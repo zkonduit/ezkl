@@ -156,6 +156,14 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: MNIST Gan Mock
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_4_expects -- --include-ignored
+      - name: NanoGPT Mock
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_1_expects -- --include-ignored
+      - name: Self Attention Mock
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
+      - name: Multihead Attention Mock
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
       - name: Mock proving tests (public outputs)
         run: cargo nextest run --release --verbose tests::mock_public_outputs_ --test-threads 32
       - name: Mock proving tests (public outputs + batch size == 10)
@@ -182,10 +190,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_encrypted_all_::t  --test-threads 32
       - name: Mock proving tests (encrypted inputs + hashed params)
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
-      - name: Self Attention Mock
-        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
-      - name: NanoGPT Mock
-        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_1_expects -- --include-ignored
+
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
@@ -193,9 +198,7 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
         python-tests,
-        python-integration-tests,
       ]
     steps:
       - uses: actions/checkout@v3
@@ -233,9 +236,7 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
         python-tests,
-        python-integration-tests,
       ]
     steps:
       - uses: actions/checkout@v3
@@ -265,9 +266,7 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
         python-tests,
-        python-integration-tests,
       ]
     steps:
       - uses: actions/checkout@v3
@@ -316,9 +315,7 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
         python-tests,
-        python-integration-tests,
       ]
     steps:
       - uses: actions/checkout@v3
@@ -340,7 +337,7 @@ jobs:
       [
         build,
         library-tests,
-        mock-proving-tests,
+
         python-tests,
       ]
     steps:
@@ -426,6 +423,27 @@ jobs:
 
   python-integration-tests:
       runs-on: 768gb
+
+        # Service containers to run with `container-job`
+      services:
+        # Label used to access the service container
+        postgres:
+          # Docker Hub image
+          image: postgres
+          env:
+            POSTGRES_USER: ubuntu
+            POSTGRES_HOST_AUTH_METHOD: trust
+          # Set health checks to wait until postgres has started
+          options: >-
+            --health-cmd pg_isready
+            --health-interval 10s
+            --health-timeout 5s
+            --health-retries 5
+          ports:
+            # Maps tcp port 5432 on service container to the host
+            - 5432:5432
+
+
       # needs: [build,  library-tests, docs]
       steps:
         - uses: actions/checkout@v3
@@ -458,12 +476,16 @@ jobs:
         #     # now dump the contents of the file into a file called kaggle.json
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
-        - name: Voice tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
         - name: Gan tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
         - name: Keras tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
+        - name: Little transformer tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects --no-capture
+        - name: Mean tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
+        - name: Voice tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
         - name: Encrypted tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
         - name: Hashed tutorial
@@ -474,6 +496,7 @@ jobs:
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
         - name: Variance tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
+
 
 
 

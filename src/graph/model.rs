@@ -22,6 +22,7 @@ use serde::Serialize;
 use tract_onnx::prelude::{
     DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
 };
+use tract_onnx::tract_core::downcast_rs::Downcast;
 use tract_onnx::tract_hir::ops::scan::Scan;
 
 use core::panic;
@@ -146,9 +147,7 @@ impl NodeType {
     pub fn decrement_const(&mut self) {
         match self {
             NodeType::Node(n) => {
-                if let Some(c) = n
-                    .opkind
-                    .as_any()
+                if let Some(c) = crate::circuit::ops::Op::as_any(&n.opkind)
                     .downcast_ref::<crate::circuit::Constant<Fp>>()
                 {
                     if c.num_uses > 0 {
@@ -611,9 +610,10 @@ impl Model {
                 NodeType::Node(n) => {
                     if let Some(c) = n
                         .opkind
-                        .as_any()
-                        .downcast_ref::<crate::circuit::Constant<Fp>>()
+                        .as_any_mut()
+                        .downcast_mut::<crate::circuit::Constant<Fp>>()
                     {
+                        c.empty_raw_value();
                         c.num_uses > 0
                     } else {
                         true

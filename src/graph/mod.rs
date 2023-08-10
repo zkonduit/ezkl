@@ -174,11 +174,7 @@ impl Serialize for FieldSingleVector {
     where
         S: Serializer,
     {
-        let field_elems: Vec<[u64; 4]> = self
-            .0
-            .iter()
-            .map(field_to_vecu64)
-            .collect::<Vec<_>>();
+        let field_elems: Vec<[u64; 4]> = self.0.iter().map(field_to_vecu64).collect::<Vec<_>>();
         field_elems.serialize(serializer)
     }
 }
@@ -645,10 +641,10 @@ impl GraphCircuit {
         scales: Vec<u32>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         match &data {
-            DataSource::OnChain(_) => {
-                panic!("Cannot use on-chain data source as input for wasm rn.")
-            }
             DataSource::File(file_data) => self.load_file_data(file_data, &shapes, scales),
+            DataSource::OnChain(_) => {
+                panic!("Cannot use non-file data source as input for wasm rn.")
+            }
         }
     }
 
@@ -670,6 +666,10 @@ impl GraphCircuit {
                     .await
             }
             DataSource::File(file_data) => self.load_file_data(file_data, &shapes, scales),
+            DataSource::DB(pg) => {
+                let data = pg.fetch_and_format_as_file()?;
+                self.load_file_data(&data, &shapes, scales)
+            }
         }
     }
 
@@ -741,7 +741,7 @@ impl GraphCircuit {
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(input)?;
-
+        info!("max lookup inputs: {}", res.max_lookup_inputs);
         let max_range = 2i128.pow(self.settings.run_args.bits as u32 - 1);
         if res.max_lookup_inputs > max_range {
             let recommended_bits = (res.max_lookup_inputs as f64).log2().ceil() as usize + 1;
@@ -926,9 +926,9 @@ impl GraphCircuit {
 
             let input_data = match &data.input_data {
                 DataSource::File(input_data) => input_data,
-                DataSource::OnChain(_) => panic!(
-                    "Cannot use on-chain data source as input for on-chain test. 
-                    Will manually populate on-chain data from file source instead"
+                _ => panic!(
+                    "Cannot use non file source as input for on-chain test.
+                    Manually populate on-chain data from file source instead"
                 ),
             };
             // Get the flatten length of input_data

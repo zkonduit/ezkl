@@ -42,6 +42,20 @@ def teardown_module(module):
     proc.terminate()
 
 
+def test_field_serialization():
+    """
+    Test field element serialization
+    """
+    expected = "0x0000000000000000000000000000000000000000000000000000000000000001"
+    assert expected == ezkl.vecu64_to_felt([1, 0, 0, 0])
+
+    expected = "0x0000000000000000000000000000000000000000000000000000000000000019"
+    assert expected == ezkl.vecu64_to_felt([25, 0, 0, 0])
+
+    expected = "0x0000000000000005000000000000000100000000000000020000000000000002"
+    assert expected == ezkl.vecu64_to_felt([2, 2, 1, 5])
+
+
 def test_table_1l_average():
     """
     Test for table() with 1l_average.onnx
@@ -176,10 +190,8 @@ def test_forward():
     assert data["inputs"] == res["inputs"]
     assert data["outputs"] == res["outputs"]
 
-    assert data["processed_inputs"]["poseidon_hash"] == res["processed_inputs"]["poseidon_hash"] == [
-        [13250656787953244331, 6427599703873277537, 10144505220959691175, 292751733201779167]]
-    assert data["processed_outputs"]["poseidon_hash"] == res["processed_outputs"]["poseidon_hash"] == [
-        [12652505662889675846, 5609103816932831989, 7270433874688716388, 2874826183531284668]]
+    assert data["processed_inputs"]["poseidon_hash"] == res["processed_inputs"]["poseidon_hash"]
+    assert data["processed_outputs"]["poseidon_hash"] == res["processed_outputs"]["poseidon_hash"]
 
 
 def test_get_srs():

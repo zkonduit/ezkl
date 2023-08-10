@@ -62,7 +62,7 @@ impl Circuit<Fr> for MyCircuit {
                         &mut region,
                         &[self.image.clone()],
                         Box::new(PolyOp::SumPool {
-                            padding: (0, 0),
+                            padding: [(0, 0); 2],
                             stride: (1, 1),
                             kernel_shape: (2, 2),
                         }),
