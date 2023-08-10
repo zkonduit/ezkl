@@ -194,14 +194,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
             num_uses: 0,
         }
     }
-    /// Requantize the constant.
-    pub fn requantize(&mut self, scale: u32) -> Result<(), Box<dyn Error>> {
-        self.quantized_values = crate::graph::quantize_tensor(
-            self.raw_values.clone(),
-            scale,
-            self.quantized_values.visibility().unwrap(),
-        )?;
-        Ok(())
+
+    /// Empty raw value
+    pub fn empty_raw_value(&mut self) {
+        self.raw_values = Tensor::new(None, &[0]).unwrap();
     }
 
     /// Returns true if the constant is only used once.

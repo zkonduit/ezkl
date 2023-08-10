@@ -90,7 +90,7 @@ mod matmul {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -164,7 +164,7 @@ mod matmul_col_overflow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -239,7 +239,7 @@ mod dot {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -312,7 +312,7 @@ mod dot_col_overflow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -381,7 +381,7 @@ mod sum {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -450,7 +450,7 @@ mod sum_col_overflow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -543,7 +543,7 @@ mod composition {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -594,7 +594,7 @@ mod conv {
                                 Box::new(PolyOp::Conv {
                                     kernel: self.inputs[1].clone(),
                                     bias: None,
-                                    padding: (1, 1),
+                                    padding: [(1, 1); 2],
                                     stride: (2, 2),
                                 }),
                             )
@@ -637,7 +637,7 @@ mod conv {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 
     #[test]
@@ -668,7 +668,7 @@ mod conv {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -717,7 +717,7 @@ mod sumpool {
                                 &mut region,
                                 &self.inputs.clone(),
                                 Box::new(PolyOp::SumPool {
-                                    padding: (0, 0),
+                                    padding: [(0, 0); 2],
                                     stride: (1, 1),
                                     kernel_shape: (3, 3),
                                 }),
@@ -747,7 +747,7 @@ mod sumpool {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -814,7 +814,7 @@ mod add_w_shape_casting {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -881,7 +881,7 @@ mod add {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -948,7 +948,7 @@ mod add_with_overflow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -1058,7 +1058,7 @@ mod add_with_overflow_and_poseidon {
 
         let prover =
             MockProver::run(K as u32, &circuit, vec![vec![commitment_a, commitment_b]]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 
     #[test]
@@ -1153,7 +1153,7 @@ mod sub {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -1220,7 +1220,7 @@ mod mult {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -1285,7 +1285,7 @@ mod pow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -1354,7 +1354,7 @@ mod pack {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -1451,7 +1451,7 @@ mod matmul_relu {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -1546,7 +1546,7 @@ mod rangecheckpercent {
                 _marker: PhantomData,
             };
             let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-            prover.assert_satisfied();
+            prover.assert_satisfied_par();
         }
         {
             let inp = Tensor::new(Some(&[Value::<F>::known(F::from(200_u64))]), &[1]).unwrap();
@@ -1557,7 +1557,7 @@ mod rangecheckpercent {
                 _marker: PhantomData,
             };
             let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-            prover.assert_satisfied();
+            prover.assert_satisfied_par();
         }
 
         // Unsuccessful case
@@ -1656,7 +1656,7 @@ mod relu {
         };
 
         let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }
 
@@ -1760,6 +1760,6 @@ mod softmax {
             _marker: PhantomData,
         };
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
+        prover.assert_satisfied_par();
     }
 }

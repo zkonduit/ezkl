@@ -175,7 +175,7 @@ where
                     let op = PolyOp::Conv {
                         kernel: self.l0_params[0].clone(),
                         bias: Some(self.l0_params[1].clone()),
-                        padding: (PADDING, PADDING),
+                        padding: [(PADDING, PADDING); 2],
                         stride: (STRIDE, STRIDE),
                     };
                     let x = config
