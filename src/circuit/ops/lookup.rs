@@ -16,30 +16,87 @@ use halo2curves::ff::PrimeField;
 /// An enum representing the operations that can be used to express more complex operations via accumulation
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum LookupOp {
-    Div { denom: utils::F32 },
-    ReLU { scale: usize },
-    Sqrt { scales: (usize, usize) },
-    Rsqrt { scales: (usize, usize) },
-    Recip { scale: usize },
-    LeakyReLU { scale: usize, slope: utils::F32 },
-    Sigmoid { scales: (usize, usize) },
-    Ln { scales: (usize, usize) },
-    Exp { scales: (usize, usize) },
-    Cos { scales: (usize, usize) },
-    ACos { scales: (usize, usize) },
-    Cosh { scales: (usize, usize) },
-    ACosh { scales: (usize, usize) },
-    Sin { scales: (usize, usize) },
-    ASin { scales: (usize, usize) },
-    Sinh { scales: (usize, usize) },
-    ASinh { scales: (usize, usize) },
-    Tan { scales: (usize, usize) },
-    ATan { scales: (usize, usize) },
-    Tanh { scales: (usize, usize) },
-    ATanh { scales: (usize, usize) },
-    Erf { scales: (usize, usize) },
-    GreaterThan { a: utils::F32 },
-    LessThan { a: utils::F32 },
+    Div {
+        denom: utils::F32,
+    },
+    ReLU {
+        scale: usize,
+    },
+    Max {
+        scales: (usize, usize),
+        a: utils::F32,
+    },
+    Min {
+        scales: (usize, usize),
+        a: utils::F32,
+    },
+    Sqrt {
+        scales: (usize, usize),
+    },
+    Rsqrt {
+        scales: (usize, usize),
+    },
+    Recip {
+        scale: usize,
+    },
+    LeakyReLU {
+        scale: usize,
+        slope: utils::F32,
+    },
+    Sigmoid {
+        scales: (usize, usize),
+    },
+    Ln {
+        scales: (usize, usize),
+    },
+    Exp {
+        scales: (usize, usize),
+    },
+    Cos {
+        scales: (usize, usize),
+    },
+    ACos {
+        scales: (usize, usize),
+    },
+    Cosh {
+        scales: (usize, usize),
+    },
+    ACosh {
+        scales: (usize, usize),
+    },
+    Sin {
+        scales: (usize, usize),
+    },
+    ASin {
+        scales: (usize, usize),
+    },
+    Sinh {
+        scales: (usize, usize),
+    },
+    ASinh {
+        scales: (usize, usize),
+    },
+    Tan {
+        scales: (usize, usize),
+    },
+    ATan {
+        scales: (usize, usize),
+    },
+    Tanh {
+        scales: (usize, usize),
+    },
+    ATanh {
+        scales: (usize, usize),
+    },
+    Erf {
+        scales: (usize, usize),
+    },
+    GreaterThan {
+        a: utils::F32,
+    },
+    LessThan {
+        a: utils::F32,
+    },
     Sign,
 }
 
@@ -63,6 +120,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
+            LookupOp::Max { scales, a } => Ok(tensor::ops::nonlinearities::max(
+                &x,
+                scales.0,
+                scales.1,
+                a.0.into(),
+            )),
+            LookupOp::Min { scales, a } => Ok(tensor::ops::nonlinearities::min(
+                &x,
+                scales.0,
+                scales.1,
+                a.0.into(),
+            )),
             LookupOp::Sign => Ok(tensor::ops::nonlinearities::sign(&x)),
             LookupOp::LessThan { a } => Ok(tensor::ops::nonlinearities::less_than(
                 &x,
@@ -151,6 +220,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         let name = match self {
+            LookupOp::Max { .. } => "MAX",
+            LookupOp::Min { .. } => "MIN",
             LookupOp::Sign => "SIGN",
             LookupOp::GreaterThan { .. } => "GREATER_THAN",
             LookupOp::LessThan { .. } => "LESS_THAN",
@@ -225,6 +296,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                     scale_to_multiplier(inputs_scale[0]) as usize,
                     scale_to_multiplier(global_scale) as usize,
                 ),
+            }),
+            LookupOp::Max { a, .. } => Box::new(LookupOp::Max {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+                a: *a,
+            }),
+            LookupOp::Min { a, .. } => Box::new(LookupOp::Min {
+                scales: (
+                    scale_to_multiplier(inputs_scale[0]) as usize,
+                    scale_to_multiplier(global_scale) as usize,
+                ),
+                a: *a,
             }),
             LookupOp::Sqrt { .. } => Box::new(LookupOp::Sqrt {
                 scales: (

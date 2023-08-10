@@ -117,6 +117,7 @@ mod py_tests {
         "mean_postgres.ipynb",
         "simple_demo_aggregated_proofs.ipynb",
         "little_transformer.ipynb",
+        // "lstm.ipynb"
     ];
 
     macro_rules! test_func {

@@ -1506,7 +1506,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         let dims = x.dims();
         let vals = vec![ValType::Value(Value::<F>::unknown()); x.len()];
         let mut x = Tensor::from(vals.into_iter());
-        x.reshape(&dims);
+        x.reshape(dims);
         return Ok(x.into());
     }
 
