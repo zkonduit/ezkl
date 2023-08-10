@@ -378,7 +378,7 @@ impl Node {
         let remaining_inputs = inputs.iter().map(|i| i.idx()).collect::<Vec<_>>();
         let mut remaining_idx = 0;
         input_ids.iter_mut().for_each(|(idx, _)| {
-            if remaining_inputs[remaining_idx] == *idx {
+            if remaining_inputs.len() > remaining_idx && remaining_inputs[remaining_idx] == *idx {
                 remaining_idx += 1;
             } else {
                 // this input is not used
