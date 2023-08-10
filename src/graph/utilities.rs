@@ -746,7 +746,7 @@ pub fn new_op_from_onnx(
                 deleted_indices.push(inputs.len() - 1);
             }
             // remove the scale factor node from the inputs
-            if let Some(node) = inputs.last_mut() {
+            if let Some(node) = inputs.get_mut(inputs.len() - 2) {
                 node.decrement_const();
                 deleted_indices.push(inputs.len() - 2);
             }

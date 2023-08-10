@@ -2820,7 +2820,7 @@ pub mod nonlinearities {
     ///    Some(&[2, 15, 2, 1, 1, -5]),
     ///   &[2, 3],
     /// ).unwrap();
-    /// let result = max(&x, 1);
+    /// let result = max(&x, 1, 1, 1.0);
     /// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
@@ -2857,7 +2857,7 @@ pub mod nonlinearities {
     ///    Some(&[2, 15, 2, 1, 1, -5]),
     ///   &[2, 3],
     /// ).unwrap();
-    /// let result = max(&x, 2);
+    /// let result = min(&x, 1, 1, 2.0);
     /// let expected = Tensor::<i128>::new(Some(&[2, 2, 2, 1, 1, -5]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
