@@ -246,10 +246,11 @@ pub fn new_op_from_onnx(
     scale: u32,
     param_visibility: Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
-    inputs: &mut Vec<&mut super::NodeType>,
-) -> Result<SupportedOp, Box<dyn std::error::Error>> {
+    inputs: &mut [super::NodeType],
+) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
     debug!("Loading node: {:?}", node);
-    Ok(match node.op().name().as_ref() {
+    let mut deleted_indices = vec![];
+    let node = match node.op().name().as_ref() {
         "Gather" => {
             if inputs.len() != 2 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "gather".to_string())));
@@ -257,9 +258,7 @@ pub fn new_op_from_onnx(
             let op = load_gather_op(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
 
-            let boxed_op = inputs[1].clone().opkind();
-
-            let index: Tensor<usize> = match extract_const_raw_values(boxed_op) {
+            let index: Tensor<usize> = match extract_const_raw_values(inputs[1].opkind()) {
                 Some(c) => c.map(|e| e as usize),
                 None => {
                     warn!("assuming the gather window is over a context variable");
@@ -273,7 +272,7 @@ pub fn new_op_from_onnx(
 
             if let Some(node) = inputs.last_mut() {
                 node.decrement_const();
-                inputs.pop();
+                deleted_indices.push(inputs.len() - 1);
             }
 
             SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
@@ -329,7 +328,7 @@ pub fn new_op_from_onnx(
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
 
-            SupportedOp::Hybrid(HybridOp::Min { axes })
+            SupportedOp::Hybrid(HybridOp::ReduceMin { axes })
         }
         "Reduce<Max>" => {
             if inputs.len() != 1 {
@@ -338,7 +337,7 @@ pub fn new_op_from_onnx(
             let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
 
-            SupportedOp::Hybrid(HybridOp::Max { axes })
+            SupportedOp::Hybrid(HybridOp::ReduceMax { axes })
         }
         "Reduce<Sum>" => {
             if inputs.len() != 1 {
@@ -351,7 +350,7 @@ pub fn new_op_from_onnx(
         }
         "Max" => {
             // Extract the slope layer hyperparams
-            let boxed_op = inputs[1].clone().opkind();
+            let boxed_op = inputs[1].opkind();
             let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
                 if c.len() == 1 {
                     c[0]
@@ -362,13 +361,44 @@ pub fn new_op_from_onnx(
                 return Err(Box::new(GraphError::OpMismatch(idx, "Max".to_string())));
             };
 
-            if inputs.len() == 2 && unit == 0. {
+            if inputs.len() == 2 {
                 if let Some(node) = inputs.last_mut() {
                     node.decrement_const();
-                    inputs.pop();
+                    deleted_indices.push(inputs.len() - 1);
                 }
-                SupportedOp::Nonlinear(LookupOp::ReLU {
-                    scale: inputs[0].out_scales()[0] as usize,
+                if unit == 0. {
+                    SupportedOp::Nonlinear(LookupOp::ReLU { scale: 1 })
+                } else {
+                    SupportedOp::Nonlinear(LookupOp::Max {
+                        scales: (1, 1),
+                        a: crate::circuit::utils::F32(unit),
+                    })
+                }
+            } else {
+                todo!()
+            }
+        }
+        "Min" => {
+            // Extract the slope layer hyperparams
+            let boxed_op = inputs[1].opkind();
+            let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
+                if c.len() == 1 {
+                    c[0]
+                } else {
+                    todo!()
+                }
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(idx, "Min".to_string())));
+            };
+
+            if inputs.len() == 2 {
+                if let Some(node) = inputs.last_mut() {
+                    node.decrement_const();
+                    deleted_indices.push(inputs.len() - 1);
+                }
+                SupportedOp::Nonlinear(LookupOp::Min {
+                    scales: (1, 1),
+                    a: crate::circuit::utils::F32(unit),
                 })
             } else {
                 todo!()
@@ -428,8 +458,7 @@ pub fn new_op_from_onnx(
         "Iff" => SupportedOp::Linear(PolyOp::Iff),
         "Less" => {
             // Extract the slope layer hyperparams
-            let boxed_op = inputs[0].clone().opkind();
-            let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
+            let unit = if let Some(c) = extract_const_raw_values(inputs[0].opkind()) {
                 if c.len() == 1 {
                     c[0]
                 } else {
@@ -440,7 +469,7 @@ pub fn new_op_from_onnx(
             };
 
             if inputs.len() == 2 {
-                inputs.remove(0);
+                deleted_indices.push(0);
                 SupportedOp::Nonlinear(LookupOp::LessThan {
                     a: crate::circuit::utils::F32(unit),
                 })
@@ -450,8 +479,7 @@ pub fn new_op_from_onnx(
         }
         "Greater" => {
             // Extract the slope layer hyperparams
-            let boxed_op = inputs[0].clone().opkind();
-            let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
+            let unit = if let Some(c) = extract_const_raw_values(inputs[0].opkind()) {
                 if c.len() == 1 {
                     c[0]
                 } else {
@@ -462,7 +490,7 @@ pub fn new_op_from_onnx(
             };
 
             if inputs.len() == 2 {
-                inputs.remove(0);
+                deleted_indices.push(0);
                 SupportedOp::Nonlinear(LookupOp::GreaterThan {
                     a: crate::circuit::utils::F32(unit),
                 })
@@ -705,7 +733,7 @@ pub fn new_op_from_onnx(
             {
                 unimplemented!("Only nearest neighbor interpolation is supported")
             }
-            let boxed_op = inputs[2].clone().opkind();
+            let boxed_op = inputs[2].opkind();
             let scale_factor = if let Some(c) = extract_const_raw_values(boxed_op) {
                 c.map(|x| x as usize).into_iter().collect::<Vec<usize>>()
             } else {
@@ -715,12 +743,12 @@ pub fn new_op_from_onnx(
             // remove the resize node from the inputs
             if let Some(node) = inputs.last_mut() {
                 node.decrement_const();
-                inputs.pop();
+                deleted_indices.push(inputs.len() - 1);
             }
             // remove the scale factor node from the inputs
             if let Some(node) = inputs.last_mut() {
                 node.decrement_const();
-                inputs.pop();
+                deleted_indices.push(inputs.len() - 2);
             }
 
             SupportedOp::Linear(PolyOp::Resize { scale_factor })
@@ -825,35 +853,27 @@ pub fn new_op_from_onnx(
             warn!("Unknown op: {}", c);
             SupportedOp::Unknown(crate::circuit::ops::Unknown)
         }
-    })
-}
+    };
 
-///
-pub fn downcast_const_op(
-    boxed_op: Box<dyn crate::circuit::Op<Fp>>,
-) -> Option<crate::circuit::ops::Constant<Fp>> {
-    boxed_op
-        .as_any()
-        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-        .cloned()
+    Ok((node, deleted_indices))
 }
 
 /// Extracts the raw values from a [crate::circuit::ops::Constant] op.
-pub fn extract_const_raw_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> Option<Tensor<f32>> {
-    boxed_op
-        .as_any()
-        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-        .map(|c| c.raw_values.clone())
+pub fn extract_const_raw_values(op: SupportedOp) -> Option<Tensor<f32>> {
+    match op {
+        SupportedOp::Constant(crate::circuit::ops::Constant { raw_values, .. }) => Some(raw_values),
+        _ => None,
+    }
 }
 
 /// Extracts the quantized values from a [crate::circuit::ops::Constant] op.
-pub fn extract_const_quantized_values(
-    boxed_op: Box<dyn crate::circuit::Op<Fp>>,
-) -> Option<Tensor<Fp>> {
-    boxed_op
-        .as_any()
-        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-        .map(|c| c.quantized_values.clone())
+pub fn extract_const_quantized_values(op: SupportedOp) -> Option<Tensor<Fp>> {
+    match op {
+        SupportedOp::Constant(crate::circuit::ops::Constant {
+            quantized_values, ..
+        }) => Some(quantized_values),
+        _ => None,
+    }
 }
 
 /// Extract the quantized values from a conv op

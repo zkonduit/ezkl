@@ -28,7 +28,6 @@ use serde::Serialize;
 use tract_onnx::prelude::{
     DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
 };
-use tract_onnx::tract_core::downcast_rs::Downcast;
 use tract_onnx::tract_hir::ops::scan::Scan;
 
 use log::error;
@@ -146,18 +145,15 @@ impl NodeType {
     /// decrement const num times used
     pub fn decrement_const(&mut self) {
         match self {
-            NodeType::Node(n) => {
-                if let Some(c) = crate::circuit::ops::Op::as_any(&n.opkind)
-                    .downcast_ref::<crate::circuit::Constant<Fp>>()
-                {
-                    if c.num_uses > 0 {
-                        n.opkind = SupportedOp::Constant(crate::circuit::Constant {
-                            num_uses: c.num_uses - 1,
-                            ..c.clone()
-                        });
-                    }
+            NodeType::Node(n) => match &n.opkind {
+                SupportedOp::Constant(c) => {
+                    n.opkind = SupportedOp::Constant(crate::circuit::Constant {
+                        num_uses: c.num_uses - 1,
+                        ..c.clone()
+                    })
                 }
-            }
+                _ => log::warn!("Cannot decrement const of non-const node"),
+            },
             NodeType::SubGraph { .. } => log::warn!("Cannot decrement const of subgraph"),
         }
     }
@@ -179,10 +175,10 @@ impl NodeType {
     }
 
     /// Returns the operation kind of the node (if any).
-    pub fn opkind(&self) -> Box<dyn Op<Fp>> {
+    pub fn opkind(&self) -> SupportedOp {
         match self {
-            NodeType::Node(n) => n.opkind.clone_dyn(),
-            NodeType::SubGraph { .. } => Unknown.clone_dyn(),
+            NodeType::Node(n) => n.opkind.clone(),
+            NodeType::SubGraph { .. } => SupportedOp::Unknown(Unknown),
         }
     }
 }
@@ -612,18 +608,13 @@ impl Model {
         fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
             // remove all nodes that are consts with 0 uses now
             nodes.retain(|_, n| match n {
-                NodeType::Node(n) => {
-                    if let Some(c) = n
-                        .opkind
-                        .as_any_mut()
-                        .downcast_mut::<crate::circuit::Constant<Fp>>()
-                    {
+                NodeType::Node(n) => match &mut n.opkind {
+                    SupportedOp::Constant(c) => {
                         c.empty_raw_value();
                         c.num_uses > 0
-                    } else {
-                        true
                     }
-                }
+                    _ => true,
+                },
                 NodeType::SubGraph { model, .. } => {
                     clean_useless_consts(&mut model.graph.nodes);
                     true
@@ -921,9 +912,8 @@ impl Model {
         let mut params = vec![];
         for node in self.graph.nodes.values() {
             match node {
-                NodeType::Node(n) => {
-                    let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = extract_const_quantized_values(boxed_op.clone()) {
+                NodeType::Node(_) => {
+                    if let Some(constant) = extract_const_quantized_values(node.opkind()) {
                         params.push(constant);
                     }
                 }
@@ -940,9 +930,8 @@ impl Model {
         let mut const_shapes = vec![];
         for node in self.graph.nodes.values() {
             match node {
-                NodeType::Node(n) => {
-                    let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = extract_const_quantized_values(boxed_op) {
+                NodeType::Node(_) => {
+                    if let Some(constant) = extract_const_quantized_values(node.opkind()) {
                         const_shapes.push(constant.dims().to_vec());
                     };
                 }
@@ -959,22 +948,19 @@ impl Model {
         let mut const_idx = 0;
         for node in self.graph.nodes.values_mut() {
             match node {
-                NodeType::Node(n) => {
-                    let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = boxed_op
-                        .as_any()
-                        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-                    {
+                NodeType::Node(n) => match &n.opkind {
+                    SupportedOp::Constant(c) => {
                         let mut op = crate::circuit::Constant::new(
-                            constant.quantized_values.clone(),
-                            constant.raw_values.clone(),
+                            c.quantized_values.clone(),
+                            c.raw_values.clone(),
                         );
                         op.pre_assign(consts[const_idx].clone());
                         n.opkind = SupportedOp::Constant(op);
 
                         const_idx += 1;
                     }
-                }
+                    _ => {}
+                },
                 NodeType::SubGraph { model, .. } => {
                     model.replace_consts(consts.clone());
                 }
@@ -989,9 +975,6 @@ impl Model {
             instance_shapes.extend(self.graph.input_shapes());
         }
         if self.visibility.output.is_public() {
-            println!("output is public");
-            println!("output shapes: {:?}", self.graph.output_shapes());
-            println!("outputs: {:?}", self.graph.outputs);
             instance_shapes.extend(self.graph.output_shapes());
         }
         instance_shapes

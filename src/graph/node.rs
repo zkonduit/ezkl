@@ -359,28 +359,28 @@ impl Node {
             .map(|i| (i.node, i.slot))
             .collect::<Vec<_>>();
 
-        other_nodes.iter_mut().for_each(|(idx, v)| {
-            if input_ids.iter().map(|(i, _)| i).any(|i| i == idx) {
-                inputs.push(v);
-            }
+        input_ids.iter().for_each(|(i, _)| {
+            inputs.push(other_nodes.get(i).ok_or("input not found").unwrap().clone())
         });
 
-        // other nodesd are sorted by idx, so we need to sort the inputs again by their position in input_ids
-        inputs.sort_by(|a, b| {
-            let a_idx = input_ids.iter().position(|(i, _)| *i == a.idx()).unwrap();
-            let b_idx = input_ids.iter().position(|(i, _)| *i == b.idx()).unwrap();
-            a_idx.cmp(&b_idx)
-        });
+        println!("bc input {:?}", inputs);
 
-        let mut opkind = new_op_from_onnx(idx, scale, param_visibility, node.clone(), &mut inputs)?; // parses the op name
+        let (mut opkind, deleted_indices) =
+            new_op_from_onnx(idx, scale, param_visibility, node.clone(), &mut inputs)?; // parses the op name
+
+        println!("ad input {:?}", inputs);
 
         // we can only take the inputs as mutable once -- so we need to collect them first
-        let remaining_inputs = inputs.iter().map(|i| i.idx()).collect::<Vec<_>>();
-        let mut remaining_idx = 0;
-        input_ids.iter_mut().for_each(|(idx, _)| {
-            if remaining_inputs.len() > remaining_idx && remaining_inputs[remaining_idx] == *idx {
-                remaining_idx += 1;
-            } else {
+
+        other_nodes.extend(
+            inputs
+                .iter()
+                .map(|i| (i.idx(), i.clone()))
+                .collect::<BTreeMap<_, _>>(),
+        );
+
+        input_ids.iter_mut().enumerate().for_each(|(i, (idx, _))| {
+            if deleted_indices.contains(&i) {
                 // this input is not used
                 *idx = usize::MAX;
             }
