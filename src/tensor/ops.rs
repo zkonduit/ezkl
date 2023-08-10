@@ -2144,13 +2144,7 @@ pub mod nonlinearities {
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            if *a_i > 0 {
-                output[i] = 1;
-            } else if *a_i < 0 {
-                output[i] = -1;
-            } else {
-                output[i] = 0;
-            }
+            output[i] = a_i.signum();
         }
         output
     }
