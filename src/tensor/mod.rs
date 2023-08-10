@@ -709,9 +709,9 @@ impl<T: Clone + TensorType> Tensor<T> {
                     old_coord[source + 1] = *c;
                 } else if i == source && source > destination {
                     old_coord[source - 1] = *c;
-                } else if i < source && source < destination {
-                    old_coord[i] = *c;
-                } else if i < destination && source > destination {
+                } else if (i < source && source < destination)
+                    || (i < destination && source > destination)
+                {
                     old_coord[i] = *c;
                 } else if i > source && source < destination {
                     old_coord[i + 1] = *c;

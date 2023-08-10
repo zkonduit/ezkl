@@ -17,20 +17,19 @@ use crate::{
 use halo2curves::bn256::Fr as Fp;
 
 use colored::Colorize;
-use serde::Deserialize;
-use serde::Serialize;
-use tract_onnx::prelude::{
-    DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
-};
-use tract_onnx::tract_core::downcast_rs::Downcast;
-use tract_onnx::tract_hir::ops::scan::Scan;
-
 use core::panic;
 use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::ConstraintSystem,
 };
 use itertools::Itertools;
+use serde::Deserialize;
+use serde::Serialize;
+use tract_onnx::prelude::{
+    DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
+};
+use tract_onnx::tract_hir::ops::scan::Scan;
+
 use log::error;
 use log::{debug, info, trace};
 use std::collections::BTreeMap;
@@ -83,7 +82,7 @@ pub enum NodeType {
         /// The subgraph
         model: Model,
         /// The subgraph's inputs
-        inputs: Vec<usize>,
+        inputs: Vec<Outlet>,
         /// the subgraph's idx within the parent graph
         idx: usize,
     },
@@ -91,7 +90,7 @@ pub enum NodeType {
 
 impl NodeType {
     /// Returns the indices of the node's inputs.
-    pub fn inputs(&self) -> Vec<usize> {
+    pub fn inputs(&self) -> Vec<Outlet> {
         match self {
             NodeType::Node(n) => n.inputs.clone(),
             NodeType::SubGraph { inputs, .. } => inputs.clone(),
@@ -146,18 +145,15 @@ impl NodeType {
     /// decrement const num times used
     pub fn decrement_const(&mut self) {
         match self {
-            NodeType::Node(n) => {
-                if let Some(c) = crate::circuit::ops::Op::as_any(&n.opkind)
-                    .downcast_ref::<crate::circuit::Constant<Fp>>()
-                {
-                    if c.num_uses > 0 {
-                        n.opkind = SupportedOp::Constant(crate::circuit::Constant {
-                            num_uses: c.num_uses - 1,
-                            ..c.clone()
-                        });
-                    }
+            NodeType::Node(n) => match &n.opkind {
+                SupportedOp::Constant(c) => {
+                    n.opkind = SupportedOp::Constant(crate::circuit::Constant {
+                        num_uses: c.num_uses - 1,
+                        ..c.clone()
+                    })
                 }
-            }
+                _ => log::warn!("Cannot decrement const of non-const node"),
+            },
             NodeType::SubGraph { .. } => log::warn!("Cannot decrement const of subgraph"),
         }
     }
@@ -179,10 +175,10 @@ impl NodeType {
     }
 
     /// Returns the operation kind of the node (if any).
-    pub fn opkind(&self) -> Box<dyn Op<Fp>> {
+    pub fn opkind(&self) -> SupportedOp {
         match self {
-            NodeType::Node(n) => n.opkind.clone_dyn(),
-            NodeType::SubGraph { .. } => Unknown.clone_dyn(),
+            NodeType::Node(n) => n.opkind.clone(),
+            NodeType::SubGraph { .. } => SupportedOp::Unknown(Unknown),
         }
     }
 }
@@ -192,7 +188,7 @@ impl NodeType {
 pub struct ParsedNodes {
     nodes: BTreeMap<usize, NodeType>,
     inputs: Vec<usize>,
-    outputs: Vec<usize>,
+    outputs: Vec<Outlet>,
 }
 
 impl ParsedNodes {
@@ -220,7 +216,7 @@ impl ParsedNodes {
     pub fn output_shapes(&self) -> Vec<Vec<usize>> {
         self.outputs
             .iter()
-            .flat_map(|o| self.nodes.get(o).unwrap().out_dims())
+            .map(|(idx, outlet)| self.nodes.get(idx).unwrap().out_dims()[*outlet].clone())
             .collect_vec()
     }
 
@@ -236,7 +232,7 @@ impl ParsedNodes {
     pub fn get_output_scales(&self) -> Vec<u32> {
         let output_nodes = self.outputs.iter();
         output_nodes
-            .flat_map(|o| self.nodes.get(o).unwrap().out_scales())
+            .map(|(idx, outlet)| self.nodes.get(idx).unwrap().out_scales()[*outlet])
             .collect_vec()
     }
 }
@@ -292,6 +288,12 @@ impl Model {
         check_mode: CheckMode,
     ) -> Result<GraphSettings, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes();
+        info!(
+            "{} {} {}",
+            "model has".blue(),
+            instance_shapes.len().to_string().blue(),
+            "instances".blue()
+        );
         // this is the total number of variables we will need to allocate
         // for the circuit
 
@@ -351,7 +353,7 @@ impl Model {
     /// * `model_inputs` - A vector of [Tensor]s to use as inputs to the model.
     /// * `run_args` - [RunArgs]
     pub fn forward(&self, model_inputs: &[Tensor<Fp>]) -> Result<ForwardResult, Box<dyn Error>> {
-        let mut results: BTreeMap<&usize, Tensor<Fp>> = BTreeMap::new();
+        let mut results: BTreeMap<&usize, Vec<Tensor<Fp>>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
         let mut input_idx = 0;
         for (idx, n) in self.graph.nodes.iter() {
@@ -364,10 +366,10 @@ impl Model {
             } else {
                 debug!("executing {}: {}", idx, n.as_str());
                 trace!("dims: {:?}", n.out_dims());
-                for i in n.inputs().iter() {
-                    match results.get(&i) {
-                        Some(value) => inputs.push(value.clone()),
-                        None => return Err(Box::new(GraphError::MissingNode(*i))),
+                for (idx, outlet) in n.inputs().iter() {
+                    match results.get(&idx) {
+                        Some(value) => inputs.push(value[*outlet].clone()),
+                        None => return Err(Box::new(GraphError::MissingNode(*idx))),
                     }
                 }
             };
@@ -392,16 +394,13 @@ impl Model {
                         max_lookup_inputs = max_lookup_inputs.max(max);
                     }
 
-                    results.insert(idx, res.output);
+                    results.insert(idx, vec![res.output]);
                 }
                 NodeType::SubGraph { model, .. } => {
                     let res = model.forward(&inputs)?;
                     // recursively get the max lookup inputs for subgraphs
                     max_lookup_inputs = max_lookup_inputs.max(res.max_lookup_inputs);
-
-                    let mut res = res.outputs.last().unwrap().clone();
-                    res.flatten();
-                    results.insert(idx, res);
+                    results.insert(idx, res.outputs);
                 }
             }
         }
@@ -412,7 +411,7 @@ impl Model {
             output_nodes.clone().collect_vec()
         );
         let outputs = output_nodes
-            .map(|o| results.get(&o).unwrap().clone().map(|x| x))
+            .map(|(idx, outlet)| results.get(&idx).unwrap()[*outlet].clone())
             .collect_vec();
 
         let res = ForwardResult {
@@ -493,7 +492,7 @@ impl Model {
         let parsed_nodes = ParsedNodes {
             nodes,
             inputs: model.inputs.iter().map(|o| o.node).collect(),
-            outputs: model.outputs.iter().map(|o| o.node).collect(),
+            outputs: model.outputs.iter().map(|o| (o.node, o.slot)).collect(),
         };
 
         let duration = start_time.elapsed();
@@ -567,7 +566,7 @@ impl Model {
                     let subgraph = ParsedNodes {
                         nodes: subgraph_nodes,
                         inputs: model.inputs.iter().map(|o| o.node).collect(),
-                        outputs: model.outputs.iter().map(|o| o.node).collect(),
+                        outputs: model.outputs.iter().map(|o| (o.node, o.slot)).collect(),
                     };
 
                     let om = Model {
@@ -578,8 +577,7 @@ impl Model {
                         i,
                         NodeType::SubGraph {
                             model: om,
-                            inputs: n.inputs.iter().map(|i| i.node).collect_vec(),
-
+                            inputs: n.inputs.iter().map(|i| (i.node, i.slot)).collect_vec(),
                             idx: i,
                         },
                     );
@@ -607,18 +605,13 @@ impl Model {
         fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
             // remove all nodes that are consts with 0 uses now
             nodes.retain(|_, n| match n {
-                NodeType::Node(n) => {
-                    if let Some(c) = n
-                        .opkind
-                        .as_any_mut()
-                        .downcast_mut::<crate::circuit::Constant<Fp>>()
-                    {
+                NodeType::Node(n) => match &mut n.opkind {
+                    SupportedOp::Constant(c) => {
                         c.empty_raw_value();
                         c.num_uses > 0
-                    } else {
-                        true
                     }
-                }
+                    _ => true,
+                },
                 NodeType::SubGraph { model, .. } => {
                     clean_useless_consts(&mut model.graph.nodes);
                     true
@@ -701,13 +694,13 @@ impl Model {
             })
             .collect_vec();
 
-        let mut results = BTreeMap::<usize, ValTensor<Fp>>::new();
+        let mut results = BTreeMap::<usize, Vec<ValTensor<Fp>>>::new();
 
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
-                results.insert(*input_idx, vars.instances[i].clone());
+                results.insert(*input_idx, vec![vars.instances[i].clone()]);
             } else {
-                results.insert(*input_idx, inputs[i].clone());
+                results.insert(*input_idx, vec![inputs[i].clone()]);
             }
         }
 
@@ -719,7 +712,13 @@ impl Model {
                 let mut thread_safe_region = RegionCtx::new(region, 0);
 
                 let outputs = self
-                    .layout_nodes(&mut config, &mut thread_safe_region, &mut results)
+                    .layout_nodes(
+                        &mut config,
+                        &mut thread_safe_region,
+                        &mut results,
+                        // get first outlet to begin with in top graph
+                        &self.graph.inputs.iter().map(|i| (*i, 0)).collect_vec(),
+                    )
                     .map_err(|e| {
                         error!("{}", e);
                         halo2_proofs::plonk::Error::Synthesis
@@ -763,25 +762,30 @@ impl Model {
         &self,
         config: &mut ModelConfig,
         region: &mut RegionCtx<Fp>,
-        results: &mut BTreeMap<usize, ValTensor<Fp>>,
+        results: &mut BTreeMap<usize, Vec<ValTensor<Fp>>>,
+        inputs: &[(usize, usize)],
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
-        let inputs = self.graph.inputs.clone();
         // index over results to get original inputs
         let orig_inputs: BTreeMap<usize, _> = results
             .clone()
             .into_iter()
-            .filter(|(idx, _)| inputs.contains(idx))
+            .filter(|(idx, _)| inputs.iter().map(|(i, _)| i).any(|i| i == idx))
             .collect();
 
+        let mut input_iter = 0;
         for (idx, node) in self.graph.nodes.iter() {
             let values: Vec<ValTensor<Fp>> = if !node.is_input() {
                 node.inputs()
                     .iter()
-                    .map(|i| results.get(i).unwrap().clone())
+                    .map(|(idx, outlet)| results.get(idx).unwrap()[*outlet].clone())
                     .collect_vec()
             } else {
                 // we re-assign inputs
-                vec![results.get(idx).unwrap().clone()]
+                let (idx, outlet) = inputs[input_iter];
+                let mut res = results.get(&idx).unwrap()[outlet].clone();
+                res.reshape(&node.out_dims()[outlet])?;
+                input_iter += 1;
+                vec![res]
             };
 
             debug!(
@@ -808,19 +812,13 @@ impl Model {
 
                     if let Some(vt) = res {
                         // we get the max as for fused nodes this corresponds to the node output
-                        results.insert(*idx, vt);
+                        results.insert(*idx, vec![vt.clone()]);
                         //only use with mock prover
-                        trace!(
-                            "------------ output node {:?}: {:?}",
-                            idx,
-                            results.get(idx).unwrap().show()
-                        );
+                        trace!("------------ output node {:?}: {:?}", idx, vt.show());
                     }
                 }
-                NodeType::SubGraph { model, .. } => {
-                    let res = model.layout_nodes(config, region, results)?;
-                    let mut res = res.last().unwrap().clone();
-                    res.flatten();
+                NodeType::SubGraph { model, inputs, .. } => {
+                    let res = model.layout_nodes(config, region, results, inputs)?;
                     results.insert(*idx, res);
                 }
             }
@@ -835,7 +833,7 @@ impl Model {
             output_nodes.clone().collect_vec()
         );
         let outputs = output_nodes
-            .map(|o| results.get(o).unwrap().clone())
+            .map(|(idx, outlet)| results.get(idx).unwrap()[*outlet].clone())
             .collect_vec();
 
         Ok(outputs)
@@ -853,7 +851,7 @@ impl Model {
 
         let start_time = instant::Instant::now();
 
-        let mut results = BTreeMap::<usize, ValTensor<Fp>>::new();
+        let mut results = BTreeMap::<usize, Vec<ValTensor<Fp>>>::new();
 
         let inputs: Vec<ValTensor<Fp>> = input_shapes
             .iter()
@@ -866,7 +864,7 @@ impl Model {
             .collect_vec();
 
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
-            results.insert(*input_idx, inputs[i].clone());
+            results.insert(*input_idx, vec![inputs[i].clone()]);
         }
 
         let mut dummy_config = PolyConfig::dummy(run_args.logrows as usize);
@@ -877,7 +875,13 @@ impl Model {
 
         let mut region = RegionCtx::new_dummy(0);
 
-        let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
+        let outputs = self.layout_nodes(
+            &mut model_config,
+            &mut region,
+            &mut results,
+            // get first outlet to begin with in top graph
+            &self.graph.inputs.iter().map(|i| (*i, 0)).collect_vec(),
+        )?;
 
         if run_args.output_visibility == Visibility::Public {
             let _ = outputs
@@ -905,9 +909,8 @@ impl Model {
         let mut params = vec![];
         for node in self.graph.nodes.values() {
             match node {
-                NodeType::Node(n) => {
-                    let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = extract_const_quantized_values(boxed_op.clone()) {
+                NodeType::Node(_) => {
+                    if let Some(constant) = extract_const_quantized_values(node.opkind()) {
                         params.push(constant);
                     }
                 }
@@ -924,9 +927,8 @@ impl Model {
         let mut const_shapes = vec![];
         for node in self.graph.nodes.values() {
             match node {
-                NodeType::Node(n) => {
-                    let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = extract_const_quantized_values(boxed_op) {
+                NodeType::Node(_) => {
+                    if let Some(constant) = extract_const_quantized_values(node.opkind()) {
                         const_shapes.push(constant.dims().to_vec());
                     };
                 }
@@ -943,22 +945,19 @@ impl Model {
         let mut const_idx = 0;
         for node in self.graph.nodes.values_mut() {
             match node {
-                NodeType::Node(n) => {
-                    let boxed_op = n.opkind.clone_dyn();
-                    if let Some(constant) = boxed_op
-                        .as_any()
-                        .downcast_ref::<crate::circuit::ops::Constant<Fp>>()
-                    {
+                NodeType::Node(n) => match &n.opkind {
+                    SupportedOp::Constant(c) => {
                         let mut op = crate::circuit::Constant::new(
-                            constant.quantized_values.clone(),
-                            constant.raw_values.clone(),
+                            c.quantized_values.clone(),
+                            c.raw_values.clone(),
                         );
                         op.pre_assign(consts[const_idx].clone());
                         n.opkind = SupportedOp::Constant(op);
 
                         const_idx += 1;
                     }
-                }
+                    _ => {}
+                },
                 NodeType::SubGraph { model, .. } => {
                     model.replace_consts(consts.clone());
                 }

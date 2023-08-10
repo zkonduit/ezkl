@@ -22,10 +22,10 @@ pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::S
 impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd> ValType<F> {
     /// Returns true if the value is previously assigned.
     pub fn is_prev_assigned(&self) -> bool {
-        match self {
-            ValType::PrevAssigned(_) | ValType::AssignedConstant(..) => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            ValType::PrevAssigned(_) | ValType::AssignedConstant(..)
+        )
     }
 }
 
