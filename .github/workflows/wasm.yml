@@ -44,9 +44,9 @@ jobs:
           - name: Update package.json version to match github tag
             shell: bash
             env:
-                RELEASE_TAG: ${{ github.ref_name }}
+                RELEASE_NUMBER: ${{ env.EZKL_VERSION }}
             run: |
-                sed -i "s/\"version\": \".*\"/\"version\": \"$RELEASE_TAG\"/" pkg/package.json
+                sed -i "s/\"version\": \".*\"/\"version\": \"$RELEASE_NUMBER\"/" pkg/package.json
       
           - name: Set up Node.js
             uses: actions/setup-node@v3
