@@ -794,7 +794,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>],
-    padding: (usize, usize),
+    padding: [(usize, usize); 2],
     stride: (usize, usize),
     kernel_shape: (usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -865,7 +865,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-    padding: (usize, usize),
+    padding: [(usize, usize); 2],
     stride: (usize, usize),
     pool_dims: (usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -882,8 +882,8 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let mut padded_image = image.clone();
     padded_image.pad(padding)?;
 
-    let vert_slides = (image_height + 2 * padding.0 - pool_dims.0) / stride.0 + 1;
-    let horz_slides = (image_width + 2 * padding.1 - pool_dims.1) / stride.1 + 1;
+    let vert_slides = (image_height + padding[0].0 + padding[1].0 - pool_dims.0) / stride.0 + 1;
+    let horz_slides = (image_width + padding[0].1 + padding[1].1 - pool_dims.1) / stride.1 + 1;
 
     let mut output: Tensor<ValType<F>> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides])?;
@@ -944,7 +944,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     inputs: &[ValTensor<F>],
-    padding: (usize, usize),
+    padding: [(usize, usize); 2],
     output_padding: (usize, usize),
     stride: (usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -979,7 +979,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
     let mut expanded_image = image.clone();
     expanded_image.intercalate_values(null_val.clone(), stride.0, 2)?;
     expanded_image.intercalate_values(null_val, stride.1, 3)?;
-    expanded_image.pad((kernel_height - 1, kernel_width - 1))?;
+    expanded_image.pad([(kernel_height - 1, kernel_width - 1); 2])?;
 
     // flip order
     let channel_coord = (0..kernel.dims()[0])
@@ -992,9 +992,9 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
         .enumerate()
         .map(|(i, d)| {
             if i == 2 {
-                padding.0..d - padding.0 + output_padding.0
+                padding[0].0..d - padding[1].0 + output_padding.0
             } else if i == 3 {
-                padding.1..d - padding.1 + output_padding.1
+                padding[0].1..d - padding[1].1 + output_padding.1
             } else {
                 0..*d
             }
@@ -1036,7 +1036,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
         vec![sliced_expanded_image, deconv_kernel.clone().into()]
     };
 
-    let output = conv(config, region, &conv_input, (0, 0), (1, 1))?;
+    let output = conv(config, region, &conv_input, [(0, 0); 2], (1, 1))?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
@@ -1075,7 +1075,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>],
-    padding: (usize, usize),
+    padding: [(usize, usize); 2],
     stride: (usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let has_bias = values.len() == 3;
@@ -1132,8 +1132,8 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
     let (image_height, image_width) = (image_dims[2], image_dims[3]);
 
-    let vert_slides = (image_height + 2 * padding.0 - kernel_height) / stride.0 + 1;
-    let horz_slides = (image_width + 2 * padding.1 - kernel_width) / stride.1 + 1;
+    let vert_slides = (image_height + padding[0].0 + padding[1].0 - kernel_height) / stride.0 + 1;
+    let horz_slides = (image_width + padding[0].1 + padding[1].1 - kernel_width) / stride.1 + 1;
 
     let num_groups = input_channels / kernel_dims[1];
     let input_channels_per_group = input_channels / num_groups;

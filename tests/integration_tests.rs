@@ -133,7 +133,13 @@ mod native_tests {
 
     const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr.proof";
 
-    const LARGE_TESTS: [&str; 3] = ["self_attention", "nanoGPT", "mobilenet"];
+    const LARGE_TESTS: [&str; 5] = [
+        "self_attention",
+        "nanoGPT",
+        "multihead_attention",
+        "mobilenet",
+        "mnist_gan",
+    ];
 
     const TESTS: [&str; 40] = [
         "1l_mlp",
@@ -562,7 +568,7 @@ mod native_tests {
             });
 
 
-            seq!(N in 0..=2 {
+            seq!(N in 0..=4 {
 
             #(#[test_case(LARGE_TESTS[N])])*
             #[ignore]

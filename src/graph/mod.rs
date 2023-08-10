@@ -741,7 +741,7 @@ impl GraphCircuit {
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(input)?;
-
+        info!("max lookup inputs: {}", res.max_lookup_inputs);
         let max_range = 2i128.pow(self.settings.run_args.bits as u32 - 1);
         if res.max_lookup_inputs > max_range {
             let recommended_bits = (res.max_lookup_inputs as f64).log2().ceil() as usize + 1;
