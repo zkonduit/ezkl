@@ -217,6 +217,13 @@ def test_get_srs():
 
     assert os.path.isfile(srs_path)
 
+    another_srs_path = os.path.join(folder_path, "kzg_test_k8.params")
+
+    res = ezkl.get_srs(another_srs_path, logrows=8)
+
+    assert os.path.isfile(another_srs_path)
+
+
 
 def test_mock():
     """
