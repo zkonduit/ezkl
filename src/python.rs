@@ -1,6 +1,7 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{CalibrationTarget, RunArgs, StrategyType};
-use crate::graph::{Model, Visibility};
+use crate::fieldutils::{felt_to_i128, i128_to_felt};
+use crate::graph::{quantize_float, scale_to_multiplier, Model, Visibility};
 use crate::pfsys::{save_params, srs::gen_srs as ezkl_gen_srs, Snark, TranscriptType};
 use ethers::types::H160;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
@@ -80,6 +81,43 @@ fn vecu64_to_felt(array: [u64; 4]) -> PyResult<String> {
     Ok(format!(
         "{:?}",
         crate::pfsys::vecu64_to_field::<halo2curves::bn256::Fr>(&array)
+    ))
+}
+
+/// Converts 4 u64s representing a field element directly to an integer
+#[pyfunction(signature = (
+    array,
+))]
+fn vecu64_to_int(array: [u64; 4]) -> PyResult<i128> {
+    let felt = crate::pfsys::vecu64_to_field::<halo2curves::bn256::Fr>(&array);
+    let int_rep = felt_to_i128(felt);
+    Ok(int_rep)
+}
+
+/// Converts 4 u64s representing a field element directly to a (rescaled from fixed point scaling) floating point
+#[pyfunction(signature = (
+    array,
+    scale
+))]
+fn vecu64_to_float(array: [u64; 4], scale: u32) -> PyResult<f64> {
+    let felt = crate::pfsys::vecu64_to_field::<halo2curves::bn256::Fr>(&array);
+    let int_rep = felt_to_i128(felt);
+    let multiplier = scale_to_multiplier(scale);
+    let float_rep = int_rep as f64 / multiplier;
+    Ok(float_rep)
+}
+
+/// Converts a floating point element to 4 u64s representing a fixed point field element
+#[pyfunction(signature = (
+input,
+scale
+))]
+fn float_to_vecu64(input: f64, scale: u32) -> PyResult<[u64; 4]> {
+    let int_rep = quantize_float(&input, 0.0, scale)
+        .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
+    let felt = i128_to_felt(int_rep);
+    Ok(crate::pfsys::field_to_vecu64::<halo2curves::bn256::Fr>(
+        &felt,
     ))
 }
 
@@ -621,6 +659,9 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
     m.add_class::<PyRunArgs>()?;
     m.add_function(wrap_pyfunction!(vecu64_to_felt, m)?)?;
+    m.add_function(wrap_pyfunction!(vecu64_to_int, m)?)?;
+    m.add_function(wrap_pyfunction!(vecu64_to_float, m)?)?;
+    m.add_function(wrap_pyfunction!(float_to_vecu64, m)?)?;
     m.add_function(wrap_pyfunction!(table, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
     m.add_function(wrap_pyfunction!(setup, m)?)?;

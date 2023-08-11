@@ -55,6 +55,18 @@ def test_field_serialization():
     expected = "0x0000000000000005000000000000000100000000000000020000000000000002"
     assert expected == ezkl.vecu64_to_felt([2, 2, 1, 5])
 
+    input = 890
+    scale = 7
+    felt = ezkl.float_to_vecu64(input, scale)
+    roundtrip_input = ezkl.vecu64_to_float(felt, scale)
+    assert input == roundtrip_input
+
+    input = -700
+    scale = 7
+    felt = ezkl.float_to_vecu64(input, scale)
+    roundtrip_input = ezkl.vecu64_to_float(felt, scale)
+    assert input == roundtrip_input
+
 
 def test_table_1l_average():
     """
