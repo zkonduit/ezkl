@@ -438,7 +438,7 @@ impl GraphModules {
             });
 
             let encrypted_messages = inputs.iter().fold(vec![], |mut acc, x| {
-                let res = ElGamalGadget::encrypt(variables.pk, x.to_vec(), variables.r).1;
+                let res = ElGamalGadget::encrypt(variables.pk, x.to_vec(), variables.r).c2;
                 acc.push(res);
                 acc
             });
