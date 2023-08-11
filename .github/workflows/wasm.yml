@@ -49,11 +49,15 @@ jobs:
                   "web/ezkl_bg.wasm",
                   "web/ezkl.js",
                   "web/ezkl.d.ts",
+                  "web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js",
                   "ezkl.js",
                   "ezkl.d.ts"
                 ],
                 "main": "ezkl.js",
-                "types": "ezkl.d.ts"
+                "types": "ezkl.d.ts",
+                "sideEffects": [
+                  "web/snippets/*"
+                ]
               }' > pkg/package.json
 
           - name: Create ezkl.js in pkg folder
