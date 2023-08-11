@@ -55,6 +55,18 @@ def test_field_serialization():
     expected = "0x0000000000000005000000000000000100000000000000020000000000000002"
     assert expected == ezkl.vecu64_to_felt([2, 2, 1, 5])
 
+    input = 890
+    scale = 7
+    felt = ezkl.float_to_vecu64(input, scale)
+    roundtrip_input = ezkl.vecu64_to_float(felt, scale)
+    assert input == roundtrip_input
+
+    input = -700
+    scale = 7
+    felt = ezkl.float_to_vecu64(input, scale)
+    roundtrip_input = ezkl.vecu64_to_float(felt, scale)
+    assert input == roundtrip_input
+
 
 def test_table_1l_average():
     """
@@ -69,17 +81,17 @@ def test_table_1l_average():
 
     expected_table = (
         " \n"
-        "┌─────────┬───────────┬────────┬──────────────┬─────┐\n"
-        "│ opkind  │ out_scale │ inputs │ out_dims     │ idx │\n"
-        "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
-        "│ Input   │ 7         │        │ [1, 3, 2, 2] │ 0   │\n"
-        "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
-        "│ PAD     │ 7         │ [0]    │ [1, 3, 4, 4] │ 1   │\n"
-        "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
-        "│ SUMPOOL │ 7         │ [1]    │ [1, 3, 3, 3] │ 2   │\n"
-        "├─────────┼───────────┼────────┼──────────────┼─────┤\n"
-        "│ RESHAPE │ 7         │ [2]    │ [3, 3, 3]    │ 3   │\n"
-        "└─────────┴───────────┴────────┴──────────────┴─────┘"
+        "┌─────────┬───────────┬──────────┬──────────────┬─────┐\n"
+        "│ opkind  │ out_scale │ inputs   │ out_dims     │ idx │\n"
+        "├─────────┼───────────┼──────────┼──────────────┼─────┤\n"
+        "│ Input   │ 7         │          │ [1, 3, 2, 2] │ 0   │\n"
+        "├─────────┼───────────┼──────────┼──────────────┼─────┤\n"
+        "│ PAD     │ 7         │ [(0, 0)] │ [1, 3, 4, 4] │ 1   │\n"
+        "├─────────┼───────────┼──────────┼──────────────┼─────┤\n"
+        "│ SUMPOOL │ 7         │ [(1, 0)] │ [1, 3, 3, 3] │ 2   │\n"
+        "├─────────┼───────────┼──────────┼──────────────┼─────┤\n"
+        "│ RESHAPE │ 7         │ [(2, 0)] │ [3, 3, 3]    │ 3   │\n"
+        "└─────────┴───────────┴──────────┴──────────────┴─────┘"
     )
     assert ezkl.table(path) == expected_table
 
@@ -205,6 +217,12 @@ def test_get_srs():
 
     assert os.path.isfile(srs_path)
 
+    another_srs_path = os.path.join(folder_path, "kzg_test_k8.params")
+
+    res = ezkl.get_srs(another_srs_path, logrows=8)
+
+    assert os.path.isfile(another_srs_path)
+
 
 def test_mock():
     """
@@ -258,6 +276,10 @@ def test_setup():
     assert os.path.isfile(vk_path)
     assert os.path.isfile(pk_path)
     assert os.path.isfile(settings_path)
+
+    res = ezkl.gen_vk_from_pk_single(pk_path, settings_path, vk_path)
+    assert res == True
+    assert os.path.isfile(vk_path)
 
 
 def test_setup_evm():
@@ -512,6 +534,10 @@ async def aggregate_and_verify_aggr():
         params_k20_path,
         20,
     )
+
+    res = ezkl.gen_vk_from_pk_aggr(aggregate_pk_path, aggregate_vk_path)
+    assert res == True
+    assert os.path.isfile(vk_path)
 
     res = ezkl.aggregate(
         aggregate_proof_path,

@@ -142,7 +142,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("pad inputs".to_string()));
                 }
-                tensor::ops::pad(&inputs[0], p.clone())
+                tensor::ops::pad(&inputs[0], *p)
             }
             PolyOp::Add => tensor::ops::add(&inputs),
             PolyOp::Neg => tensor::ops::neg(&inputs[0]),
