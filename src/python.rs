@@ -1,11 +1,16 @@
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::{CalibrationTarget, RunArgs, StrategyType};
 use crate::fieldutils::{felt_to_i128, i128_to_felt};
-use crate::graph::{quantize_float, scale_to_multiplier, Model, Visibility};
-use crate::pfsys::{save_params, srs::gen_srs as ezkl_gen_srs, Snark, TranscriptType};
+use crate::graph::{
+    quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
+};
+use crate::pfsys::evm::aggregation::AggregationCircuit;
+use crate::pfsys::{
+    load_pk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, Snark, TranscriptType,
+};
 use ethers::types::H160;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2curves::bn256::Bn256;
+use halo2curves::bn256::{Bn256, Fr};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -13,6 +18,7 @@ use pyo3_log;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
+
 /// pyclass containing the struct used for run_args
 #[pyclass]
 #[derive(Clone)]
@@ -121,6 +127,50 @@ fn float_to_vecu64(input: f64, scale: u32) -> PyResult<[u64; 4]> {
     ))
 }
 
+/// Generates a vk from a pk for a model circuit and saves it to a file
+#[pyfunction(signature = (
+    path_to_pk,
+    circuit_settings_path,
+    vk_output_path
+    ))]
+fn gen_vk_from_pk_single(
+    path_to_pk: PathBuf,
+    circuit_settings_path: PathBuf,
+    vk_output_path: PathBuf,
+) -> PyResult<bool> {
+    let settings = GraphSettings::load(&circuit_settings_path)
+        .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
+
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(path_to_pk, settings)
+        .map_err(|_| PyIOError::new_err("Failed to load pk"))?;
+
+    let vk = pk.get_vk();
+
+    // now save
+    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_output_path, vk)
+        .map_err(|_| PyIOError::new_err("Failed to save vk"))?;
+
+    Ok(true)
+}
+
+/// Generates a vk from a pk for an aggregate circuit and saves it to a file
+#[pyfunction(signature = (
+    path_to_pk,
+    vk_output_path
+    ))]
+fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult<bool> {
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(path_to_pk, ())
+        .map_err(|_| PyIOError::new_err("Failed to load pk"))?;
+
+    let vk = pk.get_vk();
+
+    // now save
+    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_output_path, vk)
+        .map_err(|_| PyIOError::new_err("Failed to save vk"))?;
+
+    Ok(true)
+}
+
 /// Displays the table as a string in python
 #[pyfunction(signature = (
     model,
@@ -154,7 +204,11 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
     settings_path=None,
     logrows=None,
 ))]
-fn get_srs(srs_path: PathBuf, settings_path: Option<PathBuf>, logrows: Option<u32>) -> PyResult<bool> {
+fn get_srs(
+    srs_path: PathBuf,
+    settings_path: Option<PathBuf>,
+    logrows: Option<u32>,
+) -> PyResult<bool> {
     Runtime::new()
         .unwrap()
         .block_on(crate::execute::get_srs_cmd(
@@ -664,6 +718,8 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(vecu64_to_int, m)?)?;
     m.add_function(wrap_pyfunction!(vecu64_to_float, m)?)?;
     m.add_function(wrap_pyfunction!(float_to_vecu64, m)?)?;
+    m.add_function(wrap_pyfunction!(gen_vk_from_pk_aggr, m)?)?;
+    m.add_function(wrap_pyfunction!(gen_vk_from_pk_single, m)?)?;
     m.add_function(wrap_pyfunction!(table, m)?)?;
     m.add_function(wrap_pyfunction!(mock, m)?)?;
     m.add_function(wrap_pyfunction!(setup, m)?)?;

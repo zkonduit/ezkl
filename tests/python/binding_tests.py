@@ -224,7 +224,6 @@ def test_get_srs():
     assert os.path.isfile(another_srs_path)
 
 
-
 def test_mock():
     """
     Test for mock
@@ -277,6 +276,10 @@ def test_setup():
     assert os.path.isfile(vk_path)
     assert os.path.isfile(pk_path)
     assert os.path.isfile(settings_path)
+
+    res = ezkl.gen_vk_from_pk_single(pk_path, settings_path, vk_path)
+    assert res == True
+    assert os.path.isfile(vk_path)
 
 
 def test_setup_evm():
@@ -531,6 +534,10 @@ async def aggregate_and_verify_aggr():
         params_k20_path,
         20,
     )
+
+    res = ezkl.gen_vk_from_pk_aggr(aggregate_pk_path, aggregate_vk_path)
+    assert res == True
+    assert os.path.isfile(vk_path)
 
     res = ezkl.aggregate(
         aggregate_proof_path,
