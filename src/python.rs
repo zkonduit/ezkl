@@ -113,14 +113,16 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
 /// gets a public srs
 #[pyfunction(signature = (
     srs_path,
-    settings_path,
+    settings_path=None,
+    logrows=None,
 ))]
-fn get_srs(srs_path: PathBuf, settings_path: PathBuf) -> PyResult<bool> {
+fn get_srs(srs_path: PathBuf, settings_path: Option<PathBuf>, logrows: Option<u32>) -> PyResult<bool> {
     Runtime::new()
         .unwrap()
         .block_on(crate::execute::get_srs_cmd(
             srs_path,
             settings_path,
+            logrows,
             CheckMode::SAFE,
         ))
         .map_err(|e| {
