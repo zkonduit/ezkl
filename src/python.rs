@@ -127,7 +127,7 @@ fn float_to_vecu64(input: f64, scale: u32) -> PyResult<[u64; 4]> {
     ))
 }
 
-/// Generates a vk from a pk for a simple single proof and saves it to a file
+/// Generates a vk from a pk for a model circuit and saves it to a file
 #[pyfunction(signature = (
     path_to_pk,
     circuit_settings_path,
@@ -153,7 +153,7 @@ fn gen_vk_from_pk_single(
     Ok(true)
 }
 
-/// Generates a vk from a pk for an aggregate proof and saves it to a file
+/// Generates a vk from a pk for an aggregate circuit and saves it to a file
 #[pyfunction(signature = (
     path_to_pk,
     vk_output_path
