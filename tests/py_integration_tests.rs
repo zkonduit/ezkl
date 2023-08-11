@@ -115,8 +115,8 @@ mod py_tests {
         "data_attest.ipynb",
         "variance.ipynb",
         "mean_postgres.ipynb",
-        "simple_demo_aggregated_proofs.ipynb",
         "little_transformer.ipynb",
+        "simple_demo_aggregated_proofs.ipynb",
         // "lstm.ipynb"
     ];
 
