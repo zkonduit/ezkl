@@ -105,7 +105,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 9] = [
+    const TESTS: [&str; 10] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -116,6 +116,7 @@ mod py_tests {
         "variance.ipynb",
         "mean_postgres.ipynb",
         "little_transformer.ipynb",
+        "simple_demo_aggregated_proofs.ipynb",
         // "lstm.ipynb"
     ];
 
