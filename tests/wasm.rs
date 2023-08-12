@@ -14,10 +14,12 @@ mod wasm32 {
     use halo2curves::bn256::{Fr, G1Affine, Fq};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
-    pub use wasm_bindgen_rayon::init_thread_pool;
     use wasm_bindgen_test::*;
+    #[cfg(feature = "web")]
+    pub use wasm_bindgen_rayon::init_thread_pool;
+    
+    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-    wasm_bindgen_test_configure!(run_in_browser);
 
     pub const KZG_PARAMS: &[u8] = include_bytes!("../tests/wasm/kzg");
     pub const CIRCUIT_PARAMS: &[u8] = include_bytes!("../tests/wasm/settings.json");
