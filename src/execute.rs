@@ -666,8 +666,10 @@ pub(crate) async fn calibrate(
                 // we need to set the allocated constraints to 0 to avoid dummy pass
                 local_run_args.allocated_constraints = Some(settings.num_constraints);
                 // we don't want to calculate the params here
-                //  trigger a new dummy layout
-                local_run_args.allocated_constraints = None;
+                //  trigger a new dummy layout to get the number of pruned constraints
+                if local_run_args.param_visibility.is_public() {
+                    local_run_args.allocated_constraints = None;
+                }
 
                 let original_settings = settings.clone();
 
