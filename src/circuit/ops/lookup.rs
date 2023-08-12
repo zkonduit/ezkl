@@ -150,10 +150,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 Ok(tensor::ops::nonlinearities::leakyrelu(&x, *scale, 0_f64))
             }
 
-            LookupOp::LeakyReLU { scale, slope } => Ok(tensor::ops::nonlinearities::leakyrelu(
+            LookupOp::LeakyReLU { scale, slope: a } => Ok(tensor::ops::nonlinearities::leakyrelu(
                 &x,
                 *scale,
-                slope.0.into(),
+                a.0.into(),
             )),
             LookupOp::Sigmoid { scales } => {
                 Ok(tensor::ops::nonlinearities::sigmoid(&x, scales.0, scales.1))
@@ -220,33 +220,33 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         let name = match self {
-            LookupOp::Max { .. } => "MAX",
-            LookupOp::Min { .. } => "MIN",
-            LookupOp::Sign => "SIGN",
-            LookupOp::GreaterThan { .. } => "GREATER_THAN",
-            LookupOp::LessThan { .. } => "LESS_THAN",
-            LookupOp::Recip { .. } => "RECIP",
-            LookupOp::Div { .. } => "DIV",
-            LookupOp::Ln { .. } => "LN",
-            LookupOp::ReLU { .. } => "RELU",
-            LookupOp::LeakyReLU { .. } => "LEAKY_RELU",
-            LookupOp::Sigmoid { .. } => "SIGMOID",
-            LookupOp::Sqrt { .. } => "SQRT",
-            LookupOp::Erf { .. } => "ERF",
-            LookupOp::Rsqrt { .. } => "RSQRT",
-            LookupOp::Exp { .. } => "EXP",
-            LookupOp::Tan { .. } => "TAN",
-            LookupOp::ATan { .. } => "ATAN",
-            LookupOp::Tanh { .. } => "TANH",
-            LookupOp::ATanh { .. } => "ATANH",
-            LookupOp::Cos { .. } => "COS",
-            LookupOp::ACos { .. } => "ACOS",
-            LookupOp::Cosh { .. } => "COSH",
-            LookupOp::ACosh { .. } => "ACOSH",
-            LookupOp::Sin { .. } => "SIN",
-            LookupOp::ASin { .. } => "ASIN",
-            LookupOp::Sinh { .. } => "SINH",
-            LookupOp::ASinh { .. } => "ASINH",
+            LookupOp::Max { scales, a } => format!("MAX w/ {:?} /t {}", scales, a),
+            LookupOp::Min { scales, a } => format!("MIN w/ {:?} /t {}", scales, a),
+            LookupOp::Sign => "SIGN".into(),
+            LookupOp::GreaterThan { .. } => "GREATER_THAN".into(),
+            LookupOp::LessThan { .. } => "LESS_THAN".into(),
+            LookupOp::Recip { scale, .. } => format!("RECIP w/ {}", scale),
+            LookupOp::Div { denom, .. } => format!("DIV w/ {}", denom),
+            LookupOp::Ln { scales } => format!("LN w/ {:?}", scales),
+            LookupOp::ReLU { scale, .. } => format!("RELU w/ scale {}", scale),
+            LookupOp::LeakyReLU { scale, slope: a } => format!("L_RELU w/ {} /s {}", scale, a),
+            LookupOp::Sigmoid { scales } => format!("SIGMOID w/ {:?}", scales),
+            LookupOp::Sqrt { scales } => format!("SQRT w/ {:?}", scales),
+            LookupOp::Erf { scales } => format!("ERF w/ {:?}", scales),
+            LookupOp::Rsqrt { scales } => format!("RSQRT w/ {:?}", scales),
+            LookupOp::Exp { scales } => format!("EXP w/ {:?}", scales),
+            LookupOp::Tan { scales } => format!("TAN w/ {:?}", scales),
+            LookupOp::ATan { scales } => format!("ATAN w/ {:?}", scales),
+            LookupOp::Tanh { scales } => format!("TANH w/ {:?}", scales),
+            LookupOp::ATanh { scales } => format!("ATANH w/ {:?}", scales),
+            LookupOp::Cos { scales } => format!("COS w/ {:?}", scales),
+            LookupOp::ACos { scales } => format!("ACOS w/ {:?}", scales),
+            LookupOp::Cosh { scales } => format!("COSH w/ {:?}", scales),
+            LookupOp::ACosh { scales } => format!("ACOSH w/ {:?}", scales),
+            LookupOp::Sin { scales } => format!("SIN w/ {:?}", scales),
+            LookupOp::ASin { scales } => format!("ASIN w/ {:?}", scales),
+            LookupOp::Sinh { scales } => format!("SINH w/ {:?}", scales),
+            LookupOp::ASinh { scales } => format!("ASINH w/ {:?}", scales),
         };
         name.into()
     }

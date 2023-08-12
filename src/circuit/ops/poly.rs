@@ -82,32 +82,31 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     }
 
     fn as_string(&self) -> String {
-        let name = match &self {
-            PolyOp::MoveAxis { .. } => "MOVEAXIS",
-            PolyOp::Downsample { .. } => "DOWNSAMPLE",
-            PolyOp::Resize { .. } => "RESIZE",
-            PolyOp::Iff => "IFF",
-            PolyOp::Einsum { .. } => "EINSUM",
-            PolyOp::Identity => "IDENTITY",
-            PolyOp::Reshape(_) => "RESHAPE",
-            PolyOp::Flatten(_) => "FLATTEN",
-            PolyOp::Pad(_) => "PAD",
-            PolyOp::Add { .. } => "ADD",
-            PolyOp::Mult { .. } => "MULT",
-            PolyOp::Sub => "SUB",
-            PolyOp::Sum { .. } => "SUM",
-            PolyOp::Pow(_) => "POW",
-            PolyOp::Pack(_, _) => "PACK",
-            PolyOp::GlobalSumPool => "GLOBALSUMPOOL",
-            PolyOp::Conv { .. } => "CONV",
-            PolyOp::DeConv { .. } => "DECONV",
-            PolyOp::SumPool { .. } => "SUMPOOL",
-            PolyOp::Gather { .. } => "GATHER",
-            PolyOp::Concat { .. } => "CONCAT",
-            PolyOp::Slice { .. } => "SLICE",
-            PolyOp::Neg => "NEG",
-        };
-        name.into()
+        match &self {
+            PolyOp::MoveAxis { .. } => "MOVEAXIS".into(),
+            PolyOp::Downsample { .. } => "DOWNSAMPLE".into(),
+            PolyOp::Resize { .. } => "RESIZE".into(),
+            PolyOp::Iff => "IFF".into(),
+            PolyOp::Einsum { equation, .. } => format!("EINSUM {}", equation),
+            PolyOp::Identity => "IDENTITY".into(),
+            PolyOp::Reshape(_) => "RESHAPE".into(),
+            PolyOp::Flatten(_) => "FLATTEN".into(),
+            PolyOp::Pad(_) => "PAD".into(),
+            PolyOp::Add => "ADD".into(),
+            PolyOp::Mult => "MULT".into(),
+            PolyOp::Sub => "SUB".into(),
+            PolyOp::Sum { .. } => "SUM".into(),
+            PolyOp::Pow(_) => "POW".into(),
+            PolyOp::Pack(_, _) => "PACK".into(),
+            PolyOp::GlobalSumPool => "GLOBALSUMPOOL".into(),
+            PolyOp::Conv { .. } => "CONV".into(),
+            PolyOp::DeConv { .. } => "DECONV".into(),
+            PolyOp::SumPool { .. } => "SUMPOOL".into(),
+            PolyOp::Gather { .. } => "GATHER".into(),
+            PolyOp::Concat { .. } => "CONCAT".into(),
+            PolyOp::Slice { .. } => "SLICE".into(),
+            PolyOp::Neg => "NEG".into(),
+        }
     }
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.

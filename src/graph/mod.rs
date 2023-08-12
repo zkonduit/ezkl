@@ -490,7 +490,6 @@ impl GraphCircuit {
     pub fn new(
         model: Model,
         run_args: RunArgs,
-        check_mode: CheckMode,
     ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
         // // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
         let mut inputs: Vec<Vec<Fp>> = vec![];
@@ -502,7 +501,7 @@ impl GraphCircuit {
         // dummy module settings, must load from GraphData after
         let module_settings = ModuleSettings::default();
 
-        let mut settings = model.gen_params(run_args, check_mode)?;
+        let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
 
         let mut num_params = 0;
         if !model.const_shapes().is_empty() {
@@ -796,12 +795,7 @@ impl GraphCircuit {
             self.settings.run_args.logrows = logrows as u32;
         }
 
-        self.settings = GraphCircuit::new(
-            self.model.clone(),
-            self.settings.run_args,
-            self.settings.check_mode,
-        )?
-        .settings;
+        self.settings = GraphCircuit::new(self.model.clone(), self.settings.run_args)?.settings;
 
         Ok(())
     }
@@ -864,23 +858,21 @@ impl GraphCircuit {
     pub fn from_run_args(
         run_args: &RunArgs,
         model_path: &std::path::PathBuf,
-        check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let model = Model::from_run_args(run_args, model_path)?;
-        Self::new(model, *run_args, check_mode)
+        Self::new(model, *run_args)
     }
 
     ///
     pub fn preprocessed_from_run_args(
         run_args: &RunArgs,
         model_path: &std::path::PathBuf,
-        check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let model = Model::load(model_path.clone()).map_err(|e| {
             error!("failed to deserialize compiled model. have you called compile-model ?");
             e
         })?;
-        Self::new(model, *run_args, check_mode)
+        Self::new(model, *run_args)
     }
 
     /// Create a new circuit from a set of input data and [GraphSettings].

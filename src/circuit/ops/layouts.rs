@@ -30,7 +30,8 @@ use crate::{
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
 
-fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usize) -> usize {
+///
+pub fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usize) -> usize {
     let mut idx = starting_idx;
     // let x = idx / column_len;
     let y = idx % column_len;

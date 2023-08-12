@@ -88,7 +88,7 @@ impl Op<Fp> for Rescaled {
     fn required_lookups(&self) -> Vec<LookupOp> {
         let mut required_lookups = vec![];
         for scale in &self.scale {
-            if scale.1 != 0 {
+            if scale.1 > 1 {
                 required_lookups.push(LookupOp::Div {
                     denom: (scale.1 as f32).into(),
                 });
