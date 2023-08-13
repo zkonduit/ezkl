@@ -832,7 +832,7 @@ pub(crate) fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, B
 
 #[cfg(feature = "render")]
 pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(), Box<dyn Error>> {
-    let circuit = GraphCircuit::from_run_args(&args, &model, CheckMode::UNSAFE)?;
+    let circuit = GraphCircuit::from_run_args(&args, &model)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
