@@ -15,18 +15,6 @@ use super::{VarVisibility, Visibility};
 /// poseidon len to hash in tree
 pub const POSEIDON_LEN_GRAPH: usize = 10;
 
-// TODO: Need a dummy pass module to get the exact size of each module, this is a rough estimate
-/// Module sizes
-pub const POSEIDON_CONSTRAINTS_ESTIMATE: usize = 44;
-/// Module sizes
-pub const ELGAMAL_CONSTRAINTS_ESTIMATE: usize = 128;
-// 2^11
-/// Module sizes
-pub const POSEIDOIN_FIXED_COST_ESTIMATE: usize = 2048;
-// 2^17
-/// Module sizes
-pub const ELGAMAL_FIXED_COST_ESTIMATE: usize = 131072;
-
 /// Poseidon module type
 pub type ModulePoseidon =
     PoseidonChip<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>;
@@ -274,31 +262,19 @@ impl GraphModules {
         shapes: Vec<Vec<usize>>,
         sizes: &mut ModuleSizes,
     ) {
-        if visibility.is_hashed() {
-            for shape in shapes {
-                let total_len = shape.iter().product::<usize>();
-                sizes.poseidon.0 += POSEIDON_CONSTRAINTS_ESTIMATE * total_len;
-                if total_len > 0 {
-                    sizes.poseidon.0 += POSEIDOIN_FIXED_COST_ESTIMATE;
-                    sizes.poseidon.1[0] += 1;
-                }
-            }
-        } else if visibility.is_encrypted() {
-            let total_len = shapes
-                .iter()
-                .map(|x| x.iter().product::<usize>())
-                .sum::<usize>();
-
-            // 4 constraints for each ciphertext c1, c2, and sk
+        for shape in shapes {
+            let total_len = shape.iter().product::<usize>();
             if total_len > 0 {
-                // add the 1 time fixed cost of maingate + ecc chips
-                sizes.elgamal.0 += ELGAMAL_FIXED_COST_ESTIMATE;
-                sizes.elgamal.1[0] += 4;
-            }
-            // 1 constraint for each ciphertext c2 elem
-            for shape in shapes {
-                let total_len = shape.iter().product::<usize>();
-                sizes.elgamal.0 += ELGAMAL_CONSTRAINTS_ESTIMATE * total_len;
+                if visibility.is_hashed() {
+                    sizes.poseidon.0 += ModulePoseidon::num_rows(total_len);
+                    // 1 constraints for hash
+                    sizes.poseidon.1[0] += 1;
+                } else if visibility.is_encrypted() {
+                    // add the 1 time fixed cost of maingate + ecc chips
+                    sizes.elgamal.0 += ElGamalGadget::num_rows(total_len);
+                    // 4 constraints for each ciphertext c1, c2, and sk
+                    sizes.elgamal.1[0] += 4;
+                }
             }
         }
     }
@@ -430,9 +406,7 @@ impl GraphModules {
         if element_visibility.is_encrypted() {
             let variables = ElGamalVariables::gen_random(&mut rng);
             let ciphertexts = inputs.iter().fold(vec![], |mut acc, x| {
-                let res = ElGamalGadget::run((x.to_vec(), variables.clone()))
-                    .unwrap()
-                    ;
+                let res = ElGamalGadget::run((x.to_vec(), variables.clone())).unwrap();
                 acc.extend(res);
                 acc
             });

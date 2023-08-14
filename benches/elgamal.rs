@@ -6,7 +6,6 @@ use ezkl::circuit::modules::elgamal::{
 use ezkl::circuit::modules::Module;
 use ezkl::circuit::*;
 use ezkl::execute::create_proof_circuit_kzg;
-use ezkl::graph::modules::{ELGAMAL_CONSTRAINTS_ESTIMATE, ELGAMAL_FIXED_COST_ESTIMATE};
 use ezkl::pfsys::create_keys;
 use ezkl::pfsys::srs::gen_srs;
 use ezkl::pfsys::TranscriptType;
@@ -65,9 +64,7 @@ fn runelgamal(c: &mut Criterion) {
     for size in [784, 2352, 12288].iter() {
         let mut rng = test_rng();
 
-        let k = ((size * ELGAMAL_CONSTRAINTS_ESTIMATE + ELGAMAL_FIXED_COST_ESTIMATE) as f32)
-            .log2()
-            .ceil() as u32;
+        let k = (ElGamalGadget::num_rows(*size) as f32).log2().ceil() as u32;
         let params = gen_srs::<KZGCommitmentScheme<_>>(k);
 
         let var = ElGamalVariables::gen_random(&mut rng);
