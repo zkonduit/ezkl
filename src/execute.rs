@@ -9,7 +9,7 @@ use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_soli
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::graph::{TestDataSource, TestSources, Visibility};
+use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
@@ -576,7 +576,7 @@ pub(crate) fn gen_circuit_settings(
     params_output: PathBuf,
     run_args: RunArgs,
 ) -> Result<(), Box<dyn Error>> {
-    let circuit = GraphCircuit::from_run_args(&run_args, &model_path, CheckMode::SAFE)?;
+    let circuit = GraphCircuit::from_run_args(&run_args, &model_path)?;
     let params = circuit.settings;
     params.save(&params_output).map_err(Box::<dyn Error>::from)
 }
@@ -662,21 +662,13 @@ pub(crate) async fn calibrate(
                 // we need to create a new run args for each chunk
                 // time it
                 let chunk = chunk.clone();
-                let mut local_run_args = RunArgs { scale, ..run_args };
-                // we need to set the allocated constraints to 0 to avoid dummy pass
-                local_run_args.allocated_constraints = Some(settings.num_constraints);
-                // we don't want to calculate the params here
-                local_run_args.input_visibility = Visibility::Public;
-                local_run_args.param_visibility = Visibility::Public;
-                local_run_args.output_visibility = Visibility::Public;
+                let local_run_args = RunArgs { scale, ..run_args };
 
                 let original_settings = settings.clone();
 
-                // we need to set the output visibility to public to avoid dummy pass
-                let mut circuit =
-                    GraphCircuit::from_run_args(&local_run_args, &model_path, CheckMode::UNSAFE)
-                        .map_err(|_| "failed to create circuit from run args")
-                        .unwrap();
+                let mut circuit = GraphCircuit::from_run_args(&local_run_args, &model_path)
+                    .map_err(|_| "failed to create circuit from run args")
+                    .unwrap();
 
                 tokio::task::spawn(async move {
                     let data = circuit
@@ -708,6 +700,7 @@ pub(crate) async fn calibrate(
                         run_args: found_run_args,
                         required_lookups: circuit.settings.required_lookups,
                         model_output_scales: circuit.settings.model_output_scales,
+                        num_constraints: circuit.settings.num_constraints,
                         ..original_settings.clone()
                     };
 
@@ -743,7 +736,7 @@ pub(crate) async fn calibrate(
     debug!("Found {} sets of parameters", found_params.len());
 
     // now find the best params according to the target
-    match target {
+    let best_params = match target {
         CalibrationTarget::Resources => {
             let mut param_iterator = found_params.iter().sorted_by_key(|p| p.run_args.logrows);
 
@@ -751,13 +744,12 @@ pub(crate) async fn calibrate(
 
             // pick the ones that have the minimum logrows but also the largest scale:
             // this is the best tradeoff between resource usage and accuracy
-            let best_params = found_params
+            found_params
                 .iter()
                 .filter(|p| p.run_args.logrows == min_logrows)
                 .max_by_key(|p| p.run_args.scale)
-                .unwrap();
-
-            best_params.save(&settings_path)?;
+                .unwrap()
+                .clone()
         }
         CalibrationTarget::Accuracy => {
             let param_iterator = found_params.iter().sorted_by_key(|p| p.run_args.scale);
@@ -766,15 +758,16 @@ pub(crate) async fn calibrate(
 
             // pick the ones that have the max scale but also the smallest logrows:
             // this is the best tradeoff between resource usage and accuracy
-            let best_params = found_params
+            found_params
                 .iter()
                 .filter(|p| p.run_args.scale == max_scale)
                 .min_by_key(|p| p.run_args.logrows)
-                .unwrap();
-
-            best_params.save(&settings_path)?;
+                .unwrap()
+                .clone()
         }
-    }
+    };
+
+    best_params.save(&settings_path)?;
 
     debug!("Saved parameters.");
 
@@ -832,7 +825,7 @@ pub(crate) fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, B
 
 #[cfg(feature = "render")]
 pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(), Box<dyn Error>> {
-    let circuit = GraphCircuit::from_run_args(&args, &model, CheckMode::UNSAFE)?;
+    let circuit = GraphCircuit::from_run_args(&args, &model)?;
     info!("Rendering circuit");
 
     // Create the area we want to draw on.
@@ -1263,11 +1256,7 @@ pub(crate) async fn fuzz(
                 CheckMode::UNSAFE,
             )?
         }
-        None => GraphCircuit::preprocessed_from_run_args(
-            &run_args,
-            &compiled_model_path,
-            CheckMode::UNSAFE,
-        )?,
+        None => GraphCircuit::preprocessed_from_run_args(&run_args, &compiled_model_path)?,
     };
 
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)

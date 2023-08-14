@@ -476,12 +476,12 @@ jobs:
         #     # now dump the contents of the file into a file called kaggle.json
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+        - name: Keras tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
         - name: Simple aggregation tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_9_expects
         - name: Gan tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
-        - name: Keras tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
         - name: Little transformer tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects --no-capture
         - name: Mean tutorial

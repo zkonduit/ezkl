@@ -12,6 +12,7 @@ use halo2curves::ff::PrimeField;
 pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
     region: Option<Arc<Mutex<Region<'a, F>>>>,
     offset: usize,
+    total_constants: usize,
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
@@ -19,14 +20,22 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     pub fn new(region: Region<'a, F>, offset: usize) -> RegionCtx<'a, F> {
         let region = Some(Arc::new(Mutex::new(region)));
 
-        RegionCtx { region, offset }
+        RegionCtx {
+            region,
+            offset,
+            total_constants: 0,
+        }
     }
     /// Create a new region context from a wrapped region
     pub fn from_wrapped_region(
         region: Option<Arc<Mutex<Region<'a, F>>>>,
         offset: usize,
     ) -> RegionCtx<'a, F> {
-        RegionCtx { region, offset }
+        RegionCtx {
+            region,
+            offset,
+            total_constants: 0,
+        }
     }
     /// Get the region
     pub fn region(&self) -> Option<Arc<Mutex<Region<'a, F>>>> {
@@ -37,7 +46,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     pub fn new_dummy(offset: usize) -> RegionCtx<'a, F> {
         let region = None;
 
-        RegionCtx { region, offset }
+        RegionCtx {
+            region,
+            offset,
+            total_constants: 0,
+        }
     }
 
     /// Check if the region is dummy
@@ -50,8 +63,14 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         self.offset
     }
 
+    /// Get the total number of constants
+    pub fn total_constants(&self) -> usize {
+        self.total_constants
+    }
+
     /// Assign a constant value
     pub fn assign_constant(&mut self, var: &VarTensor, value: F) -> Result<ValType<F>, Error> {
+        self.total_constants += 1;
         if let Some(region) = &self.region {
             let mut lock = region.lock().unwrap();
             let cell = var.assign_constant(&mut lock, self.offset, value)?;
@@ -70,6 +89,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             let mut lock = region.lock().unwrap();
             var.assign(&mut lock, self.offset, values)
         } else {
+            self.total_constants += values.num_constants();
             Ok(values.clone())
         }
     }
@@ -85,6 +105,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             // duplicates every nth element to adjust for column overflow
             var.assign_with_duplication(&mut lock, self.offset, values, check_mode)
         } else {
+            self.total_constants += values.num_constants();
             var.dummy_assign_with_duplication(self.offset, values)
         }
     }
@@ -108,5 +129,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     /// Increment the offset
     pub fn increment(&mut self, n: usize) {
         self.offset += n
+    }
+
+    /// increment constants
+    pub fn increment_constants(&mut self, n: usize) {
+        self.total_constants += n
     }
 }

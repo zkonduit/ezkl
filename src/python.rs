@@ -73,7 +73,6 @@ impl From<PyRunArgs> for RunArgs {
             input_visibility: py_run_args.input_visibility,
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
-            allocated_constraints: py_run_args.allocated_constraints,
             batch_size: py_run_args.batch_size,
         }
     }
