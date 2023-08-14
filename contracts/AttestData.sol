@@ -21,7 +21,7 @@ contract DataAttestationVerifier {
 
     /**
      * @notice EZKL P value 
-     * @dev In order to prevent the verifier from accepting two version of the same pubInput, n and the quantity (n + P),  where n + P <= 2^256, we require that all pubInputs are stricly less than P. a
+     * @dev In order to prevent the verifier from accepting two version of the same pubInput, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
      * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
      */
     uint256 constant SIZE_LIMIT = 21888242871839275222246405745257275088696311157297823662689037894645226208583; 
@@ -159,9 +159,9 @@ contract DataAttestationVerifier {
         }
     }
 
-    function attestData(uint256[] calldata pubInputs) internal view {
+    function attestData(uint256[] calldata instances) internal view {
         require(
-            pubInputs.length >= INPUT_CALLS + OUTPUT_CALLS,
+            instances.length >= INPUT_CALLS + OUTPUT_CALLS,
             "Invalid public inputs length"
         );
         uint256 _accountCount = accountCalls.length;
@@ -183,7 +183,7 @@ contract DataAttestationVerifier {
                     scale
                 );
                 require(
-                    quantized_data == pubInputs[counter + instanceOffset],
+                    quantized_data == instances[counter + instanceOffset],
                     "Public input does not match"
                 );
                 counter++;
@@ -192,12 +192,12 @@ contract DataAttestationVerifier {
     }
 
     function verifyWithDataAttestation(
-        uint256[] calldata pubInputs,
+        uint256[] calldata instances,
         bytes calldata proof
     ) public view returns (bool) {
         bool success = true;
         bytes32[] memory transcript;
-        attestData(pubInputs);
+        attestData(instances);
         assembly { /* This is where the proof verification happens*/ }
         return success;
     }
