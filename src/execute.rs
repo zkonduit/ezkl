@@ -662,14 +662,7 @@ pub(crate) async fn calibrate(
                 // we need to create a new run args for each chunk
                 // time it
                 let chunk = chunk.clone();
-                let mut local_run_args = RunArgs { scale, ..run_args };
-                // we need to set the allocated constraints to 0 to avoid dummy pass
-                local_run_args.allocated_constraints = Some(settings.num_constraints);
-                // we don't want to calculate the params here
-                //  trigger a new dummy layout to get the number of pruned constraints
-                if local_run_args.param_visibility.is_public() {
-                    local_run_args.allocated_constraints = None;
-                }
+                let local_run_args = RunArgs { scale, ..run_args };
 
                 let original_settings = settings.clone();
 
