@@ -156,23 +156,25 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Mock proving tests (hashed inputs)
+      - name: hashed inputs
         run: cargo nextest run --release --verbose tests::mock_hashed_input_::t  --test-threads 32
-      - name: Mock proving tests (hashed params)
+      - name: hashed params
         run: cargo nextest run --release --verbose tests::mock_hashed_params_::t  --test-threads 32
-      - name: Mock proving tests (hashed outputs)
+      - name: hashed outputs
         run: cargo nextest run --release --verbose tests::mock_hashed_output_::t  --test-threads 32
-      - name: Mock proving tests (encrypted inputs)
+      - name: hashed inputs + params + outputs)
+        run: cargo nextest run --release --verbose tests::mock_hashed_all_::t  --test-threads 32
+      - name: encrypted inputs
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_::t  --test-threads 32
-      - name: Mock proving tests (encrypted params)
+      - name: encrypted params
         run: cargo nextest run --release --verbose tests::mock_encrypted_params_::t  --test-threads 32
-      - name: Mock proving tests (encrypted outputs)
+      - name: encrypted outputs
         run: cargo nextest run --release --verbose tests::mock_encrypted_output_::t  --test-threads 32
-      - name: Mock proving tests (encrypted inputs + params)
+      - name: encrypted inputs + params)
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_params_::t  --test-threads 32
-      - name: Mock proving tests (encrypted inputs + params + outputs)
+      - name: encrypted inputs + params + outputs)
         run: cargo nextest run --release --verbose tests::mock_encrypted_all_::t  --test-threads 32
-      - name: Mock proving tests (encrypted inputs + hashed params)
+      - name: encrypted inputs + hashed params)
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
       - name: MNIST Gan Mock
         run: cargo nextest run --release --verbose tests::large_mock_::large_tests_4_expects -- --include-ignored
@@ -182,13 +184,13 @@ jobs:
         run: cargo nextest run --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
       - name: Multihead Attention Mock
         run: cargo nextest run --release --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
-      - name: Mock proving tests (public outputs)
+      - name: public outputs
         run: cargo nextest run --release --verbose tests::mock_public_outputs_ --test-threads 32
-      - name: Mock proving tests (public outputs + batch size == 10)
+      - name: public outputs + batch size == 10)
         run: cargo nextest run --release --verbose tests::mock_large_batch_public_outputs_ --test-threads 32
-      - name: Mock proving tests (public inputs)
+      - name: public inputs
         run: cargo nextest run --release --verbose tests::mock_public_inputs_ --test-threads 32
-      - name: Mock proving tests (public params)
+      - name: public params
         run: cargo nextest run --release --verbose tests::mock_public_params_ --test-threads 32
      
 
@@ -395,7 +397,7 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Mock proving tests (should fail)
+      - name: should fail)
         run: cargo nextest run neg_tests::neg_examples_
 
   python-tests:
