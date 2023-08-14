@@ -162,9 +162,6 @@ pub struct RunArgs {
     /// Flags whether params are public, private, hashed
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
-    /// the number of constraints the circuit might use. If not specified, this will be calculated using a 'dummy layout' pass.
-    #[arg(long)]
-    pub allocated_constraints: Option<usize>,
 }
 use lazy_static::lazy_static;
 

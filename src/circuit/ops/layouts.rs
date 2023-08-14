@@ -30,7 +30,8 @@ use crate::{
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
 
-fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usize) -> usize {
+///
+pub fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usize) -> usize {
     let mut idx = starting_idx;
     // let x = idx / column_len;
     let y = idx % column_len;
@@ -78,6 +79,8 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         let overflowed_len =
             overflowed_len(region.offset(), values[0].len(), config.output.col_size());
         region.increment(overflowed_len);
+        let num_constants = values[0].num_constants() + values[1].num_constants();
+        region.increment_constants(num_constants);
         return Ok(Tensor::from([ValType::<F>::from(Value::<F>::unknown())].into_iter()).into());
     }
 
@@ -628,6 +631,8 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     if region.is_dummy() {
         region.increment(lhs.len());
+        let num_constants = lhs.num_constants() + rhs.num_constants();
+        region.increment_constants(num_constants);
         let vals = vec![ValType::Value(Value::<F>::unknown()); broadcasted_shape.iter().product()];
         let mut tensor: Tensor<ValType<F>> = Tensor::from(vals.into_iter());
         tensor.reshape(&broadcasted_shape);
@@ -1503,6 +1508,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     if region.is_dummy() {
         region.increment(x.len());
+        region.increment_constants(x.num_constants());
         let dims = x.dims();
         let vals = vec![ValType::Value(Value::<F>::unknown()); x.len()];
         let mut x = Tensor::from(vals.into_iter());

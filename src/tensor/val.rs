@@ -27,6 +27,10 @@ impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + Partia
             ValType::PrevAssigned(_) | ValType::AssignedConstant(..)
         )
     }
+    /// Returns true if the value is constant.
+    pub fn is_constant(&self) -> bool {
+        matches!(self, ValType::Constant(_) | ValType::AssignedConstant(..))
+    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
@@ -232,6 +236,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         match self {
             ValTensor::Value { scale, .. } => *scale,
             ValTensor::Instance { scale, .. } => *scale,
+        }
+    }
+
+    /// Returns the number of constants in the [ValTensor].
+    pub fn num_constants(&self) -> usize {
+        match self {
+            ValTensor::Value { inner, .. } => inner.iter().filter(|x| x.is_constant()).count(),
+            ValTensor::Instance { .. } => 0,
         }
     }
 

@@ -13,11 +13,11 @@
         "batch_size": 1,
         "input_visibility": "Private",
         "output_visibility": "Public",
-        "param_visibility": "Private",
-        "allocated_constraints": null
+        "param_visibility": "Private"
     },
     "version": "0.0.0-git",
     "num_constraints": 24,
+    "total_const_size": 0,
     "model_output_scales": [
         7
     ],

@@ -1,18 +1,18 @@
+use crate::circuit::modules::elgamal::{ElGamalCipher, ElGamalVariablesSer};
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::PoseidonChip;
-use crate::circuit::modules::elgamal::{ElGamalCipher, ElGamalVariablesSer};
 use crate::circuit::modules::Module;
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
+use crate::pfsys::{field_to_vecu64, vecu64_to_field};
 use halo2_proofs::plonk::*;
 use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
-use halo2curves::bn256::{Bn256, Fr, G1Affine, Fq, G1};
+use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use crate::pfsys::{vecu64_to_field, field_to_vecu64};
 
 use crate::tensor::TensorType;
 use wasm_bindgen::prelude::*;
@@ -47,37 +47,31 @@ pub fn poseidonHash(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
 
     let output: Vec<Vec<[u64; 4]>> = output
         .into_iter()
-        .map(|v| v.into_iter().map(|b| field_to_vecu64(&b) ).collect())
+        .map(|v| v.into_iter().map(|b| field_to_vecu64(&b)).collect())
         .collect();
 
     serde_json::to_vec(&output).unwrap()
 }
 
-/// Generates random elgamal variables from a random seed value in browser. 
+/// Generates random elgamal variables from a random seed value in browser.
 /// Make sure input seed comes a secure source of randomness
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn elgamalGenRandom(
-    rng: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Vec<u8> {
-
-    let seed: &[u8] = &rng;  
-    let mut rng = StdRng::from_seed(seed.try_into().unwrap()); 
+pub fn elgamalGenRandom(rng: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
+    let seed: &[u8] = &rng;
+    let mut rng = StdRng::from_seed(seed.try_into().unwrap());
 
     let output = crate::circuit::modules::elgamal::ElGamalVariables::gen_random(&mut rng);
 
-    let output= ElGamalVariablesSer {
+    let output = ElGamalVariablesSer {
         r: field_to_vecu64(&output.r),
         sk: field_to_vecu64(&output.sk),
-        pk: [
-            field_to_vecu64(&output.pk.x),
-            field_to_vecu64(&output.pk.y),
-        ],
+        pk: [field_to_vecu64(&output.pk.x), field_to_vecu64(&output.pk.y)],
         window_size: output.window_size,
         aux_generator: [
             field_to_vecu64(&output.aux_generator.x),
             field_to_vecu64(&output.aux_generator.y),
-        ]
+        ],
     };
 
     serde_json::to_vec(&output).unwrap()
@@ -130,11 +124,11 @@ pub fn elgamalDecrypt(
         c1: G1 {
             x: Fq::from_raw(cipher.0[0]),
             y: Fq::from_raw(cipher.0[1]),
-            z: Fq::from_raw(cipher.0[2])
+            z: Fq::from_raw(cipher.0[2]),
         },
         c2: cipher.1.iter().map(|b| vecu64_to_field(b)).collect(),
     };
-    
+
     let output = crate::circuit::modules::elgamal::ElGamalGadget::decrypt(&cipher, sk);
 
     let output: Vec<[u64; 4]> = output.iter().map(|b| field_to_vecu64(b)).collect();
@@ -212,12 +206,7 @@ pub fn prove(
     let mut reader = std::io::BufReader::new(&circuit_ser[..]);
     let model = crate::graph::Model::new(&mut reader, circuit_settings.run_args).unwrap();
 
-    let mut circuit = GraphCircuit::new(
-        model,
-        circuit_settings.run_args,
-        crate::circuit::CheckMode::UNSAFE,
-    )
-    .unwrap();
+    let mut circuit = GraphCircuit::new(model, circuit_settings.run_args).unwrap();
 
     // prep public inputs
     circuit.load_graph_witness(&data).unwrap();
