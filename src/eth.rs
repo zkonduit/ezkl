@@ -93,7 +93,7 @@ pub async fn deploy_verifier_via_solidity(
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "Verifier", Some(1000))?;
+        get_contract_artifacts(sol_code_path, "Verifier", Some(10000))?;
     let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone())?;
 
     let contract = factory.deploy(())?.send().await?;
@@ -175,7 +175,7 @@ pub async fn deploy_da_verifier_via_solidity(
     };
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestationVerifier", Some(1000))?;
+        get_contract_artifacts(sol_code_path, "DataAttestationVerifier", Some(10000))?;
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
 
