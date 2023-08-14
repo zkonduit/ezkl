@@ -82,9 +82,6 @@ impl VarTensor {
     pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize) {
         match self {
             VarTensor::Advice { col_size, .. } => {
-                if linear_coord >= *col_size {
-                    error!("linear_coord: {}, col_size: {}", linear_coord, col_size);
-                }
                 let x = linear_coord / col_size;
                 let y = linear_coord % col_size;
                 (x, y)
