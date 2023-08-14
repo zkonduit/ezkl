@@ -353,12 +353,29 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         // import numpy as np
         // x = [2, 512, 514, 1024, 2048]
         // y = [405, 23918, 23919, 47432, 93257]
-        // slope, intercept = np.polyfit(x, y, 1)
-        // print(slope, intercept)
+        // def fit_above(x, y) :
+        //     x0, y0 = x[0] - 1, y[0]
+        //     x -= x0
+        //     y -= y0
+        //     def error_function_2(b, x, y) :
+        //         a = np.min((y - b) / x)
+        //         return np.sum((y - a * x - b)**2)
+        //     b = scipy.optimize.minimize(error_function_2, [0], args=(x, y)).x[0]
+        //     a = np.max((y - b) / x)
+        //     return a, b - a * x0 + y0
+        // a, b = fit_above(x, y)
+        // plt.plot(x, y, 'o')
+        // plt.plot(x, a*x + b, '-')
+        // plt.show()
+
+        // for (x_i, y_i) in zip(x,y):
+        // assert y_i <= a*x_i + b
+
+        // print(a, b)
         // ```
         // note that the number of constraints is not linear, but the slope is a good approximation as odd numbers of input_len use the same number of rows as the previous even number
-        const NUM_CONSTRAINTS_SLOPE: usize = 46;
-        const NUM_CONSTRAINTS_INTERCEPT: usize = 596;
+        const NUM_CONSTRAINTS_SLOPE: usize = 47;
+        const NUM_CONSTRAINTS_INTERCEPT: usize = 314;
 
         // check if even or odd
         let is_even = input_len % 2 == 0;

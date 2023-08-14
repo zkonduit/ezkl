@@ -776,11 +776,26 @@ impl Module<Fr> for ElGamalGadget {
         // import numpy as np
         // x = [1, 2, 3, 512, 513, 514]
         // y = [75424, 75592, 75840, 161017, 161913, 162000]
-        // slope, intercept = np.polyfit(x, y, 1)
-        // print(slope, intercept)
+        // def fit_above(x, y) :
+        //     x0, y0 = x[0] - 1, y[0]
+        //     x -= x0
+        //     y -= y0
+        //     def error_function_2(b, x, y) :
+        //         a = np.min((y - b) / x)
+        //         return np.sum((y - a * x - b)**2)
+        //     b = scipy.optimize.minimize(error_function_2, [0], args=(x, y)).x[0]
+        //     a = np.max((y - b) / x)
+        //     return a, b - a * x0 + y0
+        // a, b = fit_above(x, y)
+        // plt.plot(x, y, 'o')
+        // plt.plot(x, a*x + b, '-')
+        // plt.show()
+        // for (x_i, y_i) in zip(x,y):
+        // assert y_i <= a*x_i + b
+        // print(a, b)
         // ```
-        const NUM_CONSTRAINTS_SLOPE: usize = 168;
-        const NUM_CONSTRAINTS_INTERCEPT: usize = 75395;
+        const NUM_CONSTRAINTS_SLOPE: usize = 196;
+        const NUM_CONSTRAINTS_INTERCEPT: usize = 75257;
 
         // check if even or odd
         input_len * NUM_CONSTRAINTS_SLOPE + NUM_CONSTRAINTS_INTERCEPT
