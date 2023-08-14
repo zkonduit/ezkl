@@ -296,13 +296,9 @@ impl Model {
         );
         // this is the total number of variables we will need to allocate
         // for the circuit
-
-        let num_constraints = if let Some(num_constraints) = run_args.allocated_constraints {
-            num_constraints
-        } else {
-            self.dummy_layout(&run_args, &self.graph.input_shapes())
-                .unwrap()
-        };
+        let (num_constraints, total_const_size) = self
+            .dummy_layout(&run_args, &self.graph.input_shapes())
+            .unwrap();
 
         // Then number of columns in the circuits
         info!(
@@ -342,6 +338,7 @@ impl Model {
             num_constraints,
             required_lookups: lookup_ops,
             model_output_scales: self.graph.get_output_scales(),
+            total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
         })
@@ -747,7 +744,10 @@ impl Model {
                         })
                         .collect_vec();
                 }
-                info!("computing...");
+                info!(
+                    "computing proof over {} assigned rows",
+                    thread_safe_region.offset()
+                );
                 Ok(outputs)
             },
         )?;
@@ -846,7 +846,7 @@ impl Model {
         &self,
         run_args: &RunArgs,
         input_shapes: &[Vec<usize>],
-    ) -> Result<usize, Box<dyn Error>> {
+    ) -> Result<(usize, usize), Box<dyn Error>> {
         info!("calculating num of constraints using dummy model layout...");
 
         let start_time = instant::Instant::now();
@@ -901,7 +901,7 @@ impl Model {
         let duration = start_time.elapsed();
         trace!("dummy model layout took: {:?}", duration);
 
-        Ok(region.offset())
+        Ok((region.offset(), region.total_constants()))
     }
 
     /// Retrieves all constants from the model.

@@ -382,6 +382,8 @@ pub struct GraphSettings {
     pub run_args: RunArgs,
     /// the potential number of constraints in the circuit
     pub num_constraints: usize,
+    /// total const size
+    pub total_const_size: usize,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
@@ -770,16 +772,7 @@ impl GraphCircuit {
                     .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
                 let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize;
                 logrows = std::cmp::max(logrows, instance_len_logrows);
-            // this is for fixed const columns
-            } else if self.settings.run_args.param_visibility.is_public() {
-                // if private input then public inputs col will have 0
-                let total_const_len = self
-                    .model
-                    .const_shapes()
-                    .iter()
-                    .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
-                let const_len_logrows = (total_const_len as f64).log2().ceil() as usize + 1;
-                logrows = std::cmp::max(logrows, const_len_logrows);
+                // this is for fixed const columns
             }
 
             // ensure logrows is at least 7
@@ -796,6 +789,11 @@ impl GraphCircuit {
         }
 
         self.settings = GraphCircuit::new(self.model.clone(), self.settings.run_args)?.settings;
+
+        let total_const_len = self.settings.total_const_size;
+        let const_len_logrows = (total_const_len as f64).log2().ceil() as u32 + 1;
+        self.settings.run_args.logrows =
+            std::cmp::max(self.settings.run_args.logrows, const_len_logrows);
 
         Ok(())
     }
@@ -989,7 +987,6 @@ impl Circuit<Fp> for GraphCircuit {
             params.run_args.logrows as usize,
             params.num_constraints,
             params.model_instance_shapes.clone(),
-            visibility.clone(),
             params.run_args.scale,
         );
 

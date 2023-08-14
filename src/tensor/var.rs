@@ -14,13 +14,7 @@ pub enum VarTensor {
         /// Number of rows available to be used in each column of the storage
         col_size: usize,
     },
-    /// A VarTensor for holding Fixed values, which are assigned at circuit definition time.
-    Fixed {
-        /// Vec of Fixed columns
-        inner: Vec<Column<Fixed>>,
-        /// Number of rows available to be used in each column of the storage
-        col_size: usize,
-    },
+
     /// Dummy var
     Dummy {
         /// Number of rows available to be used in each column of the storage
@@ -68,40 +62,10 @@ impl VarTensor {
         VarTensor::Dummy { col_size: max_rows }
     }
 
-    /// Create a new VarTensor::Fixed
-    /// Arguments
-    /// * `cs` - `ConstraintSystem` from which the columns will be allocated.
-    /// * `logrows` - log2 number of rows in the matrix, including any system and blinding rows.
-    /// * `capacity` - number of advice cells for this tensor
-    pub fn new_fixed<F: PrimeField>(
-        cs: &mut ConstraintSystem<F>,
-        logrows: usize,
-        capacity: usize,
-    ) -> Self {
-        let base = 2u32;
-        let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
-        let mut modulo = (capacity / max_rows) + 1;
-        // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
-        modulo = ((capacity + modulo) / max_rows) + 1;
-
-        let mut fixed = vec![];
-        for _ in 0..modulo {
-            let col = cs.fixed_column();
-            cs.enable_constant(col);
-            fixed.push(col);
-        }
-
-        VarTensor::Fixed {
-            inner: fixed,
-            col_size: max_rows,
-        }
-    }
-
     /// Gets the dims of the object the VarTensor represents
     pub fn num_cols(&self) -> usize {
         match self {
             VarTensor::Advice { inner, .. } => inner.len(),
-            VarTensor::Fixed { inner, .. } => inner.len(),
             _ => 0,
         }
     }
@@ -109,9 +73,7 @@ impl VarTensor {
     /// Gets the size of each column
     pub fn col_size(&self) -> usize {
         match self {
-            VarTensor::Advice { col_size, .. }
-            | VarTensor::Fixed { col_size, .. }
-            | VarTensor::Dummy { col_size } => *col_size,
+            VarTensor::Advice { col_size, .. } | VarTensor::Dummy { col_size } => *col_size,
             _ => 0,
         }
     }
@@ -119,7 +81,10 @@ impl VarTensor {
     /// Take a linear coordinate and output the (column, row) position in the storage block.
     pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize) {
         match self {
-            VarTensor::Advice { col_size, .. } | VarTensor::Fixed { col_size, .. } => {
+            VarTensor::Advice { col_size, .. } => {
+                if linear_coord >= *col_size {
+                    error!("linear_coord: {}, col_size: {}", linear_coord, col_size);
+                }
                 let x = linear_coord / col_size;
                 let y = linear_coord % col_size;
                 (x, y)
@@ -139,16 +104,6 @@ impl VarTensor {
         rng: usize,
     ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
         match &self {
-            VarTensor::Fixed { inner: fixed, .. } => {
-                let c = Tensor::from(
-                    // this should fail if dims is empty, should be impossible
-                    (0..rng).map(|i| {
-                        let (x, y) = self.cartesian_coord(idx_offset + i);
-                        meta.query_fixed(fixed[x], Rotation(rotation_offset + y as i32))
-                    }),
-                );
-                Ok(c)
-            }
             // when advice we have 1 col per row
             VarTensor::Advice { inner: advices, .. } => {
                 let c = Tensor::from(
@@ -168,7 +123,7 @@ impl VarTensor {
     }
 
     /// Assigns a constant value to a specific cell in the tensor.
-    pub fn assign_constant<F: PrimeField + TensorType>(
+    pub fn assign_constant<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Region<F>,
         offset: usize,
@@ -179,9 +134,6 @@ impl VarTensor {
         match &self {
             VarTensor::Advice { inner: advices, .. } => {
                 region.assign_advice_from_constant(|| "constant", advices[x], y, constant)
-            }
-            VarTensor::Fixed { inner: fixed, .. } => {
-                region.assign_fixed(|| "constant", fixed[x], y, || Value::known(constant))
             }
             _ => panic!(),
         }
@@ -223,49 +175,14 @@ impl VarTensor {
             ValTensor::Value { inner: v, .. } => Ok(v
                 .enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    let cell = match k.clone() {
-                        ValType::Value(v) => match &self {
-                            VarTensor::Fixed { inner: fixed, .. } => {
-                                region.assign_fixed(|| "k", fixed[x], y, || v)
-                            }
-                            VarTensor::Advice { inner: advices, .. } => {
-                                region.assign_advice(|| "k", advices[x], y, || v)
-                            }
-                            _ => unimplemented!(),
-                        },
-                        ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
-                            match &self {
-                                VarTensor::Advice { inner: advices, .. } => {
-                                    v.copy_advice(|| "k", region, advices[x], y)
-                                }
-                                _ => {
-                                    error!("PrevAssigned is only supported for advice columns");
-                                    Err(halo2_proofs::plonk::Error::Synthesis)
-                                }
-                            }
-                        }
-                        ValType::AssignedValue(v) => match &self {
-                            VarTensor::Fixed { inner: fixed, .. } => region
-                                .assign_fixed(|| "k", fixed[x], y, || v)
-                                .map(|a| a.evaluate()),
-                            VarTensor::Advice { inner: advices, .. } => region
-                                .assign_advice(|| "k", advices[x], y, || v)
-                                .map(|a| a.evaluate()),
-                            _ => unimplemented!(),
-                        },
-                        ValType::Constant(v) => self.assign_constant(region, offset + coord, v),
-                    }?;
+                    let cell = self.assign_value(region, offset, k.clone(), x, y, coord)?;
 
                     match k {
-                        ValType::Constant(f) => {
-                            Ok::<ValType<F>, halo2_proofs::plonk::Error>(ValType::AssignedConstant(cell, f))
-                        },
-                        ValType::AssignedConstant(_, f) => {
-                            Ok(ValType::AssignedConstant(cell, f))
-                        },
-                        _ => {
-                            Ok(ValType::PrevAssigned(cell))
-                        }
+                        ValType::Constant(f) => Ok::<ValType<F>, halo2_proofs::plonk::Error>(
+                            ValType::AssignedConstant(cell, f),
+                        ),
+                        ValType::AssignedConstant(_, f) => Ok(ValType::AssignedConstant(cell, f)),
+                        _ => Ok(ValType::PrevAssigned(cell)),
                     }
                 })?
                 .into()),
@@ -322,41 +239,7 @@ impl VarTensor {
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
 
-
-                    let cell = match k.clone() {
-                        ValType::Value(v) => match &self {
-                            VarTensor::Fixed { inner: fixed, .. } => {
-                                region.assign_fixed(|| "k", fixed[x], y, || v)
-
-                            }
-                            VarTensor::Advice { inner: advices, .. } => {
-                                region.assign_advice(|| "k", advices[x], y, || v)
-
-                            },
-                            _ => unimplemented!(),
-                        },
-                        ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => match &self {
-                            VarTensor::Advice { inner: advices, .. } => {
-                                v.copy_advice(|| "k", region, advices[x], y)
-                            }
-                            _ => {
-                                error!("PrevAssigned is only supported for advice columns");
-                                Err(halo2_proofs::plonk::Error::Synthesis)},
-
-                        },
-                        ValType::AssignedValue(v) => match &self {
-                            VarTensor::Fixed { inner: fixed, .. } => region
-                                .assign_fixed(|| "k", fixed[x], y, || v)
-                                .map(|a| a.evaluate()),
-                            VarTensor::Advice { inner: advices, .. } => region
-                                .assign_advice(|| "k", advices[x], y, || v)
-                                .map(|a| a.evaluate()),
-                            _ => unimplemented!(),
-                        },
-                        ValType::Constant(v) => {
-                            self.assign_constant(region, offset + coord, v)
-                        }
-                    }?;
+                    let cell = self.assign_value(region, offset, k.clone(), x, y, coord)?;
 
                     if y == (self.col_size() - 1)   {
                         // if we are at the end of the column, we need to copy the cell to the next column
@@ -381,7 +264,7 @@ impl VarTensor {
                             Ok(ValType::PrevAssigned(cell))
                         }
                     }
-                   
+
                 })?.into()};
                 let total_used_len = res.len();
                 res.remove_every_n(self.col_size(), offset).unwrap();
@@ -404,6 +287,41 @@ impl VarTensor {
 
                 Ok((res, total_used_len))
             }
+        }
+    }
+
+    fn assign_value<F: PrimeField + TensorType + PartialOrd>(
+        &self,
+        region: &mut Region<F>,
+        offset: usize,
+        k: ValType<F>,
+        x: usize,
+        y: usize,
+        coord: usize,
+    ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
+        match k.clone() {
+            ValType::Value(v) => match &self {
+                VarTensor::Advice { inner: advices, .. } => {
+                    region.assign_advice(|| "k", advices[x], y, || v)
+                }
+                _ => unimplemented!(),
+            },
+            ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => match &self {
+                VarTensor::Advice { inner: advices, .. } => {
+                    v.copy_advice(|| "k", region, advices[x], y)
+                }
+                _ => {
+                    error!("PrevAssigned is only supported for advice columns");
+                    Err(halo2_proofs::plonk::Error::Synthesis)
+                }
+            },
+            ValType::AssignedValue(v) => match &self {
+                VarTensor::Advice { inner: advices, .. } => region
+                    .assign_advice(|| "k", advices[x], y, || v)
+                    .map(|a| a.evaluate()),
+                _ => unimplemented!(),
+            },
+            ValType::Constant(v) => self.assign_constant(region, offset + coord, v),
         }
     }
 }
