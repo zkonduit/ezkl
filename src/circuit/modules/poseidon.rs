@@ -375,7 +375,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         // ```
         // note that the number of constraints is not linear, but the slope is a good approximation as odd numbers of input_len use the same number of rows as the previous even number
         const NUM_CONSTRAINTS_SLOPE: usize = 47;
-        const NUM_CONSTRAINTS_INTERCEPT: usize = 314;
+        const NUM_CONSTRAINTS_INTERCEPT: usize = 406;
 
         // check if even or odd
         let is_even = input_len % 2 == 0;
