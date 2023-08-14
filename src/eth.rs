@@ -93,7 +93,7 @@ pub async fn deploy_verifier_via_solidity(
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "Verifier", None)?;
+        get_contract_artifacts(sol_code_path, "Verifier", Some(1000))?;
     let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone())?;
 
     let contract = factory.deploy(())?.send().await?;
@@ -175,7 +175,7 @@ pub async fn deploy_da_verifier_via_solidity(
     };
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestationVerifier", None)?;
+        get_contract_artifacts(sol_code_path, "DataAttestationVerifier", Some(1000))?;
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
 
@@ -307,7 +307,7 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
 
     // Compile the contract
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_path, "TestReads", None).unwrap();
+        get_contract_artifacts(sol_path, "TestReads", Some(10000)).unwrap();
 
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
@@ -486,7 +486,7 @@ pub async fn evm_quantize<M: 'static + Middleware>(
     sol_path.push("quantizedata.sol");
     std::fs::write(&sol_path, QUANTIZE_DATA_SOL)?;
 
-    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_path, "QuantizeData", None)?;
+    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_path, "QuantizeData", Some(10000))?;
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
 
