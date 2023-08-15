@@ -57,7 +57,8 @@ jobs:
                 "types": "ezkl.d.ts",
                 "sideEffects": [
                   "web/snippets/*"
-                ]
+                ],
+                "private": false
               }' > pkg/package.json
 
           - name: Create ezkl.js in pkg folder
@@ -82,6 +83,10 @@ jobs:
             with:
               node-version: '18.12.1'
               registry-url: 'https://registry.npmjs.org'
+
+          - name: Clear npm cache
+            run: npm cache clean --force
+            
           - name: Publish to npm
             run: |
               cd pkg
