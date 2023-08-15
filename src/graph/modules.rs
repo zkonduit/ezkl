@@ -13,7 +13,7 @@ use super::{FieldDoubleVector, FieldSingleVector, GraphWitness};
 use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
-pub const POSEIDON_LEN_GRAPH: usize = 10;
+pub const POSEIDON_LEN_GRAPH: usize = 32;
 
 /// Poseidon module type
 pub type ModulePoseidon =

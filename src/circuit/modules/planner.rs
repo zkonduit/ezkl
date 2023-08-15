@@ -188,7 +188,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
             }
         }
 
-        debug!("region {} assigned", region_index);
+        trace!("region {} assigned", region_index);
         trace!("total_constants: {:?}", self.total_constants);
         let max_row_index = self
             .columns
