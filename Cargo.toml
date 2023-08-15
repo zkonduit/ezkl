@@ -19,7 +19,7 @@ halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curv
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
 plotters = { version = "0.3.0", default_features = false, optional = true }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev= "dc32e4eead2545cc1c9f79b12db3c5255ceaf521", default_features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev= "8864e56", default_features = false, optional = true }
 clap = { version = "4.3.3", features = ["derive"]}
 serde = { version = "1.0.126", features = ["derive"], optional = true }
 serde_json = { version = "1.0.97", default_features = false, features = ["float_roundtrip", "raw_value"], optional = true }
