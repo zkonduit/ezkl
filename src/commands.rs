@@ -625,6 +625,8 @@ pub enum Commands {
         #[arg(long, default_value = "contract.address")]
         /// The path to output the contract address
         addr_path: PathBuf,
+        /// The optimizer runs to set on the verifier. (Lower values optimize for deployment, while higher values optimize for execution)
+        optimizer_runs: Option<usize>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     #[command(name = "deploy-evm-da-verifier", arg_required_else_help = true)]
@@ -644,6 +646,8 @@ pub enum Commands {
         #[arg(long, default_value = "contract_da.address")]
         /// The path to output the contract address
         addr_path: PathBuf,
+        /// The optimizer runs to set on the verifier. (Lower values optimize for deployment, while higher values optimize for execution)
+        optimizer_runs: Option<usize>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Verifies a proof using a local EVM executor, returning accept or reject

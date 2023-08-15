@@ -318,7 +318,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             rpc_url,
             addr_path,
-        } => deploy_evm(sol_code_path, rpc_url, addr_path).await,
+            optimizer_runs,
+        } => deploy_evm(sol_code_path, rpc_url, addr_path, optimizer_runs).await,
         #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvmDataAttestationVerifier {
             data,
@@ -326,7 +327,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             rpc_url,
             addr_path,
-        } => deploy_da_evm(data, settings_path, sol_code_path, rpc_url, addr_path).await,
+            optimizer_runs,
+        } => deploy_da_evm(data, settings_path, sol_code_path, rpc_url, addr_path, optimizer_runs).await,
         #[cfg(not(target_arch = "wasm32"))]
         Commands::VerifyEVM {
             proof_path,
@@ -965,10 +967,11 @@ pub(crate) async fn deploy_da_evm(
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
     addr_path: PathBuf,
+    runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
     let contract_address =
-        deploy_da_verifier_via_solidity(settings_path, data, sol_code_path, rpc_url.as_deref())
+        deploy_da_verifier_via_solidity(settings_path, data, sol_code_path, rpc_url.as_deref(), runs)
             .await?;
     info!("Contract deployed at: {}", contract_address);
 
@@ -983,9 +986,10 @@ pub(crate) async fn deploy_evm(
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
     addr_path: PathBuf,
+    runs: Option<usize>
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
-    let contract_address = deploy_verifier_via_solidity(sol_code_path, rpc_url.as_deref()).await?;
+    let contract_address = deploy_verifier_via_solidity(sol_code_path, rpc_url.as_deref(), runs).await?;
 
     info!("Contract deployed at: {:#?}", contract_address);
 
