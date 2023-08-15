@@ -577,11 +577,13 @@ fn create_evm_data_attestation_verifier(
     addr_path,
     sol_code_path,
     rpc_url=None,
+    optimizer_runs=None
 ))]
 fn deploy_evm(
     addr_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
+    optimizer_runs: Option<usize>
 ) -> Result<bool, PyErr> {
     Runtime::new()
         .unwrap()
@@ -589,6 +591,7 @@ fn deploy_evm(
             sol_code_path,
             rpc_url,
             addr_path,
+            optimizer_runs,
         ))
         .map_err(|e| {
             let err_str = format!("Failed to run deploy_evm: {}", e);
@@ -604,6 +607,7 @@ fn deploy_evm(
     settings_path,
     sol_code_path,
     rpc_url=None,
+    optimizer_runs=None
 ))]
 fn deploy_da_evm(
     addr_path: PathBuf,
@@ -611,6 +615,7 @@ fn deploy_da_evm(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
+    optimizer_runs: Option<usize>
 ) -> Result<bool, PyErr> {
     Runtime::new()
         .unwrap()
@@ -620,6 +625,7 @@ fn deploy_da_evm(
             sol_code_path,
             rpc_url,
             addr_path,
+            optimizer_runs
         ))
         .map_err(|e| {
             let err_str = format!("Failed to run deploy_da_evm: {}", e);
