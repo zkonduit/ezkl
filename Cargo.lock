@@ -2672,7 +2672,7 @@ dependencies = [
  "pest_derive",
  "regex",
  "serde",
- "time 0.3.22",
+ "time 0.3.23",
 ]
 
 [[package]]
@@ -2697,7 +2697,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "regex",
- "time 0.3.22",
+ "time 0.3.23",
  "unicode-segmentation",
 ]
 
@@ -4854,9 +4854,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.22"
+version = "0.3.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea9e1b3cf1243ae005d9e74085d4d542f3125458f3a81af210d901dcd7411efd"
+checksum = "59e399c068f43a5d116fedaf73b203fa4f9c519f17e2b34f63221d3792f81446"
 dependencies = [
  "itoa",
  "serde",
@@ -4872,9 +4872,9 @@ checksum = "7300fbefb4dadc1af235a9cef3737cea692a9d97e1b9cbcd4ebdae6f8868e6fb"
 
 [[package]]
 name = "time-macros"
-version = "0.2.9"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "372950940a5f07bf38dbe211d7283c9e6d7327df53794992d293e534c733d09b"
+checksum = "96ba15a897f3c86766b757e5ac7221554c6750054d74d5b28844fce5fb36a6c4"
 dependencies = [
  "time-core",
 ]
@@ -5074,7 +5074,7 @@ dependencies = [
 [[package]]
 name = "tract-core"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
+source = "git+https://github.com/sonos/tract/?rev=8864e56#8864e56cdc531f4b5df3cfec4bc05e0ff8a11daa"
 dependencies = [
  "anyhow",
  "bit-set",
@@ -5097,7 +5097,7 @@ dependencies = [
 [[package]]
 name = "tract-data"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
+source = "git+https://github.com/sonos/tract/?rev=8864e56#8864e56cdc531f4b5df3cfec4bc05e0ff8a11daa"
 dependencies = [
  "anyhow",
  "half 2.2.1",
@@ -5116,7 +5116,7 @@ dependencies = [
 [[package]]
 name = "tract-hir"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
+source = "git+https://github.com/sonos/tract/?rev=8864e56#8864e56cdc531f4b5df3cfec4bc05e0ff8a11daa"
 dependencies = [
  "derive-new",
  "log",
@@ -5126,7 +5126,7 @@ dependencies = [
 [[package]]
 name = "tract-linalg"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
+source = "git+https://github.com/sonos/tract/?rev=8864e56#8864e56cdc531f4b5df3cfec4bc05e0ff8a11daa"
 dependencies = [
  "cc",
  "derive-new",
@@ -5141,6 +5141,7 @@ dependencies = [
  "paste",
  "scan_fmt",
  "smallvec",
+ "time 0.3.23",
  "tract-data",
  "unicode-normalization",
  "walkdir",
@@ -5149,7 +5150,7 @@ dependencies = [
 [[package]]
 name = "tract-nnef"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
+source = "git+https://github.com/sonos/tract/?rev=8864e56#8864e56cdc531f4b5df3cfec4bc05e0ff8a11daa"
 dependencies = [
  "byteorder",
  "flate2",
@@ -5163,7 +5164,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
+source = "git+https://github.com/sonos/tract/?rev=8864e56#8864e56cdc531f4b5df3cfec4bc05e0ff8a11daa"
 dependencies = [
  "bytes",
  "derive-new",
@@ -5180,7 +5181,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx-opl"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=dc32e4eead2545cc1c9f79b12db3c5255ceaf521#dc32e4eead2545cc1c9f79b12db3c5255ceaf521"
+source = "git+https://github.com/sonos/tract/?rev=8864e56#8864e56cdc531f4b5df3cfec4bc05e0ff8a11daa"
 dependencies = [
  "getrandom",
  "log",
