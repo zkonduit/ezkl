@@ -345,10 +345,32 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
 
         Ok(vec![hash_inputs])
     }
+
+    fn num_rows(mut input_len: usize) -> usize {
+        // this was determined by running the circuit and looking at the number of constraints
+        // in the test called hash_for_a_range_of_input_sizes, then regressing in python to find the slope
+        let fixed_cost: usize = 41 * L;
+
+        let mut num_rows = 0;
+
+        loop {
+            // the number of times the input_len is divisible by L
+            let num_chunks = input_len / L + 1;
+            num_rows += num_chunks * fixed_cost;
+            if num_chunks == 1 {
+                break;
+            }
+            input_len = num_chunks;
+        }
+
+        num_rows
+    }
 }
 
 #[allow(unused)]
 mod tests {
+
+    use crate::circuit::modules::ModulePlanner;
 
     use super::{
         spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
@@ -375,7 +397,7 @@ mod tests {
 
     impl<S: Spec<Fp, WIDTH, RATE>, const L: usize> Circuit<Fp> for HashCircuit<S, L> {
         type Config = PoseidonConfig<WIDTH, RATE>;
-        type FloorPlanner = SimpleFloorPlanner;
+        type FloorPlanner = ModulePlanner;
         type Params = ();
 
         fn without_witnesses(&self) -> Self {
@@ -403,6 +425,7 @@ mod tests {
                 &[self.message.clone()],
                 vec![0; NUM_INSTANCE_COLUMNS],
             )?;
+
             Ok(())
         }
     }
@@ -443,6 +466,38 @@ mod tests {
         };
         let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
         assert_eq!(prover.verify_par(), Ok(()))
+    }
+
+    #[test]
+    #[ignore]
+    fn hash_for_a_range_of_input_sizes() {
+        let rng = rand::rngs::OsRng;
+
+        env_logger::init();
+
+        for i in [32].into_iter() {
+            // print a bunch of new lines
+            println!(
+                "i is {} -------------------------------------------------",
+                i
+            );
+
+            let message: Vec<Fp> = (0..i).map(|_| Fp::random(rng)).collect::<Vec<_>>();
+            let output =
+                PoseidonChip::<PoseidonSpec, WIDTH, RATE, 32>::run(message.clone()).unwrap();
+
+            let mut message: Tensor<ValType<Fp>> =
+                message.into_iter().map(|m| Value::known(m).into()).into();
+
+            let k = 17;
+            let circuit = HashCircuit::<PoseidonSpec, 32> {
+                message: message.into(),
+                _spec: PhantomData,
+            };
+            let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
+
+            assert_eq!(prover.verify_par(), Ok(()))
+        }
     }
 
     #[test]

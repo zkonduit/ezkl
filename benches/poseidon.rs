@@ -4,7 +4,6 @@ use ezkl::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig, NUM_INSTANC
 use ezkl::circuit::modules::Module;
 use ezkl::circuit::*;
 use ezkl::execute::create_proof_circuit_kzg;
-use ezkl::graph::modules::{POSEIDOIN_FIXED_COST_ESTIMATE, POSEIDON_CONSTRAINTS_ESTIMATE};
 use ezkl::pfsys::create_keys;
 use ezkl::pfsys::srs::gen_srs;
 use ezkl::pfsys::TranscriptType;
@@ -60,7 +59,8 @@ fn runposeidon(c: &mut Criterion) {
     let mut group = c.benchmark_group("poseidon");
 
     for size in [64, 784, 2352, 12288].iter() {
-        let k = ((size * POSEIDON_CONSTRAINTS_ESTIMATE + POSEIDOIN_FIXED_COST_ESTIMATE) as f32)
+        let k = (PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, L>::num_rows(*size)
+            as f32)
             .log2()
             .ceil() as u32;
         let params = gen_srs::<KZGCommitmentScheme<_>>(k);
