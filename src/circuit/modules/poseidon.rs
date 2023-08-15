@@ -349,7 +349,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     fn num_rows(mut input_len: usize) -> usize {
         // this was determined by running the circuit and looking at the number of constraints
         // in the test called hash_for_a_range_of_input_sizes, then regressing in python to find the slope
-        let fixed_cost: usize = 42 * L;
+        let fixed_cost: usize = 41 * L;
 
         let mut num_rows = 0;
 
