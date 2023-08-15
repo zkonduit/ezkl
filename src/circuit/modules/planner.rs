@@ -15,7 +15,7 @@ use halo2_proofs::{
         Instance, Selector, TableColumn,
     },
 };
-use log::{debug, trace};
+use log::trace;
 
 /// A simple [`FloorPlanner`] that performs minimal optimizations.
 #[derive(Debug)]
