@@ -75,8 +75,8 @@ jobs:
         
           - name: Modify workerHelpers.js file to point to the root of the package
             run: |
-              sed -i '54s/.*/  const pkg = await import(\'..\/..\/..\/..\');/' pkg/web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js
-              sed -i '55s/.*/  await pkg.web.default(data.module, data.memory);/' pkg/web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js
+              sed -i "54s/.*/  const pkg = await import('..\/..\/..\/..');/" web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js
+              sed -i "55s/.*/  await pkg.web.default(data.module, data.memory);/" web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js
 
           - name: Set up Node.js
             uses: actions/setup-node@v3
