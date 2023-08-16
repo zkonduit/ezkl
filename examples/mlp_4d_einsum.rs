@@ -192,6 +192,7 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
 }
 
 pub fn runmlp() {
+    #[cfg(not(target_arch = "wasm32"))]
     env_logger::init();
     // parameters
     let mut l0_kernel: Tensor<F> = Tensor::<i32>::new(
