@@ -74,7 +74,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         if let Some(region) = &self.region {
             let mut lock = region.lock().unwrap();
             let cell = var.assign_constant(&mut lock, self.offset, value)?;
-            Ok(cell.into())
+            if cell.is_none() {
+                return Ok(value.into());
+            } else {
+                return Ok(cell.unwrap().into());
+            }
         } else {
             Ok(value.into())
         }
@@ -84,13 +88,20 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
-    ) -> Result<ValTensor<F>, Error> {
+    ) -> Result<(ValTensor<F>, usize), Error> {
         if let Some(region) = &self.region {
             let mut lock = region.lock().unwrap();
             var.assign(&mut lock, self.offset, values)
         } else {
-            self.total_constants += values.num_constants();
-            Ok(values.clone())
+            let zero_indices = values
+                .get_const_zero_indices()
+                .map_err(|_| Error::Synthesis)?;
+            let mut cleaned_values = values.clone();
+            cleaned_values
+                .remove_indices(&zero_indices)
+                .map_err(|_| Error::Synthesis)?;
+            self.total_constants += cleaned_values.num_constants();
+            Ok((values.clone(), cleaned_values.len()))
         }
     }
     /// Assign a valtensor to a vartensor with duplication

@@ -794,8 +794,8 @@ impl Model {
                 node.as_str(),
                 region.offset()
             );
-            trace!("dims: {:?}", node.out_dims());
-            trace!(
+            debug!("dims: {:?}", node.out_dims());
+            debug!(
                 "input_dims {:?}",
                 values.iter().map(|v| v.dims()).collect_vec()
             );

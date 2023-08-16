@@ -482,6 +482,34 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             ValTensor::Instance { .. } => Err(TensorError::WrongMethod),
         }
     }
+    /// gets constants
+    pub fn insert_const_zero_indices(
+        &mut self,
+        indices: &[usize],
+        new_dims: &[usize],
+    ) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                let mut new_v = vec![];
+                for (j, e) in v.iter().enumerate() {
+                    if indices.contains(&j) {
+                        new_v.push(ValType::Constant(F::ZERO));
+                    } else {
+                        new_v.push(e.clone());
+                    }
+                }
+                let new_tensor = Tensor::new(Some(&new_v), new_dims)?;
+                *v = new_tensor;
+                *d = new_dims.to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
 
     /// removes constants with inner value 0
     pub fn remove_indices(&mut self, indices: &[usize]) -> Result<(), TensorError> {

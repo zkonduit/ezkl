@@ -415,6 +415,16 @@ impl<F: PrimeField + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>>
     }
 }
 
+// from parallel iterator
+impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
+    rayon::iter::FromParallelIterator<T> for Tensor<T>
+{
+    fn from_par_iter<I: rayon::iter::IntoParallelIterator<Item = T>>(value: I) -> Tensor<T> {
+        let data: Vec<I::Item> = value.into_par_iter().collect::<Vec<I::Item>>();
+        Tensor::new(Some(&data), &[data.len()]).unwrap()
+    }
+}
+
 impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
     rayon::iter::IntoParallelIterator for Tensor<T>
 {

@@ -125,15 +125,26 @@ impl VarTensor {
         region: &mut Region<F>,
         offset: usize,
         constant: F,
-    ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
+    ) -> Result<Option<AssignedCell<F, F>>, halo2_proofs::plonk::Error> {
         let (x, y) = self.cartesian_coord(offset);
 
-        match &self {
+        let value = match &self {
             VarTensor::Advice { inner: advices, .. } => {
-                region.assign_advice_from_constant(|| "constant", advices[x], y, constant)
+                if constant != F::ZERO {
+                    Some(region.assign_advice_from_constant(
+                        || "constant",
+                        advices[x],
+                        y,
+                        constant,
+                    )?)
+                } else {
+                    None
+                }
             }
             _ => panic!(),
-        }
+        };
+
+        Ok(value)
     }
 
     /// Assigns [ValTensor] to the columns of the inner tensor.
@@ -142,7 +153,8 @@ impl VarTensor {
         region: &mut Region<F>,
         offset: usize,
         values: &ValTensor<F>,
-    ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
+    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
+        let mut total_assigned = 0;
         let mut res: ValTensor<F> = match values {
             ValTensor::Instance {
                 inner: instance,
@@ -154,6 +166,7 @@ impl VarTensor {
                     let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
                     Ok(t.enum_map(|coord, _| {
                         let (x, y) = self.cartesian_coord(offset + coord);
+                        total_assigned += 1;
                         region.assign_advice_from_instance(
                             || "pub input anchor",
                             *instance,
@@ -174,18 +187,28 @@ impl VarTensor {
                     let (x, y) = self.cartesian_coord(offset + coord);
                     let cell = self.assign_value(region, offset, k.clone(), x, y, coord)?;
 
+                    if cell.is_some() {
+                        total_assigned += 1;
+                    }
+
                     match k {
-                        ValType::Constant(f) => Ok::<ValType<F>, halo2_proofs::plonk::Error>(
-                            ValType::AssignedConstant(cell, f),
-                        ),
-                        ValType::AssignedConstant(_, f) => Ok(ValType::AssignedConstant(cell, f)),
-                        _ => Ok(ValType::PrevAssigned(cell)),
+                        ValType::Constant(f) => {
+                            Ok::<ValType<F>, halo2_proofs::plonk::Error>(if f == F::ZERO {
+                                ValType::Constant(F::ZERO)
+                            } else {
+                                ValType::AssignedConstant(cell.unwrap(), f)
+                            })
+                        }
+                        ValType::AssignedConstant(_, f) => {
+                            Ok(ValType::AssignedConstant(cell.unwrap(), f))
+                        }
+                        _ => Ok(ValType::PrevAssigned(cell.unwrap())),
                     }
                 })?
                 .into()),
         }?;
         res.set_scale(values.scale());
-        Ok(res)
+        Ok((res, total_assigned))
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
@@ -195,15 +218,29 @@ impl VarTensor {
         offset: usize,
         values: &ValTensor<F>,
     ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
-        match values {
+        let zero_indices = values.get_const_zero_indices().map_err(|e| {
+            error!("Error while getting zero indices: {}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+
+        let mut v = values.clone();
+        v.remove_indices(&zero_indices).unwrap();
+        match v {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
-            ValTensor::Value { inner: v, dims , ..} => {
+            ValTensor::Value { inner: v, .. } => {
                 // duplicates every nth element to adjust for column overflow
                 let mut res: ValTensor<F> = v.duplicate_every_n(self.col_size(), offset).unwrap().into();
                 let total_used_len = res.len();
                 res.remove_every_n(self.col_size(), offset).unwrap();
 
-                res.reshape(dims).unwrap();
+                // now insert values where the const 0 values were
+                res.insert_const_zero_indices(&zero_indices, values.dims())
+                  .map_err(|e| {
+                      error!("Error while inserting zero indices: {}", e);
+                      halo2_proofs::plonk::Error::Synthesis
+                  })?;
+
+                res.reshape(values.dims()).unwrap();
                 res.set_scale(values.scale());
 
                 Ok((res, total_used_len))
@@ -222,10 +259,19 @@ impl VarTensor {
     ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
         let mut prev_cell = None;
 
-        match values {
+        let zero_indices = values.get_const_zero_indices().map_err(|e| {
+            error!("Error while getting zero indices: {}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+
+        let mut v = values.clone();
+        v.remove_indices(&zero_indices).unwrap();
+
+        match v {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
-            ValTensor::Value { inner: v, dims , ..} => {
+            ValTensor::Value { inner: v,  ..} => {
                 // duplicates every nth element to adjust for column overflow
+
                 let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
                 let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
@@ -236,7 +282,7 @@ impl VarTensor {
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
 
-                    let cell = self.assign_value(region, offset, k.clone(), x, y, coord)?;
+                    let cell = self.assign_value(region, offset, k.clone(), x, y, coord)?.unwrap();
 
                     if y == (self.col_size() - 1)   {
                         // if we are at the end of the column, we need to copy the cell to the next column
@@ -266,7 +312,13 @@ impl VarTensor {
                 let total_used_len = res.len();
                 res.remove_every_n(self.col_size(), offset).unwrap();
 
-                res.reshape(dims).unwrap();
+                 // now insert values where the const 0 values were
+                res.insert_const_zero_indices(&zero_indices, values.dims())
+                .map_err(|e| {
+                    error!("Error while inserting zero indices: {}", e);
+                    halo2_proofs::plonk::Error::Synthesis
+                })?;
+
                 res.set_scale(values.scale());
 
                 if matches!(check_mode, CheckMode::SAFE) {
@@ -295,30 +347,33 @@ impl VarTensor {
         x: usize,
         y: usize,
         coord: usize,
-    ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
-        match k.clone() {
+    ) -> Result<Option<AssignedCell<F, F>>, halo2_proofs::plonk::Error> {
+        let value = match k.clone() {
             ValType::Value(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
-                    region.assign_advice(|| "k", advices[x], y, || v)
+                    Some(region.assign_advice(|| "k", advices[x], y, || v)?)
                 }
                 _ => unimplemented!(),
             },
             ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
-                    v.copy_advice(|| "k", region, advices[x], y)
+                    Some(v.copy_advice(|| "k", region, advices[x], y)?)
                 }
                 _ => {
                     error!("PrevAssigned is only supported for advice columns");
-                    Err(halo2_proofs::plonk::Error::Synthesis)
+                    return Err(halo2_proofs::plonk::Error::Synthesis);
                 }
             },
             ValType::AssignedValue(v) => match &self {
-                VarTensor::Advice { inner: advices, .. } => region
-                    .assign_advice(|| "k", advices[x], y, || v)
-                    .map(|a| a.evaluate()),
+                VarTensor::Advice { inner: advices, .. } => Some(
+                    region
+                        .assign_advice(|| "k", advices[x], y, || v)
+                        .map(|a| a.evaluate())?,
+                ),
                 _ => unimplemented!(),
             },
-            ValType::Constant(v) => self.assign_constant(region, offset + coord, v),
-        }
+            ValType::Constant(v) => self.assign_constant(region, offset + coord, v)?,
+        };
+        Ok(value)
     }
 }

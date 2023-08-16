@@ -7,7 +7,7 @@ use std::{
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
-use log::error;
+use log::{debug, error, trace};
 
 use super::{
     chip::{BaseConfig, CheckMode, CircuitError},
@@ -57,6 +57,9 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // time this entire function run
+    let global_start = std::time::Instant::now();
+
     let mut values = values.clone();
 
     let mut removal_indices: HashSet<usize> = HashSet::new();
@@ -81,6 +84,8 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         region.increment(overflowed_len);
         let num_constants = values[0].num_constants() + values[1].num_constants();
         region.increment_constants(num_constants);
+        trace!("dummy dot layout took {:?}", global_start.elapsed());
+
         return Ok(Tensor::from([ValType::<F>::from(Value::<F>::unknown())].into_iter()).into());
     }
 
@@ -97,8 +102,12 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     }
 
     // Now we can assign the dot product
+    // time this step
+    let start = std::time::Instant::now();
     let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
         .expect("accum poly: dot op failed");
+    let elapsed = start.elapsed();
+    trace!("calculating accumulated dot took: {:?}", elapsed);
 
     let (output, output_assigned_len) = region.assign_with_duplication(
         &config.output,
@@ -141,6 +150,9 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     region.increment(assigned_len);
     // last element is the result
+
+    let elapsed = global_start.elapsed();
+    trace!("dot took: {:?}", elapsed);
     Ok(last_elem)
 }
 
@@ -599,6 +611,9 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
     op: BaseOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // time to calculate the value of the output
+    let global_start = std::time::Instant::now();
+
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
@@ -636,20 +651,30 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         let vals = vec![ValType::Value(Value::<F>::unknown()); broadcasted_shape.iter().product()];
         let mut tensor: Tensor<ValType<F>> = Tensor::from(vals.into_iter());
         tensor.reshape(&broadcasted_shape);
+
+        trace!(
+            "dummy pairwise {} layout took {:?}",
+            op.as_str(),
+            global_start.elapsed()
+        );
+
         return Ok(tensor.into());
     }
 
     let mut inputs = vec![];
-
+    let mut assigned_lens = vec![];
     for (i, input) in [lhs.clone(), rhs.clone()].iter().enumerate() {
         let inp = {
-            let res = region.assign(&config.inputs[i], input)?;
+            let (res, assigned_len) = region.assign(&config.inputs[i], input)?;
+            assigned_lens.push(assigned_len);
             res.get_inner()?
         };
         inputs.push(inp);
     }
 
     // Now we can assign the dot product
+    // time the calc
+    let start = std::time::Instant::now();
     let op_result = match op {
         BaseOp::Add => add(&inputs),
         BaseOp::Sub => sub(&inputs),
@@ -660,8 +685,11 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         error!("{}", e);
         halo2_proofs::plonk::Error::Synthesis
     })?;
+    let elapsed = start.elapsed();
+    debug!("pairwise {} calc took {:?}", op.as_str(), elapsed);
 
-    let output = region.assign(&config.output, &op_result.into())?;
+    let (output, assigned_len) = region.assign(&config.output, &op_result.into())?;
+    assigned_lens.push(assigned_len);
 
     // Enable the selectors
     (0..inputs[0].len()).for_each(|i| {
@@ -671,7 +699,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         region.enable(selector, y).unwrap();
     });
 
-    region.increment(output.len());
+    region.increment(*assigned_lens.iter().max().unwrap());
 
     let mut j = 0;
     // infill the zero indices with the correct values from values[0] or values[1]
@@ -725,6 +753,9 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     actual_output.reshape(&broadcasted_shape)?;
 
+    let end = global_start.elapsed();
+    trace!("pairwise {} layout took {:?}", op.as_str(), end);
+
     Ok(actual_output)
 }
 
@@ -743,7 +774,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     region.next();
 
     // make sure mask is boolean
-    let assigned_mask = region.assign(&config.inputs[1], mask)?;
+    let (assigned_mask, assigned_len) = region.assign(&config.inputs[1], mask)?;
 
     // Enable the selectors
     (0..assigned_mask.len()).for_each(|i| {
@@ -753,7 +784,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
         region.enable(selector, y).unwrap();
     });
 
-    region.increment(assigned_mask.len());
+    region.increment(assigned_len);
 
     let one_minus_mask = pairwise(config, region, &[unit, assigned_mask.clone()], BaseOp::Sub)?;
 
@@ -772,14 +803,17 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut assigned_lens = vec![];
     let input = {
-        let res = region.assign(&config.inputs[1], &values[0])?;
+        let (res, assigned_len) = region.assign(&config.inputs[1], &values[0])?;
+        assigned_lens.push(assigned_len);
         res.get_inner()?
     };
 
     let neg = input.map(|e| -e);
 
-    let output = region.assign(&config.output, &neg.into())?;
+    let (output, assigned_len) = region.assign(&config.output, &neg.into())?;
+    assigned_lens.push(assigned_len);
 
     // Enable the selectors
     (0..values[0].len()).for_each(|i| {
@@ -789,7 +823,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
         region.enable(selector, y).unwrap();
     });
 
-    region.increment(output.len());
+    region.increment(*assigned_lens.iter().max().unwrap());
 
     Ok(output)
 }
@@ -1090,14 +1124,12 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     // 1. assign the kernel
     let mut assigned_kernel_len = 0;
     if !kernel.all_prev_assigned() {
-        kernel = region.assign(&config.inputs[0], &kernel)?;
-        assigned_kernel_len = kernel.len();
+        (kernel, assigned_kernel_len) = region.assign(&config.inputs[0], &kernel)?;
     }
     // 2. assign the image
     let mut assigned_image_len = 0;
     if !image.all_prev_assigned() {
-        image = region.assign(&config.inputs[1], &image)?;
-        assigned_image_len = image.len();
+        (image, assigned_image_len) = region.assign(&config.inputs[1], &image)?;
     }
 
     // increment the region
@@ -1411,8 +1443,8 @@ pub fn resize<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     scales: &[usize],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let mut output = region.assign(&config.output, &values[0])?;
-    region.increment(output.len());
+    let (mut output, assigned_len) = region.assign(&config.output, &values[0])?;
+    region.increment(assigned_len);
     output.resize(scales)?;
 
     Ok(output)
@@ -1428,8 +1460,8 @@ pub fn slice<F: PrimeField + TensorType + PartialOrd>(
     end: &usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assigns the instance to the advice.
-    let mut output = region.assign(&config.output, &values[0])?;
-    region.increment(output.len());
+    let (mut output, assigned_len) = region.assign(&config.output, &values[0])?;
+    region.increment(assigned_len);
     output.slice(axis, start, end)?;
 
     Ok(output)
@@ -1451,8 +1483,8 @@ pub fn identity<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let output = region.assign(&config.output, &values[0])?;
-    region.increment(output.len());
+    let (output, assigned_len) = region.assign(&config.output, &values[0])?;
+    region.increment(assigned_len);
 
     Ok(output)
 }
@@ -1466,11 +1498,11 @@ pub fn downsample<F: PrimeField + TensorType + PartialOrd>(
     stride: &usize,
     modulo: &usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let input = region.assign(&config.inputs[0], &values[0])?;
+    let (input, assigned_len_input) = region.assign(&config.inputs[0], &values[0])?;
     let processed_output =
         tensor::ops::downsample(&input.get_inner_tensor()?, *axis, *stride, *modulo)?;
-    let output = region.assign(&config.output, &processed_output.into())?;
-    region.increment(input.len());
+    let (output, assigned_len_output) = region.assign(&config.output, &processed_output.into())?;
+    region.increment(std::cmp::max(assigned_len_input, assigned_len_output));
     Ok(output)
 }
 
@@ -1483,7 +1515,7 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assigns the instance to the advice.
     region.assign(&config.inputs[1], &values[0])?;
-    let output = region.assign(&config.output, &values[1])?;
+    let (output, assigned_len) = region.assign(&config.output, &values[1])?;
 
     (0..values[0].len()).for_each(|i| {
         let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
@@ -1492,7 +1524,7 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
         region.enable(selector, y).unwrap();
     });
 
-    region.increment(output.len());
+    region.increment(assigned_len);
 
     Ok(output)
 }
@@ -1504,6 +1536,9 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     nl: &LookupOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // time the entire operation
+    let timer = std::time::Instant::now();
+
     let x = &values[0];
 
     if region.is_dummy() {
@@ -1513,10 +1548,17 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         let vals = vec![ValType::Value(Value::<F>::unknown()); x.len()];
         let mut x = Tensor::from(vals.into_iter());
         x.reshape(dims);
+        // total time taken
+        trace!(
+            "dummy nonlinearity {} layout took {:?}",
+            <LookupOp as Op<F>>::as_string(nl),
+            timer.elapsed()
+        );
+
         return Ok(x.into());
     }
 
-    let w = region.assign(&config.lookup_input, x)?;
+    let (w, assigned_len_w) = region.assign(&config.lookup_input, x)?;
 
     // extract integer_valuations
     let output: Tensor<Value<F>> = w
@@ -1532,9 +1574,11 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
             })
         });
 
-    let mut output = region.assign(&config.lookup_output, &output.into())?;
+    let (mut output, assigned_len_output) = region.assign(&config.lookup_output, &output.into())?;
 
-    (0..x.len()).for_each(|i| {
+    assert_eq!(assigned_len_w, assigned_len_output);
+
+    (0..assigned_len_output).for_each(|i| {
         let (x, y) = config.lookup_input.cartesian_coord(region.offset() + i);
         let selector = config.lookup_selectors.get(&(nl.clone(), x));
         region.enable(selector, y).unwrap();
@@ -1542,7 +1586,14 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     output.reshape(x.dims())?;
 
-    region.increment(x.len());
+    region.increment(assigned_len_output);
+
+    let elapsed = timer.elapsed();
+    trace!(
+        "nonlinearity {} layout took {:?}",
+        <LookupOp as Op<F>>::as_string(nl),
+        elapsed
+    );
 
     // constrain the calculated output to a column
     Ok(output)
@@ -1610,8 +1661,8 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
         Some(i) => Tensor::new(Some(&[Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
     };
 
-    let assigned_max_val = region.assign(&config.inputs[1], &max_val)?;
-    region.next();
+    let (assigned_max_val, assigned_len) = region.assign(&config.inputs[1], &max_val)?;
+    region.increment(assigned_len);
 
     let unit: ValTensor<F> =
         Tensor::from(vec![region.assign_constant(&config.inputs[1], F::from(1))?].into_iter())
@@ -1704,8 +1755,8 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
         Some(i) => Tensor::new(Some(&[Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
     };
 
-    let assigned_min_val = region.assign(&config.inputs[1], &min_val)?;
-    region.next();
+    let (assigned_min_val, assigned_len) = region.assign(&config.inputs[1], &min_val)?;
+    region.increment(assigned_len);
 
     let unit: ValTensor<F> =
         Tensor::from(vec![region.assign_constant(&config.inputs[1], F::from(1))?].into_iter())
