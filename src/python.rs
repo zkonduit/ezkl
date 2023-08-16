@@ -1,5 +1,5 @@
 use crate::circuit::{CheckMode, Tolerance};
-use crate::commands::{CalibrationTarget, RunArgs, StrategyType};
+use crate::commands::{CalibrationTarget, StrategyType};
 use crate::fieldutils::{felt_to_i128, i128_to_felt};
 use crate::graph::{
     quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
@@ -8,6 +8,7 @@ use crate::pfsys::evm::aggregation::AggregationCircuit;
 use crate::pfsys::{
     load_pk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, Snark, TranscriptType,
 };
+use crate::RunArgs;
 use ethers::types::H160;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::{Bn256, Fr};
@@ -583,7 +584,7 @@ fn deploy_evm(
     addr_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
-    optimizer_runs: Option<usize>
+    optimizer_runs: Option<usize>,
 ) -> Result<bool, PyErr> {
     Runtime::new()
         .unwrap()
@@ -615,7 +616,7 @@ fn deploy_da_evm(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
-    optimizer_runs: Option<usize>
+    optimizer_runs: Option<usize>,
 ) -> Result<bool, PyErr> {
     Runtime::new()
         .unwrap()
@@ -625,7 +626,7 @@ fn deploy_da_evm(
             sol_code_path,
             rpc_url,
             addr_path,
-            optimizer_runs
+            optimizer_runs,
         ))
         .map_err(|e| {
             let err_str = format!("Failed to run deploy_da_evm: {}", e);
