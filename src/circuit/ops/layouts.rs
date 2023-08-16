@@ -59,7 +59,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // time this entire function run
-    let global_start = std::time::Instant::now();
+    let global_start = instant::Instant::now();
 
     let mut values = values.clone();
 
@@ -97,7 +97,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::<F>::from(Value::<F>::unknown())].into_iter()).into());
     }
 
-    let start = std::time::Instant::now();
+    let start = instant::Instant::now();
     let mut inputs = vec![];
     let mut assigned_len = 0;
     for (i, input) in values.iter().enumerate() {
@@ -114,13 +114,13 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     // Now we can assign the dot product
     // time this step
-    let start = std::time::Instant::now();
+    let start = instant::Instant::now();
     let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
         .expect("accum poly: dot op failed");
     let elapsed = start.elapsed();
     trace!("calculating accumulated dot took: {:?}", elapsed);
 
-    let start = std::time::Instant::now();
+    let start = instant::Instant::now();
     let (output, output_assigned_len) = region.assign_with_duplication(
         &config.output,
         &accumulated_dot.into(),
@@ -627,7 +627,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     op: BaseOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // time to calculate the value of the output
-    let global_start = std::time::Instant::now();
+    let global_start = instant::Instant::now();
 
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
@@ -685,7 +685,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     // Now we can assign the dot product
     // time the calc
-    let start = std::time::Instant::now();
+    let start = instant::Instant::now();
     let op_result = match op {
         BaseOp::Add => add(&inputs),
         BaseOp::Sub => sub(&inputs),
@@ -1547,7 +1547,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     nl: &LookupOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // time the entire operation
-    let timer = std::time::Instant::now();
+    let timer = instant::Instant::now();
 
     let x = &values[0];
 
