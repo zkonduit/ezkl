@@ -1,8 +1,9 @@
-use std::error::Error;
-use std::sync::Arc;
-
-use super::{GraphError, Rescaled, SupportedOp, Visibility};
+#[cfg(not(target_arch = "wasm32"))]
+use super::GraphError;
+use super::{Rescaled, SupportedOp, Visibility};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::hybrid::HybridOp;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
 use crate::circuit::Op;
@@ -10,22 +11,29 @@ use crate::tensor::{Tensor, TensorError, TensorType};
 use halo2curves::bn256::Fr as Fp;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
+#[cfg(not(target_arch = "wasm32"))]
 use log::{debug, warn};
+use std::error::Error;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
-use tract_onnx::tract_core::ops::array::Gather;
-use tract_onnx::tract_core::ops::array::Slice;
-use tract_onnx::tract_core::ops::change_axes::AxisOp;
-use tract_onnx::tract_core::ops::cnn::DeconvUnary;
-use tract_onnx::tract_core::ops::einsum::EinSum;
-use tract_onnx::tract_core::ops::element_wise::ElementWiseOp;
-use tract_onnx::tract_core::ops::nn::{LeakyRelu, Reduce, Softmax};
-use tract_onnx::tract_core::ops::Downsample;
-use tract_onnx::tract_hir::internal::DimLike;
-use tract_onnx::tract_hir::ops::cnn::ConvUnary;
-use tract_onnx::tract_hir::ops::konst::Const;
+#[cfg(not(target_arch = "wasm32"))]
+use tract_onnx::tract_core::ops::{
+    array::{Gather, Slice},
+    change_axes::AxisOp,
+    cnn::DeconvUnary,
+    einsum::EinSum,
+    element_wise::ElementWiseOp,
+    nn::{LeakyRelu, Reduce, Softmax},
+    Downsample,
+};
+#[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_hir::{
+    internal::DimLike,
     ops::array::{Pad, PadMode},
-    ops::cnn::{MaxPool, PoolSpec, SumPool},
+    ops::cnn::{ConvUnary, MaxPool, PoolSpec, SumPool},
+    ops::konst::Const,
     ops::nn::DataFormat,
     tract_core::ops::cnn::{conv::KernelFormat, PaddingSpec},
 };
@@ -63,6 +71,7 @@ pub fn mult_to_scale(mult: f64) -> u32 {
 }
 
 /// Gets the shape of a onnx node's outlets.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn node_output_shapes(
     node: &OnnxNode<TypedFact, Box<dyn TypedOp>>,
 ) -> Result<Vec<Option<Vec<usize>>>, Box<dyn std::error::Error>> {
@@ -75,6 +84,7 @@ pub fn node_output_shapes(
     Ok(shapes)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
 ) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
@@ -122,6 +132,7 @@ fn extract_tensor_value(
 }
 
 /// Extracts a Gather op from an onnx node.
+#[cfg(not(target_arch = "wasm32"))]
 fn load_gather_op(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
@@ -139,6 +150,7 @@ fn load_gather_op(
 }
 
 ///
+#[cfg(not(target_arch = "wasm32"))]
 fn load_axis_op(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
@@ -156,6 +168,7 @@ fn load_axis_op(
 }
 
 /// Extracts a const node from an onnx node.
+#[cfg(not(target_arch = "wasm32"))]
 fn load_const(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
@@ -173,6 +186,7 @@ fn load_const(
 }
 
 /// Extracts an axis op from an onnx node.
+#[cfg(not(target_arch = "wasm32"))]
 fn load_reduce_op(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
@@ -189,6 +203,7 @@ fn load_reduce_op(
 }
 
 /// Extracts an axis op from an onnx node.
+#[cfg(not(target_arch = "wasm32"))]
 fn load_eltwise_op(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
@@ -204,6 +219,7 @@ fn load_eltwise_op(
     Ok(op.clone())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn load_concat_op(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
@@ -219,6 +235,7 @@ fn load_concat_op(
 }
 
 /// Extracts a Slice op from an onnx node.
+#[cfg(not(target_arch = "wasm32"))]
 fn load_slice_op(
     op: &dyn tract_onnx::prelude::Op,
     name: String,
@@ -241,6 +258,7 @@ fn load_slice_op(
 /// * `param_visibility` - [Visibility] of the node.
 /// * `node` - the [OnnxNode] to be matched.
 /// * `inputs` - the node's inputs.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn new_op_from_onnx(
     idx: usize,
     scale: u32,

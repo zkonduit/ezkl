@@ -1,4 +1,6 @@
+#[cfg(not(target_arch = "wasm32"))]
 use super::utilities::node_output_shapes;
+#[cfg(not(target_arch = "wasm32"))]
 use super::Visibility;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
@@ -9,21 +11,25 @@ use crate::circuit::Op;
 use crate::circuit::Unknown;
 use crate::fieldutils::felt_to_i128;
 use crate::fieldutils::i128_to_felt;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::graph::new_op_from_onnx;
 use crate::tensor::Tensor;
 use crate::tensor::TensorError;
 use halo2curves::bn256::Fr as Fp;
+#[cfg(not(target_arch = "wasm32"))]
 use log::trace;
 use serde::Deserialize;
 use serde::Serialize;
+#[cfg(not(target_arch = "wasm32"))]
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use tabled::Tabled;
-use tract_onnx;
-use tract_onnx::prelude::Node as OnnxNode;
-use tract_onnx::prelude::TypedFact;
-use tract_onnx::prelude::TypedOp;
+#[cfg(not(target_arch = "wasm32"))]
+use tract_onnx::{
+    self,
+    prelude::{Node as OnnxNode, TypedFact, TypedOp},
+};
 
 fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     if !v.is_empty() {
@@ -339,6 +345,7 @@ impl Node {
     /// * `other_nodes` - [BTreeMap] of other previously initialized [Node]s in the computational graph.
     /// * `public_params` - flag if parameters of model are public
     /// * `idx` - The node's unique identifier.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(
         node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
         other_nodes: &mut BTreeMap<usize, super::NodeType>,

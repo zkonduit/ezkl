@@ -26,7 +26,7 @@ mod wasm32 {
     pub const PK: &[u8] = include_bytes!("../tests/wasm/test.provekey");
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
     pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
-    pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test.onnx");
+    pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test_network.compiled");
 
     #[wasm_bindgen_test]
     async fn verify_elgamal_gen_random_wasm() {

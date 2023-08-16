@@ -6,6 +6,7 @@ use super::GraphError;
 use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::RegionCtx;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::Input;
 use crate::circuit::Unknown;
 use crate::fieldutils::felt_to_i128;
@@ -18,7 +19,6 @@ use halo2curves::bn256::Fr as Fp;
 
 #[cfg(not(target_arch = "wasm32"))]
 use colored::Colorize;
-use core::panic;
 use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::ConstraintSystem,
@@ -26,9 +26,13 @@ use halo2_proofs::{
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
+#[cfg(not(target_arch = "wasm32"))]
+use tract_onnx;
+#[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::prelude::{
-    DatumExt, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
+    DatumExt, Framework, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
 };
+#[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_hir::ops::scan::Scan;
 
 use log::error;
@@ -40,8 +44,6 @@ use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
 use tabled::Table;
-use tract_onnx;
-use tract_onnx::prelude::Framework;
 
 /// The result of a forward pass.
 #[derive(Clone, Debug)]
@@ -251,6 +253,7 @@ impl Model {
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
     /// * `run_args` - [RunArgs]
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(reader: &mut dyn std::io::Read, run_args: RunArgs) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(run_args)?;
 
@@ -427,6 +430,7 @@ impl Model {
     /// * `reader` - A reader for an Onnx file.
     /// * `scale` - The scale to use for quantization.
     /// * `public_params` - Whether to make the params public.
+    #[cfg(not(target_arch = "wasm32"))]
     fn load_onnx_model(
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
@@ -542,6 +546,7 @@ impl Model {
     /// * `run_args` - [RunArgs]
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     /// * `input_scales` - The scales of the model's inputs.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn nodes_from_graph(
         graph: &Graph<TypedFact, Box<dyn TypedOp>>,
         run_args: &RunArgs,
@@ -627,6 +632,7 @@ impl Model {
     /// Creates a `Model` from parsed run_args
     /// # Arguments
     /// * `params` - A [GraphSettings] struct holding parsed CLI arguments.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_run_args(
         run_args: &RunArgs,
         model: &std::path::PathBuf,

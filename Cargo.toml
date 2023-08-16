@@ -18,7 +18,6 @@ halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/update-h
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "2f322219b39b67da8979bf2b014b31145e7872b0", package = "halo2curves", features = ["derive_serde"] }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev= "8864e56", default_features = false, optional = true }
 clap = { version = "4.3.3", features = ["derive"]}
 serde = { version = "1.0.126", features = ["derive"], optional = true }
 serde_json = { version = "1.0.97", default_features = false, features = ["float_roundtrip", "raw_value"], optional = true }
@@ -52,6 +51,8 @@ tokio = { version = "1.26.0",  default_features = false, features = ["macros", "
 pyo3 = { version = "0.18.3", features = ["extension-module", "abi3-py37", "macros"],  default_features = false, optional = true }
 pyo3-asyncio = { version = "0.18.0",  features = ["attributes", "tokio-runtime"],  default_features = false, optional = true }
 pyo3-log = { version = "0.8.1", default_features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev= "8864e56", default_features = false, optional = true }
+
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

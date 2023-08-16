@@ -853,6 +853,7 @@ impl GraphCircuit {
     }
 
     /// Create a new circuit from a set of input data and [RunArgs].
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_run_args(
         run_args: &RunArgs,
         model_path: &std::path::PathBuf,
@@ -874,6 +875,7 @@ impl GraphCircuit {
     }
 
     /// Create a new circuit from a set of input data and [GraphSettings].
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_settings(
         params: &GraphSettings,
         model_path: &std::path::PathBuf,

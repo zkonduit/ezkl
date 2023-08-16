@@ -203,8 +203,7 @@ pub fn prove(
     .unwrap();
 
     // read in circuit
-    let mut reader = std::io::BufReader::new(&circuit_ser[..]);
-    let model = crate::graph::Model::new(&mut reader, circuit_settings.run_args).unwrap();
+    let model: crate::graph::Model = bincode::deserialize(&circuit_ser[..]).unwrap();
 
     let mut circuit = GraphCircuit::new(model, circuit_settings.run_args).unwrap();
 
