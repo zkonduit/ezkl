@@ -24,10 +24,10 @@ use self::modules::{
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
-use crate::commands::RunArgs;
 use crate::graph::modules::ModuleInstanceOffset;
 use crate::pfsys::field_to_vecu64;
 use crate::tensor::{Tensor, ValTensor};
+use crate::RunArgs;
 use halo2_proofs::{
     circuit::Layouter,
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
@@ -853,6 +853,7 @@ impl GraphCircuit {
     }
 
     /// Create a new circuit from a set of input data and [RunArgs].
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_run_args(
         run_args: &RunArgs,
         model_path: &std::path::PathBuf,
@@ -874,6 +875,7 @@ impl GraphCircuit {
     }
 
     /// Create a new circuit from a set of input data and [GraphSettings].
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn from_settings(
         params: &GraphSettings,
         model_path: &std::path::PathBuf,

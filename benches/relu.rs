@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::circuit::region::RegionCtx;
 use ezkl::circuit::{ops::lookup::LookupOp, BaseConfig as Config, CheckMode};
-use ezkl::execute::create_proof_circuit_kzg;
+use ezkl::pfsys::create_proof_circuit_kzg;
 use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
 use ezkl::tensor::*;

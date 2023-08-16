@@ -105,7 +105,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 10] = [
+    const TESTS: [&str; 11] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -117,7 +117,8 @@ mod py_tests {
         "mean_postgres.ipynb",
         "little_transformer.ipynb",
         "simple_demo_aggregated_proofs.ipynb",
-        // "lstm.ipynb"
+        // "lstm.ipynb",
+        "ezkl_demo.ipynb",
     ];
 
     macro_rules! test_func {

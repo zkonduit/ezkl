@@ -5,6 +5,7 @@ pub mod evm;
 pub mod srs;
 
 use crate::circuit::CheckMode;
+use crate::pfsys::evm::aggregation::PoseidonTranscript;
 use crate::tensor::TensorType;
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
@@ -12,8 +13,13 @@ use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
+use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG};
+use halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
 use halo2_proofs::poly::VerificationStrategy;
-use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
+use halo2_proofs::transcript::{
+    Blake2bRead, Blake2bWrite, Challenge255, EncodedChallenge, TranscriptReadBuffer,
+    TranscriptWriterBuffer,
+};
 use halo2curves::ff::{FromUniformBytes, PrimeField, WithSmallOrderMulGroup};
 use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
@@ -23,6 +29,8 @@ use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
+use snark_verifier::loader::native::NativeLoader;
+use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use snark_verifier::system::halo2::{compile, Config};
 use snark_verifier::verifier::plonk::PlonkProtocol;
 use std::error::Error;
@@ -32,6 +40,8 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::path::PathBuf;
 use thiserror::Error as thisError;
+
+use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
 #[derive(thisError, Debug)]
 /// Errors related to pfsys
@@ -572,6 +582,122 @@ pub fn save_params<Scheme: CommitmentScheme>(
     params.write(&mut writer)?;
     writer.flush()?;
     Ok(())
+}
+
+/// helper function
+pub fn create_proof_circuit_kzg<
+    'params,
+    C: Circuit<Fr>,
+    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,
+>(
+    circuit: C,
+    params: &'params ParamsKZG<Bn256>,
+    public_inputs: Vec<Vec<Fr>>,
+    pk: &ProvingKey<G1Affine>,
+    transcript: TranscriptType,
+    strategy: Strategy,
+    check_mode: CheckMode,
+) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
+    match transcript {
+        TranscriptType::EVM => create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            Fr,
+            _,
+            ProverGWC<_>,
+            VerifierGWC<_>,
+            _,
+            _,
+            EvmTranscript<G1Affine, _, _, _>,
+            EvmTranscript<G1Affine, _, _, _>,
+        >(
+            circuit,
+            public_inputs,
+            params,
+            pk,
+            strategy,
+            check_mode,
+            transcript,
+        )
+        .map_err(Box::<dyn Error>::from),
+        TranscriptType::Poseidon => create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            Fr,
+            _,
+            ProverGWC<_>,
+            VerifierGWC<_>,
+            _,
+            _,
+            PoseidonTranscript<NativeLoader, _>,
+            PoseidonTranscript<NativeLoader, _>,
+        >(
+            circuit,
+            public_inputs,
+            params,
+            pk,
+            strategy,
+            check_mode,
+            transcript,
+        )
+        .map_err(Box::<dyn Error>::from),
+        TranscriptType::Blake => create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            Fr,
+            _,
+            ProverGWC<_>,
+            VerifierGWC<'_, Bn256>,
+            _,
+            Challenge255<_>,
+            Blake2bWrite<_, _, _>,
+            Blake2bRead<_, _, _>,
+        >(
+            circuit,
+            public_inputs,
+            params,
+            pk,
+            strategy,
+            check_mode,
+            transcript,
+        )
+        .map_err(Box::<dyn Error>::from),
+    }
+}
+
+/// helper function
+pub(crate) fn verify_proof_circuit_kzg<
+    'params,
+    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,
+>(
+    params: &'params ParamsKZG<Bn256>,
+    proof: Snark<Fr, G1Affine>,
+    vk: &VerifyingKey<G1Affine>,
+    strategy: Strategy,
+) -> Result<Strategy::Output, halo2_proofs::plonk::Error> {
+    match proof.transcript_type {
+        TranscriptType::Blake => verify_proof_circuit::<
+            Fr,
+            VerifierGWC<'_, Bn256>,
+            _,
+            _,
+            Challenge255<_>,
+            Blake2bRead<_, _, _>,
+        >(&proof, params, vk, strategy),
+        TranscriptType::EVM => verify_proof_circuit::<
+            Fr,
+            VerifierGWC<'_, Bn256>,
+            _,
+            _,
+            _,
+            EvmTranscript<G1Affine, _, _, _>,
+        >(&proof, params, vk, strategy),
+        TranscriptType::Poseidon => verify_proof_circuit::<
+            Fr,
+            VerifierGWC<'_, Bn256>,
+            _,
+            _,
+            _,
+            PoseidonTranscript<NativeLoader, _>,
+        >(&proof, params, vk, strategy),
+    }
 }
 
 ////////////////////////

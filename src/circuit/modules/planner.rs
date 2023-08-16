@@ -15,6 +15,7 @@ use halo2_proofs::{
         Instance, Selector, TableColumn,
     },
 };
+use log::trace;
 
 /// A simple [`FloorPlanner`] that performs minimal optimizations.
 #[derive(Debug)]
@@ -60,6 +61,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug for ModuleLayouter<'a, F, 
         f.debug_struct("ModuleLayouter")
             .field("regions", &self.regions)
             .field("columns", &self.columns)
+            .field("total_constants", &self.total_constants)
             .finish()
     }
 }
@@ -185,6 +187,17 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
                 self.total_constants += 1;
             }
         }
+
+        trace!("region {} assigned", region_index);
+        trace!("total_constants: {:?}", self.total_constants);
+        let max_row_index = self
+            .columns
+            .iter()
+            .filter(|((module, _), _)| *module == self.current_module)
+            .map(|(_, row)| *row)
+            .max()
+            .unwrap_or(0);
+        trace!("max_row_index: {:?}", max_row_index);
 
         Ok(result)
     }

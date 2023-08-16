@@ -1,13 +1,24 @@
+// ignore file if compiling for wasm
+
+#[cfg(not(target_arch = "wasm32"))]
 use clap::Parser;
+#[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
+#[cfg(not(target_arch = "wasm32"))]
 use ezkl::commands::Cli;
+#[cfg(not(target_arch = "wasm32"))]
 use ezkl::execute::run;
+#[cfg(not(target_arch = "wasm32"))]
 use ezkl::logger::init_logger;
+#[cfg(not(target_arch = "wasm32"))]
 use log::{error, info};
+#[cfg(not(target_arch = "wasm32"))]
 use rand::prelude::SliceRandom;
+#[cfg(not(target_arch = "wasm32"))]
 use std::error::Error;
 
 #[tokio::main(flavor = "current_thread")]
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::parse();
     init_logger();
@@ -21,6 +32,10 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     res
 }
 
+#[cfg(target_arch = "wasm32")]
+pub fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn banner() {
     let ell: Vec<&str> = vec![
         "for Neural Networks",

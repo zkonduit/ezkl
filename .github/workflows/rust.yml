@@ -143,7 +143,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::tutorial_
 
   mock-proving-tests:
-    runs-on: 512gb
+    runs-on: self-hosted
     # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
@@ -156,6 +156,26 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: hashed inputs
+        run: cargo nextest run --release --verbose tests::mock_hashed_input_::t  --test-threads 32
+      - name: hashed params
+        run: cargo nextest run --release --verbose tests::mock_hashed_params_::t  --test-threads 32
+      - name: hashed outputs
+        run: cargo nextest run --release --verbose tests::mock_hashed_output_::t  --test-threads 32
+      - name: hashed inputs + params + outputs)
+        run: cargo nextest run --release --verbose tests::mock_hashed_all_::t  --test-threads 32
+      - name: encrypted inputs
+        run: cargo nextest run --release --verbose tests::mock_encrypted_input_::t  --test-threads 32
+      - name: encrypted params
+        run: cargo nextest run --release --verbose tests::mock_encrypted_params_::t  --test-threads 32
+      - name: encrypted outputs
+        run: cargo nextest run --release --verbose tests::mock_encrypted_output_::t  --test-threads 32
+      - name: encrypted inputs + params)
+        run: cargo nextest run --release --verbose tests::mock_encrypted_input_params_::t  --test-threads 32
+      - name: encrypted inputs + params + outputs)
+        run: cargo nextest run --release --verbose tests::mock_encrypted_all_::t  --test-threads 32
+      - name: encrypted inputs + hashed params)
+        run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
       - name: MNIST Gan Mock
         run: cargo nextest run --release --verbose tests::large_mock_::large_tests_4_expects -- --include-ignored
       - name: NanoGPT Mock
@@ -164,32 +184,15 @@ jobs:
         run: cargo nextest run --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
       - name: Multihead Attention Mock
         run: cargo nextest run --release --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
-      - name: Mock proving tests (public outputs)
+      - name: public outputs
         run: cargo nextest run --release --verbose tests::mock_public_outputs_ --test-threads 32
-      - name: Mock proving tests (public outputs + batch size == 10)
+      - name: public outputs + batch size == 10)
         run: cargo nextest run --release --verbose tests::mock_large_batch_public_outputs_ --test-threads 32
-      - name: Mock proving tests (public inputs)
+      - name: public inputs
         run: cargo nextest run --release --verbose tests::mock_public_inputs_ --test-threads 32
-      - name: Mock proving tests (public params)
+      - name: public params
         run: cargo nextest run --release --verbose tests::mock_public_params_ --test-threads 32
-      - name: Mock proving tests (hashed inputs)
-        run: cargo nextest run --release --verbose tests::mock_hashed_input_::t  --test-threads 32
-      - name: Mock proving tests (hashed params)
-        run: cargo nextest run --release --verbose tests::mock_hashed_params_::t  --test-threads 32
-      - name: Mock proving tests (hashed outputs)
-        run: cargo nextest run --release --verbose tests::mock_hashed_output_::t  --test-threads 32
-      - name: Mock proving tests (encrypted inputs)
-        run: cargo nextest run --release --verbose tests::mock_encrypted_input_::t  --test-threads 32
-      - name: Mock proving tests (encrypted params)
-        run: cargo nextest run --release --verbose tests::mock_encrypted_params_::t  --test-threads 32
-      - name: Mock proving tests (encrypted outputs)
-        run: cargo nextest run --release --verbose tests::mock_encrypted_output_::t  --test-threads 32
-      - name: Mock proving tests (encrypted inputs + params)
-        run: cargo nextest run --release --verbose tests::mock_encrypted_input_params_::t  --test-threads 32
-      - name: Mock proving tests (encrypted inputs + params + outputs)
-        run: cargo nextest run --release --verbose tests::mock_encrypted_all_::t  --test-threads 32
-      - name: Mock proving tests (encrypted inputs + hashed params)
-        run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
+     
 
 
   prove-and-verify-evm-tests:
@@ -394,7 +397,7 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Mock proving tests (should fail)
+      - name: should fail)
         run: cargo nextest run neg_tests::neg_examples_
 
   python-tests:
@@ -422,7 +425,7 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: 768gb
+      runs-on: self-hosted
 
         # Service containers to run with `container-job`
       services:
@@ -498,6 +501,8 @@ jobs:
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
         - name: Variance tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
+        - name: End to end demo tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
 
 
 

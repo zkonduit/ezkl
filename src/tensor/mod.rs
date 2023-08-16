@@ -6,7 +6,10 @@ pub mod val;
 pub mod var;
 
 use halo2curves::ff::PrimeField;
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::{
+    prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
+    slice::ParallelSliceMut,
+};
 use serde::{Deserialize, Serialize};
 pub use val::*;
 pub use var::*;
@@ -635,6 +638,33 @@ impl<T: Clone + TensorType> Tensor<T> {
                 inner.push(elem.clone());
             }
         }
+        Tensor::new(Some(&inner), &[inner.len()])
+    }
+
+    /// Remove indices
+    /// WARN: assumes indices are in ascending order for speed
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 6]), &[4]).unwrap();
+    /// let mut indices = vec![3, 4];
+    /// assert_eq!(a.remove_indices(&mut indices, true).unwrap(), expected);
+    /// ```
+    pub fn remove_indices(
+        &self,
+        indices: &mut [usize],
+        is_sorted: bool,
+    ) -> Result<Tensor<T>, TensorError> {
+        let mut inner: Vec<T> = self.inner.clone();
+        // time it
+        if !is_sorted {
+            indices.par_sort_unstable();
+        }
+        // remove indices
+        for elem in indices.iter().rev() {
+            inner.swap_remove(*elem);
+        }
+
         Tensor::new(Some(&inner), &[inner.len()])
     }
 

@@ -214,7 +214,7 @@ pub struct ElGamalVariablesSer {
     ///
     pub aux_generator: [[u64; 4]; 2],
     ///
-    pub window_size: usize, 
+    pub window_size: usize,
 }
 
 impl<'de> Deserialize<'de> for ElGamalVariables {
@@ -222,7 +222,6 @@ impl<'de> Deserialize<'de> for ElGamalVariables {
     where
         D: Deserializer<'de>,
     {
-
         let var_ser: ElGamalVariablesSer = Deserialize::deserialize(deserializer)?;
 
         Ok(ElGamalVariables {
@@ -295,7 +294,6 @@ pub struct ElGamalCipher {
     pub c2: Vec<Fr>,
 }
 
-
 impl<'de> Deserialize<'de> for ElGamalCipher {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -313,7 +311,7 @@ impl<'de> Deserialize<'de> for ElGamalCipher {
             c1: G1 {
                 x: Fq::from_raw(cipher_ser.c1[0]),
                 y: Fq::from_raw(cipher_ser.c1[1]),
-                z: Fq::from_raw(cipher_ser.c1[2])
+                z: Fq::from_raw(cipher_ser.c1[2]),
             },
             c2: cipher_ser.c2,
         })
@@ -770,13 +768,47 @@ impl Module<Fr> for ElGamalGadget {
 
         Ok(assigned_input.into())
     }
+
+    fn num_rows(input_len: usize) -> usize {
+        // this was determined by running the circuit and looking at the number of constraints
+        // in the test called hash_for_a_range_of_input_sizes, then regressing in python to find the slope
+        // ```python
+        // import numpy as np
+        // x = [1, 2, 3, 512, 513, 514]
+        // y = [75424, 75592, 75840, 161017, 161913, 162000]
+        // def fit_above(x, y) :
+        //     x0, y0 = x[0] - 1, y[0]
+        //     x -= x0
+        //     y -= y0
+        //     def error_function_2(b, x, y) :
+        //         a = np.min((y - b) / x)
+        //         return np.sum((y - a * x - b)**2)
+        //     b = scipy.optimize.minimize(error_function_2, [0], args=(x, y)).x[0]
+        //     a = np.max((y - b) / x)
+        //     return a, b - a * x0 + y0
+        // a, b = fit_above(x, y)
+        // plt.plot(x, y, 'o')
+        // plt.plot(x, a*x + b, '-')
+        // plt.show()
+        // for (x_i, y_i) in zip(x,y):
+        // assert y_i <= a*x_i + b
+        // print(a, b)
+        // ```
+        const NUM_CONSTRAINTS_SLOPE: usize = 196;
+        const NUM_CONSTRAINTS_INTERCEPT: usize = 75257;
+
+        // check if even or odd
+        input_len * NUM_CONSTRAINTS_SLOPE + NUM_CONSTRAINTS_INTERCEPT
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::circuit::modules::ModulePlanner;
+
     use super::*;
     use ark_std::test_rng;
-    use halo2_proofs::{circuit::SimpleFloorPlanner, dev::MockProver, plonk::Circuit};
+    use halo2_proofs::{dev::MockProver, plonk::Circuit};
 
     struct EncryptionCircuit {
         message: ValTensor<Fr>,
@@ -785,7 +817,7 @@ mod tests {
 
     impl Circuit<Fr> for EncryptionCircuit {
         type Config = ElGamalConfig;
-        type FloorPlanner = SimpleFloorPlanner;
+        type FloorPlanner = ModulePlanner;
         type Params = ();
 
         fn without_witnesses(&self) -> Self {
@@ -880,5 +912,39 @@ mod tests {
 
         let res = MockProver::run(17, &circuit, public_inputs).unwrap();
         res.assert_satisfied_par();
+    }
+
+    #[test]
+    #[ignore]
+    pub fn test_circuit_range_of_input_sizes() {
+        let mut rng = test_rng();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        env_logger::init();
+
+        //
+        for i in [1, 2, 3, 512, 513, 514, 1024] {
+            println!("i is {} ----------------------------------------", i);
+
+            let var = ElGamalVariables::gen_random(&mut rng);
+            let mut msg = vec![];
+            for _ in 0..i {
+                msg.push(Fr::random(&mut rng));
+            }
+
+            let run_inputs = (msg.clone(), var.clone());
+            let public_inputs: Vec<Vec<Fr>> = ElGamalGadget::run(run_inputs).unwrap();
+
+            let message: Tensor<ValType<Fr>> =
+                msg.into_iter().map(|m| Value::known(m).into()).into();
+
+            let circuit = EncryptionCircuit {
+                message: message.into(),
+                variables: var,
+            };
+
+            let res = MockProver::run(19, &circuit, public_inputs).unwrap();
+            res.assert_satisfied_par();
+        }
     }
 }

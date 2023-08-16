@@ -89,11 +89,12 @@ pub async fn setup_eth_backend(
 pub async fn deploy_verifier_via_solidity(
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
+    runs: Option<usize>
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "Verifier", None)?;
+        get_contract_artifacts(sol_code_path, "Verifier", runs)?;
     let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone())?;
 
     let contract = factory.deploy(())?.send().await?;
@@ -107,6 +108,7 @@ pub async fn deploy_da_verifier_via_solidity(
     input: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
+    runs: Option<usize>
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
@@ -175,7 +177,7 @@ pub async fn deploy_da_verifier_via_solidity(
     };
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestationVerifier", None)?;
+        get_contract_artifacts(sol_code_path, "DataAttestationVerifier", runs)?;
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
 

@@ -28,8 +28,8 @@ pub fn init_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
-use crate::execute::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::graph::{GraphCircuit, GraphSettings};
+use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 
 /// Generate a poseidon hash in browser. Input message
 #[wasm_bindgen]
@@ -203,8 +203,7 @@ pub fn prove(
     .unwrap();
 
     // read in circuit
-    let mut reader = std::io::BufReader::new(&circuit_ser[..]);
-    let model = crate::graph::Model::new(&mut reader, circuit_settings.run_args).unwrap();
+    let model: crate::graph::Model = bincode::deserialize(&circuit_ser[..]).unwrap();
 
     let mut circuit = GraphCircuit::new(model, circuit_settings.run_args).unwrap();
 
