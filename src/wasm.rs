@@ -28,8 +28,8 @@ pub fn init_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
-use crate::execute::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::graph::{GraphCircuit, GraphSettings};
+use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 
 /// Generate a poseidon hash in browser. Input message
 #[wasm_bindgen]

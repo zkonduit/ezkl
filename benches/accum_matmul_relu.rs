@@ -3,7 +3,7 @@ use ezkl::circuit::*;
 
 use ezkl::circuit::lookup::LookupOp;
 use ezkl::circuit::poly::PolyOp;
-use ezkl::execute::create_proof_circuit_kzg;
+use ezkl::pfsys::create_proof_circuit_kzg;
 use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
 use ezkl::tensor::*;

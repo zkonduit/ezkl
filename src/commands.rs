@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::types::H160;
 #[cfg(feature = "python-bindings")]
@@ -12,10 +12,11 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
 
-use crate::circuit::{CheckMode, Tolerance};
+use crate::RunArgs;
+
+use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::TestDataSource;
-use crate::graph::Visibility;
 use crate::pfsys::TranscriptType;
 
 impl std::fmt::Display for TranscriptType {
@@ -135,34 +136,6 @@ impl<'source> FromPyObject<'source> for CalibrationTarget {
     }
 }
 
-/// Parameters specific to a proving run
-#[derive(Debug, Copy, Args, Deserialize, Serialize, Clone, Default, PartialEq, PartialOrd)]
-pub struct RunArgs {
-    /// The tolerance for error on model outputs
-    #[arg(short = 'T', long, default_value = "0")]
-    pub tolerance: Tolerance,
-    /// The denominator in the fixed point representation used when quantizing
-    #[arg(short = 'S', long, default_value = "7")]
-    pub scale: u32,
-    /// The number of bits used in lookup tables
-    #[arg(short = 'B', long, default_value = "16")]
-    pub bits: usize,
-    /// The log_2 number of rows
-    #[arg(short = 'K', long, default_value = "17")]
-    pub logrows: u32,
-    /// The number of batches to split the input data into
-    #[arg(long, default_value = "1")]
-    pub batch_size: usize,
-    /// Flags whether inputs are public, private, hashed
-    #[arg(long, default_value = "private")]
-    pub input_visibility: Visibility,
-    /// Flags whether outputs are public, private, hashed
-    #[arg(long, default_value = "public")]
-    pub output_visibility: Visibility,
-    /// Flags whether params are public, private, hashed
-    #[arg(long, default_value = "private")]
-    pub param_visibility: Visibility,
-}
 use lazy_static::lazy_static;
 
 // if CARGO VERSION is 0.0.0 replace with "source - no compatibility guaranteed"

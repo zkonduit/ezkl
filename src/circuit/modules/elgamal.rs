@@ -919,6 +919,7 @@ mod tests {
     pub fn test_circuit_range_of_input_sizes() {
         let mut rng = test_rng();
 
+        #[cfg(not(target_arch = "wasm32"))]
         env_logger::init();
 
         //

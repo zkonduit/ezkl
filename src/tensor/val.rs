@@ -483,18 +483,18 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         }
     }
 
-    /// removes constants with inner value 0
-    pub fn remove_indices(&mut self, indices: &[usize]) -> Result<(), TensorError> {
+    /// calls `remove_indices` on the inner [Tensor].
+    pub fn remove_indices(
+        &mut self,
+        indices: &mut [usize],
+        is_sorted: bool,
+    ) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = v
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, _)| !indices.contains(i))
-                    .map(|x| x.1.clone())
-                    .collect();
+                // this is very slow how can we speed this up ?
+                *v = v.remove_indices(indices, is_sorted)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

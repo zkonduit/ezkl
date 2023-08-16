@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
-use ezkl::execute::create_proof_circuit_kzg;
 use ezkl::pfsys::create_keys;
+use ezkl::pfsys::create_proof_circuit_kzg;
 use ezkl::pfsys::srs::gen_srs;
 use ezkl::pfsys::TranscriptType;
 use ezkl::tensor::*;

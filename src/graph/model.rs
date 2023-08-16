@@ -11,11 +11,12 @@ use crate::circuit::Unknown;
 use crate::fieldutils::felt_to_i128;
 use crate::{
     circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
-    commands::RunArgs,
     tensor::{Tensor, ValTensor},
+    RunArgs,
 };
 use halo2curves::bn256::Fr as Fp;
 
+#[cfg(not(target_arch = "wasm32"))]
 use colored::Colorize;
 use core::panic;
 use halo2_proofs::{
@@ -288,6 +289,7 @@ impl Model {
         check_mode: CheckMode,
     ) -> Result<GraphSettings, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes();
+        #[cfg(not(target_arch = "wasm32"))]
         info!(
             "{} {} {}",
             "model has".blue(),
@@ -301,6 +303,7 @@ impl Model {
             .unwrap();
 
         // Then number of columns in the circuits
+        #[cfg(not(target_arch = "wasm32"))]
         info!(
             "{} {} {}",
             "model generates".blue(),

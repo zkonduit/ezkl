@@ -1,8 +1,8 @@
 use std::error::Error;
 
-use crate::commands::RunArgs;
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
+use crate::RunArgs;
 use halo2_proofs::plonk::ConstraintSystem;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;

@@ -3,8 +3,8 @@ use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEID
 use ezkl::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig, NUM_INSTANCE_COLUMNS};
 use ezkl::circuit::modules::Module;
 use ezkl::circuit::*;
-use ezkl::execute::create_proof_circuit_kzg;
 use ezkl::pfsys::create_keys;
+use ezkl::pfsys::create_proof_circuit_kzg;
 use ezkl::pfsys::srs::gen_srs;
 use ezkl::pfsys::TranscriptType;
 use ezkl::tensor::*;

@@ -24,10 +24,10 @@ use self::modules::{
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
-use crate::commands::RunArgs;
 use crate::graph::modules::ModuleInstanceOffset;
 use crate::pfsys::field_to_vecu64;
 use crate::tensor::{Tensor, ValTensor};
+use crate::RunArgs;
 use halo2_proofs::{
     circuit::Layouter,
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
