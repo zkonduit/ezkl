@@ -823,7 +823,7 @@ mod native_tests {
     fn model_serialization(test_dir: &str, example_name: String) {
         let model_path = format!("{}/{}/network.onnx", test_dir, example_name);
         let serialization_path = format!("{}/{}/network.ezkl", test_dir, example_name);
-        let run_args = ezkl::commands::RunArgs {
+        let run_args = ezkl::RunArgs {
             param_visibility: Visibility::Public,
             batch_size: 1,
             ..Default::default()
