@@ -1,7 +1,7 @@
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::{CalibrationTarget, StrategyType};
-use crate::commands::{Cli, Commands, RunArgs};
+use crate::commands::{Cli, Commands};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
@@ -10,7 +10,7 @@ use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::{TestDataSource, TestSources};
-use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
+use crate::pfsys::evm::aggregation::AggregationCircuit;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
 #[cfg(not(target_arch = "wasm32"))]
@@ -18,23 +18,21 @@ use crate::pfsys::evm::{
     aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
 };
 use crate::pfsys::{create_keys, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType};
-use crate::pfsys::{create_proof_circuit, save_vk, srs::*, verify_proof_circuit};
+use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
+use crate::pfsys::{save_vk, srs::*};
+use crate::RunArgs;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::types::H160;
 #[cfg(not(target_arch = "wasm32"))]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
-use halo2_proofs::plonk::{Circuit, ProvingKey, VerifyingKey};
 use halo2_proofs::poly::commitment::Params;
 use halo2_proofs::poly::commitment::ParamsProver;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2_proofs::poly::kzg::multiopen::ProverGWC;
 use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy;
 use halo2_proofs::poly::kzg::{
-    commitment::ParamsKZG, multiopen::VerifierGWC, strategy::SingleStrategy as KZGSingleStrategy,
+    commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
-use halo2_proofs::poly::VerificationStrategy;
-use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite, Challenge255};
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 #[cfg(not(target_arch = "wasm32"))]
 use halo2curves::ff::Field;
@@ -54,8 +52,6 @@ use rand::Rng;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 #[cfg(not(target_arch = "wasm32"))]
 use snark_verifier::loader::evm;
-use snark_verifier::loader::native::NativeLoader;
-use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
@@ -328,7 +324,17 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             rpc_url,
             addr_path,
             optimizer_runs,
-        } => deploy_da_evm(data, settings_path, sol_code_path, rpc_url, addr_path, optimizer_runs).await,
+        } => {
+            deploy_da_evm(
+                data,
+                settings_path,
+                sol_code_path,
+                rpc_url,
+                addr_path,
+                optimizer_runs,
+            )
+            .await
+        }
         #[cfg(not(target_arch = "wasm32"))]
         Commands::VerifyEVM {
             proof_path,
@@ -337,122 +343,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             data_attestation,
         } => verify_evm(proof_path, addr, rpc_url, data_attestation).await,
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
-    }
-}
-
-/// helper function
-pub(crate) fn verify_proof_circuit_kzg<
-    'params,
-    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,
->(
-    params: &'params ParamsKZG<Bn256>,
-    proof: Snark<Fr, G1Affine>,
-    vk: &VerifyingKey<G1Affine>,
-    strategy: Strategy,
-) -> Result<Strategy::Output, halo2_proofs::plonk::Error> {
-    match proof.transcript_type {
-        TranscriptType::Blake => verify_proof_circuit::<
-            Fr,
-            VerifierGWC<'_, Bn256>,
-            _,
-            _,
-            Challenge255<_>,
-            Blake2bRead<_, _, _>,
-        >(&proof, params, vk, strategy),
-        TranscriptType::EVM => verify_proof_circuit::<
-            Fr,
-            VerifierGWC<'_, Bn256>,
-            _,
-            _,
-            _,
-            EvmTranscript<G1Affine, _, _, _>,
-        >(&proof, params, vk, strategy),
-        TranscriptType::Poseidon => verify_proof_circuit::<
-            Fr,
-            VerifierGWC<'_, Bn256>,
-            _,
-            _,
-            _,
-            PoseidonTranscript<NativeLoader, _>,
-        >(&proof, params, vk, strategy),
-    }
-}
-
-/// helper function
-pub fn create_proof_circuit_kzg<
-    'params,
-    C: Circuit<Fr>,
-    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,
->(
-    circuit: C,
-    params: &'params ParamsKZG<Bn256>,
-    public_inputs: Vec<Vec<Fr>>,
-    pk: &ProvingKey<G1Affine>,
-    transcript: TranscriptType,
-    strategy: Strategy,
-    check_mode: CheckMode,
-) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
-    match transcript {
-        TranscriptType::EVM => create_proof_circuit::<
-            KZGCommitmentScheme<_>,
-            Fr,
-            _,
-            ProverGWC<_>,
-            VerifierGWC<_>,
-            _,
-            _,
-            EvmTranscript<G1Affine, _, _, _>,
-            EvmTranscript<G1Affine, _, _, _>,
-        >(
-            circuit,
-            public_inputs,
-            params,
-            pk,
-            strategy,
-            check_mode,
-            transcript,
-        )
-        .map_err(Box::<dyn Error>::from),
-        TranscriptType::Poseidon => create_proof_circuit::<
-            KZGCommitmentScheme<_>,
-            Fr,
-            _,
-            ProverGWC<_>,
-            VerifierGWC<_>,
-            _,
-            _,
-            PoseidonTranscript<NativeLoader, _>,
-            PoseidonTranscript<NativeLoader, _>,
-        >(
-            circuit,
-            public_inputs,
-            params,
-            pk,
-            strategy,
-            check_mode,
-            transcript,
-        )
-        .map_err(Box::<dyn Error>::from),
-        TranscriptType::Blake => create_proof_circuit::<
-            KZGCommitmentScheme<_>,
-            Fr,
-            _,
-            ProverGWC<_>,
-            VerifierGWC<'_, Bn256>,
-            _,
-            Challenge255<_>,
-            Blake2bWrite<_, _, _>,
-            Blake2bRead<_, _, _>,
-        >(
-            circuit,
-            public_inputs,
-            params,
-            pk,
-            strategy,
-            check_mode,
-            transcript,
-        )
-        .map_err(Box::<dyn Error>::from),
     }
 }
 
@@ -970,9 +860,14 @@ pub(crate) async fn deploy_da_evm(
     runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
-    let contract_address =
-        deploy_da_verifier_via_solidity(settings_path, data, sol_code_path, rpc_url.as_deref(), runs)
-            .await?;
+    let contract_address = deploy_da_verifier_via_solidity(
+        settings_path,
+        data,
+        sol_code_path,
+        rpc_url.as_deref(),
+        runs,
+    )
+    .await?;
     info!("Contract deployed at: {}", contract_address);
 
     let mut f = File::create(addr_path)?;
@@ -986,10 +881,11 @@ pub(crate) async fn deploy_evm(
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
     addr_path: PathBuf,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
-    let contract_address = deploy_verifier_via_solidity(sol_code_path, rpc_url.as_deref(), runs).await?;
+    let contract_address =
+        deploy_verifier_via_solidity(sol_code_path, rpc_url.as_deref(), runs).await?;
 
     info!("Contract deployed at: {:#?}", contract_address);
 

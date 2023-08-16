@@ -473,6 +473,7 @@ mod tests {
     fn hash_for_a_range_of_input_sizes() {
         let rng = rand::rngs::OsRng;
 
+        #[cfg(not(target_arch = "wasm32"))]
         env_logger::init();
 
         for i in [32].into_iter() {
