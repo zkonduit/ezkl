@@ -647,7 +647,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// use ezkl::tensor::Tensor;
     /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
     /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 6]), &[4]).unwrap();
-    /// assert_eq!(a.remove_indices(&[3, 4], true).unwrap(), expected);
+    /// let mut indices = vec![3, 4];
+    /// assert_eq!(a.remove_indices(&mut indices, true).unwrap(), expected);
     /// ```
     pub fn remove_indices(
         &self,
