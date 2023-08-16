@@ -43,6 +43,7 @@ use std::error::Error;
 use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use tabled::Table;
 
 /// The result of a forward pass.
@@ -506,6 +507,7 @@ impl Model {
     }
 
     /// Formats nodes (including subgraphs) into tables !
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn table_nodes(&self) -> String {
         let mut node_accumulator = vec![];
         let mut string = String::new();

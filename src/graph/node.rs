@@ -17,13 +17,17 @@ use crate::tensor::Tensor;
 use crate::tensor::TensorError;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(not(target_arch = "wasm32"))]
+use itertools::Itertools;
+#[cfg(not(target_arch = "wasm32"))]
 use log::trace;
 use serde::Deserialize;
 use serde::Serialize;
 #[cfg(not(target_arch = "wasm32"))]
 use std::collections::BTreeMap;
 use std::error::Error;
+#[cfg(not(target_arch = "wasm32"))]
 use std::fmt;
+#[cfg(not(target_arch = "wasm32"))]
 use tabled::Tabled;
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::{
@@ -31,6 +35,7 @@ use tract_onnx::{
     prelude::{Node as OnnxNode, TypedFact, TypedOp},
 };
 
+#[cfg(not(target_arch = "wasm32"))]
 fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     if !v.is_empty() {
         format!("{:?}", v)
@@ -39,7 +44,7 @@ fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     }
 }
 
-#[allow(clippy::borrowed_box)]
+#[cfg(not(target_arch = "wasm32"))]
 fn display_opkind(v: &SupportedOp) -> String {
     v.as_string()
 }
@@ -127,7 +132,7 @@ impl Op<Fp> for Rescaled {
 }
 
 /// A single operation in a [crate::graph::Model].
-#[derive(Clone, Debug, Tabled, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SupportedOp {
     /// A linear operation.
     Linear(PolyOp<Fp>),
@@ -309,23 +314,58 @@ impl Op<Fp> for SupportedOp {
 pub type Outlet = (usize, usize);
 
 /// A single operation in a [crate::graph::Model].
-#[derive(Clone, Debug, Tabled, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Node {
     /// [Op] i.e what operation this node represents.
-    #[tabled(display_with = "display_opkind")]
     pub opkind: SupportedOp,
     /// The denominator in the fixed point representation for the node's output. Tensors of differing scales should not be combined.
     pub out_scale: u32,
     // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
     // but in_dim is [in], out_dim is [out]
-    #[tabled(display_with = "display_vector")]
     /// The indices of the node's inputs.
     pub inputs: Vec<Outlet>,
-    #[tabled(display_with = "display_vector")]
     /// Dimensions of output.
     pub out_dims: Vec<usize>,
     /// The node's unique identifier.
     pub idx: usize,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Tabled for Node {
+    const LENGTH: usize = 6;
+
+    fn headers() -> Vec<std::borrow::Cow<'static, str>> {
+        let mut headers = Vec::with_capacity(Self::LENGTH);
+        for i in [
+            "idx",
+            "opkind",
+            "out_scale",
+            "inputs",
+            "out_dims",
+            "required_lookups",
+        ] {
+            headers.push(std::borrow::Cow::Borrowed(i));
+        }
+        headers
+    }
+
+    fn fields(&self) -> Vec<std::borrow::Cow<'_, str>> {
+        let mut fields = Vec::with_capacity(Self::LENGTH);
+        fields.push(std::borrow::Cow::Owned(self.idx.to_string()));
+        fields.push(std::borrow::Cow::Owned(display_opkind(&self.opkind)));
+        fields.push(std::borrow::Cow::Owned(self.out_scale.to_string()));
+        fields.push(std::borrow::Cow::Owned(display_vector(&self.inputs)));
+        fields.push(std::borrow::Cow::Owned(display_vector(&self.out_dims)));
+        fields.push(std::borrow::Cow::Owned(format!(
+            "{:?}",
+            self.opkind
+                .required_lookups()
+                .iter()
+                .map(|c| <LookupOp as Op<Fp>>::as_string(c))
+                .collect_vec()
+        )));
+        fields
+    }
 }
 
 impl PartialEq for Node {
