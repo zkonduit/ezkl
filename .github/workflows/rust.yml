@@ -425,7 +425,7 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: [512gb, 768gb]
+      runs-on: self-hosted
 
         # Service containers to run with `container-job`
       services:
