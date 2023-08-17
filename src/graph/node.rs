@@ -361,7 +361,7 @@ impl Tabled for Node {
             self.opkind
                 .required_lookups()
                 .iter()
-                .map(|c| <LookupOp as Op<Fp>>::as_string(c))
+                .map(<LookupOp as Op<Fp>>::as_string)
                 .collect_vec()
         )));
         fields

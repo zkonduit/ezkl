@@ -138,8 +138,8 @@ fn number_of_iterations(mappings: &[InputMapping], dims: Vec<&[usize]>) -> usize
             });
     // assert all collected number of iterations are equal
     assert!(number_of_iterations.clone().all_equal());
-    let number_of_iterations = number_of_iterations.next().unwrap_or(1);
-    number_of_iterations
+    
+    number_of_iterations.next().unwrap_or(1)
 }
 
 fn input_state_idx(input_mappings: &[InputMapping]) -> Vec<usize> {
@@ -501,7 +501,7 @@ impl Model {
                     trace!(
                         "------------ output node {}: {:?}",
                         idx,
-                        res.output.map(|x| crate::fieldutils::felt_to_i32(x)).show()
+                        res.output.map(crate::fieldutils::felt_to_i32).show()
                     );
                     results.insert(idx, vec![res.output]);
                 }
@@ -528,7 +528,7 @@ impl Model {
                                     let start = i * chunk;
                                     let end = (i + 1) * chunk;
                                     let t =
-                                        crate::tensor::ops::slice(&og_input, axis, &start, &end)?;
+                                        crate::tensor::ops::slice(og_input, axis, &start, &end)?;
                                     *inp = t;
                                 }
                                 _ => {}
@@ -582,7 +582,7 @@ impl Model {
                             .iter()
                             .map(|x|
                             // convert to tensor i32
-                            x.map(|x| crate::fieldutils::felt_to_i32(x)).show())
+                            x.map(crate::fieldutils::felt_to_i32).show())
                             .collect_vec()
                     );
 
@@ -1020,7 +1020,7 @@ impl Model {
                     .collect_vec()
             } else {
                 // we re-assign inputs, always from the 0 outlet
-                let mut res = results.get(&idx).unwrap()[0].clone();
+                let mut res = results.get(idx).unwrap()[0].clone();
                 res.reshape(&node.out_dims()[0])?;
                 vec![res]
             };

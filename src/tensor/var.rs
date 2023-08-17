@@ -296,7 +296,7 @@ impl VarTensor {
         y: usize,
         coord: usize,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
-        match k.clone() {
+        match k {
             ValType::Value(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
                     region.assign_advice(|| "k", advices[x], y, || v)

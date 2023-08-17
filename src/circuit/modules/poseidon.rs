@@ -476,7 +476,8 @@ mod tests {
         #[cfg(not(target_arch = "wasm32"))]
         env_logger::init();
 
-        for i in [32].into_iter() {
+        {
+            let i = 32;
             // print a bunch of new lines
             println!(
                 "i is {} -------------------------------------------------",
