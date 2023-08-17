@@ -46,7 +46,7 @@ jobs:
         run: cargo doc --verbose
 
   library-tests:
-    runs-on: ubuntu-latest-32-cores | 256gb
+    runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -65,7 +65,7 @@ jobs:
         run: cargo nextest run --lib --verbose -- --include-ignored
 
   model-serialization:
-    runs-on: ubuntu-latest-32-cores | 256gb
+    runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -106,7 +106,7 @@ jobs:
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
 
   render-circuit:
-    runs-on: ubuntu-latest-32-cores | 256gb 
+    runs-on: ubuntu-latest-32-cores
     needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
@@ -234,7 +234,7 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify --test-threads 1
 
   prove-and-verify-tests:
-    runs-on: ubuntu-latest-32-cores | 256gb
+    runs-on: ubuntu-latest-32-cores
     needs:
       [
         build,
@@ -264,7 +264,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted --test-threads 8
 
   fuzz-tests:
-    runs-on: ubuntu-latest-32-cores | 256gb
+    runs-on: ubuntu-latest-32-cores
     needs:
       [
         build,
@@ -292,7 +292,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_fuzz_ --test-threads 6
 
   prove-and-verify-mock-aggr-tests:
-    runs-on: ubuntu-latest-32-cores | 256gb
+    runs-on: ubuntu-latest-32-cores
     needs:
       [
       build,
@@ -309,11 +309,11 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: KZG prove and verify aggr tests
+      - name: Mock aggr tests
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_ --test-threads 8
 
   prove-and-verify-aggr-tests:
-    runs-on: 512gb | 768gb
+    runs-on: large-self-hosted
     needs:
       [
         build,
@@ -335,12 +335,11 @@ jobs:
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:
-    runs-on: 512gb | 768gb
+    runs-on: large-self-hosted
     needs:
       [
         build,
         library-tests,
-
         python-tests,
       ]
     steps:
@@ -365,7 +364,7 @@ jobs:
 
 
   examples:
-    runs-on: ubuntu-latest-32-cores | 256gb
+    runs-on: ubuntu-latest-32-cores
     needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
@@ -401,7 +400,7 @@ jobs:
         run: cargo nextest run neg_tests::neg_examples_
 
   python-tests:
-    runs-on: ubuntu-latest-32-cores | 256gb
+    runs-on: ubuntu-latest-32-cores
     needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
@@ -425,8 +424,7 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: 512gb | 768gb
-
+      runs-on: large-self-hosted
         # Service containers to run with `container-job`
       services:
         # Label used to access the service container
@@ -445,8 +443,6 @@ jobs:
           ports:
             # Maps tcp port 5432 on service container to the host
             - 5432:5432
-
-
       # needs: [build,  library-tests, docs]
       steps:
         - uses: actions/checkout@v3
@@ -479,6 +475,8 @@ jobs:
         #     # now dump the contents of the file into a file called kaggle.json
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+        - name: End to end demo tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
         - name: LSTM tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_11_expects
         - name: Keras tutorial
@@ -503,8 +501,7 @@ jobs:
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
         - name: Variance tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
-        - name: End to end demo tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
+
 
 
 
