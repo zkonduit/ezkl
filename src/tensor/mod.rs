@@ -523,6 +523,15 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index].clone()
     }
 
+    /// Display a tensor
+    pub fn show(&self) -> String {
+        if self.len() > 10 {
+            format!("{:?} ..", self[..10].to_vec())
+        } else {
+            format!("{:?}", self)
+        }
+    }
+
     /// Get a slice from the Tensor.
     ///
     /// ```
