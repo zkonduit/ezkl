@@ -141,7 +141,7 @@ mod native_tests {
         "mnist_gan",
     ];
 
-    const TESTS: [&str; 40] = [
+    const TESTS: [&str; 41] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -184,7 +184,7 @@ mod native_tests {
         "idolmodel",
         "trig",
         "prelu_gmm",
-        // "lstm",
+        "lstm",
     ];
 
     const TESTS_AGGR: [&str; 20] = [
@@ -329,7 +329,7 @@ mod native_tests {
 
 
 
-            seq!(N in 0..=39 {
+            seq!(N in 0..=40 {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {

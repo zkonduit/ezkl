@@ -598,6 +598,20 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(res)
     }
 
+    /// Calls `concats` on the inner [Tensor].
+    pub fn concat_axis(&self, other: Self, axis: &usize) -> Result<Self, TensorError> {
+        let res = match (self, other) {
+            (ValTensor::Value { inner: v1, .. }, ValTensor::Value { inner: v2, .. }) => {
+                let v = crate::tensor::ops::concat(&[v1.clone(), v2], *axis)?;
+                ValTensor::from(v)
+            }
+            _ => {
+                return Err(TensorError::WrongMethod);
+            }
+        };
+        Ok(res)
+    }
+
     /// Returns the `dims` attribute of the [ValTensor].
     pub fn dims(&self) -> &[usize] {
         match self {
