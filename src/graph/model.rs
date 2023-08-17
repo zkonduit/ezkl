@@ -106,6 +106,14 @@ impl OutputMapping {
             OutputMapping::Stacked { is_state, .. } => *is_state,
         }
     }
+
+    ///
+    pub fn outlet(&self) -> usize {
+        match self {
+            OutputMapping::Single { outlet, .. } => *outlet,
+            OutputMapping::Stacked { outlet, .. } => *outlet,
+        }
+    }
 }
 
 ///
@@ -138,7 +146,7 @@ fn number_of_iterations(mappings: &[InputMapping], dims: Vec<&[usize]>) -> usize
             });
     // assert all collected number of iterations are equal
     assert!(number_of_iterations.clone().all_equal());
-    
+
     number_of_iterations.next().unwrap_or(1)
 }
 
@@ -155,8 +163,7 @@ fn output_state_idx(output_mappings: &[Vec<OutputMapping>]) -> Vec<usize> {
     output_mappings
         .iter()
         .flatten()
-        .enumerate()
-        .filter_map(|(idx, x)| if x.is_state() { Some(idx) } else { None })
+        .filter_map(|x| if x.is_state() { Some(x.outlet()) } else { None })
         .collect::<Vec<_>>()
 }
 
@@ -509,12 +516,18 @@ impl Model {
                     model,
                     output_mappings,
                     input_mappings,
+                    inputs: input_tuple,
                     ..
                 } => {
                     let orig_inputs = inputs.clone();
 
                     let input_dims = inputs.iter().map(|inp| inp.dims());
                     let num_iter = number_of_iterations(input_mappings, input_dims.collect());
+
+                    warn!(
+                        "{} iteration(s) in a subgraph with inputs {:?}",
+                        num_iter, input_tuple
+                    );
 
                     let mut full_results: Vec<Tensor<Fp>> = vec![];
 
@@ -555,9 +568,10 @@ impl Model {
                                                 ],
                                                 *axis,
                                             )?;
-                                            outlets.insert(idx, stacked_res);
+
+                                            outlets.insert(outlet, stacked_res);
                                         } else {
-                                            outlets.insert(idx, outlet_res.clone());
+                                            outlets.insert(outlet, outlet_res.clone());
                                         }
                                     }
                                 }
@@ -569,9 +583,10 @@ impl Model {
                         let output_states = output_state_idx(output_mappings);
                         let input_states = input_state_idx(input_mappings);
 
+                        assert_eq!(input_states.len(), output_states.len());
+
                         for (input_idx, output_idx) in input_states.iter().zip(output_states) {
-                            let t = full_results[output_idx].clone();
-                            inputs[*input_idx] = t;
+                            inputs[*input_idx] = full_results[output_idx].clone();
                         }
                     }
 
@@ -780,7 +795,7 @@ impl Model {
                             mappings.push(OutputMapping::Stacked {
                                 outlet: last.0,
                                 axis: last.1.axis,
-                                is_state: mapping.state,
+                                is_state: false,
                             });
                             output_scales.insert(last.0, om.graph.get_output_scales()[i]);
                         }
@@ -1076,7 +1091,7 @@ impl Model {
                     let mut full_results: Vec<ValTensor<Fp>> = vec![];
 
                     for i in 0..num_iter {
-                        debug!("subgraph iteration: {}", i);
+                        debug!(" -------------- subgraph iteration: {}", i);
                         // replace the Stacked input with the current chunk iter
                         for ((mapping, inp), og_inp) in
                             input_mappings.iter().zip(&mut values).zip(&original_values)
@@ -1119,9 +1134,9 @@ impl Model {
                                                 .clone()
                                                 .concat_axis(outlet_res.clone(), axis)?;
 
-                                            outlets.insert(idx, stacked_res);
+                                            outlets.insert(outlet, stacked_res);
                                         } else {
-                                            outlets.insert(idx, outlet_res.clone());
+                                            outlets.insert(outlet, outlet_res.clone());
                                         }
                                     }
                                 }
@@ -1133,11 +1148,10 @@ impl Model {
                         let output_states = output_state_idx(output_mappings);
                         let input_states = input_state_idx(input_mappings);
 
+                        assert_eq!(input_states.len(), output_states.len());
+
                         for (input_idx, output_idx) in input_states.iter().zip(output_states) {
-                            let t = full_results[output_idx].clone();
-                            let input_outlet = inputs[*input_idx];
-                            let input = results.get_mut(&input_outlet.0).unwrap();
-                            input[input_outlet.1] = t;
+                            values[*input_idx] = full_results[output_idx].clone();
                         }
                     }
 
