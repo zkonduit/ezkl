@@ -46,7 +46,7 @@ jobs:
         run: cargo doc --verbose
 
   library-tests:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-latest-32-cores | 256gb
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -65,7 +65,7 @@ jobs:
         run: cargo nextest run --lib --verbose -- --include-ignored
 
   model-serialization:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-latest-32-cores | 256gb
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -106,7 +106,7 @@ jobs:
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
 
   render-circuit:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-latest-32-cores | 256gb 
     needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
@@ -234,7 +234,7 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify --test-threads 1
 
   prove-and-verify-tests:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-latest-32-cores | 256gb
     needs:
       [
         build,
@@ -264,7 +264,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted --test-threads 8
 
   fuzz-tests:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-latest-32-cores | 256gb
     needs:
       [
         build,
@@ -292,7 +292,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_fuzz_ --test-threads 6
 
   prove-and-verify-mock-aggr-tests:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-latest-32-cores | 256gb
     needs:
       [
       build,
@@ -313,7 +313,7 @@ jobs:
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_ --test-threads 8
 
   prove-and-verify-aggr-tests:
-    runs-on: self-hosted
+    runs-on: 512gb | 768gb
     needs:
       [
         build,
@@ -335,7 +335,7 @@ jobs:
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:
-    runs-on: self-hosted
+    runs-on: 512gb | 768gb
     needs:
       [
         build,
@@ -365,7 +365,7 @@ jobs:
 
 
   examples:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-latest-32-cores | 256gb
     needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
@@ -401,7 +401,7 @@ jobs:
         run: cargo nextest run neg_tests::neg_examples_
 
   python-tests:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-latest-32-cores | 256gb
     needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v3
@@ -425,7 +425,7 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: self-hosted
+      runs-on: 512gb | 768gb
 
         # Service containers to run with `container-job`
       services:
