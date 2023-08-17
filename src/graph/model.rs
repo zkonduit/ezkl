@@ -1263,8 +1263,8 @@ impl Model {
         const_shapes
     }
 
-    /// Replaces all constants in the model with the provided values (in order of indexing)
-    pub fn replace_consts(&mut self, consts: Vec<ValTensor<Fp>>) {
+    /// Replaces all constants in the model with the provided values (in order of indexing), returns the number of consts
+    pub fn replace_consts(&mut self, consts: &[ValTensor<Fp>]) -> usize {
         let mut const_idx = 0;
         for node in self.graph.nodes.values_mut() {
             match node {
@@ -1282,10 +1282,12 @@ impl Model {
                     _ => {}
                 },
                 NodeType::SubGraph { model, .. } => {
-                    model.replace_consts(consts.clone());
+                    let total_consts = model.replace_consts(&consts[const_idx..]);
+                    const_idx += total_consts;
                 }
             }
         }
+        const_idx
     }
 
     /// Shapes of the computational graph's public inputs (if any)
