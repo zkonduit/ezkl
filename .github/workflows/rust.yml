@@ -358,9 +358,9 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
       - name: KZG prove and verify aggr tests
-        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 8 -- --include-ignored
+        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 4 -- --include-ignored
       - name: KZG prove and verify aggr tests (encrypted input)
-        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_encrypted --test-threads 8 -- --include-ignored
+        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_encrypted --test-threads 4 -- --include-ignored
 
 
   examples:
