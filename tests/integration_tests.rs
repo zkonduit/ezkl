@@ -685,7 +685,6 @@ mod native_tests {
                     let mut anvil_child = crate::native_tests::start_anvil();
                     kzg_evm_aggr_prove_and_verify(path, test.to_string(), "private", "private", "public");
                     test_dir.close().unwrap();
-                    anvil_child.kill().unwrap();
                 }
 
                 // these take a particularly long time to run
@@ -696,10 +695,9 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let mut anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil();
                     kzg_evm_aggr_prove_and_verify(path, test.to_string(), "encrypted", "private", "public");
                     test_dir.close().unwrap();
-                    anvil_child.kill().unwrap();
                 }
             });
 
@@ -723,10 +721,9 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let mut anvil_child = crate::native_tests::start_anvil();
+                    let mut _anvil_child = crate::native_tests::start_anvil();
                     kzg_evm_prove_and_verify(path, test.to_string(), "hashed", "private", "private");
                     test_dir.close().unwrap();
-                    anvil_child.kill().unwrap();
                 }
 
                 #(#[test_case(TESTS_EVM[N])])*
