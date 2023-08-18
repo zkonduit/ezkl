@@ -37,7 +37,7 @@ use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 /// Converts 4 u64s to a field element
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn vecu64_to_felt(array: wasm_bindgen::Clamped<Vec<u8>>) -> String {
+pub fn vecU64ToFelt(array: wasm_bindgen::Clamped<Vec<u8>>) -> String {
     let felt: Fr = serde_json::from_slice(&array[..]).unwrap();
     format!("{:?}", felt)
 }
@@ -45,7 +45,7 @@ pub fn vecu64_to_felt(array: wasm_bindgen::Clamped<Vec<u8>>) -> String {
 /// Converts 4 u64s representing a field element directly to an integer
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn vecu64_to_int(array: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindgen::Clamped<Vec<u8>> {
+pub fn vecU64ToInt(array: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindgen::Clamped<Vec<u8>> {
     let felt: Fr = serde_json::from_slice(&array[..]).unwrap();
     wasm_bindgen::Clamped(serde_json::to_vec(&felt_to_i128(felt)).unwrap())
 }

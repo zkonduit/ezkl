@@ -9,7 +9,8 @@ mod wasm32 {
     use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
-        elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, poseidonHash, prove, verify,
+        elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, poseidonHash, prove, vecU64ToFelt,
+        vecU64ToFloat, vecU64ToInt, verify,
     };
     use halo2curves::bn256::{Fr, G1Affine};
     use rand::rngs::StdRng;
@@ -27,6 +28,25 @@ mod wasm32 {
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
     pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test_network.compiled");
+
+    #[wasm_bindgen_test]
+    async fn verify_field_serialization_roundtrip() {
+        for i in 0..32 {
+            let field_element = Fr::from(i);
+            let serialized = serde_json::to_vec(&field_element).unwrap();
+            let clamped = wasm_bindgen::Clamped(serialized);
+            let scale = 2;
+            let floating_point = vecU64ToFloat(clamped.clone(), scale);
+            assert_eq!(floating_point, (i as f64) / 4.0);
+
+            let integer: i128 = serde_json::from_slice(&vecU64ToInt(clamped.clone())).unwrap();
+            assert_eq!(integer, i as i128);
+
+            let hex_string = format!("{:?}", field_element);
+            let returned_string = vecU64ToFelt(clamped);
+            assert_eq!(hex_string, returned_string);
+        }
+    }
 
     #[wasm_bindgen_test]
     async fn verify_elgamal_gen_random_wasm() {
@@ -56,7 +76,7 @@ mod wasm32 {
         let var = ElGamalVariables::gen_random(&mut rng);
 
         let mut message: Vec<Fr> = vec![];
-        for i in 0..0 {
+        for i in 0..32 {
             message.push(Fr::from(i as u64));
         }
 
