@@ -24,6 +24,7 @@ use halo2_proofs::{
     plonk::ConstraintSystem,
 };
 use itertools::Itertools;
+use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 #[cfg(not(target_arch = "wasm32"))]
@@ -76,6 +77,96 @@ pub struct Model {
     pub visibility: VarVisibility,
 }
 
+///
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum OutputMapping {
+    ///
+    Single {
+        ///
+        outlet: usize,
+        ///
+        is_state: bool,
+    },
+    ///
+    Stacked {
+        ///
+        outlet: usize,
+        ///
+        axis: usize,
+        ///
+        is_state: bool,
+    },
+}
+
+impl OutputMapping {
+    ///
+    pub fn is_state(&self) -> bool {
+        match self {
+            OutputMapping::Single { is_state, .. } => *is_state,
+            OutputMapping::Stacked { is_state, .. } => *is_state,
+        }
+    }
+
+    ///
+    pub fn outlet(&self) -> usize {
+        match self {
+            OutputMapping::Single { outlet, .. } => *outlet,
+            OutputMapping::Stacked { outlet, .. } => *outlet,
+        }
+    }
+}
+
+///
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum InputMapping {
+    ///
+    Full,
+    ///
+    State,
+    ///
+    Stacked {
+        ///
+        axis: usize,
+        ///
+        chunk: usize,
+    },
+}
+
+fn number_of_iterations(mappings: &[InputMapping], dims: Vec<&[usize]>) -> usize {
+    let mut number_of_iterations =
+        dims.iter()
+            .zip(mappings)
+            .filter_map(|(dims, mapping)| match mapping {
+                InputMapping::Stacked { axis, chunk } => Some(
+                    // number of iterations given the dim size along the axis
+                    // and the chunk size
+                    (dims[*axis] + chunk - 1) / chunk,
+                ),
+                _ => None,
+            });
+    // assert all collected number of iterations are equal
+    assert!(number_of_iterations.clone().all_equal());
+
+    number_of_iterations.next().unwrap_or(1)
+}
+
+fn input_state_idx(input_mappings: &[InputMapping]) -> Vec<usize> {
+    input_mappings
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| matches!(r, InputMapping::State))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>()
+}
+
+fn output_state_idx(output_mappings: &[Vec<OutputMapping>]) -> Vec<usize> {
+    output_mappings
+        .iter()
+        .flatten()
+        .filter_map(|x| if x.is_state() { Some(x.outlet()) } else { None })
+        .collect::<Vec<_>>()
+}
+
 /// Enables model as subnode of other models
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum NodeType {
@@ -89,6 +180,14 @@ pub enum NodeType {
         inputs: Vec<Outlet>,
         /// the subgraph's idx within the parent graph
         idx: usize,
+        /// output mappings
+        output_mappings: Vec<Vec<OutputMapping>>,
+        /// input mappings
+        input_mappings: Vec<InputMapping>,
+        ///
+        out_dims: Vec<Vec<usize>>,
+        ///
+        out_scales: Vec<u32>,
     },
 }
 
@@ -105,7 +204,7 @@ impl NodeType {
     pub fn out_dims(&self) -> Vec<Vec<usize>> {
         match self {
             NodeType::Node(n) => vec![n.out_dims.clone()],
-            NodeType::SubGraph { model, .. } => model.graph.output_shapes(),
+            NodeType::SubGraph { out_dims, .. } => out_dims.clone(),
         }
     }
     /// Returns the lookups required by a graph
@@ -119,7 +218,7 @@ impl NodeType {
     pub fn out_scales(&self) -> Vec<u32> {
         match self {
             NodeType::Node(n) => vec![n.out_scale],
-            NodeType::SubGraph { model, .. } => model.graph.get_output_scales(),
+            NodeType::SubGraph { out_scales, .. } => out_scales.clone(),
         }
     }
 
@@ -368,8 +467,6 @@ impl Model {
                 t.reshape(&n.out_dims()[0]);
                 inputs.push(t);
             } else {
-                debug!("executing {}: {}", idx, n.as_str());
-                trace!("dims: {:?}", n.out_dims());
                 for (idx, outlet) in n.inputs().iter() {
                     match results.get(&idx) {
                         Some(value) => inputs.push(value[*outlet].clone()),
@@ -377,6 +474,13 @@ impl Model {
                     }
                 }
             };
+
+            debug!("executing {}: {}", idx, n.as_str());
+            debug!("dims: {:?}", n.out_dims());
+            debug!(
+                "input_dims: {:?}",
+                inputs.iter().map(|x| x.dims()).collect::<Vec<_>>()
+            );
 
             if !n.required_lookups().is_empty() {
                 let mut max = 0;
@@ -388,7 +492,11 @@ impl Model {
 
             match n {
                 NodeType::Node(n) => {
+                    // execute the op
+                    let start = instant::Instant::now();
                     let res = Op::<Fp>::f(&n.opkind, &inputs)?;
+                    let elapsed = start.elapsed();
+                    trace!("op took: {:?}", elapsed);
                     // see if any of the intermediate lookup calcs are the max
                     if !res.intermediate_lookups.is_empty() {
                         let mut max = 0;
@@ -397,14 +505,103 @@ impl Model {
                         }
                         max_lookup_inputs = max_lookup_inputs.max(max);
                     }
-
+                    trace!(
+                        "------------ output node {}: {:?}",
+                        idx,
+                        res.output.map(crate::fieldutils::felt_to_i32).show()
+                    );
                     results.insert(idx, vec![res.output]);
                 }
-                NodeType::SubGraph { model, .. } => {
-                    let res = model.forward(&inputs)?;
-                    // recursively get the max lookup inputs for subgraphs
-                    max_lookup_inputs = max_lookup_inputs.max(res.max_lookup_inputs);
-                    results.insert(idx, res.outputs);
+                NodeType::SubGraph {
+                    model,
+                    output_mappings,
+                    input_mappings,
+                    inputs: input_tuple,
+                    ..
+                } => {
+                    let orig_inputs = inputs.clone();
+
+                    let input_dims = inputs.iter().map(|inp| inp.dims());
+                    let num_iter = number_of_iterations(input_mappings, input_dims.collect());
+
+                    warn!(
+                        "{} iteration(s) in a subgraph with inputs {:?}",
+                        num_iter, input_tuple
+                    );
+
+                    let mut full_results: Vec<Tensor<Fp>> = vec![];
+
+                    for i in 0..num_iter {
+                        // replace the Stacked input with the current chunk iter
+                        for ((mapping, inp), og_input) in
+                            input_mappings.iter().zip(&mut inputs).zip(&orig_inputs)
+                        {
+                            match mapping {
+                                InputMapping::Stacked { axis, chunk } => {
+                                    let start = i * chunk;
+                                    let end = (i + 1) * chunk;
+                                    let t =
+                                        crate::tensor::ops::slice(og_input, axis, &start, &end)?;
+                                    *inp = t;
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        let res = model.forward(&inputs)?;
+                        // recursively get the max lookup inputs for subgraphs
+                        max_lookup_inputs = max_lookup_inputs.max(res.max_lookup_inputs);
+
+                        let mut outlets = BTreeMap::new();
+                        for (mappings, outlet_res) in output_mappings.iter().zip(res.outputs) {
+                            for mapping in mappings {
+                                match mapping {
+                                    OutputMapping::Single { outlet, .. } => {
+                                        outlets.insert(outlet, outlet_res.clone());
+                                    }
+                                    OutputMapping::Stacked { outlet, axis, .. } => {
+                                        if !full_results.is_empty() {
+                                            let stacked_res = crate::tensor::ops::concat(
+                                                &[
+                                                    full_results[*outlet].clone(),
+                                                    outlet_res.clone(),
+                                                ],
+                                                *axis,
+                                            )?;
+
+                                            outlets.insert(outlet, stacked_res);
+                                        } else {
+                                            outlets.insert(outlet, outlet_res.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        full_results = outlets.into_values().collect_vec();
+
+                        let output_states = output_state_idx(output_mappings);
+                        let input_states = input_state_idx(input_mappings);
+
+                        assert_eq!(input_states.len(), output_states.len());
+
+                        for (input_idx, output_idx) in input_states.iter().zip(output_states) {
+                            inputs[*input_idx] = full_results[output_idx].clone();
+                        }
+                    }
+
+                    trace!(
+                        "------------ output subgraph node {}: {:?}",
+                        idx,
+                        full_results
+                            .iter()
+                            .map(|x|
+                            // convert to tensor i32
+                            x.map(crate::fieldutils::felt_to_i32).show())
+                            .collect_vec()
+                    );
+
+                    results.insert(idx, full_results);
                 }
             }
         }
@@ -555,6 +752,8 @@ impl Model {
         visibility: &VarVisibility,
         input_scales: Vec<u32>,
     ) -> Result<BTreeMap<usize, NodeType>, Box<dyn Error>> {
+        use crate::graph::node_output_shapes;
+
         let mut nodes = BTreeMap::<usize, NodeType>::new();
         let mut input_idx = 0;
         for (i, n) in graph.nodes.iter().enumerate() {
@@ -580,12 +779,64 @@ impl Model {
                         graph: subgraph,
                         visibility: visibility.clone(),
                     };
+
+                    let mut output_mappings = vec![];
+                    let mut output_scales = BTreeMap::new();
+                    for (i, mapping) in b.output_mapping.iter().enumerate() {
+                        let mut mappings = vec![];
+                        if let Some(outlet) = mapping.last_value_slot {
+                            mappings.push(OutputMapping::Single {
+                                outlet,
+                                is_state: mapping.state,
+                            });
+                            output_scales.insert(outlet, om.graph.get_output_scales()[i]);
+                        }
+                        if let Some(last) = mapping.scan {
+                            mappings.push(OutputMapping::Stacked {
+                                outlet: last.0,
+                                axis: last.1.axis,
+                                is_state: false,
+                            });
+                            output_scales.insert(last.0, om.graph.get_output_scales()[i]);
+                        }
+                        output_mappings.push(mappings);
+                    }
+
+                    let out_scales = output_scales.into_values().collect_vec();
+
+                    let mut input_mappings = vec![];
+                    for mapping in &b.input_mapping {
+                        match mapping {
+                            tract_onnx::tract_hir::ops::scan::InputMapping::Scan(info) => {
+                                input_mappings.push(InputMapping::Stacked {
+                                    axis: info.axis,
+                                    chunk: info.chunk as usize,
+                                });
+                            }
+                            tract_onnx::tract_hir::ops::scan::InputMapping::State => {
+                                input_mappings.push(InputMapping::State);
+                            }
+                            tract_onnx::tract_hir::ops::scan::InputMapping::Full => {
+                                input_mappings.push(InputMapping::Full);
+                            }
+                        }
+                    }
+
+                    let out_dims = node_output_shapes(n)?
+                        .iter()
+                        .map(|shape| shape.as_ref().unwrap().clone())
+                        .collect_vec();
+
                     nodes.insert(
                         i,
                         NodeType::SubGraph {
                             model: om,
                             inputs: n.inputs.iter().map(|i| (i.node, i.slot)).collect_vec(),
                             idx: i,
+                            output_mappings,
+                            input_mappings,
+                            out_dims,
+                            out_scales,
                         },
                     );
                 }
@@ -720,13 +971,7 @@ impl Model {
                 let mut thread_safe_region = RegionCtx::new(region, 0);
 
                 let outputs = self
-                    .layout_nodes(
-                        &mut config,
-                        &mut thread_safe_region,
-                        &mut results,
-                        // get first outlet to begin with in top graph
-                        &self.graph.inputs.iter().map(|i| (*i, 0)).collect_vec(),
-                    )
+                    .layout_nodes(&mut config, &mut thread_safe_region, &mut results)
                     .map_err(|e| {
                         error!("{}", e);
                         halo2_proofs::plonk::Error::Synthesis
@@ -774,28 +1019,24 @@ impl Model {
         config: &mut ModelConfig,
         region: &mut RegionCtx<Fp>,
         results: &mut BTreeMap<usize, Vec<ValTensor<Fp>>>,
-        inputs: &[(usize, usize)],
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         // index over results to get original inputs
         let orig_inputs: BTreeMap<usize, _> = results
             .clone()
             .into_iter()
-            .filter(|(idx, _)| inputs.iter().map(|(i, _)| i).any(|i| i == idx))
+            .filter(|(idx, _)| self.graph.inputs.contains(idx))
             .collect();
 
-        let mut input_iter = 0;
         for (idx, node) in self.graph.nodes.iter() {
-            let values: Vec<ValTensor<Fp>> = if !node.is_input() {
+            let mut values: Vec<ValTensor<Fp>> = if !node.is_input() {
                 node.inputs()
                     .iter()
                     .map(|(idx, outlet)| results.get(idx).unwrap()[*outlet].clone())
                     .collect_vec()
             } else {
-                // we re-assign inputs
-                let (idx, outlet) = inputs[input_iter];
-                let mut res = results.get(&idx).unwrap()[outlet].clone();
-                res.reshape(&node.out_dims()[outlet])?;
-                input_iter += 1;
+                // we re-assign inputs, always from the 0 outlet
+                let mut res = results.get(idx).unwrap()[0].clone();
+                res.reshape(&node.out_dims()[0])?;
                 vec![res]
             };
 
@@ -805,8 +1046,8 @@ impl Model {
                 node.as_str(),
                 region.offset()
             );
-            trace!("dims: {:?}", node.out_dims());
-            trace!(
+            debug!("dims: {:?}", node.out_dims());
+            debug!(
                 "input_dims {:?}",
                 values.iter().map(|v| v.dims()).collect_vec()
             );
@@ -828,9 +1069,100 @@ impl Model {
                         trace!("------------ output node {:?}: {:?}", idx, vt.show());
                     }
                 }
-                NodeType::SubGraph { model, inputs, .. } => {
-                    let res = model.layout_nodes(config, region, results, inputs)?;
-                    results.insert(*idx, res);
+                NodeType::SubGraph {
+                    model,
+                    inputs,
+                    output_mappings,
+                    input_mappings,
+                    ..
+                } => {
+                    let original_values = values.clone();
+
+                    let input_dims = inputs
+                        .iter()
+                        .map(|inp| results.get(&inp.0).unwrap()[inp.1].dims());
+                    let num_iter = number_of_iterations(input_mappings, input_dims.collect());
+
+                    warn!(
+                        "{} iteration(s) in a subgraph with inputs {:?}",
+                        num_iter, inputs
+                    );
+
+                    let mut full_results: Vec<ValTensor<Fp>> = vec![];
+
+                    for i in 0..num_iter {
+                        debug!(" -------------- subgraph iteration: {}", i);
+                        // replace the Stacked input with the current chunk iter
+                        for ((mapping, inp), og_inp) in
+                            input_mappings.iter().zip(&mut values).zip(&original_values)
+                        {
+                            match mapping {
+                                InputMapping::Stacked { axis, chunk } => {
+                                    let start = i * chunk;
+                                    let end = (i + 1) * chunk;
+                                    let mut sliced_input = og_inp.clone();
+                                    sliced_input.slice(axis, &start, &end)?;
+                                    *inp = sliced_input;
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        let mut subgraph_results = BTreeMap::from_iter(
+                            model
+                                .graph
+                                .inputs
+                                .clone()
+                                .into_iter()
+                                .sorted()
+                                .zip(values.clone().into_iter().map(|v| vec![v])),
+                        );
+
+                        let res = model.layout_nodes(config, region, &mut subgraph_results)?;
+
+                        let mut outlets = BTreeMap::new();
+
+                        for (mappings, outlet_res) in output_mappings.iter().zip(res) {
+                            for mapping in mappings {
+                                match mapping {
+                                    OutputMapping::Single { outlet, .. } => {
+                                        outlets.insert(outlet, outlet_res.clone());
+                                    }
+                                    OutputMapping::Stacked { outlet, axis, .. } => {
+                                        if !full_results.is_empty() {
+                                            let stacked_res = full_results[*outlet]
+                                                .clone()
+                                                .concat_axis(outlet_res.clone(), axis)?;
+
+                                            outlets.insert(outlet, stacked_res);
+                                        } else {
+                                            outlets.insert(outlet, outlet_res.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        full_results = outlets.into_values().collect_vec();
+
+                        let output_states = output_state_idx(output_mappings);
+                        let input_states = input_state_idx(input_mappings);
+
+                        assert_eq!(input_states.len(), output_states.len());
+
+                        for (input_idx, output_idx) in input_states.iter().zip(output_states) {
+                            values[*input_idx] = full_results[output_idx].clone();
+                        }
+                    }
+
+                    //only use with mock prover
+                    trace!(
+                        "------------ output subgraph node {:?}: {:?}",
+                        idx,
+                        full_results.iter().map(|x| x.show()).collect_vec()
+                    );
+
+                    results.insert(*idx, full_results);
                 }
             }
         }
@@ -886,13 +1218,7 @@ impl Model {
 
         let mut region = RegionCtx::new_dummy(0);
 
-        let outputs = self.layout_nodes(
-            &mut model_config,
-            &mut region,
-            &mut results,
-            // get first outlet to begin with in top graph
-            &self.graph.inputs.iter().map(|i| (*i, 0)).collect_vec(),
-        )?;
+        let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
         if run_args.output_visibility == Visibility::Public {
             let _ = outputs
@@ -951,8 +1277,8 @@ impl Model {
         const_shapes
     }
 
-    /// Replaces all constants in the model with the provided values (in order of indexing)
-    pub fn replace_consts(&mut self, consts: Vec<ValTensor<Fp>>) {
+    /// Replaces all constants in the model with the provided values (in order of indexing), returns the number of consts
+    pub fn replace_consts(&mut self, consts: &[ValTensor<Fp>]) -> usize {
         let mut const_idx = 0;
         for node in self.graph.nodes.values_mut() {
             match node {
@@ -970,10 +1296,12 @@ impl Model {
                     _ => {}
                 },
                 NodeType::SubGraph { model, .. } => {
-                    model.replace_consts(consts.clone());
+                    let total_consts = model.replace_consts(&consts[const_idx..]);
+                    const_idx += total_consts;
                 }
             }
         }
+        const_idx
     }
 
     /// Shapes of the computational graph's public inputs (if any)

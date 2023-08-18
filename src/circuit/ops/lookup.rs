@@ -219,7 +219,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
 
     /// Returns the name of the operation
     fn as_string(&self) -> String {
-        let name = match self {
+        
+        match self {
             LookupOp::Max { scales, a } => format!("MAX w/ {:?} /t {}", scales, a),
             LookupOp::Min { scales, a } => format!("MIN w/ {:?} /t {}", scales, a),
             LookupOp::Sign => "SIGN".into(),
@@ -247,8 +248,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::ASin { scales } => format!("ASIN w/ {:?}", scales),
             LookupOp::Sinh { scales } => format!("SINH w/ {:?}", scales),
             LookupOp::ASinh { scales } => format!("ASINH w/ {:?}", scales),
-        };
-        name.into()
+        }
     }
 
     fn layout(

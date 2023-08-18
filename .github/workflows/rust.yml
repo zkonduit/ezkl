@@ -65,7 +65,7 @@ jobs:
         run: cargo nextest run --lib --verbose -- --include-ignored
 
   model-serialization:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: 256gb
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -217,7 +217,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
       - name: KZG prove and verify tests (EVM)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed inputs)
@@ -285,7 +285,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
       - name: fuzz tests (EVM)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_fuzz_ --test-threads 2
       - name: fuzz tests
@@ -309,11 +309,11 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: KZG prove and verify aggr tests
+      - name: Mock aggr tests
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_ --test-threads 8
 
   prove-and-verify-aggr-tests:
-    runs-on: self-hosted
+    runs-on: large-self-hosted
     needs:
       [
         build,
@@ -335,14 +335,13 @@ jobs:
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:
-    runs-on: self-hosted
-    needs:
-      [
-        build,
-        library-tests,
-
-        python-tests,
-      ]
+    runs-on: large-self-hosted
+    # needs:
+    #   [
+    #     build,
+    #     library-tests,
+    #     python-tests,
+    #   ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -357,7 +356,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
       - name: KZG prove and verify aggr tests
         run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 8 -- --include-ignored
       - name: KZG prove and verify aggr tests (encrypted input)
@@ -418,15 +417,14 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
       - name: Build python ezkl
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Run pytest
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: self-hosted
-
+      runs-on: large-self-hosted
         # Service containers to run with `container-job`
       services:
         # Label used to access the service container
@@ -445,8 +443,6 @@ jobs:
           ports:
             # Maps tcp port 5432 on service container to the host
             - 5432:5432
-
-
       # needs: [build,  library-tests, docs]
       steps:
         - uses: actions/checkout@v3
@@ -465,7 +461,7 @@ jobs:
         - name: Install solc
           run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
         - name: Install Anvil
-          run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked foundry-cli anvil
+          run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
         - name: Setup Virtual Env and Install python dependencies
           run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
         - name: Build python ezkl
@@ -479,16 +475,18 @@ jobs:
         #     # now dump the contents of the file into a file called kaggle.json
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+        - name: Mean tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
+        - name: End to end demo tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
+        - name: LSTM tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_11_expects
         - name: Keras tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
         - name: Simple aggregation tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_9_expects
-        - name: Gan tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
         - name: Little transformer tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects --no-capture
-        - name: Mean tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
         - name: Voice tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
         - name: Encrypted tutorial
@@ -501,8 +499,9 @@ jobs:
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
         - name: Variance tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
-        - name: End to end demo tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
+        - name: Gan tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
+
 
 
 

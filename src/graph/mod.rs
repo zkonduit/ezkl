@@ -1087,7 +1087,7 @@ impl Circuit<Fp> for GraphCircuit {
             })?;
 
             // now the flattened_params have been assigned to and we-assign them to the model consts such that they are constrained to be equal
-            model.replace_consts(split_params);
+            model.replace_consts(&split_params);
         }
 
         // create a new module for the model (space 2)
