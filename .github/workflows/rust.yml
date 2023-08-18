@@ -65,7 +65,7 @@ jobs:
         run: cargo nextest run --lib --verbose -- --include-ignored
 
   model-serialization:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: 256gb
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -336,12 +336,12 @@ jobs:
 
   prove-and-verify-aggr-evm-tests:
     runs-on: large-self-hosted
-    needs:
-      [
-        build,
-        library-tests,
-        python-tests,
-      ]
+    # needs:
+    #   [
+    #     build,
+    #     library-tests,
+    #     python-tests,
+    #   ]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -475,6 +475,8 @@ jobs:
         #     # now dump the contents of the file into a file called kaggle.json
         #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
         #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+        - name: Mean tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
         - name: End to end demo tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
         - name: LSTM tutorial
@@ -483,12 +485,8 @@ jobs:
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
         - name: Simple aggregation tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_9_expects
-        - name: Gan tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
         - name: Little transformer tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects --no-capture
-        - name: Mean tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
         - name: Voice tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
         - name: Encrypted tutorial
@@ -501,6 +499,8 @@ jobs:
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
         - name: Variance tutorial
           run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
+        - name: Gan tutorial
+          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
 
 
 
