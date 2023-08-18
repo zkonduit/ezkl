@@ -9,7 +9,7 @@ use halo2curves::bn256::Fr as Fp;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use super::{FieldDoubleVector, FieldSingleVector, GraphWitness};
+use super::GraphWitness;
 use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
@@ -124,16 +124,16 @@ pub struct ElGamalResult {
     /// ElGamal variables
     pub variables: ElGamalVariables,
     /// ElGamal ciphertexts
-    pub ciphertexts: FieldDoubleVector,
+    pub ciphertexts: Vec<Vec<Fp>>,
     /// ElGamal encrypted message
-    pub encrypted_messages: FieldDoubleVector,
+    pub encrypted_messages: Vec<Vec<Fp>>,
 }
 
 /// Result from a forward pass
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ModuleForwardResult {
     /// The inputs of the forward pass for poseidon
-    pub poseidon_hash: Option<FieldSingleVector>,
+    pub poseidon_hash: Option<Vec<Fp>>,
     /// The outputs of the forward pass for ElGamal
     pub elgamal: Option<ElGamalResult>,
 }
@@ -232,14 +232,13 @@ impl GraphModules {
             if visibility.is_hashed() {
                 instances
                     .poseidon
-                    .extend(res.poseidon_hash.clone().unwrap().0);
+                    .extend(res.poseidon_hash.clone().unwrap());
             } else if visibility.is_encrypted() {
                 instances.elgamal.extend(
                     res.elgamal
                         .clone()
                         .unwrap()
                         .ciphertexts
-                        .0
                         .into_iter()
                         .flatten(),
                 );
@@ -400,7 +399,7 @@ impl GraphModules {
                 acc.extend(res);
                 acc
             });
-            poseidon_hash = Some(FieldSingleVector(field_elements));
+            poseidon_hash = Some(field_elements);
         }
 
         if element_visibility.is_encrypted() {
@@ -419,8 +418,8 @@ impl GraphModules {
 
             elgamal = Some(ElGamalResult {
                 variables,
-                ciphertexts: FieldDoubleVector(ciphertexts),
-                encrypted_messages: FieldDoubleVector(encrypted_messages),
+                ciphertexts,
+                encrypted_messages,
             });
         }
 

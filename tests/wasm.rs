@@ -2,16 +2,16 @@
 #[cfg(test)]
 mod wasm32 {
     use ark_std::test_rng;
-    use ezkl::circuit::modules::elgamal::{ElGamalVariables, ElGamalVariablesSer};
+    use ezkl::circuit::modules::elgamal::ElGamalVariables;
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
     use ezkl::circuit::modules::Module;
     use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
-    use ezkl::pfsys::{field_to_vecu64, vecu64_to_field, Snark};
+    use ezkl::pfsys::Snark;
     use ezkl::wasm::{
         elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, poseidonHash, prove, verify,
     };
-    use halo2curves::bn256::{Fq, Fr, G1Affine};
+    use halo2curves::bn256::{Fr, G1Affine};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     #[cfg(feature = "web")]
@@ -39,21 +39,7 @@ mod wasm32 {
         // Use the seed to generate ElGamal variables via WASM function
         let wasm_output = elgamalGenRandom(wasm_seed);
 
-        let wasm_vars: ElGamalVariablesSer = serde_json::from_slice(&wasm_output[..]).unwrap();
-
-        let wasm_vars = ElGamalVariables {
-            r: Fr::from_raw(wasm_vars.r),
-            pk: G1Affine {
-                x: Fq::from_raw(wasm_vars.pk[0]),
-                y: Fq::from_raw(wasm_vars.pk[1]),
-            },
-            sk: Fr::from_raw(wasm_vars.sk),
-            window_size: wasm_vars.window_size,
-            aux_generator: G1Affine {
-                x: Fq::from_raw(wasm_vars.aux_generator[0]),
-                y: Fq::from_raw(wasm_vars.aux_generator[1]),
-            },
-        };
+        let wasm_vars: ElGamalVariables = serde_json::from_slice(&wasm_output[..]).unwrap();
 
         // Use the same seed to generate ElGamal variables directly
         let mut rng_from_seed = StdRng::from_seed(seed);
@@ -74,17 +60,9 @@ mod wasm32 {
             message.push(Fr::from(i as u64));
         }
 
-        let pk: [[u64; 4]; 2] = [field_to_vecu64(&var.pk.x), field_to_vecu64(&var.pk.y)];
-        let r = field_to_vecu64(&var.r);
-        let message_u64: Vec<[u64; 4]> = message
-            .clone()
-            .into_iter()
-            .map(|b| field_to_vecu64(&b))
-            .collect();
-
-        let pk = serde_json::to_vec(&pk).unwrap();
-        let message_ser = serde_json::to_vec(&message_u64).unwrap();
-        let r = serde_json::to_vec(&r).unwrap();
+        let pk = serde_json::to_vec(&var.pk).unwrap();
+        let message_ser = serde_json::to_vec(&message).unwrap();
+        let r = serde_json::to_vec(&var.r).unwrap();
 
         let cipher = elgamalEncrypt(
             wasm_bindgen::Clamped(pk.clone()),
@@ -92,19 +70,12 @@ mod wasm32 {
             wasm_bindgen::Clamped(r.clone()),
         );
 
-        let sk = field_to_vecu64(&var.sk);
-        let sk = serde_json::to_vec(&sk).unwrap();
+        let sk = serde_json::to_vec(&var.sk).unwrap();
 
         let decrypted_message =
             elgamalDecrypt(wasm_bindgen::Clamped(cipher), wasm_bindgen::Clamped(sk));
 
-        let decrypted_message: Vec<[u64; 4]> =
-            serde_json::from_slice(&decrypted_message[..]).unwrap();
-
-        let decrypted_message: Vec<Fr> = decrypted_message
-            .into_iter()
-            .map(|b| vecu64_to_field(&b))
-            .collect();
+        let decrypted_message: Vec<Fr> = serde_json::from_slice(&decrypted_message[..]).unwrap();
 
         assert_eq!(message, decrypted_message)
     }
@@ -112,21 +83,14 @@ mod wasm32 {
     #[wasm_bindgen_test]
     async fn verify_hash() {
         let mut message: Vec<Fr> = vec![];
-        let mut message_vecu64s: Vec<[u64; 4]> = vec![];
         for i in 0..32 {
             message.push(Fr::from(i as u64));
-            message_vecu64s.push(field_to_vecu64(&Fr::from(i as u64)));
         }
 
-        let message_ser = serde_json::to_vec(&message_vecu64s).unwrap();
+        let message_ser = serde_json::to_vec(&message).unwrap();
 
         let hash = poseidonHash(wasm_bindgen::Clamped(message_ser));
-        let hash: Vec<Vec<[u64; 4]>> = serde_json::from_slice(&hash[..]).unwrap();
-
-        let hash: Vec<Vec<Fr>> = hash
-            .into_iter()
-            .map(|v| v.into_iter().map(|b| vecu64_to_field(&b)).collect())
-            .collect();
+        let hash: Vec<Vec<Fr>> = serde_json::from_slice(&hash[..]).unwrap();
 
         let reference_hash =
             PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(

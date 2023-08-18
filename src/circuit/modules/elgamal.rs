@@ -7,7 +7,6 @@ Huge thank you to https://github.com/timoftime/ for providing the inspiration an
 mod add_chip;
 
 use crate::circuit::modules::poseidon::spec::PoseidonSpec;
-use crate::pfsys::field_to_vecu64;
 use crate::tensor::{Tensor, ValTensor, ValType};
 use add_chip::{AddChip, AddConfig, AddInstruction};
 use ark_std::rand::{CryptoRng, RngCore};
@@ -24,8 +23,7 @@ use halo2curves::bn256::{Fq, Fr, G1Affine, G1};
 use halo2curves::group::cofactor::CofactorCurveAffine;
 use halo2curves::group::{Curve, Group};
 use halo2curves::CurveAffine;
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::ops::{Mul, MulAssign};
 use std::rc::Rc;
 use std::vec;
@@ -161,7 +159,7 @@ impl ElGamalChip {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 /// The variables used in the ElGamal circuit.
 pub struct ElGamalVariables {
     /// The randomness used in the encryption.
@@ -174,70 +172,6 @@ pub struct ElGamalVariables {
     pub window_size: usize,
     /// The auxiliary generator used in the ECC chip.
     pub aux_generator: G1Affine,
-}
-
-impl Serialize for ElGamalVariables {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let r: [u64; 4] = field_to_vecu64(&self.r);
-        let sk: [u64; 4] = field_to_vecu64(&self.sk);
-
-        let aux_generator: [[u64; 4]; 2] = [
-            field_to_vecu64(&self.aux_generator.x),
-            field_to_vecu64(&self.aux_generator.y),
-        ];
-
-        let pk: [[u64; 4]; 2] = [field_to_vecu64(&self.pk.x), field_to_vecu64(&self.pk.y)];
-
-        let mut state = serializer.serialize_struct("ElGamalVariables", 4)?;
-        state.serialize_field("r", &r)?;
-        state.serialize_field("sk", &sk)?;
-        state.serialize_field("pk", &pk)?;
-        state.serialize_field("aux_generator", &aux_generator)?;
-        state.serialize_field("window_size", &self.window_size)?;
-
-        state.end()
-    }
-}
-
-/// Wasm based serializing and deserailizing for ElGamalVariables
-#[derive(Deserialize, Serialize, Debug)]
-pub struct ElGamalVariablesSer {
-    ///
-    pub r: [u64; 4],
-    ///
-    pub sk: [u64; 4],
-    ///
-    pub pk: [[u64; 4]; 2],
-    ///
-    pub aux_generator: [[u64; 4]; 2],
-    ///
-    pub window_size: usize,
-}
-
-impl<'de> Deserialize<'de> for ElGamalVariables {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let var_ser: ElGamalVariablesSer = Deserialize::deserialize(deserializer)?;
-
-        Ok(ElGamalVariables {
-            r: Fr::from_raw(var_ser.r),
-            pk: G1Affine {
-                x: Fq::from_raw(var_ser.pk[0]),
-                y: Fq::from_raw(var_ser.pk[1]),
-            },
-            sk: Fr::from_raw(var_ser.sk),
-            window_size: var_ser.window_size,
-            aux_generator: G1Affine {
-                x: Fq::from_raw(var_ser.aux_generator[0]),
-                y: Fq::from_raw(var_ser.aux_generator[1]),
-            },
-        })
-    }
 }
 
 impl Default for ElGamalVariables {
@@ -285,37 +219,13 @@ impl ElGamalVariables {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 /// The cipher returned from the ElGamal encryption.
 pub struct ElGamalCipher {
     /// c1 := r*G
     pub c1: G1,
     /// c2 := m*s
     pub c2: Vec<Fr>,
-}
-
-impl<'de> Deserialize<'de> for ElGamalCipher {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct ElGamalCipherSer {
-            c1: [[u64; 4]; 3],
-            c2: Vec<Fr>,
-        }
-
-        let cipher_ser: ElGamalCipherSer = Deserialize::deserialize(deserializer)?;
-
-        Ok(ElGamalCipher {
-            c1: G1 {
-                x: Fq::from_raw(cipher_ser.c1[0]),
-                y: Fq::from_raw(cipher_ser.c1[1]),
-                z: Fq::from_raw(cipher_ser.c1[2]),
-            },
-            c2: cipher_ser.c2,
-        })
-    }
 }
 
 #[derive(Debug, Clone)]

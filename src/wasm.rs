@@ -1,15 +1,18 @@
-use crate::circuit::modules::elgamal::{ElGamalCipher, ElGamalVariablesSer};
+use crate::circuit::modules::elgamal::ElGamalCipher;
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::PoseidonChip;
 use crate::circuit::modules::Module;
+use crate::fieldutils::felt_to_i128;
+use crate::fieldutils::i128_to_felt;
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
-use crate::pfsys::{field_to_vecu64, vecu64_to_field};
+use crate::graph::quantize_float;
+use crate::graph::scale_to_multiplier;
 use halo2_proofs::plonk::*;
 use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
-use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
+use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -31,13 +34,47 @@ pub fn init_panic_hook() {
 use crate::graph::{GraphCircuit, GraphSettings};
 use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 
+/// Converts 4 u64s to a field element
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn vecu64_to_felt(array: wasm_bindgen::Clamped<Vec<u8>>) -> String {
+    let felt: Fr = serde_json::from_slice(&array[..]).unwrap();
+    format!("{:?}", felt)
+}
+
+/// Converts 4 u64s representing a field element directly to an integer
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn vecu64_to_int(array: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindgen::Clamped<Vec<u8>> {
+    let felt: Fr = serde_json::from_slice(&array[..]).unwrap();
+    wasm_bindgen::Clamped(serde_json::to_vec(&felt_to_i128(felt)).unwrap())
+}
+
+/// Converts 4 u64s representing a field element directly to a (rescaled from fixed point scaling) floating point
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn vecU64ToFloat(array: wasm_bindgen::Clamped<Vec<u8>>, scale: u32) -> f64 {
+    let felt: Fr = serde_json::from_slice(&array[..]).unwrap();
+    let int_rep = felt_to_i128(felt);
+    let multiplier = scale_to_multiplier(scale);
+    int_rep as f64 / multiplier
+}
+
+/// Converts a floating point element to 4 u64s representing a fixed point field element
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn floatToVecU64(input: f64, scale: u32) -> wasm_bindgen::Clamped<Vec<u8>> {
+    let int_rep = quantize_float(&input, 0.0, scale).unwrap();
+    let felt = i128_to_felt(int_rep);
+    let vec = crate::pfsys::field_to_vecu64_montgomery::<halo2curves::bn256::Fr>(&felt);
+    wasm_bindgen::Clamped(serde_json::to_vec(&vec).unwrap())
+}
+
 /// Generate a poseidon hash in browser. Input message
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn poseidonHash(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
-    let message: Vec<[u64; 4]> = serde_json::from_slice(&message[..]).unwrap();
-
-    let message: Vec<Fr> = message.iter().map(|b| vecu64_to_field(b)).collect();
+pub fn poseidonHash(message: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindgen::Clamped<Vec<u8>> {
+    let message: Vec<Fr> = serde_json::from_slice(&message[..]).unwrap();
 
     let output =
         PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(
@@ -45,12 +82,7 @@ pub fn poseidonHash(message: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
         )
         .unwrap();
 
-    let output: Vec<Vec<[u64; 4]>> = output
-        .into_iter()
-        .map(|v| v.into_iter().map(|b| field_to_vecu64(&b)).collect())
-        .collect();
-
-    serde_json::to_vec(&output).unwrap()
+    wasm_bindgen::Clamped(serde_json::to_vec(&output).unwrap())
 }
 
 /// Generates random elgamal variables from a random seed value in browser.
@@ -63,17 +95,6 @@ pub fn elgamalGenRandom(rng: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
 
     let output = crate::circuit::modules::elgamal::ElGamalVariables::gen_random(&mut rng);
 
-    let output = ElGamalVariablesSer {
-        r: field_to_vecu64(&output.r),
-        sk: field_to_vecu64(&output.sk),
-        pk: [field_to_vecu64(&output.pk.x), field_to_vecu64(&output.pk.y)],
-        window_size: output.window_size,
-        aux_generator: [
-            field_to_vecu64(&output.aux_generator.x),
-            field_to_vecu64(&output.aux_generator.y),
-        ],
-    };
-
     serde_json::to_vec(&output).unwrap()
 }
 
@@ -85,26 +106,12 @@ pub fn elgamalEncrypt(
     message: wasm_bindgen::Clamped<Vec<u8>>,
     r: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
-    let pk: [[u64; 4]; 2] = serde_json::from_slice(&pk[..]).unwrap();
-    let pk: G1Affine = G1Affine {
-        x: Fq::from_raw(pk[0]),
-        y: Fq::from_raw(pk[1]),
-    };
-    let message: Vec<[u64; 4]> = serde_json::from_slice(&message[..]).unwrap();
-    let message: Vec<Fr> = message.iter().map(|b| vecu64_to_field(b)).collect();
-    let r: [u64; 4] = serde_json::from_slice(&r[..]).unwrap();
-    let r: Fr = vecu64_to_field(&r);
+    let pk: G1Affine = serde_json::from_slice(&pk[..]).unwrap();
+    let message: Vec<Fr> = serde_json::from_slice(&message[..]).unwrap();
+    let r: Fr = serde_json::from_slice(&r[..]).unwrap();
 
     let output = crate::circuit::modules::elgamal::ElGamalGadget::encrypt(pk, message, r);
 
-    let output: ([[u64; 4]; 3], Vec<[u64; 4]>) = (
-        [
-            field_to_vecu64(&output.c1.x),
-            field_to_vecu64(&output.c1.y),
-            field_to_vecu64(&output.c1.z),
-        ],
-        output.c2.into_iter().map(|b| field_to_vecu64(&b)).collect(),
-    );
     serde_json::to_vec(&output).unwrap()
 }
 
@@ -115,23 +122,11 @@ pub fn elgamalDecrypt(
     cipher: wasm_bindgen::Clamped<Vec<u8>>,
     sk: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
-    let sk: [u64; 4] = serde_json::from_slice(&sk[..]).unwrap();
-    let sk: Fr = vecu64_to_field(&sk);
+    let sk: Fr = serde_json::from_slice(&sk[..]).unwrap();
 
-    let cipher: ([[u64; 4]; 3], Vec<[u64; 4]>) = serde_json::from_slice(&cipher[..]).unwrap();
-
-    let cipher = ElGamalCipher {
-        c1: G1 {
-            x: Fq::from_raw(cipher.0[0]),
-            y: Fq::from_raw(cipher.0[1]),
-            z: Fq::from_raw(cipher.0[2]),
-        },
-        c2: cipher.1.iter().map(|b| vecu64_to_field(b)).collect(),
-    };
+    let cipher: ElGamalCipher = serde_json::from_slice(&cipher[..]).unwrap();
 
     let output = crate::circuit::modules::elgamal::ElGamalGadget::decrypt(&cipher, sk);
-
-    let output: Vec<[u64; 4]> = output.iter().map(|b| field_to_vecu64(b)).collect();
 
     serde_json::to_vec(&output).unwrap()
 }
