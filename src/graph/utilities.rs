@@ -449,6 +449,7 @@ pub fn new_op_from_onnx(
         "Scan" => {
             panic!("should never reach here")
         }
+        "QuantizeLinearU8" | "DequantizeLinearF32" => SupportedOp::Linear(PolyOp::Identity),
         "Abs" => SupportedOp::Hybrid(HybridOp::Abs),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
         "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid { scales: (1, 1) }),
