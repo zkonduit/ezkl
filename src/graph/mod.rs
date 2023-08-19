@@ -25,7 +25,6 @@ use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::graph::modules::ModuleInstanceOffset;
-use crate::pfsys::field_to_vecu64;
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
 use halo2_proofs::{
@@ -44,12 +43,15 @@ use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::ops::Deref;
 use thiserror::Error;
 pub use utilities::*;
 pub use vars::*;
+
+#[cfg(feature = "python-bindings")]
+use crate::pfsys::field_to_vecu64_montgomery;
 
 /// circuit related errors.
 #[derive(Debug, Error)]
@@ -98,87 +100,6 @@ pub enum GraphError {
     PackingExponent,
 }
 
-/// Inner elements of witness coming from a witness
-#[derive(Clone, Debug, Default)]
-pub struct FieldDoubleVector(Vec<Vec<Fp>>);
-
-impl From<Vec<Vec<Fp>>> for FieldDoubleVector {
-    fn from(value: Vec<Vec<Fp>>) -> Self {
-        FieldDoubleVector(value)
-    }
-}
-
-// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
-// UNTAGGED ENUMS WONT WORK :( as highlighted here:
-impl<'de> Deserialize<'de> for FieldDoubleVector {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
-
-        let t: Vec<Vec<[u64; 4]>> = serde_json::from_str(this_json.get())
-            .map_err(|_| serde::de::Error::custom("failed to deserialize WitnessSource"))?;
-
-        let t: Vec<Vec<Fp>> = t
-            .iter()
-            .map(|x| x.iter().map(|fp| Fp::from_raw(*fp)).collect())
-            .collect();
-        Ok(FieldDoubleVector(t))
-    }
-}
-
-impl Serialize for FieldDoubleVector {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let field_elems: Vec<Vec<[u64; 4]>> = self
-            .0
-            .iter()
-            .map(|x| x.iter().map(field_to_vecu64).collect())
-            .collect::<Vec<_>>();
-        field_elems.serialize(serializer)
-    }
-}
-
-/// Inner elements of witness coming from a witness
-#[derive(Clone, Debug, Default)]
-pub struct FieldSingleVector(Vec<Fp>);
-
-impl From<Vec<Fp>> for FieldSingleVector {
-    fn from(value: Vec<Fp>) -> Self {
-        FieldSingleVector(value)
-    }
-}
-
-// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
-// UNTAGGED ENUMS WONT WORK :( as highlighted here:
-impl<'de> Deserialize<'de> for FieldSingleVector {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
-
-        let t: Vec<[u64; 4]> = serde_json::from_str(this_json.get())
-            .map_err(|_| serde::de::Error::custom("failed to deserialize WitnessSource"))?;
-
-        let t: Vec<Fp> = t.iter().map(|x| Fp::from_raw(*x)).collect();
-        Ok(FieldSingleVector(t))
-    }
-}
-
-impl Serialize for FieldSingleVector {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let field_elems: Vec<[u64; 4]> = self.0.iter().map(field_to_vecu64).collect::<Vec<_>>();
-        field_elems.serialize(serializer)
-    }
-}
-
 const ASSUMED_BLINDING_FACTORS: usize = 7;
 
 /// 26
@@ -188,9 +109,9 @@ const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GraphWitness {
     /// The inputs of the forward pass
-    pub inputs: FieldDoubleVector,
+    pub inputs: Vec<Vec<Fp>>,
     /// The output of the forward pass
-    pub outputs: FieldDoubleVector,
+    pub outputs: Vec<Vec<Fp>>,
     /// Any hashes of inputs generated during the forward pass
     pub processed_inputs: Option<ModuleForwardResult>,
     /// Any hashes of params generated during the forward pass
@@ -205,8 +126,8 @@ impl GraphWitness {
     ///
     pub fn new(inputs: Vec<Vec<Fp>>, outputs: Vec<Vec<Fp>>) -> Self {
         GraphWitness {
-            inputs: inputs.into(),
-            outputs: outputs.into(),
+            inputs: inputs,
+            outputs: outputs,
             processed_inputs: None,
             processed_params: None,
             processed_outputs: None,
@@ -229,7 +150,6 @@ impl GraphWitness {
     ///
     pub fn get_input_tensor(&self) -> Vec<Tensor<Fp>> {
         self.inputs
-            .0
             .clone()
             .into_iter()
             .map(|i| Tensor::from(i.into_iter()))
@@ -248,16 +168,14 @@ impl ToPyObject for GraphWitness {
 
         let inputs: Vec<Vec<[u64; 4]>> = self
             .inputs
-            .0
             .iter()
-            .map(|x| x.iter().map(field_to_vecu64).collect())
+            .map(|x| x.iter().map(field_to_vecu64_montgomery).collect())
             .collect();
 
         let outputs: Vec<Vec<[u64; 4]>> = self
             .outputs
-            .0
             .iter()
-            .map(|x| x.iter().map(field_to_vecu64).collect())
+            .map(|x| x.iter().map(field_to_vecu64_montgomery).collect())
             .collect();
 
         dict.set_item("inputs", &inputs).unwrap();
@@ -268,7 +186,7 @@ impl ToPyObject for GraphWitness {
         if let Some(processed_inputs) = &self.processed_inputs {
             //poseidon_hash
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
-                insert_poseidon_hash_pydict(&dict_inputs, &processed_inputs_poseidon_hash.0);
+                insert_poseidon_hash_pydict(&dict_inputs, &processed_inputs_poseidon_hash);
             }
             if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal);
@@ -279,7 +197,7 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_params) = &self.processed_params {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_params, &processed_params_poseidon_hash.0);
+                insert_poseidon_hash_pydict(dict_params, &processed_params_poseidon_hash);
             }
             if let Some(processed_params_elgamal) = &processed_params.elgamal {
                 insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal);
@@ -290,7 +208,7 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_outputs, &processed_outputs_poseidon_hash.0);
+                insert_poseidon_hash_pydict(dict_outputs, &processed_outputs_poseidon_hash);
             }
             if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal);
@@ -305,7 +223,10 @@ impl ToPyObject for GraphWitness {
 
 #[cfg(feature = "python-bindings")]
 fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
-    let poseidon_hash: Vec<[u64; 4]> = poseidon_hash.iter().map(field_to_vecu64).collect();
+    let poseidon_hash: Vec<[u64; 4]> = poseidon_hash
+        .iter()
+        .map(field_to_vecu64_montgomery)
+        .collect();
     pydict.set_item("poseidon_hash", poseidon_hash).unwrap();
 }
 
@@ -313,8 +234,8 @@ fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
 use halo2curves::bn256::G1Affine;
 #[cfg(feature = "python-bindings")]
 fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
-    let g1affine_x = field_to_vecu64(&g1affine.x);
-    let g1affine_y = field_to_vecu64(&g1affine.y);
+    let g1affine_x = field_to_vecu64_montgomery(&g1affine.x);
+    let g1affine_y = field_to_vecu64_montgomery(&g1affine.y);
     g1affine_dict.set_item("x", g1affine_x).unwrap();
     g1affine_dict.set_item("y", g1affine_y).unwrap();
 }
@@ -326,17 +247,23 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
     let results_dict = PyDict::new(py);
     let cipher_text: Vec<Vec<[u64; 4]>> = elgamal_results
         .ciphertexts
-        .0
         .iter()
-        .map(|v| v.iter().map(field_to_vecu64).collect::<Vec<[u64; 4]>>())
+        .map(|v| {
+            v.iter()
+                .map(field_to_vecu64_montgomery)
+                .collect::<Vec<[u64; 4]>>()
+        })
         .collect::<Vec<Vec<[u64; 4]>>>();
     results_dict.set_item("ciphertexts", cipher_text).unwrap();
 
     let encrypted_messages: Vec<Vec<[u64; 4]>> = elgamal_results
         .encrypted_messages
-        .0
         .iter()
-        .map(|v| v.iter().map(field_to_vecu64).collect::<Vec<[u64; 4]>>())
+        .map(|v| {
+            v.iter()
+                .map(field_to_vecu64_montgomery)
+                .collect::<Vec<[u64; 4]>>()
+        })
         .collect::<Vec<Vec<[u64; 4]>>>();
     results_dict
         .set_item("encrypted_messages", encrypted_messages)
@@ -345,10 +272,10 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
     let variables_dict = PyDict::new(py);
     let variables = &elgamal_results.variables;
 
-    let r = field_to_vecu64(&variables.r);
+    let r = field_to_vecu64_montgomery(&variables.r);
     variables_dict.set_item("r", r).unwrap();
     // elgamal secret key
-    let sk = field_to_vecu64(&variables.sk);
+    let sk = field_to_vecu64_montgomery(&variables.sk);
     variables_dict.set_item("sk", sk).unwrap();
 
     let pk_dict = PyDict::new(py);
@@ -581,10 +508,10 @@ impl GraphCircuit {
         // as they are configured in that order as Column<Instances>
         let mut public_inputs = vec![];
         if self.settings.run_args.input_visibility.is_public() {
-            public_inputs = self.graph_witness.inputs.0.clone();
+            public_inputs = self.graph_witness.inputs.clone();
         }
         if self.settings.run_args.output_visibility.is_public() {
-            public_inputs.extend(self.graph_witness.outputs.0.clone());
+            public_inputs.extend(self.graph_witness.outputs.clone());
         }
         info!(
             "public inputs lengths: {:?}",
@@ -726,12 +653,12 @@ impl GraphCircuit {
     ///
     pub fn load_witness_file_data(
         &mut self,
-        file_data: &FieldDoubleVector,
+        file_data: &Vec<Vec<Fp>>,
         shapes: &Vec<Vec<usize>>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         let mut data: Vec<Tensor<Fp>> = vec![];
-        for (d, shape) in file_data.0.iter().zip(shapes) {
+        for (d, shape) in file_data.iter().zip(shapes) {
             let mut t: Tensor<Fp> = d.clone().into_iter().into();
             t.reshape(shape);
             data.push(t);

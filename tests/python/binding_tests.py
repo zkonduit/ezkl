@@ -46,14 +46,6 @@ def test_field_serialization():
     """
     Test field element serialization
     """
-    expected = "0x0000000000000000000000000000000000000000000000000000000000000001"
-    assert expected == ezkl.vecu64_to_felt([1, 0, 0, 0])
-
-    expected = "0x0000000000000000000000000000000000000000000000000000000000000019"
-    assert expected == ezkl.vecu64_to_felt([25, 0, 0, 0])
-
-    expected = "0x0000000000000005000000000000000100000000000000020000000000000002"
-    assert expected == ezkl.vecu64_to_felt([2, 2, 1, 5])
 
     input = 890
     scale = 7

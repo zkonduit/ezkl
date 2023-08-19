@@ -27,8 +27,7 @@ use instant::Instant;
 use log::{debug, info, trace};
 use rand::rngs::OsRng;
 use serde::de::DeserializeOwned;
-use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use snark_verifier::system::halo2::{compile, Config};
@@ -36,7 +35,6 @@ use snark_verifier::verifier::plonk::PlonkProtocol;
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Cursor, Write};
-use std::marker::PhantomData;
 use std::ops::Deref;
 use std::path::PathBuf;
 use thiserror::Error as thisError;
@@ -70,32 +68,6 @@ impl ToPyObject for TranscriptType {
     }
 }
 
-/// converts field elem into `Vec<u64>`
-pub fn field_to_vecu64<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
-    let bytes: <F as PrimeField>::Repr = fp.to_repr();
-    let bytes_first_u64 = u64::from_le_bytes(bytes.as_ref()[0..8][..].try_into().unwrap());
-    let bytes_second_u64 = u64::from_le_bytes(bytes.as_ref()[8..16][..].try_into().unwrap());
-    let bytes_third_u64 = u64::from_le_bytes(bytes.as_ref()[16..24][..].try_into().unwrap());
-    let bytes_fourth_u64 = u64::from_le_bytes(bytes.as_ref()[24..32][..].try_into().unwrap());
-
-    [
-        bytes_first_u64,
-        bytes_second_u64,
-        bytes_third_u64,
-        bytes_fourth_u64,
-    ]
-}
-// consider further restricting the associated type: ` where <F as halo2curves::ff::PrimeField>::Repr: From<[u8; 32]>`
-/// convert [u64; 4] into field element
-pub fn vecu64_to_field<F: PrimeField + SerdeObject + FromUniformBytes<64>>(b: &[u64; 4]) -> F {
-    let mut bytes = [0u8; 64];
-    bytes[0..8].copy_from_slice(&b[0].to_le_bytes());
-    bytes[8..16].copy_from_slice(&b[1].to_le_bytes());
-    bytes[16..24].copy_from_slice(&b[2].to_le_bytes());
-    bytes[24..32].copy_from_slice(&b[3].to_le_bytes());
-    F::from_uniform_bytes(&bytes)
-}
-
 /// converts fp into `Vec<u64>` in Montgomery form
 pub fn field_to_vecu64_montgomery<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
     let repr = serde_json::to_string(&fp).unwrap();
@@ -103,9 +75,22 @@ pub fn field_to_vecu64_montgomery<F: PrimeField + SerdeObject + Serialize>(fp: &
     b
 }
 
+/// converts `Vec<u64>` in Montgomery form into fp
+pub fn vecu64_to_field_montgomery<F: PrimeField + SerdeObject + Serialize + DeserializeOwned>(
+    b: &[u64; 4],
+) -> F {
+    let repr = serde_json::to_string(&b).unwrap();
+    let fp: F = serde_json::from_str(&repr).unwrap();
+    fp
+}
+
 /// An application snark with proof and instance variables ready for aggregation (raw field element)
-#[derive(Debug, Clone)]
-pub struct Snark<F: PrimeField + SerdeObject, C: CurveAffine> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Snark<F: PrimeField + SerdeObject, C: CurveAffine>
+where
+    C::Scalar: Serialize + DeserializeOwned,
+    C::ScalarExt: Serialize + DeserializeOwned,
+{
     /// the protocol
     pub protocol: Option<PlonkProtocol<C>>,
     /// public instances of the snark
@@ -119,15 +104,17 @@ pub struct Snark<F: PrimeField + SerdeObject, C: CurveAffine> {
 #[cfg(feature = "python-bindings")]
 use pyo3::{types::PyDict, PyObject, Python, ToPyObject};
 #[cfg(feature = "python-bindings")]
-impl<F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> ToPyObject
-    for Snark<F, C>
+impl<F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> ToPyObject for Snark<F, C>
+where
+    C::Scalar: Serialize + DeserializeOwned,
+    C::ScalarExt: Serialize + DeserializeOwned,
 {
     fn to_object(&self, py: Python) -> PyObject {
         let dict = PyDict::new(py);
         let field_elems: Vec<Vec<[u64; 4]>> = self
             .instances
             .iter()
-            .map(|x| x.iter().map(|fp| field_to_vecu64(fp)).collect())
+            .map(|x| x.iter().map(|fp| field_to_vecu64_montgomery(fp)).collect())
             .collect::<Vec<_>>();
         dict.set_item("instances", &field_elems).unwrap();
         let hex_proof = hex::encode(&self.proof);
@@ -138,145 +125,8 @@ impl<F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> ToPyOb
     }
 }
 
-impl<F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> Serialize for Snark<F, C>
-where
-    C::Scalar: serde::Serialize,
-    C::ScalarExt: serde::Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // leave it untagged
-        let mut state = serializer.serialize_struct("", 2)?;
-        let field_elems: Vec<Vec<[u64; 4]>> = self
-            .instances
-            .iter()
-            .map(|x| x.iter().map(|fp| field_to_vecu64(fp)).collect())
-            .collect::<Vec<_>>();
-        state.serialize_field("instances", &field_elems)?;
-
-        let hex_proof = hex::encode(&self.proof);
-        state.serialize_field("proof", &hex_proof)?;
-        state.serialize_field("transcript_type", &self.transcript_type)?;
-        if self.protocol.is_some() {
-            state.serialize_field("protocol", &self.protocol)?;
-        }
-        state.end()
-    }
-}
-
 impl<
-        'de,
-        F: PrimeField + SerdeObject + Serialize + FromUniformBytes<64>,
-        C: CurveAffine + Serialize,
-    > Deserialize<'de> for Snark<F, C>
-where
-    C::Scalar: serde::Deserialize<'de>,
-    C: serde::Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // leave it untagged
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "lowercase")]
-        enum Field {
-            Instances,
-            Proof,
-            #[serde(rename = "transcript_type")]
-            TranscriptType,
-            Protocol,
-        }
-
-        struct SnarkVisitor<F: PrimeField + SerdeObject, C: CurveAffine> {
-            _marker: std::marker::PhantomData<(F, C)>,
-        }
-
-        impl<'de, F: PrimeField + SerdeObject + FromUniformBytes<64>, C: CurveAffine>
-            serde::de::Visitor<'de> for SnarkVisitor<F, C>
-        where
-            C::Scalar: serde::Deserialize<'de>,
-            C: serde::Deserialize<'de>,
-        {
-            type Value = Snark<F, C>;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("struct Snark")
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<Snark<F, C>, V::Error>
-            where
-                V: serde::de::MapAccess<'de>,
-            {
-                let mut instances: Option<Vec<Vec<[u64; 4]>>> = None;
-                let mut proof: Option<String> = None;
-                let mut transcript_type = None;
-                let mut protocol = None;
-
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Instances => {
-                            if instances.is_some() {
-                                return Err(serde::de::Error::duplicate_field("instances"));
-                            }
-                            instances = Some(map.next_value()?);
-                        }
-                        Field::Proof => {
-                            if proof.is_some() {
-                                return Err(serde::de::Error::duplicate_field("proof"));
-                            }
-                            proof = Some(map.next_value()?);
-                        }
-                        Field::TranscriptType => {
-                            if transcript_type.is_some() {
-                                return Err(serde::de::Error::duplicate_field("transcript_type"));
-                            }
-                            transcript_type = Some(map.next_value()?);
-                        }
-                        Field::Protocol => {
-                            if protocol.is_some() {
-                                return Err(serde::de::Error::duplicate_field("protocol"));
-                            }
-                            protocol = Some(map.next_value()?);
-                        }
-                    }
-                }
-                let instances =
-                    instances.ok_or_else(|| serde::de::Error::missing_field("instances"))?;
-                let proof = proof.ok_or_else(|| serde::de::Error::missing_field("proof"))?;
-                let transcript_type = transcript_type
-                    .ok_or_else(|| serde::de::Error::missing_field("transcript_type"))?;
-                // protocol can be optional
-
-                let instances: Vec<Vec<F>> = instances
-                    .iter()
-                    .map(|x| x.iter().map(|fp| vecu64_to_field(fp)).collect())
-                    .collect::<Vec<_>>();
-
-                let proof = hex::decode(proof).map_err(serde::de::Error::custom)?;
-
-                Ok(Snark {
-                    protocol,
-                    instances,
-                    proof,
-                    transcript_type,
-                })
-            }
-        }
-        deserializer.deserialize_struct(
-            "Snark",
-            &["instances", "proof", "transcript_type", "protocol"],
-            SnarkVisitor {
-                _marker: PhantomData,
-            },
-        )
-    }
-}
-
-impl<
-        F: PrimeField + SerdeObject + Serialize + FromUniformBytes<64>,
+        F: PrimeField + SerdeObject + Serialize + FromUniformBytes<64> + DeserializeOwned,
         C: CurveAffine + Serialize + DeserializeOwned,
     > Snark<F, C>
 where
@@ -345,7 +195,11 @@ impl<F: PrimeField, C: CurveAffine> SnarkWitness<F, C> {
     }
 }
 
-impl<F: PrimeField + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWitness<F, C> {
+impl<F: PrimeField + SerdeObject, C: CurveAffine> From<Snark<F, C>> for SnarkWitness<F, C>
+where
+    C::Scalar: Serialize + DeserializeOwned,
+    C::ScalarExt: Serialize + DeserializeOwned,
+{
     fn from(snark: Snark<F, C>) -> Self {
         Self {
             protocol: snark.protocol,
@@ -480,8 +334,14 @@ pub fn verify_proof_circuit<
     strategy: Strategy,
 ) -> Result<Strategy::Output, halo2_proofs::plonk::Error>
 where
-    Scheme::Scalar:
-        SerdeObject + PrimeField + FromUniformBytes<64> + WithSmallOrderMulGroup<3> + Ord,
+    Scheme::Scalar: SerdeObject
+        + PrimeField
+        + FromUniformBytes<64>
+        + WithSmallOrderMulGroup<3>
+        + Ord
+        + Serialize
+        + DeserializeOwned,
+    Scheme::Curve: Serialize + DeserializeOwned,
 {
     let pi_inner = snark
         .instances

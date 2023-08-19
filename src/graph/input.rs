@@ -1,5 +1,4 @@
 use crate::fieldutils::i128_to_felt;
-use crate::pfsys::field_to_vecu64;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::tensor::Tensor;
 use halo2curves::bn256::Fr as Fp;
@@ -41,7 +40,7 @@ impl Serialize for FileSourceInner {
         S: Serializer,
     {
         match self {
-            FileSourceInner::Field(data) => field_to_vecu64(data).serialize(serializer),
+            FileSourceInner::Field(data) => data.serialize(serializer),
             FileSourceInner::Float(data) => data.serialize(serializer),
         }
     }
@@ -61,9 +60,9 @@ impl<'de> Deserialize<'de> for FileSourceInner {
         if let Ok(t) = first_try {
             return Ok(FileSourceInner::Float(t));
         }
-        let second_try: Result<[u64; 4], _> = serde_json::from_str(this_json.get());
+        let second_try: Result<Fp, _> = serde_json::from_str(this_json.get());
         if let Ok(t) = second_try {
-            return Ok(FileSourceInner::Field(Fp::from_raw(t)));
+            return Ok(FileSourceInner::Field(t));
         }
 
         Err(serde::de::Error::custom(
@@ -514,10 +513,13 @@ impl ToPyObject for DataSource {
 }
 
 #[cfg(feature = "python-bindings")]
+use crate::pfsys::field_to_vecu64_montgomery;
+
+#[cfg(feature = "python-bindings")]
 impl ToPyObject for FileSourceInner {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
-            FileSourceInner::Field(data) => field_to_vecu64(data).to_object(py),
+            FileSourceInner::Field(data) => field_to_vecu64_montgomery(data).to_object(py),
             FileSourceInner::Float(data) => data.to_object(py),
         }
     }

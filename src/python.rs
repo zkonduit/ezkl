@@ -86,7 +86,7 @@ impl From<PyRunArgs> for RunArgs {
 fn vecu64_to_felt(array: [u64; 4]) -> PyResult<String> {
     Ok(format!(
         "{:?}",
-        crate::pfsys::vecu64_to_field::<halo2curves::bn256::Fr>(&array)
+        crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array)
     ))
 }
 
@@ -95,7 +95,7 @@ fn vecu64_to_felt(array: [u64; 4]) -> PyResult<String> {
     array,
 ))]
 fn vecu64_to_int(array: [u64; 4]) -> PyResult<i128> {
-    let felt = crate::pfsys::vecu64_to_field::<halo2curves::bn256::Fr>(&array);
+    let felt = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     Ok(int_rep)
 }
@@ -106,7 +106,7 @@ fn vecu64_to_int(array: [u64; 4]) -> PyResult<i128> {
     scale
 ))]
 fn vecu64_to_float(array: [u64; 4], scale: u32) -> PyResult<f64> {
-    let felt = crate::pfsys::vecu64_to_field::<halo2curves::bn256::Fr>(&array);
+    let felt = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
     let float_rep = int_rep as f64 / multiplier;
@@ -122,9 +122,9 @@ fn float_to_vecu64(input: f64, scale: u32) -> PyResult<[u64; 4]> {
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = i128_to_felt(int_rep);
-    Ok(crate::pfsys::field_to_vecu64::<halo2curves::bn256::Fr>(
-        &felt,
-    ))
+    Ok(crate::pfsys::field_to_vecu64_montgomery::<
+        halo2curves::bn256::Fr,
+    >(&felt))
 }
 
 /// Generates a vk from a pk for a model circuit and saves it to a file
