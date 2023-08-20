@@ -32,34 +32,56 @@ jobs:
       
           - name: Build wasm files for both web and nodejs compilation targets
             run: |
-                wasm-pack build --target web . -- -Z build-std="panic_abort,std" --features web
+                wasm-pack build --target nodejs --out-dir ./pkg/nodejs . -- -Z build-std="panic_abort,std"
+                wasm-pack build --target web --out-dir ./pkg/web . -- -Z build-std="panic_abort,std" --features web
           - name: Create package.json in pkg folder
             shell: bash
             env:
                 RELEASE_TAG: ${{ github.ref_name }}
             run: |
               echo '{
-                "name": "@ezkljs/engine",
+                "name": "ezkl-wasm",
                 "version": "${{ github.ref_name }}",
                 "files": [
-                  "ezkl_bg.wasm",
+                  "nodejs/ezkl_bg.wasm",
+                  "nodejs/ezkl.js",
+                  "nodejs/ezkl.d.ts",
+                  "web/ezkl_bg.wasm",
+                  "web/ezkl.js",
+                  "web/ezkl.d.ts",
+                  "web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js",
                   "ezkl.js",
-                  "ezkl.d.ts",
-                  "snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js"
+                  "ezkl.d.ts"
                 ],
                 "main": "ezkl.js",
                 "types": "ezkl.d.ts",
                 "sideEffects": [
-                  "./snippets/*"
+                  "web/snippets/*"
                 ]
               }' > pkg/package.json
+              
+          - name: Create ezkl.js in pkg folder
+            run: |
+              echo "import * as nodejsFunctions from './nodejs/ezkl.js';" >> pkg/ezkl.js
+              echo "import * as webFunctions from './web/ezkl.js';" >> pkg/ezkl.js
+              echo "export const nodejs = nodejsFunctions;" >> pkg/ezkl.js
+              echo "export const web = webFunctions;" >> pkg/ezkl.js
+
+          - name: Create ezkl.d.ts in pkg folder
+            run: |
+              echo "export const nodejs: typeof import('./nodejs/ezkl');" >> pkg/ezkl.d.ts
+              echo "export const web: typeof import('./web/ezkl');" >> pkg/ezkl.d.ts
+
+          - name: Replace memory definition in nodejs with definition in web
+            run: |
+              PATTERN=$(grep -o 'new WebAssembly.Memory({initial:[0-9]*,maximum:[0-9]*,shared:true})' pkg/web/ezkl.js)
+              sed -i "3s|imports\['env'\] = {memory:.*|imports\['env'\] = {memory: $PATTERN}|" pkg/nodejs/ezkl.js
 
           - name: Set up Node.js
             uses: actions/setup-node@v3
             with:
               node-version: '18.12.1'
               registry-url: 'https://registry.npmjs.org'
-  
           - name: Publish to npm
             run: |
               cd pkg
