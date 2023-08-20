@@ -40,7 +40,7 @@ jobs:
                 RELEASE_TAG: ${{ github.ref_name }}
             run: |
               echo '{
-                "name": "ezkl-wasm",
+                "name": "@ezkljs/engine",
                 "version": "${{ github.ref_name }}",
                 "files": [
                   "nodejs/ezkl_bg.wasm",
