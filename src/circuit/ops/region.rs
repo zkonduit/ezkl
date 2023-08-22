@@ -1,16 +1,15 @@
+use crate::tensor::{TensorType, ValTensor, ValType, VarTensor};
 use halo2_proofs::{
     circuit::Region,
     plonk::{Error, Selector},
 };
-use std::sync::{Arc, Mutex};
-
-use crate::tensor::{TensorType, ValTensor, ValType, VarTensor};
 use halo2curves::ff::PrimeField;
+use std::cell::RefCell;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 /// A context for a region
 pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
-    region: Option<Arc<Mutex<Region<'a, F>>>>,
+    region: Option<RefCell<Region<'a, F>>>,
     offset: usize,
     total_constants: usize,
 }
@@ -18,7 +17,7 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     /// Create a new region context
     pub fn new(region: Region<'a, F>, offset: usize) -> RegionCtx<'a, F> {
-        let region = Some(Arc::new(Mutex::new(region)));
+        let region = Some(RefCell::new(region));
 
         RegionCtx {
             region,
@@ -28,7 +27,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     }
     /// Create a new region context from a wrapped region
     pub fn from_wrapped_region(
-        region: Option<Arc<Mutex<Region<'a, F>>>>,
+        region: Option<RefCell<Region<'a, F>>>,
         offset: usize,
     ) -> RegionCtx<'a, F> {
         RegionCtx {
@@ -36,10 +35,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             offset,
             total_constants: 0,
         }
-    }
-    /// Get the region
-    pub fn region(&self) -> Option<Arc<Mutex<Region<'a, F>>>> {
-        self.region.clone()
     }
 
     /// Create a new region context
@@ -72,8 +67,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     pub fn assign_constant(&mut self, var: &VarTensor, value: F) -> Result<ValType<F>, Error> {
         self.total_constants += 1;
         if let Some(region) = &self.region {
-            let mut lock = region.lock().unwrap();
-            let cell = var.assign_constant(&mut lock, self.offset, value)?;
+            let cell = var.assign_constant(&mut region.borrow_mut(), self.offset, value)?;
             Ok(cell.into())
         } else {
             Ok(value.into())
@@ -86,8 +80,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, Error> {
         if let Some(region) = &self.region {
-            let mut lock = region.lock().unwrap();
-            var.assign(&mut lock, self.offset, values)
+            var.assign(&mut region.borrow_mut(), self.offset, values)
         } else {
             self.total_constants += values.num_constants();
             Ok(values.clone())
@@ -101,9 +94,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         check_mode: &crate::circuit::CheckMode,
     ) -> Result<(ValTensor<F>, usize), Error> {
         if let Some(region) = &self.region {
-            let mut lock = region.lock().unwrap();
             // duplicates every nth element to adjust for column overflow
-            var.assign_with_duplication(&mut lock, self.offset, values, check_mode)
+            var.assign_with_duplication(&mut region.borrow_mut(), self.offset, values, check_mode)
         } else {
             self.total_constants += values.num_constants();
             var.dummy_assign_with_duplication(self.offset, values)
@@ -112,11 +104,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
 
     /// Enable a selector
     pub fn enable(&mut self, selector: Option<&Selector>, y: usize) -> Result<(), Error> {
-        match self.region {
-            Some(ref region) => {
-                let mut lock = region.lock().unwrap();
-                selector.unwrap().enable(&mut lock, y)
-            }
+        match &self.region {
+            Some(region) => selector.unwrap().enable(&mut region.borrow_mut(), y),
             None => Ok(()),
         }
     }
