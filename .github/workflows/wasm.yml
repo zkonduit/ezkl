@@ -46,10 +46,12 @@ jobs:
                   "nodejs/ezkl_bg.wasm",
                   "nodejs/ezkl.js",
                   "nodejs/ezkl.d.ts",
+                  "nodejs/package.json",
                   "web/ezkl_bg.wasm",
                   "web/ezkl.js",
                   "web/ezkl.d.ts",
                   "web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js",
+                  "web/package.json",
                   "ezkl.js",
                   "ezkl.d.ts"
                 ],
@@ -62,20 +64,19 @@ jobs:
               
           - name: Create ezkl.js in pkg folder
             run: |
-              echo "import * as nodejsFunctions from './nodejs/ezkl.js';" >> pkg/ezkl.js
-              echo "import * as webFunctions from './web/ezkl.js';" >> pkg/ezkl.js
-              echo "export const nodejs = nodejsFunctions;" >> pkg/ezkl.js
-              echo "export const web = webFunctions;" >> pkg/ezkl.js
+              echo "const nodejsFunctions = require('./nodejs/ezkl.js');" >> pkg/ezkl.js
+              echo "const webFunctions = require('./web/ezkl.js');" >> pkg/ezkl.js
+              echo "exports.nodejs = nodejsFunctions;" >> pkg/ezkl.js
+              echo "exports.web = webFunctions;" >> pkg/ezkl.js
 
           - name: Create ezkl.d.ts in pkg folder
             run: |
               echo "export const nodejs: typeof import('./nodejs/ezkl');" >> pkg/ezkl.d.ts
               echo "export const web: typeof import('./web/ezkl');" >> pkg/ezkl.d.ts
-
-          - name: Replace memory definition in nodejs with definition in web
+    
+          - name: Replace memory definition in nodejs
             run: |
-              PATTERN=$(grep -o 'new WebAssembly.Memory({initial:[0-9]*,maximum:[0-9]*,shared:true})' pkg/web/ezkl.js)
-              sed -i "3s|imports\['env'\] = {memory:.*|imports\['env'\] = {memory: $PATTERN}|" pkg/nodejs/ezkl.js
+              sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
 
           - name: Set up Node.js
             uses: actions/setup-node@v3
