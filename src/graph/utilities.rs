@@ -635,7 +635,7 @@ pub fn new_op_from_onnx(
                 stride,
             })
         }
-        "Not" => SupportedOp::Nonlinear(LookupOp::Not),
+        "Not" => SupportedOp::Linear(PolyOp::Not),
         "DeconvUnary" => {
             let deconv_node: &DeconvUnary = match node.op().downcast_ref::<DeconvUnary>() {
                 Some(b) => b,

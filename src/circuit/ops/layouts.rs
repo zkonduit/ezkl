@@ -821,6 +821,26 @@ pub fn less<F: PrimeField + TensorType + PartialOrd>(
     )
 }
 
+/// Not boolean operation
+pub fn not<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mask = values[0].clone();
+
+    let unit: ValTensor<F> =
+        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(1))?].into_iter())
+            .into();
+
+    let nil: ValTensor<F> =
+        Tensor::from(vec![region.assign_constant(&config.inputs[1], F::from(0))?].into_iter())
+            .into();
+    region.next();
+
+    iff(config, region, &[mask, unit, nil])
+}
+
 /// Iff
 pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,

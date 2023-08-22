@@ -39,18 +39,59 @@ pub fn iff<
         + Mul<Output = T>
         + Sub<Output = T>
         + std::marker::Send
-        + std::marker::Sync,
+        + std::marker::Sync
+        + std::cmp::PartialEq,
 >(
     mask: &Tensor<T>,
     b: &Tensor<T>,
     a: &Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
+    // assert is boolean
+    assert!(
+        mask.iter()
+            .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
+        "iff() only works on boolean mask"
+    );
+
     let masked_a = (mask.clone() * a.clone())?;
     let masked_b = ((Tensor::from(vec![T::one().ok_or(TensorError::DimError)?].into_iter())
         - mask.clone())?
         * b.clone())?;
 
     masked_a + masked_b
+}
+
+/// Elementwise applies not to a tensor of integers.
+/// # Arguments
+/// * `a` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::not;
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 1, 1, 1, 1, 0]),
+///   &[2, 3],
+/// ).unwrap();
+/// let result = not(&x).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn not<
+    T: TensorType
+        + Add<Output = T>
+        + Mul<Output = T>
+        + Sub<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialEq,
+>(
+    a: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    iff(
+        a,
+        &Tensor::from(vec![T::one().unwrap()].into_iter()),
+        &Tensor::from(vec![T::zero().unwrap()].into_iter()),
+    )
 }
 
 /// Greater than operation.
@@ -2124,35 +2165,6 @@ pub mod nonlinearities {
             let fout = (scale_output as f64) / (1.0 + (-kix).exp());
             let rounded = fout.round();
             output[i] = rounded as i128;
-        }
-        output
-    }
-
-    /// Elementwise applies not to a tensor of integers.
-    /// # Arguments
-    /// * `a` - Tensor
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::not;
-    /// let x = Tensor::<i128>::new(
-    ///    Some(&[1, 1, 1, 1, 1, 0]),
-    ///   &[2, 3],
-    /// ).unwrap();
-    /// let result = not(&x);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn not(a: &Tensor<i128>) -> Tensor<i128> {
-        // assert is boolean
-        assert!(
-            a.iter().map(|x| *x).all(|x| x == 0 || x == 1),
-            "not() only works on boolean tensors"
-        );
-
-        let mut output: Tensor<i128> = a.clone();
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = 1 - a_i;
         }
         output
     }

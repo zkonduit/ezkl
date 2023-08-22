@@ -69,6 +69,7 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Resize {
         scale_factor: Vec<usize>,
     },
+    Not,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {}
@@ -106,6 +107,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Concat { .. } => "CONCAT".into(),
             PolyOp::Slice { .. } => "SLICE".into(),
             PolyOp::Neg => "NEG".into(),
+            PolyOp::Not => "NOT".into(),
         }
     }
 
@@ -113,6 +115,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let mut inputs = inputs.to_vec();
         let res = match &self {
+            PolyOp::Not => tensor::ops::not(&inputs[0]),
             PolyOp::Downsample {
                 axis,
                 stride,
@@ -226,6 +229,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Not => layouts::not(config, region, values[..].try_into()?)?,
             PolyOp::MoveAxis {
                 source,
                 destination,
@@ -325,6 +329,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
+            PolyOp::Not => in_scales[0],
             PolyOp::Neg => in_scales[0],
             PolyOp::MoveAxis { .. } => in_scales[0],
             PolyOp::Downsample { .. } => in_scales[0],
