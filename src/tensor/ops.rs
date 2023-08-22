@@ -62,16 +62,16 @@ pub fn iff<
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::greater;
 /// let a = Tensor::<i128>::new(
-///   Some(&[1, 2, 3, 4, 5, 6]),
+///   Some(&[1, 12, 6, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap();
 /// let b = Tensor::<i128>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap();
-/// let result = greater(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 0]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
+/// let result = greater(&a, &b, &(1,1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result.0, expected);
 /// ```
 pub fn greater<
     T: TensorType
@@ -112,16 +112,16 @@ pub fn greater<
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::less;
 /// let a = Tensor::<i128>::new(
-///  Some(&[1, 2, 3, 4, 5, 6]),
+///  Some(&[1, 0, 5, 4, 5, 1]),
 /// &[2, 3],
 /// ).unwrap();
 /// let b = Tensor::<i128>::new(
 /// Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap();
-/// let result = less(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 0]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
+/// let result = less(&a, &b,  &(1,1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result.0, expected);
 /// ```
 ///
 pub fn less<
