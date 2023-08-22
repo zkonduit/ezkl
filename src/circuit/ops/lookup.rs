@@ -98,6 +98,7 @@ pub enum LookupOp {
         a: utils::F32,
     },
     Sign,
+    Not,
 }
 
 impl LookupOp {
@@ -108,6 +109,18 @@ impl LookupOp {
             <F as TensorType>::zero().unwrap(),
             Op::<F>::f(self, &[x]).unwrap().output[0],
         )
+    }
+
+    /// Returns the range of values that can be represented by the table
+    pub fn bit_range(&self, allocated_bits: usize) -> (i128, i128) {
+        let base = 2i128;
+        match self {
+            LookupOp::Not => (0, 1),
+            _ => (
+                -base.pow(allocated_bits as u32 - 1),
+                base.pow(allocated_bits as u32 - 1),
+            ),
+        }
     }
 }
 
@@ -207,6 +220,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Tanh { scales } => {
                 Ok(tensor::ops::nonlinearities::tanh(&x, scales.0, scales.1))
             }
+            LookupOp::Not => Ok(tensor::ops::nonlinearities::not(&x)),
         }?;
 
         let output = res.map(|x| i128_to_felt(x));
@@ -219,7 +233,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
 
     /// Returns the name of the operation
     fn as_string(&self) -> String {
-        
         match self {
             LookupOp::Max { scales, a } => format!("MAX w/ {:?} /t {}", scales, a),
             LookupOp::Min { scales, a } => format!("MIN w/ {:?} /t {}", scales, a),
@@ -248,6 +261,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::ASin { scales } => format!("ASIN w/ {:?}", scales),
             LookupOp::Sinh { scales } => format!("SINH w/ {:?}", scales),
             LookupOp::ASinh { scales } => format!("ASINH w/ {:?}", scales),
+            LookupOp::Not => "NOT".into(),
         }
     }
 
@@ -275,6 +289,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
 
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
         match self {
+            LookupOp::Not => Box::new(LookupOp::Not),
             LookupOp::Sign => Box::new(LookupOp::Sign),
             LookupOp::Recip { .. } => Box::new(LookupOp::Recip {
                 scale: scale_to_multiplier(inputs_scale[0] + global_scale) as usize,

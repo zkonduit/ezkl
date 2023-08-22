@@ -97,12 +97,17 @@ fn extract_tensor_value(
     };
 
     let mut const_value: Tensor<f32>;
+
     match dt {
         DatumType::F32 => {
             let vec = input.as_slice::<f32>()?.to_vec();
             const_value = vec.into_iter().into();
         }
-
+        DatumType::F64 => {
+            let vec = input.as_slice::<f64>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = cast.into_iter().into();
+        }
         DatumType::I64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i64>()?.to_vec();
@@ -476,43 +481,16 @@ pub fn new_op_from_onnx(
         "Mul" => SupportedOp::Linear(PolyOp::Mult),
         "Iff" => SupportedOp::Linear(PolyOp::Iff),
         "Less" => {
-            // Extract the slope layer hyperparams
-            let unit = if let Some(c) = extract_const_raw_values(inputs[0].opkind()) {
-                if c.len() == 1 {
-                    c[0]
-                } else {
-                    todo!()
-                }
-            } else {
-                return Err(Box::new(GraphError::OpMismatch(idx, "less".to_string())));
-            };
-
             if inputs.len() == 2 {
-                deleted_indices.push(0);
-                SupportedOp::Nonlinear(LookupOp::LessThan {
-                    a: crate::circuit::utils::F32(unit),
-                })
+                SupportedOp::Hybrid(HybridOp::Less { scales: (1, 1) })
             } else {
                 todo!()
             }
         }
         "Greater" => {
             // Extract the slope layer hyperparams
-            let unit = if let Some(c) = extract_const_raw_values(inputs[0].opkind()) {
-                if c.len() == 1 {
-                    c[0]
-                } else {
-                    todo!()
-                }
-            } else {
-                return Err(Box::new(GraphError::OpMismatch(idx, "greater".to_string())));
-            };
-
             if inputs.len() == 2 {
-                deleted_indices.push(0);
-                SupportedOp::Nonlinear(LookupOp::GreaterThan {
-                    a: crate::circuit::utils::F32(unit),
-                })
+                SupportedOp::Hybrid(HybridOp::Greater { scales: (1, 1) })
             } else {
                 todo!()
             }
@@ -657,6 +635,7 @@ pub fn new_op_from_onnx(
                 stride,
             })
         }
+        "Not" => SupportedOp::Nonlinear(LookupOp::Not),
         "DeconvUnary" => {
             let deconv_node: &DeconvUnary = match node.op().downcast_ref::<DeconvUnary>() {
                 Some(b) => b,
@@ -949,6 +928,15 @@ pub fn homogenize_input_scales(
     inputs_to_scale: Vec<usize>,
 ) -> Result<Box<dyn Op<Fp>>, Box<dyn Error>> {
     if inputs_to_scale.is_empty() {
+        return Ok(op);
+    }
+    // else if all inputs_scales at inputs_to_scale are the same, we don't need to do anything
+    else if input_scales
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| inputs_to_scale.contains(idx))
+        .all(|(_, scale)| scale == &input_scales[0])
+    {
         return Ok(op);
     }
 

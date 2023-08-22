@@ -53,6 +53,94 @@ pub fn iff<
     masked_a + masked_b
 }
 
+/// Greater than operation.
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::greater;
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = greater(&a, &b).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn greater<
+    T: TensorType
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialOrd
+        + std::convert::TryFrom<u64>,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+    scales: &(usize, usize),
+) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+    let lhs_scale = T::try_from(scales.0 as u64).map_err(|_| TensorError::DimError)?;
+    let rhs_scale = T::try_from(scales.1 as u64).map_err(|_| TensorError::DimError)?;
+
+    let lhs_scale_tensor = Tensor::from([lhs_scale].into_iter());
+    let rhs_scale_tensor = Tensor::from([rhs_scale].into_iter());
+
+    let mask_inter = ((lhs_scale_tensor * a.clone())? - (rhs_scale_tensor * b.clone())?)?;
+    let mask = mask_inter.map(|x| {
+        if x > T::zero().ok_or(TensorError::DimError).unwrap() {
+            T::one().ok_or(TensorError::DimError).unwrap()
+        } else {
+            T::zero().ok_or(TensorError::DimError).unwrap()
+        }
+    });
+    Ok((mask, vec![mask_inter]))
+}
+
+/// Less than to operation.
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::less;
+/// let a = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+/// Some(&[1, 2, 3, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = less(&a, &b).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+///
+pub fn less<
+    T: TensorType
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialOrd
+        + std::convert::TryFrom<u64>,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+    scales: &(usize, usize),
+) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+    // a < b <=> b > a
+    greater(b, a, &(scales.1, scales.0))
+}
+
 /// Resize using nearest neighbour interpolation.
 /// # Arguments
 /// * `a` - Tensor
@@ -2036,6 +2124,35 @@ pub mod nonlinearities {
             let fout = (scale_output as f64) / (1.0 + (-kix).exp());
             let rounded = fout.round();
             output[i] = rounded as i128;
+        }
+        output
+    }
+
+    /// Elementwise applies not to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::not;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[1, 1, 1, 1, 1, 0]),
+    ///   &[2, 3],
+    /// ).unwrap();
+    /// let result = not(&x);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn not(a: &Tensor<i128>) -> Tensor<i128> {
+        // assert is boolean
+        assert!(
+            a.iter().map(|x| *x).all(|x| x == 0 || x == 1),
+            "not() only works on boolean tensors"
+        );
+
+        let mut output: Tensor<i128> = a.clone();
+        for (i, a_i) in a.iter().enumerate() {
+            output[i] = 1 - a_i;
         }
         output
     }
