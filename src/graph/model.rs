@@ -237,6 +237,14 @@ impl NodeType {
             NodeType::SubGraph { .. } => false,
         }
     }
+    /// Returns true if the operation is a const.
+    pub fn is_constant(&self) -> bool {
+        match self {
+            NodeType::Node(n) => n.opkind.is_constant(),
+            NodeType::SubGraph { .. } => false,
+        }
+    }
+
     /// Returns the node's unique identifier.
     pub fn idx(&self) -> usize {
         match self {

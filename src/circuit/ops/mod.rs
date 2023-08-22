@@ -67,6 +67,11 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
         false
     }
 
+    /// Returns true if the operation is a constant.
+    fn is_constant(&self) -> bool {
+        false
+    }
+
     /// Boxes and clones
     fn clone_dyn(&self) -> Box<dyn Op<F>>;
 
@@ -255,5 +260,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl
+    }
+
+    fn is_constant(&self) -> bool {
+        true
     }
 }

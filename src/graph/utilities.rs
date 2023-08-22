@@ -367,8 +367,22 @@ pub fn new_op_from_onnx(
             SupportedOp::Linear(PolyOp::Sum { axes })
         }
         "Max" => {
-            // Extract the slope layer hyperparams
-            let boxed_op = inputs[1].opkind();
+            // Extract the max value
+            // first find the input that is a constant
+            // and then extract the value
+            let const_inputs = inputs
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| n.is_constant())
+                .map(|(i, _)| i)
+                .collect::<Vec<_>>();
+
+            if const_inputs.len() != 1 {
+                return Err(Box::new(GraphError::OpMismatch(idx, "Max".to_string())));
+            }
+
+            let const_idx = const_inputs[0];
+            let boxed_op = inputs[const_idx].opkind();
             let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
                 if c.len() == 1 {
                     c[0]
@@ -380,9 +394,9 @@ pub fn new_op_from_onnx(
             };
 
             if inputs.len() == 2 {
-                if let Some(node) = inputs.last_mut() {
+                if let Some(node) = inputs.get_mut(const_idx) {
                     node.decrement_const();
-                    deleted_indices.push(inputs.len() - 1);
+                    deleted_indices.push(const_idx);
                 }
                 if unit == 0. {
                     SupportedOp::Nonlinear(LookupOp::ReLU { scale: 1 })
@@ -397,8 +411,22 @@ pub fn new_op_from_onnx(
             }
         }
         "Min" => {
-            // Extract the slope layer hyperparams
-            let boxed_op = inputs[1].opkind();
+            // Extract the min value
+            // first find the input that is a constant
+            // and then extract the value
+            let const_inputs = inputs
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| n.is_constant())
+                .map(|(i, _)| i)
+                .collect::<Vec<_>>();
+
+            if const_inputs.len() != 1 {
+                return Err(Box::new(GraphError::OpMismatch(idx, "Min".to_string())));
+            }
+
+            let const_idx = const_inputs[0];
+            let boxed_op = inputs[const_idx].opkind();
             let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
                 if c.len() == 1 {
                     c[0]
@@ -410,9 +438,9 @@ pub fn new_op_from_onnx(
             };
 
             if inputs.len() == 2 {
-                if let Some(node) = inputs.last_mut() {
+                if let Some(node) = inputs.get_mut(const_idx) {
                     node.decrement_const();
-                    deleted_indices.push(inputs.len() - 1);
+                    deleted_indices.push(const_idx);
                 }
                 SupportedOp::Nonlinear(LookupOp::Min {
                     scales: (1, 1),
