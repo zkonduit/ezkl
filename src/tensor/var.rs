@@ -14,7 +14,6 @@ pub enum VarTensor {
         /// Number of rows available to be used in each column of the storage
         col_size: usize,
     },
-
     /// Dummy var
     Dummy {
         /// Number of rows available to be used in each column of the storage

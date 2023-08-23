@@ -35,6 +35,7 @@ pub enum HybridOp {
     Less {
         scales: (usize, usize),
     },
+    Equals,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
@@ -71,6 +72,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
                 tensor::ops::less(&x, &y, scales)?
             }
+            HybridOp::Equals => {
+                let y = inputs[1].clone().map(|x| felt_to_i128(x));
+                tensor::ops::equals(&x, &y)?
+            }
         };
 
         // convert back to felt
@@ -92,6 +97,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::RangeCheck(..) => "RANGECHECK",
             HybridOp::Greater { .. } => "GREATER",
             HybridOp::Less { .. } => "LESS",
+            HybridOp::Equals => "EQUALS",
         };
         name.into()
     }
@@ -143,6 +149,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Less { scales } => {
                 layouts::less(config, region, values[..].try_into()?, scales)?
             }
+            HybridOp::Equals => layouts::equals(config, region, values[..].try_into()?)?,
         }))
     }
 
@@ -213,9 +220,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 }
                 lookups
             }
-            HybridOp::Greater { .. } | HybridOp::Less { .. } => vec![LookupOp::GreaterThan {
-                a: circuit::utils::F32(0.),
-            }],
+            HybridOp::Greater { .. } | HybridOp::Less { .. } | HybridOp::Equals => {
+                vec![LookupOp::GreaterThan {
+                    a: circuit::utils::F32(0.),
+                }]
+            }
         }
     }
 

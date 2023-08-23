@@ -126,8 +126,8 @@ impl GraphWitness {
     ///
     pub fn new(inputs: Vec<Vec<Fp>>, outputs: Vec<Vec<Fp>>) -> Self {
         GraphWitness {
-            inputs: inputs,
-            outputs: outputs,
+            inputs,
+            outputs,
             processed_inputs: None,
             processed_params: None,
             processed_outputs: None,
@@ -544,7 +544,7 @@ impl GraphCircuit {
         data: &GraphData,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model.graph.input_shapes();
-        let scales = vec![self.settings.run_args.scale; shapes.len()];
+        let scales = self.model.graph.get_input_scales();
         self.process_data_source(&data.input_data, shapes, scales)
     }
 
@@ -555,7 +555,8 @@ impl GraphCircuit {
         data: &GraphData,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model.graph.input_shapes();
-        let scales = vec![self.settings.run_args.scale; shapes.len()];
+        let scales = self.model.graph.get_input_scales();
+        info!("input scales: {:?}", scales);
         self.process_data_source(&data.input_data, shapes, scales)
             .await
     }
@@ -764,14 +765,12 @@ impl GraphCircuit {
                 .to_vec()
                 .iter()
                 .map(|t| t.deref().to_vec())
-                .collect_vec()
-                .into(),
+                .collect_vec(),
             outputs: model_results
                 .outputs
                 .iter()
                 .map(|t| t.deref().to_vec())
-                .collect_vec()
-                .into(),
+                .collect_vec(),
             processed_inputs,
             processed_params,
             processed_outputs,

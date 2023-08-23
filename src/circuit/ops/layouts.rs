@@ -16,7 +16,7 @@ use super::{
 };
 use crate::{
     circuit::{ops::base::BaseOp, utils},
-    fieldutils::i128_to_felt,
+    fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{
         get_broadcasted_shape,
         ops::{
@@ -349,8 +349,14 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                         pair[1..]
                             .iter()
                             .fold(ValTensor::from(pair[0].clone()), |acc, x| {
-                                pairwise(config, region, &[acc, x.clone().into()], BaseOp::Mult)
-                                    .unwrap()
+                                pairwise(
+                                    config,
+                                    region,
+                                    &[acc, x.clone().into()],
+                                    BaseOp::Mult,
+                                    false,
+                                )
+                                .unwrap()
                             });
 
                     if prod.is_none() {
@@ -362,6 +368,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                                 region,
                                 &[prod.unwrap(), product_across_pair],
                                 BaseOp::Add,
+                                false,
                             )
                             .unwrap(),
                         );
@@ -625,6 +632,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
     op: BaseOp,
+    is_bool: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // time to calculate the value of the output
     let global_start = instant::Instant::now();
@@ -680,6 +688,16 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
             res.get_inner()?
         };
+        if is_bool {
+            // Enable the selectors
+            (0..inp.len()).for_each(|j| {
+                let (x, y) = config.inputs[i].cartesian_coord(region.offset() + j);
+                let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
+
+                region.enable(selector, y).unwrap();
+            });
+        }
+
         inputs.push(inp);
     }
 
@@ -782,12 +800,24 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd>(
     if lhs_scale > 1 {
         let scale = ValType::Constant(F::from(lhs_scale as u64));
         let scale_tensor = Tensor::new(Some(&[scale]), &[1])?;
-        lhs = pairwise(config, region, &[lhs, scale_tensor.into()], BaseOp::Mult)?;
+        lhs = pairwise(
+            config,
+            region,
+            &[lhs, scale_tensor.into()],
+            BaseOp::Mult,
+            false,
+        )?;
     }
     if rhs_scale > 1 {
         let scale = ValType::Constant(F::from(rhs_scale as u64));
         let scale_tensor = Tensor::new(Some(&[scale]), &[1])?;
-        rhs = pairwise(config, region, &[rhs, scale_tensor.into()], BaseOp::Mult)?;
+        rhs = pairwise(
+            config,
+            region,
+            &[rhs, scale_tensor.into()],
+            BaseOp::Mult,
+            false,
+        )?;
     }
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
@@ -795,7 +825,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd>(
     lhs.expand(&broadcasted_shape)?;
     rhs.expand(&broadcasted_shape)?;
 
-    let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
+    let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub, false)?;
 
     nonlinearity(
         config,
@@ -821,6 +851,155 @@ pub fn less<F: PrimeField + TensorType + PartialOrd>(
     )
 }
 
+/// And boolean operation
+pub fn and<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let res = pairwise(config, region, values, BaseOp::Mult, true)?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let safe_and = tensor::ops::and(&values[0].get_felt_evals()?, &values[1].get_felt_evals()?)
+            .map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?;
+
+        assert_eq!(
+            res.get_felt_evals()?.map(|x| felt_to_i128(x)),
+            safe_and.map(|x| felt_to_i128(x))
+        );
+    };
+
+    Ok(res)
+}
+
+/// Or boolean operation
+pub fn or<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let a = values[0].clone();
+    let b = values[1].clone();
+
+    let unit: ValTensor<F> =
+        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(1))?].into_iter())
+            .into();
+
+    let iff_values = &[a, b, unit];
+
+    let res = iff(config, region, iff_values, true)?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let safe_or =
+                tensor::ops::or(&values[0].get_felt_evals()?, &values[1].get_felt_evals()?)
+                    .map_err(|e| {
+                        error!("{}", e);
+                        halo2_proofs::plonk::Error::Synthesis
+                    })?;
+
+            assert_eq!(
+                res.get_felt_evals()?.map(|x| felt_to_i128(x)),
+                safe_or.map(|x| felt_to_i128(x))
+            );
+        }
+    };
+    Ok(res)
+}
+
+/// Equality boolean operation
+pub fn equals<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let diff = pairwise(config, region, values, BaseOp::Sub, false)?;
+
+    let nil: ValTensor<F> =
+        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(0))?].into_iter())
+            .into();
+
+    let greater_than_zero = greater(config, region, &[diff.clone(), nil.clone()], &(1, 1))?;
+    let less_than_zero = less(config, region, &[diff, nil], &(1, 1))?;
+
+    let res = or(config, region, &[greater_than_zero, less_than_zero])?;
+    let res = not(config, region, &[res])?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let safe_equals =
+                tensor::ops::equals(&values[0].get_felt_evals()?, &values[1].get_felt_evals()?)
+                    .map_err(|e| {
+                        error!("{}", e);
+                        halo2_proofs::plonk::Error::Synthesis
+                    })?;
+
+            assert_eq!(
+                res.get_felt_evals()?.map(|x| felt_to_i128(x)),
+                safe_equals.0.map(|x| felt_to_i128(x))
+            );
+        }
+    };
+    Ok(res)
+}
+
+/// Xor boolean operation
+pub fn xor<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let lhs = values[0].clone();
+    let rhs = values[1].clone();
+
+    let lhs_not = not(config, region, &[lhs.clone()])?;
+    let rhs_not = not(config, region, &[rhs.clone()])?;
+
+    let lhs_and_rhs_not = and(config, region, &[lhs, rhs_not.clone()])?;
+    let lhs_not_and_rhs = and(config, region, &[rhs, lhs_not])?;
+
+    // we can safely use add and not OR here because we know that lhs_and_rhs_not and lhs_not_and_rhs are =1 at different incices
+    let res: ValTensor<F> = pairwise(
+        config,
+        region,
+        &[lhs_and_rhs_not, lhs_not_and_rhs],
+        BaseOp::Add,
+        true,
+    )?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let safe_xor =
+                tensor::ops::xor(&values[0].get_felt_evals()?, &values[1].get_felt_evals()?)
+                    .map_err(|e| {
+                        error!("{}", e);
+                        halo2_proofs::plonk::Error::Synthesis
+                    })?;
+
+            assert_eq!(
+                res.get_felt_evals()?.map(|x| felt_to_i128(x)),
+                safe_xor.map(|x| felt_to_i128(x))
+            );
+        }
+    };
+    Ok(res)
+}
+
 /// Not boolean operation
 pub fn not<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
@@ -838,7 +1017,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd>(
             .into();
     region.next();
 
-    iff(config, region, &[mask, unit, nil])
+    iff(config, region, &[mask, unit, nil], true)
 }
 
 /// Iff
@@ -846,6 +1025,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 3],
+    is_bool: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // if mask > 0 then output a else output b
     let (mask, b, a) = (&values[0], &values[1], &values[2]);
@@ -868,12 +1048,30 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
 
     region.increment(assigned_mask.len());
 
-    let one_minus_mask = pairwise(config, region, &[unit, assigned_mask.clone()], BaseOp::Sub)?;
+    let one_minus_mask = pairwise(
+        config,
+        region,
+        &[unit, assigned_mask.clone()],
+        BaseOp::Sub,
+        is_bool,
+    )?;
 
-    let masked_a = pairwise(config, region, &[a.clone(), assigned_mask], BaseOp::Mult)?;
-    let masked_b = pairwise(config, region, &[b.clone(), one_minus_mask], BaseOp::Mult)?;
+    let masked_a = pairwise(
+        config,
+        region,
+        &[a.clone(), assigned_mask],
+        BaseOp::Mult,
+        is_bool,
+    )?;
+    let masked_b = pairwise(
+        config,
+        region,
+        &[b.clone(), one_minus_mask],
+        BaseOp::Mult,
+        is_bool,
+    )?;
 
-    let output = pairwise(config, region, &[masked_a, masked_b], BaseOp::Add)?;
+    let output = pairwise(config, region, &[masked_a, masked_b], BaseOp::Add, false)?;
 
     // Now we can assign the matmul op
     Ok(output)
@@ -1334,7 +1532,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
                 .unwrap()
                 .get_slice(&[start_kernel_index..end_kernel_index])
                 .unwrap();
-            res = pairwise(config, region, &[res, bias.into()], BaseOp::Add).unwrap()
+            res = pairwise(config, region, &[res, bias.into()], BaseOp::Add, false).unwrap()
         }
 
         *o = res.get_inner_tensor().unwrap()[0].clone();
@@ -1386,7 +1584,7 @@ pub fn pow<F: PrimeField + TensorType + PartialOrd>(
     let mut t = values[0].clone();
 
     for _ in 1..exponent {
-        t = pairwise(config, region, &[t, values[0].clone()], BaseOp::Mult)?;
+        t = pairwise(config, region, &[t, values[0].clone()], BaseOp::Mult, false)?;
     }
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
@@ -1469,6 +1667,7 @@ pub fn pack<F: PrimeField + TensorType + PartialOrd>(
         region,
         &[t.clone(), base_tensor.into()],
         BaseOp::Mult,
+        false,
     )?;
 
     let res = sum(config, region, &[base_prod])?;
@@ -1709,7 +1908,7 @@ pub fn abs<F: PrimeField + TensorType + PartialOrd>(
     let relu_x = nonlinearity(config, region, &[x.clone()], &LookupOp::ReLU { scale: 1 })?;
     let relu_neg_x = nonlinearity(config, region, &[neg_x], &LookupOp::ReLU { scale: 1 })?;
     // abs(x) = relu(x) + relu(-x)
-    let abs = pairwise(config, region, &[relu_x, relu_neg_x], BaseOp::Add)?;
+    let abs = pairwise(config, region, &[relu_x, relu_neg_x], BaseOp::Add, false)?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
@@ -1757,6 +1956,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
         region,
         &[assigned_max_val.clone(), unit.clone()],
         BaseOp::Sub,
+        false,
     )?;
 
     // x - max(x - 1)
@@ -1765,6 +1965,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
         region,
         &[values[0].clone(), max_minus_1],
         BaseOp::Sub,
+        false,
     )?;
     // relu(x - max(x - 1))
     let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU { scale: 1 })?;
@@ -1785,7 +1986,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     // sum(relu(x - max(x - 1)))
     let sum_relu = sum(config, region, &[relu])?;
     // 1 - sum(relu(x - max(x - 1)))
-    let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
+    let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub, false)?;
     // relu(1 - sum(relu(x - max(x - 1))))
     let relu_one_minus_sum_relu = nonlinearity(
         config,
@@ -1853,6 +2054,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
         region,
         &[assigned_min_val.clone(), unit.clone()],
         BaseOp::Add,
+        false,
     )?;
 
     // min(x + 1)  - x
@@ -1861,6 +2063,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
         region,
         &[min_plus_1, values[0].clone()],
         BaseOp::Sub,
+        false,
     )?;
 
     // relu(min(x + 1)  - x)
@@ -1881,7 +2084,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     // sum(relu(min(x + 1) - x))
     let sum_relu = sum(config, region, &[relu])?;
     // 1 - sum(relu(min(x + 1) - x))
-    let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
+    let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub, false)?;
     // relu(1 - sum(relu(min(x + 1) - x)))
     let relu_one_minus_sum_relu = nonlinearity(
         config,
@@ -1991,7 +2194,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // product of num * (1 / denom) = 2*output_scale
-    let softmax = pairwise(config, region, &[ex, inv_denom], BaseOp::Mult)?;
+    let softmax = pairwise(config, region, &[ex, inv_denom], BaseOp::Mult, false)?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
@@ -2032,7 +2235,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     }
 
     // Calculate the difference between the expected output and actual output
-    let diff = pairwise(config, region, values, BaseOp::Sub)?;
+    let diff = pairwise(config, region, values, BaseOp::Sub, false)?;
 
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
     let scale = input_scale * output_scale;
@@ -2043,7 +2246,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         &LookupOp::Recip { scale },
     )?;
     // Multiply the difference by the recip
-    let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
+    let product = pairwise(config, region, &[diff, recip], BaseOp::Mult, false)?;
 
     // Use the greater than look up table to check if the percent error is within the tolerance for upper bound
     let tol = tol / 100.0;
@@ -2070,7 +2273,13 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // Add the lower_bound and upper_bound
-    let sum = pairwise(config, region, &[lower_bound, upper_bound], BaseOp::Add)?;
+    let sum = pairwise(
+        config,
+        region,
+        &[lower_bound, upper_bound],
+        BaseOp::Add,
+        false,
+    )?;
 
     // Assign the sum tensor to the inputs
     region.assign(&config.inputs[1], &sum)?;
