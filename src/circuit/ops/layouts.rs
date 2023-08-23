@@ -769,6 +769,78 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     Ok(actual_output)
 }
 
+///
+pub fn greater<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+    scales: &(usize, usize),
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
+    let lhs_scale = scales.0;
+    let rhs_scale = scales.1;
+    if lhs_scale > 1 {
+        let scale = ValType::Constant(F::from(lhs_scale as u64));
+        let scale_tensor = Tensor::new(Some(&[scale]), &[1])?;
+        lhs = pairwise(config, region, &[lhs, scale_tensor.into()], BaseOp::Mult)?;
+    }
+    if rhs_scale > 1 {
+        let scale = ValType::Constant(F::from(rhs_scale as u64));
+        let scale_tensor = Tensor::new(Some(&[scale]), &[1])?;
+        rhs = pairwise(config, region, &[rhs, scale_tensor.into()], BaseOp::Mult)?;
+    }
+
+    let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
+
+    lhs.expand(&broadcasted_shape)?;
+    rhs.expand(&broadcasted_shape)?;
+
+    let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
+
+    nonlinearity(
+        config,
+        region,
+        &[diff],
+        &LookupOp::GreaterThan { a: utils::F32(0.) },
+    )
+}
+
+///
+pub fn less<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+    scales: &(usize, usize),
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // just flip the order and use greater
+    greater(
+        config,
+        region,
+        &[values[1].clone(), values[0].clone()],
+        &(scales.1, scales.0),
+    )
+}
+
+/// Not boolean operation
+pub fn not<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mask = values[0].clone();
+
+    let unit: ValTensor<F> =
+        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(1))?].into_iter())
+            .into();
+
+    let nil: ValTensor<F> =
+        Tensor::from(vec![region.assign_constant(&config.inputs[1], F::from(0))?].into_iter())
+            .into();
+    region.next();
+
+    iff(config, region, &[mask, unit, nil])
+}
+
 /// Iff
 pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,

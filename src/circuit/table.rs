@@ -29,7 +29,7 @@ pub struct Table<F: PrimeField> {
     /// Flags if table has been previously assigned to.
     pub is_assigned: bool,
     /// Number of bits used in lookup table.
-    pub bits: usize,
+    pub range: (i128, i128),
     _marker: PhantomData<F>,
 }
 
@@ -42,13 +42,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         preexisting_input: Option<TableColumn>,
     ) -> Table<F> {
         let table_input = preexisting_input.unwrap_or_else(|| cs.lookup_table_column());
+        let range = nonlinearity.bit_range(bits);
 
         Table {
             nonlinearity: nonlinearity.clone(),
             table_input,
             table_output: cs.lookup_table_column(),
             is_assigned: false,
-            bits,
+            range,
             _marker: PhantomData,
         }
     }
@@ -62,9 +63,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
             return Err(Box::new(CircuitError::TableAlreadyAssigned));
         }
 
-        let base = 2i128;
-        let smallest = -base.pow(self.bits as u32 - 1);
-        let largest = base.pow(self.bits as u32 - 1);
+        let smallest = self.range.0;
+        let largest = self.range.1;
 
         let inputs = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
         let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;

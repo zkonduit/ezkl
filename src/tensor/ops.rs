@@ -39,18 +39,147 @@ pub fn iff<
         + Mul<Output = T>
         + Sub<Output = T>
         + std::marker::Send
-        + std::marker::Sync,
+        + std::marker::Sync
+        + std::cmp::PartialEq,
 >(
     mask: &Tensor<T>,
     b: &Tensor<T>,
     a: &Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
+    // assert is boolean
+    assert!(
+        mask.iter()
+            .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
+        "iff() only works on boolean mask"
+    );
+
     let masked_a = (mask.clone() * a.clone())?;
     let masked_b = ((Tensor::from(vec![T::one().ok_or(TensorError::DimError)?].into_iter())
         - mask.clone())?
         * b.clone())?;
 
     masked_a + masked_b
+}
+
+/// Elementwise applies not to a tensor of integers.
+/// # Arguments
+/// * `a` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::not;
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 1, 1, 1, 1, 0]),
+///   &[2, 3],
+/// ).unwrap();
+/// let result = not(&x).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn not<
+    T: TensorType
+        + Add<Output = T>
+        + Mul<Output = T>
+        + Sub<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialEq,
+>(
+    a: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    iff(
+        a,
+        &Tensor::from(vec![T::one().unwrap()].into_iter()),
+        &Tensor::from(vec![T::zero().unwrap()].into_iter()),
+    )
+}
+
+/// Greater than operation.
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::greater;
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 12, 6, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = greater(&a, &b, &(1,1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result.0, expected);
+/// ```
+pub fn greater<
+    T: TensorType
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialOrd
+        + std::convert::TryFrom<u64>,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+    scales: &(usize, usize),
+) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+    let lhs_scale = T::try_from(scales.0 as u64).map_err(|_| TensorError::DimError)?;
+    let rhs_scale = T::try_from(scales.1 as u64).map_err(|_| TensorError::DimError)?;
+
+    let lhs_scale_tensor = Tensor::from([lhs_scale].into_iter());
+    let rhs_scale_tensor = Tensor::from([rhs_scale].into_iter());
+
+    let mask_inter = ((lhs_scale_tensor * a.clone())? - (rhs_scale_tensor * b.clone())?)?;
+    let mask = mask_inter.map(|x| {
+        if x > T::zero().ok_or(TensorError::DimError).unwrap() {
+            T::one().ok_or(TensorError::DimError).unwrap()
+        } else {
+            T::zero().ok_or(TensorError::DimError).unwrap()
+        }
+    });
+    Ok((mask, vec![mask_inter]))
+}
+
+/// Less than to operation.
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::less;
+/// let a = Tensor::<i128>::new(
+///  Some(&[1, 0, 5, 4, 5, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+/// Some(&[1, 2, 3, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = less(&a, &b,  &(1,1)).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result.0, expected);
+/// ```
+///
+pub fn less<
+    T: TensorType
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialOrd
+        + std::convert::TryFrom<u64>,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+    scales: &(usize, usize),
+) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+    // a < b <=> b > a
+    greater(b, a, &(scales.1, scales.0))
 }
 
 /// Resize using nearest neighbour interpolation.

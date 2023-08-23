@@ -109,6 +109,17 @@ impl LookupOp {
             Op::<F>::f(self, &[x]).unwrap().output[0],
         )
     }
+
+    /// Returns the range of values that can be represented by the table
+    pub fn bit_range(&self, allocated_bits: usize) -> (i128, i128) {
+        let base = 2i128;
+        match self {
+            _ => (
+                -base.pow(allocated_bits as u32 - 1),
+                base.pow(allocated_bits as u32 - 1),
+            ),
+        }
+    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
@@ -219,7 +230,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
 
     /// Returns the name of the operation
     fn as_string(&self) -> String {
-        
         match self {
             LookupOp::Max { scales, a } => format!("MAX w/ {:?} /t {}", scales, a),
             LookupOp::Min { scales, a } => format!("MIN w/ {:?} /t {}", scales, a),

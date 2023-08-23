@@ -29,6 +29,12 @@ pub enum HybridOp {
         scales: (usize, usize),
     },
     RangeCheck(Tolerance),
+    Greater {
+        scales: (usize, usize),
+    },
+    Less {
+        scales: (usize, usize),
+    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
@@ -57,6 +63,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 tensor::ops::nonlinearities::multi_dim_softmax(&x, scales.0, scales.1)
             }
             HybridOp::RangeCheck(..) => (x, vec![]),
+            HybridOp::Greater { scales } => {
+                let y = inputs[1].clone().map(|x| felt_to_i128(x));
+                tensor::ops::greater(&x, &y, scales)?
+            }
+            HybridOp::Less { scales } => {
+                let y = inputs[1].clone().map(|x| felt_to_i128(x));
+                tensor::ops::less(&x, &y, scales)?
+            }
         };
 
         // convert back to felt
@@ -76,6 +90,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::ReduceMin { .. } => "REDUCEMIN",
             HybridOp::Softmax { .. } => "SOFTMAX",
             HybridOp::RangeCheck(..) => "RANGECHECK",
+            HybridOp::Greater { .. } => "GREATER",
+            HybridOp::Less { .. } => "LESS",
         };
         name.into()
     }
@@ -121,11 +137,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 tol.scales.1,
                 tol.val,
             )?,
+            HybridOp::Greater { scales } => {
+                layouts::greater(config, region, values[..].try_into()?, scales)?
+            }
+            HybridOp::Less { scales } => {
+                layouts::less(config, region, values[..].try_into()?, scales)?
+            }
         }))
     }
 
     fn out_scale(&self, in_scales: Vec<u32>, global_scale: u32) -> u32 {
         match self {
+            HybridOp::Greater { .. } | HybridOp::Less { .. } => 0,
             HybridOp::Softmax { .. } => 2 * global_scale,
             _ => in_scales[0],
         }
@@ -139,6 +162,26 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     scale_to_multiplier(global_scale) as usize,
                 ),
             }),
+            HybridOp::Greater { .. } => {
+                // get max scale
+                let max_scale = input_scales.iter().max().unwrap();
+                Box::new(HybridOp::Greater {
+                    scales: (
+                        scale_to_multiplier(max_scale - input_scales[0]) as usize,
+                        scale_to_multiplier(max_scale - input_scales[1]) as usize,
+                    ),
+                })
+            }
+            HybridOp::Less { .. } => {
+                // get max scale
+                let max_scale = input_scales.iter().max().unwrap();
+                Box::new(HybridOp::Less {
+                    scales: (
+                        scale_to_multiplier(max_scale - input_scales[0]) as usize,
+                        scale_to_multiplier(max_scale - input_scales[1]) as usize,
+                    ),
+                })
+            }
             _ => Box::new(self.clone()),
         }
     }
@@ -170,6 +213,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 }
                 lookups
             }
+            HybridOp::Greater { .. } | HybridOp::Less { .. } => vec![LookupOp::GreaterThan {
+                a: circuit::utils::F32(0.),
+            }],
         }
     }
 
