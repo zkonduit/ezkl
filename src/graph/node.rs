@@ -228,6 +228,18 @@ impl Op<Fp> for SupportedOp {
         }
     }
 
+    fn is_constant(&self) -> bool {
+        match self {
+            SupportedOp::Linear(op) => Op::<Fp>::is_constant(op),
+            SupportedOp::Nonlinear(op) => Op::<Fp>::is_constant(op),
+            SupportedOp::Hybrid(op) => Op::<Fp>::is_constant(op),
+            SupportedOp::Input(op) => Op::<Fp>::is_constant(op),
+            SupportedOp::Constant(op) => Op::<Fp>::is_constant(op),
+            SupportedOp::Unknown(op) => Op::<Fp>::is_constant(op),
+            SupportedOp::Rescaled(op) => Op::<Fp>::is_constant(op),
+        }
+    }
+
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         match self {
             SupportedOp::Linear(op) => Op::<Fp>::requires_homogenous_input_scales(op),
