@@ -166,7 +166,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     // last element is the result
 
     let elapsed = global_start.elapsed();
-    trace!("dot layout took: {:?}", elapsed);
+    trace!("dot layout took: {:?}, offset {}", elapsed, region.offset());
     trace!("----------------------------");
     Ok(last_elem)
 }
@@ -640,6 +640,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
+
     lhs.expand(&broadcasted_shape)?;
     rhs.expand(&broadcasted_shape)?;
 
@@ -673,9 +674,10 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         tensor.reshape(&broadcasted_shape);
 
         trace!(
-            "dummy pairwise {} layout took {:?}",
+            "dummy pairwise {} layout took {:?}, offset: {}",
             op.as_str(),
-            global_start.elapsed()
+            global_start.elapsed(),
+            region.offset()
         );
 
         return Ok(tensor.into());
@@ -782,7 +784,12 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     actual_output.reshape(&broadcasted_shape)?;
 
     let end = global_start.elapsed();
-    trace!("pairwise {} layout took {:?}", op.as_str(), end);
+    trace!(
+        "pairwise {} layout took {:?}, offset: {}",
+        op.as_str(),
+        end,
+        region.offset()
+    );
 
     Ok(actual_output)
 }
@@ -860,16 +867,23 @@ pub fn and<F: PrimeField + TensorType + PartialOrd>(
     let res = pairwise(config, region, values, BaseOp::Mult, true)?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        let safe_and = tensor::ops::and(&values[0].get_felt_evals()?, &values[1].get_felt_evals()?)
-            .map_err(|e| {
-                error!("{}", e);
-                halo2_proofs::plonk::Error::Synthesis
-            })?;
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let safe_and =
+                tensor::ops::and(&values[0].get_felt_evals()?, &values[1].get_felt_evals()?)
+                    .map_err(|e| {
+                        error!("{}", e);
+                        halo2_proofs::plonk::Error::Synthesis
+                    })?;
 
-        assert_eq!(
-            res.get_felt_evals()?.map(|x| felt_to_i128(x)),
-            safe_and.map(|x| felt_to_i128(x))
-        );
+            assert_eq!(
+                res.get_felt_evals()?.map(|x| felt_to_i128(x)),
+                safe_and.map(|x| felt_to_i128(x))
+            );
+        }
     };
 
     Ok(res)
@@ -887,6 +901,7 @@ pub fn or<F: PrimeField + TensorType + PartialOrd>(
     let unit: ValTensor<F> =
         Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(1))?].into_iter())
             .into();
+    region.next();
 
     let iff_values = &[a, b, unit];
 
@@ -925,6 +940,7 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
     let nil: ValTensor<F> =
         Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(0))?].into_iter())
             .into();
+    region.next();
 
     let greater_than_zero = greater(config, region, &[diff.clone(), nil.clone()], &(1, 1))?;
     let less_than_zero = less(config, region, &[diff, nil], &(1, 1))?;
@@ -1012,12 +1028,31 @@ pub fn not<F: PrimeField + TensorType + PartialOrd>(
         Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(1))?].into_iter())
             .into();
 
-    let nil: ValTensor<F> =
-        Tensor::from(vec![region.assign_constant(&config.inputs[1], F::from(0))?].into_iter())
-            .into();
+    // to leverage sparsity we don't assign this guy
+    let nil: ValTensor<F> = Tensor::from(vec![ValType::Constant(F::from(0))].into_iter()).into();
     region.next();
 
-    iff(config, region, &[mask, unit, nil], true)
+    let res = iff(config, region, &[mask, unit, nil], true)?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let safe_not = tensor::ops::not(&values[0].get_felt_evals()?).map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?;
+
+            assert_eq!(
+                res.get_felt_evals()?.map(|x| felt_to_i128(x)),
+                safe_not.map(|x| felt_to_i128(x))
+            );
+        }
+    };
+
+    Ok(res)
 }
 
 /// Iff
@@ -1063,6 +1098,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
         is_bool,
     )?;
+
     let masked_b = pairwise(
         config,
         region,
@@ -1071,10 +1107,32 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
         is_bool,
     )?;
 
-    let output = pairwise(config, region, &[masked_a, masked_b], BaseOp::Add, false)?;
+    let res = pairwise(config, region, &[masked_a, masked_b], BaseOp::Add, is_bool)?;
 
-    // Now we can assign the matmul op
-    Ok(output)
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let mut is_assigned = !res.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let safe_iff = tensor::ops::iff(
+                &mask.get_felt_evals()?,
+                &b.get_felt_evals()?,
+                &a.get_felt_evals()?,
+            )
+            .map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?;
+
+            assert_eq!(
+                res.get_felt_evals()?.map(|x| felt_to_i128(x)),
+                safe_iff.map(|x| felt_to_i128(x))
+            );
+        }
+    };
+
+    Ok(res)
 }
 
 /// Negation operation accumulated layout
@@ -1831,9 +1889,10 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         x.reshape(dims);
         // total time taken
         trace!(
-            "dummy nonlinearity {} layout took {:?}",
+            "dummy nonlinearity {} layout took {:?}, offset: {}",
             <LookupOp as Op<F>>::as_string(nl),
-            timer.elapsed()
+            timer.elapsed(),
+            region.offset()
         );
 
         return Ok(x.into());

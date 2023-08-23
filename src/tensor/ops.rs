@@ -239,7 +239,7 @@ pub fn and<
 /// Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap();
-/// let result = equals(&a, &b).unwrap();
+/// let result = equals(&a, &b).unwrap().0;
 /// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 0, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```

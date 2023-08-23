@@ -965,6 +965,7 @@ pub(crate) fn split_valtensor(
     Ok(tensors)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn change_all_input_scales(inputs: &mut [super::NodeType], new_scale: u32) {
     for input in inputs {
         if input.is_input() {
