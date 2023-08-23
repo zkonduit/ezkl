@@ -62,13 +62,12 @@ impl<'de> Deserialize<'de> for FileSourceInner {
         if let Ok(t) = bool_try {
             return Ok(FileSourceInner::Bool(t));
         }
-
-        let first_try: Result<f64, _> = serde_json::from_str(this_json.get());
-        if let Ok(t) = first_try {
+        let float_try: Result<f64, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = float_try {
             return Ok(FileSourceInner::Float(t));
         }
-        let second_try: Result<Fp, _> = serde_json::from_str(this_json.get());
-        if let Ok(t) = second_try {
+        let field_try: Result<Fp, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = field_try {
             return Ok(FileSourceInner::Field(t));
         }
 
@@ -90,7 +89,6 @@ impl FileSourceInner {
     pub fn new_field(f: Fp) -> Self {
         FileSourceInner::Field(f)
     }
-
     /// Create a new FileSourceInner
     pub fn new_bool(f: bool) -> Self {
         FileSourceInner::Bool(f)
@@ -546,6 +544,7 @@ impl ToPyObject for FileSourceInner {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
             FileSourceInner::Field(data) => field_to_vecu64_montgomery(data).to_object(py),
+            FileSourceInner::Bool(data) => data.to_object(py),
             FileSourceInner::Float(data) => data.to_object(py),
         }
     }
