@@ -276,7 +276,8 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             _ => return Err(Box::new(TensorError::WrongMethod)),
         };
 
-        let res: Tensor<F> = felt_evals.into_iter().into();
+        let mut res: Tensor<F> = felt_evals.into_iter().into();
+        res.reshape(self.dims());
         Ok(res)
     }
 
