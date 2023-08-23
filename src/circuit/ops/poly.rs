@@ -70,6 +70,9 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         scale_factor: Vec<usize>,
     },
     Not,
+    And,
+    Or,
+    Xor,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {}
@@ -108,6 +111,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Slice { .. } => "SLICE".into(),
             PolyOp::Neg => "NEG".into(),
             PolyOp::Not => "NOT".into(),
+            PolyOp::And => "AND".into(),
+            PolyOp::Or => "OR".into(),
+            PolyOp::Xor => "XOR".into(),
         }
     }
 
@@ -115,6 +121,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let mut inputs = inputs.to_vec();
         let res = match &self {
+            PolyOp::And => tensor::ops::and(&inputs[0], &inputs[1]),
+            PolyOp::Or => tensor::ops::or(&inputs[0], &inputs[1]),
+            PolyOp::Xor => tensor::ops::xor(&inputs[0], &inputs[1]),
             PolyOp::Not => tensor::ops::not(&inputs[0]),
             PolyOp::Downsample {
                 axis,
@@ -229,6 +238,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::Xor => layouts::xor(config, region, values[..].try_into()?)?,
+            PolyOp::Or => layouts::or(config, region, values[..].try_into()?)?,
+            PolyOp::And => layouts::and(config, region, values[..].try_into()?)?,
             PolyOp::Not => layouts::not(config, region, values[..].try_into()?)?,
             PolyOp::MoveAxis {
                 source,
@@ -243,7 +255,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 layouts::resize(config, region, values[..].try_into()?, scale_factor)?
             }
             PolyOp::Neg => layouts::neg(config, region, values[..].try_into()?)?,
-            PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?)?,
+            PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?, false)?,
             PolyOp::Einsum { equation } => layouts::einsum(config, region, &mut values, equation)?,
             PolyOp::Gather { dim, index } => {
                 tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
@@ -295,10 +307,14 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 *stride,
                 *kernel_shape,
             )?,
-            PolyOp::Add => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?,
-            PolyOp::Sub => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub)?,
+            PolyOp::Add => {
+                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add, false)?
+            }
+            PolyOp::Sub => {
+                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub, false)?
+            }
             PolyOp::Mult => {
-                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Mult)?
+                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Mult, false)?
             }
             PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?)?,
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
@@ -329,7 +345,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
         match self {
-            PolyOp::Not => in_scales[0],
+            PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,
             PolyOp::Neg => in_scales[0],
             PolyOp::MoveAxis { .. } => in_scales[0],
             PolyOp::Downsample { .. } => in_scales[0],

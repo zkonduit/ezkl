@@ -28,8 +28,10 @@ type RPCUrl = String;
 ///
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum FileSourceInner {
-    /// Inner elements of inputs coming from a file
+    /// Inner elements of float inputs coming from a file
     Float(f64),
+    /// Inner elements of bool inputs coming from a file
+    Bool(bool),
     /// Inner elements of inputs coming from a witness
     Field(Fp),
 }
@@ -41,6 +43,7 @@ impl Serialize for FileSourceInner {
     {
         match self {
             FileSourceInner::Field(data) => data.serialize(serializer),
+            FileSourceInner::Bool(data) => data.serialize(serializer),
             FileSourceInner::Float(data) => data.serialize(serializer),
         }
     }
@@ -55,13 +58,16 @@ impl<'de> Deserialize<'de> for FileSourceInner {
     {
         let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
 
-        let first_try: Result<f64, _> = serde_json::from_str(this_json.get());
-
-        if let Ok(t) = first_try {
+        let bool_try: Result<bool, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = bool_try {
+            return Ok(FileSourceInner::Bool(t));
+        }
+        let float_try: Result<f64, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = float_try {
             return Ok(FileSourceInner::Float(t));
         }
-        let second_try: Result<Fp, _> = serde_json::from_str(this_json.get());
-        if let Ok(t) = second_try {
+        let field_try: Result<Fp, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = field_try {
             return Ok(FileSourceInner::Field(t));
         }
 
@@ -83,11 +89,22 @@ impl FileSourceInner {
     pub fn new_field(f: Fp) -> Self {
         FileSourceInner::Field(f)
     }
+    /// Create a new FileSourceInner
+    pub fn new_bool(f: bool) -> Self {
+        FileSourceInner::Bool(f)
+    }
 
     /// Convert to a field element
     pub fn to_field(&self, scale: u32) -> Fp {
         match self {
             FileSourceInner::Float(f) => i128_to_felt(quantize_float(f, 0.0, scale).unwrap()),
+            FileSourceInner::Bool(f) => {
+                if *f {
+                    Fp::one()
+                } else {
+                    Fp::zero()
+                }
+            }
             FileSourceInner::Field(f) => *f,
         }
     }
@@ -95,6 +112,13 @@ impl FileSourceInner {
     pub fn to_float(&self) -> f64 {
         match self {
             FileSourceInner::Float(f) => *f,
+            FileSourceInner::Bool(f) => {
+                if *f {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             FileSourceInner::Field(f) => crate::fieldutils::felt_to_i128(*f) as f64,
         }
     }
@@ -520,6 +544,7 @@ impl ToPyObject for FileSourceInner {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
             FileSourceInner::Field(data) => field_to_vecu64_montgomery(data).to_object(py),
+            FileSourceInner::Bool(data) => data.to_object(py),
             FileSourceInner::Float(data) => data.to_object(py),
         }
     }

@@ -442,9 +442,6 @@ impl Model {
         let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
         lookup_ops.extend(set.into_iter().sorted());
 
-        let batch_size = self.graph.input_shapes()[0][0];
-        assert!(self.graph.input_shapes().iter().all(|x| x[0] == batch_size));
-
         Ok(GraphSettings {
             run_args,
             model_instance_shapes: instance_shapes,

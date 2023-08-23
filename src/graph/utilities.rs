@@ -663,7 +663,23 @@ pub fn new_op_from_onnx(
                 stride,
             })
         }
-        "Not" => SupportedOp::Linear(PolyOp::Not),
+        "Not" => {
+            change_all_input_scales(inputs, 0);
+            SupportedOp::Linear(PolyOp::Not)
+        }
+        "And" => {
+            change_all_input_scales(inputs, 0);
+            SupportedOp::Linear(PolyOp::And)
+        }
+        "Or" => {
+            change_all_input_scales(inputs, 0);
+            SupportedOp::Linear(PolyOp::Or)
+        }
+        "Xor" => {
+            change_all_input_scales(inputs, 0);
+            SupportedOp::Linear(PolyOp::Xor)
+        }
+        "Equals" => SupportedOp::Hybrid(HybridOp::Equals),
         "DeconvUnary" => {
             let deconv_node: &DeconvUnary = match node.op().downcast_ref::<DeconvUnary>() {
                 Some(b) => b,
@@ -947,6 +963,15 @@ pub(crate) fn split_valtensor(
         start = end;
     }
     Ok(tensors)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn change_all_input_scales(inputs: &mut [super::NodeType], new_scale: u32) {
+    for input in inputs {
+        if input.is_input() {
+            input.bump_scale(new_scale);
+        }
+    }
 }
 
 ///

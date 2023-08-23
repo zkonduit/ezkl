@@ -54,6 +54,7 @@ pub fn iff<
     );
 
     let masked_a = (mask.clone() * a.clone())?;
+
     let masked_b = ((Tensor::from(vec![T::one().ok_or(TensorError::DimError)?].into_iter())
         - mask.clone())?
         * b.clone())?;
@@ -92,6 +93,190 @@ pub fn not<
         &Tensor::from(vec![T::one().unwrap()].into_iter()),
         &Tensor::from(vec![T::zero().unwrap()].into_iter()),
     )
+}
+
+/// Elementwise applies or to two tensors of integers.
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::or;
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 1, 1, 1, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///  Some(&[1, 0, 1, 0, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = or(&a, &b).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn or<
+    T: TensorType
+        + Add<Output = T>
+        + Mul<Output = T>
+        + Sub<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialEq,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    // assert is boolean
+    assert!(
+        b.iter()
+            .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
+        "or() only works on boolean mask"
+    );
+
+    iff(a, b, &Tensor::from(vec![T::one().unwrap()].into_iter()))
+}
+
+/// Elementwise applies xor to two tensors
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::xor;
+/// let a = Tensor::<i128>::new(
+///  Some(&[1, 1, 1, 1, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+/// Some(&[1, 0, 1, 0, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = xor(&a, &b).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 1, 0, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+///
+pub fn xor<
+    T: TensorType
+        + Add<Output = T>
+        + Mul<Output = T>
+        + Sub<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialEq,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    let a_not_b = (a.clone() * not(b)?)?;
+    let b_not_a = (b.clone() * not(a)?)?;
+    a_not_b + b_not_a
+}
+
+/// Elementwise applies and to two tensors
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::and;
+/// let a = Tensor::<i128>::new(
+///  Some(&[1, 1, 1, 1, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+/// Some(&[1, 0, 1, 0, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = and(&a, &b).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 0, 1, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn and<
+    T: TensorType
+        + Add<Output = T>
+        + Mul<Output = T>
+        + Sub<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialEq,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    // assert is boolean
+    assert!(
+        b.iter()
+            .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
+        "and() only works on boolean values"
+    );
+
+    assert!(
+        a.iter()
+            .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
+        "and() only works on boolean values"
+    );
+
+    a.clone() * b.clone()
+}
+
+/// Elementwise applies equals to two tensors of integers.
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::equals;
+/// let a = Tensor::<i128>::new(
+/// Some(&[1, 1, 1, 1, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+/// Some(&[1, 0, 1, 0, 1, 0]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = equals(&a, &b).unwrap().0;
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 0, 1, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+
+pub fn equals<
+    T: TensorType
+        + std::marker::Send
+        + std::marker::Sync
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + Add<Output = T>
+        + std::cmp::PartialEq
+        + std::cmp::PartialOrd
+        + std::convert::From<u64>,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+    let a = a.clone();
+    let b = b.clone();
+
+    if a.dims() != b.dims() {
+        return Err(TensorError::DimError);
+    }
+
+    let diff = (a - b)?;
+
+    let zero_tensor = Tensor::<T>::from(vec![T::zero().ok_or(TensorError::DimError)?].into_iter());
+
+    let (greater_than_zero, mut inter) = greater(&diff, &zero_tensor, &(1, 1))?;
+    let (less_than_zero, inter_2) = less(&diff, &zero_tensor, &(1, 1))?;
+    inter.extend(inter_2);
+
+    let result = or(&greater_than_zero, &less_than_zero)?;
+    let result = not(&result)?;
+
+    Ok((result, inter))
 }
 
 /// Greater than operation.
