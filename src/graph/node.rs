@@ -150,6 +150,16 @@ pub enum SupportedOp {
     Rescaled(Rescaled),
 }
 
+impl SupportedOp {
+    ///
+    pub fn get_input(&self) -> Option<Input> {
+        match self {
+            SupportedOp::Input(op) => Some(op.clone()),
+            _ => None,
+        }
+    }
+}
+
 impl From<Box<dyn Op<Fp>>> for SupportedOp {
     fn from(value: Box<dyn Op<Fp>>) -> Self {
         if let Some(op) = value.as_any().downcast_ref::<PolyOp<Fp>>() {

@@ -851,11 +851,14 @@ impl Model {
                         run_args.param_visibility,
                         i,
                     )?;
-                    if n.opkind.is_input() && override_input_scales.is_some() {
-                        n.opkind = SupportedOp::Input(Input {
-                            scale: override_input_scales.as_ref().unwrap()[input_idx],
-                        });
-                        input_idx += 1
+                    if override_input_scales.is_some() {
+                        if let Some(inp) = n.opkind.get_input() {
+                            n.opkind = SupportedOp::Input(Input {
+                                scale: override_input_scales.as_ref().unwrap()[input_idx],
+                                datum_type: inp.datum_type,
+                            });
+                            input_idx += 1
+                        }
                     }
                     nodes.insert(i, NodeType::Node(n));
                 }

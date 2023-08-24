@@ -255,7 +255,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 layouts::resize(config, region, values[..].try_into()?, scale_factor)?
             }
             PolyOp::Neg => layouts::neg(config, region, values[..].try_into()?)?,
-            PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?, false)?,
+            PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?)?,
             PolyOp::Einsum { equation } => layouts::einsum(config, region, &mut values, equation)?,
             PolyOp::Gather { dim, index } => {
                 tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
@@ -307,14 +307,10 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 *stride,
                 *kernel_shape,
             )?,
-            PolyOp::Add => {
-                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add, false)?
-            }
-            PolyOp::Sub => {
-                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub, false)?
-            }
+            PolyOp::Add => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?,
+            PolyOp::Sub => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub)?,
             PolyOp::Mult => {
-                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Mult, false)?
+                layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Mult)?
             }
             PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?)?,
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,

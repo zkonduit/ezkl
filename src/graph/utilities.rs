@@ -290,6 +290,8 @@ pub fn new_op_from_onnx(
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut [super::NodeType],
 ) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
+    use crate::circuit::InputType;
+
     debug!("Loading node: {:?}", node);
     let mut deleted_indices = vec![];
     let node = match node.op().name().as_ref() {
@@ -523,12 +525,11 @@ pub fn new_op_from_onnx(
         "Atanh" => SupportedOp::Nonlinear(LookupOp::ATanh { scales: (1, 1) }),
         "Erf" => SupportedOp::Nonlinear(LookupOp::Erf { scales: (1, 1) }),
         "Source" => {
-            let scale = match node.outputs[0].fact.datum_type {
-                DatumType::Bool => 0,
-                _ => scale,
+            let (scale, datum_type) = match node.outputs[0].fact.datum_type {
+                DatumType::Bool => (0, InputType::Bool),
+                _ => (scale, InputType::Num),
             };
-            println!("scale: {}", scale);
-            SupportedOp::Input(crate::circuit::ops::Input { scale })
+            SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
         }
         "Cast" => {
             let op = load_cast_op(node.op(), idx, node.op().name().to_string())?;
