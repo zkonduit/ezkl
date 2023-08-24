@@ -29,9 +29,9 @@ In the backend we use [Halo2](https://github.com/privacy-scaling-explorations/ha
 
 The generated proofs can then be used on-chain to verify computation, only the Ethereum Virtual Machine (EVM) is supported at the moment.
 
-
 - If you have any questions, we'd love for you to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions). Alternatively, you can join the ✨[EZKL Community Telegram Group](https://t.me/+QRzaRvTPIthlYWMx)💫.
 
+- To see what you can build with ezkl, check out [cryptoidol.tech](https://cryptoidol.tech/) where ezkl is used to create an AI that judges your singing ... forever. 
 
 ----------------------
 
@@ -43,8 +43,8 @@ Install the python bindings by calling.
 ```bash
 pip install ezkl
 ```
+Google Colab Example to learn how you can train a neural net and deploy an inference verifier onchain for use in other smart contracts. [![Notebook](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zkonduit/ezkl/blob/main/examples/notebooks/ezkl_demo.ipynb) 
 
-Google Colab Example to learn how you can train a neural net and deploy an inference verifier onchain for use in other smart contracts. [(https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zkonduit/ezkl/blob/main/examples/notebooks/ezkl_demo.ipynb)
 
 More notebook tutorials can be found within `examples/notebooks`.
 
@@ -64,32 +64,11 @@ Build the auto-generated rust documentation and open the docs in your browser lo
 ### building the project 🔨
 
 #### Rust CLI
-Note that the library requires a nightly version of the rust toolchain. You can change the default toolchain by running:
+
+You can install the library from source
 
 ```bash
-# we set it to this version because of https://github.com/rust-lang/rust/issues/110829
-rustup override set nightly-2023-04-17
-```
-
-After which you may build the library
-
-```bash
-cargo build --release
-```
-
-A folder `./target/release` will be generated. Add this folder to your PATH environment variable to call `ezkl` from the CLI.
-
-```bash
-# For UNIX like systems
-# in .bashrc, .bash_profile, or some other path file
-export PATH="<replace with where you cloned the repo>/ezkl/target/release:$PATH"
-```
-
-Restart your shell or reload your shell settings
-
-```bash
-# example, replace .bash_profile with the file you use to configure your shell
-source ~/.bash_profile
+cargo install --path .
 ```
 
 You will need a functioning installation of `solc` in order to run `ezkl` properly.
@@ -109,7 +88,6 @@ maturin develop --release --features python-bindings
 pip install torch pandas numpy seaborn jupyter onnx kaggle py-solc-x web3 librosa tensorflow keras tf2onnx
 ```
 
-
 ### repos
 
 The EZKL project has several libraries and repos. 
@@ -117,7 +95,7 @@ The EZKL project has several libraries and repos.
 | Repo | Description |
 | --- | --- |
 | [@zkonduit/ezkl](https://github.com/zkonduit/ezkl) | the main ezkl repo in rust with wasm and python bindings |
-| [@zkonduit/pyezkl](https://github.com/zkonduit/pyezkl) | additional functionality written in python to support data science and zero knowledge applications |
+| [@zkonduit/ezkljs](https://github.com/zkonduit/ezkljs) | typescript and javascript tooling to help integrate ezkl into web apps | 
 
 ----------------------
 
@@ -142,4 +120,7 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 ### no security guarantees
 
 Ezkl is unaudited, beta software undergoing rapid development. There may be bugs. No guarantees of security are made and it should not be relied on in production.
+
+> NOTE: Because operations are quantized when they are converted from an onnx file to a zk-circuit, outputs in python and ezkl may differ slightly. 
+
 
