@@ -646,6 +646,35 @@ impl Model {
             GraphError::ModelLoad
         })?;
 
+        for (i, id) in model.clone().inputs.iter().enumerate() {
+            let input = model.node(id.node);
+
+            let mut dims = vec![];
+            let extracted_dims: Vec<usize> = input.outputs[0]
+                .fact
+                .shape
+                .dims()
+                .filter_map(tract_onnx::tract_hir::internal::Factoid::concretize)
+                .map(|x| match x.to_i64() {
+                    Ok(x) => x as usize,
+                    Err(_e) => {
+                        if x.to_string() == "batch_size" {
+                            run_args.batch_size
+                        } else {
+                            panic!("Unknown dimension {}: {:?}", x.to_string(), x)
+                        }
+                    }
+                })
+                .collect();
+
+            dims.extend(extracted_dims);
+
+            let fact = model.node(id.node).outputs[0].fact.clone();
+            let fact = fact.with_shape(dims);
+
+            model.set_input_fact(i, fact.into())?;
+        }
+
         for (i, _) in model.clone().outputs.iter().enumerate() {
             model.set_output_fact(i, InferenceFact::default()).unwrap();
         }
