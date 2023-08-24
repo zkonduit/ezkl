@@ -853,11 +853,13 @@ impl Model {
                     )?;
                     if override_input_scales.is_some() {
                         if let Some(inp) = n.opkind.get_input() {
+                            let scale = override_input_scales.as_ref().unwrap()[input_idx];
                             n.opkind = SupportedOp::Input(Input {
-                                scale: override_input_scales.as_ref().unwrap()[input_idx],
+                                scale,
                                 datum_type: inp.datum_type,
                             });
-                            input_idx += 1
+                            input_idx += 1;
+                            n.out_scale = scale;
                         }
                     }
                     nodes.insert(i, NodeType::Node(n));
