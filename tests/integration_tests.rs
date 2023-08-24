@@ -141,7 +141,7 @@ mod native_tests {
         "mnist_gan",
     ];
 
-    const TESTS: [&str; 45] = [
+    const TESTS: [&str; 46] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -189,6 +189,7 @@ mod native_tests {
         "quantize_dequantize",
         "1l_where",
         "boolean",
+        "boolean_identity",
     ];
 
     const TESTS_AGGR: [&str; 20] = [
@@ -333,7 +334,7 @@ mod native_tests {
 
 
 
-            seq!(N in 0..=44 {
+            seq!(N in 0..=45 {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {

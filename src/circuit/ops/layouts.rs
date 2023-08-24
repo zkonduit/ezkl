@@ -1784,16 +1784,15 @@ pub fn boolean_identity<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let output = region.assign(&config.output, &values[0])?;
-    region.increment(output.len());
-
+    let output = region.assign(&config.inputs[1], &values[0])?;
     // Enable the selectors
     (0..output.len()).for_each(|j| {
-        let (x, y) = config.output.cartesian_coord(region.offset() + j);
+        let (x, y) = config.inputs[1].cartesian_coord(region.offset() + j);
         let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
 
         region.enable(selector, y).unwrap();
     });
+    region.increment(output.len());
 
     Ok(output)
 }
