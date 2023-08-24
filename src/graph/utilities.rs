@@ -35,6 +35,7 @@ use tract_onnx::tract_hir::{
     ops::cnn::{ConvUnary, MaxPool, PoolSpec, SumPool},
     ops::konst::Const,
     ops::nn::DataFormat,
+    tract_core::ops::cast::Cast,
     tract_core::ops::cnn::{conv::KernelFormat, PaddingSpec},
 };
 
@@ -145,6 +146,24 @@ fn load_gather_op(
 ) -> Result<Gather, Box<dyn std::error::Error>> {
     // Extract the slope layer hyperparams
     let op: &Gather = match op.downcast_ref::<Gather>() {
+        Some(b) => b,
+        None => {
+            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+        }
+    };
+
+    Ok(op.clone())
+}
+
+///
+#[cfg(not(target_arch = "wasm32"))]
+fn load_cast_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<Cast, Box<dyn std::error::Error>> {
+    // Extract the slope layer hyperparams
+    let op: &Cast = match op.downcast_ref::<Cast>() {
         Some(b) => b,
         None => {
             return Err(Box::new(GraphError::OpMismatch(idx, name)));
@@ -503,7 +522,31 @@ pub fn new_op_from_onnx(
         "Acosh" => SupportedOp::Nonlinear(LookupOp::ACosh { scales: (1, 1) }),
         "Atanh" => SupportedOp::Nonlinear(LookupOp::ATanh { scales: (1, 1) }),
         "Erf" => SupportedOp::Nonlinear(LookupOp::Erf { scales: (1, 1) }),
-        "Source" => SupportedOp::Input(crate::circuit::ops::Input { scale }),
+        "Source" => {
+            let scale = match node.outputs[0].fact.datum_type {
+                DatumType::Bool => 0,
+                _ => scale,
+            };
+            println!("scale: {}", scale);
+            SupportedOp::Input(crate::circuit::ops::Input { scale })
+        }
+        "Cast" => {
+            let op = load_cast_op(node.op(), idx, node.op().name().to_string())?;
+            let dt = op.to;
+            let input_scales = inputs
+                .iter()
+                .map(|x| x.out_scales())
+                .flatten()
+                .collect::<Vec<_>>();
+            assert_eq!(input_scales.len(), 1);
+            match dt {
+                DatumType::Bool => SupportedOp::Nonlinear(LookupOp::Div {
+                    denom: crate::circuit::utils::F32(scale_to_multiplier(input_scales[0]) as f32),
+                }),
+                DatumType::TDim | DatumType::String | DatumType::Blob => unimplemented!(),
+                _ => SupportedOp::Linear(PolyOp::Identity),
+            }
+        }
         "Add" => SupportedOp::Linear(PolyOp::Add),
         "Sub" => SupportedOp::Linear(PolyOp::Sub),
         "Mul" => SupportedOp::Linear(PolyOp::Mult),
@@ -663,22 +706,10 @@ pub fn new_op_from_onnx(
                 stride,
             })
         }
-        "Not" => {
-            change_all_input_scales(inputs, 0);
-            SupportedOp::Linear(PolyOp::Not)
-        }
-        "And" => {
-            change_all_input_scales(inputs, 0);
-            SupportedOp::Linear(PolyOp::And)
-        }
-        "Or" => {
-            change_all_input_scales(inputs, 0);
-            SupportedOp::Linear(PolyOp::Or)
-        }
-        "Xor" => {
-            change_all_input_scales(inputs, 0);
-            SupportedOp::Linear(PolyOp::Xor)
-        }
+        "Not" => SupportedOp::Linear(PolyOp::Not),
+        "And" => SupportedOp::Linear(PolyOp::And),
+        "Or" => SupportedOp::Linear(PolyOp::Or),
+        "Xor" => SupportedOp::Linear(PolyOp::Xor),
         "Equals" => SupportedOp::Hybrid(HybridOp::Equals),
         "DeconvUnary" => {
             let deconv_node: &DeconvUnary = match node.op().downcast_ref::<DeconvUnary>() {
@@ -963,15 +994,6 @@ pub(crate) fn split_valtensor(
         start = end;
     }
     Ok(tensors)
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn change_all_input_scales(inputs: &mut [super::NodeType], new_scale: u32) {
-    for input in inputs {
-        if input.is_input() {
-            input.bump_scale(new_scale);
-        }
-    }
 }
 
 ///

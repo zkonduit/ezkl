@@ -451,11 +451,9 @@ impl Node {
                 inputs[idx].out_scales()[*outlet]
             })
             .collect();
+
         opkind = opkind.rescale(in_scales.clone(), scale).into();
-        let out_scale = match in_scales.len() {
-            0 => scale,
-            _ => opkind.out_scale(in_scales, scale),
-        };
+        let out_scale = opkind.out_scale(in_scales, scale);
 
         // get the output shape
         let out_dims = {
