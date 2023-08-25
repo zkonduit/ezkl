@@ -21,7 +21,8 @@ pub fn load_srs<Scheme: CommitmentScheme>(
     path: PathBuf,
 ) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
     info!("loading srs from {:?}", path);
-    let f = File::open(path)?;
+    let f = File::open(path.clone())
+        .map_err(|_| format!("failed to load srs at {}", path.display()))?;
     let mut reader = BufReader::new(f);
     Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
 }
