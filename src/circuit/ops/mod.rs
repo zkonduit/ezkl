@@ -87,9 +87,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {
 
 ///
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum InputType {
+    ///
+    Bool,
+    ///
+    Num,
+}
+
+///
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Input {
     ///
     pub scale: u32,
+    ///
+    pub datum_type: InputType,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
@@ -120,11 +131,21 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         let value = values[0].clone();
         if !value.all_prev_assigned() {
-            Ok(Some(super::layouts::identity(
-                config,
-                region,
-                values[..].try_into()?,
-            )?))
+            match self.datum_type {
+                InputType::Num => Ok(Some(super::layouts::identity(
+                    config,
+                    region,
+                    values[..].try_into()?,
+                )?)),
+                InputType::Bool => {
+                    log::debug!("constraining input to be boolean");
+                    Ok(Some(super::layouts::boolean_identity(
+                        config,
+                        region,
+                        values[..].try_into()?,
+                    )?))
+                }
+            }
         } else {
             Ok(Some(value))
         }

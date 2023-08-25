@@ -10,84 +10,77 @@ defaults:
   run:
     working-directory: .
 jobs:
-  wasm-publish:
-    name: publish-wasm-bindings
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-08-24
-          override: true
-          components: rustfmt, clippy
-      - uses: jetli/wasm-pack-action@v0.4.0
-      - name: Add wasm32-unknown-unknown target
-        run: rustup target add wasm32-unknown-unknown
+    wasm-publish:
+        name: publish-wasm-bindings
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v3
+          - uses: actions-rs/toolchain@v1
+            with:
+              toolchain: nightly-2023-08-24
+              override: true
+              components: rustfmt, clippy
+          - uses: jetli/wasm-pack-action@v0.4.0
+          - name: Add wasm32-unknown-unknown target
+            run: rustup target add wasm32-unknown-unknown
+      
+          - name: Install wasm-server-runner
+            run: cargo install wasm-server-runner
+        
+          - name: Add rust-src
+            run: rustup component add rust-src --toolchain nightly-2023-04-17-x86_64-unknown-linux-gnu
+      
+          - name: Build wasm files for both web and nodejs compilation targets
+            run: |
+                wasm-pack build --target nodejs --out-dir ./pkg/nodejs . -- -Z build-std="panic_abort,std"
+                wasm-pack build --target web --out-dir ./pkg/web . -- -Z build-std="panic_abort,std" --features web
+          - name: Create package.json in pkg folder
+            shell: bash
+            env:
+                RELEASE_TAG: ${{ github.ref_name }}
+            run: |
+              echo '{
+                "name": "@ezkljs/engine",
+                "version": "${{ github.ref_name }}",
+                "files": [
+                  "nodejs/ezkl_bg.wasm",
+                  "nodejs/ezkl.js",
+                  "nodejs/ezkl.d.ts",
+                  "nodejs/package.json",
+                  "web/ezkl_bg.wasm",
+                  "web/ezkl.js",
+                  "web/ezkl.d.ts",
+                  "web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js",
+                  "web/package.json",
+                  "ezkl.d.ts"
+                ],
+                "main": "nodejs/ezkl.js",
+                "module": "web/ezkl.js",
+                "types": "ezkl.d.ts",
+                "sideEffects": [
+                  "web/snippets/*"
+                ]
+              }' > pkg/package.json
+              
+          - name: Create ezkl.d.ts in pkg folder
+            run: |
+              echo "export const nodejs: typeof import('./nodejs/ezkl');" >> pkg/ezkl.d.ts
+              echo "export const web: typeof import('./web/ezkl');" >> pkg/ezkl.d.ts
+    
+          - name: Replace memory definition in nodejs
+            run: |
+              sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
 
-      - name: Install wasm-server-runner
-        run: cargo install wasm-server-runner
-
-      - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
-
-      - name: Build wasm files for both web and nodejs compilation targets
-        run: |
-          wasm-pack build --target nodejs --out-dir ./pkg/nodejs . -- -Z build-std="panic_abort,std"
-          wasm-pack build --target web --out-dir ./pkg/web . -- -Z build-std="panic_abort,std" --features web
-      - name: Create package.json in pkg folder
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          echo '{
-            "name": "@ezkljs/engine",
-            "version": "${{ github.ref_name }}",
-            "files": [
-              "nodejs/ezkl_bg.wasm",
-              "nodejs/ezkl.js",
-              "nodejs/ezkl.d.ts",
-              "nodejs/package.json",
-              "web/ezkl_bg.wasm",
-              "web/ezkl.js",
-              "web/ezkl.d.ts",
-              "web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js",
-              "web/package.json",
-              "ezkl.js",
-              "ezkl.d.ts"
-            ],
-            "main": "ezkl.js",
-            "types": "ezkl.d.ts",
-            "sideEffects": [
-              "web/snippets/*"
-            ]
-          }' > pkg/package.json
-
-      - name: Create ezkl.js in pkg folder
-        run: |
-          echo "const nodejsFunctions = require('./nodejs/ezkl.js');" >> pkg/ezkl.js
-          echo "const webFunctions = require('./web/ezkl.js');" >> pkg/ezkl.js
-          echo "exports.nodejs = nodejsFunctions;" >> pkg/ezkl.js
-          echo "exports.web = webFunctions;" >> pkg/ezkl.js
-
-      - name: Create ezkl.d.ts in pkg folder
-        run: |
-          echo "export const nodejs: typeof import('./nodejs/ezkl');" >> pkg/ezkl.d.ts
-          echo "export const web: typeof import('./web/ezkl');" >> pkg/ezkl.d.ts
-
-      - name: Replace memory definition in nodejs
-        run: |
-          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: "18.12.1"
-          registry-url: "https://registry.npmjs.org"
-      - name: Publish to npm
-        run: |
-          cd pkg
-          npm install
-          npm ci
-          npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          - name: Set up Node.js
+            uses: actions/setup-node@v3
+            with:
+              node-version: '18.12.1'
+              registry-url: 'https://registry.npmjs.org'
+          - name: Publish to npm
+            run: |
+              cd pkg
+              npm install
+              npm ci
+              npm publish
+            env:
+              NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

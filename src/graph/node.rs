@@ -150,6 +150,16 @@ pub enum SupportedOp {
     Rescaled(Rescaled),
 }
 
+impl SupportedOp {
+    ///
+    pub fn get_input(&self) -> Option<Input> {
+        match self {
+            SupportedOp::Input(op) => Some(op.clone()),
+            _ => None,
+        }
+    }
+}
+
 impl From<Box<dyn Op<Fp>>> for SupportedOp {
     fn from(value: Box<dyn Op<Fp>>) -> Self {
         if let Some(op) = value.as_any().downcast_ref::<PolyOp<Fp>>() {
@@ -451,11 +461,9 @@ impl Node {
                 inputs[idx].out_scales()[*outlet]
             })
             .collect();
+
         opkind = opkind.rescale(in_scales.clone(), scale).into();
-        let out_scale = match in_scales.len() {
-            0 => scale,
-            _ => opkind.out_scale(in_scales, scale),
-        };
+        let out_scale = opkind.out_scale(in_scales, scale);
 
         // get the output shape
         let out_dims = {
