@@ -22,8 +22,6 @@
     missing_debug_implementations,
     unsafe_code
 )]
-#![feature(lint_reasons)]
-#![feature(int_roundings)]
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
@@ -39,7 +37,8 @@ pub mod circuit;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod commands;
 #[cfg(not(target_arch = "wasm32"))]
-#[allow(missing_docs, reason = "abigen doesn't generate docs for this module")]
+// abigen doesn't generate docs for this module
+#[allow(missing_docs)]
 /// Utility functions for contracts
 pub mod eth;
 /// Command execution

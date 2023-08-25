@@ -1082,7 +1082,10 @@ pub fn downsample<T: TensorType>(
     modulo: usize,
 ) -> Result<Tensor<T>, TensorError> {
     let mut output_shape = input.dims().to_vec();
-    output_shape[dim] = (input.dims()[dim] - modulo).div_ceil(stride);
+    // now downsample along axis dim offset by modulo, rounding up (+1 if remaidner is non-zero)
+    let remainder = (input.dims()[dim] - modulo) % stride;
+    let div = (input.dims()[dim] - modulo) / stride;
+    output_shape[dim] = div + (remainder > 0) as usize;
     let mut output = Tensor::<T>::new(None, &output_shape)?;
 
     assert!(modulo <= input.dims()[dim]);
