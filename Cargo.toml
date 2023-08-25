@@ -13,8 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/privacy-scaling-explorations/halo2", rev= "0f000478f42f065353b93d54a8d8c7ff256bcd6b", default_features = false }
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", rev= "0f000478f42f065353b93d54a8d8c7ff256bcd6b", default_features = false, features = ["thread-safe-region"]}
+halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "ac/fix-gadget-diff", default_features = false }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/fix-gadget-diff", default_features = false, features = ["thread-safe-region"]}
 halo2curves = { version = "0.1.0" }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }

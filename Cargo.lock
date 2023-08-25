@@ -1119,7 +1119,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#923b1a9b01db071dd6af60573165026e2b183a14"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#1c49a066b0d0c38e302f0ff3b1f51c05ffe1486d"
 dependencies = [
  "integer",
  "num-bigint",
@@ -2043,7 +2043,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2?rev=0f000478f42f065353b93d54a8d8c7ff256bcd6b#0f000478f42f065353b93d54a8d8c7ff256bcd6b"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/fix-gadget-diff#44c2ec6a03c4de060281b63a34c5ed4924f9097f"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2060,7 +2060,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2?rev=0f000478f42f065353b93d54a8d8c7ff256bcd6b#0f000478f42f065353b93d54a8d8c7ff256bcd6b"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/fix-gadget-diff#44c2ec6a03c4de060281b63a34c5ed4924f9097f"
 dependencies = [
  "blake2b_simd",
  "ff",
@@ -2118,7 +2118,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#923b1a9b01db071dd6af60573165026e2b183a14"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#1c49a066b0d0c38e302f0ff3b1f51c05ffe1486d"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2458,7 +2458,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#923b1a9b01db071dd6af60573165026e2b183a14"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#1c49a066b0d0c38e302f0ff3b1f51c05ffe1486d"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2701,7 +2701,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#923b1a9b01db071dd6af60573165026e2b183a14"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#1c49a066b0d0c38e302f0ff3b1f51c05ffe1486d"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -4481,7 +4481,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#97facaa90a8f6bdda6072d184f9e4158d47ed6dd"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#52394d8d326648dfa4d3bdc8cdf46a6c578870bb"
 dependencies = [
  "ecc",
  "halo2_proofs",
