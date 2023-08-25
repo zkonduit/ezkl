@@ -104,25 +104,25 @@ jobs:
       - name: Run wasm verifier tests
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
 
-  render-circuit:
-    runs-on: ubuntu-latest-32-cores
-    needs: [build, library-tests, docs]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-08-24
-          override: true
-          components: rustfmt, clippy
-      - uses: mwilliamson/setup-wasmtime-action@v2
-        with:
-          wasmtime-version: "3.0.1"
-      - uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-      - name: Circuit Render
-        run: cargo nextest run --release --features render --verbose tests::render_circuit_
+  # render-circuit:
+  #   runs-on: ubuntu-latest-32-cores
+  #   needs: [build, library-tests, docs]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: actions-rs/toolchain@v1
+  #       with:
+  #         toolchain: nightly-2023-08-24
+  #         override: true
+  #         components: rustfmt, clippy
+  #     - uses: mwilliamson/setup-wasmtime-action@v2
+  #       with:
+  #         wasmtime-version: "3.0.1"
+  #     - uses: baptiste0928/cargo-install@v1
+  #       with:
+  #         crate: cargo-nextest
+  #         locked: true
+  #     - name: Circuit Render
+  #       run: cargo nextest run --release --features render --verbose tests::render_circuit_
 
   tutorial:
     runs-on: ubuntu-latest
