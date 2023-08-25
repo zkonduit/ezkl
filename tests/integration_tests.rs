@@ -827,12 +827,12 @@ mod native_tests {
         let serialization_path = format!("{}/{}/network.ezkl", test_dir, example_name);
         let run_args = ezkl::RunArgs {
             param_visibility: Visibility::Public,
-            batch_size: 1,
+            variables: vec![("batch_size".to_string(), 1)],
             ..Default::default()
         };
 
         let model =
-            ezkl::graph::Model::new(&mut std::fs::File::open(model_path).unwrap(), run_args)
+            ezkl::graph::Model::new(&mut std::fs::File::open(model_path).unwrap(), &run_args)
                 .unwrap();
 
         model.save(serialization_path.clone().into()).unwrap();
@@ -1045,7 +1045,7 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
-                &format!("--batch-size={}", batch_size),
+                &format!("--variables=batch_size={}", batch_size),
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
@@ -1850,7 +1850,6 @@ mod native_tests {
                 "-O",
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 &format!("--scale={}", scale),
-                "--batch-size=1",
             ])
             .status()
             .expect("failed to execute process");

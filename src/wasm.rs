@@ -200,7 +200,7 @@ pub fn prove(
     // read in circuit
     let model: crate::graph::Model = bincode::deserialize(&circuit_ser[..]).unwrap();
 
-    let mut circuit = GraphCircuit::new(model, circuit_settings.run_args).unwrap();
+    let mut circuit = GraphCircuit::new(model, &circuit_settings.run_args).unwrap();
 
     // prep public inputs
     circuit.load_graph_witness(&data).unwrap();

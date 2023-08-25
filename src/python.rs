@@ -39,7 +39,7 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub param_visibility: Visibility,
     #[pyo3(get, set)]
-    pub batch_size: usize,
+    pub variables: Vec<(String, usize)>,
     #[pyo3(get, set)]
     pub allocated_constraints: Option<usize>,
 }
@@ -57,7 +57,7 @@ impl PyRunArgs {
             input_visibility: "public".into(),
             output_visibility: "public".into(),
             param_visibility: "private".into(),
-            batch_size: 1,
+            variables: vec![("batch_size".to_string(), 1)],
             allocated_constraints: None,
         }
     }
@@ -74,7 +74,7 @@ impl From<PyRunArgs> for RunArgs {
             input_visibility: py_run_args.input_visibility,
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
-            batch_size: py_run_args.batch_size,
+            variables: py_run_args.variables,
         }
     }
 }
@@ -179,7 +179,7 @@ fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult
 fn table(model: String, py_run_args: Option<PyRunArgs>) -> PyResult<String> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
-    let result = Model::new(&mut reader, run_args);
+    let result = Model::new(&mut reader, &run_args);
 
     match result {
         Ok(m) => Ok(m.table_nodes()),
@@ -251,6 +251,7 @@ fn gen_settings(
     model,
     settings,
     target,
+    num_batches=None,
 ))]
 fn calibrate_settings(
     py: Python,
@@ -258,10 +259,12 @@ fn calibrate_settings(
     model: PathBuf,
     settings: PathBuf,
     target: Option<CalibrationTarget>,
+    num_batches: Option<usize>,
 ) -> PyResult<&pyo3::PyAny> {
     let target = target.unwrap_or(CalibrationTarget::Resources);
+    let num_batches = num_batches.unwrap_or(1);
     pyo3_asyncio::tokio::future_into_py(py, async move {
-        crate::execute::calibrate(model, data, settings, target)
+        crate::execute::calibrate(model, data, settings, target, num_batches)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to calibrate settings: {}", e);

@@ -123,7 +123,7 @@ impl std::fmt::Display for VarVisibility {
 impl VarVisibility {
     /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
     /// Place in [VarVisibility] struct.
-    pub fn from_args(args: RunArgs) -> Result<Self, Box<dyn Error>> {
+    pub fn from_args(args: &RunArgs) -> Result<Self, Box<dyn Error>> {
         let input_vis = args.input_visibility;
         let params_vis = args.param_visibility;
         let output_vis = args.output_visibility;

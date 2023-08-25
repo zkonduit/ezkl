@@ -422,7 +422,7 @@ impl GraphCircuit {
     ///
     pub fn new(
         model: Model,
-        run_args: RunArgs,
+        run_args: &RunArgs,
     ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
         // // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
         let mut inputs: Vec<Vec<Fp>> = vec![];
@@ -434,7 +434,7 @@ impl GraphCircuit {
         // dummy module settings, must load from GraphData after
         let module_settings = ModuleSettings::default();
 
-        let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
+        let mut settings = model.gen_params(&run_args, CheckMode::UNSAFE)?;
 
         let mut num_params = 0;
         if !model.const_shapes().is_empty() {
@@ -447,7 +447,7 @@ impl GraphCircuit {
             model.graph.input_shapes(),
             vec![vec![num_params]],
             model.graph.output_shapes(),
-            VarVisibility::from_args(run_args).unwrap(),
+            VarVisibility::from_args(&run_args).unwrap(),
         );
 
         // number of instances used by modules
@@ -532,7 +532,7 @@ impl GraphCircuit {
             .collect::<Vec<Vec<Fp>>>();
 
         let module_instances =
-            GraphModules::public_inputs(data, VarVisibility::from_args(self.settings.run_args)?);
+            GraphModules::public_inputs(data, VarVisibility::from_args(&self.settings.run_args)?);
 
         if !module_instances.is_empty() {
             pi_inner.extend(module_instances);
@@ -720,7 +720,7 @@ impl GraphCircuit {
             self.settings.run_args.logrows = logrows as u32;
         }
 
-        self.settings = GraphCircuit::new(self.model.clone(), self.settings.run_args)?.settings;
+        self.settings = GraphCircuit::new(self.model.clone(), &self.settings.run_args)?.settings;
 
         let total_const_len = self.settings.total_const_size;
         let const_len_logrows = (total_const_len as f64).log2().ceil() as u32 + 1;
@@ -735,7 +735,7 @@ impl GraphCircuit {
         &self,
         inputs: &[Tensor<Fp>],
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
-        let visibility = VarVisibility::from_args(self.settings.run_args)?;
+        let visibility = VarVisibility::from_args(&self.settings.run_args)?;
         let mut processed_inputs = None;
         let mut processed_params = None;
         let mut processed_outputs = None;
@@ -789,7 +789,7 @@ impl GraphCircuit {
         model_path: &std::path::PathBuf,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let model = Model::from_run_args(run_args, model_path)?;
-        Self::new(model, *run_args)
+        Self::new(model, run_args)
     }
 
     ///
@@ -801,7 +801,7 @@ impl GraphCircuit {
             error!("failed to deserialize compiled model. have you called compile-model ?");
             e
         })?;
-        Self::new(model, *run_args)
+        Self::new(model, run_args)
     }
 
     /// Create a new circuit from a set of input data and [GraphSettings].
@@ -912,7 +912,7 @@ impl Circuit<Fp> for GraphCircuit {
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
-        let visibility = VarVisibility::from_args(params.run_args).unwrap();
+        let visibility = VarVisibility::from_args(&params.run_args).unwrap();
 
         let mut vars = ModelVars::new(
             cs,
