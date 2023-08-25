@@ -82,7 +82,7 @@ pub struct RunArgs {
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
     /// Hand-written parser for graph variables, eg. batch_size=1
-    #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "[(batch_size, 1)]", value_delimiter = ',')]
+    #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size=1", value_delimiter = ',')]
     pub variables: Vec<(String, usize)>,
     /// Flags whether inputs are public, private, hashed
     #[arg(long, default_value = "private")]
