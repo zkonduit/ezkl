@@ -366,7 +366,8 @@ where
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("loading verification key from {:?}", path);
-    let f = File::open(path)?;
+    let f =
+        File::open(path.clone()).map_err(|_| format!("failed to load vk at {}", path.display()))?;
     let mut reader = BufReader::new(f);
     VerifyingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
@@ -387,7 +388,8 @@ where
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("loading proving key from {:?}", path);
-    let f = File::open(path)?;
+    let f =
+        File::open(path.clone()).map_err(|_| format!("failed to load pk at {}", path.display()))?;
     let mut reader = BufReader::new(f);
     ProvingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
