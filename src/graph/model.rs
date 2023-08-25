@@ -31,7 +31,7 @@ use serde::Serialize;
 use tract_onnx;
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::prelude::{
-    DatumExt, Framework, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
+    Framework, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
 };
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_hir::ops::scan::Scan;
@@ -669,7 +669,10 @@ impl Model {
 
             dims.extend(extracted_dims);
 
-            model.set_input_fact(i, f32::fact(dims).into())?;
+            let fact = model.node(id.node).outputs[0].fact.clone();
+            let fact = fact.with_shape(dims);
+
+            model.set_input_fact(i, fact.into())?;
         }
 
         for (i, _) in model.clone().outputs.iter().enumerate() {
@@ -687,12 +690,7 @@ impl Model {
 
         info!("set batch size to {}", run_args.batch_size);
 
-        let nodes = Self::nodes_from_graph(
-            &model,
-            run_args,
-            visibility,
-            model.inputs.iter().map(|_| run_args.scale).collect(),
-        )?;
+        let nodes = Self::nodes_from_graph(&model, run_args, visibility, None)?;
 
         debug!("\n {}", model);
 
@@ -755,7 +753,7 @@ impl Model {
         graph: &Graph<TypedFact, Box<dyn TypedOp>>,
         run_args: &RunArgs,
         visibility: &VarVisibility,
-        input_scales: Vec<u32>,
+        override_input_scales: Option<Vec<u32>>,
     ) -> Result<BTreeMap<usize, NodeType>, Box<dyn Error>> {
         use crate::graph::node_output_shapes;
 
@@ -772,7 +770,7 @@ impl Model {
                         .map(|i| nodes.get(&i.node).unwrap().out_scales()[0])
                         .collect_vec();
                     let subgraph_nodes =
-                        Self::nodes_from_graph(&model, run_args, visibility, input_scales)?;
+                        Self::nodes_from_graph(&model, run_args, visibility, Some(input_scales))?;
 
                     let subgraph = ParsedNodes {
                         nodes: subgraph_nodes,
@@ -853,12 +851,16 @@ impl Model {
                         run_args.param_visibility,
                         i,
                     )?;
-                    if n.opkind.is_input() {
-                        n.opkind = SupportedOp::Input(Input {
-                            scale: input_scales[input_idx],
-                        });
-                        n.out_scale = n.opkind.out_scale(vec![], 0);
-                        input_idx += 1
+                    if override_input_scales.is_some() {
+                        if let Some(inp) = n.opkind.get_input() {
+                            let scale = override_input_scales.as_ref().unwrap()[input_idx];
+                            n.opkind = SupportedOp::Input(Input {
+                                scale,
+                                datum_type: inp.datum_type,
+                            });
+                            input_idx += 1;
+                            n.out_scale = scale;
+                        }
                     }
                     nodes.insert(i, NodeType::Node(n));
                 }

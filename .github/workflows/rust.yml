@@ -32,7 +32,6 @@ jobs:
       - name: Build
         run: cargo build --verbose
 
-
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -59,7 +58,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Doc tests
-      # nextest doesn't support --doc tests
+        # nextest doesn't support --doc tests
         run: cargo test --doc --verbose
       - name: Library tests
         run: cargo nextest run --lib --verbose -- --include-ignored
@@ -95,7 +94,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: nanasess/setup-chromedriver@v2
         with:
-          chromedriver-version: '115.0.5790.102'
+          chromedriver-version: "115.0.5790.102"
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
       - name: Install wasm runner
@@ -107,7 +106,7 @@ jobs:
 
   render-circuit:
     runs-on: ubuntu-latest-32-cores
-    needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -127,7 +126,7 @@ jobs:
 
   tutorial:
     runs-on: ubuntu-latest
-    needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -192,17 +191,10 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_public_inputs_ --test-threads 32
       - name: public params
         run: cargo nextest run --release --verbose tests::mock_public_params_ --test-threads 32
-     
-
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
-    needs:
-      [
-        build,
-        library-tests,
-        python-tests,
-      ]
+    needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -235,12 +227,7 @@ jobs:
 
   prove-and-verify-tests:
     runs-on: ubuntu-latest-32-cores
-    needs:
-      [
-        build,
-        library-tests,
-        python-tests,
-      ]
+    needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -265,12 +252,7 @@ jobs:
 
   fuzz-tests:
     runs-on: ubuntu-latest-32-cores
-    needs:
-      [
-        build,
-        library-tests,
-        python-tests,
-      ]
+    needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -293,11 +275,7 @@ jobs:
 
   prove-and-verify-mock-aggr-tests:
     runs-on: ubuntu-latest-32-cores
-    needs:
-      [
-      build,
-      library-tests,
-    ]
+    needs: [build, library-tests]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -314,12 +292,7 @@ jobs:
 
   prove-and-verify-aggr-tests:
     runs-on: large-self-hosted
-    needs:
-      [
-        build,
-        library-tests,
-        python-tests,
-      ]
+    needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -358,14 +331,13 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
       - name: KZG prove and verify aggr tests
-        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 8 -- --include-ignored
+        run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 8 -- --include-ignored
       - name: KZG prove and verify aggr tests (encrypted input)
-        run: RUST_LOG=trace cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_encrypted --test-threads 8 -- --include-ignored
-
+        run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_encrypted --test-threads 8 -- --include-ignored
 
   examples:
     runs-on: ubuntu-latest-32-cores
-    needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -384,7 +356,7 @@ jobs:
 
   neg-tests:
     runs-on: ubuntu-latest
-    needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -401,7 +373,7 @@ jobs:
 
   python-tests:
     runs-on: ubuntu-latest-32-cores
-    needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -424,85 +396,81 @@ jobs:
         run: source .env/bin/activate; pytest
 
   python-integration-tests:
-      runs-on: large-self-hosted
-        # Service containers to run with `container-job`
-      services:
-        # Label used to access the service container
-        postgres:
-          # Docker Hub image
-          image: postgres
-          env:
-            POSTGRES_USER: ubuntu
-            POSTGRES_HOST_AUTH_METHOD: trust
-          # Set health checks to wait until postgres has started
-          options: >-
-            --health-cmd pg_isready
-            --health-interval 10s
-            --health-timeout 5s
-            --health-retries 5
-          ports:
-            # Maps tcp port 5432 on service container to the host
-            - 5432:5432
-      # needs: [build,  library-tests, docs]
-      steps:
-        - uses: actions/checkout@v3
-        - uses: actions/setup-python@v4
-          with:
-            python-version: "3.9"
-        - uses: actions-rs/toolchain@v1
-          with:
-            toolchain: nightly-2023-04-17
-            override: true
-            components: rustfmt, clippy
-        - uses: baptiste0928/cargo-install@v1
-          with:
-            crate: cargo-nextest
-            locked: true
-        - name: Install solc
-          run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
-        - name: Install Anvil
-          run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
-        - name: Setup Virtual Env and Install python dependencies
-          run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
-        - name: Build python ezkl
-          run: source .env/bin/activate; maturin develop --features python-bindings --release
-        # - name: authenticate-kaggle-cli
-        #   shell: bash
-        #   env:
-        #     KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
-        #   run: |
-        #     mkdir /home/ubuntu/.kaggle
-        #     # now dump the contents of the file into a file called kaggle.json
-        #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
-        #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
-        - name: Mean tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
-        - name: End to end demo tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
-        - name: LSTM tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_11_expects
-        - name: Keras tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
-        - name: Simple aggregation tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_9_expects
-        - name: Little transformer tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects --no-capture
-        - name: Voice tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
-        - name: Encrypted tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
-        - name: Hashed tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_3_expects
-        - name: Simple tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_4_expects
-        - name: Data attestation tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
-        - name: Variance tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
-        - name: Gan tutorial
-          run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
-
-
-
-
-
+    runs-on:
+      large-self-hosted
+      # Service containers to run with `container-job`
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        env:
+          POSTGRES_USER: ubuntu
+          POSTGRES_HOST_AUTH_METHOD: trust
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
+    # needs: [build,  library-tests, docs]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-04-17
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: Install solc
+        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+      - name: Install Anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
+      - name: Setup Virtual Env and Install python dependencies
+        run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+      - name: Build python ezkl
+        run: source .env/bin/activate; maturin develop --features python-bindings --release
+      # - name: authenticate-kaggle-cli
+      #   shell: bash
+      #   env:
+      #     KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
+      #   run: |
+      #     mkdir /home/ubuntu/.kaggle
+      #     # now dump the contents of the file into a file called kaggle.json
+      #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
+      #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: Mean tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
+      - name: End to end demo tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
+      - name: LSTM tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_11_expects
+      - name: Keras tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
+      - name: Simple aggregation tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_9_expects
+      - name: Little transformer tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects --no-capture
+      - name: Voice tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
+      - name: Encrypted tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
+      - name: Hashed tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_3_expects
+      - name: Simple tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_4_expects
+      - name: Data attestation tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
+      - name: Variance tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
+      - name: Gan tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
