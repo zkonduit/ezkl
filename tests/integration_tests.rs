@@ -1850,7 +1850,6 @@ mod native_tests {
                 "-O",
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 &format!("--scale={}", scale),
-                "--batch-size=1",
             ])
             .status()
             .expect("failed to execute process");
