@@ -385,7 +385,8 @@ impl Model {
     ///
     pub fn load(path: PathBuf) -> Result<Self, Box<dyn Error>> {
         // read bytes from file
-        let mut f = std::fs::File::open(&path).expect("no file found");
+        let mut f = std::fs::File::open(&path)
+            .expect(&format!("failed to load model at {}", path.display()));
         let metadata = fs::metadata(&path).expect("unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
         f.read_exact(&mut buffer).expect("buffer overflow");
@@ -897,7 +898,11 @@ impl Model {
         run_args: &RunArgs,
         model: &std::path::PathBuf,
     ) -> Result<Self, Box<dyn Error>> {
-        Model::new(&mut std::fs::File::open(model)?, *run_args)
+        Model::new(
+            &mut std::fs::File::open(model.clone())
+                .map_err(|_| format!("failed to load model at {}", model.display()))?,
+            *run_args,
+        )
     }
 
     /// Configures a model for the circuit

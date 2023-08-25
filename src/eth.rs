@@ -89,7 +89,7 @@ pub async fn setup_eth_backend(
 pub async fn deploy_verifier_via_solidity(
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
@@ -108,7 +108,7 @@ pub async fn deploy_da_verifier_via_solidity(
     input: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
-    runs: Option<usize>
+    runs: Option<usize>,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
@@ -615,7 +615,8 @@ pub fn fix_verifier_sol(
         max_pubinputs_addr = num_instances * 32 - 32;
     }
 
-    let file = File::open(input_file)?;
+    let file = File::open(input_file.clone())
+        .map_err(|_| format!("failed to load verfier at {}", input_file.display()))?;
     let reader = BufReader::new(file);
 
     for line in reader.lines() {

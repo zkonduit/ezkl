@@ -531,7 +531,7 @@ pub(crate) async fn calibrate(
     pb.set_message("calibrating...");
     // we load the model to get the input and output shapes
     let _r = Gag::stdout().unwrap();
-    let model = Model::from_run_args(&run_args, &model_path).unwrap();
+    let model = Model::from_run_args(&run_args, &model_path)?;
     std::mem::drop(_r);
 
     let chunks = data

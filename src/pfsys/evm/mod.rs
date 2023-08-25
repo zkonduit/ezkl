@@ -73,7 +73,8 @@ impl DeploymentCode {
 
     /// Load a json serialized proof from the provided path.
     pub fn load(path: &PathBuf) -> Result<Self, Box<dyn Error>> {
-        let mut file = File::open(path).map_err(Box::<dyn Error>::from)?;
+        let mut file =
+            File::open(path).map_err(|_| format!("failed to load proof at {}", path.display()))?;
         let mut data = String::new();
         file.read_to_string(&mut data)
             .map_err(Box::<dyn Error>::from)?;

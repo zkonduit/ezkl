@@ -136,7 +136,8 @@ impl GraphWitness {
     }
     /// Load the model input from a file
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut file = std::fs::File::open(path)?;
+        let mut file = std::fs::File::open(path.clone())
+            .map_err(|_| format!("failed to load model at {}", path.display()))?;
         let mut data = String::new();
         file.read_to_string(&mut data)?;
         serde_json::from_str(&data).map_err(|e| e.into())
@@ -346,7 +347,10 @@ impl GraphSettings {
     }
     /// load params from file
     pub fn load(path: &std::path::PathBuf) -> Result<Self, std::io::Error> {
-        let mut file = std::fs::File::open(path)?;
+        let mut file = std::fs::File::open(path).map_err(|e| {
+            error!("failed to open settings file at {}", e);
+            e
+        })?;
         let mut data = String::new();
         file.read_to_string(&mut data)?;
         let res = serde_json::from_str(&data)?;
