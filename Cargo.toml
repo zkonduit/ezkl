@@ -13,9 +13,9 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2", default_features = false, branch= "ac/update-h2curves" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/update-h2curves", default_features = false, features = ["thread-safe-region"]}
-halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "2f322219b39b67da8979bf2b014b31145e7872b0", package = "halo2curves", features = ["derive_serde"] }
+halo2_gadgets = { git = "https://github.com/privacy-scaling-explorations/halo2", rev= "0f000478f42f065353b93d54a8d8c7ff256bcd6b", default_features = false }
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2", rev= "0f000478f42f065353b93d54a8d8c7ff256bcd6b", default_features = false, features = ["thread-safe-region"]}
+halo2curves = { version = "0.1.0" }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
 clap = { version = "4.3.3", features = ["derive"]}
@@ -24,7 +24,7 @@ serde_json = { version = "1.0.97", default_features = false, features = ["float_
 log = { version = "0.4.17", default_features = false, optional = true }
 thiserror = { version = "1.0.38", default_features = false }
 hex = { version = "0.4.3", default_features = false }
-halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", default_features = false, package = "ecc", branch = "ac/send-sync-region"}
+halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/send-sync-region", default_features=false, package = "ecc" }
 snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/send-sync-region", features=["derive_serde"]}
 rayon = { version = "1.7.0",  default_features = false }
 bincode = { version = "1.3.3", default_features = false }
@@ -50,7 +50,7 @@ tokio = { version = "1.26.0",  default_features = false, features = ["macros", "
 pyo3 = { version = "0.18.3", features = ["extension-module", "abi3-py37", "macros"],  default_features = false, optional = true }
 pyo3-asyncio = { version = "0.18.0",  features = ["attributes", "tokio-runtime"],  default_features = false, optional = true }
 pyo3-log = { version = "0.8.1", default_features = false, optional = true }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev= "f5901a9634ec2d3e3769146d8799e776f0d79f15", default_features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev= "dd39d4e", default_features = false, optional = true }
 tabled = { version = "0.12.0", optional = true}
 
 
