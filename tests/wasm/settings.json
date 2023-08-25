@@ -10,7 +10,12 @@
         "scale": 0,
         "bits": 5,
         "logrows": 7,
-        "batch_size": 1,
+        "variables": [
+            [
+                "batch_size",
+                1
+            ]
+        ],
         "input_visibility": "Private",
         "output_visibility": "Public",
         "param_visibility": "Private"

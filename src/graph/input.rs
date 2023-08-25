@@ -464,7 +464,7 @@ impl GraphData {
         };
 
         for (i, input) in iterable.iter().enumerate() {
-            // ensure the input is devenly divisible by batch_size
+            // ensure the input is evenly divisible by batch_size
             if input.len() % batch_size != 0 {
                 return Err(Box::new(GraphError::InvalidDims(
                     0,

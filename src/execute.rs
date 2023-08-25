@@ -160,7 +160,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
             data,
             target,
-        } => calibrate(model, data, settings_path, target).await,
+            num_batches,
+        } => calibrate(model, data, settings_path, target, num_batches).await,
         Commands::GenWitness {
             data,
             compiled_model,
@@ -450,9 +451,15 @@ pub(crate) async fn gen_witness(
 
     let witness = circuit.forward(&input)?;
 
+    // print each variable tuple (symbol, value) as symbol=value
     trace!(
-        "witness generation (B={:?}) took {:?}",
-        circuit_settings.run_args.batch_size,
+        "witness generation {:?} took {:?}",
+        circuit_settings
+            .run_args
+            .variables
+            .iter()
+            .map(|v| { format!("{}={}", v.0, v.1) })
+            .collect::<Vec<_>>(),
         start_time.elapsed()
     );
 
@@ -519,23 +526,23 @@ pub(crate) async fn calibrate(
     data: PathBuf,
     settings_path: PathBuf,
     target: CalibrationTarget,
+    num_batches: usize,
 ) -> Result<(), Box<dyn Error>> {
     let data = GraphData::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
-    let run_args = settings.run_args;
 
     let pb = init_bar((2..16).len() as u64);
 
     pb.set_message("calibrating...");
     // we load the model to get the input and output shapes
     let _r = Gag::stdout().unwrap();
-    let model = Model::from_run_args(&run_args, &model_path).unwrap();
+    let model = Model::from_run_args(&settings.run_args, &model_path).unwrap();
     std::mem::drop(_r);
 
     let chunks = data
-        .split_into_batches(run_args.batch_size, model.graph.input_shapes())
+        .split_into_batches(num_batches, model.graph.input_shapes())
         .unwrap();
 
     debug!("num of calibration batches: {}", chunks.len(),);
@@ -546,15 +553,22 @@ pub(crate) async fn calibrate(
         pb.set_message(format!("scale {}", scale));
         std::thread::sleep(Duration::from_millis(100));
 
+        // vec of settings copied chunks.len() times
+        let run_args_iterable = vec![settings.run_args.clone(); chunks.len()];
+
         // let _r = Gag::stdout().unwrap();
         // Result<Vec<GraphSettings>, &str>
         let tasks = chunks
             .iter()
-            .map(|chunk| {
+            .zip(run_args_iterable)
+            .map(|(chunk, run_args)| {
                 // we need to create a new run args for each chunk
                 // time it
                 let chunk = chunk.clone();
-                let local_run_args = RunArgs { scale, ..run_args };
+                let local_run_args = RunArgs {
+                    scale,
+                    ..run_args.clone()
+                };
 
                 let original_settings = settings.clone();
 
@@ -585,7 +599,7 @@ pub(crate) async fn calibrate(
                         scale: circuit.settings.run_args.scale,
                         bits: circuit.settings.run_args.bits,
                         logrows: circuit.settings.run_args.logrows,
-                        ..run_args
+                        ..run_args.clone()
                     };
 
                     let found_settings = GraphSettings {
@@ -789,7 +803,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
     let settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, settings.run_args.logrows)?;
 
-    let visibility = VarVisibility::from_args(settings.run_args)?;
+    let visibility = VarVisibility::from_args(&settings.run_args)?;
 
     let num_instance = settings.total_instances();
 

@@ -362,10 +362,10 @@ impl Model {
     /// * `reader` - A reader for an Onnx file.
     /// * `run_args` - [RunArgs]
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn new(reader: &mut dyn std::io::Read, run_args: RunArgs) -> Result<Self, Box<dyn Error>> {
+    pub fn new(reader: &mut dyn std::io::Read, run_args: &RunArgs) -> Result<Self, Box<dyn Error>> {
         let visibility = VarVisibility::from_args(run_args)?;
 
-        let graph = Self::load_onnx_model(reader, &run_args, &visibility)?;
+        let graph = Self::load_onnx_model(reader, run_args, &visibility)?;
 
         let om = Model { graph, visibility };
 
@@ -396,7 +396,7 @@ impl Model {
     /// Generate model parameters for the circuit
     pub fn gen_params(
         &self,
-        run_args: RunArgs,
+        run_args: &RunArgs,
         check_mode: CheckMode,
     ) -> Result<GraphSettings, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes();
@@ -443,7 +443,7 @@ impl Model {
         lookup_ops.extend(set.into_iter().sorted());
 
         Ok(GraphSettings {
-            run_args,
+            run_args: run_args.clone(),
             model_instance_shapes: instance_shapes,
             module_sizes: crate::graph::modules::ModuleSizes::default(),
             num_constraints,
@@ -646,6 +646,9 @@ impl Model {
             GraphError::ModelLoad
         })?;
 
+        let variables: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::from_iter(run_args.variables.clone().into_iter());
+
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node(id.node);
 
@@ -657,13 +660,13 @@ impl Model {
                 .filter_map(tract_onnx::tract_hir::internal::Factoid::concretize)
                 .map(|x| match x.to_i64() {
                     Ok(x) => x as usize,
-                    Err(_e) => {
-                        if x.to_string() == "batch_size" {
-                            run_args.batch_size
-                        } else {
-                            panic!("Unknown dimension {}: {:?}", x.to_string(), x)
-                        }
-                    }
+                    Err(_e) => *variables.get(&x.to_string()).unwrap_or_else(|| {
+                        panic!(
+                            "Unknown dimension {}: {:?} in model inputs",
+                            x.to_string(),
+                            x
+                        )
+                    }),
                 })
                 .collect();
 
@@ -679,16 +682,12 @@ impl Model {
             model.set_output_fact(i, InferenceFact::default()).unwrap();
         }
         // Note: do not optimize the model, as the layout will depend on underlying hardware
-        let model = model.into_typed()?.into_decluttered()?;
-        let batch_size_sym = model.symbol_table.sym("batch_size");
-        let seq_len_sym = model.symbol_table.sym("sequence_length");
-        let model = model
-            .concretize_dims(
-                &SymbolValues::default().with(&batch_size_sym, run_args.batch_size as i64),
-            )?
-            .concretize_dims(&SymbolValues::default().with(&seq_len_sym, 1))?;
-
-        info!("set batch size to {}", run_args.batch_size);
+        let mut model = model.into_typed()?.into_decluttered()?;
+        for (symbol, value) in run_args.variables.iter() {
+            let symbol = model.symbol_table.sym(&symbol);
+            model = model.concretize_dims(&SymbolValues::default().with(&symbol, *value as i64))?;
+            info!("set {} to {}", symbol, value);
+        }
 
         let nodes = Self::nodes_from_graph(&model, run_args, visibility, None)?;
 
@@ -897,7 +896,7 @@ impl Model {
         run_args: &RunArgs,
         model: &std::path::PathBuf,
     ) -> Result<Self, Box<dyn Error>> {
-        Model::new(&mut std::fs::File::open(model)?, *run_args)
+        Model::new(&mut std::fs::File::open(model)?, run_args)
     }
 
     /// Configures a model for the circuit
