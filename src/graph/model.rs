@@ -24,7 +24,6 @@ use halo2_proofs::{
     plonk::ConstraintSystem,
 };
 use itertools::Itertools;
-use log::warn;
 use serde::Deserialize;
 use serde::Serialize;
 #[cfg(not(target_arch = "wasm32"))]
@@ -529,7 +528,7 @@ impl Model {
                     let input_dims = inputs.iter().map(|inp| inp.dims());
                     let num_iter = number_of_iterations(input_mappings, input_dims.collect());
 
-                    warn!(
+                    debug!(
                         "{} iteration(s) in a subgraph with inputs {:?}",
                         num_iter, input_tuple
                     );
@@ -1089,7 +1088,7 @@ impl Model {
                         .map(|inp| results.get(&inp.0).unwrap()[inp.1].dims());
                     let num_iter = number_of_iterations(input_mappings, input_dims.collect());
 
-                    warn!(
+                    debug!(
                         "{} iteration(s) in a subgraph with inputs {:?}",
                         num_iter, inputs
                     );
