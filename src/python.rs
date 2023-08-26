@@ -251,7 +251,6 @@ fn gen_settings(
     model,
     settings,
     target,
-    num_batches=None,
 ))]
 fn calibrate_settings(
     py: Python,
@@ -259,12 +258,10 @@ fn calibrate_settings(
     model: PathBuf,
     settings: PathBuf,
     target: Option<CalibrationTarget>,
-    num_batches: Option<usize>,
 ) -> PyResult<&pyo3::PyAny> {
     let target = target.unwrap_or(CalibrationTarget::Resources);
-    let num_batches = num_batches.unwrap_or(1);
     pyo3_asyncio::tokio::future_into_py(py, async move {
-        crate::execute::calibrate(model, data, settings, target, num_batches)
+        crate::execute::calibrate(model, data, settings, target)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to calibrate settings: {}", e);
