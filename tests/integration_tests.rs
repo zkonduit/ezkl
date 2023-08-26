@@ -688,23 +688,40 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil();
-                    kzg_evm_aggr_prove_and_verify(path, test.to_string(), "private", "private", "public");
+                    kzg_evm_aggr_prove_and_verify(path, test.to_string(), "private", "private", "public", 23);
                     test_dir.close().unwrap();
                 }
 
-                // these take a particularly long time to run
-                #[test]
-                #[ignore]
-                fn kzg_evm_aggr_prove_and_verify_encrypted_input_() {
-                    let test = "1l_mlp";
-                    crate::native_tests::init_binary();
-                    let test_dir = TempDir::new(test).unwrap();
-                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
-                    kzg_evm_aggr_prove_and_verify(path, test.to_string(), "encrypted", "private", "public");
-                    test_dir.close().unwrap();
-                }
+
             });
+
+
+            // these take a particularly long time to run
+            #[test]
+            #[ignore]
+            fn kzg_evm_aggr_prove_and_verify_large_mlp_() {
+                let test = "large_mlp";
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                let _anvil_child = crate::native_tests::start_anvil();
+                kzg_evm_aggr_prove_and_verify(path, test.to_string(), "hashed", "private", "public", 24);
+                test_dir.close().unwrap();
+            }
+
+
+             // these take a particularly long time to run
+             #[test]
+             #[ignore]
+             fn kzg_evm_aggr_prove_and_verify_encrypted_input_() {
+                 let test = "1l_mlp";
+                 crate::native_tests::init_binary();
+                 let test_dir = TempDir::new(test).unwrap();
+                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                 let _anvil_child = crate::native_tests::start_anvil();
+                 kzg_evm_aggr_prove_and_verify(path, test.to_string(), "encrypted", "private", "public", 23);
+                 test_dir.close().unwrap();
+             }
 
 
             seq!(N in 0..= 19 {
@@ -1488,6 +1505,7 @@ mod native_tests {
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
+        aggr_logrows: usize,
     ) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1556,7 +1574,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let srs_path = download_srs(test_dir, 23);
+        let srs_path = download_srs(test_dir, 21);
         let srs_path = format!("--srs-path={}", srs_path);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1601,13 +1619,16 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let srs_path = download_srs(test_dir, aggr_logrows);
+        let srs_path = format!("--srs-path={}", srs_path);
+
         // now setup-aggregate
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "setup-aggregate",
                 "--sample-snarks",
                 &format!("{}/{}/evm.pf", test_dir, example_name),
-                "--logrows=23",
+                &format!("--logrows={}", aggr_logrows),
                 "--vk-path",
                 &format!("{}/{}/evm_aggr.vk", test_dir, example_name),
                 "--pk-path",
@@ -1621,7 +1642,7 @@ mod native_tests {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "aggregate",
-                "--logrows=23",
+                &format!("--logrows={}", aggr_logrows),
                 "--aggregation-snarks",
                 &format!("{}/{}/evm.pf", test_dir, example_name),
                 "--proof-path",
