@@ -25,7 +25,7 @@ use tokio::runtime::Runtime;
 #[derive(Clone)]
 struct PyRunArgs {
     #[pyo3(get, set)]
-    pub tolerance: Tolerance,
+    pub tolerance: f32,
     #[pyo3(get, set)]
     pub scale: u32,
     #[pyo3(get, set)]
@@ -50,7 +50,7 @@ impl PyRunArgs {
     #[new]
     fn new() -> Self {
         PyRunArgs {
-            tolerance: Tolerance::default(),
+            tolerance: 0.0,
             scale: 7,
             bits: 16,
             logrows: 17,
@@ -67,7 +67,7 @@ impl PyRunArgs {
 impl From<PyRunArgs> for RunArgs {
     fn from(py_run_args: PyRunArgs) -> Self {
         RunArgs {
-            tolerance: py_run_args.tolerance,
+            tolerance: Tolerance::from(py_run_args.tolerance),
             scale: py_run_args.scale,
             bits: py_run_args.bits,
             logrows: py_run_args.logrows,

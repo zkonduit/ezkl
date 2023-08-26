@@ -42,6 +42,16 @@ def teardown_module(module):
     proc.terminate()
 
 
+def test_py_run_args():
+    """
+    Test for PyRunArgs
+    """
+    run_args = ezkl.PyRunArgs()
+    run_args.input_visibility = "hashed"
+    run_args.output_visibility = "hashed"
+    run_args.tolerance = 1.5
+
+
 def test_field_serialization():
     """
     Test field element serialization

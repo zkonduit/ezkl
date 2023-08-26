@@ -92,6 +92,15 @@ impl FromStr for Tolerance {
     }
 }
 
+impl From<f32> for Tolerance {
+    fn from(value: f32) -> Self {
+        Tolerance {
+            val: value,
+            scales: (1, 1),
+        }
+    }
+}
+
 #[cfg(feature = "python-bindings")]
 /// Converts CheckMode into a PyObject (Required for CheckMode to be compatible with Python)
 impl IntoPy<PyObject> for CheckMode {
