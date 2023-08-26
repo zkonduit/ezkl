@@ -544,7 +544,7 @@ pub(crate) async fn calibrate(
 
     info!("num of calibration batches: {}", chunks.len());
 
-    let pb = init_bar((2..16).len() as u64);
+    let pb = init_bar((5..16).len() as u64);
 
     pb.set_message("calibrating...");
 
