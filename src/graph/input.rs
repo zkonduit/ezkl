@@ -442,7 +442,6 @@ impl GraphData {
     ///
     pub fn split_into_batches(
         &self,
-        batch_size: usize,
         input_shapes: Vec<Vec<usize>>,
     ) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
         // split input data into batches
@@ -466,15 +465,17 @@ impl GraphData {
 
         for (i, input) in iterable.iter().enumerate() {
             // ensure the input is evenly divisible by batch_size
-            if input.len() % batch_size != 0 {
+            let input_size = input_shapes[i].clone().iter().product::<usize>();
+            if input.len() % input_size != 0 {
                 return Err(Box::new(GraphError::InvalidDims(
                     0,
-                    "input data length must be evenly divisible by batch size".to_string(),
+                    "calibration data length must be evenly divisible by the original input_size"
+                        .to_string(),
                 )));
             }
             let input_size = input_shapes[i].clone().iter().product::<usize>();
             let mut batches = vec![];
-            for batch in input.chunks(batch_size * input_size) {
+            for batch in input.chunks(input_size) {
                 batches.push(batch.to_vec());
             }
             batched_inputs.push(batches);

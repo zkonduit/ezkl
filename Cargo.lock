@@ -1119,7 +1119,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#64e3a06b6be822fcfd4a117d331c6478a181e11e"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#1c49a066b0d0c38e302f0ff3b1f51c05ffe1486d"
 dependencies = [
  "integer",
  "num-bigint",
@@ -1597,7 +1597,7 @@ dependencies = [
  "getrandom",
  "halo2_gadgets",
  "halo2_proofs",
- "halo2curves 0.1.0 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=2f322219b39b67da8979bf2b014b31145e7872b0)",
+ "halo2curves 0.1.0",
  "hex",
  "indicatif",
  "instant",
@@ -2043,14 +2043,14 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/update-h2curves#b154081f47f70fed41b04d67f7813487814f8dc6"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/fix-gadget-diff#44c2ec6a03c4de060281b63a34c5ed4924f9097f"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
  "ff",
  "group",
  "halo2_proofs",
- "halo2curves 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "halo2curves 0.1.0",
  "lazy_static",
  "rand 0.8.5",
  "subtle",
@@ -2060,12 +2060,12 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/update-h2curves#b154081f47f70fed41b04d67f7813487814f8dc6"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/fix-gadget-diff#44c2ec6a03c4de060281b63a34c5ed4924f9097f"
 dependencies = [
  "blake2b_simd",
  "ff",
  "group",
- "halo2curves 0.1.0 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=2f322219b39b67da8979bf2b014b31145e7872b0)",
+ "halo2curves 0.1.0",
  "plotters",
  "rand_chacha",
  "rand_core 0.6.4",
@@ -2080,25 +2080,6 @@ name = "halo2curves"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6b1142bd1059aacde1b477e0c80c142910f1ceae67fc619311d6a17428007ab"
-dependencies = [
- "blake2b_simd",
- "ff",
- "group",
- "lazy_static",
- "num-bigint",
- "num-traits",
- "pasta_curves",
- "paste",
- "rand 0.8.5",
- "rand_core 0.6.4",
- "static_assertions",
- "subtle",
-]
-
-[[package]]
-name = "halo2curves"
-version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2curves?rev=2f322219b39b67da8979bf2b014b31145e7872b0#2f322219b39b67da8979bf2b014b31145e7872b0"
 dependencies = [
  "blake2b_simd",
  "ff",
@@ -2137,7 +2118,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#64e3a06b6be822fcfd4a117d331c6478a181e11e"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#1c49a066b0d0c38e302f0ff3b1f51c05ffe1486d"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2477,7 +2458,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#64e3a06b6be822fcfd4a117d331c6478a181e11e"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#1c49a066b0d0c38e302f0ff3b1f51c05ffe1486d"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2720,7 +2701,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#64e3a06b6be822fcfd4a117d331c6478a181e11e"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/send-sync-region#1c49a066b0d0c38e302f0ff3b1f51c05ffe1486d"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -4500,11 +4481,11 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#9acce727c7b30225b2d4bd642910558e2ae5fd5c"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/send-sync-region#52394d8d326648dfa4d3bdc8cdf46a6c578870bb"
 dependencies = [
  "ecc",
  "halo2_proofs",
- "halo2curves 0.1.0 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=2f322219b39b67da8979bf2b014b31145e7872b0)",
+ "halo2curves 0.1.0",
  "hex",
  "itertools",
  "lazy_static",
@@ -5074,7 +5055,7 @@ dependencies = [
 [[package]]
 name = "tract-core"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=f5901a9634ec2d3e3769146d8799e776f0d79f15#f5901a9634ec2d3e3769146d8799e776f0d79f15"
+source = "git+https://github.com/sonos/tract/?rev=dd39d4e#dd39d4e31f83200dfd0fa77cfb603517f81b5107"
 dependencies = [
  "anyhow",
  "bit-set",
@@ -5097,7 +5078,7 @@ dependencies = [
 [[package]]
 name = "tract-data"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=f5901a9634ec2d3e3769146d8799e776f0d79f15#f5901a9634ec2d3e3769146d8799e776f0d79f15"
+source = "git+https://github.com/sonos/tract/?rev=dd39d4e#dd39d4e31f83200dfd0fa77cfb603517f81b5107"
 dependencies = [
  "anyhow",
  "half 2.2.1",
@@ -5116,7 +5097,7 @@ dependencies = [
 [[package]]
 name = "tract-hir"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=f5901a9634ec2d3e3769146d8799e776f0d79f15#f5901a9634ec2d3e3769146d8799e776f0d79f15"
+source = "git+https://github.com/sonos/tract/?rev=dd39d4e#dd39d4e31f83200dfd0fa77cfb603517f81b5107"
 dependencies = [
  "derive-new",
  "log",
@@ -5126,7 +5107,7 @@ dependencies = [
 [[package]]
 name = "tract-linalg"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=f5901a9634ec2d3e3769146d8799e776f0d79f15#f5901a9634ec2d3e3769146d8799e776f0d79f15"
+source = "git+https://github.com/sonos/tract/?rev=dd39d4e#dd39d4e31f83200dfd0fa77cfb603517f81b5107"
 dependencies = [
  "cc",
  "derive-new",
@@ -5150,7 +5131,7 @@ dependencies = [
 [[package]]
 name = "tract-nnef"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=f5901a9634ec2d3e3769146d8799e776f0d79f15#f5901a9634ec2d3e3769146d8799e776f0d79f15"
+source = "git+https://github.com/sonos/tract/?rev=dd39d4e#dd39d4e31f83200dfd0fa77cfb603517f81b5107"
 dependencies = [
  "byteorder",
  "flate2",
@@ -5164,7 +5145,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=f5901a9634ec2d3e3769146d8799e776f0d79f15#f5901a9634ec2d3e3769146d8799e776f0d79f15"
+source = "git+https://github.com/sonos/tract/?rev=dd39d4e#dd39d4e31f83200dfd0fa77cfb603517f81b5107"
 dependencies = [
  "bytes",
  "derive-new",
@@ -5181,7 +5162,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx-opl"
 version = "0.20.7-pre"
-source = "git+https://github.com/sonos/tract/?rev=f5901a9634ec2d3e3769146d8799e776f0d79f15#f5901a9634ec2d3e3769146d8799e776f0d79f15"
+source = "git+https://github.com/sonos/tract/?rev=dd39d4e#dd39d4e31f83200dfd0fa77cfb603517f81b5107"
 dependencies = [
  "getrandom",
  "log",

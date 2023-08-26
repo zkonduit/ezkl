@@ -251,9 +251,6 @@ pub enum Commands {
         #[arg(long = "target", default_value = "resources")]
         /// Target for calibration.
         target: CalibrationTarget,
-        /// Number of calibration batches to run.
-        #[arg(long = "num-batches", default_value = "1")]
-        num_batches: usize,
     },
 
     /// Generates a dummy SRS

@@ -356,6 +356,21 @@ impl GraphSettings {
         let res = serde_json::from_str(&data)?;
         Ok(res)
     }
+
+    /// Export the ezkl configuration as json
+    pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let serialized = match serde_json::to_string(&self) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(Box::new(e));
+            }
+        };
+        Ok(serialized)
+    }
+    /// Parse an ezkl configuration from a json
+    pub fn from_json(arg_json: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(arg_json)
+    }
 }
 
 /// Configuration for a computational graph / model loaded from a `.onnx` file.

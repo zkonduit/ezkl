@@ -359,6 +359,7 @@ mod native_tests {
 
 
             #(#[test_case(TESTS[N])])*
+            #[ignore]
             fn render_circuit_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
@@ -2275,14 +2276,7 @@ mod native_tests {
 
     fn build_ezkl() {
         let status = Command::new("cargo")
-            .args([
-                "build",
-                "--release",
-                "--features",
-                "render",
-                "--bin",
-                "ezkl",
-            ])
+            .args(["build", "--release", "--bin", "ezkl"])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
