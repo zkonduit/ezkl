@@ -54,6 +54,11 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
         vec![]
     }
 
+    /// Do any of the inputs to this op require homogenous input scales?
+    fn should_match_global_scale(&self) -> Vec<usize> {
+        vec![]
+    }
+
     /// Returns the lookups required by the operation.
     fn required_lookups(&self) -> Vec<LookupOp> {
         vec![]

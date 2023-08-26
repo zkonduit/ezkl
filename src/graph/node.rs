@@ -262,6 +262,18 @@ impl Op<Fp> for SupportedOp {
         }
     }
 
+    fn should_match_global_scale(&self) -> Vec<usize> {
+        match self {
+            SupportedOp::Linear(op) => Op::<Fp>::should_match_global_scale(op),
+            SupportedOp::Nonlinear(op) => Op::<Fp>::should_match_global_scale(op),
+            SupportedOp::Hybrid(op) => Op::<Fp>::should_match_global_scale(op),
+            SupportedOp::Input(op) => Op::<Fp>::should_match_global_scale(op),
+            SupportedOp::Constant(op) => Op::<Fp>::should_match_global_scale(op),
+            SupportedOp::Unknown(op) => Op::<Fp>::should_match_global_scale(op),
+            SupportedOp::Rescaled(op) => Op::<Fp>::should_match_global_scale(op),
+        }
+    }
+
     fn clone_dyn(&self) -> Box<dyn Op<Fp>> {
         match self {
             SupportedOp::Linear(op) => Box::new(op.clone()),
@@ -307,8 +319,29 @@ impl Op<Fp> for SupportedOp {
             SupportedOp::Linear(op) => {
                 let inputs_to_scale = self.requires_homogenous_input_scales();
                 // creates a rescaled op if the inputs are not homogenous
-                super::homogenize_input_scales(Box::new(op.clone()), in_scales, inputs_to_scale)
-                    .unwrap()
+                if inputs_to_scale.is_empty() {
+                    let inputs_to_scales = self.should_match_global_scale();
+                    if inputs_to_scales.is_empty() {
+                        return Box::new(op.clone());
+                    } else {
+                        let op = super::homogenize_input_scales_to_ref(
+                            Box::new(op.clone()),
+                            in_scales,
+                            inputs_to_scales,
+                            out_scale,
+                        )
+                        .unwrap();
+                        println!("op {:?}", op);
+                        return op;
+                    }
+                } else {
+                    return super::homogenize_input_scales(
+                        Box::new(op.clone()),
+                        in_scales,
+                        inputs_to_scale,
+                    )
+                    .unwrap();
+                }
             }
             SupportedOp::Nonlinear(op) => op.rescale(in_scales, out_scale),
             SupportedOp::Hybrid(op) => op.rescale(in_scales, out_scale),

@@ -1017,23 +1017,68 @@ pub fn homogenize_input_scales(
     }
 
     let mut dividers: Vec<u128> = vec![1; input_scales.len()];
-    if !input_scales.windows(2).all(|w| w[0] == w[1]) {
-        let min_scale = input_scales.iter().min().unwrap();
-        let _ = input_scales
-            .iter()
-            .enumerate()
-            .map(|(idx, input_scale)| {
-                if !inputs_to_scale.contains(&idx) {
-                    return;
-                }
-                let scale_diff = input_scale - min_scale;
-                if scale_diff > 0 {
-                    let mult = crate::graph::scale_to_multiplier(scale_diff);
-                    dividers[idx] = mult as u128;
-                }
-            })
-            .collect_vec();
+    let min_scale = input_scales.iter().min().unwrap();
+    let _ = input_scales
+        .iter()
+        .enumerate()
+        .map(|(idx, input_scale)| {
+            if !inputs_to_scale.contains(&idx) {
+                return;
+            }
+            let scale_diff = input_scale - min_scale;
+            if scale_diff > 0 {
+                let mult = crate::graph::scale_to_multiplier(scale_diff);
+                dividers[idx] = mult as u128;
+            }
+        })
+        .collect_vec();
+
+    // only rescale if need to
+    if dividers.iter().any(|&x| x > 1) {
+        Ok(Box::new(Rescaled {
+            inner: Box::new(op.into()),
+            scale: (0..input_scales.len()).zip(dividers).collect_vec(),
+        }))
+    } else {
+        Ok(op)
     }
+}
+
+///
+pub fn homogenize_input_scales_to_ref(
+    op: Box<dyn Op<Fp>>,
+    input_scales: Vec<u32>,
+    inputs_to_scale: Vec<usize>,
+    reference_scale: u32,
+) -> Result<Box<dyn Op<Fp>>, Box<dyn Error>> {
+    if inputs_to_scale.is_empty() {
+        return Ok(op);
+    }
+    // else if all inputs_scales at inputs_to_scale are the same, we don't need to do anything
+    else if input_scales
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| inputs_to_scale.contains(idx))
+        .all(|(_, scale)| *scale == reference_scale)
+    {
+        return Ok(op);
+    }
+
+    let mut dividers: Vec<u128> = vec![1; input_scales.len()];
+    let _ = input_scales
+        .iter()
+        .enumerate()
+        .map(|(idx, input_scale)| {
+            if !inputs_to_scale.contains(&idx) {
+                return;
+            }
+            let scale_diff = input_scale - reference_scale;
+            if scale_diff > 0 {
+                let mult = crate::graph::scale_to_multiplier(scale_diff);
+                dividers[idx] = mult as u128;
+            }
+        })
+        .collect_vec();
 
     // only rescale if need to
     if dividers.iter().any(|&x| x > 1) {

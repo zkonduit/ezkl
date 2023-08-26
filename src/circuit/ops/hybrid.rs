@@ -155,7 +155,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn out_scale(&self, in_scales: Vec<u32>, global_scale: u32) -> u32 {
         match self {
-            HybridOp::Greater { .. } | HybridOp::Less { .. } => 0,
+            HybridOp::Greater { .. } | HybridOp::Less { .. } | HybridOp::Equals => 0,
             HybridOp::Softmax { .. } => 2 * global_scale,
             _ => in_scales[0],
         }
