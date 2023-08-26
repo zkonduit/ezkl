@@ -429,6 +429,8 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     fn should_match_global_scale(&self) -> Vec<usize> {
         if matches!(self, PolyOp::Mult { .. } | PolyOp::Einsum { .. }) {
             vec![0, 1]
+        } else if matches!(self, PolyOp::Pow(_)) {
+            vec![0]
         } else {
             vec![]
         }

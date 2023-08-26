@@ -544,13 +544,13 @@ pub(crate) async fn calibrate(
 
     info!("num of calibration batches: {}", chunks.len());
 
-    let pb = init_bar((5..16).len() as u64);
+    let pb = init_bar((2..16).len() as u64);
 
     pb.set_message("calibrating...");
 
     let mut found_params: Vec<GraphSettings> = vec![];
 
-    for scale in 5..16 {
+    for scale in 2..16 {
         pb.set_message(format!("scale {}", scale));
         std::thread::sleep(Duration::from_millis(100));
 

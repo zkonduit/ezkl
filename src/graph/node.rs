@@ -331,7 +331,6 @@ impl Op<Fp> for SupportedOp {
                             out_scale,
                         )
                         .unwrap();
-                        println!("op {:?}", op);
                         return op;
                     }
                 } else {
