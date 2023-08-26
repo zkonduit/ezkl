@@ -1505,7 +1505,7 @@ mod native_tests {
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
-        aggr_logrows: usize,
+        aggr_logrows: u32,
     ) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
