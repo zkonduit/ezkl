@@ -550,7 +550,7 @@ pub(crate) async fn calibrate(
 
     let mut found_params: Vec<GraphSettings> = vec![];
 
-    for scale in 2..16 {
+    for scale in 5..16 {
         pb.set_message(format!("scale {}", scale));
         std::thread::sleep(Duration::from_millis(100));
 
