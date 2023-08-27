@@ -110,6 +110,46 @@ def test_gen_srs():
     assert os.path.isfile(params_k20_path)
 
 
+async def calibrate_over_user_range():
+    data_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'input.json'
+    )
+    model_path = os.path.join(
+        examples_path,
+        'onnx',
+        '1l_average',
+        'network.onnx'
+    )
+    output_path = os.path.join(
+        folder_path,
+        'settings.json'
+    )
+
+    run_args = ezkl.PyRunArgs()
+    run_args.input_visibility = "hashed"
+    run_args.output_visibility = "hashed"
+
+    # TODO: Dictionary outputs
+    res = ezkl.gen_settings(
+        model_path, output_path, py_run_args=run_args)
+    assert res == True
+
+    res = await ezkl.calibrate_settings(
+        data_path, model_path, output_path, "resources", [0, 1, 2])
+    assert res == True
+    assert os.path.isfile(output_path)
+
+
+def test_calibrate_calibrate_over_user_range():
+    """
+    Test for calibrate
+    """
+    asyncio.run(calibrate_over_user_range())
+
+
 async def calibrate():
     data_path = os.path.join(
         examples_path,
