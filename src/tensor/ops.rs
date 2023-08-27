@@ -43,8 +43,8 @@ pub fn iff<
         + std::cmp::PartialEq,
 >(
     mask: &Tensor<T>,
-    b: &Tensor<T>,
     a: &Tensor<T>,
+    b: &Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
     // assert is boolean
     assert!(

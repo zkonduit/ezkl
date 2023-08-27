@@ -1032,7 +1032,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 3],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // if mask > 0 then output a else output b
-    let (mask, b, a) = (&values[0], &values[1], &values[2]);
+    let (mask, a, b) = (&values[0], &values[1], &values[2]);
 
     let unit: ValTensor<F> =
         Tensor::from(vec![region.assign_constant(&config.inputs[1], F::from(1))?].into_iter())
