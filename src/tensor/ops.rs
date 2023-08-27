@@ -90,8 +90,8 @@ pub fn not<
 ) -> Result<Tensor<T>, TensorError> {
     iff(
         a,
-        &Tensor::from(vec![T::one().unwrap()].into_iter()),
         &Tensor::from(vec![T::zero().unwrap()].into_iter()),
+        &Tensor::from(vec![T::one().unwrap()].into_iter()),
     )
 }
 
@@ -134,7 +134,7 @@ pub fn or<
         "or() only works on boolean mask"
     );
 
-    iff(a, b, &Tensor::from(vec![T::one().unwrap()].into_iter()))
+    iff(a, a, b)
 }
 
 /// Elementwise applies xor to two tensors

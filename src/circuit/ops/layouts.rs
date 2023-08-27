@@ -869,12 +869,7 @@ pub fn or<F: PrimeField + TensorType + PartialOrd>(
     let a = values[0].clone();
     let b = values[1].clone();
 
-    let unit: ValTensor<F> =
-        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(1))?].into_iter())
-            .into();
-    region.next();
-
-    let iff_values = &[a, b, unit];
+    let iff_values = &[a.clone(), a, b];
 
     let res = iff(config, region, iff_values)?;
 
@@ -1002,7 +997,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd>(
     let nil: ValTensor<F> = Tensor::from(vec![ValType::Constant(F::from(0))].into_iter()).into();
     region.next();
 
-    let res = iff(config, region, &[mask, unit, nil])?;
+    let res = iff(config, region, &[mask, nil, unit])?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         let mut is_assigned = !res.any_unknowns();
@@ -1068,8 +1063,8 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
         if is_assigned {
             let safe_iff = tensor::ops::iff(
                 &mask.get_felt_evals()?,
-                &b.get_felt_evals()?,
                 &a.get_felt_evals()?,
+                &b.get_felt_evals()?,
             )
             .map_err(|e| {
                 error!("{}", e);
