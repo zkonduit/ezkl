@@ -251,6 +251,7 @@ fn gen_settings(
     model,
     settings,
     target,
+    scales = None,
 ))]
 fn calibrate_settings(
     py: Python,
@@ -258,10 +259,11 @@ fn calibrate_settings(
     model: PathBuf,
     settings: PathBuf,
     target: Option<CalibrationTarget>,
+    scales: Option<Vec<u32>>,
 ) -> PyResult<&pyo3::PyAny> {
     let target = target.unwrap_or(CalibrationTarget::Resources);
     pyo3_asyncio::tokio::future_into_py(py, async move {
-        crate::execute::calibrate(model, data, settings, target)
+        crate::execute::calibrate(model, data, settings, target, scales)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to calibrate settings: {}", e);

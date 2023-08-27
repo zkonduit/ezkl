@@ -251,6 +251,9 @@ pub enum Commands {
         #[arg(long = "target", default_value = "resources")]
         /// Target for calibration.
         target: CalibrationTarget,
+        /// Optional scales to specifically try for calibration.
+        #[arg(long, value_delimiter = ',')]
+        scales: Option<Vec<u32>>,
     },
 
     /// Generates a dummy SRS
