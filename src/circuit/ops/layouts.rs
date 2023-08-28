@@ -658,21 +658,8 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if region.is_dummy() {
-        region.increment(lhs.len());
         let num_constants = lhs.num_constants() + rhs.num_constants();
         region.increment_constants(num_constants);
-        let vals = vec![ValType::Value(Value::<F>::unknown()); broadcasted_shape.iter().product()];
-        let mut tensor: Tensor<ValType<F>> = Tensor::from(vals.into_iter());
-        tensor.reshape(&broadcasted_shape);
-
-        trace!(
-            "dummy pairwise {} layout took {:?}, offset: {}",
-            op.as_str(),
-            global_start.elapsed(),
-            region.offset()
-        );
-
-        return Ok(tensor.into());
     }
 
     let mut inputs = vec![];
@@ -1030,9 +1017,8 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     let (mask, a, b) = (&values[0], &values[1], &values[2]);
 
     let unit: ValTensor<F> =
-        Tensor::from(vec![region.assign_constant(&config.inputs[1], F::from(1))?].into_iter())
+        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(1))?].into_iter())
             .into();
-    region.next();
 
     // make sure mask is boolean
     let assigned_mask = region.assign(&config.inputs[1], mask)?;
