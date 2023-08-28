@@ -1018,7 +1018,7 @@ pub fn homogenize_input_scales(
 
     let mut dividers: Vec<u128> = vec![1; input_scales.len()];
     if !input_scales.windows(2).all(|w| w[0] == w[1]) {
-        let min_scale = input_scales.iter().min().unwrap();
+        let max_scale = input_scales.iter().max().unwrap();
         let _ = input_scales
             .iter()
             .enumerate()
@@ -1026,7 +1026,7 @@ pub fn homogenize_input_scales(
                 if !inputs_to_scale.contains(&idx) {
                     return;
                 }
-                let scale_diff = input_scale - min_scale;
+                let scale_diff = max_scale - input_scale;
                 if scale_diff > 0 {
                     let mult = crate::graph::scale_to_multiplier(scale_diff);
                     dividers[idx] = mult as u128;

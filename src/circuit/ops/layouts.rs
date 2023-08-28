@@ -1632,15 +1632,10 @@ pub fn rescale<F: PrimeField + TensorType + PartialOrd>(
             rescaled_inputs.push(ri.clone());
             continue;
         }
-        let scaled_input = nonlinearity(
-            config,
-            region,
-            &[ri.clone()],
-            &LookupOp::Div {
-                denom: (scales[i].1 as f32).into(),
-            },
-        )?;
 
+        let multiplier: ValTensor<F> =
+            Tensor::from(vec![ValType::Constant(F::from(scales[i].1 as u64))].into_iter()).into();
+        let scaled_input = pairwise(config, region, &[ri.clone(), multiplier], BaseOp::Mult)?;
         rescaled_inputs.push(scaled_input);
     }
 
