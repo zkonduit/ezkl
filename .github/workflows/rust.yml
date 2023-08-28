@@ -136,7 +136,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Mock accuracy calibration
-        run: cargo nextest run --release --verbose tests::mock_accuracy_cal_tests::t
+        run: cargo nextest run --release --verbose tests::mock_accuracy_cal_tests::a
       - name: hashed inputs
         run: cargo nextest run --release --verbose tests::mock_hashed_input_::t  --test-threads 32
       - name: hashed params
