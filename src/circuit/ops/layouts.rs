@@ -657,10 +657,9 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         ))));
     }
 
+    // if not sub
     if region.is_dummy() {
-        region.increment(lhs.len());
         let num_constants = lhs.num_constants() + rhs.num_constants();
-        region.increment_constants(num_constants);
         let vals = vec![ValType::Value(Value::<F>::unknown()); broadcasted_shape.iter().product()];
         let mut tensor: Tensor<ValType<F>> = Tensor::from(vals.into_iter());
         tensor.reshape(&broadcasted_shape);
@@ -671,6 +670,19 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
             global_start.elapsed(),
             region.offset()
         );
+
+        let mut rows = lhs.len();
+
+        if op == BaseOp::Sub {
+            // get number of zeros that are unique to lhs
+            let num_unique_lhs_zeros = first_zero_indices
+                .iter()
+                .filter(|&x| !second_zero_indices.contains(x))
+                .count();
+            rows += num_unique_lhs_zeros;
+        }
+        region.increment(rows);
+        region.increment_constants(num_constants);
 
         return Ok(tensor.into());
     }
@@ -723,13 +735,10 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
                 let b = orig_rhs.get_inner_tensor().unwrap()[i].clone();
                 let a_is_null = first_zero_indices.contains(&i);
                 let b_is_null = second_zero_indices.contains(&i);
-                let both_null = a_is_null && b_is_null;
 
                 match op {
                     BaseOp::Add => {
-                        if both_null {
-                            ValType::Constant(F::ZERO)
-                        } else if a_is_null {
+                        if a_is_null {
                             b
                         } else if b_is_null {
                             a
@@ -738,9 +747,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
                         }
                     }
                     BaseOp::Sub => {
-                        if both_null {
-                            ValType::Constant(F::ZERO)
-                        } else if a_is_null {
+                        if a_is_null {
                             let tensor = Tensor::new(Some(&[b]), &[1]).unwrap();
                             neg(config, region, &[tensor.into()])
                                 .unwrap()
@@ -869,12 +876,7 @@ pub fn or<F: PrimeField + TensorType + PartialOrd>(
     let a = values[0].clone();
     let b = values[1].clone();
 
-    let unit: ValTensor<F> =
-        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(1))?].into_iter())
-            .into();
-    region.next();
-
-    let iff_values = &[a, b, unit];
+    let iff_values = &[a.clone(), a, b];
 
     let res = iff(config, region, iff_values)?;
 
@@ -1002,7 +1004,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd>(
     let nil: ValTensor<F> = Tensor::from(vec![ValType::Constant(F::from(0))].into_iter()).into();
     region.next();
 
-    let res = iff(config, region, &[mask, unit, nil])?;
+    let res = iff(config, region, &[mask, nil, unit])?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         let mut is_assigned = !res.any_unknowns();
@@ -1032,12 +1034,11 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 3],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // if mask > 0 then output a else output b
-    let (mask, b, a) = (&values[0], &values[1], &values[2]);
+    let (mask, a, b) = (&values[0], &values[1], &values[2]);
 
     let unit: ValTensor<F> =
-        Tensor::from(vec![region.assign_constant(&config.inputs[1], F::from(1))?].into_iter())
+        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(1))?].into_iter())
             .into();
-    region.next();
 
     // make sure mask is boolean
     let assigned_mask = region.assign(&config.inputs[1], mask)?;
@@ -1068,8 +1069,8 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
         if is_assigned {
             let safe_iff = tensor::ops::iff(
                 &mask.get_felt_evals()?,
-                &b.get_felt_evals()?,
                 &a.get_felt_evals()?,
+                &b.get_felt_evals()?,
             )
             .map_err(|e| {
                 error!("{}", e);

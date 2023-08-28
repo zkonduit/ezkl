@@ -192,7 +192,7 @@ mod native_tests {
         "boolean_identity",
     ];
 
-    const TESTS_AGGR: [&str; 20] = [
+    const TESTS_AGGR: [&str; 21] = [
         "1l_mlp",
         "1l_flatten",
         "1l_average",
@@ -202,7 +202,7 @@ mod native_tests {
         "1l_sigmoid",
         "1l_gelu_noappx",
         "1l_sqrt",
-        // "1l_prelu",
+        "1l_prelu",
         "1l_var",
         "1l_leakyrelu",
         "1l_relu",
@@ -221,7 +221,7 @@ mod native_tests {
         ("2l_relu_small", "2l_relu_sigmoid_small"),
     ];
 
-    const TESTS_EVM: [&str; 20] = [
+    const TESTS_EVM: [&str; 21] = [
         "1l_mlp",
         "1l_flatten",
         "1l_average",
@@ -229,7 +229,7 @@ mod native_tests {
         "1l_sigmoid",
         "1l_div",
         "1l_sqrt",
-        // "1l_prelu",
+        "1l_prelu",
         "1l_var",
         "1l_leakyrelu",
         "1l_gelu_noappx",
@@ -245,13 +245,13 @@ mod native_tests {
         "1l_identity",
     ];
 
-    const TESTS_EVM_AGGR: [&str; 17] = [
+    const TESTS_EVM_AGGR: [&str; 18] = [
         "1l_mlp",
         "1l_reshape",
         "1l_sigmoid",
         "1l_div",
         "1l_sqrt",
-        // "1l_prelu",
+        "1l_prelu",
         "1l_var",
         "1l_leakyrelu",
         "1l_gelu_noappx",
@@ -279,7 +279,7 @@ mod native_tests {
             use crate::native_tests::kzg_aggr_mock_prove_and_verify;
             use tempdir::TempDir;
 
-            seq!(N in 0..=17 {
+            seq!(N in 0..=20 {
 
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_mock_prove_and_verify_(test: &str) {
@@ -679,7 +679,7 @@ mod native_tests {
             });
 
 
-            seq!(N in 0..= 16 {
+            seq!(N in 0..= 17 {
                 // these take a particularly long time to run
                 #(#[test_case(TESTS_EVM_AGGR[N])])*
                 #[ignore]
@@ -707,7 +707,7 @@ mod native_tests {
             });
 
 
-            seq!(N in 0..= 19 {
+            seq!(N in 0..= 20 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
