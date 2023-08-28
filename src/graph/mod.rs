@@ -24,6 +24,7 @@ use self::modules::{
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
+use crate::fieldutils::felt_to_i128;
 use crate::graph::modules::ModuleInstanceOffset;
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
@@ -539,7 +540,14 @@ impl GraphCircuit {
                 .map(|i| i.len())
                 .collect::<Vec<usize>>()
         );
-        trace!("{:?}", public_inputs);
+        trace!(
+            "{:?}",
+            public_inputs
+                .clone()
+                .into_iter()
+                .map(|x| x.into_iter().map(felt_to_i128).collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        );
 
         let mut pi_inner: Vec<Vec<Fp>> = public_inputs
             .iter()

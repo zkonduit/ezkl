@@ -368,8 +368,8 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                     }
                 }
             }
-
-            *o = prod.unwrap().get_inner_tensor().unwrap()[0].clone();
+            let prod = prod.unwrap().get_inner_tensor().unwrap()[0].clone();
+            *o = prod;
         }
     });
 
@@ -772,6 +772,35 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         .into();
 
     actual_output.reshape(&broadcasted_shape)?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let mut is_assigned = !actual_output.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let felt_evals = values
+                .iter()
+                .map(|x| x.get_felt_evals().unwrap())
+                .collect::<Vec<_>>();
+
+            let safe_op = match op {
+                BaseOp::Add => tensor::ops::add(&felt_evals),
+                BaseOp::Sub => tensor::ops::sub(&felt_evals),
+                BaseOp::Mult => tensor::ops::mult(&felt_evals),
+                _ => panic!(),
+            }
+            .map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?;
+
+            assert_eq!(
+                actual_output.get_felt_evals()?.map(|x| felt_to_i128(x)),
+                safe_op.map(|x| felt_to_i128(x))
+            );
+        }
+    }
 
     let end = global_start.elapsed();
     trace!(
