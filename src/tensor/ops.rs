@@ -22,15 +22,15 @@ pub use std::ops::{Add, Div, Mul, Neg, Sub};
 /// &[2, 3],
 /// ).unwrap();
 /// let a = Tensor::<i128>::new(
-///   Some(&[2, 1, 2, 1, 1, 1]),
+///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap();
 /// let b = Tensor::<i128>::new(
-///   Some(&[2, 3, 2, 1, 1, 1]),
+///   Some(&[7, 8, 9, 10, 11, 12]),
 /// &[2, 3],
 /// ).unwrap();
 /// let result = iff(&mask, &a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 1, 2, 1, 1, 1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 8, 3, 10, 5, 12]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn iff<
@@ -43,8 +43,8 @@ pub fn iff<
         + std::cmp::PartialEq,
 >(
     mask: &Tensor<T>,
-    b: &Tensor<T>,
     a: &Tensor<T>,
+    b: &Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
     // assert is boolean
     assert!(
@@ -90,8 +90,8 @@ pub fn not<
 ) -> Result<Tensor<T>, TensorError> {
     iff(
         a,
-        &Tensor::from(vec![T::one().unwrap()].into_iter()),
         &Tensor::from(vec![T::zero().unwrap()].into_iter()),
+        &Tensor::from(vec![T::one().unwrap()].into_iter()),
     )
 }
 
@@ -134,7 +134,7 @@ pub fn or<
         "or() only works on boolean mask"
     );
 
-    iff(a, b, &Tensor::from(vec![T::one().unwrap()].into_iter()))
+    iff(a, a, b)
 }
 
 /// Elementwise applies xor to two tensors
