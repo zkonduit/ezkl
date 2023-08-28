@@ -141,7 +141,7 @@ mod native_tests {
         "mnist_gan",
     ];
 
-    const ACCURACY_CAL_TESTS: [&str; 2] = ["accuracy", "1l_mlp", "4l_relu_conv_fc"];
+    const ACCURACY_CAL_TESTS: [&str; 3] = ["accuracy", "1l_mlp", "4l_relu_conv_fc"];
 
     const TESTS: [&str; 46] = [
         "1l_mlp",
