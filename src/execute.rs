@@ -160,7 +160,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             settings_path,
             data,
             target,
-        } => calibrate(model, data, settings_path, target).await,
+            scales,
+        } => calibrate(model, data, settings_path, target, scales).await,
         Commands::GenWitness {
             data,
             compiled_model,
@@ -528,29 +529,35 @@ pub(crate) async fn calibrate(
     data: PathBuf,
     settings_path: PathBuf,
     target: CalibrationTarget,
+    scales: Option<Vec<u32>>,
 ) -> Result<(), Box<dyn Error>> {
     let data = GraphData::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
-
     // we load the model to get the input and output shapes
     let _r = Gag::stdout().unwrap();
     let model = Model::from_run_args(&settings.run_args, &model_path).unwrap();
     // drop the gag
     std::mem::drop(_r);
 
+    let range = if let Some(scales) = scales {
+        scales
+    } else {
+        (2..16).collect::<Vec<u32>>()
+    };
+
     let chunks = data.split_into_batches(model.graph.input_shapes()).unwrap();
 
     info!("num of calibration batches: {}", chunks.len());
 
-    let pb = init_bar((2..16).len() as u64);
+    let pb = init_bar(range.len() as u64);
 
     pb.set_message("calibrating...");
 
     let mut found_params: Vec<GraphSettings> = vec![];
 
-    for scale in 2..16 {
+    for scale in range {
         pb.set_message(format!("scale {}", scale));
         std::thread::sleep(Duration::from_millis(100));
 
