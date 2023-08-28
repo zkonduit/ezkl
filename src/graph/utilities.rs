@@ -1023,20 +1023,19 @@ pub fn homogenize_input_scales(
 
     let max_scale = input_scales.iter().max().unwrap();
     let _ = input_scales
-            .iter()
-            .enumerate()
-            .map(|(idx, input_scale)| {
-                if !inputs_to_scale.contains(&idx) {
-                    return;
-                }
-                let scale_diff = max_scale - input_scale;
-                if scale_diff > 0 {
-                    let mult = crate::graph::scale_to_multiplier(scale_diff);
-                    dividers[idx] = mult as u128;
-                }
-            })
-            .collect_vec();
-    }
+        .iter()
+        .enumerate()
+        .map(|(idx, input_scale)| {
+            if !inputs_to_scale.contains(&idx) {
+                return;
+            }
+            let scale_diff = max_scale - input_scale;
+            if scale_diff > 0 {
+                let mult = crate::graph::scale_to_multiplier(scale_diff);
+                dividers[idx] = mult as u128;
+            }
+        })
+        .collect_vec();
 
     // only rescale if need to
     if dividers.iter().any(|&x| x > 1) {
