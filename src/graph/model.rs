@@ -510,7 +510,7 @@ impl Model {
                         }
                         max_lookup_inputs = max_lookup_inputs.max(max);
                     }
-                    trace!(
+                    debug!(
                         "------------ output node {}: {:?}",
                         idx,
                         res.output.map(crate::fieldutils::felt_to_i32).show()
@@ -1076,7 +1076,7 @@ impl Model {
                         // we get the max as for fused nodes this corresponds to the node output
                         results.insert(*idx, vec![vt.clone()]);
                         //only use with mock prover
-                        trace!("------------ output node {:?}: {:?}", idx, vt.show());
+                        debug!("------------ output node {:?}: {:?}", idx, vt.show());
                     }
                 }
                 NodeType::SubGraph {

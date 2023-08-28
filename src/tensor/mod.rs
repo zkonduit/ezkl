@@ -527,7 +527,14 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Display a tensor
     pub fn show(&self) -> String {
         if self.len() > 10 {
-            format!("{:?} ..", self[..10].to_vec())
+            let start = self[..5].to_vec();
+            let end = self[self.len() - 5..].to_vec();
+            // print the two split by ... in the middle
+            format!(
+                "[{} ... {}]",
+                start.iter().map(|x| format!("{:?}", x)).join(", "),
+                end.iter().map(|x| format!("{:?}", x)).join(", ")
+            )
         } else {
             format!("{:?}", self)
         }
@@ -659,6 +666,12 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 6]), &[4]).unwrap();
     /// let mut indices = vec![3, 4];
     /// assert_eq!(a.remove_indices(&mut indices, true).unwrap(), expected);
+    ///
+    ///
+    /// let a = Tensor::<i32>::new(Some(&[52, -245, 153, 13, -4, -56, -163, 249, -128, -172, 396, 143, 2, -96, 504, -44, -158, -393, 61, 95, 191, 74, 64, -219, 553, 104, 235, 222, 44, -216, 63, -251, 40, -140, 112, -355, 60, 123, 26, -116, -89, -200, -109, 168, 135, -34, -99, -54, 5, -81, 322, 87, 4, -139, 420, 92, -295, -12, 262, -1, 26, -48, 231, 1, -335, 244, 188, -4, 5, -362, 57, -198, -184, -117, 40, 305, 49, 30, -59, -26, -37, 96]), &[82]).unwrap();
+    /// let b = Tensor::<i32>::new(Some(&[52, -245, 153, 13, -4, -56, -163, 249, -128, -172, 396, 143, 2, -96, 504, -44, -158, -393, 61, 95, 191, 74, 64, -219, 553, 104, 235, 222, 44, -216, 63, -251, 40, -140, 112, -355, 60, 123, 26, -116, -89, -200, -109, 168, 135, -34, -99, -54, 5, -81, 322, 87, 4, -139, 420, 92, -295, -12, 262, -1, 26, -48, 231, -335, 244, 188, 5, -362, 57, -198, -184, -117, 40, 305, 49, 30, -59, -26, -37, 96]), &[80]).unwrap();
+    /// let mut indices = vec![63, 67];
+    /// assert_eq!(a.remove_indices(&mut indices, true).unwrap(), b);
     /// ```
     pub fn remove_indices(
         &self,
@@ -672,7 +685,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         }
         // remove indices
         for elem in indices.iter().rev() {
-            inner.swap_remove(*elem);
+            inner.remove(*elem);
         }
 
         Tensor::new(Some(&inner), &[inner.len()])
