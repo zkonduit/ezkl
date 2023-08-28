@@ -657,9 +657,24 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         ))));
     }
 
-    if region.is_dummy() {
+    // if not sub
+    if region.is_dummy() && op != BaseOp::Sub {
         let num_constants = lhs.num_constants() + rhs.num_constants();
+        let vals = vec![ValType::Value(Value::<F>::unknown()); broadcasted_shape.iter().product()];
+        let mut tensor: Tensor<ValType<F>> = Tensor::from(vals.into_iter());
+        tensor.reshape(&broadcasted_shape);
+
+        trace!(
+            "dummy pairwise {} layout took {:?}, offset: {}",
+            op.as_str(),
+            global_start.elapsed(),
+            region.offset()
+        );
+
+        region.increment(lhs.len());
         region.increment_constants(num_constants);
+
+        return Ok(tensor.into());
     }
 
     let mut inputs = vec![];
