@@ -6,7 +6,6 @@ mod native_tests {
     use ezkl::graph::input::{FileSource, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, Visibility};
     use lazy_static::lazy_static;
-    use log::info;
     use rand::Rng;
     use std::env::var;
     use std::io::{Read, Write};
