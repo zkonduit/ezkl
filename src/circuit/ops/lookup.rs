@@ -276,7 +276,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     }
 
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
-        println!("rescaling {:?} to {:?}", inputs_scale, global_scale);
         match self {
             LookupOp::Sign => Box::new(LookupOp::Sign),
             LookupOp::Recip { .. } => Box::new(LookupOp::Recip {

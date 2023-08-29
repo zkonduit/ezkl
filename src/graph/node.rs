@@ -610,6 +610,7 @@ impl Node {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn rescale_const_with_single_use(
     constant: &mut Constant<Fp>,
     in_scales: Vec<u32>,

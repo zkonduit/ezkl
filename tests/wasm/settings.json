@@ -51,11 +51,7 @@
         ]
     },
     "required_lookups": [
-        {
-            "ReLU": {
-                "scale": 1
-            }
-        }
+        "ReLU"
     ],
     "check_mode": "SAFE"
 }

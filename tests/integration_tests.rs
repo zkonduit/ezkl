@@ -51,12 +51,7 @@ mod native_tests {
 
             // now install torch, pandas, numpy, seaborn, jupyter
             let status = Command::new("pip")
-                .args(["install", "torch==2.0.1", "pandas==2.0.3", "numpy==1.23"])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
-            let status = Command::new("pip")
-                .args(["install", "numpy==1.23"])
+                .args(["install", "numpy==1.23", "onnxruntime", "onnx"])
                 .status()
                 .expect("failed to execute process");
 
