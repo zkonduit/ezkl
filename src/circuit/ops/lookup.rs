@@ -19,9 +19,7 @@ pub enum LookupOp {
     Div {
         denom: utils::F32,
     },
-    ReLU {
-        scale: usize,
-    },
+    ReLU,
     Max {
         scales: (usize, usize),
         a: utils::F32,
@@ -40,7 +38,6 @@ pub enum LookupOp {
         scale: usize,
     },
     LeakyReLU {
-        scale: usize,
         slope: utils::F32,
     },
     Sigmoid {
@@ -155,15 +152,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 f32::from(*denom).into(),
             )),
             LookupOp::Recip { scale } => Ok(tensor::ops::nonlinearities::recip(&x, *scale as u32)),
-            LookupOp::ReLU { scale } => {
-                Ok(tensor::ops::nonlinearities::leakyrelu(&x, *scale, 0_f64))
-            }
+            LookupOp::ReLU => Ok(tensor::ops::nonlinearities::leakyrelu(&x, 0_f64)),
 
-            LookupOp::LeakyReLU { scale, slope: a } => Ok(tensor::ops::nonlinearities::leakyrelu(
-                &x,
-                *scale,
-                a.0.into(),
-            )),
+            LookupOp::LeakyReLU { slope: a } => {
+                Ok(tensor::ops::nonlinearities::leakyrelu(&x, a.0.into()))
+            }
             LookupOp::Sigmoid { scales } => {
                 Ok(tensor::ops::nonlinearities::sigmoid(&x, scales.0, scales.1))
             }
@@ -237,8 +230,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Recip { scale, .. } => format!("RECIP w/ {}", scale),
             LookupOp::Div { denom, .. } => format!("DIV w/ {}", denom),
             LookupOp::Ln { scales } => format!("LN w/ {:?}", scales),
-            LookupOp::ReLU { scale, .. } => format!("RELU w/ scale {}", scale),
-            LookupOp::LeakyReLU { scale, slope: a } => format!("L_RELU w/ {} /s {}", scale, a),
+            LookupOp::ReLU => format!("RELU"),
+            LookupOp::LeakyReLU { slope: a } => format!("L_RELU /s {}", a),
             LookupOp::Sigmoid { scales } => format!("SIGMOID w/ {:?}", scales),
             LookupOp::Sqrt { scales } => format!("SQRT w/ {:?}", scales),
             LookupOp::Erf { scales } => format!("ERF w/ {:?}", scales),
@@ -274,14 +267,16 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     }
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, _: Vec<u32>, global_scale: u32) -> u32 {
+    fn out_scale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> u32 {
         match self {
-            LookupOp::Sign | LookupOp::GreaterThan { .. } => 0,
+            LookupOp::Sign | LookupOp::GreaterThan { .. } | LookupOp::LessThan { .. } => 0,
+            LookupOp::ReLU | LookupOp::LeakyReLU { .. } => inputs_scale[0],
             _ => global_scale,
         }
     }
 
     fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
+        println!("rescaling {:?} to {:?}", inputs_scale, global_scale);
         match self {
             LookupOp::Sign => Box::new(LookupOp::Sign),
             LookupOp::Recip { .. } => Box::new(LookupOp::Recip {
@@ -292,13 +287,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                     ((denom.0 as f64) * scale_to_multiplier(inputs_scale[0] - global_scale)) as f32,
                 ),
             }),
-            LookupOp::ReLU { .. } => Box::new(LookupOp::ReLU {
-                scale: scale_to_multiplier(inputs_scale[0] - global_scale) as usize,
-            }),
-            LookupOp::LeakyReLU { slope, .. } => Box::new(LookupOp::LeakyReLU {
-                scale: scale_to_multiplier(inputs_scale[0] - global_scale) as usize,
-                slope: *slope,
-            }),
+            LookupOp::ReLU { .. } => Box::new(LookupOp::ReLU),
+            LookupOp::LeakyReLU { slope, .. } => Box::new(LookupOp::LeakyReLU { slope: *slope }),
             LookupOp::Sigmoid { .. } => Box::new(LookupOp::Sigmoid {
                 scales: (
                     scale_to_multiplier(inputs_scale[0]) as usize,

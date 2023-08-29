@@ -1959,8 +1959,8 @@ pub fn abs<F: PrimeField + TensorType + PartialOrd>(
     let x = &values[0];
     // Negate the product
     let neg_x = neg(config, region, &[x.clone()])?;
-    let relu_x = nonlinearity(config, region, &[x.clone()], &LookupOp::ReLU { scale: 1 })?;
-    let relu_neg_x = nonlinearity(config, region, &[neg_x], &LookupOp::ReLU { scale: 1 })?;
+    let relu_x = nonlinearity(config, region, &[x.clone()], &LookupOp::ReLU)?;
+    let relu_neg_x = nonlinearity(config, region, &[neg_x], &LookupOp::ReLU)?;
     // abs(x) = relu(x) + relu(-x)
     let abs = pairwise(config, region, &[relu_x, relu_neg_x], BaseOp::Add)?;
 
@@ -2020,7 +2020,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub,
     )?;
     // relu(x - max(x - 1))
-    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU { scale: 1 })?;
+    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
 
     let len = relu.dims().iter().product();
 
@@ -2040,12 +2040,8 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     // 1 - sum(relu(x - max(x - 1)))
     let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
     // relu(1 - sum(relu(x - max(x - 1))))
-    let relu_one_minus_sum_relu = nonlinearity(
-        config,
-        region,
-        &[one_minus_sum_relu],
-        &LookupOp::ReLU { scale: 1 },
-    )?;
+    let relu_one_minus_sum_relu =
+        nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
 
     // constraining relu(sum(relu(x - max(x - 1)) - len(x))) = 0
     region.assign(&config.inputs[1], &relu_one_minus_sum_relu)?;
@@ -2117,7 +2113,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // relu(min(x + 1)  - x)
-    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU { scale: 1 })?;
+    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
 
     let len = relu.dims().iter().product();
 
@@ -2136,12 +2132,8 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     // 1 - sum(relu(min(x + 1) - x))
     let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
     // relu(1 - sum(relu(min(x + 1) - x)))
-    let relu_one_minus_sum_relu = nonlinearity(
-        config,
-        region,
-        &[one_minus_sum_relu],
-        &LookupOp::ReLU { scale: 1 },
-    )?;
+    let relu_one_minus_sum_relu =
+        nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
 
     region.assign(&config.inputs[1], &relu_one_minus_sum_relu)?;
 

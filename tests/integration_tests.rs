@@ -6,12 +6,14 @@ mod native_tests {
     use ezkl::graph::input::{FileSource, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, Visibility};
     use lazy_static::lazy_static;
+    use log::info;
     use rand::Rng;
     use std::env::var;
     use std::io::{Read, Write};
     use std::process::{Child, Command};
     use std::sync::Once;
     static COMPILE: Once = Once::new();
+    static ENV_SETUP: Once = Once::new();
 
     //Sure to run this once
 
@@ -36,6 +38,29 @@ mod native_tests {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
             build_ezkl();
+        });
+    }
+
+    fn setup_py_env() {
+        ENV_SETUP.call_once(|| {
+            // supposes that you have a virtualenv called .env and have run the following
+            // equivalent of python -m venv .env
+            // source .env/bin/activate
+            // pip install -r requirements.txt
+            // maturin develop --release --features python-bindings
+
+            // now install torch, pandas, numpy, seaborn, jupyter
+            let status = Command::new("pip")
+                .args(["install", "torch==2.0.1", "pandas==2.0.3", "numpy==1.23"])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+            let status = Command::new("pip")
+                .args(["install", "numpy==1.23"])
+                .status()
+                .expect("failed to execute process");
+
+            assert!(status.success());
         });
     }
 
@@ -323,6 +348,7 @@ mod native_tests {
             use crate::native_tests::LARGE_TESTS;
             use test_case::test_case;
             use crate::native_tests::mock;
+            use crate::native_tests::accuracy_measurement;
             use crate::native_tests::kzg_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
@@ -383,6 +409,39 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                 render_circuit(path, test.to_string());
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn accuracy_measurement_public_outputs_(test: &str) {
+                env_logger::init();
+                crate::native_tests::init_binary();
+                crate::native_tests::setup_py_env();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "accuracy");
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn accuracy_measurement_public_params_(test: &str) {
+                env_logger::init();
+                crate::native_tests::init_binary();
+                crate::native_tests::setup_py_env();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                accuracy_measurement(path, test.to_string(), "private", "public", "private", 1, "accuracy");
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn accuracy_measurement_public_inputs_(test: &str) {
+                env_logger::init();
+                crate::native_tests::init_binary();
+                crate::native_tests::setup_py_env();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                accuracy_measurement(path, test.to_string(), "public", "private", "private", 1, "accuracy");
                 test_dir.close().unwrap();
             }
 
@@ -1139,6 +1198,106 @@ mod native_tests {
             ])
             .status()
             .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    // Mock prove (fast, but does not cover some potential issues)
+    fn accuracy_measurement(
+        test_dir: &str,
+        example_name: String,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+        batch_size: usize,
+        cal_target: &str,
+    ) {
+        info!("running accuracy measurement for {}", example_name);
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-settings",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+                &format!("--variables=batch_size={}", batch_size),
+                &format!("--input-visibility={}", input_visibility),
+                &format!("--param-visibility={}", param_visibility),
+                &format!("--output-visibility={}", output_visibility),
+            ])
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "calibrate-settings",
+                "--data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+                &format!("--target={}", cal_target),
+            ])
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "compile-model",
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--compiled-model",
+                format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-witness",
+                "-D",
+                &format!("{}/{}/input.json", test_dir, example_name),
+                "-M",
+                &format!("{}/{}/network.compiled", test_dir, example_name),
+                "-O",
+                &format!("{}/{}/witness.json", test_dir, example_name),
+                &format!(
+                    "--settings-path={}/{}/settings.json",
+                    test_dir, example_name
+                ),
+            ])
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // run python ./output_comparison.py in the test dir
+        let status = Command::new("python")
+            .args([
+                "tests/output_comparison.py",
+                &format!("{}/{}/network.onnx", test_dir, example_name),
+                &format!("{}/{}/input.json", test_dir, example_name),
+                &format!("{}/{}/witness.json", test_dir, example_name),
+                &format!("{}/{}/settings.json", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+
         assert!(status.success());
     }
 

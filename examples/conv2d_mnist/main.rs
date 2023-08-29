@@ -147,7 +147,17 @@ where
             PolyConfig::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE);
 
         layer_config
-            .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU { scale: 32 })
+            .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU)
+            .unwrap();
+
+        layer_config
+            .configure_lookup(
+                cs,
+                &input,
+                &output,
+                BITS,
+                &LookupOp::Div { denom: 32.0.into() },
+            )
             .unwrap();
 
         let public_output: Column<Instance> = cs.instance_column();
@@ -183,15 +193,21 @@ where
                         .layout(&mut region, &[self.input.clone()], Box::new(op))
                         .unwrap();
 
+                    let x = config
+                        .layer_config
+                        .layout(&mut region, &[x.unwrap()], Box::new(LookupOp::ReLU))
+                        .unwrap();
+
                     let mut x = config
                         .layer_config
                         .layout(
                             &mut region,
                             &[x.unwrap()],
-                            Box::new(LookupOp::ReLU { scale: 32 }),
+                            Box::new(LookupOp::Div { denom: 32.0.into() }),
                         )
                         .unwrap()
                         .unwrap();
+
                     x.flatten();
                     // multiply by weights
                     let x = config

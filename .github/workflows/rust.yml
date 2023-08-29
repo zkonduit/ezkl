@@ -121,6 +121,7 @@ jobs:
       - name: Circuit Render
         run: cargo nextest run --release --verbose tests::tutorial_
 
+
   mock-proving-tests:
     runs-on: self-hosted
     # needs: [build,  library-tests, docs]
@@ -376,6 +377,34 @@ jobs:
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Run pytest
         run: source .env/bin/activate; pytest
+
+   accuracy-measurement-tests:
+    runs-on: ubuntu-latest-32-cores
+    # needs: [build, library-tests, docs]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.7"
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-08-24
+          override: true
+          components: rustfmt, clippy
+      - name: Install solc
+        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+      - name: Setup Virtual Env and Install python dependencies
+        run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+      - name: Install Anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --profile local --locked anvil
+      - name: Build python ezkl
+        run: source .env/bin/activate; maturin develop --features python-bindings --release
+      - name: Public inputs
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_inputs_
+      - name: Public params
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_params_
+      - name: Public outputs
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_
 
   python-integration-tests:
     runs-on:

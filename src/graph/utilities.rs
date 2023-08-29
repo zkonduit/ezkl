@@ -431,7 +431,7 @@ pub fn new_op_from_onnx(
                     deleted_indices.push(const_idx);
                 }
                 if unit == 0. {
-                    SupportedOp::Nonlinear(LookupOp::ReLU { scale: 1 })
+                    SupportedOp::Nonlinear(LookupOp::ReLU)
                 } else {
                     SupportedOp::Nonlinear(LookupOp::Max {
                         scales: (1, 1),
@@ -502,7 +502,6 @@ pub fn new_op_from_onnx(
             };
 
             SupportedOp::Nonlinear(LookupOp::LeakyReLU {
-                scale: 1,
                 slope: crate::circuit::utils::F32(leaky_op.alpha),
             })
         }

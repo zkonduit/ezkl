@@ -3105,20 +3105,20 @@ pub mod nonlinearities {
     ///     Some(&[2, 15, 2, 1, 1, -5]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = leakyrelu(&x, 1, 0.1);
+    /// let result = leakyrelu(&x, 0.1);
     /// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, -1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn leakyrelu(a: &Tensor<i128>, scale: usize, slope: f64) -> Tensor<i128> {
+    pub fn leakyrelu(a: &Tensor<i128>, slope: f64) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
             output[i] = if a_i < &0 {
-                let d_inv_x = (slope) * (*a_i as f64) / (scale as f64);
+                let d_inv_x = (slope) * (*a_i as f64);
                 d_inv_x.round() as i128
             } else {
-                let d_inv_x = (*a_i as f64) / (scale as f64);
+                let d_inv_x = *a_i as f64;
                 d_inv_x.round() as i128
             };
         }
@@ -3196,47 +3196,6 @@ pub mod nonlinearities {
             };
         }
 
-        output
-    }
-
-    /// Elementwise applies prelu to a tensor of integers.
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `scale` - Single value
-    /// * `slopes` - Array of values
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::prelu;
-    /// let x = Tensor::<i128>::new(
-    ///     Some(&[-10, 15, 2, 1, 1, -5]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let result = prelu(&x, 1, &[0.1, 25.0]);
-    /// let expected = Tensor::<i128>::new(Some(&[-1, 15, 2, 1, 1, -125]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn prelu(a: &Tensor<i128>, scale: usize, slopes: &[f64]) -> Tensor<i128> {
-        if slopes.len() == 1 {
-            return leakyrelu(a, scale, slopes[0]);
-        } else {
-            // assert number of slopes is equal to number of channels
-            assert_eq!(slopes.len(), a.dims()[0])
-        }
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = if a_i < &0 {
-                let slope_i: f64 = slopes[i / (a.dims()[1..].iter().product::<usize>())];
-                let d_inv_x = (slope_i) * (*a_i as f64) / (scale as f64);
-                d_inv_x.round() as i128
-            } else {
-                let d_inv_x = (*a_i as f64) / (scale as f64);
-                d_inv_x.round() as i128
-            };
-        }
         output
     }
 

@@ -198,7 +198,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::ReduceMax { .. }
             | HybridOp::ReduceMin { .. }
             | HybridOp::MaxPool2d { .. }
-            | HybridOp::Abs => Op::<F>::required_lookups(&LookupOp::ReLU { scale: 1 }),
+            | HybridOp::Abs => Op::<F>::required_lookups(&LookupOp::ReLU),
             HybridOp::Softmax { scales } => {
                 vec![
                     LookupOp::Exp { scales: *scales },
