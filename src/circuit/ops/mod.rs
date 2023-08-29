@@ -283,6 +283,10 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         Box::new(self.clone()) // Forward to the derive(Clone) impl
     }
 
+    fn out_scale(&self, _: Vec<u32>, _: u32) -> u32 {
+        self.quantized_values.scale().unwrap()
+    }
+
     fn is_constant(&self) -> bool {
         true
     }

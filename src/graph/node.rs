@@ -132,24 +132,15 @@ pub struct RebaseScale {
     pub inner: Box<SupportedOp>,
     /// The scale of the operation's inputs.
     pub scale: u128,
-    /// rebase multiplier
-    pub rebase_multiplier: u32,
 }
 
 impl RebaseScale {
     ///
-    pub fn rebase(
-        inner: SupportedOp,
-        original_scale: u32,
-        op_out_scale: u32,
-        rebase_multiplier: u32,
-    ) -> SupportedOp {
-        if op_out_scale > rebase_multiplier * original_scale {
+    pub fn rebase(inner: SupportedOp, global_scale: u32, op_out_scale: u32) -> SupportedOp {
+        if (op_out_scale > global_scale) && !inner.is_constant() && !inner.is_input() {
             SupportedOp::RebaseScale(RebaseScale {
                 inner: Box::new(inner),
-                scale: scale_to_multiplier(op_out_scale - rebase_multiplier * original_scale)
-                    as u128,
-                rebase_multiplier,
+                scale: scale_to_multiplier(op_out_scale - global_scale) as u128,
             })
         } else {
             inner
@@ -182,7 +173,7 @@ impl Op<Fp> for RebaseScale {
     }
 
     fn out_scale(&self, _: Vec<u32>, _g: u32) -> u32 {
-        self.rebase_multiplier * _g
+        _g
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
@@ -242,6 +233,13 @@ impl SupportedOp {
     pub fn get_input(&self) -> Option<Input> {
         match self {
             SupportedOp::Input(op) => Some(op.clone()),
+            _ => None,
+        }
+    }
+    ///
+    pub fn get_mutable_constant(&mut self) -> Option<&mut Constant<Fp>> {
+        match self {
+            SupportedOp::Constant(op) => Some(op),
             _ => None,
         }
     }
@@ -554,7 +552,7 @@ impl Node {
         input_ids.retain(|(idx, _)| *idx != usize::MAX);
 
         // rescale the inputs if necessary to get consistent fixed points
-        let in_scales: Vec<u32> = input_ids
+        let mut in_scales: Vec<u32> = input_ids
             .iter()
             .map(|(idx, outlet)| {
                 let idx = inputs.iter().position(|x| *idx == x.idx()).unwrap();
@@ -562,10 +560,31 @@ impl Node {
             })
             .collect();
 
-        opkind = opkind.rescale(in_scales.clone(), scales.input).into();
-        let mut out_scale = opkind.out_scale(in_scales.clone(), scales.input);
-        opkind = RebaseScale::rebase(opkind, scales.input, out_scale, scales.rebase_multiplier);
-        out_scale = opkind.out_scale(in_scales, scales.input);
+        let global_scale = scales.input * scales.rebase_multiplier;
+
+        let homogenous_inputs = opkind.requires_homogenous_input_scales();
+        // autoamtically increases a constant's scale if it is only used once and
+        for input in homogenous_inputs {
+            let input_node = other_nodes.get_mut(&inputs[input].idx()).unwrap();
+            let input_opkind = &mut input_node.opkind();
+            if let Some(constant) = input_opkind.get_mutable_constant() {
+                rescale_const_with_single_use(
+                    constant,
+                    in_scales.clone(),
+                    global_scale,
+                    param_visibility,
+                )?;
+                input_node.replace_opkind(constant.clone_dyn().into());
+                let out_scale = input_opkind.out_scale(vec![], global_scale);
+                input_node.bump_scale(out_scale);
+                in_scales[input] = out_scale;
+            }
+        }
+
+        opkind = opkind.rescale(in_scales.clone(), global_scale).into();
+        let mut out_scale = opkind.out_scale(in_scales.clone(), global_scale);
+        opkind = RebaseScale::rebase(opkind, global_scale, out_scale);
+        out_scale = opkind.out_scale(in_scales, global_scale);
 
         // get the output shape
         let out_dims = {
@@ -589,4 +608,23 @@ impl Node {
             out_scale,
         })
     }
+}
+
+fn rescale_const_with_single_use(
+    constant: &mut Constant<Fp>,
+    in_scales: Vec<u32>,
+    global_scale: u32,
+    param_visibility: Visibility,
+) -> Result<(), Box<dyn Error>> {
+    if constant.is_single_use() {
+        let current_scale = constant.out_scale(vec![], global_scale);
+        let scale_max = in_scales.iter().max().unwrap();
+        if scale_max > &current_scale {
+            let raw_values = constant.raw_values.clone();
+            constant.quantized_values =
+                super::quantize_tensor(raw_values, *scale_max, param_visibility)?;
+        }
+    }
+
+    Ok(())
 }

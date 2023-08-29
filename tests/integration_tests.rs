@@ -141,7 +141,13 @@ mod native_tests {
         "mnist_gan",
     ];
 
-    const ACCURACY_CAL_TESTS: [&str; 3] = ["accuracy", "1l_mlp", "4l_relu_conv_fc"];
+    const ACCURACY_CAL_TESTS: [&str; 5] = [
+        "accuracy",
+        "1l_mlp",
+        "4l_relu_conv_fc",
+        "1l_elu",
+        "1l_prelu",
+    ];
 
     const TESTS: [&str; 46] = [
         "1l_mlp",
@@ -335,7 +341,7 @@ mod native_tests {
                 test_dir.close().unwrap();
             }
 
-            seq!(N in 0..=2 {
+            seq!(N in 0..=4 {
             #(#[test_case(ACCURACY_CAL_TESTS[N])])*
             fn mock_accuracy_cal_tests(test: &str) {
                 crate::native_tests::init_binary();
