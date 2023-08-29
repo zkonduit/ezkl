@@ -2524,12 +2524,12 @@ pub mod nonlinearities {
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::softmax;
     /// let x = Tensor::<i128>::new(
-    ///     Some(&[2, 4, 2, 1, 1, 0]),
+    ///     Some(&[2, 2, 3, 2, 2, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = softmax(&x, 128, 128).0;
+    /// let result = softmax(&x, 1, 128).0;
     /// // doubles the scale of the input
-    /// let expected = Tensor::<i128>::new(Some(&[2730, 2772, 2730, 2709, 2709, 2688]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[2838, 2838, 7713, 2838, 2838, 384]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn softmax(
@@ -2540,7 +2540,11 @@ pub mod nonlinearities {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
         let mut intermediate_values = vec![];
 
+        intermediate_values.push(a.clone());
+
         let exp = exp(a, scale_input, scale_output);
+
+        println!("exp {:?}", exp);
 
         let sum = sum(&exp).unwrap();
         intermediate_values.push(sum.clone());

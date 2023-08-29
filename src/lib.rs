@@ -78,7 +78,7 @@ pub struct RunArgs {
     #[arg(long, default_value = "7")]
     pub param_scale: u32,
     /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to scale_rebase_multiplier * input_scale (this a more advanced parameter, use with caution)
-    #[arg(long, default_value = "2")]
+    #[arg(long, default_value = "1")]
     pub scale_rebase_multiplier: u32,
     /// The number of bits used in lookup tables
     #[arg(short = 'B', long, default_value = "16")]

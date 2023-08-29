@@ -229,6 +229,14 @@ impl NodeType {
         }
     }
 
+    /// Returns true if the operation is a rebase
+    pub fn is_rebase(&self) -> bool {
+        match self {
+            NodeType::Node(n) => matches!(n.opkind, SupportedOp::RebaseScale { .. }),
+            NodeType::SubGraph { .. } => false,
+        }
+    }
+
     /// Returns true if the operation is an input.
     pub fn is_input(&self) -> bool {
         match self {
@@ -867,27 +875,27 @@ impl Model {
                 }
             }
         }
-
-        fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
-            // remove all nodes that are consts with 0 uses now
-            nodes.retain(|_, n| match n {
-                NodeType::Node(n) => match &mut n.opkind {
-                    SupportedOp::Constant(c) => {
-                        c.empty_raw_value();
-                        c.num_uses > 0
-                    }
-                    _ => true,
-                },
-                NodeType::SubGraph { model, .. } => {
-                    clean_useless_consts(&mut model.graph.nodes);
-                    true
-                }
-            });
-        }
-
-        clean_useless_consts(&mut nodes);
+        Self::clean_useless_consts(&mut nodes);
 
         Ok(nodes)
+    }
+
+    /// Removes all nodes that are consts with 0 uses
+    fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
+        // remove all nodes that are consts with 0 uses now
+        nodes.retain(|_, n| match n {
+            NodeType::Node(n) => match &mut n.opkind {
+                SupportedOp::Constant(c) => {
+                    c.empty_raw_value();
+                    c.num_uses > 0
+                }
+                _ => true,
+            },
+            NodeType::SubGraph { model, .. } => {
+                Self::clean_useless_consts(&mut model.graph.nodes);
+                true
+            }
+        });
     }
 
     /// Creates a `Model` from parsed run_args

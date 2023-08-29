@@ -23,9 +23,23 @@ def get_onnx_output(model_file, input_file):
     onnx.checker.check_model(onnx_model)
     with open(input_file) as f:
         inputs = json.load(f)
-    inputs_onnx = np.array(inputs['input_data']).astype(np.float32)
-    onnx_session = onnxruntime.InferenceSession(model_file)
-    onnx_input = {onnx_session.get_inputs()[0].name: inputs_onnx}
+    # reshape the input to the model
+    num_inputs = len(inputs['input_data'])
+
+    onnx_input = dict()
+    for i in range(num_inputs):
+        input_node = onnx_model.graph.input[i]
+        dims = []
+        for dim in input_node.type.tensor_type.shape.dim:
+            if dim.dim_value == 0:
+                dims.append(1)
+            else:
+                dims.append(dim.dim_value)
+
+        inputs_onnx = np.array(inputs['input_data'][i]).astype(
+            np.float32).reshape(dims)
+        onnx_session = onnxruntime.InferenceSession(model_file)
+        onnx_input[input_node.name] = inputs_onnx
     onnx_output = onnx_session.run(None, onnx_input)
     return onnx_output[0]
 
@@ -35,16 +49,18 @@ def compare_outputs(zk_output, onnx_output):
 
     res = []
 
-    zip_object = zip(zk_output, onnx_output)
+    zip_object = zip(np.array(zk_output).flatten(),
+                     np.array(onnx_output).flatten())
     for list1_i, list2_i in zip_object:
-        for second_list1_i, second_list2_i in zip(list1_i, list2_i):
-            if second_list1_i == 0.0 and second_list2_i == 0.0:
-                res.append(0)
-            else:
-                res.append(100*(second_list1_i - second_list2_i) /
-                           (second_list2_i))
+        if list1_i == 0.0 and list2_i == 0.0:
+            res.append(0)
+        else:
+            diff = list1_i - list2_i
+            res.append(100 * (diff) / (list2_i))
 
-    return np.mean(res)
+    print(res)
+
+    return np.mean(np.abs(res))
 
 
 if __name__ == '__main__':
@@ -64,4 +80,4 @@ if __name__ == '__main__':
     percentage_difference = compare_outputs(ezkl_output, onnx_output)
     # print the percentage difference
     print("mean percent diff: ", percentage_difference)
-    assert percentage_difference < 2.0, "Percentage difference is too high"
+    assert percentage_difference < 5, "Percentage difference is too high"

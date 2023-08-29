@@ -132,6 +132,8 @@ pub struct RebaseScale {
     pub inner: Box<SupportedOp>,
     /// The scale of the operation's inputs.
     pub scale: u128,
+    /// The original scale of the operation's inputs.
+    pub original_scale: u32,
 }
 
 impl RebaseScale {
@@ -141,6 +143,7 @@ impl RebaseScale {
             SupportedOp::RebaseScale(RebaseScale {
                 inner: Box::new(inner),
                 scale: scale_to_multiplier(op_out_scale - global_scale) as u128,
+                original_scale: op_out_scale,
             })
         } else {
             inner
@@ -169,7 +172,11 @@ impl Op<Fp> for RebaseScale {
     }
 
     fn as_string(&self) -> String {
-        format!("REBASED SCALE ({})", self.inner.as_string())
+        format!(
+            "REBASED (div={:?}) ({})",
+            self.scale,
+            self.inner.as_string()
+        )
     }
 
     fn out_scale(&self, _: Vec<u32>, _g: u32) -> u32 {

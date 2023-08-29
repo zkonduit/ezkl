@@ -51,6 +51,7 @@ mod native_tests {
             // now install torch, pandas, numpy, seaborn, jupyter
             let status = Command::new("pip")
                 .args(["install", "numpy", "onnxruntime", "onnx"])
+                .stdout(std::process::Stdio::null())
                 .status()
                 .expect("failed to execute process");
 
@@ -168,7 +169,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 46] = [
+    const TESTS: [&str; 47] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -217,6 +218,7 @@ mod native_tests {
         "1l_where",
         "boolean",
         "boolean_identity",
+        "variable_cnn",
     ];
 
     const TESTS_AGGR: [&str; 21] = [
@@ -372,7 +374,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=45 {
+            seq!(N in 0..=46 {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {

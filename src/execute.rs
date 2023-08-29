@@ -550,12 +550,9 @@ pub(crate) async fn calibrate(
 
     info!("num of calibration batches: {}", chunks.len());
 
-    let range_len = range.len() as u64;
-    let pb = init_bar(range_len.pow(2));
-
-    pb.set_message("calibrating...");
-
     let mut found_params: Vec<GraphSettings> = vec![];
+
+    let scale_rebase_multiplier = [1, 2, 3, 10];
 
     // 2 x 2 grid
     let range_grid = range
@@ -564,10 +561,25 @@ pub(crate) async fn calibrate(
         .map(|(a, b)| (*a, *b))
         .collect::<Vec<(u32, u32)>>();
 
-    for (input_scale, param_scale) in range_grid {
+    // remove all entries where input_scale > param_scale
+    let range_grid = range_grid
+        .into_iter()
+        .filter(|(a, b)| a <= b)
+        .collect::<Vec<(u32, u32)>>();
+
+    let range_grid = range_grid
+        .iter()
+        .cartesian_product(scale_rebase_multiplier.iter())
+        .map(|(a, b)| (*a, *b))
+        .collect::<Vec<((u32, u32), u32)>>();
+
+    let pb = init_bar(range_grid.len() as u64);
+    pb.set_message("calibrating...");
+
+    for ((input_scale, param_scale), scale_rebase_multiplier) in range_grid {
         pb.set_message(format!(
-            "input scale: {}, param scale: {}",
-            input_scale, param_scale
+            "input scale: {}, param scale: {}, scale rebase multiplier: {}",
+            input_scale, param_scale, scale_rebase_multiplier
         ));
         std::thread::sleep(Duration::from_millis(100));
 
@@ -587,6 +599,7 @@ pub(crate) async fn calibrate(
                 let local_run_args = RunArgs {
                     input_scale,
                     param_scale,
+                    scale_rebase_multiplier,
                     ..run_args.clone()
                 };
 
@@ -620,6 +633,7 @@ pub(crate) async fn calibrate(
                         param_scale: circuit.settings.run_args.param_scale,
                         bits: circuit.settings.run_args.bits,
                         logrows: circuit.settings.run_args.logrows,
+                        scale_rebase_multiplier: circuit.settings.run_args.scale_rebase_multiplier,
                         ..run_args.clone()
                     };
 
