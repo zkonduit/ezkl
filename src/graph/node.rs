@@ -2,6 +2,8 @@ use super::scale_to_multiplier;
 #[cfg(not(target_arch = "wasm32"))]
 use super::utilities::node_output_shapes;
 #[cfg(not(target_arch = "wasm32"))]
+use super::VarScales;
+#[cfg(not(target_arch = "wasm32"))]
 use super::Visibility;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
@@ -125,21 +127,29 @@ impl Op<Fp> for Rescaled {
 
 /// A wrapper for an operation that has been rescaled.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RebaseScale<const REBASE_MULTIPLIER: u32> {
+pub struct RebaseScale {
     /// The operation that has to be rescaled.
     pub inner: Box<SupportedOp>,
     /// The scale of the operation's inputs.
     pub scale: u128,
+    /// rebase multiplier
+    pub rebase_multiplier: u32,
 }
 
-impl<const REBASE_MULTIPLIER: u32> RebaseScale<REBASE_MULTIPLIER> {
+impl RebaseScale {
     ///
-    pub fn rebase(inner: SupportedOp, original_scale: u32, op_out_scale: u32) -> SupportedOp {
-        if op_out_scale > REBASE_MULTIPLIER * original_scale {
+    pub fn rebase(
+        inner: SupportedOp,
+        original_scale: u32,
+        op_out_scale: u32,
+        rebase_multiplier: u32,
+    ) -> SupportedOp {
+        if op_out_scale > rebase_multiplier * original_scale {
             SupportedOp::RebaseScale(RebaseScale {
                 inner: Box::new(inner),
-                scale: scale_to_multiplier(op_out_scale - REBASE_MULTIPLIER * original_scale)
+                scale: scale_to_multiplier(op_out_scale - rebase_multiplier * original_scale)
                     as u128,
+                rebase_multiplier,
             })
         } else {
             inner
@@ -147,7 +157,7 @@ impl<const REBASE_MULTIPLIER: u32> RebaseScale<REBASE_MULTIPLIER> {
     }
 }
 
-impl<const REBASE_MULTIPLIER: u32> Op<Fp> for RebaseScale<REBASE_MULTIPLIER> {
+impl Op<Fp> for RebaseScale {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -172,7 +182,7 @@ impl<const REBASE_MULTIPLIER: u32> Op<Fp> for RebaseScale<REBASE_MULTIPLIER> {
     }
 
     fn out_scale(&self, _: Vec<u32>, _g: u32) -> u32 {
-        REBASE_MULTIPLIER * _g
+        self.rebase_multiplier * _g
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
@@ -224,7 +234,7 @@ pub enum SupportedOp {
     ///
     Rescaled(Rescaled),
     ///
-    RebaseScale(RebaseScale<2>),
+    RebaseScale(RebaseScale),
 }
 
 impl SupportedOp {
@@ -265,7 +275,7 @@ impl From<Box<dyn Op<Fp>>> for SupportedOp {
         if let Some(op) = value.as_any().downcast_ref::<Rescaled>() {
             return SupportedOp::Rescaled(op.clone());
         };
-        if let Some(op) = value.as_any().downcast_ref::<RebaseScale<2>>() {
+        if let Some(op) = value.as_any().downcast_ref::<RebaseScale>() {
             return SupportedOp::RebaseScale(op.clone());
         };
 
@@ -501,7 +511,7 @@ impl Node {
     pub fn new(
         node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
         other_nodes: &mut BTreeMap<usize, super::NodeType>,
-        scale: u32,
+        scales: &VarScales,
         param_visibility: Visibility,
         idx: usize,
     ) -> Result<Self, Box<dyn Error>> {
@@ -523,7 +533,7 @@ impl Node {
         });
 
         let (mut opkind, deleted_indices) =
-            new_op_from_onnx(idx, scale, param_visibility, node.clone(), &mut inputs)?; // parses the op name
+            new_op_from_onnx(idx, scales, param_visibility, node.clone(), &mut inputs)?; // parses the op name
 
         // we can only take the inputs as mutable once -- so we need to collect them first
         other_nodes.extend(
@@ -552,10 +562,10 @@ impl Node {
             })
             .collect();
 
-        opkind = opkind.rescale(in_scales.clone(), scale).into();
-        let mut out_scale = opkind.out_scale(in_scales.clone(), scale);
-        opkind = RebaseScale::<2>::rebase(opkind, scale, out_scale);
-        out_scale = opkind.out_scale(in_scales, scale);
+        opkind = opkind.rescale(in_scales.clone(), scales.input).into();
+        let mut out_scale = opkind.out_scale(in_scales.clone(), scales.input);
+        opkind = RebaseScale::rebase(opkind, scales.input, out_scale, scales.rebase_multiplier);
+        out_scale = opkind.out_scale(in_scales, scales.input);
 
         // get the output shape
         let out_dims = {

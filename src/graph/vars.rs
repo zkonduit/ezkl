@@ -100,6 +100,34 @@ impl std::fmt::Display for Visibility {
     }
 }
 
+/// Represents the scale of the model input, model parameters.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, PartialOrd)]
+pub struct VarScales {
+    ///
+    pub input: u32,
+    ///
+    pub params: u32,
+    ///
+    pub rebase_multiplier: u32,
+}
+
+impl std::fmt::Display for VarScales {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "(inputs: {}, params: {})", self.input, self.params)
+    }
+}
+
+impl VarScales {
+    /// Place in [VarScales] struct.
+    pub fn from_args(args: &RunArgs) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
+            input: args.input_scale,
+            params: args.param_scale,
+            rebase_multiplier: args.scale_rebase_multiplier,
+        })
+    }
+}
+
 /// Represents whether the model input, model parameters, and model output are Public or Private to the prover.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, PartialOrd)]
 pub struct VarVisibility {
@@ -163,14 +191,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         logrows: usize,
         var_len: usize,
         instance_dims: Vec<Vec<usize>>,
-        scale: u32,
+        instance_scale: u32,
     ) -> Self {
         let advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, var_len))
             .collect_vec();
         // will be empty if instances dims has len 0
         let instances = (0..instance_dims.len())
-            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), scale))
+            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), instance_scale))
             .collect_vec();
         ModelVars { advices, instances }
     }

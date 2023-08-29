@@ -1,5 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use super::GraphError;
+#[cfg(not(target_arch = "wasm32"))]
+use super::VarScales;
 use super::{Rescaled, SupportedOp, Visibility};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::hybrid::HybridOp;
@@ -285,7 +287,7 @@ fn load_slice_op(
 #[cfg(not(target_arch = "wasm32"))]
 pub fn new_op_from_onnx(
     idx: usize,
-    scale: u32,
+    scales: &VarScales,
     param_visibility: Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut [super::NodeType],
@@ -355,7 +357,11 @@ pub fn new_op_from_onnx(
             // Raw values are always f32
             let raw_value = extract_tensor_value(op.0)?;
             // If bool then don't scale
-            let constant_scale = if dt == DatumType::Bool { 0 } else { scale };
+            let constant_scale = if dt == DatumType::Bool {
+                0
+            } else {
+                scales.params
+            };
             // Quantize the raw value
             let quantized_value =
                 quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
@@ -527,7 +533,7 @@ pub fn new_op_from_onnx(
         "Source" => {
             let (scale, datum_type) = match node.outputs[0].fact.datum_type {
                 DatumType::Bool => (0, InputType::Bool),
-                _ => (scale, InputType::Num),
+                _ => (scales.input, InputType::Num),
             };
             SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
         }
@@ -684,7 +690,7 @@ pub fn new_op_from_onnx(
             };
 
             let kernel = extract_tensor_value(conv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scale, param_visibility)?;
+            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match conv_node.bias.clone() {
                 Some(b) => {
@@ -692,7 +698,7 @@ pub fn new_op_from_onnx(
 
                     let val = quantize_tensor(
                         const_value,
-                        scale + inputs[0].out_scales()[0],
+                        scales.params + inputs[0].out_scales()[0],
                         param_visibility,
                     )?;
                     Some(val)
@@ -750,7 +756,7 @@ pub fn new_op_from_onnx(
             };
 
             let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scale, param_visibility)?;
+            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match deconv_node.bias.clone() {
                 Some(b) => {
@@ -758,7 +764,7 @@ pub fn new_op_from_onnx(
 
                     let val = quantize_tensor(
                         const_value,
-                        scale + inputs[0].out_scales()[0],
+                        scales.params + inputs[0].out_scales()[0],
                         param_visibility,
                     )?;
                     Some(val)

@@ -707,7 +707,10 @@ impl GraphCircuit {
                 self.settings.run_args.logrows = (recommended_bits + 1) as u32;
                 return self.calibrate(input);
             } else {
-                let err_string = format!("No possible value of bits (estimate {}) at scale {} can accomodate this value.", recommended_bits, self.settings.run_args.scale);
+                let err_string = format!(
+                    "No possible value of bits (estimate {}) can accomodate max value.",
+                    recommended_bits
+                );
                 return Err(err_string.into());
             }
         } else {
@@ -878,7 +881,7 @@ impl GraphCircuit {
             };
             // Get the flatten length of input_data
             let length = input_data.iter().map(|x| x.len()).sum();
-            let scales = vec![self.settings.run_args.scale; length];
+            let scales = vec![self.settings.run_args.input_scale; length];
             let datam: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 input_data,
                 scales,
@@ -942,7 +945,7 @@ impl Circuit<Fp> for GraphCircuit {
             params.run_args.logrows as usize,
             params.num_constraints,
             params.model_instance_shapes.clone(),
-            params.run_args.scale,
+            params.run_args.input_scale,
         );
 
         let base = Model::configure(

@@ -432,7 +432,7 @@ impl Model {
                 let mut tolerance = run_args.tolerance;
                 tolerance.scales = (
                     scale_to_multiplier(scale) as usize,
-                    scale_to_multiplier(run_args.scale) as usize,
+                    scale_to_multiplier(run_args.input_scale) as usize,
                 );
                 let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
                 lookup_ops.extend(opkind.required_lookups());
@@ -689,7 +689,8 @@ impl Model {
             info!("set {} to {}", symbol, value);
         }
 
-        let nodes = Self::nodes_from_graph(&model, run_args, visibility, None)?;
+        let scales = VarScales::from_args(run_args)?;
+        let nodes = Self::nodes_from_graph(&model, run_args, &scales, visibility, None)?;
 
         debug!("\n {}", model);
 
@@ -751,6 +752,7 @@ impl Model {
     pub fn nodes_from_graph(
         graph: &Graph<TypedFact, Box<dyn TypedOp>>,
         run_args: &RunArgs,
+        scales: &VarScales,
         visibility: &VarVisibility,
         override_input_scales: Option<Vec<u32>>,
     ) -> Result<BTreeMap<usize, NodeType>, Box<dyn Error>> {
@@ -768,8 +770,13 @@ impl Model {
                         .iter()
                         .map(|i| nodes.get(&i.node).unwrap().out_scales()[0])
                         .collect_vec();
-                    let subgraph_nodes =
-                        Self::nodes_from_graph(&model, run_args, visibility, Some(input_scales))?;
+                    let subgraph_nodes = Self::nodes_from_graph(
+                        &model,
+                        run_args,
+                        scales,
+                        visibility,
+                        Some(input_scales),
+                    )?;
 
                     let subgraph = ParsedNodes {
                         nodes: subgraph_nodes,
@@ -843,13 +850,8 @@ impl Model {
                     );
                 }
                 None => {
-                    let mut n = Node::new(
-                        n.clone(),
-                        &mut nodes,
-                        run_args.scale,
-                        run_args.param_visibility,
-                        i,
-                    )?;
+                    let mut n =
+                        Node::new(n.clone(), &mut nodes, scales, run_args.param_visibility, i)?;
                     if override_input_scales.is_some() {
                         if let Some(inp) = n.opkind.get_input() {
                             let scale = override_input_scales.as_ref().unwrap()[input_idx];
@@ -989,7 +991,7 @@ impl Model {
 
                 if run_args.output_visibility == Visibility::Public {
                     let output_scales = self.graph.get_output_scales();
-                    let global_scale = scale_to_multiplier(run_args.scale) as usize;
+                    let global_scale = scale_to_multiplier(run_args.input_scale) as usize;
                     let _ = outputs
                         .iter()
                         .enumerate()
