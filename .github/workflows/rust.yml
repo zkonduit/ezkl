@@ -391,6 +391,10 @@ jobs:
           toolchain: nightly-2023-08-24
           override: true
           components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl
