@@ -1163,8 +1163,8 @@ mod native_tests {
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
                 "--bits=16",
                 "--logrows=17",
-                "--input_scale=4",
-                "--param_scale=4",
+                "--input-scale=4",
+                "--param-scale=4",
                 &format!("--tolerance={}", tolerance),
             ])
             .status()
@@ -1865,8 +1865,8 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "-O",
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
-                &format!("--input_scale={}", scale),
-                &format!("--param_scale={}", scale),
+                &format!("--input-scale={}", scale),
+                &format!("--param-scale={}", scale),
             ])
             .status()
             .expect("failed to execute process");
@@ -1913,8 +1913,8 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!("--bits={}", bits),
                 &format!("--logrows={}", logrows),
-                &format!("--input_scale={}", scale),
-                &format!("--param_scale={}", scale),
+                &format!("--input-scale={}", scale),
+                &format!("--param-scale={}", scale),
                 &format!("--num-runs={}", 5),
                 &format!("--transcript={}", transcript),
             ])
