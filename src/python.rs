@@ -27,7 +27,11 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub tolerance: f32,
     #[pyo3(get, set)]
-    pub scale: u32,
+    pub input_scale: u32,
+    #[pyo3(get, set)]
+    pub param_scale: u32,
+    #[pyo3(get, set)]
+    pub scale_rebase_multiplier: u32,
     #[pyo3(get, set)]
     pub bits: usize,
     #[pyo3(get, set)]
@@ -51,7 +55,9 @@ impl PyRunArgs {
     fn new() -> Self {
         PyRunArgs {
             tolerance: 0.0,
-            scale: 7,
+            input_scale: 7,
+            param_scale: 7,
+            scale_rebase_multiplier: 2,
             bits: 16,
             logrows: 17,
             input_visibility: "public".into(),
@@ -68,7 +74,9 @@ impl From<PyRunArgs> for RunArgs {
     fn from(py_run_args: PyRunArgs) -> Self {
         RunArgs {
             tolerance: Tolerance::from(py_run_args.tolerance),
-            scale: py_run_args.scale,
+            input_scale: py_run_args.input_scale,
+            param_scale: py_run_args.param_scale,
+            scale_rebase_multiplier: py_run_args.scale_rebase_multiplier,
             bits: py_run_args.bits,
             logrows: py_run_args.logrows,
             input_visibility: py_run_args.input_visibility,
