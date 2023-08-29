@@ -87,11 +87,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
                                 )?;
                             }
 
+                            let output = evals.output[row_offset];
+
                             table.assign_cell(
                                 || format!("nl_o_col row {}", row_offset),
                                 self.table_output,
                                 row_offset,
-                                || Value::known(evals.output[row_offset]),
+                                || Value::known(output),
                             )?;
                             Ok(())
                         })

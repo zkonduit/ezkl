@@ -1,3 +1,4 @@
+use super::scale_to_multiplier;
 #[cfg(not(target_arch = "wasm32"))]
 use super::utilities::node_output_shapes;
 #[cfg(not(target_arch = "wasm32"))]
@@ -82,7 +83,7 @@ impl Op<Fp> for Rescaled {
     }
 
     fn as_string(&self) -> String {
-        format!("RESCALED {}", self.inner.as_string())
+        format!("RESCALED INPUT ({})", self.inner.as_string())
     }
 
     fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
@@ -124,14 +125,29 @@ impl Op<Fp> for Rescaled {
 
 /// A wrapper for an operation that has been rescaled.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RebaseScale {
+pub struct RebaseScale<const REBASE_MULTIPLIER: u32> {
     /// The operation that has to be rescaled.
     pub inner: Box<SupportedOp>,
     /// The scale of the operation's inputs.
     pub scale: u128,
 }
 
-impl Op<Fp> for RebaseScale {
+impl<const REBASE_MULTIPLIER: u32> RebaseScale<REBASE_MULTIPLIER> {
+    ///
+    pub fn rebase(inner: SupportedOp, original_scale: u32, op_out_scale: u32) -> SupportedOp {
+        if op_out_scale > REBASE_MULTIPLIER * original_scale {
+            SupportedOp::RebaseScale(RebaseScale {
+                inner: Box::new(inner),
+                scale: scale_to_multiplier(op_out_scale - REBASE_MULTIPLIER * original_scale)
+                    as u128,
+            })
+        } else {
+            inner
+        }
+    }
+}
+
+impl<const REBASE_MULTIPLIER: u32> Op<Fp> for RebaseScale<REBASE_MULTIPLIER> {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -141,7 +157,8 @@ impl Op<Fp> for RebaseScale {
         let ri = res.output.map(felt_to_i128);
         let rescaled = crate::tensor::ops::nonlinearities::const_div(&ri, self.scale as f64);
         res.output = rescaled.map(i128_to_felt);
-        res.intermediate_lookups = vec![rescaled];
+
+        res.intermediate_lookups.push(ri);
 
         Ok(res)
     }
@@ -151,17 +168,19 @@ impl Op<Fp> for RebaseScale {
     }
 
     fn as_string(&self) -> String {
-        format!("REBASED SCALE {}", self.inner.as_string())
+        format!("REBASED SCALE ({})", self.inner.as_string())
     }
 
     fn out_scale(&self, _: Vec<u32>, _g: u32) -> u32 {
-        _g
+        REBASE_MULTIPLIER * _g
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
-        vec![LookupOp::Div {
+        let mut lookups = self.inner.required_lookups();
+        lookups.push(LookupOp::Div {
             denom: crate::circuit::utils::F32(self.scale as f32),
-        }]
+        });
+        lookups
     }
 
     fn layout(
@@ -205,7 +224,7 @@ pub enum SupportedOp {
     ///
     Rescaled(Rescaled),
     ///
-    RebaseScale(RebaseScale),
+    RebaseScale(RebaseScale<2>),
 }
 
 impl SupportedOp {
@@ -246,7 +265,7 @@ impl From<Box<dyn Op<Fp>>> for SupportedOp {
         if let Some(op) = value.as_any().downcast_ref::<Rescaled>() {
             return SupportedOp::Rescaled(op.clone());
         };
-        if let Some(op) = value.as_any().downcast_ref::<RebaseScale>() {
+        if let Some(op) = value.as_any().downcast_ref::<RebaseScale<2>>() {
             return SupportedOp::RebaseScale(op.clone());
         };
 
@@ -486,8 +505,6 @@ impl Node {
         param_visibility: Visibility,
         idx: usize,
     ) -> Result<Self, Box<dyn Error>> {
-        use crate::graph::scale_to_multiplier;
-
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
 
@@ -536,15 +553,9 @@ impl Node {
             .collect();
 
         opkind = opkind.rescale(in_scales.clone(), scale).into();
-        let mut out_scale = opkind.out_scale(in_scales, scale);
-
-        if out_scale > 2 * scale {
-            opkind = SupportedOp::RebaseScale(RebaseScale {
-                inner: Box::new(opkind),
-                scale: scale_to_multiplier(out_scale - scale) as u128,
-            });
-            out_scale = scale;
-        }
+        let mut out_scale = opkind.out_scale(in_scales.clone(), scale);
+        opkind = RebaseScale::<2>::rebase(opkind, scale, out_scale);
+        out_scale = opkind.out_scale(in_scales, scale);
 
         // get the output shape
         let out_dims = {

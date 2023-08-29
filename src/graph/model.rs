@@ -1010,10 +1010,7 @@ impl Model {
                         })
                         .collect_vec();
                 }
-                info!(
-                    "computing proof over {} assigned rows",
-                    thread_safe_region.offset()
-                );
+                info!("model has {} assigned rows", thread_safe_region.offset());
                 Ok(outputs)
             },
         )?;

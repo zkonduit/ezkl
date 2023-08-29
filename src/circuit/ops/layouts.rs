@@ -1924,9 +1924,10 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let elapsed = timer.elapsed();
     trace!(
-        "nonlinearity {} layout took {:?}",
+        "nonlinearity {} layout took {:?}, offset: {:?}",
         <LookupOp as Op<F>>::as_string(nl),
-        elapsed
+        elapsed,
+        region.offset()
     );
 
     // constrain the calculated output to a column
