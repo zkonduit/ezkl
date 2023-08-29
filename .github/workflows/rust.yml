@@ -396,11 +396,11 @@ jobs:
       - name: Build python ezkl
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Public inputs
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_inputs_
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_inputs_ --no-capture
       - name: Public params
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_params_
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_params_ --no-capture
       - name: Public outputs
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_ --no-capture
 
   python-integration-tests:
     runs-on:

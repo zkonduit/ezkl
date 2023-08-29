@@ -414,7 +414,6 @@ mod native_tests {
 
             #(#[test_case(TESTS[N])])*
             fn accuracy_measurement_public_outputs_(test: &str) {
-                env_logger::init();
                 crate::native_tests::init_binary();
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
@@ -425,7 +424,6 @@ mod native_tests {
 
             #(#[test_case(TESTS[N])])*
             fn accuracy_measurement_public_params_(test: &str) {
-                env_logger::init();
                 crate::native_tests::init_binary();
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
@@ -436,7 +434,6 @@ mod native_tests {
 
             #(#[test_case(TESTS[N])])*
             fn accuracy_measurement_public_inputs_(test: &str) {
-                env_logger::init();
                 crate::native_tests::init_binary();
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
@@ -1211,8 +1208,6 @@ mod native_tests {
         batch_size: usize,
         cal_target: &str,
     ) {
-        info!("running accuracy measurement for {}", example_name);
-
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
@@ -1286,6 +1281,10 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        println!(
+            " ------------ running accuracy measurement for {}",
+            example_name
+        );
         // run python ./output_comparison.py in the test dir
         let status = Command::new("python")
             .args([
