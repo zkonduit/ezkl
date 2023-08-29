@@ -647,10 +647,13 @@ pub(crate) async fn calibrate(
         std::mem::drop(_r);
         std::mem::drop(_q);
 
-        if let Some(best) = res
-            .into_iter()
-            .max_by_key(|p| (p.run_args.input_scale, p.run_args.param_scale))
-        {
+        if let Some(best) = res.into_iter().max_by_key(|p| {
+            (
+                p.run_args.bits,
+                p.run_args.input_scale,
+                p.run_args.param_scale,
+            )
+        }) {
             // pick the one with the largest logrows
             found_params.push(best.clone());
             info!(
