@@ -375,7 +375,7 @@ jobs:
       - name: Build python ezkl
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Run pytest
-        run: source .env/bin/activate; pytest
+        run: source .env/bin/activate; pytest -v
 
   accuracy-measurement-tests:
     runs-on: ubuntu-latest-32-cores
