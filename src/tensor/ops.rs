@@ -2548,7 +2548,7 @@ pub mod nonlinearities {
 
         let sum = sum(&exp).unwrap();
         intermediate_values.push(sum.clone());
-        let inv_denom = recip(&sum, scale_output.pow(2) as u32);
+        let inv_denom = recip(&sum, scale_output.pow(2) as f64);
 
         ((exp * inv_denom).unwrap(), intermediate_values)
     }
@@ -2585,7 +2585,7 @@ pub mod nonlinearities {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
         let scale = input_scale * output_scale;
         let diff: Tensor<i128> = sub(t).unwrap();
-        let recip = recip(&t[0], scale as u32);
+        let recip = recip(&t[0], scale as f64);
         let product = mult(&[diff, recip]).unwrap();
         let _tol = ((tol / 100.0) * scale as f32).round() as f64;
         let upper_bound = greater_than(&product, _tol);
@@ -3251,12 +3251,13 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn recip(a: &Tensor<i128>, scale: u32) -> Tensor<i128> {
+    pub fn recip(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let d_inv_x = (scale as f64) * (1_f64) / (*a_i as f64);
+            let denom = (1_f64) / (*a_i as f64);
+            let d_inv_x = scale * denom;
             output[i] = d_inv_x.round() as i128;
         }
         output

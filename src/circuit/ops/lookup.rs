@@ -151,7 +151,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 &x,
                 f32::from(*denom).into(),
             )),
-            LookupOp::Recip { scale } => Ok(tensor::ops::nonlinearities::recip(&x, *scale as u32)),
+            LookupOp::Recip { scale } => Ok(tensor::ops::nonlinearities::recip(&x, *scale as f64)),
             LookupOp::ReLU => Ok(tensor::ops::nonlinearities::leakyrelu(&x, 0_f64)),
 
             LookupOp::LeakyReLU { slope: a } => {
