@@ -45,6 +45,9 @@ use std::io::Read;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use tabled::Table;
+use unzip_n::unzip_n;
+
+unzip_n!(pub 3);
 
 /// The result of a forward pass.
 #[derive(Clone, Debug)]
@@ -532,26 +535,15 @@ impl Model {
                     ..
                 } => {
                     let mut orig_inputs = inputs.clone();
-                    orig_inputs = orig_inputs
-                        .iter()
-                        .zip(model.graph.inputs.iter())
-                        .sorted_by_key(|(_, source)| *source)
-                        .map(|(x, _)| x.clone())
-                        .collect();
-
                     let mut input_mappings = input_mappings.clone();
-                    input_mappings = input_mappings
+                    (input_mappings, inputs, orig_inputs) = input_mappings
                         .iter()
+                        .zip(inputs)
+                        .zip(orig_inputs)
                         .zip(model.graph.inputs.iter())
                         .sorted_by_key(|(_, source)| *source)
-                        .map(|(x, _)| x.clone())
-                        .collect();
-                    inputs = inputs
-                        .iter()
-                        .zip(model.graph.inputs.iter())
-                        .sorted_by_key(|(_, source)| *source)
-                        .map(|(x, _)| x.clone())
-                        .collect();
+                        .map(|(((x, y), z), _)| (x.clone(), y.clone(), z.clone()))
+                        .unzip_n_vec();
 
                     let input_dims = inputs.iter().map(|inp| inp.dims());
                     let num_iter = number_of_iterations(&input_mappings, input_dims.collect());
@@ -1116,30 +1108,17 @@ impl Model {
                     ..
                 } => {
                     let mut original_values = values.clone();
-                    original_values = original_values
-                        .iter()
-                        .zip(model.graph.inputs.iter())
-                        .sorted_by_key(|(_, source)| *source)
-                        .map(|(x, _)| x.clone())
-                        .collect();
-
                     let mut input_mappings = input_mappings.clone();
-                    input_mappings = input_mappings
+                    (input_mappings, values, original_values) = input_mappings
                         .iter()
+                        .zip(values)
+                        .zip(original_values)
                         .zip(model.graph.inputs.iter())
                         .sorted_by_key(|(_, source)| *source)
-                        .map(|(x, _)| x.clone())
-                        .collect();
-                    values = values
-                        .iter()
-                        .zip(model.graph.inputs.iter())
-                        .sorted_by_key(|(_, source)| *source)
-                        .map(|(x, _)| x.clone())
-                        .collect();
+                        .map(|(((x, y), z), _)| (x.clone(), y.clone(), z.clone()))
+                        .unzip_n_vec();
 
-                    let input_dims = inputs
-                        .iter()
-                        .map(|inp| results.get(&inp.0).unwrap()[inp.1].dims());
+                    let input_dims = values.iter().map(|inp| inp.dims());
                     let num_iter = number_of_iterations(&input_mappings, input_dims.collect());
 
                     debug!(
