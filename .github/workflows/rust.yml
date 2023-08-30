@@ -191,7 +191,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
       - name: KZG prove and verify tests (EVM)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed inputs)
@@ -249,7 +249,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
       - name: fuzz tests (EVM)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_fuzz_ --test-threads 2
       - name: fuzz tests
@@ -311,7 +311,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
       - name: KZG prove and verify aggr tests
         run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 8 -- --include-ignored
       - name: KZG prove and verify aggr tests (encrypted input)
@@ -371,7 +371,7 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
       - name: Build python ezkl
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Run pytest
@@ -444,7 +444,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl
