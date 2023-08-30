@@ -667,11 +667,9 @@ pub(crate) async fn calibrate(
 
         if let Some(best) = res.into_iter().max_by_key(|p| {
             (
+                p.run_args.bits,
                 p.run_args.input_scale,
                 p.run_args.param_scale,
-                // we want the largest rebase multiplier as it means we can use less constraints
-                crate::circuit::utils::F32(1.0 / (p.run_args.scale_rebase_multiplier as f32)),
-                p.run_args.bits,
             )
         }) {
             // pick the one with the largest logrows
@@ -705,23 +703,47 @@ pub(crate) async fn calibrate(
             found_params
                 .iter()
                 .filter(|p| p.run_args.logrows == min_logrows)
-                .max_by_key(|p| (p.run_args.input_scale, p.run_args.param_scale))
+                .max_by_key(|p| {
+                    (
+                        p.run_args.input_scale,
+                        p.run_args.param_scale,
+                        // we want the largest rebase multiplier as it means we can use less constraints
+                        crate::circuit::utils::F32(
+                            1.0 / (p.run_args.scale_rebase_multiplier as f32),
+                        ),
+                    )
+                })
                 .unwrap()
                 .clone()
         }
         CalibrationTarget::Accuracy => {
-            let param_iterator = found_params
-                .iter()
-                .sorted_by_key(|p| (p.run_args.input_scale, p.run_args.param_scale));
+            let param_iterator = found_params.iter().sorted_by_key(|p| {
+                (
+                    p.run_args.input_scale,
+                    p.run_args.param_scale,
+                    // we want the largest rebase multiplier as it means we can use less constraints
+                    crate::circuit::utils::F32(1.0 / (p.run_args.scale_rebase_multiplier as f32)),
+                )
+            });
 
             let last = param_iterator.last().unwrap();
-            let max_scale = (last.run_args.input_scale, last.run_args.param_scale);
+            let max_scale = (
+                last.run_args.input_scale,
+                last.run_args.param_scale,
+                last.run_args.scale_rebase_multiplier,
+            );
 
             // pick the ones that have the max scale but also the smallest logrows:
             // this is the best tradeoff between resource usage and accuracy
             found_params
                 .iter()
-                .filter(|p| (p.run_args.input_scale, p.run_args.param_scale) == max_scale)
+                .filter(|p| {
+                    (
+                        p.run_args.input_scale,
+                        p.run_args.param_scale,
+                        p.run_args.scale_rebase_multiplier,
+                    ) == max_scale
+                })
                 .min_by_key(|p| p.run_args.logrows)
                 .unwrap()
                 .clone()
