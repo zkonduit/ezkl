@@ -1517,11 +1517,13 @@ pub fn conv<
 
     let mut output = Tensor::new(None, &[num_outputs])?;
 
-    let cartesian_coord = [(0..batch_size),
+    let cartesian_coord = [
+        (0..batch_size),
         (0..num_groups),
         (0..output_channels_per_group),
         (0..vert_slides),
-        (0..horz_slides)]
+        (0..horz_slides),
+    ]
     .iter()
     .cloned()
     .multi_cartesian_product()
@@ -1895,10 +1897,12 @@ pub fn sumpool<
     let mut output: Tensor<T> =
         Tensor::new(None, &[batch, output_channels, vert_slides, horz_slides]).unwrap();
 
-    let cartesian_coord = [(0..batch),
+    let cartesian_coord = [
+        (0..batch),
         (0..output_channels),
         (0..vert_slides),
-        (0..horz_slides)]
+        (0..horz_slides),
+    ]
     .iter()
     .cloned()
     .multi_cartesian_product()
@@ -1983,10 +1987,12 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send + std::c
     let mut output: Tensor<T> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides]).unwrap();
 
-    let cartesian_coord = [(0..batch),
+    let cartesian_coord = [
+        (0..batch),
         (0..input_channels),
         (0..vert_slides),
-        (0..horz_slides)]
+        (0..horz_slides),
+    ]
     .iter()
     .cloned()
     .multi_cartesian_product()
@@ -3240,7 +3246,7 @@ pub mod nonlinearities {
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = 2_u32;
+    /// let k = 2_f64;
     /// let result = recip(&x, k);
     /// let expected = Tensor::<i128>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
