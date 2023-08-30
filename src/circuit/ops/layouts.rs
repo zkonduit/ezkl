@@ -1244,10 +1244,12 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let mut output: Tensor<ValType<F>> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides])?;
 
-    let cartesian_coord = [(0..batch),
+    let cartesian_coord = [
+        (0..batch),
         (0..input_channels),
         (0..vert_slides),
-        (0..horz_slides)]
+        (0..horz_slides),
+    ]
     .iter()
     .cloned()
     .multi_cartesian_product()
@@ -1505,11 +1507,13 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
     let mut output = Tensor::new(None, &[num_outputs])?;
 
-    let cartesian_coord = [(0..batch_size),
+    let cartesian_coord = [
+        (0..batch_size),
         (0..num_groups),
         (0..output_channels_per_group),
         (0..vert_slides),
-        (0..horz_slides)]
+        (0..horz_slides),
+    ]
     .iter()
     .cloned()
     .multi_cartesian_product()
@@ -2039,7 +2043,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     let relu_one_minus_sum_relu =
         nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
 
-    // constraining relu(sum(relu(x - max(x - 1)) - len(x))) = 0
+    // constraining 1 - sum(relu(x - max(x - 1))) = 0
     region.assign(&config.inputs[1], &relu_one_minus_sum_relu)?;
 
     let (x, y) = config.output.cartesian_coord(region.offset());

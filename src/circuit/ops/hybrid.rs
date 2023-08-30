@@ -49,7 +49,31 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
         let (res, intermediate_lookups) = match &self {
             HybridOp::Abs => (tensor::ops::abs(&x)?, vec![]),
-            HybridOp::ReduceMax { axes, .. } => (tensor::ops::max_axes(&x, axes)?, vec![]),
+            HybridOp::ReduceMax { axes, .. } => {
+                let res = tensor::ops::max_axes(&x, axes)?;
+                let max_minus_one =
+                    Tensor::from(vec![x.clone().into_iter().max().unwrap() - 1].into_iter());
+                let unit = Tensor::from(vec![1].into_iter());
+                // relu(x - max(x - 1)
+                let inter_1 = (x.clone() - max_minus_one)?;
+                // relu(1 - sum(relu(inter_1)))
+                let inter_2 = (unit
+                    - tensor::ops::sum(&tensor::ops::nonlinearities::leakyrelu(&inter_1, 0.0))?)?;
+
+                (res.clone(), vec![inter_1, inter_2])
+            }
+            HybridOp::ReduceMin { axes, .. } => {
+                let res = tensor::ops::min_axes(&x, axes)?;
+                let min_plus_one =
+                    Tensor::from(vec![x.clone().into_iter().max().unwrap() - 1].into_iter());
+                let unit = Tensor::from(vec![1].into_iter());
+                // relu(min(x + 1) - x)
+                let inter_1 = (min_plus_one - x.clone())?;
+                // relu(1 - sum(relu(inter_1)))
+                let inter_2 = (unit
+                    - tensor::ops::sum(&tensor::ops::nonlinearities::leakyrelu(&inter_1, 0.0))?)?;
+                (res.clone(), vec![inter_1, inter_2])
+            }
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -59,7 +83,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
                 vec![],
             ),
-            HybridOp::ReduceMin { axes, .. } => (tensor::ops::min_axes(&x, axes)?, vec![]),
             HybridOp::Softmax { scales } => {
                 tensor::ops::nonlinearities::multi_dim_softmax(&x, scales.0, scales.1)
             }
