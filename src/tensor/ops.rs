@@ -2544,8 +2544,6 @@ pub mod nonlinearities {
 
         let exp = exp(a, scale_input, scale_output);
 
-        println!("exp {:?}", exp);
-
         let sum = sum(&exp).unwrap();
         intermediate_values.push(sum.clone());
         let inv_denom = recip(&sum, scale_output.pow(2) as f64);
