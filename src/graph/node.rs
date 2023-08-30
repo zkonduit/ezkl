@@ -138,8 +138,16 @@ pub struct RebaseScale {
 
 impl RebaseScale {
     ///
-    pub fn rebase(inner: SupportedOp, global_scale: u32, op_out_scale: u32) -> SupportedOp {
-        if (op_out_scale > global_scale) && !inner.is_constant() && !inner.is_input() {
+    pub fn rebase(
+        inner: SupportedOp,
+        global_scale: u32,
+        op_out_scale: u32,
+        scale_rebase_multiplier: u32,
+    ) -> SupportedOp {
+        if (op_out_scale > (global_scale * scale_rebase_multiplier))
+            && !inner.is_constant()
+            && !inner.is_input()
+        {
             SupportedOp::RebaseScale(RebaseScale {
                 inner: Box::new(inner),
                 scale: scale_to_multiplier(op_out_scale - global_scale) as u128,
@@ -567,7 +575,7 @@ impl Node {
             })
             .collect();
 
-        let global_scale = scales.input * scales.rebase_multiplier;
+        let global_scale = scales.input;
 
         let homogenous_inputs = opkind.requires_homogenous_input_scales();
         // autoamtically increases a constant's scale if it is only used once and
@@ -590,7 +598,8 @@ impl Node {
 
         opkind = opkind.rescale(in_scales.clone(), global_scale).into();
         let mut out_scale = opkind.out_scale(in_scales.clone(), global_scale);
-        opkind = RebaseScale::rebase(opkind, global_scale, out_scale);
+        opkind =
+            RebaseScale::rebase(opkind, global_scale, out_scale, scales.rebase_multiplier).into();
         out_scale = opkind.out_scale(in_scales, global_scale);
 
         // get the output shape

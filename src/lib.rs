@@ -77,7 +77,7 @@ pub struct RunArgs {
     /// The denominator in the fixed point representation used when quantizing parameters
     #[arg(long, default_value = "7")]
     pub param_scale: u32,
-    /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to scale_rebase_multiplier * input_scale (this a more advanced parameter, use with caution)
+    /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
     #[arg(long, default_value = "1")]
     pub scale_rebase_multiplier: u32,
     /// The number of bits used in lookup tables
