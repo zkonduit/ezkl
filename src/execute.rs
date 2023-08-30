@@ -645,6 +645,7 @@ pub(crate) async fn calibrate(
                         required_lookups: circuit.settings.required_lookups,
                         model_output_scales: circuit.settings.model_output_scales,
                         num_constraints: circuit.settings.num_constraints,
+                        total_const_size: circuit.settings.total_const_size,
                         ..original_settings.clone()
                     };
 
