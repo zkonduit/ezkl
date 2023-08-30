@@ -669,6 +669,8 @@ pub(crate) async fn calibrate(
                 p.run_args.input_scale,
                 p.run_args.param_scale,
                 p.run_args.bits,
+                // we want the largest rebase multiplier as it means we can use less constraints
+                crate::circuit::utils::F32(1.0 / (p.run_args.scale_rebase_multiplier as f32)),
             )
         }) {
             // pick the one with the largest logrows
