@@ -53,33 +53,33 @@ mod py_tests {
             // maturin develop --release --features python-bindings
 
             // now install torch, pandas, numpy, seaborn, jupyter
-            // let status = Command::new("pip")
-            //     .args([
-            //         "install",
-            //         "torch==2.0.1",
-            //         "pandas==2.0.3",
-            //         "numpy==1.23",
-            //         "seaborn==0.12.2",
-            //         "jupyter==1.0.0",
-            //         "onnx==1.14.0",
-            //         "kaggle==1.5.15",
-            //         "py-solc-x==1.1.1",
-            //         "web3==6.5.0",
-            //         "librosa==0.10.0.post2",
-            //         "keras==2.12.0",
-            //         "tensorflow==2.12.0",
-            //         "tf2onnx==1.14.0",
-            //         "pytorch-lightning==2.0.6",
-            //     ])
-            //     .status()
-            //     .expect("failed to execute process");
-            // assert!(status.success());
-            // let status = Command::new("pip")
-            //     .args(["install", "numpy==1.23"])
-            //     .status()
-            //     .expect("failed to execute process");
+            let status = Command::new("pip")
+                .args([
+                    "install",
+                    "torch==2.0.1",
+                    "pandas==2.0.3",
+                    "numpy==1.23",
+                    "seaborn==0.12.2",
+                    "jupyter==1.0.0",
+                    "onnx==1.14.0",
+                    "kaggle==1.5.15",
+                    "py-solc-x==1.1.1",
+                    "web3==6.5.0",
+                    "librosa==0.10.0.post2",
+                    "keras==2.12.0",
+                    "tensorflow==2.12.0",
+                    "tf2onnx==1.14.0",
+                    "pytorch-lightning==2.0.6",
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+            let status = Command::new("pip")
+                .args(["install", "numpy==1.23"])
+                .status()
+                .expect("failed to execute process");
 
-            // assert!(status.success());
+            assert!(status.success());
         });
     }
 
@@ -165,6 +165,12 @@ mod py_tests {
 
     fn run_notebook(test_dir: &str, test: &str) {
         // activate venv
+        let status = Command::new("bash")
+            .arg("-c")
+            .arg("source .env/bin/activate")
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
 
         let path: std::path::PathBuf = format!("{}/{}", test_dir, test).into();
         let status = Command::new("jupyter")
