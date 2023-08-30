@@ -674,7 +674,7 @@ pub(crate) async fn calibrate(
         }) {
             // pick the one with the largest logrows
             found_params.push(best.clone());
-            info!(
+            debug!(
                 "found settings: \n {}",
                 best.as_json()?.to_colored_json_auto()?
             );
