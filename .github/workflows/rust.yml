@@ -121,7 +121,6 @@ jobs:
       - name: Circuit Render
         run: cargo nextest run --release --verbose tests::tutorial_
 
-
   mock-proving-tests:
     runs-on: self-hosted
     # needs: [build,  library-tests, docs]
@@ -355,7 +354,7 @@ jobs:
         run: cargo nextest run neg_tests::neg_examples_
 
   python-tests:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: 256gb
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v3
