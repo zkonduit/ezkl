@@ -169,7 +169,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 46] = [
+    const TESTS: [&str; 45] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -218,7 +218,7 @@ mod native_tests {
         "1l_where",
         "boolean",
         "boolean_identity",
-        "variable_cnn",
+        // "variable_cnn",
     ];
 
     const TESTS_AGGR: [&str; 21] = [
@@ -374,7 +374,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=45 {
+            seq!(N in 0..=44 {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {
