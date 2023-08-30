@@ -1066,9 +1066,7 @@ impl Model {
                     .collect_vec()
             } else {
                 // we re-assign inputs, always from the 0 outlet
-                let mut res = results.get(idx).unwrap()[0].clone();
-                res.reshape(&node.out_dims()[0])?;
-                vec![res]
+                vec![results.get(idx).unwrap()[0].clone()]
             };
 
             debug!(
