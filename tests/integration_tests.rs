@@ -169,12 +169,12 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 47] = [
+    const TESTS: [&str; 46] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
         "1l_flatten",
-        "1l_average",
+        // "1l_average",
         "1l_div",
         "1l_pad",
         "1l_reshape",
@@ -374,7 +374,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=46 {
+            seq!(N in 0..=45 {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {

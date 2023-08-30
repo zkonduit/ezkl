@@ -880,6 +880,7 @@ impl Model {
         Ok(nodes)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Removes all nodes that are consts with 0 uses
     fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
         // remove all nodes that are consts with 0 uses now
