@@ -30,14 +30,21 @@ def get_onnx_output(model_file, input_file):
     for i in range(num_inputs):
         input_node = onnx_model.graph.input[i]
         dims = []
+        elem_type = input_node.type.tensor_type.elem_type
         for dim in input_node.type.tensor_type.shape.dim:
             if dim.dim_value == 0:
                 dims.append(1)
             else:
                 dims.append(dim.dim_value)
-
-        inputs_onnx = np.array(inputs['input_data'][i]).astype(
-            np.float32).reshape(dims)
+        if elem_type == 7:
+            inputs_onnx = np.array(inputs['input_data'][i]).astype(
+                np.int64).reshape(dims)
+        elif elem_type == 9:
+            inputs_onnx = np.array(inputs['input_data'][i]).astype(
+                bool).reshape(dims)
+        else:
+            inputs_onnx = np.array(inputs['input_data'][i]).astype(
+                np.float32).reshape(dims)
         onnx_session = onnxruntime.InferenceSession(model_file)
         onnx_input[input_node.name] = inputs_onnx
     onnx_output = onnx_session.run(None, onnx_input)

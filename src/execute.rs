@@ -543,7 +543,10 @@ pub(crate) async fn calibrate(
     let range = if let Some(scales) = scales {
         scales
     } else {
-        (2..12).collect::<Vec<u32>>()
+        match target {
+            CalibrationTarget::Resources => (2..7).collect::<Vec<u32>>(),
+            CalibrationTarget::Accuracy => (7..12).collect::<Vec<u32>>(),
+        }
     };
 
     let chunks = data.split_into_batches(model.graph.input_shapes()).unwrap();
@@ -552,7 +555,7 @@ pub(crate) async fn calibrate(
 
     let mut found_params: Vec<GraphSettings> = vec![];
 
-    let scale_rebase_multiplier = [1, 2, 3, 10];
+    let scale_rebase_multiplier = [1, 10];
 
     // 2 x 2 grid
     let range_grid = range
