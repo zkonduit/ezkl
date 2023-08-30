@@ -58,7 +58,9 @@ def compare_outputs(zk_output, onnx_output):
             diff = list1_i - list2_i
             res.append(100 * (diff) / (list2_i))
 
-    print(res)
+    print("zk_output: ", zk_output)
+    print("onnx_output: ", onnx_output)
+    print("res: ", res)
 
     return np.mean(np.abs(res))
 

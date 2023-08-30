@@ -1163,7 +1163,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit.clone());
     kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1]);
 
-    let cartesian_coord = vec![(0..batch_size), (0..image_channels)]
+    let cartesian_coord = [(0..batch_size), (0..image_channels)]
         .iter()
         .cloned()
         .multi_cartesian_product()
@@ -1244,12 +1244,10 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let mut output: Tensor<ValType<F>> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides])?;
 
-    let cartesian_coord = vec![
-        (0..batch),
+    let cartesian_coord = [(0..batch),
         (0..input_channels),
         (0..vert_slides),
-        (0..horz_slides),
-    ]
+        (0..horz_slides)]
     .iter()
     .cloned()
     .multi_cartesian_product()
@@ -1507,13 +1505,11 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
     let mut output = Tensor::new(None, &[num_outputs])?;
 
-    let cartesian_coord = vec![
-        (0..batch_size),
+    let cartesian_coord = [(0..batch_size),
         (0..num_groups),
         (0..output_channels_per_group),
         (0..vert_slides),
-        (0..horz_slides),
-    ]
+        (0..horz_slides)]
     .iter()
     .cloned()
     .multi_cartesian_product()

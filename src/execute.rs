@@ -370,7 +370,7 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     }
 
     pb.finish_with_message("SRS downloaded.");
-    Ok(buf.drain(..buf.len()).collect())
+    Ok(std::mem::take(&mut buf))
 }
 
 #[cfg(not(target_arch = "wasm32"))]

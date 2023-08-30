@@ -156,7 +156,7 @@ impl Op<Fp> for RebaseScale {
         self
     }
     fn f(&self, x: &[Tensor<Fp>]) -> Result<crate::circuit::ForwardResult<Fp>, TensorError> {
-        let mut res = Op::<Fp>::f(&*self.inner, &x)?;
+        let mut res = Op::<Fp>::f(&*self.inner, x)?;
 
         let ri = res.output.map(felt_to_i128);
         let rescaled = crate::tensor::ops::nonlinearities::const_div(&ri, self.scale as f64);

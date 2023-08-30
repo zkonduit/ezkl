@@ -230,7 +230,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Recip { scale, .. } => format!("RECIP w/ {}", scale),
             LookupOp::Div { denom, .. } => format!("DIV w/ {}", denom),
             LookupOp::Ln { scales } => format!("LN w/ {:?}", scales),
-            LookupOp::ReLU => format!("RELU"),
+            LookupOp::ReLU => "RELU".to_string(),
             LookupOp::LeakyReLU { slope: a } => format!("L_RELU /s {}", a),
             LookupOp::Sigmoid { scales } => format!("SIGMOID w/ {:?}", scales),
             LookupOp::Sqrt { scales } => format!("SQRT w/ {:?}", scales),

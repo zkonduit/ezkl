@@ -1517,13 +1517,11 @@ pub fn conv<
 
     let mut output = Tensor::new(None, &[num_outputs])?;
 
-    let cartesian_coord = vec![
-        (0..batch_size),
+    let cartesian_coord = [(0..batch_size),
         (0..num_groups),
         (0..output_channels_per_group),
         (0..vert_slides),
-        (0..horz_slides),
-    ]
+        (0..horz_slides)]
     .iter()
     .cloned()
     .multi_cartesian_product()
@@ -1897,12 +1895,10 @@ pub fn sumpool<
     let mut output: Tensor<T> =
         Tensor::new(None, &[batch, output_channels, vert_slides, horz_slides]).unwrap();
 
-    let cartesian_coord = vec![
-        (0..batch),
+    let cartesian_coord = [(0..batch),
         (0..output_channels),
         (0..vert_slides),
-        (0..horz_slides),
-    ]
+        (0..horz_slides)]
     .iter()
     .cloned()
     .multi_cartesian_product()
@@ -1987,12 +1983,10 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send + std::c
     let mut output: Tensor<T> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides]).unwrap();
 
-    let cartesian_coord = vec![
-        (0..batch),
+    let cartesian_coord = [(0..batch),
         (0..input_channels),
         (0..vert_slides),
-        (0..horz_slides),
-    ]
+        (0..horz_slides)]
     .iter()
     .cloned()
     .multi_cartesian_product()

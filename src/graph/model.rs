@@ -393,7 +393,7 @@ impl Model {
     pub fn load(path: PathBuf) -> Result<Self, Box<dyn Error>> {
         // read bytes from file
         let mut f = std::fs::File::open(&path)
-            .expect(&format!("failed to load model at {}", path.display()));
+            .unwrap_or_else(|_| panic!("failed to load model at {}", path.display()));
         let metadata = fs::metadata(&path).expect("unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
         f.read_exact(&mut buffer).expect("buffer overflow");
@@ -418,7 +418,7 @@ impl Model {
         // this is the total number of variables we will need to allocate
         // for the circuit
         let (num_constraints, total_const_size) = self
-            .dummy_layout(&run_args, &self.graph.input_shapes())
+            .dummy_layout(run_args, &self.graph.input_shapes())
             .unwrap();
 
         // Then number of columns in the circuits
@@ -655,7 +655,7 @@ impl Model {
         })?;
 
         let variables: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::from_iter(run_args.variables.clone().into_iter());
+            std::collections::HashMap::from_iter(run_args.variables.clone());
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node(id.node);
@@ -683,7 +683,7 @@ impl Model {
             let fact = model.node(id.node).outputs[0].fact.clone();
             let fact = fact.with_shape(dims);
 
-            model.set_input_fact(i, fact.into())?;
+            model.set_input_fact(i, fact)?;
         }
 
         for (i, _) in model.clone().outputs.iter().enumerate() {
@@ -692,7 +692,7 @@ impl Model {
         // Note: do not optimize the model, as the layout will depend on underlying hardware
         let mut model = model.into_typed()?.into_decluttered()?;
         for (symbol, value) in run_args.variables.iter() {
-            let symbol = model.symbol_table.sym(&symbol);
+            let symbol = model.symbol_table.sym(symbol);
             model = model.concretize_dims(&SymbolValues::default().with(&symbol, *value as i64))?;
             info!("set {} to {}", symbol, value);
         }
@@ -905,10 +905,10 @@ impl Model {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_run_args(
         run_args: &RunArgs,
-        model: &std::path::PathBuf,
+        model: &std::path::Path,
     ) -> Result<Self, Box<dyn Error>> {
         Model::new(
-            &mut std::fs::File::open(model.clone())
+            &mut std::fs::File::open(model)
                 .map_err(|_| format!("failed to load model at {}", model.display()))?,
             run_args,
         )
@@ -922,7 +922,7 @@ impl Model {
     /// * `required_lookups` - The required lookup operations for the circuit.
     pub fn configure(
         meta: &mut ConstraintSystem<Fp>,
-        vars: &mut ModelVars<Fp>,
+        vars: &ModelVars<Fp>,
         num_bits: usize,
         required_lookups: Vec<LookupOp>,
         check_mode: CheckMode,

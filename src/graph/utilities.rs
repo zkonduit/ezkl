@@ -541,8 +541,7 @@ pub fn new_op_from_onnx(
             let dt = op.to;
             let input_scales = inputs
                 .iter()
-                .map(|x| x.out_scales())
-                .flatten()
+                .flat_map(|x| x.out_scales())
                 .collect::<Vec<_>>();
             assert_eq!(input_scales.len(), 1);
             match dt {
@@ -1020,7 +1019,7 @@ pub fn homogenize_input_scales(
         return Ok(op);
     }
     // else if all inputs_scales at inputs_to_scale are the same, we don't need to do anything
-    else if relevant_input_scales.windows(2).all(|w| w[0] == w[1]) {
+    if relevant_input_scales.windows(2).all(|w| w[0] == w[1]) {
         return Ok(op);
     }
 

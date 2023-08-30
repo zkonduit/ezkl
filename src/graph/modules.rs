@@ -295,7 +295,7 @@ impl GraphModules {
 
     /// Layout the module
     fn layout_module(
-        module: &mut impl Module<Fp>,
+        module: &impl Module<Fp>,
         layouter: &mut impl Layouter<Fp>,
         values: &mut [Vec<ValTensor<Fp>>],
         instance_offset: &mut [usize],
@@ -334,16 +334,11 @@ impl GraphModules {
             // config for poseidon
             let poseidon_config = configs.poseidon.clone().unwrap();
             // create the module
-            let mut chip = ModulePoseidon::new(poseidon_config);
+            let chip = ModulePoseidon::new(poseidon_config);
             // concat values and sk to get the inputs
             let mut inputs = values.iter_mut().map(|x| vec![x.clone()]).collect_vec();
             // layout the module
-            Self::layout_module(
-                &mut chip,
-                layouter,
-                &mut inputs,
-                &mut instance_offset.poseidon,
-            )?;
+            Self::layout_module(&chip, layouter, &mut inputs, &mut instance_offset.poseidon)?;
             // replace the inputs with the outputs
             values.iter_mut().enumerate().for_each(|(i, x)| {
                 x.clone_from(&inputs[i][0]);
@@ -369,12 +364,7 @@ impl GraphModules {
                 .map(|x| vec![x.clone(), sk.clone().into()])
                 .collect_vec();
             // layout the module
-            Self::layout_module(
-                &mut chip,
-                layouter,
-                &mut inputs,
-                &mut instance_offset.elgamal,
-            )?;
+            Self::layout_module(&chip, layouter, &mut inputs, &mut instance_offset.elgamal)?;
             // replace the inputs with the outputs
             values.iter_mut().enumerate().for_each(|(i, x)| {
                 x.clone_from(&inputs[i][0]);
