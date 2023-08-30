@@ -475,9 +475,8 @@ impl Model {
         for (idx, n) in self.graph.nodes.iter() {
             let mut inputs = vec![];
             if n.is_input() {
-                let mut t = model_inputs[input_idx].clone();
+                let t = model_inputs[input_idx].clone();
                 input_idx += 1;
-                t.reshape(&n.out_dims()[0]);
                 inputs.push(t);
             } else {
                 for (idx, outlet) in n.inputs().iter() {
@@ -532,15 +531,37 @@ impl Model {
                     inputs: input_tuple,
                     ..
                 } => {
-                    let orig_inputs = inputs.clone();
+                    let mut orig_inputs = inputs.clone();
+                    orig_inputs = orig_inputs
+                        .iter()
+                        .zip(model.graph.inputs.iter())
+                        .sorted_by_key(|(_, source)| *source)
+                        .map(|(x, _)| x.clone())
+                        .collect();
+
+                    let mut input_mappings = input_mappings.clone();
+                    input_mappings = input_mappings
+                        .iter()
+                        .zip(model.graph.inputs.iter())
+                        .sorted_by_key(|(_, source)| *source)
+                        .map(|(x, _)| x.clone())
+                        .collect();
+                    inputs = inputs
+                        .iter()
+                        .zip(model.graph.inputs.iter())
+                        .sorted_by_key(|(_, source)| *source)
+                        .map(|(x, _)| x.clone())
+                        .collect();
 
                     let input_dims = inputs.iter().map(|inp| inp.dims());
-                    let num_iter = number_of_iterations(input_mappings, input_dims.collect());
+                    let num_iter = number_of_iterations(&input_mappings, input_dims.collect());
 
                     debug!(
-                        "{} iteration(s) in a subgraph with inputs {:?}",
-                        num_iter, input_tuple
+                        "{} iteration(s) in a subgraph with inputs {:?} and sources {:?}",
+                        num_iter, input_tuple, model.graph.inputs
                     );
+
+                    debug!("input_mappings: {:?}", input_mappings);
 
                     let mut full_results: Vec<Tensor<Fp>> = vec![];
 
@@ -594,7 +615,7 @@ impl Model {
                         full_results = outlets.into_values().collect_vec();
 
                         let output_states = output_state_idx(output_mappings);
-                        let input_states = input_state_idx(input_mappings);
+                        let input_states = input_state_idx(&input_mappings);
 
                         assert_eq!(input_states.len(), output_states.len());
 
@@ -1094,16 +1115,36 @@ impl Model {
                     input_mappings,
                     ..
                 } => {
-                    let original_values = values.clone();
+                    let mut original_values = values.clone();
+                    original_values = original_values
+                        .iter()
+                        .zip(model.graph.inputs.iter())
+                        .sorted_by_key(|(_, source)| *source)
+                        .map(|(x, _)| x.clone())
+                        .collect();
+
+                    let mut input_mappings = input_mappings.clone();
+                    input_mappings = input_mappings
+                        .iter()
+                        .zip(model.graph.inputs.iter())
+                        .sorted_by_key(|(_, source)| *source)
+                        .map(|(x, _)| x.clone())
+                        .collect();
+                    values = values
+                        .iter()
+                        .zip(model.graph.inputs.iter())
+                        .sorted_by_key(|(_, source)| *source)
+                        .map(|(x, _)| x.clone())
+                        .collect();
 
                     let input_dims = inputs
                         .iter()
                         .map(|inp| results.get(&inp.0).unwrap()[inp.1].dims());
-                    let num_iter = number_of_iterations(input_mappings, input_dims.collect());
+                    let num_iter = number_of_iterations(&input_mappings, input_dims.collect());
 
                     debug!(
-                        "{} iteration(s) in a subgraph with inputs {:?}",
-                        num_iter, inputs
+                        "{} iteration(s) in a subgraph with inputs {:?} and sources {:?}",
+                        num_iter, inputs, model.graph.inputs
                     );
 
                     let mut full_results: Vec<ValTensor<Fp>> = vec![];
@@ -1164,7 +1205,7 @@ impl Model {
                         full_results = outlets.into_values().collect_vec();
 
                         let output_states = output_state_idx(output_mappings);
-                        let input_states = input_state_idx(input_mappings);
+                        let input_states = input_state_idx(&input_mappings);
 
                         assert_eq!(input_states.len(), output_states.len());
 
