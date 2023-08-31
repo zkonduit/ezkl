@@ -130,7 +130,7 @@ impl<'source> FromPyObject<'source> for CheckMode {
 /// Converts Tolerance into a PyObject (Required for Tolerance to be compatible with Python)
 impl IntoPy<PyObject> for Tolerance {
     fn into_py(self, py: Python) -> PyObject {
-        (self.val, self.scales).to_object(py)
+        (self.val, self.scale.0).to_object(py)
     }
 }
 
@@ -138,8 +138,11 @@ impl IntoPy<PyObject> for Tolerance {
 /// Obtains Tolerance from PyObject (Required for Tolerance to be compatible with Python)
 impl<'source> FromPyObject<'source> for Tolerance {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        if let Ok((val, scales)) = ob.extract::<(f32, (usize, usize))>() {
-            Ok(Tolerance { val, scales })
+        if let Ok((val, scale)) = ob.extract::<(f32, f32)>() {
+            Ok(Tolerance {
+                val,
+                scale: utils::F32(scale),
+            })
         } else {
             Err(PyValueError::new_err("Invalid tolerance value provided. "))
         }

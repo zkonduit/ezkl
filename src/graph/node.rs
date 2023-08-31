@@ -255,6 +255,7 @@ impl SupportedOp {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn rescale(&self, in_scales: Vec<u32>) -> Box<dyn Op<Fp>> {
         let inputs_to_scale = self.requires_homogenous_input_scales();
         // creates a rescaled op if the inputs are not homogenous

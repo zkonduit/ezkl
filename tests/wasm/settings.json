@@ -2,10 +2,7 @@
     "run_args": {
         "tolerance": {
             "val": 0.0,
-            "scales": [
-                1,
-                1
-            ]
+            "scale": 1.0
         },
         "input_scale": 0,
         "param_scale": 0,
