@@ -485,7 +485,7 @@ pub fn new_op_from_onnx(
         "Recip" => {
             // Extract the slope layer hyperparams
             SupportedOp::Nonlinear(LookupOp::Recip {
-                scale: (2.0 * scale_to_multiplier(inputs[0].out_scales()[0])).into(),
+                scale: (scale_to_multiplier(inputs[0].out_scales()[0]).powf(2.0)).into(),
             })
         }
 
