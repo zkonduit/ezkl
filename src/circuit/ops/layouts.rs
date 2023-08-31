@@ -818,21 +818,8 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-    scales: &(usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
-    let lhs_scale = scales.0;
-    let rhs_scale = scales.1;
-    if lhs_scale > 1 {
-        let scale = ValType::Constant(F::from(lhs_scale as u64));
-        let scale_tensor = Tensor::new(Some(&[scale]), &[1])?;
-        lhs = pairwise(config, region, &[lhs, scale_tensor.into()], BaseOp::Mult)?;
-    }
-    if rhs_scale > 1 {
-        let scale = ValType::Constant(F::from(rhs_scale as u64));
-        let scale_tensor = Tensor::new(Some(&[scale]), &[1])?;
-        rhs = pairwise(config, region, &[rhs, scale_tensor.into()], BaseOp::Mult)?;
-    }
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
 
@@ -854,15 +841,9 @@ pub fn less<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-    scales: &(usize, usize),
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // just flip the order and use greater
-    greater(
-        config,
-        region,
-        &[values[1].clone(), values[0].clone()],
-        &(scales.1, scales.0),
-    )
+    greater(config, region, &[values[1].clone(), values[0].clone()])
 }
 
 /// And boolean operation
@@ -944,8 +925,8 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
             .into();
     region.next();
 
-    let greater_than_zero = greater(config, region, &[diff.clone(), nil.clone()], &(1, 1))?;
-    let less_than_zero = less(config, region, &[diff, nil], &(1, 1))?;
+    let greater_than_zero = greater(config, region, &[diff.clone(), nil.clone()])?;
+    let less_than_zero = less(config, region, &[diff, nil])?;
 
     let res = or(config, region, &[greater_than_zero, less_than_zero])?;
     let res = not(config, region, &[res])?;
@@ -2168,14 +2149,13 @@ pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-    input_scale: usize,
-    output_scale: usize,
+    scale: utils::F32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // we want this to be as small as possible so we set the output scale to 1
     let dims = values[0].dims();
 
     if dims.len() == 1 {
-        return softmax(config, region, values, input_scale, output_scale);
+        return softmax(config, region, values, scale);
     }
 
     let cartesian_coord = dims[..dims.len() - 1]
@@ -2195,10 +2175,7 @@ pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
 
         let softmax_input = values[0].get_slice(&sum_dims)?;
 
-        outputs.push(
-            softmax(config, region, &[softmax_input], input_scale, output_scale)?
-                .get_inner_tensor()?,
-        );
+        outputs.push(softmax(config, region, &[softmax_input], scale)?.get_inner_tensor()?);
     }
 
     let mut res = Tensor::new(Some(&outputs), &[outputs.len()])?.combine()?;
@@ -2212,14 +2189,10 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-    input_scale: usize,
-    output_scale: usize,
+    scale: utils::F32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    // we want this to be as small as possible so we set the output scale to 1
-    let scales = (input_scale, output_scale);
-
     // elementwise exponential
-    let ex = nonlinearity(config, region, values, &LookupOp::Exp { scales })?;
+    let ex = nonlinearity(config, region, values, &LookupOp::Exp { scale: scale })?;
 
     // sum of exps
     let denom = sum(config, region, &[ex.clone()])?;
@@ -2231,7 +2204,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
         &[denom],
         // we set to input scale + output_scale so the output scale is output)scale
         &LookupOp::Recip {
-            scale: output_scale.pow(2),
+            scale: scale.0.powf(2.0).into(),
         },
     )?;
 
@@ -2249,7 +2222,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
             let int_evals = Tensor::new(Some(&values[0].get_int_evals()?), values[0].dims())?;
             // scale is double the output
             let ref_sofmax: Tensor<i128> =
-                tensor::ops::nonlinearities::softmax(&int_evals, input_scale, output_scale).0;
+                tensor::ops::nonlinearities::softmax(&int_evals, scale.into()).0;
 
             let output_int_evals = Tensor::new(Some(&softmax.get_int_evals()?), values[0].dims())?;
 
@@ -2267,8 +2240,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-    input_scale: usize,
-    output_scale: usize,
+    scale: utils::F32,
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     if tol == 0.0 {
@@ -2279,13 +2251,15 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
 
+    let scale_squared = scale.0.powf(2.0);
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
-    let scale = input_scale * output_scale;
     let recip = nonlinearity(
         config,
         region,
         &[values[0].clone()],
-        &LookupOp::Recip { scale },
+        &LookupOp::Recip {
+            scale: scale_squared.into(),
+        },
     )?;
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
@@ -2297,7 +2271,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         region,
         &[product.clone()],
         &LookupOp::GreaterThan {
-            a: utils::F32(tol * scale as f32),
+            a: utils::F32(tol * scale_squared),
         },
     )?;
 
@@ -2310,7 +2284,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         region,
         &[neg_product],
         &LookupOp::GreaterThan {
-            a: utils::F32(tol * scale as f32),
+            a: utils::F32(tol * scale_squared),
         },
     )?;
 

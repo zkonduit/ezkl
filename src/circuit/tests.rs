@@ -1485,14 +1485,14 @@ mod rangecheckpercent {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let scale = SCALE.pow(2);
+            let scale = utils::F32(SCALE.pow(2) as f32);
             let a = VarTensor::new_advice(cs, K, LEN);
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
             let mut config = Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE);
             // set up a new GreaterThan and Recip tables
             let nl = &LookupOp::GreaterThan {
-                a: circuit::utils::F32((RANGE * scale as f32) / 100.0),
+                a: circuit::utils::F32((RANGE * scale.0) / 100.0),
             };
             config.configure_lookup(cs, &b, &output, 16, nl).unwrap();
             config
@@ -1518,7 +1518,7 @@ mod rangecheckpercent {
                                 &[self.output.clone(), self.input.clone()],
                                 Box::new(HybridOp::RangeCheck(Tolerance {
                                     val: RANGE,
-                                    scales: (SCALE, SCALE),
+                                    scale: SCALE.into(),
                                 })),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1664,7 +1664,7 @@ mod softmax {
 
     const K: usize = 18;
     const LEN: usize = 3;
-    const SCALE: usize = i128::pow(2, 7) as usize;
+    const SCALE: f32 = 128.0;
 
     #[derive(Clone)]
     struct SoftmaxCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -1696,7 +1696,7 @@ mod softmax {
                     &advices[1],
                     16,
                     &LookupOp::Exp {
-                        scales: (SCALE, SCALE),
+                        scale: SCALE.into(),
                     },
                 )
                 .unwrap();
@@ -1707,7 +1707,7 @@ mod softmax {
                     &advices[1],
                     16,
                     &LookupOp::Recip {
-                        scale: SCALE.pow(2),
+                        scale: SCALE.powf(2.0).into(),
                     },
                 )
                 .unwrap();
@@ -1730,7 +1730,7 @@ mod softmax {
                                 &mut region,
                                 &[self.input.clone()],
                                 Box::new(HybridOp::Softmax {
-                                    scales: (SCALE, SCALE),
+                                    scale: SCALE.into(),
                                 }),
                             )
                             .unwrap();

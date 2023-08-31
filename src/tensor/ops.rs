@@ -269,8 +269,8 @@ pub fn equals<
 
     let zero_tensor = Tensor::<T>::from(vec![T::zero().ok_or(TensorError::DimError)?].into_iter());
 
-    let (greater_than_zero, mut inter) = greater(&diff, &zero_tensor, &(1, 1))?;
-    let (less_than_zero, inter_2) = less(&diff, &zero_tensor, &(1, 1))?;
+    let (greater_than_zero, mut inter) = greater(&diff, &zero_tensor)?;
+    let (less_than_zero, inter_2) = less(&diff, &zero_tensor)?;
     inter.extend(inter_2);
 
     let result = or(&greater_than_zero, &less_than_zero)?;
@@ -310,15 +310,8 @@ pub fn greater<
 >(
     a: &Tensor<T>,
     b: &Tensor<T>,
-    scales: &(usize, usize),
 ) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
-    let lhs_scale = T::try_from(scales.0 as u64).map_err(|_| TensorError::DimError)?;
-    let rhs_scale = T::try_from(scales.1 as u64).map_err(|_| TensorError::DimError)?;
-
-    let lhs_scale_tensor = Tensor::from([lhs_scale].into_iter());
-    let rhs_scale_tensor = Tensor::from([rhs_scale].into_iter());
-
-    let mask_inter = ((lhs_scale_tensor * a.clone())? - (rhs_scale_tensor * b.clone())?)?;
+    let mask_inter = (a.clone() - b.clone())?;
     let mask = mask_inter.map(|x| {
         if x > T::zero().ok_or(TensorError::DimError).unwrap() {
             T::one().ok_or(TensorError::DimError).unwrap()
@@ -361,10 +354,9 @@ pub fn less<
 >(
     a: &Tensor<T>,
     b: &Tensor<T>,
-    scales: &(usize, usize),
 ) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
     // a < b <=> b > a
-    greater(b, a, &(scales.1, scales.0))
+    greater(b, a)
 }
 
 /// Resize using nearest neighbour interpolation.
@@ -2344,13 +2336,13 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[187]), &[1]).unwrap();
     ///
     /// ```
-    pub fn sigmoid(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn sigmoid(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / (scale_input as f64);
-            let fout = (scale_output as f64) / (1.0 + (-kix).exp());
+            let kix = (*a_i as f64) / scale_input;
+            let fout = scale_input / (1.0 + (-kix).exp());
             let rounded = fout.round();
             output[i] = rounded as i128;
         }
@@ -2386,13 +2378,13 @@ pub mod nonlinearities {
     ///
     /// assert_eq!(result, expected);
     /// ```
-    pub fn exp(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn exp(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / (scale_input as f64);
-            let fout = (scale_output as f64) * kix.exp();
+            let kix = (*a_i as f64) / scale_input;
+            let fout = scale_input * kix.exp();
             let rounded = fout.round();
             output[i] = rounded as i128;
         }
@@ -2428,13 +2420,13 @@ pub mod nonlinearities {
     ///
     /// assert_eq!(result, expected);
     /// ```
-    pub fn ln(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn ln(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / (scale_input as f64);
-            let fout = (scale_output as f64) * kix.ln();
+            let kix = (*a_i as f64) / scale_input;
+            let fout = scale_input * kix.ln();
             let rounded = fout.round();
             output[i] = rounded as i128;
         }
@@ -2467,16 +2459,12 @@ pub mod nonlinearities {
     }
 
     /// softmax layout
-    pub fn multi_dim_softmax(
-        a: &Tensor<i128>,
-        scale_input: usize,
-        scale_output: usize,
-    ) -> (Tensor<i128>, Vec<Tensor<i128>>) {
+    pub fn multi_dim_softmax(a: &Tensor<i128>, scale: f64) -> (Tensor<i128>, Vec<Tensor<i128>>) {
         // we want this to be as small as possible so we set the output scale to 1
         let dims = a.dims();
 
         if dims.len() == 1 {
-            return softmax(a, scale_input, scale_output);
+            return softmax(a, scale);
         }
 
         let mut intermediate_values = vec![];
@@ -2498,7 +2486,7 @@ pub mod nonlinearities {
 
             let softmax_input = a.get_slice(&sum_dims).unwrap();
 
-            let res = softmax(&softmax_input, scale_input, scale_output);
+            let res = softmax(&softmax_input, scale);
 
             outputs.push(res.0);
             intermediate_values.extend(res.1);
@@ -2532,21 +2520,17 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[2838, 2838, 7713, 2838, 2838, 384]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn softmax(
-        a: &Tensor<i128>,
-        scale_input: usize,
-        scale_output: usize,
-    ) -> (Tensor<i128>, Vec<Tensor<i128>>) {
+    pub fn softmax(a: &Tensor<i128>, scale: f64) -> (Tensor<i128>, Vec<Tensor<i128>>) {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
         let mut intermediate_values = vec![];
 
         intermediate_values.push(a.clone());
 
-        let exp = exp(a, scale_input, scale_output);
+        let exp = exp(a, scale);
 
         let sum = sum(&exp).unwrap();
         intermediate_values.push(sum.clone());
-        let inv_denom = recip(&sum, scale_output.pow(2) as f64);
+        let inv_denom = recip(&sum, scale.powf(2.0));
 
         ((exp * inv_denom).unwrap(), intermediate_values)
     }
@@ -2612,13 +2596,13 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[2, 5, 3, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sqrt(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn sqrt(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / (scale_input as f64);
-            let fout = (scale_output as f64) * kix.sqrt();
+            let kix = (*a_i as f64) / scale_input;
+            let fout = scale_input * kix.sqrt();
             let rounded = fout.round();
             output[i] = rounded as i128;
         }
@@ -2643,13 +2627,13 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn rsqrt(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn rsqrt(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / (scale_input as f64);
-            let fout = (scale_output as f64) * (1.0 / kix.sqrt());
+            let kix = (*a_i as f64) / scale_input;
+            let fout = scale_input * (1.0 / kix.sqrt());
             let rounded = fout.round();
             output[i] = rounded as i128;
         }
@@ -2673,12 +2657,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[-83, 126, -18, 69, 69, 128]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn cos(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn cos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let cosz = (scale_output as f64) * z.cos();
+            let z = a[i] as f64 / scale_input;
+            let cosz = scale_input * z.cos();
             output[i] = cosz as i128;
         }
 
@@ -2702,12 +2686,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 201]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn acos(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn acos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let acos = (scale_output as f64) * z.acos();
+            let z = a[i] as f64 / scale_input;
+            let acos = scale_input * z.acos();
             output[i] = acos as i128;
         }
 
@@ -2731,12 +2715,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[3495, 4608313557592, 190781, 197, 197, 128]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn cosh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn cosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let coshz = (scale_output as f64) * z.cosh();
+            let z = a[i] as f64 / scale_input;
+            let coshz = scale_input * z.cosh();
             output[i] = coshz as i128;
         }
 
@@ -2760,12 +2744,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[264, 500, 354, 0, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn acosh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn acosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let acoshz = (scale_output as f64) * z.acosh();
+            let z = a[i] as f64 / scale_input;
+            let acoshz = scale_input * z.acosh();
             output[i] = acoshz as i128;
         }
 
@@ -2789,12 +2773,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[-96, -16, 126, 107, 107, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sin(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn sin(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let sinz = (scale_output as f64) * z.sin();
+            let z = a[i] as f64 / scale_input;
+            let sinz = scale_input * z.sin();
             output[i] = sinz as i128;
         }
 
@@ -2818,12 +2802,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(& [0, 0, 0, 201, 201, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn asin(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn asin(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let asinz = (scale_output as f64) * z.asin();
+            let z = a[i] as f64 / scale_input;
+            let asinz = scale_input * z.asin();
             output[i] = asinz as i128;
         }
 
@@ -2847,12 +2831,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(& [3493, 4608313557592, 190781, 150, 150, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sinh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn sinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let asinz = (scale_output as f64) * z.sinh();
+            let z = a[i] as f64 / scale_input;
+            let asinz = scale_input * z.sinh();
             output[i] = asinz as i128;
         }
 
@@ -2876,12 +2860,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[268, 500, 355, 112, 112, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn asinh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn asinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let asinhz = (scale_output as f64) * z.asinh();
+            let z = a[i] as f64 / scale_input;
+            let asinhz = scale_input * z.asinh();
             output[i] = asinhz as i128;
         }
 
@@ -2905,12 +2889,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[148, -17, -870, 199, 199, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn tan(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn tan(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let tanz = (scale_output as f64) * z.tan();
+            let z = a[i] as f64 / scale_input;
+            let tanz = scale_input * z.tan();
             output[i] = tanz as i128;
         }
 
@@ -2934,12 +2918,12 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[169, 195, 185, 100, 100, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn atan(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn atan(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let atanz = (scale_output as f64) * z.atan();
+            let z = a[i] as f64 / scale_input;
+            let atanz = scale_input * z.atan();
             output[i] = atanz as i128;
         }
 
@@ -2965,12 +2949,12 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
 
-    pub fn tanh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn tanh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let tanhz: f64 = (scale_output as f64) * z.tanh();
+            let z = a[i] as f64 / scale_input;
+            let tanhz: f64 = scale_input * z.tanh();
             output[i] = tanhz as i128;
         }
 
@@ -2996,12 +2980,12 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
 
-    pub fn atanh(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn atanh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         for i in 0..a.len() {
-            let z = a[i] as f64 / (scale_input as f64);
-            let atanhz = (scale_output as f64) * z.atanh();
+            let z = a[i] as f64 / scale_input;
+            let atanhz = scale_input * z.atanh();
             output[i] = atanhz as i128;
         }
 
@@ -3026,7 +3010,7 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap(); // TODO
     /// assert_eq!(result, expected);
     /// ```
-    pub fn erffunc(a: &Tensor<i128>, scale_input: usize, scale_output: usize) -> Tensor<i128> {
+    pub fn erffunc(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         let mut output = a.clone();
 
         const NCOEF: usize = 28;
@@ -3086,8 +3070,8 @@ pub mod nonlinearities {
         }
 
         for i in 0..a.len() {
-            let mut z = a[i] as f64 / (scale_input as f64);
-            z = (scale_output as f64) * (erf(z));
+            let mut z = a[i] as f64 / scale_input;
+            z = scale_input * (erf(z));
             output[i] = z as i128;
         }
         output

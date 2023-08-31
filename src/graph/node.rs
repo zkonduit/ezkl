@@ -80,22 +80,18 @@ impl Op<Fp> for Rescaled {
         Op::<Fp>::f(&*self.inner, &rescaled_inputs)
     }
 
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<Fp>> {
-        Box::new(self.clone())
-    }
-
     fn as_string(&self) -> String {
         format!("RESCALED INPUT ({})", self.inner.as_string())
     }
 
-    fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
+    fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
             .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f64))
             .collect();
 
-        Op::<Fp>::out_scale(&*self.inner, in_scales, _g)
+        Op::<Fp>::out_scale(&*self.inner, in_scales)
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
@@ -132,6 +128,8 @@ pub struct RebaseScale {
     pub inner: Box<SupportedOp>,
     /// The scale of the operation's inputs.
     pub scale: u128,
+    /// scale being rebased to
+    pub target_scale: u32,
     /// The original scale of the operation's inputs.
     pub original_scale: u32,
 }
@@ -150,7 +148,9 @@ impl RebaseScale {
         {
             SupportedOp::RebaseScale(RebaseScale {
                 inner: Box::new(inner),
-                scale: scale_to_multiplier(op_out_scale - global_scale) as u128,
+                target_scale: global_scale * scale_rebase_multiplier,
+                scale: scale_to_multiplier(op_out_scale - global_scale * scale_rebase_multiplier)
+                    as u128,
                 original_scale: op_out_scale,
             })
         } else {
@@ -175,10 +175,6 @@ impl Op<Fp> for RebaseScale {
         Ok(res)
     }
 
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<Fp>> {
-        Box::new(self.clone())
-    }
-
     fn as_string(&self) -> String {
         format!(
             "REBASED (div={:?}) ({})",
@@ -187,8 +183,8 @@ impl Op<Fp> for RebaseScale {
         )
     }
 
-    fn out_scale(&self, _: Vec<u32>, _g: u32) -> u32 {
-        _g
+    fn out_scale(&self, _: Vec<u32>) -> u32 {
+        self.target_scale
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
@@ -257,6 +253,13 @@ impl SupportedOp {
             SupportedOp::Constant(op) => Some(op),
             _ => None,
         }
+    }
+
+    fn rescale(&self, in_scales: Vec<u32>) -> Box<dyn Op<Fp>> {
+        let inputs_to_scale = self.requires_homogenous_input_scales();
+        // creates a rescaled op if the inputs are not homogenous
+        let op = self.clone_dyn();
+        super::homogenize_input_scales(op, in_scales, inputs_to_scale).unwrap()
     }
 }
 
@@ -413,34 +416,16 @@ impl Op<Fp> for SupportedOp {
         }
     }
 
-    fn rescale(&self, in_scales: Vec<u32>, out_scale: u32) -> Box<dyn Op<Fp>> {
+    fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
         match self {
-            SupportedOp::Linear(op) => {
-                let inputs_to_scale = self.requires_homogenous_input_scales();
-                // creates a rescaled op if the inputs are not homogenous
-                super::homogenize_input_scales(Box::new(op.clone()), in_scales, inputs_to_scale)
-                    .unwrap()
-            }
-            SupportedOp::Nonlinear(op) => op.rescale(in_scales, out_scale),
-            SupportedOp::Hybrid(op) => op.rescale(in_scales, out_scale),
-            SupportedOp::Input(op) => op.rescale(in_scales, out_scale),
-            SupportedOp::Constant(op) => op.rescale(in_scales, out_scale),
-            SupportedOp::Unknown(op) => op.rescale(in_scales, out_scale),
-            SupportedOp::Rescaled(op) => op.rescale(in_scales, out_scale),
-            SupportedOp::RebaseScale(op) => op.rescale(in_scales, out_scale),
-        }
-    }
-
-    fn out_scale(&self, in_scales: Vec<u32>, global: u32) -> u32 {
-        match self {
-            SupportedOp::Linear(op) => Op::<Fp>::out_scale(op, in_scales, global),
-            SupportedOp::Nonlinear(op) => Op::<Fp>::out_scale(op, in_scales, global),
-            SupportedOp::Hybrid(op) => Op::<Fp>::out_scale(op, in_scales, global),
-            SupportedOp::Input(op) => Op::<Fp>::out_scale(op, in_scales, global),
-            SupportedOp::Constant(op) => Op::<Fp>::out_scale(op, in_scales, global),
-            SupportedOp::Unknown(op) => Op::<Fp>::out_scale(op, in_scales, global),
-            SupportedOp::Rescaled(op) => Op::<Fp>::out_scale(op, in_scales, global),
-            SupportedOp::RebaseScale(op) => Op::<Fp>::out_scale(op, in_scales, global),
+            SupportedOp::Linear(op) => Op::<Fp>::out_scale(op, in_scales),
+            SupportedOp::Nonlinear(op) => Op::<Fp>::out_scale(op, in_scales),
+            SupportedOp::Hybrid(op) => Op::<Fp>::out_scale(op, in_scales),
+            SupportedOp::Input(op) => Op::<Fp>::out_scale(op, in_scales),
+            SupportedOp::Constant(op) => Op::<Fp>::out_scale(op, in_scales),
+            SupportedOp::Unknown(op) => Op::<Fp>::out_scale(op, in_scales),
+            SupportedOp::Rescaled(op) => Op::<Fp>::out_scale(op, in_scales),
+            SupportedOp::RebaseScale(op) => Op::<Fp>::out_scale(op, in_scales),
         }
     }
 }
@@ -575,32 +560,25 @@ impl Node {
             })
             .collect();
 
-        let global_scale = scales.input;
-
         let homogenous_inputs = opkind.requires_homogenous_input_scales();
         // autoamtically increases a constant's scale if it is only used once and
         for input in homogenous_inputs {
             let input_node = other_nodes.get_mut(&inputs[input].idx()).unwrap();
             let input_opkind = &mut input_node.opkind();
             if let Some(constant) = input_opkind.get_mutable_constant() {
-                rescale_const_with_single_use(
-                    constant,
-                    in_scales.clone(),
-                    global_scale,
-                    param_visibility,
-                )?;
+                rescale_const_with_single_use(constant, in_scales.clone(), param_visibility)?;
                 input_node.replace_opkind(constant.clone_dyn().into());
-                let out_scale = input_opkind.out_scale(vec![], global_scale);
+                let out_scale = input_opkind.out_scale(vec![]);
                 input_node.bump_scale(out_scale);
                 in_scales[input] = out_scale;
             }
         }
 
-        opkind = opkind.rescale(in_scales.clone(), global_scale).into();
-        let mut out_scale = opkind.out_scale(in_scales.clone(), global_scale);
+        opkind = opkind.rescale(in_scales.clone()).into();
+        let mut out_scale = opkind.out_scale(in_scales.clone());
         opkind =
-            RebaseScale::rebase(opkind, global_scale, out_scale, scales.rebase_multiplier).into();
-        out_scale = opkind.out_scale(in_scales, global_scale);
+            RebaseScale::rebase(opkind, scales.input, out_scale, scales.rebase_multiplier).into();
+        out_scale = opkind.out_scale(in_scales);
 
         // get the output shape
         let out_dims = {
@@ -630,11 +608,10 @@ impl Node {
 fn rescale_const_with_single_use(
     constant: &mut Constant<Fp>,
     in_scales: Vec<u32>,
-    global_scale: u32,
     param_visibility: Visibility,
 ) -> Result<(), Box<dyn Error>> {
     if constant.is_single_use() {
-        let current_scale = constant.out_scale(vec![], global_scale);
+        let current_scale = constant.out_scale(vec![]);
         let scale_max = in_scales.iter().max().unwrap();
         if scale_max > &current_scale {
             let raw_values = constant.raw_values.clone();

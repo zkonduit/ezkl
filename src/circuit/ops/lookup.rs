@@ -5,7 +5,6 @@ use std::error::Error;
 use crate::{
     circuit::{layouts, utils},
     fieldutils::{felt_to_i128, i128_to_felt},
-    graph::scale_to_multiplier,
     tensor::{self, Tensor, TensorError, TensorType},
 };
 
@@ -29,64 +28,64 @@ pub enum LookupOp {
         a: utils::F32,
     },
     Sqrt {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Rsqrt {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Recip {
-        scale: usize,
+        scale: utils::F32,
     },
     LeakyReLU {
         slope: utils::F32,
     },
     Sigmoid {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Ln {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Exp {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Cos {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     ACos {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Cosh {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     ACosh {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Sin {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     ASin {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Sinh {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     ASinh {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Tan {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     ATan {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Tanh {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     ATanh {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     Erf {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     GreaterThan {
         a: utils::F32,
@@ -151,64 +150,32 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 &x,
                 f32::from(*denom).into(),
             )),
-            LookupOp::Recip { scale } => Ok(tensor::ops::nonlinearities::recip(&x, *scale as f64)),
+            LookupOp::Recip { scale } => Ok(tensor::ops::nonlinearities::recip(&x, scale.into())),
             LookupOp::ReLU => Ok(tensor::ops::nonlinearities::leakyrelu(&x, 0_f64)),
 
             LookupOp::LeakyReLU { slope: a } => {
                 Ok(tensor::ops::nonlinearities::leakyrelu(&x, a.0.into()))
             }
-            LookupOp::Sigmoid { scales } => {
-                Ok(tensor::ops::nonlinearities::sigmoid(&x, scales.0, scales.1))
+            LookupOp::Sigmoid { scale } => {
+                Ok(tensor::ops::nonlinearities::sigmoid(&x, scale.into()))
             }
-            LookupOp::Sqrt { scales } => {
-                Ok(tensor::ops::nonlinearities::sqrt(&x, scales.0, scales.1))
-            }
-            LookupOp::Rsqrt { scales } => {
-                Ok(tensor::ops::nonlinearities::rsqrt(&x, scales.0, scales.1))
-            }
-            LookupOp::Erf { scales } => {
-                Ok(tensor::ops::nonlinearities::erffunc(&x, scales.0, scales.1))
-            }
-            LookupOp::Exp { scales } => {
-                Ok(tensor::ops::nonlinearities::exp(&x, scales.0, scales.1))
-            }
-            LookupOp::Ln { scales } => Ok(tensor::ops::nonlinearities::ln(&x, scales.0, scales.1)),
-            LookupOp::Cos { scales } => {
-                Ok(tensor::ops::nonlinearities::cos(&x, scales.0, scales.1))
-            }
-            LookupOp::ACos { scales } => {
-                Ok(tensor::ops::nonlinearities::acos(&x, scales.0, scales.1))
-            }
-            LookupOp::Cosh { scales } => {
-                Ok(tensor::ops::nonlinearities::cosh(&x, scales.0, scales.1))
-            }
-            LookupOp::ACosh { scales } => {
-                Ok(tensor::ops::nonlinearities::acosh(&x, scales.0, scales.1))
-            }
-            LookupOp::Sin { scales } => {
-                Ok(tensor::ops::nonlinearities::sin(&x, scales.0, scales.1))
-            }
-            LookupOp::ASin { scales } => {
-                Ok(tensor::ops::nonlinearities::asin(&x, scales.0, scales.1))
-            }
-            LookupOp::Sinh { scales } => {
-                Ok(tensor::ops::nonlinearities::sinh(&x, scales.0, scales.1))
-            }
-            LookupOp::ASinh { scales } => {
-                Ok(tensor::ops::nonlinearities::asinh(&x, scales.0, scales.1))
-            }
-            LookupOp::Tan { scales } => {
-                Ok(tensor::ops::nonlinearities::tan(&x, scales.0, scales.1))
-            }
-            LookupOp::ATan { scales } => {
-                Ok(tensor::ops::nonlinearities::atan(&x, scales.0, scales.1))
-            }
-            LookupOp::ATanh { scales } => {
-                Ok(tensor::ops::nonlinearities::atanh(&x, scales.0, scales.1))
-            }
-            LookupOp::Tanh { scales } => {
-                Ok(tensor::ops::nonlinearities::tanh(&x, scales.0, scales.1))
-            }
+            LookupOp::Sqrt { scale } => Ok(tensor::ops::nonlinearities::sqrt(&x, scale.into())),
+            LookupOp::Rsqrt { scale } => Ok(tensor::ops::nonlinearities::rsqrt(&x, scale.into())),
+            LookupOp::Erf { scale } => Ok(tensor::ops::nonlinearities::erffunc(&x, scale.into())),
+            LookupOp::Exp { scale } => Ok(tensor::ops::nonlinearities::exp(&x, scale.into())),
+            LookupOp::Ln { scale } => Ok(tensor::ops::nonlinearities::ln(&x, scale.into())),
+            LookupOp::Cos { scale } => Ok(tensor::ops::nonlinearities::cos(&x, scale.into())),
+            LookupOp::ACos { scale } => Ok(tensor::ops::nonlinearities::acos(&x, scale.into())),
+            LookupOp::Cosh { scale } => Ok(tensor::ops::nonlinearities::cosh(&x, scale.into())),
+            LookupOp::ACosh { scale } => Ok(tensor::ops::nonlinearities::acosh(&x, scale.into())),
+            LookupOp::Sin { scale } => Ok(tensor::ops::nonlinearities::sin(&x, scale.into())),
+            LookupOp::ASin { scale } => Ok(tensor::ops::nonlinearities::asin(&x, scale.into())),
+            LookupOp::Sinh { scale } => Ok(tensor::ops::nonlinearities::sinh(&x, scale.into())),
+            LookupOp::ASinh { scale } => Ok(tensor::ops::nonlinearities::asinh(&x, scale.into())),
+            LookupOp::Tan { scale } => Ok(tensor::ops::nonlinearities::tan(&x, scale.into())),
+            LookupOp::ATan { scale } => Ok(tensor::ops::nonlinearities::atan(&x, scale.into())),
+            LookupOp::ATanh { scale } => Ok(tensor::ops::nonlinearities::atanh(&x, scale.into())),
+            LookupOp::Tanh { scale } => Ok(tensor::ops::nonlinearities::tanh(&x, scale.into())),
         }?;
 
         let output = res.map(|x| i128_to_felt(x));
@@ -229,26 +196,26 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::LessThan { .. } => "LESS_THAN".into(),
             LookupOp::Recip { scale, .. } => format!("RECIP w/ {}", scale),
             LookupOp::Div { denom, .. } => format!("DIV w/ {}", denom),
-            LookupOp::Ln { scales } => format!("LN w/ {:?}", scales),
+            LookupOp::Ln { scale } => format!("LN w/ {:?}", scale),
             LookupOp::ReLU => "RELU".to_string(),
             LookupOp::LeakyReLU { slope: a } => format!("L_RELU /s {}", a),
-            LookupOp::Sigmoid { scales } => format!("SIGMOID w/ {:?}", scales),
-            LookupOp::Sqrt { scales } => format!("SQRT w/ {:?}", scales),
-            LookupOp::Erf { scales } => format!("ERF w/ {:?}", scales),
-            LookupOp::Rsqrt { scales } => format!("RSQRT w/ {:?}", scales),
-            LookupOp::Exp { scales } => format!("EXP w/ {:?}", scales),
-            LookupOp::Tan { scales } => format!("TAN w/ {:?}", scales),
-            LookupOp::ATan { scales } => format!("ATAN w/ {:?}", scales),
-            LookupOp::Tanh { scales } => format!("TANH w/ {:?}", scales),
-            LookupOp::ATanh { scales } => format!("ATANH w/ {:?}", scales),
-            LookupOp::Cos { scales } => format!("COS w/ {:?}", scales),
-            LookupOp::ACos { scales } => format!("ACOS w/ {:?}", scales),
-            LookupOp::Cosh { scales } => format!("COSH w/ {:?}", scales),
-            LookupOp::ACosh { scales } => format!("ACOSH w/ {:?}", scales),
-            LookupOp::Sin { scales } => format!("SIN w/ {:?}", scales),
-            LookupOp::ASin { scales } => format!("ASIN w/ {:?}", scales),
-            LookupOp::Sinh { scales } => format!("SINH w/ {:?}", scales),
-            LookupOp::ASinh { scales } => format!("ASINH w/ {:?}", scales),
+            LookupOp::Sigmoid { scale } => format!("SIGMOID w/ {:?}", scale),
+            LookupOp::Sqrt { scale } => format!("SQRT w/ {:?}", scale),
+            LookupOp::Erf { scale } => format!("ERF w/ {:?}", scale),
+            LookupOp::Rsqrt { scale } => format!("RSQRT w/ {:?}", scale),
+            LookupOp::Exp { scale } => format!("EXP w/ {:?}", scale),
+            LookupOp::Tan { scale } => format!("TAN w/ {:?}", scale),
+            LookupOp::ATan { scale } => format!("ATAN w/ {:?}", scale),
+            LookupOp::Tanh { scale } => format!("TANH w/ {:?}", scale),
+            LookupOp::ATanh { scale } => format!("ATANH w/ {:?}", scale),
+            LookupOp::Cos { scale } => format!("COS w/ {:?}", scale),
+            LookupOp::ACos { scale } => format!("ACOS w/ {:?}", scale),
+            LookupOp::Cosh { scale } => format!("COSH w/ {:?}", scale),
+            LookupOp::ACosh { scale } => format!("ACOSH w/ {:?}", scale),
+            LookupOp::Sin { scale } => format!("SIN w/ {:?}", scale),
+            LookupOp::ASin { scale } => format!("ASIN w/ {:?}", scale),
+            LookupOp::Sinh { scale } => format!("SINH w/ {:?}", scale),
+            LookupOp::ASinh { scale } => format!("ASINH w/ {:?}", scale),
         }
     }
 
@@ -267,155 +234,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     }
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> u32 {
+    fn out_scale(&self, inputs_scale: Vec<u32>) -> u32 {
         match self {
             LookupOp::Sign | LookupOp::GreaterThan { .. } | LookupOp::LessThan { .. } => 0,
-            LookupOp::ReLU | LookupOp::LeakyReLU { .. } => inputs_scale[0],
-            _ => global_scale,
-        }
-    }
-
-    fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
-        match self {
-            LookupOp::Sign => Box::new(LookupOp::Sign),
-            LookupOp::Recip { .. } => Box::new(LookupOp::Recip {
-                scale: scale_to_multiplier(inputs_scale[0] + global_scale) as usize,
-            }),
-            LookupOp::Div { denom } => Box::new(LookupOp::Div {
-                denom: crate::circuit::utils::F32(
-                    ((denom.0 as f64) * scale_to_multiplier(inputs_scale[0] - global_scale)) as f32,
-                ),
-            }),
-            LookupOp::ReLU { .. } => Box::new(LookupOp::ReLU),
-            LookupOp::LeakyReLU { slope, .. } => Box::new(LookupOp::LeakyReLU { slope: *slope }),
-            LookupOp::Sigmoid { .. } => Box::new(LookupOp::Sigmoid {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Max { a, .. } => Box::new(LookupOp::Max {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-                a: *a,
-            }),
-            LookupOp::Min { a, .. } => Box::new(LookupOp::Min {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-                a: *a,
-            }),
-            LookupOp::Sqrt { .. } => Box::new(LookupOp::Sqrt {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Rsqrt { .. } => Box::new(LookupOp::Rsqrt {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Cos { .. } => Box::new(LookupOp::Cos {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::ACos { .. } => Box::new(LookupOp::ACos {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Cosh { .. } => Box::new(LookupOp::Cosh {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::ACosh { .. } => Box::new(LookupOp::ACosh {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Sin { .. } => Box::new(LookupOp::Sin {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::ASin { .. } => Box::new(LookupOp::ASin {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Sinh { .. } => Box::new(LookupOp::Sinh {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::ASinh { .. } => Box::new(LookupOp::ASinh {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Tan { .. } => Box::new(LookupOp::Tan {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::ATan { .. } => Box::new(LookupOp::ATan {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::ATanh { .. } => Box::new(LookupOp::ATanh {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Tanh { .. } => Box::new(LookupOp::Tanh {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Erf { .. } => Box::new(LookupOp::Erf {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Exp { .. } => Box::new(LookupOp::Exp {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::Ln { .. } => Box::new(LookupOp::Ln {
-                scales: (
-                    scale_to_multiplier(inputs_scale[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            LookupOp::GreaterThan { a } => Box::new(LookupOp::GreaterThan {
-                a: utils::F32(((a.0 as f64) * scale_to_multiplier(inputs_scale[0])) as f32),
-            }),
-            LookupOp::LessThan { a } => Box::new(LookupOp::LessThan {
-                a: utils::F32(((a.0 as f64) * scale_to_multiplier(inputs_scale[0])) as f32),
-            }),
+            _ => inputs_scale[0],
         }
     }
 

@@ -441,10 +441,7 @@ impl Model {
         if run_args.tolerance.val > 0.0 {
             for scale in self.graph.get_output_scales() {
                 let mut tolerance = run_args.tolerance;
-                tolerance.scales = (
-                    scale_to_multiplier(scale) as usize,
-                    scale_to_multiplier(run_args.input_scale) as usize,
-                );
+                tolerance.scale = scale_to_multiplier(scale).into();
                 let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
                 lookup_ops.extend(opkind.required_lookups());
             }
@@ -1013,14 +1010,12 @@ impl Model {
 
                 if run_args.output_visibility == Visibility::Public {
                     let output_scales = self.graph.get_output_scales();
-                    let global_scale = scale_to_multiplier(run_args.input_scale) as usize;
                     let _ = outputs
                         .iter()
                         .enumerate()
                         .map(|(i, output)| {
                             let mut tolerance = run_args.tolerance;
-                            tolerance.scales =
-                                (scale_to_multiplier(output_scales[i]) as usize, global_scale);
+                            tolerance.scale = scale_to_multiplier(output_scales[i]).into();
 
                             let mut instance_offset = 0;
                             if self.visibility.input.is_public() {

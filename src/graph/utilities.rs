@@ -484,7 +484,9 @@ pub fn new_op_from_onnx(
         }
         "Recip" => {
             // Extract the slope layer hyperparams
-            SupportedOp::Nonlinear(LookupOp::Recip { scale: 1 })
+            SupportedOp::Nonlinear(LookupOp::Recip {
+                scale: (2.0 * scale_to_multiplier(inputs[0].out_scales()[0])).into(),
+            })
         }
 
         "LeakyRelu" => {
@@ -511,24 +513,60 @@ pub fn new_op_from_onnx(
         "QuantizeLinearU8" | "DequantizeLinearF32" => SupportedOp::Linear(PolyOp::Identity),
         "Abs" => SupportedOp::Hybrid(HybridOp::Abs),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
-        "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid { scales: (1, 1) }),
-        "Sqrt" => SupportedOp::Nonlinear(LookupOp::Sqrt { scales: (1, 1) }),
-        "Rsqrt" => SupportedOp::Nonlinear(LookupOp::Rsqrt { scales: (1, 1) }),
-        "Exp" => SupportedOp::Nonlinear(LookupOp::Exp { scales: (1, 1) }),
-        "Ln" => SupportedOp::Nonlinear(LookupOp::Ln { scales: (1, 1) }),
-        "Sin" => SupportedOp::Nonlinear(LookupOp::Sin { scales: (1, 1) }),
-        "Cos" => SupportedOp::Nonlinear(LookupOp::Cos { scales: (1, 1) }),
-        "Tan" => SupportedOp::Nonlinear(LookupOp::Tan { scales: (1, 1) }),
-        "Asin" => SupportedOp::Nonlinear(LookupOp::ASin { scales: (1, 1) }),
-        "Acos" => SupportedOp::Nonlinear(LookupOp::ACos { scales: (1, 1) }),
-        "Atan" => SupportedOp::Nonlinear(LookupOp::ATan { scales: (1, 1) }),
-        "Sinh" => SupportedOp::Nonlinear(LookupOp::Sinh { scales: (1, 1) }),
-        "Cosh" => SupportedOp::Nonlinear(LookupOp::Cosh { scales: (1, 1) }),
-        "Tanh" => SupportedOp::Nonlinear(LookupOp::Tanh { scales: (1, 1) }),
-        "Asinh" => SupportedOp::Nonlinear(LookupOp::ASinh { scales: (1, 1) }),
-        "Acosh" => SupportedOp::Nonlinear(LookupOp::ACosh { scales: (1, 1) }),
-        "Atanh" => SupportedOp::Nonlinear(LookupOp::ATanh { scales: (1, 1) }),
-        "Erf" => SupportedOp::Nonlinear(LookupOp::Erf { scales: (1, 1) }),
+        "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Sqrt" => SupportedOp::Nonlinear(LookupOp::Sqrt {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Rsqrt" => SupportedOp::Nonlinear(LookupOp::Rsqrt {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Exp" => SupportedOp::Nonlinear(LookupOp::Exp {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Ln" => SupportedOp::Nonlinear(LookupOp::Ln {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Sin" => SupportedOp::Nonlinear(LookupOp::Sin {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Cos" => SupportedOp::Nonlinear(LookupOp::Cos {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Tan" => SupportedOp::Nonlinear(LookupOp::Tan {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Asin" => SupportedOp::Nonlinear(LookupOp::ASin {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Acos" => SupportedOp::Nonlinear(LookupOp::ACos {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Atan" => SupportedOp::Nonlinear(LookupOp::ATan {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Sinh" => SupportedOp::Nonlinear(LookupOp::Sinh {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Cosh" => SupportedOp::Nonlinear(LookupOp::Cosh {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Tanh" => SupportedOp::Nonlinear(LookupOp::Tanh {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Asinh" => SupportedOp::Nonlinear(LookupOp::ASinh {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Acosh" => SupportedOp::Nonlinear(LookupOp::ACosh {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Atanh" => SupportedOp::Nonlinear(LookupOp::ATanh {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Erf" => SupportedOp::Nonlinear(LookupOp::Erf {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
         "Source" => {
             let (scale, datum_type) = match node.outputs[0].fact.datum_type {
                 DatumType::Bool => (0, InputType::Bool),
@@ -558,7 +596,7 @@ pub fn new_op_from_onnx(
         "Iff" => SupportedOp::Linear(PolyOp::Iff),
         "Less" => {
             if inputs.len() == 2 {
-                SupportedOp::Hybrid(HybridOp::Less { scales: (1, 1) })
+                SupportedOp::Hybrid(HybridOp::Less)
             } else {
                 todo!()
             }
@@ -566,7 +604,7 @@ pub fn new_op_from_onnx(
         "Greater" => {
             // Extract the slope layer hyperparams
             if inputs.len() == 2 {
-                SupportedOp::Hybrid(HybridOp::Greater { scales: (1, 1) })
+                SupportedOp::Hybrid(HybridOp::Greater)
             } else {
                 todo!()
             }
@@ -602,7 +640,9 @@ pub fn new_op_from_onnx(
                 )));
             }
 
-            SupportedOp::Hybrid(HybridOp::Softmax { scales: (1, 1) })
+            SupportedOp::Hybrid(HybridOp::Softmax {
+                scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            })
         }
         "MaxPool" => {
             // Extract the padding and stride layer hyperparams
