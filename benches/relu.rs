@@ -38,7 +38,7 @@ impl Circuit<Fr> for NLCircuit {
                 .map(|_| VarTensor::new_advice(cs, K, LEN))
                 .collect::<Vec<_>>();
 
-            let nl = LookupOp::ReLU { scale: 128 };
+            let nl = LookupOp::ReLU;
 
             let mut config = Config::default();
 
@@ -61,11 +61,7 @@ impl Circuit<Fr> for NLCircuit {
             |region| {
                 let mut region = RegionCtx::new(region, 0);
                 config
-                    .layout(
-                        &mut region,
-                        &[self.input.clone()],
-                        Box::new(LookupOp::ReLU { scale: 128 }),
-                    )
+                    .layout(&mut region, &[self.input.clone()], Box::new(LookupOp::ReLU))
                     .unwrap();
                 Ok(())
             },

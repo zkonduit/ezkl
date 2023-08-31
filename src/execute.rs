@@ -370,7 +370,7 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     }
 
     pb.finish_with_message("SRS downloaded.");
-    Ok(buf.drain(..buf.len()).collect())
+    Ok(std::mem::take(&mut buf))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -505,7 +505,7 @@ pub(crate) fn init_spinner() -> ProgressBar {
 // not for wasm targets
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn init_bar(len: u64) -> ProgressBar {
-    let pb = indicatif::ProgressBar::new(len);
+    let pb = ProgressBar::new(len);
     pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
     pb.enable_steady_tick(Duration::from_millis(200));
     let sty = ProgressStyle::with_template(
@@ -514,7 +514,6 @@ pub(crate) fn init_bar(len: u64) -> ProgressBar {
     .unwrap()
     .progress_chars("##-");
     pb.set_style(sty);
-
     pb
 }
 
@@ -544,21 +543,47 @@ pub(crate) async fn calibrate(
     let range = if let Some(scales) = scales {
         scales
     } else {
-        (2..16).collect::<Vec<u32>>()
+        match target {
+            CalibrationTarget::Resources => (2..7).collect::<Vec<u32>>(),
+            CalibrationTarget::Accuracy => (7..12).collect::<Vec<u32>>(),
+        }
     };
 
     let chunks = data.split_into_batches(model.graph.input_shapes()).unwrap();
 
     info!("num of calibration batches: {}", chunks.len());
 
-    let pb = init_bar(range.len() as u64);
-
-    pb.set_message("calibrating...");
-
     let mut found_params: Vec<GraphSettings> = vec![];
 
-    for scale in range {
-        pb.set_message(format!("scale {}", scale));
+    let scale_rebase_multiplier = [1, 10];
+
+    // 2 x 2 grid
+    let range_grid = range
+        .iter()
+        .cartesian_product(range.iter())
+        .map(|(a, b)| (*a, *b))
+        .collect::<Vec<(u32, u32)>>();
+
+    // remove all entries where input_scale > param_scale
+    let range_grid = range_grid
+        .into_iter()
+        .filter(|(a, b)| a <= b)
+        .collect::<Vec<(u32, u32)>>();
+
+    let range_grid = range_grid
+        .iter()
+        .cartesian_product(scale_rebase_multiplier.iter())
+        .map(|(a, b)| (*a, *b))
+        .collect::<Vec<((u32, u32), u32)>>();
+
+    let pb = init_bar(range_grid.len() as u64);
+    pb.set_message("calibrating...");
+
+    for ((input_scale, param_scale), scale_rebase_multiplier) in range_grid {
+        pb.set_message(format!(
+            "input scale: {}, param scale: {}, scale rebase multiplier: {}",
+            input_scale, param_scale, scale_rebase_multiplier
+        ));
         std::thread::sleep(Duration::from_millis(100));
 
         // vec of settings copied chunks.len() times
@@ -575,7 +600,9 @@ pub(crate) async fn calibrate(
                 // time it
                 let chunk = chunk.clone();
                 let local_run_args = RunArgs {
-                    scale,
+                    input_scale,
+                    param_scale,
+                    scale_rebase_multiplier,
                     ..run_args.clone()
                 };
 
@@ -605,9 +632,11 @@ pub(crate) async fn calibrate(
                     }
 
                     let found_run_args = RunArgs {
-                        scale: circuit.settings.run_args.scale,
+                        input_scale: circuit.settings.run_args.input_scale,
+                        param_scale: circuit.settings.run_args.param_scale,
                         bits: circuit.settings.run_args.bits,
                         logrows: circuit.settings.run_args.logrows,
+                        scale_rebase_multiplier: circuit.settings.run_args.scale_rebase_multiplier,
                         ..run_args.clone()
                     };
 
@@ -616,6 +645,7 @@ pub(crate) async fn calibrate(
                         required_lookups: circuit.settings.required_lookups,
                         model_output_scales: circuit.settings.model_output_scales,
                         num_constraints: circuit.settings.num_constraints,
+                        total_const_size: circuit.settings.total_const_size,
                         ..original_settings.clone()
                     };
 
@@ -635,13 +665,16 @@ pub(crate) async fn calibrate(
         std::mem::drop(_r);
         std::mem::drop(_q);
 
-        if let Some(best) = res
-            .into_iter()
-            .max_by_key(|p| (p.run_args.bits, p.run_args.scale))
-        {
+        if let Some(best) = res.into_iter().max_by_key(|p| {
+            (
+                p.run_args.bits,
+                p.run_args.input_scale,
+                p.run_args.param_scale,
+            )
+        }) {
             // pick the one with the largest logrows
             found_params.push(best.clone());
-            info!(
+            debug!(
                 "found settings: \n {}",
                 best.as_json()?.to_colored_json_auto()?
             );
@@ -670,20 +703,45 @@ pub(crate) async fn calibrate(
             found_params
                 .iter()
                 .filter(|p| p.run_args.logrows == min_logrows)
-                .max_by_key(|p| p.run_args.scale)
+                .max_by_key(|p| {
+                    (
+                        p.run_args.input_scale,
+                        p.run_args.param_scale,
+                        // we want the largest rebase multiplier as it means we can use less constraints
+                        p.run_args.scale_rebase_multiplier,
+                    )
+                })
                 .unwrap()
                 .clone()
         }
         CalibrationTarget::Accuracy => {
-            let param_iterator = found_params.iter().sorted_by_key(|p| p.run_args.scale);
+            let param_iterator = found_params.iter().sorted_by_key(|p| {
+                (
+                    p.run_args.input_scale,
+                    p.run_args.param_scale,
+                    // we want the largest rebase multiplier as it means we can use less constraints
+                    p.run_args.scale_rebase_multiplier,
+                )
+            });
 
-            let max_scale = param_iterator.last().unwrap().run_args.scale;
+            let last = param_iterator.last().unwrap();
+            let max_scale = (
+                last.run_args.input_scale,
+                last.run_args.param_scale,
+                last.run_args.scale_rebase_multiplier,
+            );
 
             // pick the ones that have the max scale but also the smallest logrows:
             // this is the best tradeoff between resource usage and accuracy
             found_params
                 .iter()
-                .filter(|p| p.run_args.scale == max_scale)
+                .filter(|p| {
+                    (
+                        p.run_args.input_scale,
+                        p.run_args.param_scale,
+                        p.run_args.scale_rebase_multiplier,
+                    ) == max_scale
+                })
                 .min_by_key(|p| p.run_args.logrows)
                 .unwrap()
                 .clone()
@@ -855,7 +913,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
         for call in source.calls {
             on_chain_input_data.push(call);
         }
-        Some((settings.run_args.scale, on_chain_input_data))
+        Some((settings.run_args.input_scale, on_chain_input_data))
     } else {
         None
     };

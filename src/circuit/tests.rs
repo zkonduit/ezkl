@@ -1396,7 +1396,7 @@ mod matmul_relu {
                 BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE);
             // sets up a new relu table
             base_config
-                .configure_lookup(cs, &b, &output, 16, &LookupOp::ReLU { scale: 1 })
+                .configure_lookup(cs, &b, &output, 16, &LookupOp::ReLU)
                 .unwrap();
 
             MyConfig { base_config }
@@ -1421,11 +1421,7 @@ mod matmul_relu {
                         .unwrap();
                     let _output = config
                         .base_config
-                        .layout(
-                            &mut region,
-                            &[output.unwrap()],
-                            Box::new(LookupOp::ReLU { scale: 1 }),
-                        )
+                        .layout(&mut region, &[output.unwrap()], Box::new(LookupOp::ReLU))
                         .unwrap();
                     Ok(())
                 },
@@ -1610,7 +1606,7 @@ mod relu {
                 .map(|_| VarTensor::new_advice(cs, 4, 3))
                 .collect::<Vec<_>>();
 
-            let nl = LookupOp::ReLU { scale: 1 };
+            let nl = LookupOp::ReLU;
 
             let mut config = BaseConfig::default();
 
@@ -1632,11 +1628,7 @@ mod relu {
                     |region| {
                         let mut region = RegionCtx::new(region, 0);
                         config
-                            .layout(
-                                &mut region,
-                                &[self.input.clone()],
-                                Box::new(LookupOp::ReLU { scale: 1 }),
-                            )
+                            .layout(&mut region, &[self.input.clone()], Box::new(LookupOp::ReLU))
                             .map_err(|_| Error::Synthesis)
                     },
                 )

@@ -55,7 +55,7 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         layer_config
-            .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU { scale: 1 })
+            .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU)
             .unwrap();
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
@@ -121,7 +121,7 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
                     println!("x shape: {:?}", x.dims());
                     let mut x = config
                         .layer_config
-                        .layout(&mut region, &[x], Box::new(LookupOp::ReLU { scale: 1 }))
+                        .layout(&mut region, &[x], Box::new(LookupOp::ReLU))
                         .unwrap()
                         .unwrap();
                     println!("3");
@@ -157,7 +157,7 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
                     println!("x shape: {:?}", x.dims());
                     let x = config
                         .layer_config
-                        .layout(&mut region, &[x], Box::new(LookupOp::ReLU { scale: 1 }))
+                        .layout(&mut region, &[x], Box::new(LookupOp::ReLU))
                         .unwrap();
                     println!("6");
                     println!("offset: {}", region.offset());

@@ -29,6 +29,7 @@ snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = 
 rayon = { version = "1.7.0",  default_features = false }
 bincode = { version = "1.3.3", default_features = false }
 ark-std = { version = "^0.3.0", default-features = false }
+unzip-n = "0.1.2"
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

@@ -1163,7 +1163,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit.clone());
     kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1]);
 
-    let cartesian_coord = vec![(0..batch_size), (0..image_channels)]
+    let cartesian_coord = [(0..batch_size), (0..image_channels)]
         .iter()
         .cloned()
         .multi_cartesian_product()
@@ -1244,7 +1244,7 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     let mut output: Tensor<ValType<F>> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides])?;
 
-    let cartesian_coord = vec![
+    let cartesian_coord = [
         (0..batch),
         (0..input_channels),
         (0..vert_slides),
@@ -1507,7 +1507,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
     let mut output = Tensor::new(None, &[num_outputs])?;
 
-    let cartesian_coord = vec![
+    let cartesian_coord = [
         (0..batch_size),
         (0..num_groups),
         (0..output_channels_per_group),
@@ -1662,15 +1662,10 @@ pub fn rescale<F: PrimeField + TensorType + PartialOrd>(
             rescaled_inputs.push(ri.clone());
             continue;
         }
-        let scaled_input = nonlinearity(
-            config,
-            region,
-            &[ri.clone()],
-            &LookupOp::Div {
-                denom: (scales[i].1 as f32).into(),
-            },
-        )?;
 
+        let multiplier: ValTensor<F> =
+            Tensor::from(vec![ValType::Constant(F::from(scales[i].1 as u64))].into_iter()).into();
+        let scaled_input = pairwise(config, region, &[ri.clone(), multiplier], BaseOp::Mult)?;
         rescaled_inputs.push(scaled_input);
     }
 
@@ -1929,9 +1924,10 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let elapsed = timer.elapsed();
     trace!(
-        "nonlinearity {} layout took {:?}",
+        "nonlinearity {} layout took {:?}, offset: {:?}",
         <LookupOp as Op<F>>::as_string(nl),
-        elapsed
+        elapsed,
+        region.offset()
     );
 
     // constrain the calculated output to a column
@@ -1963,8 +1959,8 @@ pub fn abs<F: PrimeField + TensorType + PartialOrd>(
     let x = &values[0];
     // Negate the product
     let neg_x = neg(config, region, &[x.clone()])?;
-    let relu_x = nonlinearity(config, region, &[x.clone()], &LookupOp::ReLU { scale: 1 })?;
-    let relu_neg_x = nonlinearity(config, region, &[neg_x], &LookupOp::ReLU { scale: 1 })?;
+    let relu_x = nonlinearity(config, region, &[x.clone()], &LookupOp::ReLU)?;
+    let relu_neg_x = nonlinearity(config, region, &[neg_x], &LookupOp::ReLU)?;
     // abs(x) = relu(x) + relu(-x)
     let abs = pairwise(config, region, &[relu_x, relu_neg_x], BaseOp::Add)?;
 
@@ -2024,7 +2020,7 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub,
     )?;
     // relu(x - max(x - 1))
-    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU { scale: 1 })?;
+    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
 
     let len = relu.dims().iter().product();
 
@@ -2044,14 +2040,10 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     // 1 - sum(relu(x - max(x - 1)))
     let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
     // relu(1 - sum(relu(x - max(x - 1))))
-    let relu_one_minus_sum_relu = nonlinearity(
-        config,
-        region,
-        &[one_minus_sum_relu],
-        &LookupOp::ReLU { scale: 1 },
-    )?;
+    let relu_one_minus_sum_relu =
+        nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
 
-    // constraining relu(sum(relu(x - max(x - 1)) - len(x))) = 0
+    // constraining 1 - sum(relu(x - max(x - 1))) = 0
     region.assign(&config.inputs[1], &relu_one_minus_sum_relu)?;
 
     let (x, y) = config.output.cartesian_coord(region.offset());
@@ -2121,7 +2113,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // relu(min(x + 1)  - x)
-    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU { scale: 1 })?;
+    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
 
     let len = relu.dims().iter().product();
 
@@ -2140,12 +2132,8 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     // 1 - sum(relu(min(x + 1) - x))
     let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
     // relu(1 - sum(relu(min(x + 1) - x)))
-    let relu_one_minus_sum_relu = nonlinearity(
-        config,
-        region,
-        &[one_minus_sum_relu],
-        &LookupOp::ReLU { scale: 1 },
-    )?;
+    let relu_one_minus_sum_relu =
+        nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
 
     region.assign(&config.inputs[1], &relu_one_minus_sum_relu)?;
 

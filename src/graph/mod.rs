@@ -450,7 +450,7 @@ impl GraphCircuit {
         // dummy module settings, must load from GraphData after
         let module_settings = ModuleSettings::default();
 
-        let mut settings = model.gen_params(&run_args, CheckMode::UNSAFE)?;
+        let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
 
         let mut num_params = 0;
         if !model.const_shapes().is_empty() {
@@ -463,7 +463,7 @@ impl GraphCircuit {
             model.graph.input_shapes(),
             vec![vec![num_params]],
             model.graph.output_shapes(),
-            VarVisibility::from_args(&run_args).unwrap(),
+            VarVisibility::from_args(run_args).unwrap(),
         );
 
         // number of instances used by modules
@@ -649,7 +649,7 @@ impl GraphCircuit {
         .await?;
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<Fp>> = vec![];
-        for (input, shape) in vec![quantized_evm_inputs].iter().zip(shapes) {
+        for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
             let mut t: Tensor<Fp> = input.iter().cloned().collect();
             t.reshape(shape);
             inputs.push(t);
@@ -681,8 +681,8 @@ impl GraphCircuit {
     ///
     pub fn load_witness_file_data(
         &mut self,
-        file_data: &Vec<Vec<Fp>>,
-        shapes: &Vec<Vec<usize>>,
+        file_data: &[Vec<Fp>],
+        shapes: &[Vec<usize>],
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         let mut data: Vec<Tensor<Fp>> = vec![];
@@ -707,7 +707,10 @@ impl GraphCircuit {
                 self.settings.run_args.logrows = (recommended_bits + 1) as u32;
                 return self.calibrate(input);
             } else {
-                let err_string = format!("No possible value of bits (estimate {}) at scale {} can accomodate this value.", recommended_bits, self.settings.run_args.scale);
+                let err_string = format!(
+                    "No possible value of bits (estimate {}) can accomodate max value.",
+                    recommended_bits
+                );
                 return Err(err_string.into());
             }
         } else {
@@ -818,9 +821,9 @@ impl GraphCircuit {
     ///
     pub fn preprocessed_from_run_args(
         run_args: &RunArgs,
-        model_path: &std::path::PathBuf,
+        model_path: &std::path::Path,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Model::load(model_path.clone()).map_err(|e| {
+        let model = Model::load(model_path.to_path_buf()).map_err(|e| {
             error!("failed to deserialize compiled model. have you called compile-model ?");
             e
         })?;
@@ -841,10 +844,10 @@ impl GraphCircuit {
     /// Create a new circuit from a set of input data and [GraphSettings].
     pub fn preprocessed_from_settings(
         params: &GraphSettings,
-        model_path: &std::path::PathBuf,
+        model_path: &std::path::Path,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Model::load(model_path.clone()).map_err(|e| {
+        let model = Model::load(model_path.to_path_buf()).map_err(|e| {
             error!("failed to deserialize compiled model. have you called compile-model ?");
             e
         })?;
@@ -878,7 +881,7 @@ impl GraphCircuit {
             };
             // Get the flatten length of input_data
             let length = input_data.iter().map(|x| x.len()).sum();
-            let scales = vec![self.settings.run_args.scale; length];
+            let scales = vec![self.settings.run_args.input_scale; length];
             let datam: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 input_data,
                 scales,
@@ -937,17 +940,17 @@ impl Circuit<Fp> for GraphCircuit {
     fn configure_with_params(cs: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
         let visibility = VarVisibility::from_args(&params.run_args).unwrap();
 
-        let mut vars = ModelVars::new(
+        let vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
             params.num_constraints,
             params.model_instance_shapes.clone(),
-            params.run_args.scale,
+            params.run_args.input_scale,
         );
 
         let base = Model::configure(
             cs,
-            &mut vars,
+            &vars,
             params.run_args.bits,
             params.required_lookups,
             params.check_mode,

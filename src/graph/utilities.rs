@@ -1,5 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use super::GraphError;
+#[cfg(not(target_arch = "wasm32"))]
+use super::VarScales;
 use super::{Rescaled, SupportedOp, Visibility};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::hybrid::HybridOp;
@@ -285,7 +287,7 @@ fn load_slice_op(
 #[cfg(not(target_arch = "wasm32"))]
 pub fn new_op_from_onnx(
     idx: usize,
-    scale: u32,
+    scales: &VarScales,
     param_visibility: Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut [super::NodeType],
@@ -355,7 +357,11 @@ pub fn new_op_from_onnx(
             // Raw values are always f32
             let raw_value = extract_tensor_value(op.0)?;
             // If bool then don't scale
-            let constant_scale = if dt == DatumType::Bool { 0 } else { scale };
+            let constant_scale = if dt == DatumType::Bool {
+                0
+            } else {
+                scales.params
+            };
             // Quantize the raw value
             let quantized_value =
                 quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
@@ -425,7 +431,7 @@ pub fn new_op_from_onnx(
                     deleted_indices.push(const_idx);
                 }
                 if unit == 0. {
-                    SupportedOp::Nonlinear(LookupOp::ReLU { scale: 1 })
+                    SupportedOp::Nonlinear(LookupOp::ReLU)
                 } else {
                     SupportedOp::Nonlinear(LookupOp::Max {
                         scales: (1, 1),
@@ -496,7 +502,6 @@ pub fn new_op_from_onnx(
             };
 
             SupportedOp::Nonlinear(LookupOp::LeakyReLU {
-                scale: 1,
                 slope: crate::circuit::utils::F32(leaky_op.alpha),
             })
         }
@@ -527,7 +532,7 @@ pub fn new_op_from_onnx(
         "Source" => {
             let (scale, datum_type) = match node.outputs[0].fact.datum_type {
                 DatumType::Bool => (0, InputType::Bool),
-                _ => (scale, InputType::Num),
+                _ => (scales.input, InputType::Num),
             };
             SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
         }
@@ -536,8 +541,7 @@ pub fn new_op_from_onnx(
             let dt = op.to;
             let input_scales = inputs
                 .iter()
-                .map(|x| x.out_scales())
-                .flatten()
+                .flat_map(|x| x.out_scales())
                 .collect::<Vec<_>>();
             assert_eq!(input_scales.len(), 1);
             match dt {
@@ -684,7 +688,7 @@ pub fn new_op_from_onnx(
             };
 
             let kernel = extract_tensor_value(conv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scale, param_visibility)?;
+            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match conv_node.bias.clone() {
                 Some(b) => {
@@ -692,7 +696,7 @@ pub fn new_op_from_onnx(
 
                     let val = quantize_tensor(
                         const_value,
-                        scale + inputs[0].out_scales()[0],
+                        scales.params + inputs[0].out_scales()[0],
                         param_visibility,
                     )?;
                     Some(val)
@@ -750,7 +754,7 @@ pub fn new_op_from_onnx(
             };
 
             let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scale, param_visibility)?;
+            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match deconv_node.bias.clone() {
                 Some(b) => {
@@ -758,7 +762,7 @@ pub fn new_op_from_onnx(
 
                     let val = quantize_tensor(
                         const_value,
-                        scale + inputs[0].out_scales()[0],
+                        scales.params + inputs[0].out_scales()[0],
                         param_visibility,
                     )?;
                     Some(val)
@@ -1015,12 +1019,13 @@ pub fn homogenize_input_scales(
         return Ok(op);
     }
     // else if all inputs_scales at inputs_to_scale are the same, we don't need to do anything
-    else if relevant_input_scales.windows(2).all(|w| w[0] == w[1]) {
+    if relevant_input_scales.windows(2).all(|w| w[0] == w[1]) {
         return Ok(op);
     }
 
     let mut dividers: Vec<u128> = vec![1; input_scales.len()];
-    let min_scale = relevant_input_scales.iter().min().unwrap();
+
+    let max_scale = input_scales.iter().max().unwrap();
     let _ = input_scales
         .iter()
         .enumerate()
@@ -1028,7 +1033,7 @@ pub fn homogenize_input_scales(
             if !inputs_to_scale.contains(&idx) {
                 return;
             }
-            let scale_diff = input_scale - min_scale;
+            let scale_diff = max_scale - input_scale;
             if scale_diff > 0 {
                 let mult = crate::graph::scale_to_multiplier(scale_diff);
                 dividers[idx] = mult as u128;

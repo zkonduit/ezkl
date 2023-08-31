@@ -295,7 +295,7 @@ impl OnChainSource {
 
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<Fp>> = vec![];
-        for (input, shape) in vec![quantized_evm_inputs].iter().zip(shapes) {
+        for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
             let mut t: Tensor<Fp> = input.iter().cloned().collect();
             t.reshape(&shape);
             inputs.push(t);

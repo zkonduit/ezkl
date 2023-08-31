@@ -1517,7 +1517,7 @@ pub fn conv<
 
     let mut output = Tensor::new(None, &[num_outputs])?;
 
-    let cartesian_coord = vec![
+    let cartesian_coord = [
         (0..batch_size),
         (0..num_groups),
         (0..output_channels_per_group),
@@ -1897,7 +1897,7 @@ pub fn sumpool<
     let mut output: Tensor<T> =
         Tensor::new(None, &[batch, output_channels, vert_slides, horz_slides]).unwrap();
 
-    let cartesian_coord = vec![
+    let cartesian_coord = [
         (0..batch),
         (0..output_channels),
         (0..vert_slides),
@@ -1987,7 +1987,7 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send + std::c
     let mut output: Tensor<T> =
         Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides]).unwrap();
 
-    let cartesian_coord = vec![
+    let cartesian_coord = [
         (0..batch),
         (0..input_channels),
         (0..vert_slides),
@@ -2524,12 +2524,12 @@ pub mod nonlinearities {
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::softmax;
     /// let x = Tensor::<i128>::new(
-    ///     Some(&[2, 4, 2, 1, 1, 0]),
+    ///     Some(&[2, 2, 3, 2, 2, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = softmax(&x, 128, 128).0;
+    /// let result = softmax(&x, 1, 128).0;
     /// // doubles the scale of the input
-    /// let expected = Tensor::<i128>::new(Some(&[2730, 2772, 2730, 2709, 2709, 2688]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[2838, 2838, 7713, 2838, 2838, 384]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn softmax(
@@ -2540,11 +2540,13 @@ pub mod nonlinearities {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
         let mut intermediate_values = vec![];
 
+        intermediate_values.push(a.clone());
+
         let exp = exp(a, scale_input, scale_output);
 
         let sum = sum(&exp).unwrap();
         intermediate_values.push(sum.clone());
-        let inv_denom = recip(&sum, scale_output.pow(2) as u32);
+        let inv_denom = recip(&sum, scale_output.pow(2) as f64);
 
         ((exp * inv_denom).unwrap(), intermediate_values)
     }
@@ -2581,7 +2583,7 @@ pub mod nonlinearities {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
         let scale = input_scale * output_scale;
         let diff: Tensor<i128> = sub(t).unwrap();
-        let recip = recip(&t[0], scale as u32);
+        let recip = recip(&t[0], scale as f64);
         let product = mult(&[diff, recip]).unwrap();
         let _tol = ((tol / 100.0) * scale as f32).round() as f64;
         let upper_bound = greater_than(&product, _tol);
@@ -3105,20 +3107,20 @@ pub mod nonlinearities {
     ///     Some(&[2, 15, 2, 1, 1, -5]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = leakyrelu(&x, 1, 0.1);
+    /// let result = leakyrelu(&x, 0.1);
     /// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, -1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn leakyrelu(a: &Tensor<i128>, scale: usize, slope: f64) -> Tensor<i128> {
+    pub fn leakyrelu(a: &Tensor<i128>, slope: f64) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
             output[i] = if a_i < &0 {
-                let d_inv_x = (slope) * (*a_i as f64) / (scale as f64);
+                let d_inv_x = (slope) * (*a_i as f64);
                 d_inv_x.round() as i128
             } else {
-                let d_inv_x = (*a_i as f64) / (scale as f64);
+                let d_inv_x = *a_i as f64;
                 d_inv_x.round() as i128
             };
         }
@@ -3199,47 +3201,6 @@ pub mod nonlinearities {
         output
     }
 
-    /// Elementwise applies prelu to a tensor of integers.
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `scale` - Single value
-    /// * `slopes` - Array of values
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::prelu;
-    /// let x = Tensor::<i128>::new(
-    ///     Some(&[-10, 15, 2, 1, 1, -5]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let result = prelu(&x, 1, &[0.1, 25.0]);
-    /// let expected = Tensor::<i128>::new(Some(&[-1, 15, 2, 1, 1, -125]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn prelu(a: &Tensor<i128>, scale: usize, slopes: &[f64]) -> Tensor<i128> {
-        if slopes.len() == 1 {
-            return leakyrelu(a, scale, slopes[0]);
-        } else {
-            // assert number of slopes is equal to number of channels
-            assert_eq!(slopes.len(), a.dims()[0])
-        }
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = if a_i < &0 {
-                let slope_i: f64 = slopes[i / (a.dims()[1..].iter().product::<usize>())];
-                let d_inv_x = (slope_i) * (*a_i as f64) / (scale as f64);
-                d_inv_x.round() as i128
-            } else {
-                let d_inv_x = (*a_i as f64) / (scale as f64);
-                d_inv_x.round() as i128
-            };
-        }
-        output
-    }
-
     /// Elementwise divides a tensor with a const integer element.
     /// # Arguments
     ///
@@ -3283,17 +3244,18 @@ pub mod nonlinearities {
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = 2_u32;
+    /// let k = 2_f64;
     /// let result = recip(&x, k);
     /// let expected = Tensor::<i128>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn recip(a: &Tensor<i128>, scale: u32) -> Tensor<i128> {
+    pub fn recip(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         // calculate value of output
         let mut output: Tensor<i128> = a.clone();
 
         for (i, a_i) in a.iter().enumerate() {
-            let d_inv_x = (scale as f64) * (1_f64) / (*a_i as f64);
+            let denom = (1_f64) / (*a_i as f64);
+            let d_inv_x = scale * denom;
             output[i] = d_inv_x.round() as i128;
         }
         output

@@ -53,7 +53,7 @@ impl Circuit<Fr> for MyCircuit {
 
         // sets up a new relu table
         base_config
-            .configure_lookup(cs, &b, &output, BITS, &LookupOp::ReLU { scale: 1 })
+            .configure_lookup(cs, &b, &output, BITS, &LookupOp::ReLU)
             .unwrap();
 
         MyConfig { base_config }
@@ -78,11 +78,7 @@ impl Circuit<Fr> for MyCircuit {
                     .unwrap();
                 let _output = config
                     .base_config
-                    .layout(
-                        &mut region,
-                        &[output.unwrap()],
-                        Box::new(LookupOp::ReLU { scale: 1 }),
-                    )
+                    .layout(&mut region, &[output.unwrap()], Box::new(LookupOp::ReLU))
                     .unwrap();
                 Ok(())
             },

@@ -45,6 +45,9 @@ use std::io::Read;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use tabled::Table;
+use unzip_n::unzip_n;
+
+unzip_n!(pub 3);
 
 /// The result of a forward pass.
 #[derive(Clone, Debug)]
@@ -229,6 +232,14 @@ impl NodeType {
         }
     }
 
+    /// Returns true if the operation is a rebase
+    pub fn is_rebase(&self) -> bool {
+        match self {
+            NodeType::Node(n) => matches!(n.opkind, SupportedOp::RebaseScale { .. }),
+            NodeType::SubGraph { .. } => false,
+        }
+    }
+
     /// Returns true if the operation is an input.
     pub fn is_input(&self) -> bool {
         match self {
@@ -385,7 +396,7 @@ impl Model {
     pub fn load(path: PathBuf) -> Result<Self, Box<dyn Error>> {
         // read bytes from file
         let mut f = std::fs::File::open(&path)
-            .expect(&format!("failed to load model at {}", path.display()));
+            .unwrap_or_else(|_| panic!("failed to load model at {}", path.display()));
         let metadata = fs::metadata(&path).expect("unable to read metadata");
         let mut buffer = vec![0; metadata.len() as usize];
         f.read_exact(&mut buffer).expect("buffer overflow");
@@ -410,7 +421,7 @@ impl Model {
         // this is the total number of variables we will need to allocate
         // for the circuit
         let (num_constraints, total_const_size) = self
-            .dummy_layout(&run_args, &self.graph.input_shapes())
+            .dummy_layout(run_args, &self.graph.input_shapes())
             .unwrap();
 
         // Then number of columns in the circuits
@@ -432,7 +443,7 @@ impl Model {
                 let mut tolerance = run_args.tolerance;
                 tolerance.scales = (
                     scale_to_multiplier(scale) as usize,
-                    scale_to_multiplier(run_args.scale) as usize,
+                    scale_to_multiplier(run_args.input_scale) as usize,
                 );
                 let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
                 lookup_ops.extend(opkind.required_lookups());
@@ -467,9 +478,8 @@ impl Model {
         for (idx, n) in self.graph.nodes.iter() {
             let mut inputs = vec![];
             if n.is_input() {
-                let mut t = model_inputs[input_idx].clone();
+                let t = model_inputs[input_idx].clone();
                 input_idx += 1;
-                t.reshape(&n.out_dims()[0]);
                 inputs.push(t);
             } else {
                 for (idx, outlet) in n.inputs().iter() {
@@ -524,15 +534,26 @@ impl Model {
                     inputs: input_tuple,
                     ..
                 } => {
-                    let orig_inputs = inputs.clone();
+                    let mut orig_inputs = inputs.clone();
+                    let mut input_mappings = input_mappings.clone();
+                    (input_mappings, inputs, orig_inputs) = input_mappings
+                        .iter()
+                        .zip(inputs)
+                        .zip(orig_inputs)
+                        .zip(model.graph.inputs.iter())
+                        .sorted_by_key(|(_, source)| *source)
+                        .map(|(((x, y), z), _)| (x.clone(), y.clone(), z.clone()))
+                        .unzip_n_vec();
 
                     let input_dims = inputs.iter().map(|inp| inp.dims());
-                    let num_iter = number_of_iterations(input_mappings, input_dims.collect());
+                    let num_iter = number_of_iterations(&input_mappings, input_dims.collect());
 
                     debug!(
-                        "{} iteration(s) in a subgraph with inputs {:?}",
-                        num_iter, input_tuple
+                        "{} iteration(s) in a subgraph with inputs {:?} and sources {:?}",
+                        num_iter, input_tuple, model.graph.inputs
                     );
+
+                    debug!("input_mappings: {:?}", input_mappings);
 
                     let mut full_results: Vec<Tensor<Fp>> = vec![];
 
@@ -586,7 +607,7 @@ impl Model {
                         full_results = outlets.into_values().collect_vec();
 
                         let output_states = output_state_idx(output_mappings);
-                        let input_states = input_state_idx(input_mappings);
+                        let input_states = input_state_idx(&input_mappings);
 
                         assert_eq!(input_states.len(), output_states.len());
 
@@ -647,7 +668,7 @@ impl Model {
         })?;
 
         let variables: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::from_iter(run_args.variables.clone().into_iter());
+            std::collections::HashMap::from_iter(run_args.variables.clone());
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node(id.node);
@@ -675,7 +696,7 @@ impl Model {
             let fact = model.node(id.node).outputs[0].fact.clone();
             let fact = fact.with_shape(dims);
 
-            model.set_input_fact(i, fact.into())?;
+            model.set_input_fact(i, fact)?;
         }
 
         for (i, _) in model.clone().outputs.iter().enumerate() {
@@ -684,12 +705,13 @@ impl Model {
         // Note: do not optimize the model, as the layout will depend on underlying hardware
         let mut model = model.into_typed()?.into_decluttered()?;
         for (symbol, value) in run_args.variables.iter() {
-            let symbol = model.symbol_table.sym(&symbol);
+            let symbol = model.symbol_table.sym(symbol);
             model = model.concretize_dims(&SymbolValues::default().with(&symbol, *value as i64))?;
             info!("set {} to {}", symbol, value);
         }
 
-        let nodes = Self::nodes_from_graph(&model, run_args, visibility, None)?;
+        let scales = VarScales::from_args(run_args)?;
+        let nodes = Self::nodes_from_graph(&model, run_args, &scales, visibility, None)?;
 
         debug!("\n {}", model);
 
@@ -751,6 +773,7 @@ impl Model {
     pub fn nodes_from_graph(
         graph: &Graph<TypedFact, Box<dyn TypedOp>>,
         run_args: &RunArgs,
+        scales: &VarScales,
         visibility: &VarVisibility,
         override_input_scales: Option<Vec<u32>>,
     ) -> Result<BTreeMap<usize, NodeType>, Box<dyn Error>> {
@@ -768,8 +791,13 @@ impl Model {
                         .iter()
                         .map(|i| nodes.get(&i.node).unwrap().out_scales()[0])
                         .collect_vec();
-                    let subgraph_nodes =
-                        Self::nodes_from_graph(&model, run_args, visibility, Some(input_scales))?;
+                    let subgraph_nodes = Self::nodes_from_graph(
+                        &model,
+                        run_args,
+                        scales,
+                        visibility,
+                        Some(input_scales),
+                    )?;
 
                     let subgraph = ParsedNodes {
                         nodes: subgraph_nodes,
@@ -843,13 +871,8 @@ impl Model {
                     );
                 }
                 None => {
-                    let mut n = Node::new(
-                        n.clone(),
-                        &mut nodes,
-                        run_args.scale,
-                        run_args.param_visibility,
-                        i,
-                    )?;
+                    let mut n =
+                        Node::new(n.clone(), &mut nodes, scales, run_args.param_visibility, i)?;
                     if override_input_scales.is_some() {
                         if let Some(inp) = n.opkind.get_input() {
                             let scale = override_input_scales.as_ref().unwrap()[input_idx];
@@ -865,27 +888,28 @@ impl Model {
                 }
             }
         }
-
-        fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
-            // remove all nodes that are consts with 0 uses now
-            nodes.retain(|_, n| match n {
-                NodeType::Node(n) => match &mut n.opkind {
-                    SupportedOp::Constant(c) => {
-                        c.empty_raw_value();
-                        c.num_uses > 0
-                    }
-                    _ => true,
-                },
-                NodeType::SubGraph { model, .. } => {
-                    clean_useless_consts(&mut model.graph.nodes);
-                    true
-                }
-            });
-        }
-
-        clean_useless_consts(&mut nodes);
+        Self::clean_useless_consts(&mut nodes);
 
         Ok(nodes)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Removes all nodes that are consts with 0 uses
+    fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
+        // remove all nodes that are consts with 0 uses now
+        nodes.retain(|_, n| match n {
+            NodeType::Node(n) => match &mut n.opkind {
+                SupportedOp::Constant(c) => {
+                    c.empty_raw_value();
+                    c.num_uses > 0
+                }
+                _ => true,
+            },
+            NodeType::SubGraph { model, .. } => {
+                Self::clean_useless_consts(&mut model.graph.nodes);
+                true
+            }
+        });
     }
 
     /// Creates a `Model` from parsed run_args
@@ -894,10 +918,10 @@ impl Model {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_run_args(
         run_args: &RunArgs,
-        model: &std::path::PathBuf,
+        model: &std::path::Path,
     ) -> Result<Self, Box<dyn Error>> {
         Model::new(
-            &mut std::fs::File::open(model.clone())
+            &mut std::fs::File::open(model)
                 .map_err(|_| format!("failed to load model at {}", model.display()))?,
             run_args,
         )
@@ -911,7 +935,7 @@ impl Model {
     /// * `required_lookups` - The required lookup operations for the circuit.
     pub fn configure(
         meta: &mut ConstraintSystem<Fp>,
-        vars: &mut ModelVars<Fp>,
+        vars: &ModelVars<Fp>,
         num_bits: usize,
         required_lookups: Vec<LookupOp>,
         check_mode: CheckMode,
@@ -989,7 +1013,7 @@ impl Model {
 
                 if run_args.output_visibility == Visibility::Public {
                     let output_scales = self.graph.get_output_scales();
-                    let global_scale = scale_to_multiplier(run_args.scale) as usize;
+                    let global_scale = scale_to_multiplier(run_args.input_scale) as usize;
                     let _ = outputs
                         .iter()
                         .enumerate()
@@ -1010,10 +1034,7 @@ impl Model {
                         })
                         .collect_vec();
                 }
-                info!(
-                    "computing proof over {} assigned rows",
-                    thread_safe_region.offset()
-                );
+                info!("model has {} assigned rows", thread_safe_region.offset());
                 Ok(outputs)
             },
         )?;
@@ -1045,9 +1066,7 @@ impl Model {
                     .collect_vec()
             } else {
                 // we re-assign inputs, always from the 0 outlet
-                let mut res = results.get(idx).unwrap()[0].clone();
-                res.reshape(&node.out_dims()[0])?;
-                vec![res]
+                vec![results.get(idx).unwrap()[0].clone()]
             };
 
             debug!(
@@ -1086,16 +1105,23 @@ impl Model {
                     input_mappings,
                     ..
                 } => {
-                    let original_values = values.clone();
-
-                    let input_dims = inputs
+                    let mut original_values = values.clone();
+                    let mut input_mappings = input_mappings.clone();
+                    (input_mappings, values, original_values) = input_mappings
                         .iter()
-                        .map(|inp| results.get(&inp.0).unwrap()[inp.1].dims());
-                    let num_iter = number_of_iterations(input_mappings, input_dims.collect());
+                        .zip(values)
+                        .zip(original_values)
+                        .zip(model.graph.inputs.iter())
+                        .sorted_by_key(|(_, source)| *source)
+                        .map(|(((x, y), z), _)| (x.clone(), y.clone(), z.clone()))
+                        .unzip_n_vec();
+
+                    let input_dims = values.iter().map(|inp| inp.dims());
+                    let num_iter = number_of_iterations(&input_mappings, input_dims.collect());
 
                     debug!(
-                        "{} iteration(s) in a subgraph with inputs {:?}",
-                        num_iter, inputs
+                        "{} iteration(s) in a subgraph with inputs {:?} and sources {:?}",
+                        num_iter, inputs, model.graph.inputs
                     );
 
                     let mut full_results: Vec<ValTensor<Fp>> = vec![];
@@ -1156,7 +1182,7 @@ impl Model {
                         full_results = outlets.into_values().collect_vec();
 
                         let output_states = output_state_idx(output_mappings);
-                        let input_states = input_state_idx(input_mappings);
+                        let input_states = input_state_idx(&input_mappings);
 
                         assert_eq!(input_states.len(), output_states.len());
 
