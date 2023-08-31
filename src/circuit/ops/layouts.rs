@@ -2192,7 +2192,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     scale: utils::F32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // elementwise exponential
-    let ex = nonlinearity(config, region, values, &LookupOp::Exp { scale: scale })?;
+    let ex = nonlinearity(config, region, values, &LookupOp::Exp { scale })?;
 
     // sum of exps
     let denom = sum(config, region, &[ex.clone()])?;

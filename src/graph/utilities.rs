@@ -69,6 +69,11 @@ pub fn scale_to_multiplier(scale: u32) -> f64 {
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
+pub fn scale_to_multiplier_neg(scale: i32) -> f64 {
+    f64::powf(2., scale as f64)
+}
+
+/// Converts a scale (log base 2) to a fixed point multiplier.
 pub fn mult_to_scale(mult: f64) -> u32 {
     mult.log2().round() as u32
 }
@@ -1063,7 +1068,7 @@ pub fn homogenize_input_scales(
         return Ok(op);
     }
 
-    let mut dividers: Vec<u128> = vec![1; input_scales.len()];
+    let mut multipliers: Vec<u128> = vec![1; input_scales.len()];
 
     let max_scale = input_scales.iter().max().unwrap();
     let _ = input_scales
@@ -1076,16 +1081,16 @@ pub fn homogenize_input_scales(
             let scale_diff = max_scale - input_scale;
             if scale_diff > 0 {
                 let mult = crate::graph::scale_to_multiplier(scale_diff);
-                dividers[idx] = mult as u128;
+                multipliers[idx] = mult as u128;
             }
         })
         .collect_vec();
 
     // only rescale if need to
-    if dividers.iter().any(|&x| x > 1) {
+    if multipliers.iter().any(|&x| x > 1) {
         Ok(Box::new(Rescaled {
             inner: Box::new(op.into()),
-            scale: (0..input_scales.len()).zip(dividers).collect_vec(),
+            scale: (0..input_scales.len()).zip(multipliers).collect_vec(),
         }))
     } else {
         Ok(op)

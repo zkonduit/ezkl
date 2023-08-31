@@ -187,7 +187,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Softmax { scale } => {
                 vec![
                     LookupOp::Exp {
-                        scale: scale.clone(),
+                        scale: *scale,
                     },
                     LookupOp::Recip {
                         scale: scale.0.powf(2.0).into(),

@@ -1,4 +1,5 @@
 use super::scale_to_multiplier;
+use super::scale_to_multiplier_neg;
 #[cfg(not(target_arch = "wasm32"))]
 use super::utilities::node_output_shapes;
 #[cfg(not(target_arch = "wasm32"))]
@@ -95,7 +96,7 @@ impl Op<Fp> for Rescaled {
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
-        vec![]
+        self.inner.required_lookups()
     }
 
     fn layout(
@@ -126,8 +127,8 @@ impl Op<Fp> for Rescaled {
 pub struct RebaseScale {
     /// The operation that has to be rescaled.
     pub inner: Box<SupportedOp>,
-    /// The scale of the operation's inputs.
-    pub scale: u128,
+    /// the multiplier applied to the node output
+    pub multiplier: f64,
     /// scale being rebased to
     pub target_scale: u32,
     /// The original scale of the operation's inputs.
@@ -149,8 +150,23 @@ impl RebaseScale {
             SupportedOp::RebaseScale(RebaseScale {
                 inner: Box::new(inner),
                 target_scale: global_scale * scale_rebase_multiplier,
-                scale: scale_to_multiplier(op_out_scale - global_scale * scale_rebase_multiplier)
-                    as u128,
+                multiplier: scale_to_multiplier(
+                    op_out_scale - global_scale * scale_rebase_multiplier,
+                ),
+                original_scale: op_out_scale,
+            })
+        } else {
+            inner
+        }
+    }
+
+    ///
+    pub fn rebase_up(inner: SupportedOp, target_scale: u32, op_out_scale: u32) -> SupportedOp {
+        if (op_out_scale < (target_scale)) && !inner.is_constant() && !inner.is_input() {
+            SupportedOp::RebaseScale(RebaseScale {
+                inner: Box::new(inner),
+                target_scale,
+                multiplier: scale_to_multiplier_neg(op_out_scale as i32 - target_scale as i32),
                 original_scale: op_out_scale,
             })
         } else {
@@ -167,7 +183,7 @@ impl Op<Fp> for RebaseScale {
         let mut res = Op::<Fp>::f(&*self.inner, x)?;
 
         let ri = res.output.map(felt_to_i128);
-        let rescaled = crate::tensor::ops::nonlinearities::const_div(&ri, self.scale as f64);
+        let rescaled = crate::tensor::ops::nonlinearities::const_div(&ri, self.multiplier);
         res.output = rescaled.map(i128_to_felt);
 
         res.intermediate_lookups.push(ri);
@@ -178,7 +194,7 @@ impl Op<Fp> for RebaseScale {
     fn as_string(&self) -> String {
         format!(
             "REBASED (div={:?}) ({})",
-            self.scale,
+            self.multiplier,
             self.inner.as_string()
         )
     }
@@ -190,7 +206,7 @@ impl Op<Fp> for RebaseScale {
     fn required_lookups(&self) -> Vec<LookupOp> {
         let mut lookups = self.inner.required_lookups();
         lookups.push(LookupOp::Div {
-            denom: crate::circuit::utils::F32(self.scale as f32),
+            denom: crate::circuit::utils::F32(self.multiplier as f32),
         });
         lookups
     }
@@ -208,7 +224,7 @@ impl Op<Fp> for RebaseScale {
             region,
             &[original_res],
             &LookupOp::Div {
-                denom: crate::circuit::utils::F32(self.scale as f32),
+                denom: crate::circuit::utils::F32(self.multiplier as f32),
             },
         )?))
     }
@@ -578,7 +594,7 @@ impl Node {
         opkind = opkind.rescale(in_scales.clone()).into();
         let mut out_scale = opkind.out_scale(in_scales.clone());
         opkind =
-            RebaseScale::rebase(opkind, scales.input, out_scale, scales.rebase_multiplier).into();
+            RebaseScale::rebase(opkind, scales.input, out_scale, scales.rebase_multiplier);
         out_scale = opkind.out_scale(in_scales);
 
         // get the output shape
