@@ -830,7 +830,7 @@ impl Model {
                         output_mappings.push(mappings);
                     }
 
-                    let out_scales = output_scales.into_values().collect_vec();
+                    let mut out_scales = output_scales.into_values().collect_vec();
                     let output_state_idx = output_state_idx(&output_mappings);
 
                     let mut input_mappings = vec![];
@@ -880,6 +880,7 @@ impl Model {
                                             output_scale,
                                         )
                                     };
+                                    out_scales[output_idx] = input_scale;
                                     node.replace_opkind(rebased_node);
                                     break;
                                 }
