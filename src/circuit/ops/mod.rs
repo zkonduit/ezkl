@@ -45,9 +45,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, _: Vec<u32>, global_scale: u32) -> u32 {
-        global_scale
-    }
+    fn out_scale(&self, _: Vec<u32>) -> u32;
 
     /// Do any of the inputs to this op require homogenous input scales?
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
@@ -58,9 +56,6 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     fn required_lookups(&self) -> Vec<LookupOp> {
         vec![]
     }
-
-    /// Rescales the operation given a vector of input scales and a global (circuit) scale.
-    fn rescale(&self, inputs_scale: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>>;
 
     /// Returns true if the operation is an input.
     fn is_input(&self) -> bool {
@@ -104,7 +99,7 @@ pub struct Input {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
-    fn out_scale(&self, _: Vec<u32>, _: u32) -> u32 {
+    fn out_scale(&self, _: Vec<u32>) -> u32 {
         self.scale
     }
 
@@ -151,10 +146,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
         }
     }
 
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
-        Box::new(self.clone())
-    }
-
     fn is_input(&self) -> bool {
         true
     }
@@ -169,6 +160,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
 pub struct Unknown;
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
+    fn out_scale(&self, _: Vec<u32>) -> u32 {
+        0
+    }
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -186,9 +180,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
         _: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         Err(Box::new(super::CircuitError::UnsupportedOp))
-    }
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
-        Box::new(self.clone())
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
@@ -275,15 +266,12 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             )?))
         }
     }
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
-        Box::new(self.clone())
-    }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl
     }
 
-    fn out_scale(&self, _: Vec<u32>, _: u32) -> u32 {
+    fn out_scale(&self, _: Vec<u32>) -> u32 {
         self.quantized_values.scale().unwrap()
     }
 

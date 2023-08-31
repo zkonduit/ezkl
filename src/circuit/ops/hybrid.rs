@@ -1,8 +1,7 @@
 use super::*;
 use crate::{
-    circuit::{self, layouts, Tolerance},
+    circuit::{self, layouts, utils, Tolerance},
     fieldutils::{felt_to_i128, i128_to_felt},
-    graph::scale_to_multiplier,
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
@@ -26,19 +25,23 @@ pub enum HybridOp {
         axes: Vec<usize>,
     },
     Softmax {
-        scales: (usize, usize),
+        scale: utils::F32,
     },
     RangeCheck(Tolerance),
-    Greater {
-        scales: (usize, usize),
-    },
-    Less {
-        scales: (usize, usize),
-    },
+    Greater,
+    Less,
     Equals,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
+    ///
+    fn requires_homogenous_input_scales(&self) -> Vec<usize> {
+        match self {
+            HybridOp::Greater | HybridOp::Less | HybridOp::Equals => vec![0, 1],
+            _ => vec![],
+        }
+    }
+
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {
         self
@@ -83,17 +86,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
                 vec![],
             ),
-            HybridOp::Softmax { scales } => {
-                tensor::ops::nonlinearities::multi_dim_softmax(&x, scales.0, scales.1)
+            HybridOp::Softmax { scale } => {
+                tensor::ops::nonlinearities::multi_dim_softmax(&x, scale.into())
             }
             HybridOp::RangeCheck(..) => (x, vec![]),
-            HybridOp::Greater { scales } => {
+            HybridOp::Greater => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
-                tensor::ops::greater(&x, &y, scales)?
+                tensor::ops::greater(&x, &y)?
             }
-            HybridOp::Less { scales } => {
+            HybridOp::Less => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
-                tensor::ops::less(&x, &y, scales)?
+                tensor::ops::less(&x, &y)?
             }
             HybridOp::Equals => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
@@ -151,68 +154,27 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::ReduceMin { axes } => {
                 layouts::min_axes(config, region, values[..].try_into()?, axes)?
             }
-            HybridOp::Softmax { scales } => layouts::multi_dim_softmax(
-                config,
-                region,
-                values[..].try_into()?,
-                scales.0,
-                scales.1,
-            )?,
+            HybridOp::Softmax { scale } => {
+                layouts::multi_dim_softmax(config, region, values[..].try_into()?, *scale)?
+            }
             HybridOp::RangeCheck(tol) => layouts::range_check_percent(
                 config,
                 region,
                 values[..].try_into()?,
-                tol.scales.0,
-                tol.scales.1,
+                tol.scale,
                 tol.val,
             )?,
-            HybridOp::Greater { scales } => {
-                layouts::greater(config, region, values[..].try_into()?, scales)?
-            }
-            HybridOp::Less { scales } => {
-                layouts::less(config, region, values[..].try_into()?, scales)?
-            }
+            HybridOp::Greater => layouts::greater(config, region, values[..].try_into()?)?,
+            HybridOp::Less => layouts::less(config, region, values[..].try_into()?)?,
             HybridOp::Equals => layouts::equals(config, region, values[..].try_into()?)?,
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<u32>, global_scale: u32) -> u32 {
+    fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
         match self {
             HybridOp::Greater { .. } | HybridOp::Less { .. } => 0,
-            HybridOp::Softmax { .. } => 2 * global_scale,
+            HybridOp::Softmax { .. } => 2 * in_scales[0],
             _ => in_scales[0],
-        }
-    }
-
-    fn rescale(&self, input_scales: Vec<u32>, global_scale: u32) -> Box<dyn Op<F>> {
-        match self {
-            HybridOp::Softmax { .. } => Box::new(HybridOp::Softmax {
-                scales: (
-                    scale_to_multiplier(input_scales[0]) as usize,
-                    scale_to_multiplier(global_scale) as usize,
-                ),
-            }),
-            HybridOp::Greater { .. } => {
-                // get max scale
-                let max_scale = input_scales.iter().max().unwrap();
-                Box::new(HybridOp::Greater {
-                    scales: (
-                        scale_to_multiplier(max_scale - input_scales[0]) as usize,
-                        scale_to_multiplier(max_scale - input_scales[1]) as usize,
-                    ),
-                })
-            }
-            HybridOp::Less { .. } => {
-                // get max scale
-                let max_scale = input_scales.iter().max().unwrap();
-                Box::new(HybridOp::Less {
-                    scales: (
-                        scale_to_multiplier(max_scale - input_scales[0]) as usize,
-                        scale_to_multiplier(max_scale - input_scales[1]) as usize,
-                    ),
-                })
-            }
-            _ => Box::new(self.clone()),
         }
     }
 
@@ -222,22 +184,26 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::ReduceMin { .. }
             | HybridOp::MaxPool2d { .. }
             | HybridOp::Abs => Op::<F>::required_lookups(&LookupOp::ReLU),
-            HybridOp::Softmax { scales } => {
+            HybridOp::Softmax { scale } => {
                 vec![
-                    LookupOp::Exp { scales: *scales },
+                    LookupOp::Exp {
+                        scale: *scale,
+                    },
                     LookupOp::Recip {
-                        scale: scales.1.pow(2),
+                        scale: scale.0.powf(2.0).into(),
                     },
                 ]
             }
             HybridOp::RangeCheck(tol) => {
                 let mut lookups = vec![];
                 if tol.val > 0.0 {
-                    let scale = tol.scales.0 * tol.scales.1;
+                    let scale_squared = tol.scale.0.powf(2.0);
                     lookups.extend([
-                        LookupOp::Recip { scale },
+                        LookupOp::Recip {
+                            scale: scale_squared.into(),
+                        },
                         LookupOp::GreaterThan {
-                            a: circuit::utils::F32((tol.val * scale as f32) / 100.0),
+                            a: circuit::utils::F32((tol.val * scale_squared) / 100.0),
                         },
                     ]);
                 }

@@ -339,7 +339,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<u32>, _g: u32) -> u32 {
+    fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
         match self {
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,
             PolyOp::Neg => in_scales[0],
@@ -410,10 +410,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Concat { axis: _ } => in_scales[0],
             PolyOp::Slice { .. } => in_scales[0],
         }
-    }
-
-    fn rescale(&self, _: Vec<u32>, _: u32) -> Box<dyn Op<F>> {
-        Box::new(self.clone())
     }
 
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {

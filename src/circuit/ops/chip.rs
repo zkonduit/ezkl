@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     circuit::ops::base::BaseOp,
-    circuit::table::Table,
+    circuit::{table::Table, utils},
     fieldutils::i32_to_felt,
     tensor::{Tensor, TensorType, ValTensor, VarTensor},
 };
@@ -71,7 +71,7 @@ impl From<String> for CheckMode {
 #[derive(Clone, Default, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
 pub struct Tolerance {
     pub val: f32,
-    pub scales: (usize, usize),
+    pub scale: utils::F32,
 }
 
 impl FromStr for Tolerance {
@@ -81,7 +81,7 @@ impl FromStr for Tolerance {
         if let Ok(val) = s.parse::<f32>() {
             Ok(Tolerance {
                 val,
-                scales: (1, 1),
+                scale: utils::F32(1.0),
             })
         } else {
             Err(
@@ -96,7 +96,7 @@ impl From<f32> for Tolerance {
     fn from(value: f32) -> Self {
         Tolerance {
             val: value,
-            scales: (1, 1),
+            scale: utils::F32(1.0),
         }
     }
 }
@@ -130,7 +130,7 @@ impl<'source> FromPyObject<'source> for CheckMode {
 /// Converts Tolerance into a PyObject (Required for Tolerance to be compatible with Python)
 impl IntoPy<PyObject> for Tolerance {
     fn into_py(self, py: Python) -> PyObject {
-        (self.val, self.scales).to_object(py)
+        (self.val, self.scale.0).to_object(py)
     }
 }
 
@@ -138,8 +138,11 @@ impl IntoPy<PyObject> for Tolerance {
 /// Obtains Tolerance from PyObject (Required for Tolerance to be compatible with Python)
 impl<'source> FromPyObject<'source> for Tolerance {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        if let Ok((val, scales)) = ob.extract::<(f32, (usize, usize))>() {
-            Ok(Tolerance { val, scales })
+        if let Ok((val, scale)) = ob.extract::<(f32, f32)>() {
+            Ok(Tolerance {
+                val,
+                scale: utils::F32(scale),
+            })
         } else {
             Err(PyValueError::new_err("Invalid tolerance value provided. "))
         }

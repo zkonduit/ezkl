@@ -441,10 +441,7 @@ impl Model {
         if run_args.tolerance.val > 0.0 {
             for scale in self.graph.get_output_scales() {
                 let mut tolerance = run_args.tolerance;
-                tolerance.scales = (
-                    scale_to_multiplier(scale) as usize,
-                    scale_to_multiplier(run_args.input_scale) as usize,
-                );
+                tolerance.scale = scale_to_multiplier(scale).into();
                 let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
                 lookup_ops.extend(opkind.required_lookups());
             }
@@ -796,7 +793,7 @@ impl Model {
                         run_args,
                         scales,
                         visibility,
-                        Some(input_scales),
+                        Some(input_scales.clone()),
                     )?;
 
                     let subgraph = ParsedNodes {
@@ -805,13 +802,14 @@ impl Model {
                         outputs: model.outputs.iter().map(|o| (o.node, o.slot)).collect(),
                     };
 
-                    let om = Model {
+                    let mut om = Model {
                         graph: subgraph,
                         visibility: visibility.clone(),
                     };
 
                     let mut output_mappings = vec![];
                     let mut output_scales = BTreeMap::new();
+
                     for (i, mapping) in b.output_mapping.iter().enumerate() {
                         let mut mappings = vec![];
                         if let Some(outlet) = mapping.last_value_slot {
@@ -832,7 +830,8 @@ impl Model {
                         output_mappings.push(mappings);
                     }
 
-                    let out_scales = output_scales.into_values().collect_vec();
+                    let mut out_scales = output_scales.into_values().collect_vec();
+                    let output_state_idx = output_state_idx(&output_mappings);
 
                     let mut input_mappings = vec![];
                     for mapping in &b.input_mapping {
@@ -848,6 +847,44 @@ impl Model {
                             }
                             tract_onnx::tract_hir::ops::scan::InputMapping::Full => {
                                 input_mappings.push(InputMapping::Full);
+                            }
+                        }
+                    }
+
+                    let input_state_idx = input_state_idx(&input_mappings);
+
+                    // if input_state_idx and output_state_idx have mismatched scales we need to rebase the scale of the output node
+                    for (input_idx, output_idx) in input_state_idx.iter().zip(output_state_idx) {
+                        let output_scale = out_scales[output_idx];
+                        let input_scale = input_scales[*input_idx];
+                        let scale_diff = output_scale as i32 - input_scale as i32;
+                        if scale_diff != 0 {
+                            // output mappings is a vec of vec. we need to find the outer index of the output node we want to rebase.
+                            let mut traversed_len = 0;
+                            for (outer_idx, mappings) in output_mappings.iter().enumerate() {
+                                let mapping_len = mappings.len();
+                                if traversed_len + mapping_len > output_idx {
+                                    let output_node_idx = b.body.outputs[outer_idx].node;
+                                    let node = om.graph.nodes.get_mut(&output_node_idx).unwrap();
+                                    let rebased_node = if scale_diff > 0 {
+                                        RebaseScale::rebase(
+                                            node.opkind(),
+                                            input_scale,
+                                            output_scale,
+                                            1,
+                                        )
+                                    } else {
+                                        RebaseScale::rebase_up(
+                                            node.opkind(),
+                                            input_scale,
+                                            output_scale,
+                                        )
+                                    };
+                                    out_scales[output_idx] = input_scale;
+                                    node.replace_opkind(rebased_node);
+                                    break;
+                                }
+                                traversed_len += mapping_len;
                             }
                         }
                     }
@@ -1013,14 +1050,12 @@ impl Model {
 
                 if run_args.output_visibility == Visibility::Public {
                     let output_scales = self.graph.get_output_scales();
-                    let global_scale = scale_to_multiplier(run_args.input_scale) as usize;
                     let _ = outputs
                         .iter()
                         .enumerate()
                         .map(|(i, output)| {
                             let mut tolerance = run_args.tolerance;
-                            tolerance.scales =
-                                (scale_to_multiplier(output_scales[i]) as usize, global_scale);
+                            tolerance.scale = scale_to_multiplier(output_scales[i]).into();
 
                             let mut instance_offset = 0;
                             if self.visibility.input.is_public() {

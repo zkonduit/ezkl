@@ -96,6 +96,30 @@ impl From<f32> for F32 {
     }
 }
 
+impl From<f64> for F32 {
+    fn from(f: f64) -> Self {
+        F32(f as f32)
+    }
+}
+
+impl From<usize> for F32 {
+    fn from(f: usize) -> Self {
+        F32(f as f32)
+    }
+}
+
+impl From<F32> for f64 {
+    fn from(f: F32) -> Self {
+        f.0 as f64
+    }
+}
+
+impl From<&F32> for f64 {
+    fn from(f: &F32) -> Self {
+        f.0 as f64
+    }
+}
+
 impl fmt::Display for F32 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)

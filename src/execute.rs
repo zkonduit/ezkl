@@ -544,8 +544,8 @@ pub(crate) async fn calibrate(
         scales
     } else {
         match target {
-            CalibrationTarget::Resources => (2..7).collect::<Vec<u32>>(),
-            CalibrationTarget::Accuracy => (7..12).collect::<Vec<u32>>(),
+            CalibrationTarget::Resources => (2..8).collect::<Vec<u32>>(),
+            CalibrationTarget::Accuracy => (8..14).collect::<Vec<u32>>(),
         }
     };
 
@@ -555,7 +555,7 @@ pub(crate) async fn calibrate(
 
     let mut found_params: Vec<GraphSettings> = vec![];
 
-    let scale_rebase_multiplier = [1, 10];
+    let scale_rebase_multiplier = [1, 2, 10];
 
     // 2 x 2 grid
     let range_grid = range

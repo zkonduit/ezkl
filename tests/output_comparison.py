@@ -89,4 +89,4 @@ if __name__ == '__main__':
     percentage_difference = compare_outputs(ezkl_output, onnx_output)
     # print the percentage difference
     print("mean percent diff: ", percentage_difference)
-    assert percentage_difference < 5, "Percentage difference is too high"
+    assert percentage_difference < 1.1, "Percentage difference is too high"
