@@ -555,7 +555,7 @@ pub(crate) async fn calibrate(
 
     let mut found_params: Vec<GraphSettings> = vec![];
 
-    let scale_rebase_multiplier = [1, 10];
+    let scale_rebase_multiplier = [1, 2, 10];
 
     // 2 x 2 grid
     let range_grid = range
