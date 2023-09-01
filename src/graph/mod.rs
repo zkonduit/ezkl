@@ -698,13 +698,17 @@ impl GraphCircuit {
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(input)?;
         info!("max lookup inputs: {}", res.max_lookup_inputs);
-        let max_range = 2i128.pow(self.settings.run_args.bits as u32 - 1);
+        let blinding_offset = ASSUMED_BLINDING_FACTORS / 2;
+        let max_range = 2i128.pow(self.settings.run_args.bits as u32) - blinding_offset as i128;
         if res.max_lookup_inputs > max_range {
-            let recommended_bits = (res.max_lookup_inputs as f64).log2().ceil() as usize + 1;
+            let recommended_bits = (res.max_lookup_inputs as f64 + blinding_offset as f64)
+                .log2()
+                .ceil() as usize
+                + 1;
 
             if recommended_bits <= (MAX_PUBLIC_SRS - 1) as usize {
                 self.settings.run_args.bits = recommended_bits;
-                self.settings.run_args.logrows = (recommended_bits + 1) as u32;
+                self.settings.run_args.logrows = recommended_bits as u32;
                 return self.calibrate(input);
             } else {
                 let err_string = format!(
@@ -718,7 +722,7 @@ impl GraphCircuit {
 
             let min_rows_from_constraints =
                 (self.settings.num_constraints as f32).log2().ceil() as usize;
-            let mut logrows = std::cmp::max(min_bits + 1, min_rows_from_constraints);
+            let mut logrows = std::cmp::max(min_bits, min_rows_from_constraints);
             // if public input then public inputs col will have public inputs len
             if self.settings.run_args.input_visibility.is_public()
                 || self.settings.run_args.output_visibility.is_public()
