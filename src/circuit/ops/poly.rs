@@ -54,6 +54,10 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Sum {
         axes: Vec<usize>,
     },
+    Prod {
+        axes: Vec<usize>,
+        len_prod: usize,
+    },
     Pow(u32),
     Pack(u32, u32),
     GlobalSumPool,
@@ -100,6 +104,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Mult => "MULT".into(),
             PolyOp::Sub => "SUB".into(),
             PolyOp::Sum { .. } => "SUM".into(),
+            PolyOp::Prod { .. } => "PROD".into(),
             PolyOp::Pow(_) => "POW".into(),
             PolyOp::Pack(_, _) => "PACK".into(),
             PolyOp::GlobalSumPool => "GLOBALSUMPOOL".into(),
@@ -208,6 +213,12 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 }
                 tensor::ops::sum_axes(&inputs[0], axes)
             }
+            PolyOp::Prod { axes, .. } => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch("prod inputs".to_string()));
+                }
+                tensor::ops::prod_axes(&inputs[0], axes)
+            }
             PolyOp::GlobalSumPool => unreachable!(),
             PolyOp::Concat { axis } => {
                 if inputs.len() < 2 {
@@ -262,6 +273,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             }
             PolyOp::Sum { axes } => {
                 layouts::sum_axes(config, region, values[..].try_into()?, axes)?
+            }
+            PolyOp::Prod { axes, .. } => {
+                layouts::prod_axes(config, region, values[..].try_into()?, axes)?
             }
             PolyOp::Conv {
                 kernel,
@@ -355,7 +369,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 scale
             }
             PolyOp::Gather { .. } => in_scales[0],
-
+            PolyOp::Prod { len_prod, .. } => in_scales[0] * (*len_prod as u32),
             PolyOp::Sum { .. } => in_scales[0],
             PolyOp::Conv { kernel, bias, .. } => {
                 let kernel_scale = match kernel.scale() {

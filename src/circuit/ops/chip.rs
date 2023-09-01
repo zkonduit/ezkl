@@ -211,6 +211,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             selectors.insert((BaseOp::Add, i), meta.selector());
             selectors.insert((BaseOp::Sub, i), meta.selector());
             selectors.insert((BaseOp::Dot, i), meta.selector());
+            selectors.insert((BaseOp::CumProd, i), meta.selector());
             selectors.insert((BaseOp::Sum, i), meta.selector());
             selectors.insert((BaseOp::Neg, i), meta.selector());
             selectors.insert((BaseOp::Mult, i), meta.selector());
