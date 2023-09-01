@@ -2044,7 +2044,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/parallel-lookup-permute#620e709546f3ec3eab334a221b254ecbaf593aac"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/parallel-lookup-permute#de8b892259ffe340339f219a1d27602e2bf69d1a"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2061,7 +2061,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/parallel-lookup-permute#620e709546f3ec3eab334a221b254ecbaf593aac"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/parallel-lookup-permute#de8b892259ffe340339f219a1d27602e2bf69d1a"
 dependencies = [
  "blake2b_simd",
  "ff",
