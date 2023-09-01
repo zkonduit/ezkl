@@ -109,11 +109,10 @@ impl LookupOp {
     /// Returns the range of values that can be represented by the table
     pub fn bit_range(&self, allocated_bits: usize, num_blinding_factors: usize) -> (i128, i128) {
         let base = 2i128;
-        let blinding_offset = (num_blinding_factors / 2) as i128;
-        (
-            -base.pow(allocated_bits as u32) + blinding_offset,
-            base.pow(allocated_bits as u32) - blinding_offset,
-        )
+        let blinding_offset = ((num_blinding_factors) as f64 / 2.0).ceil() as i128 + 1;
+        let range = base.pow(allocated_bits as u32 - 1) - blinding_offset;
+
+        (-range, range)
     }
 }
 

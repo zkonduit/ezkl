@@ -10,7 +10,8 @@ pub mod node;
 pub mod utilities;
 /// Representations of a computational graph's variables.
 pub mod vars;
-
+#[cfg(not(target_arch = "wasm32"))]
+use colored_json::ToColoredJson;
 use halo2_proofs::circuit::Value;
 pub use input::DataSource;
 use itertools::Itertools;
@@ -135,6 +136,17 @@ impl GraphWitness {
             max_lookup_inputs: 0,
         }
     }
+    /// Export the ezkl witness as json
+    pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let serialized = match serde_json::to_string(&self) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(Box::new(e));
+            }
+        };
+        Ok(serialized)
+    }
+
     /// Load the model input from a file
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let mut file = std::fs::File::open(path.clone())
@@ -697,11 +709,12 @@ impl GraphCircuit {
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(input)?;
-        info!("max lookup inputs: {}", res.max_lookup_inputs);
-        let blinding_offset = ASSUMED_BLINDING_FACTORS / 2;
-        let max_range = 2i128.pow(self.settings.run_args.bits as u32) - blinding_offset as i128;
+
+        let blinding_offset = (ASSUMED_BLINDING_FACTORS as f64 / 2.0).ceil() + 1.0;
+        let max_range = 2i128.pow(self.settings.run_args.bits as u32 - 1) - blinding_offset as i128;
+
         if res.max_lookup_inputs > max_range {
-            let recommended_bits = (res.max_lookup_inputs as f64 + blinding_offset as f64)
+            let recommended_bits = (res.max_lookup_inputs as f64 + blinding_offset)
                 .log2()
                 .ceil() as usize
                 + 1;
@@ -718,7 +731,10 @@ impl GraphCircuit {
                 return Err(err_string.into());
             }
         } else {
-            let min_bits = (res.max_lookup_inputs as f64).log2().ceil() as usize + 1;
+            let min_bits = (res.max_lookup_inputs as f64 + blinding_offset)
+                .log2()
+                .ceil() as usize
+                + 1;
 
             let min_rows_from_constraints =
                 (self.settings.num_constraints as f32).log2().ceil() as usize;
@@ -794,7 +810,7 @@ impl GraphCircuit {
             )?);
         }
 
-        Ok(GraphWitness {
+        let witness = GraphWitness {
             inputs: inputs
                 .to_vec()
                 .iter()
@@ -809,7 +825,15 @@ impl GraphCircuit {
             processed_params,
             processed_outputs,
             max_lookup_inputs: model_results.max_lookup_inputs,
-        })
+        };
+
+        #[cfg(not(target_arch = "wasm32"))]
+        log::debug!(
+            "witness: \n {}",
+            &witness.as_json()?.to_colored_json_auto()?
+        );
+
+        Ok(witness)
     }
 
     /// Create a new circuit from a set of input data and [RunArgs].
