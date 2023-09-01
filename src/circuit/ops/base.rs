@@ -9,6 +9,7 @@ use std::{
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum BaseOp {
     Dot,
+    CumProd,
     Identity,
     Add,
     Mult,
@@ -35,6 +36,7 @@ impl BaseOp {
             BaseOp::Add => a + b,
             BaseOp::Identity => b,
             BaseOp::Sum => b + m,
+            BaseOp::CumProd => b * m,
             BaseOp::Neg => -b,
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
@@ -49,6 +51,7 @@ impl BaseOp {
         match self {
             BaseOp::Identity => "IDENTITY",
             BaseOp::Dot => "DOT",
+            BaseOp::CumProd => "CUMPROD",
             BaseOp::Add => "ADD",
             BaseOp::Neg => "NEG",
             BaseOp::Sub => "SUB",
@@ -66,6 +69,7 @@ impl BaseOp {
             BaseOp::Identity => (0, 1),
             BaseOp::Neg => (0, 1),
             BaseOp::Dot => (-1, 2),
+            BaseOp::CumProd => (-1, 2),
             BaseOp::Add => (0, 1),
             BaseOp::Sub => (0, 1),
             BaseOp::Mult => (0, 1),
@@ -82,6 +86,7 @@ impl BaseOp {
             BaseOp::Identity => 1,
             BaseOp::Neg => 1,
             BaseOp::Dot => 2,
+            BaseOp::CumProd => 1,
             BaseOp::Add => 2,
             BaseOp::Sub => 2,
             BaseOp::Mult => 2,
@@ -103,6 +108,7 @@ impl BaseOp {
             BaseOp::Mult => 0,
             BaseOp::Range { .. } => 0,
             BaseOp::Sum => 1,
+            BaseOp::CumProd => 1,
             BaseOp::IsZero => 0,
             BaseOp::IsBoolean => 0,
         }

@@ -8,7 +8,6 @@ pub mod poseidon_params;
 pub mod spec;
 
 // This chip adds a set of advice columns to the gadget Chip to store the inputs of the hash
-// compared to `hash_with_instance` this version doesn't use any instance column.
 use halo2_gadgets::poseidon::{primitives::*, Hash, Pow5Chip, Pow5Config};
 use halo2_proofs::arithmetic::Field;
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
@@ -82,6 +81,39 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
 }
 
 impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, const L: usize>
+    PoseidonChip<S, WIDTH, RATE, L>
+{
+    /// Configuration of the PoseidonChip
+    pub fn configure_without_instance(
+        meta: &mut ConstraintSystem<Fp>,
+    ) -> PoseidonConfig<WIDTH, RATE> {
+        //  instantiate the required columns
+        let hash_inputs = (0..WIDTH).map(|_| meta.advice_column()).collect::<Vec<_>>();
+        for input in &hash_inputs {
+            meta.enable_equality(*input);
+        }
+
+        let partial_sbox = meta.advice_column();
+        let rc_a = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
+        let rc_b = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
+
+        for input in hash_inputs.iter().take(WIDTH) {
+            meta.enable_equality(*input);
+        }
+        meta.enable_constant(rc_b[0]);
+
+        Self::configure_with_cols(
+            meta,
+            partial_sbox,
+            rc_a.try_into().unwrap(),
+            rc_b.try_into().unwrap(),
+            hash_inputs,
+            None,
+        )
+    }
+}
+
+impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, const L: usize>
     Module<Fp> for PoseidonChip<S, WIDTH, RATE, L>
 {
     type Config = PoseidonConfig<WIDTH, RATE>;
@@ -103,6 +135,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
             _marker: PhantomData,
         }
     }
+
     /// Configuration of the PoseidonChip
     fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
         //  instantiate the required columns
@@ -230,14 +263,15 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     ) -> Result<ValTensor<Fp>, Error> {
         let (mut input_cells, zero_val) = self.layout_inputs(layouter, input)?;
         // extract the values from the input cells
-        let assigned_input: Tensor<ValType<Fp>> =
+        let mut assigned_input: Tensor<ValType<Fp>> =
             input_cells.iter().map(|e| ValType::from(e.clone())).into();
         let len = assigned_input.len();
 
         let start_time = instant::Instant::now();
 
+        let mut one_iter = false;
         // do the Tree dance baby
-        while input_cells.len() > 1 {
+        while input_cells.len() > 1 || !one_iter {
             let hashes: Result<Vec<AssignedCell<Fp, Fp>>, Error> = input_cells
                 .chunks(L)
                 .enumerate()
@@ -272,7 +306,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                 .collect();
 
             log::trace!("hashes (N={:?}) took: {:?}", len, start_time.elapsed());
-
+            one_iter = true;
             input_cells = hashes?;
         }
 
@@ -302,6 +336,8 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                 },
             )?;
 
+            assigned_input.reshape(input[0].dims().clone());
+
             Ok(assigned_input.into())
         } else {
             Ok(result.into())
@@ -311,12 +347,14 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     ///
     fn run(message: Vec<Fp>) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
         let mut hash_inputs = message;
+
         let len = hash_inputs.len();
 
         let start_time = instant::Instant::now();
 
+        let mut one_iter = false;
         // do the Tree dance baby
-        while hash_inputs.len() > 1 {
+        while hash_inputs.len() > 1 || !one_iter {
             let hashes: Vec<Fp> = hash_inputs
                 .par_chunks(L)
                 .map(|block| {
@@ -336,7 +374,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                     .hash(block.clone().try_into().unwrap())
                 })
                 .collect();
-
+            one_iter = true;
             hash_inputs = hashes;
         }
 

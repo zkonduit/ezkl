@@ -25,7 +25,12 @@ pub enum Visibility {
     /// Mark an item as public (sent in the proof submitted for verification)
     Public,
     /// Mark an item as publicly committed to (hash sent in the proof submitted for verification)
-    Hashed,
+    Hashed {
+        /// Whether the hash is used as an instance (sent in the proof submitted for verification)
+        /// if false the hash is used as an advice (not in the proof submitted for verification) and is then sent to the computational graph
+        /// if true the hash is used as an instance (sent in the proof submitted for verification) the *inputs* to the hashing function are then sent to the computational graph
+        hash_is_public: bool,
+    },
     /// Mark an item as encrypted (public key and encrypted message sent in the proof submitted for verificatio)
     Encrypted,
 }
@@ -35,7 +40,12 @@ impl<'a> From<&'a str> for Visibility {
         match s {
             "private" => Visibility::Private,
             "public" => Visibility::Public,
-            "hashed" => Visibility::Hashed,
+            "hashed" | "hashed/public" => Visibility::Hashed {
+                hash_is_public: true,
+            },
+            "hashed/private" => Visibility::Hashed {
+                hash_is_public: false,
+            },
             "encrypted" => Visibility::Encrypted,
             _ => panic!("Invalid visibility string"),
         }
@@ -49,7 +59,13 @@ impl IntoPy<PyObject> for Visibility {
         match self {
             Visibility::Private => "private".to_object(py),
             Visibility::Public => "public".to_object(py),
-            Visibility::Hashed => "hashed".to_object(py),
+            Visibility::Hashed { hash_is_public } => {
+                if hash_is_public {
+                    "hashed/public".to_object(py)
+                } else {
+                    "hashed/private".to_object(py)
+                }
+            }
             Visibility::Encrypted => "encrypted".to_object(py),
         }
     }
@@ -64,7 +80,15 @@ impl<'source> FromPyObject<'source> for Visibility {
         match strval.to_lowercase().as_str() {
             "private" => Ok(Visibility::Private),
             "public" => Ok(Visibility::Public),
-            "hashed" => Ok(Visibility::Hashed),
+            "hashed" => Ok(Visibility::Hashed {
+                hash_is_public: true,
+            }),
+            "hashed/public" => Ok(Visibility::Hashed {
+                hash_is_public: true,
+            }),
+            "hashed/private" => Ok(Visibility::Hashed {
+                hash_is_public: false,
+            }),
             "encrypted" => Ok(Visibility::Encrypted),
             _ => Err(PyValueError::new_err("Invalid value for Visibility")),
         }
@@ -78,7 +102,25 @@ impl Visibility {
     }
     #[allow(missing_docs)]
     pub fn is_hashed(&self) -> bool {
-        matches!(&self, Visibility::Hashed)
+        matches!(&self, Visibility::Hashed { .. })
+    }
+    #[allow(missing_docs)]
+    pub fn is_hashed_public(&self) -> bool {
+        matches!(
+            &self,
+            Visibility::Hashed {
+                hash_is_public: true
+            }
+        )
+    }
+    #[allow(missing_docs)]
+    pub fn is_hashed_private(&self) -> bool {
+        matches!(
+            &self,
+            Visibility::Hashed {
+                hash_is_public: false
+            }
+        )
     }
     #[allow(missing_docs)]
     pub fn is_encrypted(&self) -> bool {
@@ -86,7 +128,16 @@ impl Visibility {
     }
     #[allow(missing_docs)]
     pub fn requires_processing(&self) -> bool {
-        matches!(&self, Visibility::Encrypted) | matches!(&self, Visibility::Hashed)
+        matches!(&self, Visibility::Encrypted) | matches!(&self, Visibility::Hashed { .. })
+    }
+    #[allow(missing_docs)]
+    pub fn overwrites_inputs(&self) -> bool {
+        matches!(
+            &self,
+            Visibility::Hashed {
+                hash_is_public: false
+            }
+        )
     }
 }
 impl std::fmt::Display for Visibility {
@@ -94,7 +145,7 @@ impl std::fmt::Display for Visibility {
         match self {
             Visibility::Private => write!(f, "private"),
             Visibility::Public => write!(f, "public"),
-            Visibility::Hashed => write!(f, "hashed"),
+            Visibility::Hashed { .. } => write!(f, "hashed"),
             Visibility::Encrypted => write!(f, "encrypted"),
         }
     }
