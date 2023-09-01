@@ -670,7 +670,7 @@ impl Module<Fr> for ElGamalGadget {
         let mut assigned_input: Tensor<ValType<Fr>> =
             msg_var.iter().map(|e| ValType::from(e.clone())).into();
 
-        assigned_input.reshape(inputs[0].dims().clone());
+        assigned_input.reshape(inputs[0].dims());
 
         log::trace!(
             "layout (N={:?}) took: {:?}",

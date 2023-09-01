@@ -336,7 +336,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                 },
             )?;
 
-            assigned_input.reshape(input[0].dims().clone());
+            assigned_input.reshape(input[0].dims());
 
             Ok(assigned_input.into())
         } else {
