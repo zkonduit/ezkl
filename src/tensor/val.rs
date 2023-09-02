@@ -150,7 +150,7 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
                 if let Some(vis) = t.visibility {
                     match vis {
                         Visibility::Public => x.into(),
-                        Visibility::Private | Visibility::Hashed | Visibility::Encrypted => {
+                        Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted => {
                             Value::known(x).into()
                         }
                     }

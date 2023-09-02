@@ -1037,6 +1037,31 @@ pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, 
     Tensor::new(Some(&[res]), &[1])
 }
 
+/// Takes prod of tensor's elements.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::prod;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = prod(&x).unwrap();
+/// let expected = 0;
+/// assert_eq!(result[0], expected);
+/// ```
+pub fn prod<T: TensorType + Mul<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+    let mut res = T::one().unwrap();
+
+    let _ = a.map(|a_i| res = res.clone() * a_i);
+    Tensor::new(Some(&[res]), &[1])
+}
+
 /// Downsamples a tensor along a dimension.
 /// # Arguments
 /// * `input` - Tensor
@@ -1161,6 +1186,69 @@ pub fn gather<T: TensorType>(
     output.reshape(&output_size);
 
     Ok(output)
+}
+
+/// Takes product of a tensor along specific axes.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::prod_axes;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2, 3],
+/// ).unwrap();
+/// let result = prod_axes(&x, &[1]).unwrap();
+/// let expected = Tensor::<i128>::new(
+///     Some(&[60, 0]),
+///     &[2, 1],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn prod_axes<T: TensorType + Mul<Output = T>>(
+    a: &Tensor<T>,
+    axes: &[usize],
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+
+    if axes.is_empty() {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut prod_dims = vec![];
+        for (i, c) in coord.iter().enumerate() {
+            if axes.contains(&i) {
+                prod_dims.push(0..a.dims()[i]);
+            } else {
+                prod_dims.push(*c..*c + 1);
+            }
+        }
+
+        res.set(coord, prod(&a.get_slice(&prod_dims)?)?[0].clone());
+    }
+
+    Ok(res)
 }
 
 /// Sums a tensor along specific axes.
@@ -3397,6 +3485,39 @@ pub mod accumulated {
             .iter()
             .scan(T::zero().unwrap(), |acc, k| {
                 *acc = acc.clone() + k.clone();
+                Some(acc.clone())
+            })
+            .collect();
+
+        Ok(transcript)
+    }
+
+    /// Prod of a tensor.
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::accumulated::prod;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 15, 2, 1, 1, 0]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = prod(&x).unwrap();
+    /// let expected = Tensor::<i128>::new(
+    ///     Some(&[2, 30, 60, 60, 60, 0]),
+    ///     &[6],
+    /// ).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn prod<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+        a: &Tensor<T>,
+    ) -> Result<Tensor<T>, TensorError> {
+        let transcript: Tensor<T> = a
+            .iter()
+            .scan(T::one().unwrap(), |acc, k| {
+                *acc = acc.clone() * k.clone();
                 Some(acc.clone())
             })
             .collect();

@@ -443,13 +443,13 @@ pub(crate) async fn gen_witness(
     let data = GraphData::from_path(data)?;
 
     #[cfg(not(target_arch = "wasm32"))]
-    let input = circuit.load_graph_input(&data).await?;
+    let mut input = circuit.load_graph_input(&data).await?;
     #[cfg(target_arch = "wasm32")]
-    let input = circuit.load_graph_input(&data)?;
+    let mut input = circuit.load_graph_input(&data)?;
 
     let start_time = Instant::now();
 
-    let witness = circuit.forward(&input)?;
+    let witness = circuit.forward(&mut input)?;
 
     // print each variable tuple (symbol, value) as symbol=value
     trace!(

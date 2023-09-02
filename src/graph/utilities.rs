@@ -394,6 +394,23 @@ pub fn new_op_from_onnx(
 
             SupportedOp::Hybrid(HybridOp::ReduceMax { axes })
         }
+        "Reduce<Prod>" => {
+            if inputs.len() != 1 {
+                return Err(Box::new(GraphError::InvalidDims(idx, "prod".to_string())));
+            };
+            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            let axes: Vec<usize> = op.axes.into_iter().collect();
+
+            // length of prod along axes
+            let len_prod = inputs[0].out_dims()[0]
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| axes.contains(i))
+                .map(|(_, v)| v)
+                .product::<usize>();
+
+            SupportedOp::Linear(PolyOp::Prod { axes, len_prod })
+        }
         "Reduce<Sum>" => {
             if inputs.len() != 1 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
