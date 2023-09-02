@@ -708,10 +708,11 @@ impl GraphCircuit {
 
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
-        let res = self.forward(input)?;
+        let res = self.forward(&mut input.to_vec())?;
 
         let blinding_offset = (ASSUMED_BLINDING_FACTORS as f64 / 2.0).ceil() + 1.0;
         let max_range = 2i128.pow(self.settings.run_args.bits as u32 - 1) - blinding_offset as i128;
+
 
         if res.max_lookup_inputs > max_range {
             let recommended_bits = (res.max_lookup_inputs as f64 + blinding_offset)
@@ -779,14 +780,20 @@ impl GraphCircuit {
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
     pub fn forward(
         &self,
-        inputs: &[Tensor<Fp>],
+        inputs: &mut [Tensor<Fp>],
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
+        let original_inputs = inputs.to_vec();
+
         let visibility = VarVisibility::from_args(&self.settings.run_args)?;
         let mut processed_inputs = None;
         let mut processed_params = None;
         let mut processed_outputs = None;
 
-        if visibility.input.requires_processing() {
+        if visibility.input.is_hashed_private() {
+            let res = GraphModules::forward(inputs, visibility.input)?;
+            inputs[0] = res.clone().poseidon_hash.unwrap().into_iter().into();
+            processed_inputs = Some(res);
+        } else if visibility.input.requires_processing() {
             processed_inputs = Some(GraphModules::forward(inputs, visibility.input)?);
         }
 
@@ -811,8 +818,7 @@ impl GraphCircuit {
         }
 
         let witness = GraphWitness {
-            inputs: inputs
-                .to_vec()
+            inputs: original_inputs
                 .iter()
                 .map(|t| t.deref().to_vec())
                 .collect_vec(),

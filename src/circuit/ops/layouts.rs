@@ -22,7 +22,8 @@ use crate::{
         ops::{
             accumulated, add, conv as non_accum_conv, deconv as non_accum_deconv,
             dot as non_accum_dot, einsum as non_accum_einsum, max_pool2d as non_accum_max_pool2d,
-            mult, pack as non_accum_pack, sub, sum as non_accum_sum, sumpool as non_accum_sumpool,
+            mult, pack as non_accum_pack, prod as non_accum_prod, sub, sum as non_accum_sum,
+            sumpool as non_accum_sumpool,
         },
         Tensor, TensorError, ValType,
     },
@@ -466,6 +467,118 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
 
     // last element is the result
     Ok(last_elem)
+}
+
+/// Prod accumulated layout
+pub fn prod<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let assigned_len: usize;
+    let input = {
+        let (res, len) =
+            region.assign_with_duplication(&config.inputs[1], &values[0], &config.check_mode)?;
+        assigned_len = len;
+        res.get_inner()?
+    };
+
+    // Now we can assign the dot product
+    let accumulated_prod = accumulated::prod(&input).expect("accum poly: prod op failed");
+
+    let (output, output_assigned_len) = region.assign_with_duplication(
+        &config.output,
+        &accumulated_prod.into(),
+        &config.check_mode,
+    )?;
+
+    assert_eq!(assigned_len, output_assigned_len);
+
+    // enable the selectors
+    (0..assigned_len).for_each(|i| {
+        let (x, y) = config.output.cartesian_coord(region.offset() + i);
+        // skip over duplicates at start of column
+        if y == 0 && i > 0 {
+            return;
+        }
+        let selector = if i == 0 {
+            config.selectors.get(&(BaseOp::Identity, x))
+        } else {
+            config.selectors.get(&(BaseOp::CumProd, x))
+        };
+
+        region.enable(selector, y).unwrap();
+    });
+
+    let last_elem = output
+        .get_slice(&[output.len() - 1..output.len()])
+        .expect("accum poly: failed to fetch last elem");
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        let safe_dot = non_accum_prod(&input).map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+
+        assert_eq!(
+            Into::<Tensor<i32>>::into(last_elem.get_inner()?),
+            Into::<Tensor<i32>>::into(safe_dot),
+        )
+    }
+    region.increment(assigned_len);
+
+    // last element is the result
+    Ok(last_elem)
+}
+
+/// Sum accumulated layout
+pub fn prod_axes<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    axes: &[usize],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // calculate value of output
+
+    let a = &values[0];
+
+    if axes.is_empty() {
+        return Ok(a.clone());
+    }
+
+    let mut new_dims = vec![];
+    for i in 0..a.dims().len() {
+        if !axes.contains(&i) {
+            new_dims.push(a.dims()[i]);
+        } else {
+            new_dims.push(1);
+        }
+    }
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut prod_dims = vec![];
+        for (i, c) in coord.iter().enumerate() {
+            if axes.contains(&i) {
+                prod_dims.push(0..a.dims()[i]);
+            } else {
+                prod_dims.push(*c..*c + 1);
+            }
+        }
+        res.set(
+            coord,
+            prod(config, region, &[a.get_slice(&prod_dims)?])?.get_inner_tensor()?[0].clone(),
+        );
+    }
+
+    Ok(res.into())
 }
 
 /// Sum accumulated layout

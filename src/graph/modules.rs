@@ -44,7 +44,17 @@ impl ModuleConfigs {
             || visibility.params.is_hashed())
             && module_size.poseidon.1[0] > 0
         {
-            config.poseidon = Some(ModulePoseidon::configure(cs))
+            if visibility.input.is_hashed_public()
+                || visibility.output.is_hashed_public()
+                || visibility.params.is_hashed_public()
+            {
+                config.poseidon = Some(ModulePoseidon::configure(cs))
+            } else if visibility.input.is_hashed_private()
+                || visibility.output.is_hashed_private()
+                || visibility.params.is_hashed_private()
+            {
+                config.poseidon = Some(ModulePoseidon::configure_without_instance(cs))
+            }
         };
 
         if (visibility.input.is_encrypted()
@@ -229,7 +239,7 @@ impl GraphModules {
         instances: &mut ModuleInstances,
     ) {
         if let Some(res) = module_res {
-            if visibility.is_hashed() {
+            if visibility.is_hashed_public() {
                 instances
                     .poseidon
                     .extend(res.poseidon_hash.clone().unwrap());
@@ -304,11 +314,9 @@ impl GraphModules {
         values.iter_mut().for_each(|x| {
             // hash the input and replace the constrained cells in the input
             let cloned_x = (*x).clone();
-            let dims = cloned_x[0].dims();
             x[0] = module
                 .layout(layouter, &cloned_x, instance_offset.to_owned())
                 .unwrap();
-            x[0].reshape(dims).unwrap();
             for (i, inc) in module.instance_increment_input().iter().enumerate() {
                 // increment the instance offset to make way for future module layouts
                 instance_offset[i] += inc;
