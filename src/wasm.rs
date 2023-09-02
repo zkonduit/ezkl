@@ -131,20 +131,42 @@ pub fn elgamalDecrypt(
     serde_json::to_vec(&output).unwrap()
 }
 
+/// Generate a witness file from input.json, compiled model and a settings.json file.
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn genWitness(
+    compiled_model: wasm_bindgen::Clamped<Vec<u8>>,
+    input: wasm_bindgen::Clamped<Vec<u8>>,
+    settings: wasm_bindgen::Clamped<Vec<u8>>
+) -> Vec<u8> {
+    let compiled_model: crate::graph::Model = bincode::deserialize(&compiled_model[..]).unwrap();
+    let input: crate::graph::input::GraphData = serde_json::from_slice(&input[..]).unwrap();
+    let circuit_settings: crate::graph::GraphSettings = serde_json::from_slice(&settings[..]).unwrap();
+
+    // read in circuit
+    let mut circuit = GraphCircuit::new(compiled_model, &circuit_settings.run_args).unwrap();
+
+    let mut input = circuit.load_graph_input(&input).unwrap();
+
+    let witness = circuit.forward(&mut input).unwrap();
+
+    serde_json::to_vec(&witness).unwrap()
+}
+
 /// Verify proof in browser using wasm
 #[wasm_bindgen]
 pub fn verify(
     proof_js: wasm_bindgen::Clamped<Vec<u8>>,
     vk: wasm_bindgen::Clamped<Vec<u8>>,
-    circuit_settings_ser: wasm_bindgen::Clamped<Vec<u8>>,
-    params_ser: wasm_bindgen::Clamped<Vec<u8>>,
+    settings: wasm_bindgen::Clamped<Vec<u8>>,
+    srs: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> bool {
-    let mut reader = std::io::BufReader::new(&params_ser[..]);
+    let mut reader = std::io::BufReader::new(&srs[..]);
     let params: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
 
     let circuit_settings: GraphSettings =
-        serde_json::from_slice(&circuit_settings_ser[..]).unwrap();
+        serde_json::from_slice(&settings[..]).unwrap();
 
     let snark: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof_js[..]).unwrap();
 
@@ -172,12 +194,12 @@ pub fn verify(
 pub fn prove(
     witness: wasm_bindgen::Clamped<Vec<u8>>,
     pk: wasm_bindgen::Clamped<Vec<u8>>,
-    circuit_ser: wasm_bindgen::Clamped<Vec<u8>>,
-    circuit_settings_ser: wasm_bindgen::Clamped<Vec<u8>>,
-    params_ser: wasm_bindgen::Clamped<Vec<u8>>,
+    compiled_model: wasm_bindgen::Clamped<Vec<u8>>,
+    settings: wasm_bindgen::Clamped<Vec<u8>>,
+    srs: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Vec<u8> {
     // read in kzg params
-    let mut reader = std::io::BufReader::new(&params_ser[..]);
+    let mut reader = std::io::BufReader::new(&srs[..]);
     let params: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
 
@@ -186,7 +208,7 @@ pub fn prove(
 
     // read in circuit params
     let circuit_settings: GraphSettings =
-        serde_json::from_slice(&circuit_settings_ser[..]).unwrap();
+        serde_json::from_slice(&settings[..]).unwrap();
 
     // read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
@@ -198,9 +220,9 @@ pub fn prove(
     .unwrap();
 
     // read in circuit
-    let model: crate::graph::Model = bincode::deserialize(&circuit_ser[..]).unwrap();
+    let compiled_model: crate::graph::Model = bincode::deserialize(&compiled_model[..]).unwrap();
 
-    let mut circuit = GraphCircuit::new(model, &circuit_settings.run_args).unwrap();
+    let mut circuit = GraphCircuit::new(compiled_model, &circuit_settings.run_args).unwrap();
 
     // prep public inputs
     circuit.load_graph_witness(&data).unwrap();

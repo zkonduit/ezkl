@@ -10,7 +10,7 @@ mod wasm32 {
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
         elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, poseidonHash, prove, vecU64ToFelt,
-        vecU64ToFloat, vecU64ToInt, verify,
+        vecU64ToFloat, vecU64ToInt, verify, genWitness
     };
     use halo2curves::bn256::{Fr, G1Affine};
     use rand::rngs::StdRng;
@@ -28,6 +28,7 @@ mod wasm32 {
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
     pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test_network.compiled");
+    pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
 
     #[wasm_bindgen_test]
     async fn verify_field_serialization_roundtrip() {
@@ -119,6 +120,35 @@ mod wasm32 {
             .unwrap();
 
         assert_eq!(hash, reference_hash)
+    }
+
+    #[wasm_bindgen_test]
+    async fn verify_gen_witness() {
+
+        let witness = genWitness(
+            wasm_bindgen::Clamped(NETWORK.to_vec()),
+            wasm_bindgen::Clamped(INPUT.to_vec()),
+            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
+        );
+
+        // prove
+        let proof = prove(
+            wasm_bindgen::Clamped(witness.to_vec()),
+            wasm_bindgen::Clamped(PK.to_vec()),
+            wasm_bindgen::Clamped(NETWORK.to_vec()),
+            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
+            wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
+        );
+        assert!(proof.len() > 0);
+
+        let value = verify(
+            wasm_bindgen::Clamped(proof.to_vec()),
+            wasm_bindgen::Clamped(VK.to_vec()),
+            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
+            wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
+        );
+        // should not fail
+        assert!(value);
     }
 
     #[wasm_bindgen_test]
