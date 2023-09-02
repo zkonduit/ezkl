@@ -593,8 +593,7 @@ impl Node {
 
         opkind = opkind.rescale(in_scales.clone()).into();
         let mut out_scale = opkind.out_scale(in_scales.clone());
-        opkind =
-            RebaseScale::rebase(opkind, scales.input, out_scale, scales.rebase_multiplier);
+        opkind = RebaseScale::rebase(opkind, scales.input, out_scale, scales.rebase_multiplier);
         out_scale = opkind.out_scale(in_scales);
 
         // get the output shape

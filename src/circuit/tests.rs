@@ -1611,7 +1611,7 @@ mod relu {
             let mut config = BaseConfig::default();
 
             config
-                .configure_lookup(cs, &advices[0], &advices[1], 2, &nl)
+                .configure_lookup(cs, &advices[0], &advices[1], 4, &nl)
                 .unwrap();
             config
         }
