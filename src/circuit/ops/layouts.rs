@@ -426,7 +426,10 @@ fn reduce<F: PrimeField + TensorType + PartialOrd>(
             .map(|x| Value::known(input.get_felt_evals().unwrap().get(&[*x as usize])))
             .collect::<Tensor<_>>()
     } else {
-        Tensor::new(Some(&[Value::<F>::unknown()]), &[index.len()])?
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); index.len()]),
+            &[index.len()],
+        )?
     };
 
     let assigned_output = region.assign(&config.output, &output.into())?;
@@ -477,14 +480,13 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
     dim: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (input, index) = (values[0].clone(), values[1].clone());
+    let (input, mut index) = (values[0].clone(), values[1].clone());
+    index.flatten();
 
     // Calculate the output tensor size
     let input_dims = input.dims();
     let mut output_size = input_dims.to_vec();
     output_size[dim] = index.dims()[0];
-
-    assert!(index.dims().len() == 1, "Index must be 1D for now");
 
     // Allocate memory for the output tensor
     let mut cartesian_coord = output_size
@@ -502,6 +504,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
         .into_iter()
         .map(|coord| {
             let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+
             slice.insert(dim, 0..input_dims[dim]);
 
             let local_dims = (0..slice.len())
