@@ -108,7 +108,7 @@ const ASSUMED_BLINDING_FACTORS: usize = 7;
 const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
 
 /// Result from a forward pass
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraphWitness {
     /// The inputs of the forward pass
     pub inputs: Vec<Vec<Fp>>,

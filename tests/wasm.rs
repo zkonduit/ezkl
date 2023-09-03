@@ -6,6 +6,7 @@ mod wasm32 {
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
     use ezkl::circuit::modules::Module;
+    use ezkl::graph::GraphWitness;
     use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
@@ -131,24 +132,11 @@ mod wasm32 {
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
         );
 
-        // prove
-        let proof = prove(
-            wasm_bindgen::Clamped(witness.to_vec()),
-            wasm_bindgen::Clamped(PK.to_vec()),
-            wasm_bindgen::Clamped(NETWORK.to_vec()),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-            wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-        );
-        assert!(proof.len() > 0);
+        let witness: GraphWitness = serde_json::from_slice(&witness[..]).unwrap();
 
-        let value = verify(
-            wasm_bindgen::Clamped(proof.to_vec()),
-            wasm_bindgen::Clamped(VK.to_vec()),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-            wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-        );
+        let reference_witness: GraphWitness = serde_json::from_slice(&WITNESS).unwrap();
         // should not fail
-        assert!(value);
+        assert_eq!(witness, reference_witness);
     }
 
     #[wasm_bindgen_test]
