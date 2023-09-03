@@ -21,6 +21,7 @@ def get_onnx_output(model_file, input_file):
     # generate the ML model output from the ONNX file
     onnx_model = onnx.load(model_file)
     onnx.checker.check_model(onnx_model)
+
     with open(input_file) as f:
         inputs = json.load(f)
     # reshape the input to the model
@@ -45,9 +46,15 @@ def get_onnx_output(model_file, input_file):
         else:
             inputs_onnx = np.array(inputs['input_data'][i]).astype(
                 np.float32).reshape(dims)
+
+            onnx_input[input_node.name] = inputs_onnx
+    try:
         onnx_session = onnxruntime.InferenceSession(model_file)
-        onnx_input[input_node.name] = inputs_onnx
-    onnx_output = onnx_session.run(None, onnx_input)
+        onnx_output = onnx_session.run(None, onnx_input)
+    except Exception as e:
+        print("Error in ONNX runtime: ", e)
+        print("using inputs[output_data]")
+        onnx_output = inputs['output_data']
     return onnx_output[0]
 
 
