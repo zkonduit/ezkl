@@ -46,8 +46,7 @@ def get_onnx_output(model_file, input_file):
         else:
             inputs_onnx = np.array(inputs['input_data'][i]).astype(
                 np.float32).reshape(dims)
-
-            onnx_input[input_node.name] = inputs_onnx
+        onnx_input[input_node.name] = inputs_onnx
     try:
         onnx_session = onnxruntime.InferenceSession(model_file)
         onnx_output = onnx_session.run(None, onnx_input)
