@@ -609,14 +609,15 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
         .expect("accum poly: failed to fetch last elem");
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
-        let safe_dot: ValTensor<F> = non_accum_sum(&input)
-            .map_err(|e| {
-                error!("{}", e);
-                halo2_proofs::plonk::Error::Synthesis
-            })?
-            .into();
+        let safe_sum = non_accum_sum(&input).map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
 
-        assert_eq!(last_elem.get_int_evals()?, safe_dot.get_int_evals()?,)
+        assert_eq!(
+            Into::<Tensor<i32>>::into(last_elem.get_inner()?),
+            Into::<Tensor<i32>>::into(safe_sum),
+        )
     }
     region.increment(assigned_len);
 
