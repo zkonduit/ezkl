@@ -16,6 +16,9 @@ pub enum HybridOp {
     ReduceMax {
         axes: Vec<usize>,
     },
+    ReduceArgMax {
+        dim: usize,
+    },
     MaxPool2d {
         padding: [(usize, usize); 2],
         stride: (usize, usize),
@@ -24,6 +27,9 @@ pub enum HybridOp {
     ReduceMin {
         axes: Vec<usize>,
     },
+    ReduceArgMin {
+        dim: usize,
+    },
     Softmax {
         scale: utils::F32,
     },
@@ -31,6 +37,10 @@ pub enum HybridOp {
     Greater,
     Less,
     Equals,
+    Gather {
+        dim: usize,
+        constant_idx: Option<Tensor<usize>>,
+    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
@@ -77,6 +87,36 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     - tensor::ops::sum(&tensor::ops::nonlinearities::leakyrelu(&inter_1, 0.0))?)?;
                 (res.clone(), vec![inter_1, inter_2])
             }
+            HybridOp::ReduceArgMax { dim } => {
+                let res = tensor::ops::argmax_axes(&x, *dim)?;
+                let mut inter_equals = vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                let inter =
+                    Op::f(&HybridOp::ReduceMax { axes: vec![*dim] }, inputs)?.intermediate_lookups;
+                inter_equals.extend(inter);
+
+                (res.clone(), inter_equals)
+            }
+            HybridOp::ReduceArgMin { dim } => {
+                let res = tensor::ops::argmin_axes(&x, *dim)?;
+                let mut inter_equals = vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                let inter =
+                    Op::f(&HybridOp::ReduceMin { axes: vec![*dim] }, inputs)?.intermediate_lookups;
+                inter_equals.extend(inter);
+
+                (res.clone(), inter_equals)
+            }
+            HybridOp::Gather { dim, constant_idx } => {
+                if let Some(idx) = constant_idx {
+                    let res = tensor::ops::gather(&x, &idx, *dim)?;
+                    (res.clone(), vec![])
+                } else {
+                    let y = inputs[1].clone().map(|x| felt_to_i128(x));
+                    let inter_equals: Vec<Tensor<i128>> =
+                        vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                    let res = tensor::ops::gather(&x, &y.map(|x| x as usize), *dim)?;
+                    (res.clone(), inter_equals)
+                }
+            }
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -117,13 +157,16 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         let name = match self {
             HybridOp::Abs => "ABS",
             HybridOp::ReduceMax { .. } => "REDUCEMAX",
+            HybridOp::ReduceArgMax { .. } => "REDUCEARGMAX",
             HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
             HybridOp::ReduceMin { .. } => "REDUCEMIN",
+            HybridOp::ReduceArgMin { .. } => "REDUCEARGMIN",
             HybridOp::Softmax { .. } => "SOFTMAX",
             HybridOp::RangeCheck(..) => "RANGECHECK",
             HybridOp::Greater { .. } => "GREATER",
             HybridOp::Less { .. } => "LESS",
             HybridOp::Equals => "EQUALS",
+            HybridOp::Gather { .. } => "GATHER",
         };
         name.into()
     }
@@ -136,6 +179,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
         Ok(Some(match self {
             HybridOp::Abs => layouts::abs(config, region, values[..].try_into()?)?,
+            HybridOp::Gather { dim, constant_idx } => {
+                if let Some(idx) = constant_idx {
+                    tensor::ops::gather(&values[0].get_inner_tensor()?, idx, *dim)?.into()
+                } else {
+                    layouts::gather(config, region, values[..].try_into()?, *dim)?
+                }
+            }
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -151,8 +201,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::ReduceMax { axes } => {
                 layouts::max_axes(config, region, values[..].try_into()?, axes)?
             }
+            HybridOp::ReduceArgMax { dim } => {
+                layouts::argmax_axes(config, region, values[..].try_into()?, *dim)?
+            }
             HybridOp::ReduceMin { axes } => {
                 layouts::min_axes(config, region, values[..].try_into()?, axes)?
+            }
+            HybridOp::ReduceArgMin { dim } => {
+                layouts::argmin_axes(config, region, values[..].try_into()?, *dim)?
             }
             HybridOp::Softmax { scale } => {
                 layouts::multi_dim_softmax(config, region, values[..].try_into()?, *scale)?
@@ -172,7 +228,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
         match self {
-            HybridOp::Greater { .. } | HybridOp::Less { .. } => 0,
+            HybridOp::Greater { .. }
+            | HybridOp::Less { .. }
+            | HybridOp::ReduceArgMax { .. }
+            | HybridOp::ReduceArgMin { .. } => 0,
             HybridOp::Softmax { .. } => 2 * in_scales[0],
             _ => in_scales[0],
         }
@@ -186,9 +245,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::Abs => Op::<F>::required_lookups(&LookupOp::ReLU),
             HybridOp::Softmax { scale } => {
                 vec![
-                    LookupOp::Exp {
-                        scale: *scale,
-                    },
+                    LookupOp::Exp { scale: *scale },
                     LookupOp::Recip {
                         scale: scale.0.powf(2.0).into(),
                     },
@@ -209,10 +266,21 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 }
                 lookups
             }
-            HybridOp::Greater { .. } | HybridOp::Less { .. } | HybridOp::Equals => {
+            HybridOp::Greater { .. }
+            | HybridOp::Less { .. }
+            | HybridOp::Equals
+            | HybridOp::Gather { .. } => {
                 vec![LookupOp::GreaterThan {
                     a: circuit::utils::F32(0.),
                 }]
+            }
+            HybridOp::ReduceArgMax { .. } | HybridOp::ReduceArgMin { .. } => {
+                vec![
+                    LookupOp::ReLU,
+                    LookupOp::GreaterThan {
+                        a: circuit::utils::F32(0.),
+                    },
+                ]
             }
         }
     }

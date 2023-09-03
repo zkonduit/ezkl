@@ -105,7 +105,6 @@ fn extract_tensor_value(
     };
 
     let mut const_value: Tensor<f32>;
-
     match dt {
         DatumType::F32 => {
             let vec = input.as_slice::<f32>()?.to_vec();
@@ -119,6 +118,12 @@ fn extract_tensor_value(
         DatumType::I64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i64>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::I8 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<i8>()?.to_vec();
             let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
@@ -309,24 +314,23 @@ pub fn new_op_from_onnx(
             let op = load_gather_op(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
 
-            let index: Tensor<usize> = match extract_const_raw_values(inputs[1].opkind()) {
-                Some(c) => c.map(|e| e as usize),
-                None => {
-                    warn!("assuming the gather window is over a context variable");
-                    // offset by 1
-                    let index: Tensor<usize> =
-                        (0..node_output_shapes(&node)?[0].as_ref().unwrap().to_vec()[axis + 1])
-                            .into();
-                    index
+            match inputs[1].opkind().get_mutable_constant() {
+                // downscale
+                Some(c) => {
+                    inputs[1].decrement_const();
+                    deleted_indices.push(inputs.len() - 1);
+                    SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
+                        dim: axis,
+                        constant_idx: Some(c.raw_values.map(|x| x as usize)),
+                    })
                 }
-            };
-
-            if let Some(node) = inputs.last_mut() {
-                node.decrement_const();
-                deleted_indices.push(inputs.len() - 1);
+                None => SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
+                    dim: axis,
+                    constant_idx: None,
+                }),
             }
 
-            SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
+            // Extract the max value
         }
         "MoveAxis" => {
             let op = load_axis_op(node.op(), idx, node.op().name().to_string())?;
@@ -361,8 +365,8 @@ pub fn new_op_from_onnx(
             let dt = op.0.datum_type();
             // Raw values are always f32
             let raw_value = extract_tensor_value(op.0)?;
-            // If bool then don't scale
-            let constant_scale = if dt == DatumType::Bool {
+            // If bool or a tensor dimension then don't scale
+            let constant_scale = if dt == DatumType::Bool || dt == DatumType::TDim {
                 0
             } else {
                 scales.params
@@ -375,6 +379,26 @@ pub fn new_op_from_onnx(
             c.num_uses += node.outputs.len();
             // Create a constant op
             SupportedOp::Constant(c)
+        }
+        "Reduce<ArgMax(false)>" => {
+            if inputs.len() != 1 {
+                return Err(Box::new(GraphError::InvalidDims(idx, "argmax".to_string())));
+            };
+            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            let axes: Vec<usize> = op.axes.into_iter().collect();
+            assert_eq!(axes.len(), 1, "only support argmax over one axis");
+
+            SupportedOp::Hybrid(HybridOp::ReduceArgMax { dim: axes[0] })
+        }
+        "Reduce<ArgMin(false)>" => {
+            if inputs.len() != 1 {
+                return Err(Box::new(GraphError::InvalidDims(idx, "argmin".to_string())));
+            };
+            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            let axes: Vec<usize> = op.axes.into_iter().collect();
+            assert_eq!(axes.len(), 1, "only support argmin over one axis");
+
+            SupportedOp::Hybrid(HybridOp::ReduceArgMin { dim: axes[0] })
         }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
@@ -608,7 +632,7 @@ pub fn new_op_from_onnx(
                 DatumType::Bool => SupportedOp::Nonlinear(LookupOp::Div {
                     denom: crate::circuit::utils::F32(scale_to_multiplier(input_scales[0]) as f32),
                 }),
-                DatumType::TDim | DatumType::String | DatumType::Blob => unimplemented!(),
+                DatumType::String | DatumType::Blob => unimplemented!(),
                 _ => SupportedOp::Linear(PolyOp::Identity),
             }
         }

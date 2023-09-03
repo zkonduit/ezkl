@@ -45,10 +45,6 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         source: usize,
         destination: usize,
     },
-    Gather {
-        dim: usize,
-        index: Tensor<usize>,
-    },
     Flatten(Vec<usize>),
     Pad([(usize, usize); 2]),
     Sum {
@@ -111,7 +107,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Conv { .. } => "CONV".into(),
             PolyOp::DeConv { .. } => "DECONV".into(),
             PolyOp::SumPool { .. } => "SUMPOOL".into(),
-            PolyOp::Gather { .. } => "GATHER".into(),
             PolyOp::Concat { .. } => "CONCAT".into(),
             PolyOp::Slice { .. } => "SLICE".into(),
             PolyOp::Neg => "NEG".into(),
@@ -138,7 +133,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Resize { scale_factor } => tensor::ops::resize(&inputs[0], scale_factor),
             PolyOp::Iff => tensor::ops::iff(&inputs[0], &inputs[1], &inputs[2]),
             PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
-            PolyOp::Gather { dim, index } => tensor::ops::gather(&inputs[0], *dim, index),
             PolyOp::Identity => Ok(inputs[0].clone()),
             PolyOp::Reshape(new_dims) => {
                 let mut t = inputs[0].clone();
@@ -268,9 +262,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Neg => layouts::neg(config, region, values[..].try_into()?)?,
             PolyOp::Iff => layouts::iff(config, region, values[..].try_into()?)?,
             PolyOp::Einsum { equation } => layouts::einsum(config, region, &mut values, equation)?,
-            PolyOp::Gather { dim, index } => {
-                tensor::ops::gather(&values[0].get_inner_tensor()?, *dim, index)?.into()
-            }
             PolyOp::Sum { axes } => {
                 layouts::sum_axes(config, region, values[..].try_into()?, axes)?
             }
@@ -368,7 +359,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 }
                 scale
             }
-            PolyOp::Gather { .. } => in_scales[0],
             PolyOp::Prod { len_prod, .. } => in_scales[0] * (*len_prod as u32),
             PolyOp::Sum { .. } => in_scales[0],
             PolyOp::Conv { kernel, bias, .. } => {
