@@ -314,21 +314,26 @@ pub fn new_op_from_onnx(
             let op = load_gather_op(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
 
+            let mut op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
+                dim: axis,
+                constant_idx: None,
+            });
+
+            // if param_visibility.is_public() {
             match inputs[1].opkind().get_mutable_constant() {
                 // downscale
                 Some(c) => {
                     inputs[1].decrement_const();
                     deleted_indices.push(inputs.len() - 1);
-                    SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
+                    op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
                         dim: axis,
                         constant_idx: Some(c.raw_values.map(|x| x as usize)),
                     })
                 }
-                None => SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
-                    dim: axis,
-                    constant_idx: None,
-                }),
+                _ => {}
             }
+            // }
+            op
 
             // Extract the max value
         }
