@@ -159,7 +159,7 @@ impl ElGamalChip {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 /// The variables used in the ElGamal circuit.
 pub struct ElGamalVariables {
     /// The randomness used in the encryption.

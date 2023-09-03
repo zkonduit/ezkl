@@ -128,7 +128,7 @@ impl From<&GraphWitness> for ModuleSettings {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 /// Result from ElGamal
 pub struct ElGamalResult {
     /// ElGamal variables
@@ -140,7 +140,7 @@ pub struct ElGamalResult {
 }
 
 /// Result from a forward pass
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ModuleForwardResult {
     /// The inputs of the forward pass for poseidon
     pub poseidon_hash: Option<Vec<Fp>>,
