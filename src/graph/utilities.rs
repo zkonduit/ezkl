@@ -1037,9 +1037,19 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     scale: u32,
     visibility: Visibility,
 ) -> Result<Tensor<F>, Box<dyn std::error::Error>> {
-    let mut value: Tensor<F> = const_value.map(|x| {
-        crate::fieldutils::i128_to_felt::<F>(quantize_float(&x.into(), 0.0, scale).unwrap())
-    });
+    let value: Result<Vec<F>, Box<dyn std::error::Error>> = const_value
+        .iter()
+        .map(|x| {
+            Ok(crate::fieldutils::i128_to_felt::<F>(quantize_float(
+                &(*x).into(),
+                0.0,
+                scale,
+            )?))
+        })
+        .collect();
+
+    let mut value: Tensor<F> = value?.into_iter().into();
+    value.reshape(&const_value.dims());
     value.set_scale(scale);
     value.set_visibility(visibility);
     Ok(value)
