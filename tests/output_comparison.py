@@ -23,7 +23,6 @@ def get_onnx_output(model_file, input_file):
     onnx.checker.check_model(onnx_model)
     with open(input_file) as f:
         inputs = json.load(f)
-
     # reshape the input to the model
     num_inputs = len(inputs['input_data'])
 
