@@ -407,7 +407,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
-fn reduce<F: PrimeField + TensorType + PartialOrd>(
+fn select<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -416,6 +416,8 @@ fn reduce<F: PrimeField + TensorType + PartialOrd>(
 
     // assert input is flat
     assert_eq!(input.dims().len(), 1);
+    // assert we have a single index
+    assert_eq!(index.dims().iter().product::<usize>(), 1);
 
     let is_assigned = !input.any_unknowns() && !index.any_unknowns();
 
@@ -440,35 +442,27 @@ fn reduce<F: PrimeField + TensorType + PartialOrd>(
     let indices = region.assign(&config.inputs[1], &indices.into())?;
     region.increment(indices.len());
 
-    let mask: ValTensor<F> = Tensor::from(vec![ValType::Constant(F::ZERO); 1].into_iter()).into();
+    let local_mask = equals(config, region, &[index, indices.clone()]).unwrap();
+    let prod = pairwise(
+        config,
+        region,
+        &[values[0].clone(), local_mask],
+        BaseOp::Mult,
+    )
+    .unwrap();
 
-    let addition_of_indices = index.get_inner_tensor()?.iter().fold(mask, |acc, x| {
-        let local_index: ValTensor<F> = Tensor::from(vec![x.clone()].into_iter()).into();
-        let local_mask = equals(config, region, &[local_index, indices.clone()]).unwrap();
-        let prod = pairwise(
-            config,
-            region,
-            &[values[0].clone(), local_mask],
-            BaseOp::Mult,
-        )
-        .unwrap();
-        let sum_prod = sum(config, region, &[prod]).unwrap();
-        pairwise(config, region, &[acc, sum_prod], BaseOp::Add).unwrap()
-    });
-
-    let sum_prod = sum(config, region, &[addition_of_indices])?;
+    let sum_prod = sum(config, region, &[prod])?;
 
     let sum_claimed_output = sum(config, region, &[assigned_output.clone()])?;
 
-    let diff = pairwise(config, region, &[sum_claimed_output, sum_prod], BaseOp::Sub)?;
-
-    region.assign(&config.inputs[1], &diff)?;
+    region.assign(&config.inputs[1], &sum_prod)?;
+    region.assign(&config.output, &sum_claimed_output)?;
 
     let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::IsZero, x));
+    let selector = config.selectors.get(&(BaseOp::Identity, x));
     region.enable(selector, y)?;
 
-    region.increment(diff.len());
+    region.increment(sum_prod.len());
 
     Ok(assigned_output)
 }
@@ -480,8 +474,16 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
     dim: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (input, mut index) = (values[0].clone(), values[1].clone());
+    let (mut input, mut index) = (values[0].clone(), values[1].clone());
     index.flatten();
+
+    if !input.all_prev_assigned() {
+        input = region.assign(&config.inputs[0], &input)?;
+    }
+    if !index.all_prev_assigned() {
+        index = region.assign(&config.inputs[1], &index)?;
+    }
+    region.increment(std::cmp::max(input.len(), index.len()));
 
     // Calculate the output tensor size
     let input_dims = input.dims();
@@ -489,51 +491,33 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     output_size[dim] = index.dims()[0];
 
     // Allocate memory for the output tensor
-    let mut cartesian_coord = output_size
+    let cartesian_coord = output_size
         .iter()
-        .enumerate()
-        .filter_map(|(i, x)| if i == dim { None } else { Some(0..*x) })
+        .map(|x| 0..*x)
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    if cartesian_coord.is_empty() {
-        cartesian_coord.push(vec![]);
-    };
-
-    let res: Result<Vec<Tensor<ValType<F>>>, Box<dyn Error>> = cartesian_coord
-        .into_iter()
+    let output: Result<Vec<ValType<F>>, Box<dyn Error>> = cartesian_coord
+        .iter()
         .map(|coord| {
+            let index_val = index.get_slice(&[coord[dim]..coord[dim] + 1])?;
+
             let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
-
-            slice.insert(dim, 0..input_dims[dim]);
-
-            let local_dims = (0..slice.len())
-                .map(|i| {
-                    if i == dim {
-                        index.dims()[0]
-                    } else {
-                        slice[i].end - slice[i].start
-                    }
-                })
-                .collect_vec();
+            slice[dim] = 0..input_dims[dim];
 
             let mut sliced_input = input.get_slice(&slice)?;
             sliced_input.flatten();
 
-            let mut res =
-                reduce(config, region, &[sliced_input, index.clone()])?.get_inner_tensor()?;
+            let res =
+                select(config, region, &[sliced_input, index_val.clone()])?.get_inner_tensor()?;
 
-            res.reshape(&local_dims);
-
-            Ok(res)
+            Ok(res[0].clone())
         })
         .collect();
 
-    let res = res?;
+    let output = output?;
 
-    let res = Tensor::new(Some(&res), &[res.len()])?;
-    let mut output: ValTensor<F> = res.combine()?.into();
-
+    let mut output: ValTensor<F> = Tensor::new(Some(&output), &[output.len()])?.into();
     // Reshape the output tensor
     output.reshape(&output_size)?;
 
@@ -2244,19 +2228,21 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let w = region.assign(&config.lookup_input, x)?;
 
-    // extract integer_valuations
-    let output: Tensor<Value<F>> = w
-        .get_inner()
-        .map_err(|e| {
-            error!("{}", e);
-            halo2_proofs::plonk::Error::Synthesis
-        })?
-        .map(|elem| {
-            elem.map(|elem| {
-                let elem = Tensor::from([elem].into_iter());
-                Op::<F>::f(nl, &[elem]).unwrap().output[0]
+    let output: Tensor<Value<F>> = if !w.any_unknowns() {
+        w.get_inner()
+            .map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?
+            .map(|elem| {
+                elem.map(|elem| {
+                    let elem = Tensor::from([elem].into_iter());
+                    Op::<F>::f(nl, &[elem]).unwrap().output[0]
+                })
             })
-        });
+    } else {
+        Tensor::new(Some(&vec![Value::<F>::unknown(); w.len()]), &w.dims())?
+    };
 
     let mut output = region.assign(&config.lookup_output, &output.into())?;
 
@@ -2367,15 +2353,15 @@ pub fn argmax<F: PrimeField + TensorType + PartialOrd>(
     let prod = pairwise(config, region, &[values[0].clone(), mask], BaseOp::Mult)?;
     let sum_prod = sum(config, region, &[prod])?;
     let max_val = max(config, region, &[values[0].clone()])?;
-    let diff = pairwise(config, region, &[sum_prod, max_val], BaseOp::Sub)?;
 
-    region.assign(&config.inputs[1], &diff)?;
+    region.assign(&config.inputs[1], &sum_prod)?;
+    region.assign(&config.output, &max_val)?;
 
     let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::IsZero, x));
+    let selector = config.selectors.get(&(BaseOp::Identity, x));
     region.enable(selector, y)?;
 
-    region.increment(diff.len());
+    region.increment(max_val.len());
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
@@ -2437,16 +2423,16 @@ pub fn argmin<F: PrimeField + TensorType + PartialOrd>(
 
     let prod = pairwise(config, region, &[values[0].clone(), mask], BaseOp::Mult)?;
     let sum_prod = sum(config, region, &[prod])?;
-    let max_val = min(config, region, &[values[0].clone()])?;
-    let diff = pairwise(config, region, &[sum_prod, max_val], BaseOp::Sub)?;
+    let min_val = min(config, region, &[values[0].clone()])?;
 
-    region.assign(&config.inputs[1], &diff)?;
+    region.assign(&config.inputs[1], &sum_prod)?;
+    region.assign(&config.output, &min_val)?;
 
     let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::IsZero, x));
+    let selector = config.selectors.get(&(BaseOp::Identity, x));
     region.enable(selector, y)?;
 
-    region.increment(diff.len());
+    region.increment(min_val.len());
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
