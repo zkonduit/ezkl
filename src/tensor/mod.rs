@@ -46,7 +46,7 @@ pub enum TensorError {
     #[error("wrong method called")]
     WrongMethod,
     /// Significant bit truncation when instantiating
-    #[error("Significant bit truncation when instantiating")]
+    #[error("Significant bit truncation when instantiating, try lowering the scale")]
     SigBitTruncationError,
 }
 
