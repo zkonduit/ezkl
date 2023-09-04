@@ -608,23 +608,28 @@ pub(crate) async fn calibrate(
 
                 let original_settings = settings.clone();
 
-                let mut circuit = GraphCircuit::from_run_args(&local_run_args, &model_path)
-                    .map_err(|_| "failed to create circuit from run args")
-                    .unwrap();
+                let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
+                    Ok(c) => c,
+                    Err(_) => {
+                        return tokio::task::spawn(async move {
+                            Err(format!("failed to create circuit from run args"))
+                                as Result<GraphSettings, String>
+                        })
+                    }
+                };
 
                 tokio::task::spawn(async move {
                     let data = circuit
                         .load_graph_input(&chunk)
                         .await
-                        .map_err(|_| "failed to load circuit inputs")
-                        .unwrap();
+                        .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                     loop {
                         // ensures we have converged
                         let params_before = circuit.settings.clone();
                         circuit
                             .calibrate(&data)
-                            .map_err(|_| "failed to calibrate")?;
+                            .map_err(|e| format!("failed to calibrate: {}", e))?;
                         let params_after = circuit.settings.clone();
                         if params_before == params_after {
                             break;
@@ -649,10 +654,10 @@ pub(crate) async fn calibrate(
                         ..original_settings.clone()
                     };
 
-                    Ok(found_settings) as Result<GraphSettings, &str>
+                    Ok(found_settings) as Result<GraphSettings, String>
                 })
             })
-            .collect::<Vec<tokio::task::JoinHandle<std::result::Result<GraphSettings, &str>>>>();
+            .collect::<Vec<tokio::task::JoinHandle<std::result::Result<GraphSettings, String>>>>();
 
         let mut res: Vec<GraphSettings> = vec![];
         for task in tasks {
