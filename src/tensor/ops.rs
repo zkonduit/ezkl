@@ -1156,7 +1156,8 @@ pub fn gather<T: TensorType>(
     let mut output_size = input.dims().to_vec();
     output_size[dim] = index.dims()[0];
 
-    assert!(index.dims().len() == 1, "Index must be 1D for now");
+    let mut index = index.clone();
+    index.flatten();
 
     // Allocate memory for the output tensor
     let mut output = Tensor::new(None, &output_size)?;

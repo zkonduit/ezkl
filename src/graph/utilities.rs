@@ -333,6 +333,15 @@ pub fn new_op_from_onnx(
                 _ => {}
             }
             // }
+
+            if inputs[1].opkind().is_input() {
+                inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
+                    scale: 0,
+                    datum_type: InputType::TDim,
+                }));
+                inputs[1].bump_scale(0);
+            }
+
             op
 
             // Extract the max value
@@ -621,6 +630,7 @@ pub fn new_op_from_onnx(
         "Source" => {
             let (scale, datum_type) = match node.outputs[0].fact.datum_type {
                 DatumType::Bool => (0, InputType::Bool),
+                DatumType::TDim => (0, InputType::TDim),
                 _ => (scales.input, InputType::Num),
             };
             SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })

@@ -71,6 +71,7 @@ mod py_tests {
                     "tf2onnx==1.14.0",
                     "pytorch-lightning==2.0.6",
                     "sk2torch==1.2.0",
+                    "scikit-learn==1.1.1",
                 ])
                 .status()
                 .expect("failed to execute process");
