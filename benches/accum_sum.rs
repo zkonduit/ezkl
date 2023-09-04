@@ -41,7 +41,7 @@ impl Circuit<Fr> for MyCircuit {
         let b = VarTensor::new_advice(cs, K, len);
         let output = VarTensor::new_advice(cs, K, len);
 
-        Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE)
+        Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE, 0)
     }
 
     fn synthesize(

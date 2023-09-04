@@ -144,7 +144,7 @@ where
         println!("INPUT COL {:#?}", input);
 
         let mut layer_config =
-            PolyConfig::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE);
+            PolyConfig::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE, 0);
 
         layer_config
             .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU)

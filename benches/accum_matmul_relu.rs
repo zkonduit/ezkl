@@ -49,7 +49,7 @@ impl Circuit<Fr> for MyCircuit {
         let output = VarTensor::new_advice(cs, K, len);
 
         let mut base_config =
-            BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::UNSAFE);
+            BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::UNSAFE, BITS);
 
         // sets up a new relu table
         base_config

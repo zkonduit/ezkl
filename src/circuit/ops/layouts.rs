@@ -1966,11 +1966,11 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     // time the entire operation
     let timer = instant::Instant::now();
 
-    let x = &values[0];
+    let x = values[0].clone();
 
     if region.is_dummy() {
-        region.increment(x.len());
-        region.increment_constants(x.num_constants());
+        region.increment(2 * x.len() + 1);
+        region.increment_constants(x.num_constants() + 1);
         let dims = x.dims();
         let vals = vec![ValType::Value(Value::<F>::unknown()); x.len()];
         let mut x = Tensor::from(vals.into_iter());
@@ -1986,10 +1986,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         return Ok(x.into());
     }
 
-    let w = region.assign(&config.lookup_input, x)?;
-
-    // extract integer_valuations
-    let output: Tensor<Value<F>> = w
+    let output: ValTensor<F> = x
         .get_inner()
         .map_err(|e| {
             error!("{}", e);
@@ -2000,8 +1997,24 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
                 let elem = Tensor::from([elem].into_iter());
                 Op::<F>::f(nl, &[elem]).unwrap().output[0]
             })
-        });
+        })
+        .into();
 
+    let (smallest, _) = nl.bit_range(config.bits, config.num_blinding_factors);
+
+    let bit_offset =
+        Tensor::from(vec![ValType::Constant(F::from(smallest.abs() as u64))].into_iter());
+    let assigned_bit_offset = region.assign(&config.inputs[0], &bit_offset.into())?;
+
+    region.increment(assigned_bit_offset.len());
+    let w = pairwise(
+        config,
+        region,
+        &[x.clone(), assigned_bit_offset],
+        BaseOp::Add,
+    )?;
+
+    let w = region.assign(&config.lookup_input, &w)?;
     let mut output = region.assign(&config.lookup_output, &output.into())?;
 
     assert_eq!(w.len(), output.len());

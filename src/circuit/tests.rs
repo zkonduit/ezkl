@@ -44,7 +44,7 @@ mod matmul {
             let a = VarTensor::new_advice(cs, K, LEN * LEN);
             let b = VarTensor::new_advice(cs, K, LEN * LEN);
             let output = VarTensor::new_advice(cs, K, LEN * LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -120,7 +120,7 @@ mod matmul_col_overflow {
             let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
             let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
             let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -197,7 +197,7 @@ mod dot {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -270,7 +270,7 @@ mod dot_col_overflow {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -343,7 +343,7 @@ mod sum {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -412,7 +412,7 @@ mod sum_col_overflow {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -482,7 +482,7 @@ mod composition {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -574,7 +574,7 @@ mod conv {
             let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -699,7 +699,7 @@ mod sumpool {
             let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -778,7 +778,7 @@ mod add_w_shape_casting {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -845,7 +845,7 @@ mod add {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -912,7 +912,7 @@ mod add_with_overflow {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -996,7 +996,7 @@ mod add_with_overflow_and_poseidon {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            let base = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE);
+            let base = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
 
             let poseidon = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::configure(cs);
 
@@ -1117,7 +1117,7 @@ mod sub {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -1184,7 +1184,7 @@ mod mult {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -1251,7 +1251,7 @@ mod pow {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -1316,7 +1316,7 @@ mod pack {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
 
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0)
         }
 
         fn synthesize(
@@ -1393,7 +1393,7 @@ mod matmul_relu {
             let output = VarTensor::new_advice(cs, K, LEN);
 
             let mut base_config =
-                BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE);
+                BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
             // sets up a new relu table
             base_config
                 .configure_lookup(cs, &b, &output, 16, &LookupOp::ReLU)
@@ -1489,7 +1489,8 @@ mod rangecheckpercent {
             let a = VarTensor::new_advice(cs, K, LEN);
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
-            let mut config = Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE);
+            let mut config =
+                Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
             // set up a new GreaterThan and Recip tables
             let nl = &LookupOp::GreaterThan {
                 a: circuit::utils::F32((RANGE * scale.0) / 100.0),
@@ -1684,7 +1685,7 @@ mod softmax {
             let a = VarTensor::new_advice(cs, K, LEN);
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
-            let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE);
+            let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
             let advices = (0..2)
                 .map(|_| VarTensor::new_advice(cs, K, LEN))
                 .collect::<Vec<_>>();

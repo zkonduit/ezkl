@@ -50,8 +50,13 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
         let output = VarTensor::new_advice(cs, K, LEN);
         // tells the config layer to add an affine op to the circuit gate
 
-        let mut layer_config =
-            PolyConfig::<F>::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE);
+        let mut layer_config = PolyConfig::<F>::configure(
+            cs,
+            &[input.clone(), params],
+            &output,
+            CheckMode::SAFE,
+            BITS,
+        );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         layer_config

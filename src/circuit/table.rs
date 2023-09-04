@@ -70,12 +70,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let inputs = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
         let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
 
+        let shifted_inputs: Tensor<F> =
+            Tensor::from(0..=(smallest.abs() + largest)).map(|x| i128_to_felt(x));
+
+        assert_eq!(evals.output.len(), shifted_inputs.len());
+
         self.is_assigned = true;
         layouter
             .assign_table(
                 || "nl table",
                 |mut table| {
-                    let _ = inputs
+                    let _ = shifted_inputs
                         .iter()
                         .enumerate()
                         .map(|(row_offset, input)| {

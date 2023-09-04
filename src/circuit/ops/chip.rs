@@ -170,12 +170,17 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     pub tables: BTreeMap<LookupOp, Table<F>>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
+    /// number of bits used in lookups
+    pub bits: usize,
+    /// num blinding factors
+    pub num_blinding_factors: usize,
+    /// Marker for the field type.
     _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// Returns a new [BaseConfig] with no inputs, no selectors, and no tables.
-    pub fn dummy(col_size: usize) -> Self {
+    pub fn dummy(col_size: usize, bits: usize) -> Self {
         Self {
             inputs: vec![VarTensor::dummy(col_size), VarTensor::dummy(col_size)],
             lookup_input: VarTensor::dummy(col_size),
@@ -185,6 +190,8 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             lookup_selectors: BTreeMap::new(),
             tables: BTreeMap::new(),
             check_mode: CheckMode::SAFE,
+            bits,
+            num_blinding_factors: 0,
             _marker: PhantomData,
         }
     }
@@ -200,6 +207,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         inputs: &[VarTensor; 2],
         output: &VarTensor,
         check_mode: CheckMode,
+        bits: usize,
     ) -> Self {
         // setup a selector per base op
         let mut selectors = BTreeMap::new();
@@ -290,6 +298,8 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             tables: BTreeMap::new(),
             output: output.clone(),
             check_mode,
+            bits,
+            num_blinding_factors: meta.blinding_factors(),
             _marker: PhantomData,
         }
     }
@@ -323,13 +333,15 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             return Ok(());
         };
 
+        let blinding_factors = cs.blinding_factors();
+
         for x in 0..input.num_cols() {
             let qlookup = cs.complex_selector();
             selectors.insert((nl.clone(), x), qlookup);
             let _ = cs.lookup(Op::<F>::as_string(nl), |cs| {
                 let qlookup = cs.query_selector(qlookup);
                 let not_qlookup = Expression::Constant(<F as Field>::ONE) - qlookup.clone();
-                let (default_x, default_y): (F, F) = nl.default_pair();
+                let (default_x, default_y): (F, F) = nl.default_pair(bits, blinding_factors);
                 vec![
                     (
                         match &input {

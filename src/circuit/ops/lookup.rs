@@ -98,10 +98,15 @@ pub enum LookupOp {
 
 impl LookupOp {
     /// a value which is always in the table
-    pub fn default_pair<F: PrimeField + TensorType + PartialOrd>(&self) -> (F, F) {
+    pub fn default_pair<F: PrimeField + TensorType + PartialOrd>(
+        &self,
+        allocated_bits: usize,
+        num_blinding_factors: usize,
+    ) -> (F, F) {
         let x = vec![i128_to_felt(0_i128)].into_iter().into();
+        let (smallest, _largest) = self.bit_range(allocated_bits, num_blinding_factors);
         (
-            <F as TensorType>::zero().unwrap(),
+            <F as TensorType>::zero().unwrap() + i128_to_felt::<F>(smallest.abs()),
             Op::<F>::f(self, &[x]).unwrap().output[0],
         )
     }

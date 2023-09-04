@@ -984,6 +984,7 @@ impl Model {
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
             check_mode,
+            num_bits,
         );
         // set scale for HybridOp::RangeCheck and call self.conf_lookup on that op for percentage tolerance case
         let input = &vars.advices[0];
@@ -1281,7 +1282,7 @@ impl Model {
             results.insert(*input_idx, vec![inputs[i].clone()]);
         }
 
-        let mut dummy_config = PolyConfig::dummy(run_args.logrows as usize);
+        let mut dummy_config = PolyConfig::dummy(run_args.logrows as usize, run_args.bits);
         let mut model_config = ModelConfig {
             base: dummy_config.clone(),
             vars: ModelVars::new_dummy(),
