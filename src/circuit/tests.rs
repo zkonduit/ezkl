@@ -1393,7 +1393,7 @@ mod matmul_relu {
             let output = VarTensor::new_advice(cs, K, LEN);
 
             let mut base_config =
-                BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
+                BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 16);
             // sets up a new relu table
             base_config
                 .configure_lookup(cs, &b, &output, 16, &LookupOp::ReLU)
@@ -1490,7 +1490,7 @@ mod rangecheckpercent {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
             let mut config =
-                Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 0);
+                Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE, 16);
             // set up a new GreaterThan and Recip tables
             let nl = &LookupOp::GreaterThan {
                 a: circuit::utils::F32((RANGE * scale.0) / 100.0),
@@ -1603,18 +1603,17 @@ mod relu {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let advices = (0..2)
-                .map(|_| VarTensor::new_advice(cs, 4, 3))
-                .collect::<Vec<_>>();
-
             let nl = LookupOp::ReLU;
 
-            let mut config = BaseConfig::default();
+            let a = VarTensor::new_advice(cs, 6, 3);
+            let b = VarTensor::new_advice(cs, 6, 3);
+            let output = VarTensor::new_advice(cs, 6, 3);
 
-            config
-                .configure_lookup(cs, &advices[0], &advices[1], 4, &nl)
-                .unwrap();
-            config
+            let mut base =
+                BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE, 4);
+
+            base.configure_lookup(cs, &a, &b, 4, &nl).unwrap();
+            base
         }
 
         fn synthesize(
@@ -1648,7 +1647,7 @@ mod relu {
             input: ValTensor::from(input),
         };
 
-        let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
+        let prover = MockProver::run(6_u32, &circuit, vec![]).unwrap();
         prover.assert_satisfied_par();
     }
 }
@@ -1685,7 +1684,7 @@ mod softmax {
             let a = VarTensor::new_advice(cs, K, LEN);
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
-            let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 0);
+            let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE, 16);
             let advices = (0..2)
                 .map(|_| VarTensor::new_advice(cs, K, LEN))
                 .collect::<Vec<_>>();
