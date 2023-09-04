@@ -263,6 +263,7 @@ impl SupportedOp {
             _ => None,
         }
     }
+
     ///
     pub fn get_mutable_constant(&mut self) -> Option<&mut Constant<Fp>> {
         match self {

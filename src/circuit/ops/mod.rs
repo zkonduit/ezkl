@@ -87,6 +87,8 @@ pub enum InputType {
     Bool,
     ///
     Num,
+    ///
+    TDim,
 }
 
 ///
@@ -127,7 +129,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
         let value = values[0].clone();
         if !value.all_prev_assigned() {
             match self.datum_type {
-                InputType::Num => Ok(Some(super::layouts::identity(
+                InputType::Num | InputType::TDim => Ok(Some(super::layouts::identity(
                     config,
                     region,
                     values[..].try_into()?,
