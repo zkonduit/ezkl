@@ -52,6 +52,11 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
         vec![]
     }
 
+    /// Do any of the inputs to this op require specific input scales?
+    fn requires_specific_input_scales(&self) -> Vec<(usize, u32)> {
+        vec![]
+    }
+
     /// Returns the lookups required by the operation.
     fn required_lookups(&self) -> Vec<LookupOp> {
         vec![]

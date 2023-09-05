@@ -307,7 +307,8 @@ impl NodeType {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 /// A set of EZKL nodes that represent a computational graph.
 pub struct ParsedNodes {
-    nodes: BTreeMap<usize, NodeType>,
+    /// The nodes in the graph.
+    pub nodes: BTreeMap<usize, NodeType>,
     inputs: Vec<usize>,
     outputs: Vec<Outlet>,
 }
@@ -925,28 +926,8 @@ impl Model {
                 }
             }
         }
-        Self::clean_useless_consts(&mut nodes);
 
         Ok(nodes)
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    /// Removes all nodes that are consts with 0 uses
-    fn clean_useless_consts(nodes: &mut BTreeMap<usize, NodeType>) {
-        // remove all nodes that are consts with 0 uses now
-        nodes.retain(|_, n| match n {
-            NodeType::Node(n) => match &mut n.opkind {
-                SupportedOp::Constant(c) => {
-                    c.empty_raw_value();
-                    c.num_uses > 0
-                }
-                _ => true,
-            },
-            NodeType::SubGraph { model, .. } => {
-                Self::clean_useless_consts(&mut model.graph.nodes);
-                true
-            }
-        });
     }
 
     /// Creates a `Model` from parsed run_args

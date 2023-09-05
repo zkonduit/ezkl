@@ -543,6 +543,90 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     Ok(output.into())
 }
 
+/// Gather accumulated layout
+pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+    dim: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let (mut input, mut index) = (values[0].clone(), values[1].clone());
+
+    assert_eq!(input.dims().len(), index.dims().len());
+
+    if !input.all_prev_assigned() {
+        input = region.assign(&config.inputs[0], &input)?;
+    }
+    if !index.all_prev_assigned() {
+        index = region.assign(&config.inputs[1], &index)?;
+    }
+
+    region.increment(std::cmp::max(input.len(), index.len()));
+
+    // Calculate the output tensor size
+    let input_dim = input.dims()[dim];
+    let output_size = index.dims().to_vec();
+
+    // Allocate memory for the output tensor
+    let cartesian_coord = output_size
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let output: Result<Vec<ValType<F>>, Box<dyn Error>> = cartesian_coord
+        .iter()
+        .map(|coord| {
+            let index_val = index.get_inner_tensor()?.get(coord);
+
+            let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            slice[dim] = 0..input_dim;
+
+            let mut sliced_input = input.get_slice(&slice)?;
+            sliced_input.flatten();
+
+            let index_valtensor: ValTensor<F> =
+                Tensor::from([index_val.clone()].into_iter()).into();
+
+            let res =
+                select(config, region, &[sliced_input, index_valtensor])?.get_inner_tensor()?;
+
+            Ok(res[0].clone())
+        })
+        .collect();
+
+    let output = output?;
+
+    let mut output: ValTensor<F> = Tensor::new(Some(&output), &[output.len()])?.into();
+    // Reshape the output tensor
+    output.reshape(&output_size)?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be unknown vals so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let mut is_assigned = !output.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let mut x = values[0].get_int_evals()?;
+            x.reshape(&input.dims());
+            let mut index = values[1].get_int_evals()?;
+            index.reshape(&[index.len()]);
+
+            let ref_gather: Tensor<i128> =
+                tensor::ops::gather(&x, &index.map(|x| x as usize), dim)?;
+
+            let mut output_evals = output.get_int_evals()?;
+            output_evals.reshape(output.dims());
+
+            assert_eq!(output_evals, ref_gather)
+        }
+    };
+
+    Ok(output.into())
+}
+
 /// Sum accumulated layout
 pub fn sum<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
