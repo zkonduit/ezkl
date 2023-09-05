@@ -64,8 +64,12 @@ def compare_outputs(zk_output, onnx_output):
 
     contains_sublist = any(isinstance(sub, list) for sub in zk_output)
 
-    if contains_sublist and len(onnx_output) == 1:
-        zk_output = zk_output[0]
+    if contains_sublist:
+        try:
+            if len(onnx_output) == 1:
+                zk_output = zk_output[0]
+        except Exception as e:
+            zk_output = zk_output[0]
 
     zip_object = zip(np.array(zk_output).flatten(),
                      np.array(onnx_output).flatten())
