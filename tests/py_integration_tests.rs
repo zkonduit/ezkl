@@ -139,7 +139,6 @@ mod py_tests {
 
 
             seq!(N in 0..=16 {
-
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
                 crate::py_tests::init_binary();
