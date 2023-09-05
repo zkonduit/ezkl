@@ -458,6 +458,10 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: Gradient boosted tress
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_15_expects
+      - name: Random Forest
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_14_expects
       - name: Decision Tree
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_13_expects
       - name: Set membership

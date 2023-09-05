@@ -434,8 +434,6 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
         )?
     };
 
-    let assigned_output = region.assign(&config.output, &output.into())?;
-
     // these will be assigned as constants
     let mut indices = Tensor::from((0..values[0].len() as u64).map(|x| F::from(x)));
     indices.set_visibility(crate::graph::Visibility::Public);
@@ -453,10 +451,8 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
 
     let sum_prod = sum(config, region, &[prod])?;
 
-    let sum_claimed_output = sum(config, region, &[assigned_output.clone()])?;
-
     region.assign(&config.inputs[1], &sum_prod)?;
-    region.assign(&config.output, &sum_claimed_output)?;
+    let assigned_output = region.assign(&config.output, &output.into())?;
 
     let (x, y) = config.output.cartesian_coord(region.offset());
     let selector = config.selectors.get(&(BaseOp::Identity, x));
