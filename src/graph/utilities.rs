@@ -149,6 +149,7 @@ fn extract_tensor_value(
     Ok(const_value)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn load_op<C: tract_onnx::prelude::Op + Clone>(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
