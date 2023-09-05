@@ -582,9 +582,6 @@ impl Node {
         // remove the inputs that are not used
         input_ids.retain(|(idx, _)| *idx != usize::MAX);
 
-        // remove all nodes that are consts with 0 uses now
-        clean_useless_consts(other_nodes);
-
         // rescale the inputs if necessary to get consistent fixed points
         let mut in_scales: Vec<u32> = input_ids
             .iter()
@@ -596,41 +593,45 @@ impl Node {
 
         let homogenous_inputs = opkind.requires_homogenous_input_scales();
         // autoamtically increases a constant's scale if it is only used once and
-        for input in homogenous_inputs {
-            if let Some(input_node) = other_nodes.get_mut(&inputs[input].idx()) {
-                let input_opkind = &mut input_node.opkind();
-                if let Some(constant) = input_opkind.get_mutable_constant() {
-                    rescale_const_with_single_use(constant, in_scales.clone(), param_visibility)?;
-                    input_node.replace_opkind(constant.clone_dyn().into());
-                    let out_scale = input_opkind.out_scale(vec![]);
-                    input_node.bump_scale(out_scale);
-                    in_scales[input] = out_scale;
-                }
+        for input in homogenous_inputs
+            .into_iter()
+            .filter(|i| !deleted_indices.contains(i))
+        {
+            let input_node = other_nodes.get_mut(&inputs[input].idx()).unwrap();
+            let input_opkind = &mut input_node.opkind();
+            if let Some(constant) = input_opkind.get_mutable_constant() {
+                rescale_const_with_single_use(constant, in_scales.clone(), param_visibility)?;
+                input_node.replace_opkind(constant.clone_dyn().into());
+                let out_scale = input_opkind.out_scale(vec![]);
+                input_node.bump_scale(out_scale);
+                in_scales[input] = out_scale;
             }
         }
 
         let inputs_at_specific_scales = opkind.requires_specific_input_scales();
-        // autoamtically increases a constant's scale if it is only used once and
-        for (input, scale) in inputs_at_specific_scales {
-            if let Some(input_node) = other_nodes.get_mut(&inputs[input].idx()) {
-                let input_opkind = &mut input_node.opkind();
-                if let Some(constant) = input_opkind.get_mutable_constant() {
-                    rescale_const_with_single_use(constant, in_scales.clone(), param_visibility)?;
-                    input_node.replace_opkind(constant.clone_dyn().into());
-                    let out_scale = input_opkind.out_scale(vec![]);
-                    input_node.bump_scale(out_scale);
-                    in_scales[input] = out_scale;
+        // rescale the inputs if necessary to get consistent fixed points
+        for (input, scale) in inputs_at_specific_scales
+            .into_iter()
+            .filter(|(i, _)| !deleted_indices.contains(i))
+        {
+            let input_node = other_nodes.get_mut(&inputs[input].idx()).unwrap();
+            let input_opkind = &mut input_node.opkind();
+            if let Some(constant) = input_opkind.get_mutable_constant() {
+                rescale_const_with_single_use(constant, in_scales.clone(), param_visibility)?;
+                input_node.replace_opkind(constant.clone_dyn().into());
+                let out_scale = input_opkind.out_scale(vec![]);
+                input_node.bump_scale(out_scale);
+                in_scales[input] = out_scale;
+            } else {
+                let scale_diff = in_scales[input] as i128 - scale as i128;
+                let rebased = if scale_diff > 0 {
+                    RebaseScale::rebase(input_opkind.clone(), scale, in_scales[input], 1)
                 } else {
-                    let scale_diff = in_scales[input] as i128 - scale as i128;
-                    let rebased = if scale_diff > 0 {
-                        RebaseScale::rebase(input_opkind.clone(), scale, in_scales[input], 1)
-                    } else {
-                        RebaseScale::rebase_up(input_opkind.clone(), scale, in_scales[input])
-                    };
-                    input_node.replace_opkind(rebased.into());
-                    input_node.bump_scale(scale);
-                    in_scales[input] = scale;
-                }
+                    RebaseScale::rebase_up(input_opkind.clone(), scale, in_scales[input])
+                };
+                input_node.replace_opkind(rebased.into());
+                input_node.bump_scale(scale);
+                in_scales[input] = scale;
             }
         }
 
@@ -661,25 +662,6 @@ impl Node {
             out_scale,
         })
     }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-/// Removes all nodes that are consts with 0 uses
-fn clean_useless_consts(nodes: &mut BTreeMap<usize, super::NodeType>) {
-    // remove all nodes that are consts with 0 uses now
-    nodes.retain(|_, n| match n {
-        super::NodeType::Node(n) => match &mut n.opkind {
-            SupportedOp::Constant(c) => {
-                c.empty_raw_value();
-                c.num_uses > 0
-            }
-            _ => true,
-        },
-        super::NodeType::SubGraph { model, .. } => {
-            clean_useless_consts(&mut model.graph.nodes);
-            true
-        }
-    });
 }
 
 #[cfg(not(target_arch = "wasm32"))]
