@@ -582,7 +582,7 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
 
     let is_assigned = !input.any_unknowns() && !index.any_unknowns();
 
-    let output = if is_assigned {
+    let output: ValTensor<F> = if is_assigned {
         index
             .get_int_evals()?
             .iter()
@@ -593,7 +593,8 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
             Some(&vec![Value::<F>::unknown(); index.len()]),
             &[index.len()],
         )?
-    };
+    }
+    .into();
 
     // these will be assigned as constants
     let mut indices = Tensor::from((0..values[0].len() as u64).map(|x| F::from(x)));
@@ -602,18 +603,13 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     region.increment(indices.len());
 
     let local_mask = equals(config, region, &[index, indices.clone()]).unwrap();
-    let prod = pairwise(
-        config,
-        region,
-        &[values[0].clone(), local_mask],
-        BaseOp::Mult,
-    )
-    .unwrap();
+
+    let prod = pairwise(config, region, &[input, local_mask], BaseOp::Mult).unwrap();
 
     let sum_prod = sum(config, region, &[prod])?;
 
     region.assign(&config.inputs[1], &sum_prod)?;
-    let assigned_output = region.assign(&config.output, &output.into())?;
+    let assigned_output = region.assign(&config.output, &output)?;
 
     let (x, y) = config.output.cartesian_coord(region.offset());
     let selector = config.selectors.get(&(BaseOp::Identity, x));
