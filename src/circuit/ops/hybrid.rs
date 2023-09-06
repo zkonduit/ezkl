@@ -45,6 +45,7 @@ pub enum HybridOp {
     TopK {
         dim: usize,
         k: usize,
+    },
     GatherElements {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
@@ -334,7 +335,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::Less { .. }
             | HybridOp::Equals
             | HybridOp::Gather { .. }
-            | HybridOp::TopK { .. } => {
+            | HybridOp::TopK { .. }
             | HybridOp::GatherElements { .. } => {
                 vec![LookupOp::GreaterThan {
                     a: circuit::utils::F32(0.),

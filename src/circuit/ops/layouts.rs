@@ -474,7 +474,6 @@ fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
         // now assert that the elem is in the original vector
         let is_present = equals(config, region, &[window_a, input.clone()])?;
         let sum_equals = sum(config, region, &[is_present])?;
-        println!("sum equals: {:?}", sum_equals.get_int_evals()?);
         let greater_than = nonlinearity(
             config,
             region,

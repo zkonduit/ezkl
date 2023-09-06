@@ -22,7 +22,7 @@ use std::sync::Arc;
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_core::ops::{
-    array::{Gather, Topk, GatherElements, Slice},
+    array::{Gather, GatherElements, Slice, Topk},
     change_axes::AxisOp,
     cnn::DeconvUnary,
     einsum::EinSum,
@@ -231,6 +231,7 @@ pub fn new_op_from_onnx(
             let k = op.k;
 
             SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK { dim: axis, k })
+        }
         "GatherElements" => {
             if inputs.len() != 2 {
                 return Err(Box::new(GraphError::InvalidDims(
