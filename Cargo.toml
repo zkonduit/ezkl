@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "ac/parallel-lookup-permute", default_features = false }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/parallel-lookup-permute", default_features = false, features = ["thread-safe-region"]}
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/parallel-lookup-permute", default_features = false }
 halo2curves = { version = "0.1.0" }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
