@@ -1043,12 +1043,18 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
     Ok(last_elem)
 }
 
-/// Sum accumulated layout
-pub fn prod_axes<F: PrimeField + TensorType + PartialOrd>(
+/// Axes wise op wrapper
+fn axes_wise_op<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
+    // generic layout op
+    op: impl Fn(
+        &BaseConfig<F>,
+        &mut RegionCtx<F>,
+        &[ValTensor<F>; 1],
+    ) -> Result<ValTensor<F>, Box<dyn Error>>,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // calculate value of output
 
@@ -1086,11 +1092,22 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd>(
         }
         res.set(
             coord,
-            prod(config, region, &[a.get_slice(&prod_dims)?])?.get_inner_tensor()?[0].clone(),
+            op(config, region, &[a.get_slice(&prod_dims)?])?.get_inner_tensor()?[0].clone(),
         );
     }
 
     Ok(res.into())
+}
+
+/// Sum accumulated layout
+pub fn prod_axes<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    axes: &[usize],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // calculate value of output
+    axes_wise_op(config, region, values, axes, prod)
 }
 
 /// Sum accumulated layout
@@ -1101,46 +1118,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
     axes: &[usize],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // calculate value of output
-
-    let a = &values[0];
-
-    if axes.is_empty() {
-        return Ok(a.clone());
-    }
-
-    let mut new_dims = vec![];
-    for i in 0..a.dims().len() {
-        if !axes.contains(&i) {
-            new_dims.push(a.dims()[i]);
-        } else {
-            new_dims.push(1);
-        }
-    }
-
-    let mut res = Tensor::new(None, &new_dims)?;
-
-    let cartesian_coord = new_dims
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    for coord in cartesian_coord.iter() {
-        let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
-            if axes.contains(&i) {
-                sum_dims.push(0..a.dims()[i]);
-            } else {
-                sum_dims.push(*c..*c + 1);
-            }
-        }
-        res.set(
-            coord,
-            sum(config, region, &[a.get_slice(&sum_dims)?])?.get_inner_tensor()?[0].clone(),
-        );
-    }
-
-    Ok(res.into())
+    axes_wise_op(config, region, values, axes, sum)
 }
 
 /// Argmin layout
@@ -1151,46 +1129,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd>(
     dim: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // calculate value of output
-
-    let a = &values[0];
-
-    let mut new_dims = vec![];
-    for i in 0..a.dims().len() {
-        if !(dim == i) {
-            new_dims.push(a.dims()[i]);
-        } else {
-            new_dims.push(1);
-        }
-    }
-
-    let mut res = Tensor::new(None, &new_dims)?;
-
-    let cartesian_coord = new_dims
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    for coord in cartesian_coord.iter() {
-        let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate().take(a.dims().len()) {
-            if dim == i {
-                sum_dims.push(0..a.dims()[i]);
-            } else {
-                sum_dims.push(*c..*c + 1);
-            }
-        }
-
-        let mut slice = a.get_slice(&sum_dims)?;
-        slice.flatten();
-
-        res.set(
-            coord,
-            argmax(config, region, &[slice])?.get_inner_tensor()?[0].clone(),
-        );
-    }
-
-    Ok(res.into())
+    axes_wise_op(config, region, values, &[dim], argmax)
 }
 
 /// Max accumulated layout
@@ -1202,45 +1141,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // calculate value of output
 
-    let a = &values[0];
-
-    if axes.is_empty() {
-        return Ok(a.clone());
-    }
-
-    let mut new_dims = vec![];
-    for i in 0..a.dims().len() {
-        if !axes.contains(&i) {
-            new_dims.push(a.dims()[i]);
-        } else {
-            new_dims.push(1);
-        }
-    }
-
-    let mut res = Tensor::new(None, &new_dims)?;
-
-    let cartesian_coord = new_dims
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    for coord in cartesian_coord.iter() {
-        let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
-            if axes.contains(&i) {
-                sum_dims.push(0..a.dims()[i]);
-            } else {
-                sum_dims.push(*c..*c + 1);
-            }
-        }
-        res.set(
-            coord,
-            max(config, region, &[a.get_slice(&sum_dims)?])?.get_inner_tensor()?[0].clone(),
-        );
-    }
-
-    Ok(res.into())
+    axes_wise_op(config, region, values, axes, max)
 }
 
 /// Argmin layout
@@ -1252,45 +1153,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // calculate value of output
 
-    let a = &values[0];
-
-    let mut new_dims = vec![];
-    for i in 0..a.dims().len() {
-        if !(dim == i) {
-            new_dims.push(a.dims()[i]);
-        } else {
-            new_dims.push(1);
-        }
-    }
-
-    let mut res = Tensor::new(None, &new_dims)?;
-
-    let cartesian_coord = new_dims
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    for coord in cartesian_coord.iter() {
-        let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate().take(a.dims().len()) {
-            if dim == i {
-                sum_dims.push(0..a.dims()[i]);
-            } else {
-                sum_dims.push(*c..*c + 1);
-            }
-        }
-
-        let mut slice = a.get_slice(&sum_dims)?;
-        slice.flatten();
-
-        res.set(
-            coord,
-            argmin(config, region, &[slice])?.get_inner_tensor()?[0].clone(),
-        );
-    }
-
-    Ok(res.into())
+    axes_wise_op(config, region, values, &[dim], argmin)
 }
 
 /// Min accumulated layout
@@ -1302,46 +1165,7 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // calculate value of output
 
-    let a = &values[0];
-
-    if axes.is_empty() {
-        return Ok(a.clone());
-    }
-
-    let mut new_dims = vec![];
-    for i in 0..a.dims().len() {
-        if !axes.contains(&i) {
-            new_dims.push(a.dims()[i]);
-        } else {
-            new_dims.push(1);
-        }
-    }
-
-    let mut res = Tensor::new(None, &new_dims)?;
-
-    let cartesian_coord = new_dims
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    for coord in cartesian_coord.iter() {
-        let mut sum_dims = vec![];
-        for (i, c) in coord.iter().enumerate().take(a.dims().len()) {
-            if axes.contains(&i) {
-                sum_dims.push(0..a.dims()[i]);
-            } else {
-                sum_dims.push(*c..*c + 1);
-            }
-        }
-
-        res.set(
-            coord,
-            min(config, region, &[a.get_slice(&sum_dims)?])?.get_inner_tensor()?[0].clone(),
-        );
-    }
-
-    Ok(res.into())
+    axes_wise_op(config, region, values, axes, min)
 }
 
 /// Pairwise (elementwise) op layout
@@ -2716,17 +2540,15 @@ pub fn argmax<F: PrimeField + TensorType + PartialOrd>(
     let assigned_argmax: ValTensor<F> = region.assign(&config.inputs[1], &argmax_val)?;
     region.increment(assigned_argmax.len());
 
-    // these will be assigned as constants
-    let mut indices = Tensor::from((0..values[0].len() as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Public);
+    let claimed_val = select(
+        config,
+        region,
+        &[values[0].clone(), assigned_argmax.clone()],
+    )?;
 
-    let mask = equals(config, region, &[indices.into(), assigned_argmax.clone()])?;
-
-    let prod = pairwise(config, region, &[values[0].clone(), mask], BaseOp::Mult)?;
-    let sum_prod = sum(config, region, &[prod])?;
     let max_val = max(config, region, &[values[0].clone()])?;
 
-    region.assign(&config.inputs[1], &sum_prod)?;
+    region.assign(&config.inputs[1], &claimed_val)?;
     region.assign(&config.output, &max_val)?;
 
     let (x, y) = config.output.cartesian_coord(region.offset());
@@ -2788,16 +2610,14 @@ pub fn argmin<F: PrimeField + TensorType + PartialOrd>(
     region.increment(assigned_argmin.len());
 
     // these will be assigned as constants
-    let mut indices = Tensor::from((0..values[0].len() as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Public);
-
-    let mask = equals(config, region, &[indices.into(), assigned_argmin.clone()])?;
-
-    let prod = pairwise(config, region, &[values[0].clone(), mask], BaseOp::Mult)?;
-    let sum_prod = sum(config, region, &[prod])?;
+    let claimed_val = select(
+        config,
+        region,
+        &[values[0].clone(), assigned_argmin.clone()],
+    )?;
     let min_val = min(config, region, &[values[0].clone()])?;
 
-    region.assign(&config.inputs[1], &sum_prod)?;
+    region.assign(&config.inputs[1], &claimed_val)?;
     region.assign(&config.output, &min_val)?;
 
     let (x, y) = config.output.cartesian_coord(region.offset());
@@ -3022,38 +2842,16 @@ pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     scale: utils::F32,
+    axes: &[usize],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    // we want this to be as small as possible so we set the output scale to 1
-    let dims = values[0].dims();
+    let soft_max_at_scale = move |config: &BaseConfig<F>,
+                                  region: &mut RegionCtx<F>,
+                                  values: &[ValTensor<F>; 1]|
+          -> Result<ValTensor<F>, Box<dyn Error>> {
+        softmax(config, region, values, scale)
+    };
 
-    if dims.len() == 1 {
-        return softmax(config, region, values, scale);
-    }
-
-    let cartesian_coord = dims[..dims.len() - 1]
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    let mut outputs = vec![];
-
-    for coord in cartesian_coord {
-        let mut sum_dims = vec![];
-        for c in coord {
-            sum_dims.push(c..c + 1);
-        }
-        sum_dims.push(0..dims[dims.len() - 1]);
-
-        let softmax_input = values[0].get_slice(&sum_dims)?;
-
-        outputs.push(softmax(config, region, &[softmax_input], scale)?.get_inner_tensor()?);
-    }
-
-    let mut res = Tensor::new(Some(&outputs), &[outputs.len()])?.combine()?;
-    res.reshape(dims);
-
-    Ok(res.into())
+    axes_wise_op(config, region, values, axes, soft_max_at_scale)
 }
 
 /// softmax func

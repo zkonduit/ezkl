@@ -623,16 +623,9 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            // if its not the last dim then we don't support it
-            if softmax_op.axes.to_vec() != vec![inputs[0].out_dims()[0].len() - 1] {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "softmax".to_string(),
-                )));
-            }
-
             SupportedOp::Hybrid(HybridOp::Softmax {
                 scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                axes: softmax_op.axes.to_vec(),
             })
         }
         "MaxPool" => {

@@ -33,6 +33,7 @@ pub enum HybridOp {
     },
     Softmax {
         scale: utils::F32,
+        axes: Vec<usize>,
     },
     RangeCheck(Tolerance),
     Greater,
@@ -172,8 +173,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
                 vec![],
             ),
-            HybridOp::Softmax { scale } => {
-                tensor::ops::nonlinearities::multi_dim_softmax(&x, scale.into())
+            HybridOp::Softmax { scale, axes } => {
+                tensor::ops::nonlinearities::multi_dim_softmax(&x, scale.into(), axes)
             }
             HybridOp::RangeCheck(..) => (x, vec![]),
             HybridOp::Greater => {
@@ -265,8 +266,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::ReduceArgMin { dim } => {
                 layouts::argmin_axes(config, region, values[..].try_into()?, *dim)?
             }
-            HybridOp::Softmax { scale } => {
-                layouts::multi_dim_softmax(config, region, values[..].try_into()?, *scale)?
+            HybridOp::Softmax { scale, axes } => {
+                layouts::multi_dim_softmax(config, region, values[..].try_into()?, *scale, axes)?
             }
             HybridOp::RangeCheck(tol) => layouts::range_check_percent(
                 config,
@@ -308,7 +309,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::ReduceMin { .. }
             | HybridOp::MaxPool2d { .. }
             | HybridOp::Abs => Op::<F>::required_lookups(&LookupOp::ReLU),
-            HybridOp::Softmax { scale } => {
+            HybridOp::Softmax { scale, .. } => {
                 vec![
                     LookupOp::Exp { scale: *scale },
                     LookupOp::Recip {
