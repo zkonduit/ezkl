@@ -62,6 +62,15 @@ def compare_outputs(zk_output, onnx_output):
 
     res = []
 
+    contains_sublist = any(isinstance(sub, list) for sub in zk_output)
+
+    if contains_sublist:
+        try:
+            if len(onnx_output) == 1:
+                zk_output = zk_output[0]
+        except Exception as e:
+            zk_output = zk_output[0]
+
     zip_object = zip(np.array(zk_output).flatten(),
                      np.array(onnx_output).flatten())
     for list1_i, list2_i in zip_object:
@@ -71,8 +80,6 @@ def compare_outputs(zk_output, onnx_output):
             diff = list1_i - list2_i
             res.append(100 * (diff) / (list2_i))
 
-    print("zk_output: ", zk_output)
-    print("onnx_output: ", onnx_output)
     print("res: ", res)
 
     return np.mean(np.abs(res))

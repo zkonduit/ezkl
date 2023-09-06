@@ -45,6 +45,9 @@ pub enum HybridOp {
     TopK {
         dim: usize,
         k: usize,
+    GatherElements {
+        dim: usize,
+        constant_idx: Option<Tensor<usize>>,
     },
 }
 
@@ -147,6 +150,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
                 (res.clone(), inter_equals)
             }
+            HybridOp::GatherElements { dim, constant_idx } => {
+                if let Some(idx) = constant_idx {
+                    let res = tensor::ops::gather_elements(&x, &idx, *dim)?;
+                    (res.clone(), vec![])
+                } else {
+                    let y = inputs[1].clone().map(|x| felt_to_i128(x));
+                    let inter_equals: Vec<Tensor<i128>> =
+                        vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                    let res = tensor::ops::gather_elements(&x, &y.map(|x| x as usize), *dim)?;
+                    (res.clone(), inter_equals)
+                }
+            }
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -198,6 +213,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Equals => "EQUALS",
             HybridOp::Gather { .. } => "GATHER",
             HybridOp::TopK { .. } => "TOPK",
+            HybridOp::GatherElements { .. } => "GATHERELEMENTS",
         };
         name.into()
     }
@@ -215,6 +231,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     tensor::ops::gather(&values[0].get_inner_tensor()?, idx, *dim)?.into()
                 } else {
                     layouts::gather(config, region, values[..].try_into()?, *dim)?
+                }
+            }
+            HybridOp::GatherElements { dim, constant_idx } => {
+                if let Some(idx) = constant_idx {
+                    tensor::ops::gather_elements(&values[0].get_inner_tensor()?, idx, *dim)?.into()
+                } else {
+                    layouts::gather_elements(config, region, values[..].try_into()?, *dim)?
                 }
             }
             HybridOp::MaxPool2d {
@@ -258,6 +281,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 layouts::topk_axes(config, region, values[..].try_into()?, *k, *dim)?
             }
         }))
+    }
+
+    fn requires_specific_input_scales(&self) -> Vec<(usize, u32)> {
+        match self {
+            HybridOp::Gather { .. } | HybridOp::GatherElements { .. } => vec![(1, 0)],
+            _ => vec![],
+        }
     }
 
     fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
@@ -305,6 +335,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::Equals
             | HybridOp::Gather { .. }
             | HybridOp::TopK { .. } => {
+            | HybridOp::GatherElements { .. } => {
                 vec![LookupOp::GreaterThan {
                     a: circuit::utils::F32(0.),
                 }]

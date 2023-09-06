@@ -1147,7 +1147,7 @@ pub fn downsample<T: TensorType>(
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn gather<T: TensorType>(
+pub fn gather<T: TensorType + Send + Sync>(
     input: &Tensor<T>,
     index: &Tensor<usize>,
     dim: usize,
@@ -1167,7 +1167,7 @@ pub fn gather<T: TensorType>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    output = output.enum_map(|i, _: T| {
+    output = output.par_enum_map(|i, _: T| {
         let coord = cartesian_coord[i].clone();
         let index_val = index.get(&[coord[dim]]);
         let new_coord = coord
@@ -1177,6 +1177,63 @@ pub fn gather<T: TensorType>(
             .collect::<Vec<_>>();
 
         Ok(input.get(&new_coord))
+    })?;
+
+    // Reshape the output tensor
+    output.reshape(&output_size);
+
+    Ok(output)
+}
+
+/// Gathers a tensor along a dimension.
+/// # Arguments
+/// * `input` - Tensor
+/// * `dim` - Dimension to gather along
+/// * `index` - Tensor of indices to gather
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::gather_elements;
+/// let x = Tensor::<i128>::new(
+///    Some(&[1, 2, 3, 4]),
+///   &[2, 2],
+/// ).unwrap();
+/// let index = Tensor::<usize>::new(
+///   Some(&[0, 0, 1, 0]),
+///  &[2, 2],
+/// ).unwrap();
+/// let result = gather_elements(&x, &index, 1).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 1, 4, 3]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn gather_elements<T: TensorType + Send + Sync>(
+    input: &Tensor<T>,
+    index: &Tensor<usize>,
+    dim: usize,
+) -> Result<Tensor<T>, TensorError> {
+    // Calculate the output tensor size
+    let output_size = index.dims().to_vec();
+    // same rank
+    assert_eq!(input.dims().len(), index.dims().len());
+
+    // Allocate memory for the output tensor
+    let mut output = Tensor::new(None, &output_size)?;
+    let cartesian_coord = output_size
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output = output.par_enum_map(|i, _: T| {
+        let coord = cartesian_coord[i].clone();
+        let index_val = index.get(&coord);
+
+        let mut new_coord = coord.clone();
+        new_coord[dim] = index_val;
+
+        let val = input.get(&new_coord);
+
+        Ok(val)
     })?;
 
     // Reshape the output tensor
