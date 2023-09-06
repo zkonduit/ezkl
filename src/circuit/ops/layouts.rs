@@ -2262,6 +2262,10 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd>(
         input = region.assign(&config.inputs[0], &input)?;
     }
 
+    if input.dims().len() == 1 {
+        return op(config, region, &[input]);
+    }
+
     region.increment(input.len());
 
     // Calculate the output tensor size
