@@ -1147,7 +1147,7 @@ pub fn downsample<T: TensorType>(
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn gather<T: TensorType>(
+pub fn gather<T: TensorType + Send + Sync>(
     input: &Tensor<T>,
     index: &Tensor<usize>,
     dim: usize,
@@ -1167,7 +1167,7 @@ pub fn gather<T: TensorType>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    output = output.enum_map(|i, _: T| {
+    output = output.par_enum_map(|i, _: T| {
         let coord = cartesian_coord[i].clone();
         let index_val = index.get(&[coord[dim]]);
         let new_coord = coord
@@ -1206,7 +1206,7 @@ pub fn gather<T: TensorType>(
 /// let expected = Tensor::<i128>::new(Some(&[1, 1, 4, 3]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn gather_elements<T: TensorType>(
+pub fn gather_elements<T: TensorType + Send + Sync>(
     input: &Tensor<T>,
     index: &Tensor<usize>,
     dim: usize,
@@ -1224,7 +1224,7 @@ pub fn gather_elements<T: TensorType>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    output = output.enum_map(|i, _: T| {
+    output = output.par_enum_map(|i, _: T| {
         let coord = cartesian_coord[i].clone();
         let index_val = index.get(&coord);
 
