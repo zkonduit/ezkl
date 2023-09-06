@@ -175,7 +175,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Softmax { scale, axes } => {
                 tensor::ops::nonlinearities::softmax_axes(&x, scale.into(), axes)
             }
-            HybridOp::RangeCheck(..) => (x, vec![]),
+            HybridOp::RangeCheck(tol) => {
+                let y = inputs[1].clone().map(|x| felt_to_i128(x));
+                (
+                    tensor::ops::nonlinearities::range_check_percent(&[x, y], 128, 128, tol.val),
+                    vec![],
+                )
+            }
             HybridOp::Greater => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
                 tensor::ops::greater(&x, &y)?
