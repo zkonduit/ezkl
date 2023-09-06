@@ -605,76 +605,14 @@ pub fn topk_axes<F: PrimeField + TensorType + PartialOrd>(
     k: usize,
     dim: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let mut input = values[0].clone();
+    let topk_at_k = move |config: &BaseConfig<F>,
+                          region: &mut RegionCtx<F>,
+                          values: &[ValTensor<F>; 1]|
+          -> Result<ValTensor<F>, Box<dyn Error>> {
+        _select_topk(config, region, values, k)
+    };
 
-    if !input.all_prev_assigned() {
-        input = region.assign(&config.inputs[0], &input)?;
-    }
-
-    region.increment(input.len());
-
-    // Calculate the output tensor size
-    let input_dims = input.dims();
-    let mut output_size = input_dims.to_vec();
-    output_size[dim] = k;
-
-    let mut output_size_without_dim = output_size.clone();
-    output_size_without_dim.remove(dim);
-
-    let mut topk_tensors = Tensor::<ValTensor<F>>::new(None, &output_size_without_dim)?;
-    let mut output = Tensor::<ValType<F>>::new(None, &output_size)?;
-
-    // Allocate memory for the output tensor
-    let cartesian_coord = output_size_without_dim
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    topk_tensors = topk_tensors.enum_map(|i, _| {
-        let coord = cartesian_coord[i].clone();
-        let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
-        slice.insert(dim, 0..input_dims[dim]);
-
-        let mut sliced_input = input.get_slice(&slice).map_err(|e| {
-            error!("{}", e);
-            halo2_proofs::plonk::Error::Synthesis
-        })?;
-        sliced_input.flatten();
-
-        let res = _select_topk(config, region, &[sliced_input], k).map_err(|e| {
-            error!("{}", e);
-            halo2_proofs::plonk::Error::Synthesis
-        })?;
-
-        Ok::<_, halo2_proofs::plonk::Error>(res)
-    })?;
-
-    // Allocate memory for the output tensor
-    let cartesian_coord = output_size
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    output = output.enum_map(|i, _| {
-        let coord = cartesian_coord[i].clone();
-        let mut topk_idx = coord.clone();
-        topk_idx.remove(dim);
-
-        let topk_elem = topk_tensors
-            .get(&topk_idx)
-            .get_inner_tensor()
-            .map_err(|e| {
-                error!("{}", e);
-                halo2_proofs::plonk::Error::Synthesis
-            })?[coord[dim]]
-            .clone();
-
-        Ok::<_, halo2_proofs::plonk::Error>(topk_elem)
-    })?;
-
-    let output: ValTensor<F> = output.into();
+    let output: ValTensor<F> = multi_dim_axes_op(config, region, values, &[dim], topk_at_k)?;
 
     if matches!(&config.check_mode, CheckMode::SAFE) {
         // during key generation this will be unknown vals so we use this as a flag to check
@@ -685,7 +623,7 @@ pub fn topk_axes<F: PrimeField + TensorType + PartialOrd>(
         }
         if is_assigned {
             let mut x = values[0].get_int_evals()?;
-            x.reshape(input_dims);
+            x.reshape(values[0].dims());
 
             let ref_topk: Tensor<i128> = tensor::ops::topk_axes(&x, k, dim)?;
 
@@ -706,8 +644,6 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let (input, index) = (values[0].clone(), values[1].clone());
 
-    // assert input is flat
-    assert_eq!(input.dims().len(), 1);
     // assert we have a single index
     assert_eq!(index.dims().iter().product::<usize>(), 1);
 
@@ -2521,9 +2457,6 @@ pub fn argmax<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    // assert values is flat
-    assert_eq!(values[0].dims().len(), 1);
-
     // this is safe because we later constrain it
     let argmax = values[0]
         .get_int_evals()?
@@ -2836,8 +2769,99 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     Ok(assigned_min_val)
 }
 
+fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    axes: &[usize],
+    op: impl Fn(
+        &BaseConfig<F>,
+        &mut RegionCtx<F>,
+        &[ValTensor<F>; 1],
+    ) -> Result<ValTensor<F>, Box<dyn Error>>,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut input = values[0].clone();
+
+    if !input.all_prev_assigned() {
+        input = region.assign(&config.inputs[0], &input)?;
+    }
+
+    region.increment(input.len());
+
+    // Calculate the output tensor size
+    let input_dims = input.dims();
+    let output_size = input_dims.to_vec();
+
+    let mut output_size_without_dim = output_size.clone();
+    for dim in axes {
+        output_size_without_dim.remove(*dim);
+    }
+
+    let mut op_tensors = Tensor::<ValTensor<F>>::new(None, &output_size_without_dim)?;
+    let mut output = Tensor::<ValType<F>>::new(None, &output_size)?;
+
+    // Allocate memory for the output tensor
+    let cartesian_coord = output_size_without_dim
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    op_tensors = op_tensors.enum_map(|i, _| {
+        let coord = cartesian_coord[i].clone();
+        let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+        for dim in axes {
+            slice.insert(*dim, 0..input_dims[*dim]);
+        }
+
+        let mut sliced_input = input.get_slice(&slice).map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+        sliced_input.flatten();
+
+        let res = op(config, region, &[sliced_input]).map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+
+        Ok::<_, halo2_proofs::plonk::Error>(res)
+    })?;
+
+    // Allocate memory for the output tensor
+    let cartesian_coord = output_size
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output = output.enum_map(|i, _| {
+        let coord = cartesian_coord[i].clone();
+        let mut op_idx = coord.clone();
+        let mut coord_at_dims = vec![];
+        for dim in axes {
+            op_idx.remove(*dim);
+            coord_at_dims.push(coord[*dim]);
+        }
+
+        let topk_elem = op_tensors
+            .get(&op_idx)
+            .get_inner_tensor()
+            .map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?
+            .get(&coord_at_dims)
+            .clone();
+
+        Ok::<_, halo2_proofs::plonk::Error>(topk_elem)
+    })?;
+
+    Ok(output.into())
+}
+
 /// softmax layout
-pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
+pub fn softmax_axes<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2851,7 +2875,30 @@ pub fn multi_dim_softmax<F: PrimeField + TensorType + PartialOrd>(
         softmax(config, region, values, scale)
     };
 
-    axes_wise_op(config, region, values, axes, soft_max_at_scale)
+    let output = multi_dim_axes_op(config, region, values, axes, soft_max_at_scale)?;
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be unknown vals so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let mut is_assigned = !output.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let mut x = values[0].get_int_evals()?;
+            x.reshape(values[0].dims());
+
+            let ref_softmax: Tensor<i128> =
+                tensor::ops::nonlinearities::softmax_axes(&x, scale.0.into(), axes).0;
+
+            let mut output_evals = output.get_int_evals()?;
+            output_evals.reshape(output.dims());
+
+            assert_eq!(output_evals, ref_softmax)
+        }
+    };
+
+    Ok(output)
 }
 
 /// softmax func

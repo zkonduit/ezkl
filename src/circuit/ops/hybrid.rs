@@ -173,7 +173,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 vec![],
             ),
             HybridOp::Softmax { scale, axes } => {
-                tensor::ops::nonlinearities::multi_dim_softmax(&x, scale.into(), axes)
+                tensor::ops::nonlinearities::softmax_axes(&x, scale.into(), axes)
             }
             HybridOp::RangeCheck(..) => (x, vec![]),
             HybridOp::Greater => {
@@ -266,7 +266,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 layouts::argmin_axes(config, region, values[..].try_into()?, *dim)?
             }
             HybridOp::Softmax { scale, axes } => {
-                layouts::multi_dim_softmax(config, region, values[..].try_into()?, *scale, axes)?
+                layouts::softmax_axes(config, region, values[..].try_into()?, *scale, axes)?
             }
             HybridOp::RangeCheck(tol) => layouts::range_check_percent(
                 config,

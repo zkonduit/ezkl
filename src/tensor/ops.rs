@@ -2701,7 +2701,7 @@ pub mod nonlinearities {
     }
 
     /// softmax layout
-    pub fn multi_dim_softmax(
+    pub fn softmax_axes(
         a: &Tensor<i128>,
         scale: f64,
         axes: &[usize],
