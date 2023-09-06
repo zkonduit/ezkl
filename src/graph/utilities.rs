@@ -1011,7 +1011,7 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
         .collect();
 
     let mut value: Tensor<F> = value?.into_iter().into();
-    value.reshape(&const_value.dims());
+    value.reshape(const_value.dims());
     value.set_scale(scale);
     value.set_visibility(visibility);
     Ok(value)

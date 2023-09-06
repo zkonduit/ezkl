@@ -117,7 +117,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
-                    let res = tensor::ops::gather(&x, &idx, *dim)?;
+                    let res = tensor::ops::gather(&x, idx, *dim)?;
                     (res.clone(), vec![])
                 } else {
                     let y = inputs[1].clone().map(|x| felt_to_i128(x));
@@ -133,12 +133,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 let mut inter_equals = x
                     .clone()
                     .into_iter()
-                    .map(|elem| {
+                    .flat_map(|elem| {
                         tensor::ops::equals(&res, &vec![elem].into_iter().into())
                             .unwrap()
                             .1
                     })
-                    .flatten()
                     .collect::<Vec<_>>();
 
                 // sort in descending order and take pairwise differences
@@ -154,7 +153,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::GatherElements { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
-                    let res = tensor::ops::gather_elements(&x, &idx, *dim)?;
+                    let res = tensor::ops::gather_elements(&x, idx, *dim)?;
                     (res.clone(), vec![])
                 } else {
                     let y = inputs[1].clone().map(|x| felt_to_i128(x));

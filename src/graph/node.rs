@@ -629,7 +629,7 @@ impl Node {
                 } else {
                     RebaseScale::rebase_up(input_opkind.clone(), scale, in_scales[input])
                 };
-                input_node.replace_opkind(rebased.into());
+                input_node.replace_opkind(rebased);
                 input_node.bump_scale(scale);
                 in_scales[input] = scale;
             }

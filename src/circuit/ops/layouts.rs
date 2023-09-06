@@ -685,7 +685,7 @@ pub fn topk_axes<F: PrimeField + TensorType + PartialOrd>(
         }
         if is_assigned {
             let mut x = values[0].get_int_evals()?;
-            x.reshape(&input_dims);
+            x.reshape(input_dims);
 
             let ref_topk: Tensor<i128> = tensor::ops::topk_axes(&x, k, dim)?;
 
@@ -696,7 +696,7 @@ pub fn topk_axes<F: PrimeField + TensorType + PartialOrd>(
         }
     };
 
-    Ok(output.into())
+    Ok(output)
 }
 
 fn select<F: PrimeField + TensorType + PartialOrd>(
@@ -818,7 +818,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
         }
         if is_assigned {
             let mut x = values[0].get_int_evals()?;
-            x.reshape(&input_dims);
+            x.reshape(input_dims);
             let mut index = values[1].get_int_evals()?;
             index.reshape(&[index.len()]);
 
@@ -832,7 +832,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
         }
     };
 
-    Ok(output.into())
+    Ok(output)
 }
 
 /// Gather accumulated layout
@@ -902,9 +902,9 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
         }
         if is_assigned {
             let mut x = values[0].get_int_evals()?;
-            x.reshape(&input.dims());
+            x.reshape(input.dims());
             let mut ind = values[1].get_int_evals()?;
-            ind.reshape(&index.dims());
+            ind.reshape(index.dims());
 
             let ref_gather: Tensor<i128> =
                 tensor::ops::gather_elements(&x, &ind.map(|x| x as usize), dim)?;
@@ -916,7 +916,7 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
         }
     };
 
-    Ok(output.into())
+    Ok(output)
 }
 
 /// Sum accumulated layout
@@ -2437,7 +2437,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
                 })
             })
     } else {
-        Tensor::new(Some(&vec![Value::<F>::unknown(); w.len()]), &w.dims())?
+        Tensor::new(Some(&vec![Value::<F>::unknown(); w.len()]), w.dims())?
     };
 
     let mut output = region.assign(&config.lookup_output, &output.into())?;
@@ -2530,7 +2530,7 @@ pub fn argmax<F: PrimeField + TensorType + PartialOrd>(
         .into_iter()
         .enumerate()
         // we value the first index in the case of a tie
-        .max_by_key(|(idx, value)| (value.clone(), -(*idx as i64)))
+        .max_by_key(|(idx, value)| (*value, -(*idx as i64)))
         .map(|(idx, _)| idx as i128);
     let argmax_val: ValTensor<F> = match argmax {
         None => Tensor::new(Some(&[Value::<F>::unknown()]), &[1])?.into(),
@@ -2571,7 +2571,7 @@ pub fn argmax<F: PrimeField + TensorType + PartialOrd>(
                     .into_iter()
                     .enumerate()
                     // we value the first index in the case of a tie
-                    .max_by_key(|(idx, value)| (value.clone(), -(*idx as i64)))
+                    .max_by_key(|(idx, value)| (*value, -(*idx as i64)))
                     .map(|(idx, _)| idx as i32)
                     .unwrap()]),
                 &[1],
@@ -2599,7 +2599,7 @@ pub fn argmin<F: PrimeField + TensorType + PartialOrd>(
         .into_iter()
         .enumerate()
         // we value the first index in the case of a tie
-        .min_by_key(|(idx, value)| (value.clone(), (*idx as i64)))
+        .min_by_key(|(idx, value)| (*value, (*idx as i64)))
         .map(|(idx, _)| idx as i128);
     let argmin_val: ValTensor<F> = match argmin {
         None => Tensor::new(Some(&[Value::<F>::unknown()]), &[1])?.into(),
@@ -2640,7 +2640,7 @@ pub fn argmin<F: PrimeField + TensorType + PartialOrd>(
                     .into_iter()
                     .enumerate()
                     // we value the first index in the case of a tie
-                    .min_by_key(|(idx, value)| (value.clone(), (*idx as i64)))
+                    .min_by_key(|(idx, value)| (*value, (*idx as i64)))
                     .map(|(idx, _)| idx as i32)
                     .unwrap()]),
                 &[1],
