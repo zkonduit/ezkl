@@ -133,6 +133,16 @@ pub enum ValTensor<F: PrimeField + TensorType + PartialOrd> {
     },
 }
 
+impl<F: PrimeField + TensorType + PartialOrd> TensorType for ValTensor<F> {
+    fn zero() -> Option<Self> {
+        Some(ValTensor::Value {
+            inner: Tensor::zero()?,
+            dims: vec![],
+            scale: 0,
+        })
+    }
+}
+
 impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<ValType<F>>> for ValTensor<F> {
     fn from(t: Tensor<ValType<F>>) -> ValTensor<F> {
         ValTensor::Value {

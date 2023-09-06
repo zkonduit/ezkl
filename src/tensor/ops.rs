@@ -1248,6 +1248,106 @@ pub fn prod_axes<T: TensorType + Mul<Output = T>>(
     Ok(res)
 }
 
+/// Returns top K values.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::topk;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[6],
+/// ).unwrap();
+/// let result = topk(&x, 3).unwrap();
+/// let expected = Tensor::<i128>::new(
+///     Some(&[15, 2, 2]),
+///     &[3],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn topk<T: TensorType + PartialOrd>(a: &Tensor<T>, k: usize) -> Result<Tensor<T>, TensorError> {
+    let mut indexed_a = a.clone();
+    indexed_a.flatten();
+
+    let mut indexed_a = a
+        .iter()
+        .enumerate()
+        .map(|(i, x)| (i, x))
+        .collect::<Vec<_>>();
+
+    indexed_a.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
+
+    let indexed_a = indexed_a
+        .into_iter()
+        .take(k)
+        .map(|(i, _)| i)
+        .collect::<Vec<_>>();
+
+    let mut output = Tensor::new(None, &[k])?;
+
+    for (i, x) in indexed_a.iter().enumerate() {
+        output.set(&[i], a[*x].clone());
+    }
+
+    Ok(output)
+}
+
+/// Returns top K values.
+/// # Arguments
+///
+/// * `a` - Tensor
+/// * `b` - Single value
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::topk_axes;
+/// let x = Tensor::<i128>::new(
+///     Some(&[2, 15, 2, 1, 1, 0]),
+///     &[2,3],
+/// ).unwrap();
+/// let result = topk_axes(&x, 2, 1).unwrap();
+/// let expected = Tensor::<i128>::new(
+///     Some(&[15, 2, 1, 1]),
+///     &[2,2],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn topk_axes<T: TensorType + PartialOrd>(
+    a: &Tensor<T>,
+    k: usize,
+    dim: usize,
+) -> Result<Tensor<T>, TensorError> {
+    let mut new_dims = a.dims().to_vec();
+    new_dims[dim] = k;
+
+    let mut res = Tensor::new(None, &new_dims)?;
+
+    let cartesian_coord = new_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    for coord in cartesian_coord.iter() {
+        let mut slice = vec![];
+        for (i, c) in coord.iter().enumerate() {
+            if i == dim {
+                slice.push(0..a.dims()[i]);
+            } else {
+                slice.push(*c..*c + 1);
+            }
+        }
+        let sliced_value = a.get_slice(&slice)?;
+        let topk = topk(&sliced_value, k)?;
+        res.set(coord, topk[coord[dim]].clone());
+    }
+
+    Ok(res)
+}
+
 /// Sums a tensor along specific axes.
 /// # Arguments
 ///

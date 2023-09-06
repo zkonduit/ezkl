@@ -270,6 +270,21 @@ fn load_concat_op(
     Ok(op.clone())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn load_topk_op(
+    op: &dyn tract_onnx::prelude::Op,
+    idx: usize,
+    name: String,
+) -> Result<tract_onnx::tract_core::ops::array::Topk, Box<dyn std::error::Error>> {
+    let op: &tract_onnx::tract_core::ops::array::Topk =
+        match op.downcast_ref::<tract_onnx::tract_core::ops::array::Topk>() {
+            Some(b) => b,
+            None => return Err(Box::new(GraphError::OpMismatch(idx, name))),
+        };
+
+    Ok(op.clone())
+}
+
 /// Extracts a Slice op from an onnx node.
 #[cfg(not(target_arch = "wasm32"))]
 fn load_slice_op(
@@ -345,6 +360,13 @@ pub fn new_op_from_onnx(
             op
 
             // Extract the max value
+        }
+        "Topk" => {
+            let op = load_topk_op(node.op(), idx, node.op().name().to_string())?;
+            let axis = op.axis;
+            let k = op.k;
+
+            SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK { dim: axis, k })
         }
         "MoveAxis" => {
             let op = load_axis_op(node.op(), idx, node.op().name().to_string())?;

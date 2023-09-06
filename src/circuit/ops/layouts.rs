@@ -407,6 +407,299 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
+fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let input = values[0].clone();
+
+    // assert input is flat
+    assert_eq!(input.dims().len(), 1);
+
+    let is_assigned = !input.any_unknowns();
+
+    let sorted = if is_assigned {
+        input
+            .get_int_evals()?
+            .iter()
+            .sorted_by(|a, b| b.cmp(a))
+            .map(|x| Value::known(i128_to_felt(*x)))
+            .collect::<Tensor<_>>()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); input.len()]),
+            &[input.len()],
+        )?
+    };
+
+    let assigned_sort = region.assign(&config.inputs[0], &sorted.into())?;
+
+    let mut unit = Tensor::from(vec![F::from(1)].into_iter());
+    unit.set_visibility(crate::graph::Visibility::Public);
+    let unit_len = unit.len();
+    let unit = region.assign(&config.inputs[1], &unit.into())?;
+
+    region.increment(assigned_sort.len());
+
+    for i in 0..assigned_sort.len() - 1 {
+        // assert that each thing in turn is larger than the next
+        let window_a = assigned_sort.get_slice(&[i..i + 1])?;
+        let window_b = assigned_sort.get_slice(&[i + 1..i + 2])?;
+
+        let window_b_minus_1 = pairwise(config, region, &[window_b, unit.clone()], BaseOp::Sub)?;
+
+        let diff = pairwise(
+            config,
+            region,
+            &[window_a.clone(), window_b_minus_1.clone()],
+            BaseOp::Sub,
+        )?;
+        let greater_than = nonlinearity(
+            config,
+            region,
+            &[diff],
+            &LookupOp::GreaterThan { a: 0.0.into() },
+        )?;
+
+        region.assign(&config.inputs[1], &unit)?;
+        region.assign(&config.output, &greater_than)?;
+
+        let (x, y) = config.output.cartesian_coord(region.offset());
+        let selector = config.selectors.get(&(BaseOp::Identity, x));
+        region.enable(selector, y)?;
+
+        region.increment(unit_len);
+
+        // now assert that the elem is in the original vector
+        let is_present = equals(config, region, &[window_a, input.clone()])?;
+        let sum_equals = sum(config, region, &[is_present])?;
+        println!("sum equals: {:?}", sum_equals.get_int_evals()?);
+        let greater_than = nonlinearity(
+            config,
+            region,
+            &[sum_equals],
+            &LookupOp::GreaterThan { a: 0.0.into() },
+        )?;
+
+        region.assign(&config.inputs[1], &unit)?;
+        region.assign(&config.output, &greater_than)?;
+
+        let (x, y) = config.output.cartesian_coord(region.offset());
+        let selector = config.selectors.get(&(BaseOp::Identity, x));
+        region.enable(selector, y)?;
+
+        region.increment(unit_len);
+    }
+
+    Ok(assigned_sort)
+}
+
+fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let input = values[0].clone();
+
+    // assert input is flat
+    assert_eq!(input.dims().len(), 1);
+
+    let is_assigned = !input.any_unknowns();
+
+    let sorted = if is_assigned {
+        input
+            .get_int_evals()?
+            .iter()
+            .sorted_by(|a, b| a.cmp(b))
+            .map(|x| Value::known(input.get_felt_evals().unwrap().get(&[*x as usize])))
+            .collect::<Tensor<_>>()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); input.len()]),
+            &[input.len()],
+        )?
+    };
+
+    let assigned_sort = region.assign(&config.inputs[0], &sorted.into())?;
+
+    let mut unit = Tensor::from(vec![F::from(1)].into_iter());
+    unit.set_visibility(crate::graph::Visibility::Public);
+    let unit_len = unit.len();
+    let unit = region.assign(&config.inputs[1], &unit.into())?;
+
+    region.increment(assigned_sort.len());
+
+    for i in 0..assigned_sort.len() - 1 {
+        // assert that each thing in turn is larger than the next
+        let window_a = assigned_sort.get_slice(&[i..i + 1])?;
+        let window_b = assigned_sort.get_slice(&[i + 1..i + 2])?;
+
+        let window_a_minus_1 = pairwise(
+            config,
+            region,
+            &[window_a.clone(), unit.clone()],
+            BaseOp::Sub,
+        )?;
+
+        let diff = pairwise(
+            config,
+            region,
+            &[window_b.clone(), window_a_minus_1.clone()],
+            BaseOp::Sub,
+        )?;
+        let greater_than = nonlinearity(
+            config,
+            region,
+            &[diff],
+            &LookupOp::GreaterThan { a: 0.0.into() },
+        )?;
+
+        region.assign(&config.inputs[1], &unit)?;
+        region.assign(&config.output, &greater_than)?;
+
+        let (x, y) = config.output.cartesian_coord(region.offset());
+        let selector = config.selectors.get(&(BaseOp::Identity, x));
+        region.enable(selector, y)?;
+
+        region.increment(unit_len);
+
+        // now assert that the elem is in the original vector
+        let is_present = equals(config, region, &[window_a, input.clone()])?;
+        let sum_equals = sum(config, region, &[is_present])?;
+        let greater_than = nonlinearity(
+            config,
+            region,
+            &[sum_equals],
+            &LookupOp::GreaterThan { a: 0.0.into() },
+        )?;
+
+        region.assign(&config.inputs[1], &unit)?;
+        region.assign(&config.output, &greater_than)?;
+
+        let (x, y) = config.output.cartesian_coord(region.offset());
+        let selector = config.selectors.get(&(BaseOp::Identity, x));
+        region.enable(selector, y)?;
+
+        region.increment(unit_len);
+    }
+
+    Ok(assigned_sort)
+}
+
+///
+fn _select_topk<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    k: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let sorted = _sort_descending(config, region, values)?.get_slice(&[0..k])?;
+    Ok(sorted)
+}
+
+/// Select top k elements
+pub fn topk_axes<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    k: usize,
+    dim: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut input = values[0].clone();
+
+    if !input.all_prev_assigned() {
+        input = region.assign(&config.inputs[0], &input)?;
+    }
+
+    region.increment(input.len());
+
+    // Calculate the output tensor size
+    let input_dims = input.dims();
+    let mut output_size = input_dims.to_vec();
+    output_size[dim] = k;
+
+    let mut output_size_without_dim = output_size.clone();
+    output_size_without_dim.remove(dim);
+
+    let mut topk_tensors = Tensor::<ValTensor<F>>::new(None, &output_size_without_dim)?;
+    let mut output = Tensor::<ValType<F>>::new(None, &output_size)?;
+
+    // Allocate memory for the output tensor
+    let cartesian_coord = output_size_without_dim
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    topk_tensors = topk_tensors.enum_map(|i, _| {
+        let coord = cartesian_coord[i].clone();
+        let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+        slice.insert(dim, 0..input_dims[dim]);
+
+        let mut sliced_input = input.get_slice(&slice).map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+        sliced_input.flatten();
+
+        let res = _select_topk(config, region, &[sliced_input], k).map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+
+        Ok::<_, halo2_proofs::plonk::Error>(res)
+    })?;
+
+    // Allocate memory for the output tensor
+    let cartesian_coord = output_size
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output = output.enum_map(|i, _| {
+        let coord = cartesian_coord[i].clone();
+        let mut topk_idx = coord.clone();
+        topk_idx.remove(dim);
+
+        let topk_elem = topk_tensors
+            .get(&topk_idx)
+            .get_inner_tensor()
+            .map_err(|e| {
+                error!("{}", e);
+                halo2_proofs::plonk::Error::Synthesis
+            })?[coord[dim]]
+            .clone();
+
+        Ok::<_, halo2_proofs::plonk::Error>(topk_elem)
+    })?;
+
+    let output: ValTensor<F> = output.into();
+
+    if matches!(&config.check_mode, CheckMode::SAFE) {
+        // during key generation this will be unknown vals so we use this as a flag to check
+        // TODO: this isn't very safe and would be better to get the phase directly
+        let mut is_assigned = !output.any_unknowns();
+        for val in values.iter() {
+            is_assigned = is_assigned && !val.any_unknowns();
+        }
+        if is_assigned {
+            let mut x = values[0].get_int_evals()?;
+            x.reshape(&input_dims);
+
+            let ref_topk: Tensor<i128> = tensor::ops::topk_axes(&x, k, dim)?;
+
+            let mut output_evals = output.get_int_evals()?;
+            output_evals.reshape(output.dims());
+
+            assert_eq!(output_evals, ref_topk)
+        }
+    };
+
+    Ok(output.into())
+}
+
 fn select<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,

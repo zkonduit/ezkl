@@ -5,6 +5,7 @@ use crate::{
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 // import run args from model
 
@@ -40,6 +41,10 @@ pub enum HybridOp {
     Gather {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
+    },
+    TopK {
+        dim: usize,
+        k: usize,
     },
 }
 
@@ -117,6 +122,31 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res.clone(), inter_equals)
                 }
             }
+            HybridOp::TopK { dim, k } => {
+                let res = tensor::ops::topk_axes(&x, *k, *dim)?;
+
+                let mut inter_equals = x
+                    .clone()
+                    .into_iter()
+                    .map(|elem| {
+                        tensor::ops::equals(&res, &vec![elem].into_iter().into())
+                            .unwrap()
+                            .1
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                // sort in descending order and take pairwise differences
+                inter_equals.push(
+                    x.into_iter()
+                        .sorted()
+                        .tuple_windows()
+                        .map(|(a, b)| b - a)
+                        .into(),
+                );
+
+                (res.clone(), inter_equals)
+            }
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -167,6 +197,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Less { .. } => "LESS",
             HybridOp::Equals => "EQUALS",
             HybridOp::Gather { .. } => "GATHER",
+            HybridOp::TopK { .. } => "TOPK",
         };
         name.into()
     }
@@ -223,6 +254,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Greater => layouts::greater(config, region, values[..].try_into()?)?,
             HybridOp::Less => layouts::less(config, region, values[..].try_into()?)?,
             HybridOp::Equals => layouts::equals(config, region, values[..].try_into()?)?,
+            HybridOp::TopK { dim, k } => {
+                layouts::topk_axes(config, region, values[..].try_into()?, *k, *dim)?
+            }
         }))
     }
 
@@ -269,7 +303,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Greater { .. }
             | HybridOp::Less { .. }
             | HybridOp::Equals
-            | HybridOp::Gather { .. } => {
+            | HybridOp::Gather { .. }
+            | HybridOp::TopK { .. } => {
                 vec![LookupOp::GreaterThan {
                     a: circuit::utils::F32(0.),
                 }]

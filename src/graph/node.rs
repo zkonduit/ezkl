@@ -606,6 +606,8 @@ impl Node {
 
             if let Some([Some(v)]) = output_shapes.as_deref() {
                 v.to_vec()
+            } else if let Some([Some(v), Some(_)]) = output_shapes.as_deref() {
+                v.to_vec()
             } else {
                 panic!("Could not get output shape for node {:?}", node);
             }
