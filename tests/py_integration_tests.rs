@@ -72,6 +72,8 @@ mod py_tests {
                     "pytorch-lightning==2.0.6",
                     "sk2torch==1.2.0",
                     "scikit-learn==1.1.1",
+                    "xgboost==1.7.6",
+                    "hummingbird-ml==0.4.9",
                 ])
                 .status()
                 .expect("failed to execute process");

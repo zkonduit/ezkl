@@ -611,11 +611,11 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
         if is_assigned {
             let mut x = values[0].get_int_evals()?;
             x.reshape(&input.dims());
-            let mut index = values[1].get_int_evals()?;
-            index.reshape(&[index.len()]);
+            let mut ind = values[1].get_int_evals()?;
+            ind.reshape(&index.dims());
 
             let ref_gather: Tensor<i128> =
-                tensor::ops::gather(&x, &index.map(|x| x as usize), dim)?;
+                tensor::ops::gather_elements(&x, &ind.map(|x| x as usize), dim)?;
 
             let mut output_evals = output.get_int_evals()?;
             output_evals.reshape(output.dims());
