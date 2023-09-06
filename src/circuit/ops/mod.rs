@@ -77,6 +77,33 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
 
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any;
+
+    /// Safe mode output checl
+    fn safe_mode_check(
+        &self,
+        claimed_output: &ValTensor<F>,
+        original_values: &[ValTensor<F>],
+    ) -> Result<(), TensorError> {
+        let felt_evals = original_values
+            .iter()
+            .map(|v| {
+                let mut evals = v.get_felt_evals().map_err(|_| TensorError::FeltError)?;
+                evals.reshape(v.dims());
+                Ok(evals)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let ref_op: Tensor<F> = self.f(&felt_evals)?.output;
+
+        let mut output = claimed_output
+            .get_felt_evals()
+            .map_err(|_| TensorError::FeltError)?;
+        output.reshape(claimed_output.dims());
+
+        assert_eq!(output, ref_op);
+
+        Ok(())
+    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {

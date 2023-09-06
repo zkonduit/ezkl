@@ -51,6 +51,9 @@ pub enum TensorError {
     /// Significant bit truncation when instantiating
     #[error("Significant bit truncation when instantiating, try lowering the scale")]
     SigBitTruncationError,
+    /// Failed to convert to field element tensor
+    #[error("Failed to convert to field element tensor")]
+    FeltError,
 }
 
 /// The (inner) type of tensor elements.
