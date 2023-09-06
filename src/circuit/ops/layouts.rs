@@ -574,7 +574,8 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (input, index) = (values[0].clone(), values[1].clone());
+    let (mut input, index) = (values[0].clone(), values[1].clone());
+    input.flatten();
 
     // assert we have a single index
     assert_eq!(index.dims().iter().product::<usize>(), 1);

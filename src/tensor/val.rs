@@ -218,11 +218,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
     ///
     pub fn any_unknowns(&self) -> bool {
-        self.get_inner().unwrap().iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        })
+        match self {
+            ValTensor::Instance { .. } => true,
+            _ => self.get_inner().unwrap().iter().any(|&x| {
+                let mut is_empty = true;
+                x.map(|_| is_empty = false);
+                is_empty
+            }),
+        }
     }
 
     /// Returns true if all the [ValTensor]'s [Value]s are assigned.
