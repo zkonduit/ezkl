@@ -129,7 +129,12 @@ impl From<&str> for CalibrationTarget {
 impl IntoPy<PyObject> for CalibrationTarget {
     fn into_py(self, py: Python) -> PyObject {
         match self {
-            CalibrationTarget::Resources => "resources".to_object(py),
+            CalibrationTarget::Resources { col_overflow: true } => {
+                "resources/col-overflow".to_object(py)
+            }
+            CalibrationTarget::Resources {
+                col_overflow: false,
+            } => "resources".to_object(py),
             CalibrationTarget::Accuracy => "accuracy".to_object(py),
         }
     }
@@ -142,7 +147,10 @@ impl<'source> FromPyObject<'source> for CalibrationTarget {
         let trystr = <PyString as PyTryFrom>::try_from(ob)?;
         let strval = trystr.to_string();
         match strval.to_lowercase().as_str() {
-            "resources" => Ok(CalibrationTarget::Resources),
+            "resources" => Ok(CalibrationTarget::Resources {
+                col_overflow: false,
+            }),
+            "resources/col-overflow" => Ok(CalibrationTarget::Resources { col_overflow: true }),
             "accuracy" => Ok(CalibrationTarget::Accuracy),
             _ => Err(PyValueError::new_err("Invalid value for CalibrationTarget")),
         }
