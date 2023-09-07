@@ -713,7 +713,6 @@ impl GraphCircuit {
         let blinding_offset = (ASSUMED_BLINDING_FACTORS as f64 / 2.0).ceil() + 1.0;
         let max_range = 2i128.pow(self.settings.run_args.bits as u32 - 1) - blinding_offset as i128;
 
-
         if res.max_lookup_inputs > max_range {
             let recommended_bits = (res.max_lookup_inputs as f64 + blinding_offset)
                 .log2()
@@ -957,6 +956,38 @@ impl GraphCircuit {
     }
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct CircuitSize {
+    num_instances: usize,
+    num_advice_columns: usize,
+    num_fixed: usize,
+    num_challenges: usize,
+    num_selectors: usize,
+}
+
+impl CircuitSize {
+    pub fn from_cs(cs: &ConstraintSystem<Fp>) -> Self {
+        CircuitSize {
+            num_instances: cs.num_instance_columns(),
+            num_advice_columns: cs.num_advice_columns(),
+            num_fixed: cs.num_fixed_columns(),
+            num_challenges: cs.num_challenges(),
+            num_selectors: cs.num_selectors(),
+        }
+    }
+
+    /// Export the ezkl configuration as json
+    pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let serialized = match serde_json::to_string(&self) {
+            Ok(s) => s,
+            Err(e) => {
+                return Err(Box::new(e));
+            }
+        };
+        Ok(serialized)
+    }
+}
+
 impl Circuit<Fp> for GraphCircuit {
     type Config = GraphConfig;
     type FloorPlanner = ModulePlanner;
@@ -998,6 +1029,15 @@ impl Circuit<Fp> for GraphCircuit {
         trace!(
             "log2_ceil of degrees {:?}",
             (cs.degree() as f32).log2().ceil()
+        );
+
+        info!(
+            "circuit size: \n {}",
+            CircuitSize::from_cs(cs)
+                .as_json()
+                .unwrap()
+                .to_colored_json_auto()
+                .unwrap()
         );
 
         GraphConfig {
