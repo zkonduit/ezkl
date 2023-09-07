@@ -22,7 +22,7 @@ use std::sync::Arc;
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_core::ops::{
-    array::{Gather, GatherElements, Slice},
+    array::{Gather, GatherElements, Slice, Topk},
     change_axes::AxisOp,
     cnn::DeconvUnary,
     einsum::EinSum,
@@ -224,6 +224,13 @@ pub fn new_op_from_onnx(
             op
 
             // Extract the max value
+        }
+        "Topk" => {
+            let op = load_op::<Topk>(node.op(), idx, node.op().name().to_string())?;
+            let axis = op.axis;
+            let k = op.k;
+
+            SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK { dim: axis, k })
         }
         "GatherElements" => {
             if inputs.len() != 2 {
@@ -616,16 +623,9 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            // if its not the last dim then we don't support it
-            if softmax_op.axes.to_vec() != vec![inputs[0].out_dims()[0].len() - 1] {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "softmax".to_string(),
-                )));
-            }
-
             SupportedOp::Hybrid(HybridOp::Softmax {
                 scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                axes: softmax_op.axes.to_vec(),
             })
         }
         "MaxPool" => {
@@ -1011,7 +1011,7 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
         .collect();
 
     let mut value: Tensor<F> = value?.into_iter().into();
-    value.reshape(&const_value.dims());
+    value.reshape(const_value.dims());
     value.set_scale(scale);
     value.set_visibility(visibility);
     Ok(value)

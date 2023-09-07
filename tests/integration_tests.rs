@@ -169,7 +169,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 49] = [
+    const TESTS: [&str; 50] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -221,6 +221,7 @@ mod native_tests {
         "decision_tree", // "variable_cnn",
         "random_forest",
         "gradient_boosted_trees",
+        "1l_topk",
         "xgboost",
     ];
 
@@ -377,7 +378,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=48 {
+            seq!(N in 0..=49 {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {

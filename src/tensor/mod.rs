@@ -51,6 +51,9 @@ pub enum TensorError {
     /// Significant bit truncation when instantiating
     #[error("Significant bit truncation when instantiating, try lowering the scale")]
     SigBitTruncationError,
+    /// Failed to convert to field element tensor
+    #[error("Failed to convert to field element tensor")]
+    FeltError,
 }
 
 /// The (inner) type of tensor elements.
@@ -622,7 +625,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         let mut offset = initial_offset;
         for (i, elem) in self.inner.clone().into_iter().enumerate() {
             if (i + offset + 1) % n == 0 {
-                inner.extend(vec![elem; 2].into_iter());
+                inner.extend(vec![elem; 2]);
                 offset += 1;
             } else {
                 inner.push(elem.clone());

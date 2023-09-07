@@ -5,6 +5,7 @@ use crate::{
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 // import run args from model
 
@@ -32,6 +33,7 @@ pub enum HybridOp {
     },
     Softmax {
         scale: utils::F32,
+        axes: Vec<usize>,
     },
     RangeCheck(Tolerance),
     Greater,
@@ -40,6 +42,10 @@ pub enum HybridOp {
     Gather {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
+    },
+    TopK {
+        dim: usize,
+        k: usize,
     },
     GatherElements {
         dim: usize,
@@ -111,7 +117,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
-                    let res = tensor::ops::gather(&x, &idx, *dim)?;
+                    let res = tensor::ops::gather(&x, idx, *dim)?;
                     (res.clone(), vec![])
                 } else {
                     let y = inputs[1].clone().map(|x| felt_to_i128(x));
@@ -121,9 +127,33 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res.clone(), inter_equals)
                 }
             }
+            HybridOp::TopK { dim, k } => {
+                let res = tensor::ops::topk_axes(&x, *k, *dim)?;
+
+                let mut inter_equals = x
+                    .clone()
+                    .into_iter()
+                    .flat_map(|elem| {
+                        tensor::ops::equals(&res, &vec![elem].into_iter().into())
+                            .unwrap()
+                            .1
+                    })
+                    .collect::<Vec<_>>();
+
+                // sort in descending order and take pairwise differences
+                inter_equals.push(
+                    x.into_iter()
+                        .sorted()
+                        .tuple_windows()
+                        .map(|(a, b)| b - a)
+                        .into(),
+                );
+
+                (res.clone(), inter_equals)
+            }
             HybridOp::GatherElements { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
-                    let res = tensor::ops::gather_elements(&x, &idx, *dim)?;
+                    let res = tensor::ops::gather_elements(&x, idx, *dim)?;
                     (res.clone(), vec![])
                 } else {
                     let y = inputs[1].clone().map(|x| felt_to_i128(x));
@@ -133,7 +163,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res.clone(), inter_equals)
                 }
             }
-
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -143,10 +172,16 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
                 vec![],
             ),
-            HybridOp::Softmax { scale } => {
-                tensor::ops::nonlinearities::multi_dim_softmax(&x, scale.into())
+            HybridOp::Softmax { scale, axes } => {
+                tensor::ops::nonlinearities::softmax_axes(&x, scale.into(), axes)
             }
-            HybridOp::RangeCheck(..) => (x, vec![]),
+            HybridOp::RangeCheck(tol) => {
+                let y = inputs[1].clone().map(|x| felt_to_i128(x));
+                (
+                    tensor::ops::nonlinearities::range_check_percent(&[x, y], 128, 128, tol.val),
+                    vec![],
+                )
+            }
             HybridOp::Greater => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
                 tensor::ops::greater(&x, &y)?
@@ -184,6 +219,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Less { .. } => "LESS",
             HybridOp::Equals => "EQUALS",
             HybridOp::Gather { .. } => "GATHER",
+            HybridOp::TopK { .. } => "TOPK",
             HybridOp::GatherElements { .. } => "GATHERELEMENTS",
         };
         name.into()
@@ -235,8 +271,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::ReduceArgMin { dim } => {
                 layouts::argmin_axes(config, region, values[..].try_into()?, *dim)?
             }
-            HybridOp::Softmax { scale } => {
-                layouts::multi_dim_softmax(config, region, values[..].try_into()?, *scale)?
+            HybridOp::Softmax { scale, axes } => {
+                layouts::softmax_axes(config, region, values[..].try_into()?, *scale, axes)?
             }
             HybridOp::RangeCheck(tol) => layouts::range_check_percent(
                 config,
@@ -248,6 +284,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Greater => layouts::greater(config, region, values[..].try_into()?)?,
             HybridOp::Less => layouts::less(config, region, values[..].try_into()?)?,
             HybridOp::Equals => layouts::equals(config, region, values[..].try_into()?)?,
+            HybridOp::TopK { dim, k } => {
+                layouts::topk_axes(config, region, values[..].try_into()?, *k, *dim)?
+            }
         }))
     }
 
@@ -275,7 +314,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::ReduceMin { .. }
             | HybridOp::MaxPool2d { .. }
             | HybridOp::Abs => Op::<F>::required_lookups(&LookupOp::ReLU),
-            HybridOp::Softmax { scale } => {
+            HybridOp::Softmax { scale, .. } => {
                 vec![
                     LookupOp::Exp { scale: *scale },
                     LookupOp::Recip {
@@ -302,6 +341,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::Less { .. }
             | HybridOp::Equals
             | HybridOp::Gather { .. }
+            | HybridOp::TopK { .. }
             | HybridOp::GatherElements { .. } => {
                 vec![LookupOp::GreaterThan {
                     a: circuit::utils::F32(0.),

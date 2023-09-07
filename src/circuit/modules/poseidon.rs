@@ -282,7 +282,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                     let remainder = block.len() % L;
 
                     if remainder != 0 {
-                        block.extend(vec![zero_val.clone(); L - remainder].into_iter());
+                        block.extend(vec![zero_val.clone(); L - remainder]);
                     }
 
                     let pow5_chip = Pow5Chip::construct(self.config.pow5_config.clone());

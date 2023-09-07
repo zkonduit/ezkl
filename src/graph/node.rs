@@ -629,7 +629,7 @@ impl Node {
                 } else {
                     RebaseScale::rebase_up(input_opkind.clone(), scale, in_scales[input])
                 };
-                input_node.replace_opkind(rebased.into());
+                input_node.replace_opkind(rebased);
                 input_node.bump_scale(scale);
                 in_scales[input] = scale;
             }
@@ -648,6 +648,8 @@ impl Node {
             };
 
             if let Some([Some(v)]) = output_shapes.as_deref() {
+                v.to_vec()
+            } else if let Some([Some(v), Some(_)]) = output_shapes.as_deref() {
                 v.to_vec()
             } else {
                 panic!("Could not get output shape for node {:?}", node);
