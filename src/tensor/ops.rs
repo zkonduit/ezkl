@@ -1152,12 +1152,12 @@ pub fn gather<T: TensorType + Send + Sync>(
     index: &Tensor<usize>,
     dim: usize,
 ) -> Result<Tensor<T>, TensorError> {
+    let mut index = index.clone();
+    index.flatten();
+
     // Calculate the output tensor size
     let mut output_size = input.dims().to_vec();
     output_size[dim] = index.dims()[0];
-
-    let mut index = index.clone();
-    index.flatten();
 
     // Allocate memory for the output tensor
     let mut output = Tensor::new(None, &output_size)?;

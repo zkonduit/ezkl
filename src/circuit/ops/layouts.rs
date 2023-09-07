@@ -7,7 +7,7 @@ use std::{
 use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
-use log::{debug, error, trace};
+use log::{error, trace};
 use rayon::slice::ParallelSliceMut;
 
 use super::{
@@ -1058,7 +1058,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         halo2_proofs::plonk::Error::Synthesis
     })?;
     let elapsed = start.elapsed();
-    debug!("pairwise {} calc took {:?}", op.as_str(), elapsed);
+    trace!("pairwise {} calc took {:?}", op.as_str(), elapsed);
 
     let output = region.assign(&config.output, &op_result.into())?;
 
