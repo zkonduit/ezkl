@@ -14,7 +14,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "ac/parallel-lookup-permute", default_features = false }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/parallel-lookup-permute", default_features = false }
 halo2curves = { version = "0.1.0" }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
@@ -33,6 +32,7 @@ unzip-n = "0.1.2"
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/parallel-lookup-permute", default_features = false }
 ethers = { version = "2.0.7", default_features = false, features = ["ethers-solc"] }
 indicatif = {version = "0.17.5", features = ["rayon"]}
 gag =  { version = "1.0.0", default_features = false}
@@ -56,6 +56,7 @@ tabled = { version = "0.12.0", optional = true}
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/parallel-lookup-permute", default_features = false, features = ["thread-safe-region"]}
 getrandom = { version = "0.2.8", features = ["js"] }
 instant = { version = "0.1", features = [ "wasm-bindgen", "inaccurate" ] }
 
