@@ -956,6 +956,7 @@ impl GraphCircuit {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct CircuitSize {
     num_instances: usize,
@@ -965,6 +966,7 @@ struct CircuitSize {
     num_selectors: usize,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl CircuitSize {
     pub fn from_cs(cs: &ConstraintSystem<Fp>) -> Self {
         CircuitSize {
@@ -1031,6 +1033,7 @@ impl Circuit<Fp> for GraphCircuit {
             (cs.degree() as f32).log2().ceil()
         );
 
+        #[cfg(not(target_arch = "wasm32"))]
         info!(
             "circuit size: \n {}",
             CircuitSize::from_cs(cs)
