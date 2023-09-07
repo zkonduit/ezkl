@@ -1941,6 +1941,12 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let target_str = if overflow {
+            "--target=resources/col-overflow"
+        } else {
+            "--target=resources"
+        };
+
         let mut calibrate_args = vec![
             "calibrate-settings".to_string(),
             "--data".to_string(),
@@ -1951,6 +1957,7 @@ mod native_tests {
                 "--settings-path={}/{}/settings.json",
                 test_dir, example_name
             ),
+            target_str.into(),
         ];
 
         if let Some(scales) = scales_to_use {
@@ -1968,36 +1975,6 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-
-        let mut settings: GraphSettings =
-            GraphSettings::load(&settings_path.clone().into()).unwrap();
-        if overflow && (settings.run_args.logrows > settings.run_args.bits as u32) {
-            let mut reduction = std::cmp::max(
-                (settings
-                    .model_instance_shapes
-                    .iter()
-                    .map(|x| x.iter().product::<usize>())
-                    .sum::<usize>() as f32)
-                    .log2()
-                    .ceil() as u32
-                    + 1,
-                settings.run_args.bits as u32,
-            );
-            if settings.total_const_size > 0 {
-                reduction = std::cmp::max(
-                    reduction,
-                    (settings.total_const_size as f32).log2().ceil() as u32 + 1,
-                );
-            }
-
-            println!(
-                "logrows > bits, reducing logrows to: {} -> {}",
-                settings.run_args.logrows, reduction
-            );
-
-            settings.run_args.logrows = reduction;
-            settings.save(&settings_path.clone().into()).unwrap();
-        }
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
