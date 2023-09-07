@@ -88,7 +88,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::ReduceMin { axes, .. } => {
                 let res = tensor::ops::min_axes(&x, axes)?;
                 let min_plus_one =
-                    Tensor::from(vec![x.clone().into_iter().max().unwrap() - 1].into_iter());
+                    Tensor::from(vec![x.clone().into_iter().min().unwrap() + 1].into_iter());
                 let unit = Tensor::from(vec![1].into_iter());
                 // relu(min(x + 1) - x)
                 let inter_1 = (min_plus_one - x.clone())?;
