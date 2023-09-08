@@ -597,7 +597,17 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", None);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", None, false);
+               test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_with_overflow_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                env_logger::init();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", Some(vec![0,1]), true);
                test_dir.close().unwrap();
             }
 
@@ -606,7 +616,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "public", "private", "public", None);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "public", "private", "public", None, false);
                test_dir.close().unwrap();
             }
 
@@ -615,7 +625,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "public", "public", None);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "public", "public", None, false);
                test_dir.close().unwrap();
             }
 
@@ -624,7 +634,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed", None);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed", None, false);
                test_dir.close().unwrap();
             }
 
@@ -633,7 +643,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "encrypted", None);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "encrypted", None, false);
                test_dir.close().unwrap();
             }
 
@@ -657,7 +667,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                kzg_prove_and_verify(path, test.to_string(), "unsafe", "private", "public", "public", Some(vec![0,6]));
+                kzg_prove_and_verify(path, test.to_string(), "unsafe", "private", "public", "public", Some(vec![0,6]), false);
                 test_dir.close().unwrap();
             }
 
@@ -1913,6 +1923,7 @@ mod native_tests {
         param_visibility: &str,
         output_visibility: &str,
         scales_to_use: Option<Vec<u32>>,
+        overflow: bool,
     ) {
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
 
@@ -1930,6 +1941,12 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let target_str = if overflow {
+            "--target=resources/col-overflow"
+        } else {
+            "--target=resources"
+        };
+
         let mut calibrate_args = vec![
             "calibrate-settings".to_string(),
             "--data".to_string(),
@@ -1940,6 +1957,7 @@ mod native_tests {
                 "--settings-path={}/{}/settings.json",
                 test_dir, example_name
             ),
+            target_str.into(),
         ];
 
         if let Some(scales) = scales_to_use {

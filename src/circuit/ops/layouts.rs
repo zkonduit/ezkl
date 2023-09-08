@@ -2189,8 +2189,6 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
             .into();
     region.next();
 
-    // free up lock
-
     // min(x + 1)
     let min_plus_1 = pairwise(
         config,
@@ -2227,6 +2225,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     // 1 - sum(relu(min(x + 1) - x))
     let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
     // relu(1 - sum(relu(min(x + 1) - x)))
+
     let relu_one_minus_sum_relu =
         nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
 

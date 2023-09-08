@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, warn};
 
 use crate::circuit::CheckMode;
 
@@ -42,6 +42,14 @@ impl VarTensor {
         // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
         modulo = ((capacity + modulo) / max_rows) + 1;
         let mut advices = vec![];
+
+        if modulo > 1 {
+            warn!(
+                "will be using column duplication for {} columns",
+                modulo - 1
+            );
+        }
+
         for _ in 0..modulo {
             let col = cs.advice_column();
             cs.enable_equality(col);
