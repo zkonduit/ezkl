@@ -592,10 +592,25 @@ pub fn new_op_from_onnx(
                 todo!()
             }
         }
+        "LessEqual" => {
+            if inputs.len() == 2 {
+                SupportedOp::Hybrid(HybridOp::LessEqual)
+            } else {
+                todo!()
+            }
+        }
         "Greater" => {
             // Extract the slope layer hyperparams
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::Greater)
+            } else {
+                todo!()
+            }
+        }
+        "GreaterEqual" => {
+            // Extract the slope layer hyperparams
+            if inputs.len() == 2 {
+                SupportedOp::Hybrid(HybridOp::GreaterEqual)
             } else {
                 todo!()
             }
@@ -649,7 +664,7 @@ pub fn new_op_from_onnx(
 
             let stride = pool_spec.strides.clone().unwrap();
             let padding = match &pool_spec.padding {
-                PaddingSpec::Explicit(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
+                PaddingSpec::Explicit(b, a) => [(b[0], b[1]), (a[0], a[1])],
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
@@ -705,7 +720,7 @@ pub fn new_op_from_onnx(
             };
 
             let padding = match &conv_node.pool_spec.padding {
-                PaddingSpec::Explicit(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
+                PaddingSpec::Explicit(b, a) => [(b[0], b[1]), (a[0], a[1])],
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
@@ -771,7 +786,7 @@ pub fn new_op_from_onnx(
                 }
             };
             let padding = match &deconv_node.pool_spec.padding {
-                PaddingSpec::Explicit(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
+                PaddingSpec::Explicit(b, a) => [(b[0], b[1]), (a[0], a[1])],
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
@@ -877,7 +892,7 @@ pub fn new_op_from_onnx(
 
             let stride = pool_spec.strides.clone().unwrap();
             let padding = match &pool_spec.padding {
-                PaddingSpec::Explicit(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
+                PaddingSpec::Explicit(b, a) => [(b[0], b[1]), (a[0], a[1])],
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }

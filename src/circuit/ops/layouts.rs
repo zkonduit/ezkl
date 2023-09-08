@@ -1154,6 +1154,29 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd>(
 }
 
 ///
+pub fn greater_equal<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
+
+    let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
+
+    lhs.expand(&broadcasted_shape)?;
+    rhs.expand(&broadcasted_shape)?;
+
+    let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
+
+    nonlinearity(
+        config,
+        region,
+        &[diff],
+        &LookupOp::GreaterThanEqual { a: utils::F32(0.) },
+    )
+}
+
+///
 pub fn less<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -1161,6 +1184,16 @@ pub fn less<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // just flip the order and use greater
     greater(config, region, &[values[1].clone(), values[0].clone()])
+}
+
+///
+pub fn less_equal<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // just flip the order and use greater
+    greater_equal(config, region, &[values[1].clone(), values[0].clone()])
 }
 
 /// And boolean operation
