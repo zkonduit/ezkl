@@ -74,6 +74,7 @@ mod py_tests {
                     "scikit-learn==1.1.1",
                     "xgboost==1.7.6",
                     "hummingbird-ml==0.4.9",
+                    "lightgbm==4.0.0",
                 ])
                 .status()
                 .expect("failed to execute process");
