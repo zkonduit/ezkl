@@ -1731,6 +1731,7 @@ mod softmax {
                                 &[self.input.clone()],
                                 Box::new(HybridOp::Softmax {
                                     scale: SCALE.into(),
+                                    axes: vec![0],
                                 }),
                             )
                             .unwrap();

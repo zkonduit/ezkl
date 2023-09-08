@@ -6,6 +6,7 @@ use crate::RunArgs;
 use halo2_proofs::plonk::ConstraintSystem;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
+use log::debug;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     exceptions::PyValueError, types::PyString, FromPyObject, IntoPy, PyAny, PyObject, PyResult,
@@ -247,10 +248,19 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         let advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, var_len))
             .collect_vec();
+
+        debug!(
+            "model uses {} advice columns",
+            advices.iter().map(|v| v.num_cols()).sum::<usize>()
+        );
+
         // will be empty if instances dims has len 0
         let instances = (0..instance_dims.len())
             .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), instance_scale))
             .collect_vec();
+
+        debug!("model uses {} instance columns", instances.len());
+
         ModelVars { advices, instances }
     }
 

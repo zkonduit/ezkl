@@ -91,20 +91,33 @@ impl<'source> FromPyObject<'source> for StrategyType {
     }
 }
 
-#[derive(clap::ValueEnum, Debug, Default, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 /// Determines what the calibration pass should optimize for
 pub enum CalibrationTarget {
     /// Optimizes for reducing cpu and memory usage
-    #[default]
-    Resources,
+    Resources {
+        /// Whether to allow for column overflow. This can reduce memory usage (eg. for a browser environment), but may result in a verifier that doesn't fit on the blockchain.
+        col_overflow: bool,
+    },
     /// Optimizes for numerical accuracy given the fixed point representation
     Accuracy,
+}
+
+impl Default for CalibrationTarget {
+    fn default() -> Self {
+        CalibrationTarget::Resources {
+            col_overflow: false,
+        }
+    }
 }
 
 impl From<&str> for CalibrationTarget {
     fn from(s: &str) -> Self {
         match s {
-            "resources" => CalibrationTarget::Resources,
+            "resources" => CalibrationTarget::Resources {
+                col_overflow: false,
+            },
+            "resources/col-overflow" => CalibrationTarget::Resources { col_overflow: true },
             "accuracy" => CalibrationTarget::Accuracy,
             _ => panic!("invalid calibration target"),
         }
@@ -116,7 +129,12 @@ impl From<&str> for CalibrationTarget {
 impl IntoPy<PyObject> for CalibrationTarget {
     fn into_py(self, py: Python) -> PyObject {
         match self {
-            CalibrationTarget::Resources => "resources".to_object(py),
+            CalibrationTarget::Resources { col_overflow: true } => {
+                "resources/col-overflow".to_object(py)
+            }
+            CalibrationTarget::Resources {
+                col_overflow: false,
+            } => "resources".to_object(py),
             CalibrationTarget::Accuracy => "accuracy".to_object(py),
         }
     }
@@ -129,7 +147,10 @@ impl<'source> FromPyObject<'source> for CalibrationTarget {
         let trystr = <PyString as PyTryFrom>::try_from(ob)?;
         let strval = trystr.to_string();
         match strval.to_lowercase().as_str() {
-            "resources" => Ok(CalibrationTarget::Resources),
+            "resources" => Ok(CalibrationTarget::Resources {
+                col_overflow: false,
+            }),
+            "resources/col-overflow" => Ok(CalibrationTarget::Resources { col_overflow: true }),
             "accuracy" => Ok(CalibrationTarget::Accuracy),
             _ => Err(PyValueError::new_err("Invalid value for CalibrationTarget")),
         }
