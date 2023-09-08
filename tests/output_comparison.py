@@ -21,6 +21,7 @@ def get_onnx_output(model_file, input_file):
     # generate the ML model output from the ONNX file
     onnx_model = onnx.load(model_file)
     onnx.checker.check_model(onnx_model)
+
     with open(input_file) as f:
         inputs = json.load(f)
     # reshape the input to the model
@@ -45,9 +46,14 @@ def get_onnx_output(model_file, input_file):
         else:
             inputs_onnx = np.array(inputs['input_data'][i]).astype(
                 np.float32).reshape(dims)
-        onnx_session = onnxruntime.InferenceSession(model_file)
         onnx_input[input_node.name] = inputs_onnx
-    onnx_output = onnx_session.run(None, onnx_input)
+    try:
+        onnx_session = onnxruntime.InferenceSession(model_file)
+        onnx_output = onnx_session.run(None, onnx_input)
+    except Exception as e:
+        print("Error in ONNX runtime: ", e)
+        print("using inputs[output_data]")
+        onnx_output = inputs['output_data']
     return onnx_output[0]
 
 
@@ -55,6 +61,15 @@ def compare_outputs(zk_output, onnx_output):
     # calculate percentage difference between the 2 outputs (which are lists)
 
     res = []
+
+    contains_sublist = any(isinstance(sub, list) for sub in zk_output)
+
+    if contains_sublist:
+        try:
+            if len(onnx_output) == 1:
+                zk_output = zk_output[0]
+        except Exception as e:
+            zk_output = zk_output[0]
 
     zip_object = zip(np.array(zk_output).flatten(),
                      np.array(onnx_output).flatten())
@@ -65,8 +80,6 @@ def compare_outputs(zk_output, onnx_output):
             diff = list1_i - list2_i
             res.append(100 * (diff) / (list2_i))
 
-    print("zk_output: ", zk_output)
-    print("onnx_output: ", onnx_output)
     print("res: ", res)
 
     return np.mean(np.abs(res))

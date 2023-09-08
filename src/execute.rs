@@ -544,7 +544,7 @@ pub(crate) async fn calibrate(
         scales
     } else {
         match target {
-            CalibrationTarget::Resources => (2..8).collect::<Vec<u32>>(),
+            CalibrationTarget::Resources { .. } => (2..8).collect::<Vec<u32>>(),
             CalibrationTarget::Accuracy => (8..14).collect::<Vec<u32>>(),
         }
     };
@@ -608,23 +608,28 @@ pub(crate) async fn calibrate(
 
                 let original_settings = settings.clone();
 
-                let mut circuit = GraphCircuit::from_run_args(&local_run_args, &model_path)
-                    .map_err(|_| "failed to create circuit from run args")
-                    .unwrap();
+                let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
+                    Ok(c) => c,
+                    Err(_) => {
+                        return tokio::task::spawn(async move {
+                            Err(format!("failed to create circuit from run args"))
+                                as Result<GraphSettings, String>
+                        })
+                    }
+                };
 
                 tokio::task::spawn(async move {
                     let data = circuit
                         .load_graph_input(&chunk)
                         .await
-                        .map_err(|_| "failed to load circuit inputs")
-                        .unwrap();
+                        .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                     loop {
                         // ensures we have converged
                         let params_before = circuit.settings.clone();
                         circuit
                             .calibrate(&data)
-                            .map_err(|_| "failed to calibrate")?;
+                            .map_err(|e| format!("failed to calibrate: {}", e))?;
                         let params_after = circuit.settings.clone();
                         if params_before == params_after {
                             break;
@@ -649,10 +654,10 @@ pub(crate) async fn calibrate(
                         ..original_settings.clone()
                     };
 
-                    Ok(found_settings) as Result<GraphSettings, &str>
+                    Ok(found_settings) as Result<GraphSettings, String>
                 })
             })
-            .collect::<Vec<tokio::task::JoinHandle<std::result::Result<GraphSettings, &str>>>>();
+            .collect::<Vec<tokio::task::JoinHandle<std::result::Result<GraphSettings, String>>>>();
 
         let mut res: Vec<GraphSettings> = vec![];
         for task in tasks {
@@ -692,8 +697,8 @@ pub(crate) async fn calibrate(
     debug!("Found {} sets of parameters", found_params.len());
 
     // now find the best params according to the target
-    let best_params = match target {
-        CalibrationTarget::Resources => {
+    let mut best_params = match target {
+        CalibrationTarget::Resources { .. } => {
             let mut param_iterator = found_params.iter().sorted_by_key(|p| p.run_args.logrows);
 
             let min_logrows = param_iterator.next().unwrap().run_args.logrows;
@@ -747,6 +752,33 @@ pub(crate) async fn calibrate(
                 .clone()
         }
     };
+
+    if matches!(target, CalibrationTarget::Resources { col_overflow: true }) {
+        let mut reduction = std::cmp::max(
+            (best_params
+                .model_instance_shapes
+                .iter()
+                .map(|x| x.iter().product::<usize>())
+                .sum::<usize>() as f32)
+                .log2()
+                .ceil() as u32
+                + 1,
+            best_params.run_args.bits as u32,
+        );
+        if best_params.total_const_size > 0 {
+            reduction = std::cmp::max(
+                reduction,
+                (best_params.total_const_size as f32).log2().ceil() as u32 + 1,
+            );
+        }
+
+        info!(
+            "logrows > bits, shrinking logrows: {} -> {}",
+            best_params.run_args.logrows, reduction
+        );
+
+        best_params.run_args.logrows = reduction;
+    }
 
     best_params.save(&settings_path)?;
 

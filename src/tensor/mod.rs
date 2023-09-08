@@ -7,7 +7,10 @@ pub mod var;
 
 use halo2curves::ff::PrimeField;
 use rayon::{
-    prelude::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
+    prelude::{
+        IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator,
+        ParallelIterator,
+    },
     slice::ParallelSliceMut,
 };
 use serde::{Deserialize, Serialize};
@@ -46,8 +49,11 @@ pub enum TensorError {
     #[error("wrong method called")]
     WrongMethod,
     /// Significant bit truncation when instantiating
-    #[error("Significant bit truncation when instantiating")]
+    #[error("Significant bit truncation when instantiating, try lowering the scale")]
     SigBitTruncationError,
+    /// Failed to convert to field element tensor
+    #[error("Failed to convert to field element tensor")]
+    FeltError,
 }
 
 /// The (inner) type of tensor elements.
@@ -619,7 +625,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         let mut offset = initial_offset;
         for (i, elem) in self.inner.clone().into_iter().enumerate() {
             if (i + offset + 1) % n == 0 {
-                inner.extend(vec![elem; 2].into_iter());
+                inner.extend(vec![elem; 2]);
                 offset += 1;
             } else {
                 inner.push(elem.clone());
@@ -927,6 +933,35 @@ impl<T: Clone + TensorType> Tensor<T> {
             .iter()
             .enumerate()
             .map(|(i, e)| f(i, e.clone()))
+            .collect();
+        let mut t: Tensor<G> = Tensor::from(vec?.iter().cloned());
+        t.reshape(self.dims());
+        Ok(t)
+    }
+
+    /// Maps a function to tensors and enumerates in parallel
+    /// ```
+    /// use ezkl::tensor::{Tensor, TensorError};
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(i32::pow(x + i as i32, 2))).unwrap();
+    /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
+    /// ```
+    pub fn par_enum_map<
+        F: Fn(usize, T) -> Result<G, E> + std::marker::Send + std::marker::Sync,
+        G: TensorType + std::marker::Send + std::marker::Sync,
+        E: Error + std::marker::Send + std::marker::Sync,
+    >(
+        &self,
+        f: F,
+    ) -> Result<Tensor<G>, E>
+    where
+        T: std::marker::Send + std::marker::Sync,
+    {
+        let vec: Result<Vec<G>, E> = self
+            .inner
+            .par_iter()
+            .enumerate()
+            .map(move |(i, e)| f(i, e.clone()))
             .collect();
         let mut t: Tensor<G> = Tensor::from(vec?.iter().cloned());
         t.reshape(self.dims());

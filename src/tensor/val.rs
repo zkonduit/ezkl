@@ -133,6 +133,16 @@ pub enum ValTensor<F: PrimeField + TensorType + PartialOrd> {
     },
 }
 
+impl<F: PrimeField + TensorType + PartialOrd> TensorType for ValTensor<F> {
+    fn zero() -> Option<Self> {
+        Some(ValTensor::Value {
+            inner: Tensor::zero()?,
+            dims: vec![],
+            scale: 0,
+        })
+    }
+}
+
 impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<ValType<F>>> for ValTensor<F> {
     fn from(t: Tensor<ValType<F>>) -> ValTensor<F> {
         ValTensor::Value {
@@ -208,11 +218,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
     ///
     pub fn any_unknowns(&self) -> bool {
-        self.get_inner().unwrap().iter().any(|&x| {
-            let mut is_empty = true;
-            x.map(|_| is_empty = false);
-            is_empty
-        })
+        match self {
+            ValTensor::Instance { .. } => true,
+            _ => self.get_inner().unwrap().iter().any(|&x| {
+                let mut is_empty = true;
+                x.map(|_| is_empty = false);
+                is_empty
+            }),
+        }
     }
 
     /// Returns true if all the [ValTensor]'s [Value]s are assigned.

@@ -22,7 +22,7 @@ use std::sync::Arc;
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_core::ops::{
-    array::{Gather, Slice},
+    array::{Gather, GatherElements, Slice, Topk},
     change_axes::AxisOp,
     cnn::DeconvUnary,
     einsum::EinSum,
@@ -33,7 +33,7 @@ use tract_onnx::tract_core::ops::{
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_hir::{
     internal::DimLike,
-    ops::array::{Pad, PadMode},
+    ops::array::{Pad, PadMode, TypedConcat},
     ops::cnn::{ConvUnary, MaxPool, PoolSpec, SumPool},
     ops::konst::Const,
     ops::nn::DataFormat,
@@ -105,7 +105,6 @@ fn extract_tensor_value(
     };
 
     let mut const_value: Tensor<f32>;
-
     match dt {
         DatumType::F32 => {
             let vec = input.as_slice::<f32>()?.to_vec();
@@ -119,6 +118,12 @@ fn extract_tensor_value(
         DatumType::I64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i64>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::I8 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<i8>()?.to_vec();
             let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
@@ -144,138 +149,17 @@ fn extract_tensor_value(
     Ok(const_value)
 }
 
-/// Extracts a Gather op from an onnx node.
 #[cfg(not(target_arch = "wasm32"))]
-fn load_gather_op(
+fn load_op<C: tract_onnx::prelude::Op + Clone>(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
     name: String,
-) -> Result<Gather, Box<dyn std::error::Error>> {
+) -> Result<C, Box<dyn std::error::Error>> {
     // Extract the slope layer hyperparams
-    let op: &Gather = match op.downcast_ref::<Gather>() {
+    let op: &C = match op.downcast_ref::<C>() {
         Some(b) => b,
         None => {
             return Err(Box::new(GraphError::OpMismatch(idx, name)));
-        }
-    };
-
-    Ok(op.clone())
-}
-
-///
-#[cfg(not(target_arch = "wasm32"))]
-fn load_cast_op(
-    op: &dyn tract_onnx::prelude::Op,
-    idx: usize,
-    name: String,
-) -> Result<Cast, Box<dyn std::error::Error>> {
-    // Extract the slope layer hyperparams
-    let op: &Cast = match op.downcast_ref::<Cast>() {
-        Some(b) => b,
-        None => {
-            return Err(Box::new(GraphError::OpMismatch(idx, name)));
-        }
-    };
-
-    Ok(op.clone())
-}
-
-///
-#[cfg(not(target_arch = "wasm32"))]
-fn load_axis_op(
-    op: &dyn tract_onnx::prelude::Op,
-    idx: usize,
-    name: String,
-) -> Result<AxisOp, Box<dyn std::error::Error>> {
-    // Extract the slope layer hyperparams
-    let op: &AxisOp = match op.downcast_ref::<AxisOp>() {
-        Some(b) => b,
-        None => {
-            return Err(Box::new(GraphError::OpMismatch(idx, name)));
-        }
-    };
-
-    Ok(op.clone())
-}
-
-/// Extracts a const node from an onnx node.
-#[cfg(not(target_arch = "wasm32"))]
-fn load_const(
-    op: &dyn tract_onnx::prelude::Op,
-    idx: usize,
-    name: String,
-) -> Result<Const, Box<dyn std::error::Error>> {
-    // Extract the slope layer hyperparams
-    let op: &Const = match op.downcast_ref::<Const>() {
-        Some(b) => b,
-        None => {
-            return Err(Box::new(GraphError::OpMismatch(idx, name)));
-        }
-    };
-
-    Ok(op.clone())
-}
-
-/// Extracts an axis op from an onnx node.
-#[cfg(not(target_arch = "wasm32"))]
-fn load_reduce_op(
-    op: &dyn tract_onnx::prelude::Op,
-    idx: usize,
-    name: String,
-) -> Result<Reduce, Box<dyn std::error::Error>> {
-    // Extract the slope layer hyperparams
-    let op: &Reduce = match op.downcast_ref::<Reduce>() {
-        Some(b) => b,
-        None => {
-            return Err(Box::new(GraphError::OpMismatch(idx, name)));
-        }
-    };
-    Ok(op.clone())
-}
-
-/// Extracts an axis op from an onnx node.
-#[cfg(not(target_arch = "wasm32"))]
-fn load_eltwise_op(
-    op: &dyn tract_onnx::prelude::Op,
-    idx: usize,
-    name: String,
-) -> Result<ElementWiseOp, Box<dyn std::error::Error>> {
-    // Extract the slope layer hyperparams
-
-    let op: &ElementWiseOp = match op.downcast_ref::<ElementWiseOp>() {
-        Some(b) => b,
-        None => return Err(Box::new(GraphError::OpMismatch(idx, name))),
-    };
-
-    Ok(op.clone())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn load_concat_op(
-    op: &dyn tract_onnx::prelude::Op,
-    idx: usize,
-    name: String,
-) -> Result<tract_onnx::tract_core::ops::array::TypedConcat, Box<dyn std::error::Error>> {
-    let op: &tract_onnx::tract_core::ops::array::TypedConcat =
-        match op.downcast_ref::<tract_onnx::tract_core::ops::array::TypedConcat>() {
-            Some(b) => b,
-            None => return Err(Box::new(GraphError::OpMismatch(idx, name))),
-        };
-
-    Ok(op.clone())
-}
-
-/// Extracts a Slice op from an onnx node.
-#[cfg(not(target_arch = "wasm32"))]
-fn load_slice_op(
-    op: &dyn tract_onnx::prelude::Op,
-    name: String,
-) -> Result<Slice, Box<dyn std::error::Error>> {
-    // Extract the slope layer hyperparams
-    let op: &Slice = match op.downcast_ref::<Slice>() {
-        Some(b) => b,
-        None => {
-            return Err(Box::new(TensorError::DimMismatch(name)));
         }
     };
 
@@ -306,30 +190,94 @@ pub fn new_op_from_onnx(
             if inputs.len() != 2 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "gather".to_string())));
             };
-            let op = load_gather_op(node.op(), idx, node.op().name().to_string())?;
+            let op = load_op::<Gather>(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
 
-            let index: Tensor<usize> = match extract_const_raw_values(inputs[1].opkind()) {
-                Some(c) => c.map(|e| e as usize),
-                None => {
-                    warn!("assuming the gather window is over a context variable");
-                    // offset by 1
-                    let index: Tensor<usize> =
-                        (0..node_output_shapes(&node)?[0].as_ref().unwrap().to_vec()[axis + 1])
-                            .into();
-                    index
-                }
-            };
+            let mut op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
+                dim: axis,
+                constant_idx: None,
+            });
 
-            if let Some(node) = inputs.last_mut() {
-                node.decrement_const();
-                deleted_indices.push(inputs.len() - 1);
+            // if param_visibility.is_public() {
+            match inputs[1].opkind().get_mutable_constant() {
+                // downscale
+                Some(c) => {
+                    inputs[1].decrement_const();
+                    deleted_indices.push(inputs.len() - 1);
+                    op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
+                        dim: axis,
+                        constant_idx: Some(c.raw_values.map(|x| x as usize)),
+                    })
+                }
+                _ => {}
+            }
+            // }
+
+            if inputs[1].opkind().is_input() {
+                inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
+                    scale: 0,
+                    datum_type: InputType::TDim,
+                }));
+                inputs[1].bump_scale(0);
             }
 
-            SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::Gather { dim: axis, index })
+            op
+
+            // Extract the max value
+        }
+        "Topk" => {
+            let op = load_op::<Topk>(node.op(), idx, node.op().name().to_string())?;
+            let axis = op.axis;
+            let k = op.k;
+
+            SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK { dim: axis, k })
+        }
+        "GatherElements" => {
+            if inputs.len() != 2 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "gather elements".to_string(),
+                )));
+            };
+            let op = load_op::<GatherElements>(node.op(), idx, node.op().name().to_string())?;
+            let axis = op.axis;
+
+            let mut op =
+                SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::GatherElements {
+                    dim: axis,
+                    constant_idx: None,
+                });
+
+            // if param_visibility.is_public() {
+            match inputs[1].opkind().get_mutable_constant() {
+                // downscale
+                Some(c) => {
+                    inputs[1].decrement_const();
+                    deleted_indices.push(inputs.len() - 1);
+                    op =
+                        SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::GatherElements {
+                            dim: axis,
+                            constant_idx: Some(c.raw_values.map(|x| x as usize)),
+                        })
+                }
+                _ => {}
+            }
+            // }
+
+            if inputs[1].opkind().is_input() {
+                inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
+                    scale: 0,
+                    datum_type: InputType::TDim,
+                }));
+                inputs[1].bump_scale(0);
+            }
+
+            op
+
+            // Extract the max value
         }
         "MoveAxis" => {
-            let op = load_axis_op(node.op(), idx, node.op().name().to_string())?;
+            let op = load_op::<AxisOp>(node.op(), idx, node.op().name().to_string())?;
             match op {
                 AxisOp::Move(from, to) => {
                     let source = from.to_usize()?;
@@ -343,12 +291,12 @@ pub fn new_op_from_onnx(
             }
         }
         "Concat" | "InferenceConcat" => {
-            let op = load_concat_op(node.op(), idx, node.op().name().to_string())?;
+            let op = load_op::<TypedConcat>(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
             SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::Concat { axis })
         }
         "Slice" => {
-            let slice = load_slice_op(node.op(), node.op().name().to_string())?;
+            let slice = load_op::<Slice>(node.op(), idx, node.op().name().to_string())?;
 
             let axis = slice.axis;
             let start = slice.start.to_usize()?;
@@ -357,12 +305,12 @@ pub fn new_op_from_onnx(
             SupportedOp::Linear(PolyOp::Slice { axis, start, end })
         }
         "Const" => {
-            let op: Const = load_const(node.op(), idx, node.op().name().to_string())?;
+            let op: Const = load_op::<Const>(node.op(), idx, node.op().name().to_string())?;
             let dt = op.0.datum_type();
             // Raw values are always f32
             let raw_value = extract_tensor_value(op.0)?;
-            // If bool then don't scale
-            let constant_scale = if dt == DatumType::Bool {
+            // If bool or a tensor dimension then don't scale
+            let constant_scale = if dt == DatumType::Bool || dt == DatumType::TDim {
                 0
             } else {
                 scales.params
@@ -376,11 +324,31 @@ pub fn new_op_from_onnx(
             // Create a constant op
             SupportedOp::Constant(c)
         }
+        "Reduce<ArgMax(false)>" => {
+            if inputs.len() != 1 {
+                return Err(Box::new(GraphError::InvalidDims(idx, "argmax".to_string())));
+            };
+            let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
+            let axes: Vec<usize> = op.axes.into_iter().collect();
+            assert_eq!(axes.len(), 1, "only support argmax over one axis");
+
+            SupportedOp::Hybrid(HybridOp::ReduceArgMax { dim: axes[0] })
+        }
+        "Reduce<ArgMin(false)>" => {
+            if inputs.len() != 1 {
+                return Err(Box::new(GraphError::InvalidDims(idx, "argmin".to_string())));
+            };
+            let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
+            let axes: Vec<usize> = op.axes.into_iter().collect();
+            assert_eq!(axes.len(), 1, "only support argmin over one axis");
+
+            SupportedOp::Hybrid(HybridOp::ReduceArgMin { dim: axes[0] })
+        }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "min".to_string())));
             };
-            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
 
             SupportedOp::Hybrid(HybridOp::ReduceMin { axes })
@@ -389,7 +357,7 @@ pub fn new_op_from_onnx(
             if inputs.len() != 1 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "max".to_string())));
             };
-            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
 
             SupportedOp::Hybrid(HybridOp::ReduceMax { axes })
@@ -398,7 +366,7 @@ pub fn new_op_from_onnx(
             if inputs.len() != 1 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "prod".to_string())));
             };
-            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes: Vec<usize> = op.axes.into_iter().collect();
 
             // length of prod along axes
@@ -415,7 +383,7 @@ pub fn new_op_from_onnx(
             if inputs.len() != 1 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
             };
-            let op = load_reduce_op(node.op(), idx, node.op().name().to_string())?;
+            let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
 
             SupportedOp::Linear(PolyOp::Sum { axes })
@@ -513,7 +481,7 @@ pub fn new_op_from_onnx(
 
         "LeakyRelu" => {
             // Extract the slope layer hyperparams
-            let leaky_op = load_eltwise_op(node.op(), idx, node.op().name().to_string())?;
+            let leaky_op = load_op::<ElementWiseOp>(node.op(), idx, node.op().name().to_string())?;
 
             let leaky_op: &LeakyRelu = match leaky_op.0.downcast_ref::<LeakyRelu>() {
                 Some(b) => b,
@@ -592,12 +560,13 @@ pub fn new_op_from_onnx(
         "Source" => {
             let (scale, datum_type) = match node.outputs[0].fact.datum_type {
                 DatumType::Bool => (0, InputType::Bool),
+                DatumType::TDim => (0, InputType::TDim),
                 _ => (scales.input, InputType::Num),
             };
             SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
         }
         "Cast" => {
-            let op = load_cast_op(node.op(), idx, node.op().name().to_string())?;
+            let op = load_op::<Cast>(node.op(), idx, node.op().name().to_string())?;
             let dt = op.to;
             let input_scales = inputs
                 .iter()
@@ -608,7 +577,7 @@ pub fn new_op_from_onnx(
                 DatumType::Bool => SupportedOp::Nonlinear(LookupOp::Div {
                     denom: crate::circuit::utils::F32(scale_to_multiplier(input_scales[0]) as f32),
                 }),
-                DatumType::TDim | DatumType::String | DatumType::Blob => unimplemented!(),
+                DatumType::String | DatumType::Blob => unimplemented!(),
                 _ => SupportedOp::Linear(PolyOp::Identity),
             }
         }
@@ -654,16 +623,9 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            // if its not the last dim then we don't support it
-            if softmax_op.axes.to_vec() != vec![inputs[0].out_dims()[0].len() - 1] {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "softmax".to_string(),
-                )));
-            }
-
             SupportedOp::Hybrid(HybridOp::Softmax {
                 scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                axes: softmax_op.axes.to_vec(),
             })
         }
         "MaxPool" => {
@@ -1037,9 +999,19 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     scale: u32,
     visibility: Visibility,
 ) -> Result<Tensor<F>, Box<dyn std::error::Error>> {
-    let mut value: Tensor<F> = const_value.map(|x| {
-        crate::fieldutils::i128_to_felt::<F>(quantize_float(&x.into(), 0.0, scale).unwrap())
-    });
+    let value: Result<Vec<F>, Box<dyn std::error::Error>> = const_value
+        .iter()
+        .map(|x| {
+            Ok(crate::fieldutils::i128_to_felt::<F>(quantize_float(
+                &(*x).into(),
+                0.0,
+                scale,
+            )?))
+        })
+        .collect();
+
+    let mut value: Tensor<F> = value?.into_iter().into();
+    value.reshape(const_value.dims());
     value.set_scale(scale);
     value.set_visibility(visibility);
     Ok(value)

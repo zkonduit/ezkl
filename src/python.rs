@@ -269,7 +269,9 @@ fn calibrate_settings(
     target: Option<CalibrationTarget>,
     scales: Option<Vec<u32>>,
 ) -> PyResult<&pyo3::PyAny> {
-    let target = target.unwrap_or(CalibrationTarget::Resources);
+    let target = target.unwrap_or(CalibrationTarget::Resources {
+        col_overflow: false,
+    });
     pyo3_asyncio::tokio::future_into_py(py, async move {
         crate::execute::calibrate(model, data, settings, target, scales)
             .await
