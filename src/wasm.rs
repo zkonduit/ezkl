@@ -37,65 +37,83 @@ use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 /// Converts 4 u64s to a field element
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn vecU64ToFelt(array: wasm_bindgen::Clamped<Vec<u8>>) -> String {
-    let felt: Fr = serde_json::from_slice(&array[..]).unwrap();
-    format!("{:?}", felt)
+pub fn vecU64ToFelt(array: wasm_bindgen::Clamped<Vec<u8>>) -> Result<String, JsError> {
+    let felt: Fr =
+        serde_json::from_slice(&array[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
+    Ok(format!("{:?}", felt))
 }
 
 /// Converts 4 u64s representing a field element directly to an integer
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn vecU64ToInt(array: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindgen::Clamped<Vec<u8>> {
-    let felt: Fr = serde_json::from_slice(&array[..]).unwrap();
-    wasm_bindgen::Clamped(serde_json::to_vec(&felt_to_i128(felt)).unwrap())
+pub fn vecU64ToInt(
+    array: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
+    let felt: Fr =
+        serde_json::from_slice(&array[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
+    Ok(wasm_bindgen::Clamped(
+        serde_json::to_vec(&felt_to_i128(felt)).map_err(|e| JsError::new(&format!("{}", e)))?,
+    ))
 }
 
 /// Converts 4 u64s representing a field element directly to a (rescaled from fixed point scaling) floating point
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn vecU64ToFloat(array: wasm_bindgen::Clamped<Vec<u8>>, scale: u32) -> f64 {
-    let felt: Fr = serde_json::from_slice(&array[..]).unwrap();
+pub fn vecU64ToFloat(array: wasm_bindgen::Clamped<Vec<u8>>, scale: u32) -> Result<f64, JsError> {
+    let felt: Fr =
+        serde_json::from_slice(&array[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
     let int_rep = felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
-    int_rep as f64 / multiplier
+    Ok(int_rep as f64 / multiplier)
 }
 
 /// Converts a floating point element to 4 u64s representing a fixed point field element
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn floatToVecU64(input: f64, scale: u32) -> wasm_bindgen::Clamped<Vec<u8>> {
-    let int_rep = quantize_float(&input, 0.0, scale).unwrap();
+pub fn floatToVecU64(input: f64, scale: u32) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
+    let int_rep =
+        quantize_float(&input, 0.0, scale).map_err(|e| JsError::new(&format!("{}", e)))?;
     let felt = i128_to_felt(int_rep);
     let vec = crate::pfsys::field_to_vecu64_montgomery::<halo2curves::bn256::Fr>(&felt);
-    wasm_bindgen::Clamped(serde_json::to_vec(&vec).unwrap())
+    Ok(wasm_bindgen::Clamped(
+        serde_json::to_vec(&vec).map_err(|e| JsError::new(&format!("{}", e)))?,
+    ))
 }
 
 /// Generate a poseidon hash in browser. Input message
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn poseidonHash(message: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindgen::Clamped<Vec<u8>> {
-    let message: Vec<Fr> = serde_json::from_slice(&message[..]).unwrap();
+pub fn poseidonHash(
+    message: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
+    let message: Vec<Fr> =
+        serde_json::from_slice(&message[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let output =
         PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(
             message.clone(),
         )
-        .unwrap();
+        .map_err(|e| JsError::new(&format!("{}", e)))?;
 
-    wasm_bindgen::Clamped(serde_json::to_vec(&output).unwrap())
+    Ok(wasm_bindgen::Clamped(
+        serde_json::to_vec(&output).map_err(|e| JsError::new(&format!("{}", e)))?,
+    ))
 }
 
 /// Generates random elgamal variables from a random seed value in browser.
 /// Make sure input seed comes a secure source of randomness
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn elgamalGenRandom(rng: wasm_bindgen::Clamped<Vec<u8>>) -> Vec<u8> {
+pub fn elgamalGenRandom(rng: wasm_bindgen::Clamped<Vec<u8>>) -> Result<Vec<u8>, JsError> {
     let seed: &[u8] = &rng;
-    let mut rng = StdRng::from_seed(seed.try_into().unwrap());
+    let mut rng = StdRng::from_seed(
+        seed.try_into()
+            .map_err(|e| JsError::new(&format!("{}", e)))?,
+    );
 
     let output = crate::circuit::modules::elgamal::ElGamalVariables::gen_random(&mut rng);
 
-    serde_json::to_vec(&output).unwrap()
+    serde_json::to_vec(&output).map_err(|e| JsError::new(&format!("{}", e)))
 }
 
 /// Encrypt using elgamal in browser. Input message
@@ -105,14 +123,16 @@ pub fn elgamalEncrypt(
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     message: wasm_bindgen::Clamped<Vec<u8>>,
     r: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Vec<u8> {
-    let pk: G1Affine = serde_json::from_slice(&pk[..]).unwrap();
-    let message: Vec<Fr> = serde_json::from_slice(&message[..]).unwrap();
-    let r: Fr = serde_json::from_slice(&r[..]).unwrap();
+) -> Result<Vec<u8>, JsError> {
+    let pk: G1Affine =
+        serde_json::from_slice(&pk[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
+    let message: Vec<Fr> =
+        serde_json::from_slice(&message[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
+    let r: Fr = serde_json::from_slice(&r[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let output = crate::circuit::modules::elgamal::ElGamalGadget::encrypt(pk, message, r);
 
-    serde_json::to_vec(&output).unwrap()
+    serde_json::to_vec(&output).map_err(|e| JsError::new(&format!("{}", e)))
 }
 
 /// Decrypt using elgamal in browser. Input message
@@ -121,14 +141,15 @@ pub fn elgamalEncrypt(
 pub fn elgamalDecrypt(
     cipher: wasm_bindgen::Clamped<Vec<u8>>,
     sk: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Vec<u8> {
-    let sk: Fr = serde_json::from_slice(&sk[..]).unwrap();
+) -> Result<Vec<u8>, JsError> {
+    let sk: Fr = serde_json::from_slice(&sk[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
-    let cipher: ElGamalCipher = serde_json::from_slice(&cipher[..]).unwrap();
+    let cipher: ElGamalCipher =
+        serde_json::from_slice(&cipher[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let output = crate::circuit::modules::elgamal::ElGamalGadget::decrypt(&cipher, sk);
 
-    serde_json::to_vec(&output).unwrap()
+    serde_json::to_vec(&output).map_err(|e| JsError::new(&format!("{}", e)))
 }
 
 /// Generate a witness file from input.json, compiled model and a settings.json file.
@@ -137,20 +158,28 @@ pub fn elgamalDecrypt(
 pub fn genWitness(
     compiled_model: wasm_bindgen::Clamped<Vec<u8>>,
     input: wasm_bindgen::Clamped<Vec<u8>>,
-    settings: wasm_bindgen::Clamped<Vec<u8>>
-) -> Vec<u8> {
-    let compiled_model: crate::graph::Model = bincode::deserialize(&compiled_model[..]).unwrap();
-    let input: crate::graph::input::GraphData = serde_json::from_slice(&input[..]).unwrap();
-    let circuit_settings: crate::graph::GraphSettings = serde_json::from_slice(&settings[..]).unwrap();
+    settings: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Result<Vec<u8>, JsError> {
+    let compiled_model: crate::graph::Model =
+        bincode::deserialize(&compiled_model[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
+    let input: crate::graph::input::GraphData =
+        serde_json::from_slice(&input[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
+    let circuit_settings: crate::graph::GraphSettings =
+        serde_json::from_slice(&settings[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     // read in circuit
-    let mut circuit = GraphCircuit::new(compiled_model, &circuit_settings.run_args).unwrap();
+    let mut circuit = GraphCircuit::new(compiled_model, &circuit_settings.run_args)
+        .map_err(|e| JsError::new(&format!("{}", e)))?;
 
-    let mut input = circuit.load_graph_input(&input).unwrap();
+    let mut input = circuit
+        .load_graph_input(&input)
+        .map_err(|e| JsError::new(&format!("{}", e)))?;
 
-    let witness = circuit.forward(&mut input).unwrap();
+    let witness = circuit
+        .forward(&mut input)
+        .map_err(|e| JsError::new(&format!("{}", e)))?;
 
-    serde_json::to_vec(&witness).unwrap()
+    serde_json::to_vec(&witness).map_err(|e| JsError::new(&format!("{}", e)))
 }
 
 /// Verify proof in browser using wasm
@@ -160,15 +189,17 @@ pub fn verify(
     vk: wasm_bindgen::Clamped<Vec<u8>>,
     settings: wasm_bindgen::Clamped<Vec<u8>>,
     srs: wasm_bindgen::Clamped<Vec<u8>>,
-) -> bool {
+) -> Result<bool, JsError> {
     let mut reader = std::io::BufReader::new(&srs[..]);
     let params: ParamsKZG<Bn256> =
-        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
+        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
+            .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let circuit_settings: GraphSettings =
-        serde_json::from_slice(&settings[..]).unwrap();
+        serde_json::from_slice(&settings[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
-    let snark: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof_js[..]).unwrap();
+    let snark: crate::pfsys::Snark<Fr, G1Affine> =
+        serde_json::from_slice(&proof_js[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let mut reader = std::io::BufReader::new(&vk[..]);
     let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
@@ -176,17 +207,13 @@ pub fn verify(
         halo2_proofs::SerdeFormat::RawBytes,
         circuit_settings,
     )
-    .unwrap();
+    .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
 
     let result = verify_proof_circuit_kzg(params.verifier_params(), snark, &vk, strategy);
 
-    if result.is_ok() {
-        true
-    } else {
-        false
-    }
+    Ok(if result.is_ok() { true } else { false })
 }
 
 /// Prove in browser using wasm
@@ -197,18 +224,20 @@ pub fn prove(
     compiled_model: wasm_bindgen::Clamped<Vec<u8>>,
     settings: wasm_bindgen::Clamped<Vec<u8>>,
     srs: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Vec<u8> {
+) -> Result<Vec<u8>, JsError> {
     // read in kzg params
     let mut reader = std::io::BufReader::new(&srs[..]);
     let params: ParamsKZG<Bn256> =
-        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
+        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
+            .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     // read in model input
-    let data: crate::graph::GraphWitness = serde_json::from_slice(&witness[..]).unwrap();
+    let data: crate::graph::GraphWitness =
+        serde_json::from_slice(&witness[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     // read in circuit params
     let circuit_settings: GraphSettings =
-        serde_json::from_slice(&settings[..]).unwrap();
+        serde_json::from_slice(&settings[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     // read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
@@ -217,16 +246,22 @@ pub fn prove(
         halo2_proofs::SerdeFormat::RawBytes,
         circuit_settings.clone(),
     )
-    .unwrap();
+    .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     // read in circuit
-    let compiled_model: crate::graph::Model = bincode::deserialize(&compiled_model[..]).unwrap();
+    let compiled_model: crate::graph::Model =
+        bincode::deserialize(&compiled_model[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
-    let mut circuit = GraphCircuit::new(compiled_model, &circuit_settings.run_args).unwrap();
+    let mut circuit = GraphCircuit::new(compiled_model, &circuit_settings.run_args)
+        .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     // prep public inputs
-    circuit.load_graph_witness(&data).unwrap();
-    let public_inputs = circuit.prepare_public_inputs(&data).unwrap();
+    circuit
+        .load_graph_witness(&data)
+        .map_err(|e| JsError::new(&format!("{}", e)))?;
+    let public_inputs = circuit
+        .prepare_public_inputs(&data)
+        .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let strategy = KZGSingleStrategy::new(&params);
     let proof = create_proof_circuit_kzg(
@@ -238,9 +273,11 @@ pub fn prove(
         strategy,
         crate::circuit::CheckMode::UNSAFE,
     )
-    .unwrap();
+    .map_err(|e| JsError::new(&format!("{}", e)))?;
 
-    serde_json::to_string(&proof).unwrap().into_bytes()
+    Ok(serde_json::to_string(&proof)
+        .map_err(|e| JsError::new(&format!("{}", e)))?
+        .into_bytes())
 }
 
 // HELPER FUNCTIONS
