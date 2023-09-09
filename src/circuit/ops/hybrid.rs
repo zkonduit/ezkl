@@ -37,7 +37,9 @@ pub enum HybridOp {
     },
     RangeCheck(Tolerance),
     Greater,
+    GreaterEqual,
     Less,
+    LessEqual,
     Equals,
     Gather {
         dim: usize,
@@ -186,9 +188,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
                 tensor::ops::greater(&x, &y)?
             }
+            HybridOp::GreaterEqual => {
+                let y = inputs[1].clone().map(|x| felt_to_i128(x));
+                tensor::ops::greater_equal(&x, &y)?
+            }
             HybridOp::Less => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
                 tensor::ops::less(&x, &y)?
+            }
+            HybridOp::LessEqual => {
+                let y = inputs[1].clone().map(|x| felt_to_i128(x));
+                tensor::ops::less_equal(&x, &y)?
             }
             HybridOp::Equals => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
@@ -216,7 +226,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Softmax { .. } => "SOFTMAX",
             HybridOp::RangeCheck(..) => "RANGECHECK",
             HybridOp::Greater { .. } => "GREATER",
+            HybridOp::GreaterEqual { .. } => "GREATEREQUAL",
             HybridOp::Less { .. } => "LESS",
+            HybridOp::LessEqual { .. } => "LESSEQUAL",
             HybridOp::Equals => "EQUALS",
             HybridOp::Gather { .. } => "GATHER",
             HybridOp::TopK { .. } => "TOPK",
@@ -282,7 +294,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 tol.val,
             )?,
             HybridOp::Greater => layouts::greater(config, region, values[..].try_into()?)?,
+            HybridOp::GreaterEqual => {
+                layouts::greater_equal(config, region, values[..].try_into()?)?
+            }
             HybridOp::Less => layouts::less(config, region, values[..].try_into()?)?,
+            HybridOp::LessEqual => layouts::less_equal(config, region, values[..].try_into()?)?,
             HybridOp::Equals => layouts::equals(config, region, values[..].try_into()?)?,
             HybridOp::TopK { dim, k } => {
                 layouts::topk_axes(config, region, values[..].try_into()?, *k, *dim)?
@@ -300,7 +316,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
         match self {
             HybridOp::Greater { .. }
+            | HybridOp::GreaterEqual { .. }
             | HybridOp::Less { .. }
+            | HybridOp::LessEqual { .. }
             | HybridOp::ReduceArgMax { .. }
             | HybridOp::ReduceArgMin { .. } => 0,
             HybridOp::Softmax { .. } => 2 * in_scales[0],
@@ -344,6 +362,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::TopK { .. }
             | HybridOp::GatherElements { .. } => {
                 vec![LookupOp::GreaterThan {
+                    a: circuit::utils::F32(0.),
+                }]
+            }
+            HybridOp::GreaterEqual { .. } | HybridOp::LessEqual { .. } => {
+                vec![LookupOp::GreaterThanEqual {
                     a: circuit::utils::F32(0.),
                 }]
             }
