@@ -83,39 +83,52 @@ pub fn floatToVecU64(input: f64, scale: u32) -> Result<wasm_bindgen::Clamped<Vec
 /// Converts a buffer to vector of 4 u64s representing a fixed point field element
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn bufferToVecOfVecU64(buffer: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindgen::Clamped<Vec<u8>> {
-   // Convert the buffer to a slice
-   let buffer: &[u8] = &buffer;
+pub fn bufferToVecOfVecU64(
+    buffer: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
+    // Convert the buffer to a slice
+    let buffer: &[u8] = &buffer;
 
-   // Divide the buffer into chunks of 64 bytes
-   let chunks = buffer.chunks_exact(16);
+    // Divide the buffer into chunks of 64 bytes
+    let chunks = buffer.chunks_exact(16);
 
-   // Get the remainder
-   let remainder = chunks.remainder();
+    // Get the remainder
+    let remainder = chunks.remainder();
 
-   // Add 0s to the remainder to make it 64 bytes
-   let mut remainder = remainder.to_vec();
+    // Add 0s to the remainder to make it 64 bytes
+    let mut remainder = remainder.to_vec();
 
-   // Collect chunks into a Vec<[u8; 16]>.
-   let mut chunks: Vec<[u8; 16]> = chunks.map(|slice| {
-       let array: [u8; 16] = slice.try_into().unwrap();
-       array
-   }).collect();
+    // Collect chunks into a Vec<[u8; 16]>.
+    let chunks: Result<Vec<[u8; 16]>, JsError> = chunks
+        .map(|slice| {
+            let array: [u8; 16] = slice
+                .try_into()
+                .map_err(|e| JsError::new("failed to slice input chunks"))?;
+            Ok(array)
+        })
+        .collect();
 
-   if remainder.len() != 0 {
-       remainder.resize(16, 0);
-       // Convert the Vec<u8> to [u8; 16]
-       let remainder_array: [u8; 16] = remainder.try_into().unwrap();
-       // append the remainder to the chunks
-       chunks.push(remainder_array);
-   }
+    let mut chunks = chunks?;
 
-   // Convert each chunk to a field element
-   let field_elements: Vec<Fr> = chunks.iter().map(
-       |x| PrimeField::from_u128(u8_array_to_u128_le(*x))
-   ).collect();
+    if remainder.len() != 0 {
+        remainder.resize(16, 0);
+        // Convert the Vec<u8> to [u8; 16]
+        let remainder_array: [u8; 16] = remainder
+            .try_into()
+            .map_err(|e| JsError::new("failed to slice remainder"))?;
+        // append the remainder to the chunks
+        chunks.push(remainder_array);
+    }
 
-   wasm_bindgen::Clamped(serde_json::to_vec(&field_elements).unwrap())
+    // Convert each chunk to a field element
+    let field_elements: Vec<Fr> = chunks
+        .iter()
+        .map(|x| PrimeField::from_u128(u8_array_to_u128_le(*x)))
+        .collect();
+
+    Ok(wasm_bindgen::Clamped(
+        serde_json::to_vec(&field_elements).map_err(|e| JsError::new(&format!("{}", e)))?,
+    ))
 }
 
 /// Generate a poseidon hash in browser. Input message

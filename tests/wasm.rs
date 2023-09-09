@@ -10,15 +10,15 @@ mod wasm32 {
     use ezkl::graph::GraphWitness;
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
-        elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, poseidonHash, prove, vecU64ToFelt,
-        vecU64ToFloat, vecU64ToInt, verify, genWitness, bufferToVecOfVecU64, u8_array_to_u128_le
+        bufferToVecOfVecU64, elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, genWitness,
+        poseidonHash, prove, u8_array_to_u128_le, vecU64ToFelt, vecU64ToFloat, vecU64ToInt, verify,
     };
     use halo2curves::bn256::{Fr, G1Affine};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use snark_verifier::util::arithmetic::PrimeField;
     #[cfg(feature = "web")]
     pub use wasm_bindgen_rayon::init_thread_pool;
-    use snark_verifier::util::arithmetic::PrimeField;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -55,15 +55,14 @@ mod wasm32 {
             assert_eq!(hex_string, returned_string);
         }
     }
-    
+
     #[wasm_bindgen_test]
     async fn verify_buffer_to_field_elements() {
-
         let string_high = String::from("high");
         let mut buffer = string_high.clone().into_bytes();
         let clamped = wasm_bindgen::Clamped(buffer.clone());
 
-        let field_elements_ser = bufferToVecOfVecU64(clamped);
+        let field_elements_ser = bufferToVecOfVecU64(clamped).map_err(|_| "failed").unwrap();
 
         let field_elements: Vec<Fr> = serde_json::from_slice(&field_elements_ser[..]).unwrap();
 
@@ -80,7 +79,7 @@ mod wasm32 {
         let buffer = string_sample.clone().into_bytes();
         let clamped = wasm_bindgen::Clamped(buffer.clone());
 
-        let field_elements_ser = bufferToVecOfVecU64(clamped);
+        let field_elements_ser = bufferToVecOfVecU64(clamped).map_err(|_| "failed").unwrap();
 
         let field_elements: Vec<Fr> = serde_json::from_slice(&field_elements_ser[..]).unwrap();
 
@@ -95,13 +94,12 @@ mod wasm32 {
         let buffer = string_concat.into_bytes();
         let clamped = wasm_bindgen::Clamped(buffer.clone());
 
-        let field_elements_ser = bufferToVecOfVecU64(clamped);
+        let field_elements_ser = bufferToVecOfVecU64(clamped).map_err(|_| "failed").unwrap();
 
         let field_elements: Vec<Fr> = serde_json::from_slice(&field_elements_ser[..]).unwrap();
 
         assert_eq!(field_elements[0], reference_field_element_sample);
         assert_eq!(field_elements[1], reference_field_element_high);
-
     }
 
     #[wasm_bindgen_test]

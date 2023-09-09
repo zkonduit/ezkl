@@ -16,10 +16,10 @@ use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
+use snark_verifier::util::arithmetic::PrimeField;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
-use snark_verifier::util::arithmetic::PrimeField;
 
 /// pyclass containing the struct used for run_args
 #[pyclass]
@@ -139,7 +139,6 @@ fn float_to_vecu64(input: f64, scale: u32) -> PyResult<[u64; 4]> {
     buffer
     ))]
 fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
-
     fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
         let mut n: u128 = 0;
         for &b in arr.iter().rev() {
@@ -149,41 +148,48 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
         n
     }
 
-   let buffer = &buffer[..];
+    let buffer = &buffer[..];
 
     // Divide the buffer into chunks of 64 bytes
-   let chunks = buffer.chunks_exact(16);
+    let chunks = buffer.chunks_exact(16);
 
-   // Get the remainder
-   let remainder = chunks.remainder();
+    // Get the remainder
+    let remainder = chunks.remainder();
 
-   // Add 0s to the remainder to make it 64 bytes
-   let mut remainder = remainder.to_vec();
+    // Add 0s to the remainder to make it 64 bytes
+    let mut remainder = remainder.to_vec();
 
-   // Collect chunks into a Vec<[u8; 16]>.
-   let mut chunks: Vec<[u8; 16]> = chunks.map(|slice| {
-       let array: [u8; 16] = slice.try_into().unwrap();
-       array
-   }).collect();
+    // Collect chunks into a Vec<[u8; 16]>.
+    let chunks: Result<Vec<[u8; 16]>, PyErr> = chunks
+        .map(|slice| {
+            let array: [u8; 16] = slice
+                .try_into()
+                .map_err(|_| PyIOError::new_err("Failed to slice input buffer"))?;
+            Ok(array)
+        })
+        .collect();
 
-   if remainder.len() != 0 {
-       remainder.resize(16, 0);
-       // Convert the Vec<u8> to [u8; 16]
-       let remainder_array: [u8; 16] = remainder.try_into().unwrap();
-       // append the remainder to the chunks
-       chunks.push(remainder_array);
-   }
+    let mut chunks = chunks?;
+
+    if remainder.len() != 0 {
+        remainder.resize(16, 0);
+        // Convert the Vec<u8> to [u8; 16]
+        let remainder_array: [u8; 16] = remainder
+            .try_into()
+            .map_err(|_| PyIOError::new_err("Failed to slice remainder"))?;
+        // append the remainder to the chunks
+        chunks.push(remainder_array);
+    }
 
     // Convert each chunk to a field element
-    let field_elements: Vec<Fr> = chunks.iter().map(
-        |x| PrimeField::from_u128(u8_array_to_u128_le(*x))
-    ).collect();
+    let field_elements: Vec<Fr> = chunks
+        .iter()
+        .map(|x| PrimeField::from_u128(u8_array_to_u128_le(*x)))
+        .collect();
 
-    let field_elements: Vec<String> = field_elements.iter().map(
-        |x| format!("{:?}", x)
-    ).collect();
+    let field_elements: Vec<String> = field_elements.iter().map(|x| format!("{:?}", x)).collect();
 
-   Ok(field_elements)
+    Ok(field_elements)
 }
 
 /// Generates a vk from a pk for a model circuit and saves it to a file
