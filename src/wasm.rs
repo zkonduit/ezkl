@@ -70,7 +70,7 @@ pub fn floatToVecU64(input: f64, scale: u32) -> wasm_bindgen::Clamped<Vec<u8>> {
     wasm_bindgen::Clamped(serde_json::to_vec(&vec).unwrap())
 }
 
-/// Converts a buffer to 4 u64s representing a fixed point field element
+/// Converts a buffer to vector of 4 u64s representing a fixed point field element
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn bufferToVecOfVecU64(buffer: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindgen::Clamped<Vec<u8>> {
@@ -85,19 +85,20 @@ pub fn bufferToVecOfVecU64(buffer: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindg
 
    // Add 0s to the remainder to make it 64 bytes
    let mut remainder = remainder.to_vec();
-   remainder.resize(16, 0);
-
-   // Convert the Vec<u8> to [u8; 16]
-   let remainder_array: [u8; 16] = remainder.try_into().expect("Slice must be of length 16");
 
    // Collect chunks into a Vec<[u8; 16]>.
    let mut chunks: Vec<[u8; 16]> = chunks.map(|slice| {
-       let array: [u8; 16] = slice.try_into().expect("Slice must be of length 16");
+       let array: [u8; 16] = slice.try_into().unwrap();
        array
    }).collect();
 
-   // append the remainder to the chunks
-   chunks.push(remainder_array);
+   if remainder.len() != 0 {
+       remainder.resize(16, 0);
+       // Convert the Vec<u8> to [u8; 16]
+       let remainder_array: [u8; 16] = remainder.try_into().unwrap();
+       // append the remainder to the chunks
+       chunks.push(remainder_array);
+   }
 
    // Convert each chunk to a field element
    let field_elements: Vec<Fr> = chunks.iter().map(
