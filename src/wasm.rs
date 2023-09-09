@@ -103,7 +103,7 @@ pub fn bufferToVecOfVecU64(
         .map(|slice| {
             let array: [u8; 16] = slice
                 .try_into()
-                .map_err(|e| JsError::new("failed to slice input chunks"))?;
+                .map_err(|_| JsError::new("failed to slice input chunks"))?;
             Ok(array)
         })
         .collect();
@@ -115,7 +115,7 @@ pub fn bufferToVecOfVecU64(
         // Convert the Vec<u8> to [u8; 16]
         let remainder_array: [u8; 16] = remainder
             .try_into()
-            .map_err(|e| JsError::new("failed to slice remainder"))?;
+            .map_err(|_| JsError::new("failed to slice remainder"))?;
         // append the remainder to the chunks
         chunks.push(remainder_array);
     }
