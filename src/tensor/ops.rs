@@ -3666,7 +3666,7 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::less_than_equals;
+    /// use ezkl::tensor::ops::nonlinearities::less_than_equal;
     ///
     /// let x = Tensor::<i128>::new(
     ///    Some(&[2, 1, 2, 7, 1, 1]),
@@ -3674,7 +3674,7 @@ pub mod nonlinearities {
     /// ).unwrap();
     /// let k = 2.0;
     ///
-    /// let result = less_than_equals(&x, k);
+    /// let result = less_than_equal(&x, k);
     /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 0, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
