@@ -138,7 +138,7 @@ fn float_to_vecu64(input: f64, scale: u32) -> PyResult<[u64; 4]> {
 #[pyfunction(signature = (
     buffer
     ))]
-fn buffer_to_felt(buffer: Vec<u8>) -> PyResult<Vec<String>> {
+fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
 
     fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
         let mut n: u128 = 0;
@@ -787,7 +787,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(vecu64_to_int, m)?)?;
     m.add_function(wrap_pyfunction!(vecu64_to_float, m)?)?;
     m.add_function(wrap_pyfunction!(float_to_vecu64, m)?)?;
-    m.add_function(wrap_pyfunction!(buffer_to_felt, m)?)?;
+    m.add_function(wrap_pyfunction!(buffer_to_felts, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_single, m)?)?;
     m.add_function(wrap_pyfunction!(table, m)?)?;
