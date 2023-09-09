@@ -69,6 +69,19 @@ def test_field_serialization():
     roundtrip_input = ezkl.vecu64_to_float(felt, scale)
     assert input == roundtrip_input
 
+def test_buffer_to_felts():
+    """
+    Test buffer_to_felt
+    """
+    buffer = bytearray("a sample string!", 'utf-8')
+    felts = ezkl.buffer_to_felts(buffer)
+    ref_felt_1 = "0x0000000000000000000000000000000021676e6972747320656c706d61732061"
+    assert felts == [ref_felt_1]
+
+    buffer = bytearray("a sample string!"+"high", 'utf-8')
+    felts = ezkl.buffer_to_felts(buffer)
+    ref_felt_2 = "0x0000000000000000000000000000000000000000000000000000000068676968"
+    assert felts == [ref_felt_1,ref_felt_2]
 
 def test_table_1l_average():
     """

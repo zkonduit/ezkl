@@ -70,6 +70,44 @@ pub fn floatToVecU64(input: f64, scale: u32) -> wasm_bindgen::Clamped<Vec<u8>> {
     wasm_bindgen::Clamped(serde_json::to_vec(&vec).unwrap())
 }
 
+/// Converts a buffer to vector of 4 u64s representing a fixed point field element
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn bufferToVecOfVecU64(buffer: wasm_bindgen::Clamped<Vec<u8>>) -> wasm_bindgen::Clamped<Vec<u8>> {
+   // Convert the buffer to a slice
+   let buffer: &[u8] = &buffer;
+
+   // Divide the buffer into chunks of 64 bytes
+   let chunks = buffer.chunks_exact(16);
+
+   // Get the remainder
+   let remainder = chunks.remainder();
+
+   // Add 0s to the remainder to make it 64 bytes
+   let mut remainder = remainder.to_vec();
+
+   // Collect chunks into a Vec<[u8; 16]>.
+   let mut chunks: Vec<[u8; 16]> = chunks.map(|slice| {
+       let array: [u8; 16] = slice.try_into().unwrap();
+       array
+   }).collect();
+
+   if remainder.len() != 0 {
+       remainder.resize(16, 0);
+       // Convert the Vec<u8> to [u8; 16]
+       let remainder_array: [u8; 16] = remainder.try_into().unwrap();
+       // append the remainder to the chunks
+       chunks.push(remainder_array);
+   }
+
+   // Convert each chunk to a field element
+   let field_elements: Vec<Fr> = chunks.iter().map(
+       |x| PrimeField::from_u128(u8_array_to_u128_le(*x))
+   ).collect();
+
+   wasm_bindgen::Clamped(serde_json::to_vec(&field_elements).unwrap())
+}
+
 /// Generate a poseidon hash in browser. Input message
 #[wasm_bindgen]
 #[allow(non_snake_case)]
@@ -262,4 +300,14 @@ where
     let vk = keygen_vk(params, &empty_circuit)?;
     let pk = keygen_pk(params, vk, &empty_circuit)?;
     Ok(pk)
+}
+
+///
+pub fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
+    let mut n: u128 = 0;
+    for &b in arr.iter().rev() {
+        n <<= 8;
+        n |= b as u128;
+    }
+    n
 }

@@ -19,6 +19,7 @@ use pyo3_log;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
+use snark_verifier::util::arithmetic::PrimeField;
 
 /// pyclass containing the struct used for run_args
 #[pyclass]
@@ -130,9 +131,59 @@ fn float_to_vecu64(input: f64, scale: u32) -> PyResult<[u64; 4]> {
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = i128_to_felt(int_rep);
-    Ok(crate::pfsys::field_to_vecu64_montgomery::<
-        halo2curves::bn256::Fr,
-    >(&felt))
+    Ok(crate::pfsys::field_to_vecu64_montgomery::<Fr>(&felt))
+}
+
+/// Converts a buffer to vector of 4 u64s representing a fixed point field element
+#[pyfunction(signature = (
+    buffer
+    ))]
+fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
+
+    fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
+        let mut n: u128 = 0;
+        for &b in arr.iter().rev() {
+            n <<= 8;
+            n |= b as u128;
+        }
+        n
+    }
+
+   let buffer = &buffer[..];
+
+    // Divide the buffer into chunks of 64 bytes
+   let chunks = buffer.chunks_exact(16);
+
+   // Get the remainder
+   let remainder = chunks.remainder();
+
+   // Add 0s to the remainder to make it 64 bytes
+   let mut remainder = remainder.to_vec();
+
+   // Collect chunks into a Vec<[u8; 16]>.
+   let mut chunks: Vec<[u8; 16]> = chunks.map(|slice| {
+       let array: [u8; 16] = slice.try_into().unwrap();
+       array
+   }).collect();
+
+   if remainder.len() != 0 {
+       remainder.resize(16, 0);
+       // Convert the Vec<u8> to [u8; 16]
+       let remainder_array: [u8; 16] = remainder.try_into().unwrap();
+       // append the remainder to the chunks
+       chunks.push(remainder_array);
+   }
+
+    // Convert each chunk to a field element
+    let field_elements: Vec<Fr> = chunks.iter().map(
+        |x| PrimeField::from_u128(u8_array_to_u128_le(*x))
+    ).collect();
+
+    let field_elements: Vec<String> = field_elements.iter().map(
+        |x| format!("{:?}", x)
+    ).collect();
+
+   Ok(field_elements)
 }
 
 /// Generates a vk from a pk for a model circuit and saves it to a file
@@ -736,6 +787,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(vecu64_to_int, m)?)?;
     m.add_function(wrap_pyfunction!(vecu64_to_float, m)?)?;
     m.add_function(wrap_pyfunction!(float_to_vecu64, m)?)?;
+    m.add_function(wrap_pyfunction!(buffer_to_felts, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_single, m)?)?;
     m.add_function(wrap_pyfunction!(table, m)?)?;

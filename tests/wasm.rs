@@ -11,13 +11,14 @@ mod wasm32 {
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
         elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, poseidonHash, prove, vecU64ToFelt,
-        vecU64ToFloat, vecU64ToInt, verify, genWitness
+        vecU64ToFloat, vecU64ToInt, verify, genWitness, bufferToVecOfVecU64, u8_array_to_u128_le
     };
     use halo2curves::bn256::{Fr, G1Affine};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     #[cfg(feature = "web")]
     pub use wasm_bindgen_rayon::init_thread_pool;
+    use snark_verifier::util::arithmetic::PrimeField;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -48,6 +49,54 @@ mod wasm32 {
             let returned_string = vecU64ToFelt(clamped);
             assert_eq!(hex_string, returned_string);
         }
+    }
+    
+    #[wasm_bindgen_test]
+    async fn verify_buffer_to_field_elements() {
+
+        let string_high = String::from("high");
+        let mut buffer = string_high.clone().into_bytes();
+        let clamped = wasm_bindgen::Clamped(buffer.clone());
+
+        let field_elements_ser = bufferToVecOfVecU64(clamped);
+
+        let field_elements: Vec<Fr> = serde_json::from_slice(&field_elements_ser[..]).unwrap();
+
+        buffer.resize(16, 0);
+
+        let reference_int = u8_array_to_u128_le(buffer.try_into().unwrap());
+
+        let reference_field_element_high = PrimeField::from_u128(reference_int);
+
+        assert_eq!(field_elements[0], reference_field_element_high);
+
+        // length 16 string (divisible by 16 so doesn't need padding)
+        let string_sample = String::from("a sample string!");
+        let buffer = string_sample.clone().into_bytes();
+        let clamped = wasm_bindgen::Clamped(buffer.clone());
+
+        let field_elements_ser = bufferToVecOfVecU64(clamped);
+
+        let field_elements: Vec<Fr> = serde_json::from_slice(&field_elements_ser[..]).unwrap();
+
+        let reference_int = u8_array_to_u128_le(buffer.try_into().unwrap());
+
+        let reference_field_element_sample = PrimeField::from_u128(reference_int);
+
+        assert_eq!(field_elements[0], reference_field_element_sample);
+
+        let string_concat = string_sample + &string_high;
+
+        let buffer = string_concat.into_bytes();
+        let clamped = wasm_bindgen::Clamped(buffer.clone());
+
+        let field_elements_ser = bufferToVecOfVecU64(clamped);
+
+        let field_elements: Vec<Fr> = serde_json::from_slice(&field_elements_ser[..]).unwrap();
+
+        assert_eq!(field_elements[0], reference_field_element_sample);
+        assert_eq!(field_elements[1], reference_field_element_high);
+
     }
 
     #[wasm_bindgen_test]
