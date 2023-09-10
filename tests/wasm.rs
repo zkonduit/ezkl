@@ -232,7 +232,7 @@ mod wasm32 {
         )
         .map_err(|_| "failed");
         // should fail
-        assert!(!value.is_err());
+        assert!(value.is_err());
     }
 
     #[wasm_bindgen_test]
