@@ -318,6 +318,49 @@ pub fn greater<
     Ok((mask, vec![mask_inter]))
 }
 
+/// Greater equals than operation.
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::greater_equal;
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 12, 6, 4, 3, 2]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 4]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = greater_equal(&a, &b).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 1, 0, 0]), &[2, 3]).unwrap();
+/// assert_eq!(result.0, expected);
+/// ```
+pub fn greater_equal<
+    T: TensorType
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialOrd
+        + std::convert::TryFrom<u64>,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+    let mask_inter = (a.clone() - b.clone())?;
+    let mask = mask_inter.map(|x| {
+        if x >= T::zero().ok_or(TensorError::DimError).unwrap() {
+            T::one().ok_or(TensorError::DimError).unwrap()
+        } else {
+            T::zero().ok_or(TensorError::DimError).unwrap()
+        }
+    });
+    Ok((mask, vec![mask_inter]))
+}
+
 /// Less than to operation.
 /// # Arguments
 /// * `a` - Tensor
@@ -353,6 +396,43 @@ pub fn less<
 ) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
     // a < b <=> b > a
     greater(b, a)
+}
+
+/// Less equals than operation.
+/// # Arguments
+/// * `a` - Tensor
+/// * `b` - Tensor
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::less_equal;
+/// let a = Tensor::<i128>::new(
+///  Some(&[1, 0, 5, 4, 5, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let b = Tensor::<i128>::new(
+/// Some(&[1, 2, 3, 4, 5, 6]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = less_equal(&a, &b).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 1, 0, 1, 1, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result.0, expected);
+/// ```
+///
+pub fn less_equal<
+    T: TensorType
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + std::marker::Send
+        + std::marker::Sync
+        + std::cmp::PartialOrd
+        + std::convert::TryFrom<u64>,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+    // a < b <=> b > a
+    greater_equal(b, a)
 }
 
 /// Resize using nearest neighbour interpolation.
@@ -3522,6 +3602,34 @@ pub mod nonlinearities {
         output
     }
 
+    /// Elementwise greater than
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `b` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::greater_than_equal;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[2, 1, 2, 7, 1, 1]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let k = 2.0;
+    /// let result = greater_than_equal(&x, k);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 1, 0, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn greater_than_equal(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            output[i] = i128::from((*a_i as f64 - b) >= 0_f64);
+        }
+        output
+    }
+
     /// Elementwise less than
     /// # Arguments
     /// * `a` - Tensor
@@ -3547,6 +3655,35 @@ pub mod nonlinearities {
 
         for (i, a_i) in a.iter().enumerate() {
             output[i] = i128::from((*a_i as f64 - b) < 0_f64);
+        }
+        output
+    }
+
+    /// Elementwise less than
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `b` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::less_than_equal;
+    ///
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[2, 1, 2, 7, 1, 1]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let k = 2.0;
+    ///
+    /// let result = less_than_equal(&x, k);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 0, 1, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn less_than_equal(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
+        // calculate value of output
+        let mut output: Tensor<i128> = a.clone();
+
+        for (i, a_i) in a.iter().enumerate() {
+            output[i] = i128::from((*a_i as f64 - b) <= 0_f64);
         }
         output
     }

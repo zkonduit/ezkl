@@ -93,6 +93,12 @@ pub enum LookupOp {
     LessThan {
         a: utils::F32,
     },
+    GreaterThanEqual {
+        a: utils::F32,
+    },
+    LessThanEqual {
+        a: utils::F32,
+    },
     Sign,
 }
 
@@ -142,10 +148,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 &x,
                 f32::from(*a).into(),
             )),
+            LookupOp::LessThanEqual { a } => Ok(tensor::ops::nonlinearities::less_than_equal(
+                &x,
+                f32::from(*a).into(),
+            )),
             LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
                 &x,
                 f32::from(*a).into(),
             )),
+            LookupOp::GreaterThanEqual { a } => Ok(
+                tensor::ops::nonlinearities::greater_than_equal(&x, f32::from(*a).into()),
+            ),
             LookupOp::Div { denom } => Ok(tensor::ops::nonlinearities::const_div(
                 &x,
                 f32::from(*denom).into(),
@@ -193,7 +206,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Min { scales, a } => format!("MIN w/ {:?} /t {}", scales, a),
             LookupOp::Sign => "SIGN".into(),
             LookupOp::GreaterThan { .. } => "GREATER_THAN".into(),
+            LookupOp::GreaterThanEqual { .. } => "GREATER_THAN_EQUAL".into(),
             LookupOp::LessThan { .. } => "LESS_THAN".into(),
+            LookupOp::LessThanEqual { .. } => "LESS_THAN_EQUAL".into(),
             LookupOp::Recip { scale, .. } => format!("RECIP w/ {}", scale),
             LookupOp::Div { denom, .. } => format!("DIV w/ {}", denom),
             LookupOp::Ln { scale } => format!("LN w/ {:?}", scale),

@@ -6,8 +6,8 @@ mod wasm32 {
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
     use ezkl::circuit::modules::Module;
-    use ezkl::graph::GraphWitness;
     use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
+    use ezkl::graph::GraphWitness;
     use ezkl::pfsys::Snark;
     use ezkl::wasm::{
         elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, poseidonHash, prove, vecU64ToFelt,
@@ -39,14 +39,19 @@ mod wasm32 {
             let serialized = serde_json::to_vec(&field_element).unwrap();
             let clamped = wasm_bindgen::Clamped(serialized);
             let scale = 2;
-            let floating_point = vecU64ToFloat(clamped.clone(), scale);
+            let floating_point = vecU64ToFloat(clamped.clone(), scale)
+                .map_err(|_| "failed")
+                .unwrap();
             assert_eq!(floating_point, (i as f64) / 4.0);
 
-            let integer: i128 = serde_json::from_slice(&vecU64ToInt(clamped.clone())).unwrap();
+            let integer: i128 = serde_json::from_slice(
+                &vecU64ToInt(clamped.clone()).map_err(|_| "failed").unwrap(),
+            )
+            .unwrap();
             assert_eq!(integer, i as i128);
 
             let hex_string = format!("{:?}", field_element);
-            let returned_string = vecU64ToFelt(clamped);
+            let returned_string = vecU64ToFelt(clamped).map_err(|_| "failed").unwrap();
             assert_eq!(hex_string, returned_string);
         }
     }
@@ -108,7 +113,7 @@ mod wasm32 {
         let wasm_seed = wasm_bindgen::Clamped(seed.to_vec());
 
         // Use the seed to generate ElGamal variables via WASM function
-        let wasm_output = elgamalGenRandom(wasm_seed);
+        let wasm_output = elgamalGenRandom(wasm_seed).map_err(|_| "failed").unwrap();
 
         let wasm_vars: ElGamalVariables = serde_json::from_slice(&wasm_output[..]).unwrap();
 
@@ -139,12 +144,16 @@ mod wasm32 {
             wasm_bindgen::Clamped(pk.clone()),
             wasm_bindgen::Clamped(message_ser.clone()),
             wasm_bindgen::Clamped(r.clone()),
-        );
+        )
+        .map_err(|_| "failed")
+        .unwrap();
 
         let sk = serde_json::to_vec(&var.sk).unwrap();
 
         let decrypted_message =
-            elgamalDecrypt(wasm_bindgen::Clamped(cipher), wasm_bindgen::Clamped(sk));
+            elgamalDecrypt(wasm_bindgen::Clamped(cipher), wasm_bindgen::Clamped(sk))
+                .map_err(|_| "failed")
+                .unwrap();
 
         let decrypted_message: Vec<Fr> = serde_json::from_slice(&decrypted_message[..]).unwrap();
 
@@ -160,13 +169,16 @@ mod wasm32 {
 
         let message_ser = serde_json::to_vec(&message).unwrap();
 
-        let hash = poseidonHash(wasm_bindgen::Clamped(message_ser));
+        let hash = poseidonHash(wasm_bindgen::Clamped(message_ser))
+            .map_err(|_| "failed")
+            .unwrap();
         let hash: Vec<Vec<Fr>> = serde_json::from_slice(&hash[..]).unwrap();
 
         let reference_hash =
             PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(
                 message.clone(),
             )
+            .map_err(|_| "failed")
             .unwrap();
 
         assert_eq!(hash, reference_hash)
@@ -174,12 +186,13 @@ mod wasm32 {
 
     #[wasm_bindgen_test]
     async fn verify_gen_witness() {
-
         let witness = genWitness(
             wasm_bindgen::Clamped(NETWORK.to_vec()),
             wasm_bindgen::Clamped(INPUT.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
-        );
+        )
+        .map_err(|_| "failed")
+        .unwrap();
 
         let witness: GraphWitness = serde_json::from_slice(&witness[..]).unwrap();
 
@@ -195,7 +208,9 @@ mod wasm32 {
             wasm_bindgen::Clamped(VK.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
             wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-        );
+        )
+        .map_err(|_| "failed")
+        .unwrap();
         assert!(value);
     }
 
@@ -216,7 +231,9 @@ mod wasm32 {
             wasm_bindgen::Clamped(VK.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
             wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-        );
+        )
+        .map_err(|_| "failed")
+        .unwrap();
         // should fail
         assert!(!value);
     }
@@ -230,7 +247,9 @@ mod wasm32 {
             wasm_bindgen::Clamped(NETWORK.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
             wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-        );
+        )
+        .map_err(|_| "failed")
+        .unwrap();
         assert!(proof.len() > 0);
 
         let value = verify(
@@ -238,7 +257,9 @@ mod wasm32 {
             wasm_bindgen::Clamped(VK.to_vec()),
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
             wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
-        );
+        )
+        .map_err(|_| "failed")
+        .unwrap();
         // should not fail
         assert!(value);
     }
