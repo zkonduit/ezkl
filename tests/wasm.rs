@@ -230,10 +230,9 @@ mod wasm32 {
             wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
             wasm_bindgen::Clamped(KZG_PARAMS.to_vec()),
         )
-        .map_err(|_| "failed")
-        .unwrap();
+        .map_err(|_| "failed");
         // should fail
-        assert!(!value);
+        assert!(!value.is_err());
     }
 
     #[wasm_bindgen_test]
