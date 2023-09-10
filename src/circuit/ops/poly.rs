@@ -214,12 +214,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 tensor::ops::prod_axes(&inputs[0], axes)
             }
             PolyOp::GlobalSumPool => unreachable!(),
-            PolyOp::Concat { axis } => {
-                if inputs.len() < 2 {
-                    return Err(TensorError::DimMismatch("concat inputs".to_string()));
-                }
-                tensor::ops::concat(&inputs, *axis)
-            }
+            PolyOp::Concat { axis } => tensor::ops::concat(&inputs, *axis),
             PolyOp::Slice { axis, start, end } => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("slice inputs".to_string()));
@@ -332,12 +327,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 layouts::pack(config, region, values[..].try_into()?, *base, *scale)?
             }
             PolyOp::GlobalSumPool => unreachable!(),
-            PolyOp::Concat { axis } => {
-                if values.len() < 2 {
-                    return Err(Box::new(TensorError::DimError));
-                }
-                layouts::concat(values[..].try_into()?, axis)?
-            }
+            PolyOp::Concat { axis } => layouts::concat(values[..].try_into()?, axis)?,
             PolyOp::Slice { axis, start, end } => {
                 layouts::slice(config, region, values[..].try_into()?, axis, start, end)?
             }

@@ -1863,7 +1863,9 @@ pub fn concat<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let collected_inner: Result<Vec<Tensor<_>>, _> =
         values.iter().map(|e| e.get_inner_tensor()).collect();
-    Ok(tensor::ops::concat(&collected_inner?, *axis)?.into())
+    let collected_inner = collected_inner?;
+
+    Ok(tensor::ops::concat(&collected_inner, *axis)?.into())
 }
 
 /// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.

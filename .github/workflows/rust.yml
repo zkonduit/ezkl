@@ -293,12 +293,7 @@ jobs:
 
   prove-and-verify-aggr-evm-tests:
     runs-on: large-self-hosted
-    needs:
-      [
-        build,
-        library-tests,
-        python-tests,
-      ]
+    needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -460,6 +455,8 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: SVM
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_18_expects
       - name: LightGBM
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_17_expects
       - name: XGBoost

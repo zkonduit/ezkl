@@ -51,7 +51,7 @@ tokio = { version = "1.26.0",  default_features = false, features = ["macros", "
 pyo3 = { version = "0.18.3", features = ["extension-module", "abi3-py37", "macros"],  default_features = false, optional = true }
 pyo3-asyncio = { version = "0.18.0",  features = ["attributes", "tokio-runtime"],  default_features = false, optional = true }
 pyo3-log = { version = "0.8.1", default_features = false, optional = true }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev= "a82c5b9c28ec38030ba337523a0fe1d328eaac2e", default_features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev= "42cc9b59ada02f74725b377e30dac904c72fc140", default_features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
 
 
