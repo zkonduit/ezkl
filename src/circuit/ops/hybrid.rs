@@ -49,6 +49,10 @@ pub enum HybridOp {
         dim: usize,
         k: usize,
     },
+    OneHot {
+        dim: usize,
+        num_classes: usize,
+    },
     GatherElements {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
@@ -128,6 +132,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     let res = tensor::ops::gather(&x, &y.map(|x| x as usize), *dim)?;
                     (res.clone(), inter_equals)
                 }
+            }
+            HybridOp::OneHot { dim, num_classes } => {
+                let res = tensor::ops::one_hot(&x, *num_classes, *dim)?;
+                (res.clone(), vec![])
             }
             HybridOp::TopK { dim, k } => {
                 let res = tensor::ops::topk_axes(&x, *k, *dim)?;
@@ -233,6 +241,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Gather { .. } => "GATHER",
             HybridOp::TopK { .. } => "TOPK",
             HybridOp::GatherElements { .. } => "GATHERELEMENTS",
+            HybridOp::OneHot { .. } => "ONEHOT",
         };
         name.into()
     }
@@ -303,6 +312,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::TopK { dim, k } => {
                 layouts::topk_axes(config, region, values[..].try_into()?, *k, *dim)?
             }
+            HybridOp::OneHot { dim, num_classes } => {
+                layouts::one_hot_axis(config, region, values[..].try_into()?, *num_classes, *dim)?
+            }
         }))
     }
 
@@ -320,6 +332,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::Less { .. }
             | HybridOp::LessEqual { .. }
             | HybridOp::ReduceArgMax { .. }
+            | HybridOp::OneHot { .. }
             | HybridOp::ReduceArgMin { .. } => 0,
             HybridOp::Softmax { .. } => 2 * in_scales[0],
             _ => in_scales[0],
@@ -359,6 +372,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::Less { .. }
             | HybridOp::Equals
             | HybridOp::Gather { .. }
+            | HybridOp::OneHot { .. }
             | HybridOp::TopK { .. }
             | HybridOp::GatherElements { .. } => {
                 vec![LookupOp::GreaterThan {

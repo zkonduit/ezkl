@@ -1945,6 +1945,52 @@ pub fn intercalate_values<T: TensorType>(
     Ok(output)
 }
 
+/// One hot encodes a tensor along a given axis.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::one_hot;
+/// let tensor = Tensor::<i128>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+/// let result = one_hot(&tensor, 5, 2).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0,
+///                                           0, 0, 1, 0, 0,
+///                                           0, 0, 0, 1, 0,
+///                                           0, 0, 0, 0, 1]), &[2, 2, 5]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn one_hot(
+    tensor: &Tensor<i128>,
+    num_classes: usize,
+    axis: usize,
+) -> Result<Tensor<i128>, TensorError> {
+    let mut output_dims = tensor.dims().to_vec();
+    output_dims.insert(axis, num_classes);
+
+    let mut output: Tensor<i128> = Tensor::new(None, &output_dims)?;
+
+    let cartesian_coord = output
+        .dims()
+        .iter()
+        .map(|d| (0..*d))
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output.iter_mut().enumerate().for_each(|(i, o)| {
+        let coord = &cartesian_coord[i];
+        let coord_axis = coord[axis];
+
+        let mut coord_without_axis = coord.clone();
+        coord_without_axis.remove(axis);
+
+        if coord_axis == tensor.get(&coord_without_axis) as usize {
+            *o = 1;
+        } else {
+            *o = 0;
+        }
+    });
+
+    Ok(output)
+}
+
 /// Performs a 2D deconvolution on the given input tensor.
 /// # Examples
 /// ```
