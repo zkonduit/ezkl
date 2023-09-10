@@ -266,7 +266,7 @@ pub fn verify(
 
     match result {
         Ok(_) => Ok(true),
-        Err(e) => JsError::new(&format!("{}", e)),
+        Err(e) => Err(JsError::new(&format!("{}", e))),
     }
 }
 
