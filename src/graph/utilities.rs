@@ -105,6 +105,7 @@ fn extract_tensor_value(
     };
 
     let mut const_value: Tensor<f32>;
+
     match dt {
         DatumType::F32 => {
             let vec = input.as_slice::<f32>()?.to_vec();
@@ -118,6 +119,18 @@ fn extract_tensor_value(
         DatumType::I64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i64>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::I32 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<i32>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::I16 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<i16>()?.to_vec();
             let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
