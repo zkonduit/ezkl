@@ -224,26 +224,36 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     }
 
     fn as_string(&self) -> String {
-        let name = match self {
-            HybridOp::Abs => "ABS",
-            HybridOp::ReduceMax { .. } => "REDUCEMAX",
-            HybridOp::ReduceArgMax { .. } => "REDUCEARGMAX",
-            HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
-            HybridOp::ReduceMin { .. } => "REDUCEMIN",
-            HybridOp::ReduceArgMin { .. } => "REDUCEARGMIN",
-            HybridOp::Softmax { .. } => "SOFTMAX",
-            HybridOp::RangeCheck(..) => "RANGECHECK",
-            HybridOp::Greater { .. } => "GREATER",
-            HybridOp::GreaterEqual { .. } => "GREATEREQUAL",
-            HybridOp::Less { .. } => "LESS",
-            HybridOp::LessEqual { .. } => "LESSEQUAL",
-            HybridOp::Equals => "EQUALS",
-            HybridOp::Gather { .. } => "GATHER",
-            HybridOp::TopK { .. } => "TOPK",
-            HybridOp::GatherElements { .. } => "GATHERELEMENTS",
-            HybridOp::OneHot { .. } => "ONEHOT",
-        };
-        name.into()
+        match self {
+            HybridOp::Abs => "ABS".into(),
+            HybridOp::ReduceMax { axes } => format!("REDUCEMAX (axes={:?})", axes),
+            HybridOp::ReduceArgMax { dim } => format!("REDUCEARGMAX (dim={})", dim),
+            HybridOp::MaxPool2d {
+                padding,
+                stride,
+                pool_dims,
+            } => format!(
+                "MAXPOOL2D (padding={:?}, stride={:?}, pool_dims={:?})",
+                padding, stride, pool_dims
+            ),
+            HybridOp::ReduceMin { axes } => format!("REDUCEMIN (axes={:?})", axes),
+            HybridOp::ReduceArgMin { dim } => format!("REDUCEARGMIN (dim={})", dim),
+            HybridOp::Softmax { scale, axes } => {
+                format!("SOFTMAX (scale={}, axes={:?})", scale, axes)
+            }
+            HybridOp::RangeCheck(p) => format!("RANGECHECK (tol={:?})", p),
+            HybridOp::Greater => "GREATER".into(),
+            HybridOp::GreaterEqual => "GREATEREQUAL".into(),
+            HybridOp::Less => "LESS".into(),
+            HybridOp::LessEqual => "LESSEQUAL".into(),
+            HybridOp::Equals => "EQUALS".into(),
+            HybridOp::Gather { dim, .. } => format!("GATHER (dim={})", dim),
+            HybridOp::TopK { k, dim } => format!("TOPK (k={}, dim={})", k, dim),
+            HybridOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
+            HybridOp::OneHot { dim, num_classes } => {
+                format!("ONEHOT (dim={}, num_classes={})", dim, num_classes)
+            }
+        }
     }
 
     fn layout(

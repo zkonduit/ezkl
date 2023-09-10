@@ -1260,6 +1260,9 @@ pub fn gather<T: TensorType + Send + Sync>(
     })?;
 
     // Reshape the output tensor
+    if index.dims()[0] == 1 {
+        output_size.remove(dim);
+    }
     output.reshape(&output_size);
 
     Ok(output)

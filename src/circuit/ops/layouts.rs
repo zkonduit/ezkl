@@ -794,6 +794,9 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
 
     let mut output: ValTensor<F> = Tensor::new(Some(&output), &[output.len()])?.into();
     // Reshape the output tensor
+    if index.dims()[0] == 1 {
+        output_size.remove(dim);
+    }
     output.reshape(&output_size)?;
 
     Ok(output)
