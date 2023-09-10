@@ -343,7 +343,12 @@ pub fn new_op_from_onnx(
                 quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
 
             let mut c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
-            c.num_uses += node.outputs.len();
+
+            c.num_uses += node
+                .outputs
+                .iter()
+                .map(|outlet| outlet.successors.len())
+                .sum::<usize>();
             // Create a constant op
             SupportedOp::Constant(c)
         }
