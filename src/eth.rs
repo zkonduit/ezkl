@@ -60,7 +60,7 @@ pub async fn setup_eth_backend(
 ) -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
     // Launch anvil
     let anvil = Anvil::new().args([
-        "--code-size-limit=1048576",
+        "--code-size-limit=41943040",
         "--disable-block-gas-limit"
     ]).spawn();
 
