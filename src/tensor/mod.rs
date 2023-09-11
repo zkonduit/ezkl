@@ -496,7 +496,11 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Returns the number of elements in the tensor.
     pub fn len(&self) -> usize {
-        self.dims().iter().product::<usize>()
+        if !self.dims().is_empty() && (self.dims() != &[0]) {
+            self.dims().iter().product::<usize>()
+        } else {
+            0
+        }
     }
     /// Checks if the number of elements in tensor is 0.
     pub fn is_empty(&self) -> bool {
