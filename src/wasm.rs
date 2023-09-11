@@ -264,7 +264,10 @@ pub fn verify(
 
     let result = verify_proof_circuit_kzg(params.verifier_params(), snark, &vk, strategy);
 
-    Ok(if result.is_ok() { true } else { false })
+    match result {
+        Ok(_) => Ok(true),
+        Err(e) => Err(JsError::new(&format!("{}", e))),
+    }
 }
 
 /// Prove in browser using wasm
