@@ -717,11 +717,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         // in onnx parlance this corresponds to converting a tensor to a single element
         if new_dims.is_empty() {
             assert!(self.len() == 1 || self.len() == 0);
-            if self.len() == 1 {
-                self.dims = vec![1];
-            } else {
-                self.dims = vec![0];
-            }
+            self.flatten();
         } else {
             let product = if new_dims != &[0] {
                 new_dims.iter().product::<usize>()
