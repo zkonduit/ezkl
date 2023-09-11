@@ -1232,11 +1232,20 @@ pub fn gather<T: TensorType + Send + Sync>(
     index: &Tensor<usize>,
     dim: usize,
 ) -> Result<Tensor<T>, TensorError> {
+    println!("index: {:?}", index);
     let mut index = index.clone();
     index.flatten();
 
     // Calculate the output tensor size
     let mut output_size = input.dims().to_vec();
+    // Reshape the output tensor
+    if index.dims() == [0] || index.dims().is_empty() {
+        output_size.remove(dim);
+        let mut input = input.clone();
+        input.reshape(&output_size);
+        return Ok(input);
+    }
+
     output_size[dim] = index.dims()[0];
 
     // Allocate memory for the output tensor
@@ -1259,7 +1268,6 @@ pub fn gather<T: TensorType + Send + Sync>(
         Ok(input.get(&new_coord))
     })?;
 
-    // Reshape the output tensor
     output.reshape(&output_size);
 
     Ok(output)
@@ -1939,6 +1947,52 @@ pub fn intercalate_values<T: TensorType>(
             *o = tensor_slice_iter.next().unwrap().clone();
         } else {
             *o = value.clone();
+        }
+    });
+
+    Ok(output)
+}
+
+/// One hot encodes a tensor along a given axis.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::one_hot;
+/// let tensor = Tensor::<i128>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+/// let result = one_hot(&tensor, 5, 2).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0,
+///                                           0, 0, 1, 0, 0,
+///                                           0, 0, 0, 1, 0,
+///                                           0, 0, 0, 0, 1]), &[2, 2, 5]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn one_hot(
+    tensor: &Tensor<i128>,
+    num_classes: usize,
+    axis: usize,
+) -> Result<Tensor<i128>, TensorError> {
+    let mut output_dims = tensor.dims().to_vec();
+    output_dims.insert(axis, num_classes);
+
+    let mut output: Tensor<i128> = Tensor::new(None, &output_dims)?;
+
+    let cartesian_coord = output
+        .dims()
+        .iter()
+        .map(|d| (0..*d))
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    output.iter_mut().enumerate().for_each(|(i, o)| {
+        let coord = &cartesian_coord[i];
+        let coord_axis = coord[axis];
+
+        let mut coord_without_axis = coord.clone();
+        coord_without_axis.remove(axis);
+
+        if coord_axis == tensor.get(&coord_without_axis) as usize {
+            *o = 1;
+        } else {
+            *o = 0;
         }
     });
 
