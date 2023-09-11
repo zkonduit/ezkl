@@ -2576,6 +2576,10 @@ where
 /// Returns a TensorError if the tensors in `inputs` have incompatible dimensions for concatenation along the specified `axis`.
 
 pub fn concat<T: TensorType>(inputs: &[Tensor<T>], axis: usize) -> Result<Tensor<T>, TensorError> {
+    if inputs.len() == 1 {
+        return Ok(inputs[0].clone());
+    }
+
     // Calculate the output tensor size
     let mut output_size = inputs[0].dims().to_vec();
     output_size[axis] = inputs.iter().map(|x| x.dims()[axis]).sum();
