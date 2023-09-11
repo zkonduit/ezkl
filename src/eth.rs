@@ -28,7 +28,7 @@ use ethers::{
 };
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::error::Error;
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -59,7 +59,10 @@ pub async fn setup_eth_backend(
     rpc_url: Option<&str>,
 ) -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
     // Launch anvil
-    let anvil = Anvil::new().spawn();
+    let anvil = Anvil::new().args([
+        "--code-size-limit=1048576",
+        "--disable-block-gas-limit"
+    ]).spawn();
 
     // Instantiate the wallet
     let wallet: LocalWallet = anvil.keys()[0].clone().into();
@@ -274,10 +277,23 @@ pub async fn verify_proof_via_solidity(
         return Err(Box::new(EvmVerificationError::InvalidProof));
     }
 
+    let gas = client.estimate_gas(&tx, None).await?;
+
     info!(
         "estimated verify gas cost: {:#?}",
-        client.estimate_gas(&tx, None).await?
+        gas
     );
+
+    // if gas is greater than 30 million warn the user that the gas cost is above ethereum's 30 million block gas limit
+    if gas > 30_000_000.into() {
+        warn!(
+            "Gas cost of verify transaction is greater than 30 million block gas limit. It will fail on mainnet."
+        );
+    } else if gas > 15_000_000.into() {
+        warn!(
+            "Gas cost of verify transaction is greater than 15 million, the target block size for ethereum"
+        );
+    } 
 
     drop(anvil);
     Ok(true)
@@ -544,9 +560,11 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
     debug!("runtime bytecode size: {:#?}", size);
     if size > MAX_RUNTIME_BYTECODE_SIZE {
         // `_runtime_bytecode` exceeds the limit
-        panic!(
+        warn!(
             "Solidity runtime bytecode size is: {:#?},
-            which exceeds 24577 bytes limit.",
+            which exceeds 24577 bytes spurious dragon limit.
+            Contract will fail to deploy on any chain with 
+            EIP 140 enabled",
             size
         );
     }
