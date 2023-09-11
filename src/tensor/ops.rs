@@ -1238,7 +1238,7 @@ pub fn gather<T: TensorType + Send + Sync>(
     // Calculate the output tensor size
     let mut output_size = input.dims().to_vec();
     // Reshape the output tensor
-    if index.dims() == [0] || index.dims().is_empty() {
+    if index.len() == 0 {
         output_size.remove(dim);
         let mut input = input.clone();
         input.reshape(&output_size);

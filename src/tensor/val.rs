@@ -593,7 +593,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     pub fn len(&self) -> usize {
         match self {
             ValTensor::Value { dims, .. } | ValTensor::Instance { dims, .. } => {
-                dims.iter().product::<usize>()
+                if !dims.is_empty() && (dims != &[0]) {
+                    dims.iter().product::<usize>()
+                } else {
+                    0
+                }
             }
         }
     }
