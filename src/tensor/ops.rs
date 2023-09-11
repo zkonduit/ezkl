@@ -1232,11 +1232,20 @@ pub fn gather<T: TensorType + Send + Sync>(
     index: &Tensor<usize>,
     dim: usize,
 ) -> Result<Tensor<T>, TensorError> {
+    println!("index: {:?}", index);
     let mut index = index.clone();
     index.flatten();
 
     // Calculate the output tensor size
     let mut output_size = input.dims().to_vec();
+    // Reshape the output tensor
+    if index.dims() == [0] || index.dims().is_empty() {
+        output_size.remove(dim);
+        let mut input = input.clone();
+        input.reshape(&output_size);
+        return Ok(input);
+    }
+
     output_size[dim] = index.dims()[0];
 
     // Allocate memory for the output tensor
@@ -1259,10 +1268,6 @@ pub fn gather<T: TensorType + Send + Sync>(
         Ok(input.get(&new_coord))
     })?;
 
-    // Reshape the output tensor
-    if index.dims()[0] == 1 {
-        output_size.remove(dim);
-    }
     output.reshape(&output_size);
 
     Ok(output)

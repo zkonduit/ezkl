@@ -448,7 +448,11 @@ impl<'data, T: Clone + TensorType + std::marker::Send + std::marker::Sync>
 impl<T: Clone + TensorType> Tensor<T> {
     /// Sets (copies) the tensor values to the provided ones.
     pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, TensorError> {
-        let total_dims: usize = dims.iter().product();
+        let total_dims: usize = if !dims.is_empty() {
+            dims.iter().product()
+        } else {
+            0
+        };
         match values {
             Some(v) => {
                 if total_dims != v.len() {
@@ -710,7 +714,12 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.dims(), &[9, 3]);
     /// ```
     pub fn reshape(&mut self, new_dims: &[usize]) {
-        assert!(self.len() == new_dims.iter().product::<usize>());
+        let product = if new_dims != &[0] && !new_dims.is_empty() {
+            new_dims.iter().product::<usize>()
+        } else {
+            0
+        };
+        assert!(self.len() == product);
         self.dims = Vec::from(new_dims);
     }
 
@@ -901,7 +910,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.dims(), &[27]);
     /// ```
     pub fn flatten(&mut self) {
-        self.dims = Vec::from([self.dims.iter().product::<usize>()]);
+        if !self.dims().is_empty() && (self.dims() != &[0]) {
+            self.dims = Vec::from([self.dims.iter().product::<usize>()]);
+        }
     }
 
     /// Maps a function to tensors

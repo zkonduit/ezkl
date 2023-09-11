@@ -763,6 +763,12 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the output tensor size
     let input_dims = input.dims();
     let mut output_size = input_dims.to_vec();
+    if index.dims() == [0] || index.dims().is_empty() {
+        output_size.remove(dim);
+        input.reshape(&output_size)?;
+        return Ok(input);
+    }
+
     output_size[dim] = index.dims()[0];
 
     // Allocate memory for the output tensor
@@ -793,10 +799,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     let output = output?;
 
     let mut output: ValTensor<F> = Tensor::new(Some(&output), &[output.len()])?.into();
-    // Reshape the output tensor
-    if index.dims()[0] == 1 {
-        output_size.remove(dim);
-    }
+
     output.reshape(&output_size)?;
 
     Ok(output)
@@ -1012,10 +1015,10 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd>(
                 prod_dims.push(*c..*c + 1);
             }
         }
-        res.set(
-            coord,
-            op(config, region, &[a.get_slice(&prod_dims)?])?.get_inner_tensor()?[0].clone(),
-        );
+        let values = a.get_slice(&prod_dims)?;
+        let op = op(config, region, &[values])?;
+
+        res.set(coord, op.get_inner_tensor()?[0].clone());
     }
 
     Ok(res.into())

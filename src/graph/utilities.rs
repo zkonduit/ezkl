@@ -97,14 +97,13 @@ fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
 ) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
     let dt = input.datum_type();
-    let mut dims = input.shape().to_vec();
-    if dims.is_empty() {
-        dims.push(1)
-    } else if dims.iter().product::<usize>() == 1 {
-        dims = vec![1];
-    };
+    let dims = input.shape().to_vec();
 
     let mut const_value: Tensor<f32>;
+    if dims.is_empty() {
+        const_value = Tensor::<f32>::new(None, &dims)?;
+        return Ok(const_value);
+    }
 
     match dt {
         DatumType::F32 => {
