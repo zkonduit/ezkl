@@ -207,9 +207,13 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 
 impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<usize>, scale: u32) -> Self {
+    pub fn new_instance(cs: &mut ConstraintSystem<F>, mut dims: Vec<usize>, scale: u32) -> Self {
         let col = cs.instance_column();
         cs.enable_equality(col);
+        // force there to be at least one dimension
+        if dims.is_empty() || dims == vec![0] {
+            dims = vec![1];
+        }
         ValTensor::Instance {
             inner: col,
             dims,

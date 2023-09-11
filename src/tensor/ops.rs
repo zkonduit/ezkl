@@ -1232,7 +1232,6 @@ pub fn gather<T: TensorType + Send + Sync>(
     index: &Tensor<usize>,
     dim: usize,
 ) -> Result<Tensor<T>, TensorError> {
-    println!("index: {:?}", index);
     let mut index = index.clone();
     index.flatten();
 
