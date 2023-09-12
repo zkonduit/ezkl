@@ -80,6 +80,8 @@ jobs:
         run: rustup target add wasm32-wasi
       - name: Install cargo-wasi
         run: cargo install cargo-wasi
+      - name: Install wasmtime
+        run: curl https://wasmtime.dev/install.sh -sSf | bash
       - name: Matmul overflow (wasi)
         run: RUST_LOG=debug cargo wasi test matmul_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv overflow (wasi)
