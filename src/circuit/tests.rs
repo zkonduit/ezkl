@@ -169,6 +169,118 @@ mod matmul_col_overflow {
 }
 
 #[cfg(test)]
+mod matmul_col_ultra_overflow {
+    use halo2_proofs::poly::commitment::ParamsProver;
+
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 20;
+
+    #[derive(Clone)]
+    struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for MatmulCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "ij,jk->ik".to_string(),
+                                }),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn matmulcircuit() {
+        // get some logs fam
+        crate::logger::init_logger();
+        // parameters
+        let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        a.reshape(&[LEN, LEN]);
+
+        let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN, 1]);
+
+        let circuit = MatmulCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(w)],
+            _marker: PhantomData,
+        };
+
+        let params = crate::pfsys::srs::gen_srs::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<_>,
+        >(K as u32);
+
+        let pk = crate::pfsys::create_keys::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
+            F,
+            MatmulCircuit<F>,
+        >(&circuit, &params)
+        .unwrap();
+
+        let prover = crate::pfsys::create_proof_circuit_kzg(
+            circuit.clone(),
+            &params,
+            vec![],
+            &pk,
+            crate::pfsys::TranscriptType::EVM,
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
+            // use safe mode to verify that the proof is correct
+            CheckMode::SAFE,
+        );
+
+        assert!(prover.is_ok());
+
+        let proof = prover.unwrap();
+
+        let strategy =
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
+        let vk = pk.get_vk();
+        let result =
+            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
+
+        assert!(result.is_ok());
+
+        println!("done.");
+    }
+}
+
+#[cfg(test)]
 mod dot {
     use ops::poly::PolyOp;
 
@@ -669,6 +781,136 @@ mod conv {
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
         prover.assert_satisfied_par();
+    }
+}
+
+#[cfg(test)]
+mod conv_col_ultra_overflow {
+    use halo2_proofs::poly::commitment::ParamsProver;
+
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 28;
+
+    #[derive(Clone)]
+    struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
+        image: ValTensor<F>,
+        kernel: Tensor<F>,
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for ConvCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
+                        config
+                            .layout(
+                                &mut region,
+                                &[self.image.clone()],
+                                Box::new(PolyOp::Conv {
+                                    kernel: self.kernel.clone(),
+                                    bias: None,
+                                    padding: [(1, 1); 2],
+                                    stride: (2, 2),
+                                }),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn conv_circuit() {
+        // parameters
+        let kernel_height = 2;
+        let kernel_width = 2;
+        let image_height = LEN;
+        let image_width = LEN;
+        let in_channels = 3;
+        let out_channels = 2;
+
+        // get some logs fam
+        crate::logger::init_logger();
+        let mut image =
+            Tensor::from((0..in_channels * image_height * image_width).map(|i| F::from(i as u64)));
+        image.reshape(&[1, in_channels, image_height, image_width]);
+        image.set_visibility(crate::graph::Visibility::Private);
+
+        let mut kernels = Tensor::from(
+            (0..{ out_channels * in_channels * kernel_height * kernel_width })
+                .map(|i| F::from(i as u64)),
+        );
+        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+        kernels.set_visibility(crate::graph::Visibility::Private);
+
+        let circuit = ConvCircuit::<F> {
+            image: ValTensor::from(image),
+            kernel: kernels,
+            _marker: PhantomData,
+        };
+
+        let params = crate::pfsys::srs::gen_srs::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<_>,
+        >(K as u32);
+
+        let pk = crate::pfsys::create_keys::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
+            F,
+            ConvCircuit<F>,
+        >(&circuit, &params)
+        .unwrap();
+
+        let prover = crate::pfsys::create_proof_circuit_kzg(
+            circuit.clone(),
+            &params,
+            vec![],
+            &pk,
+            crate::pfsys::TranscriptType::EVM,
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
+            // use safe mode to verify that the proof is correct
+            CheckMode::SAFE,
+        );
+
+        assert!(prover.is_ok());
+
+        let proof = prover.unwrap();
+
+        let strategy =
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
+        let vk = pk.get_vk();
+        let result =
+            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
+
+        assert!(result.is_ok());
+
+        println!("done.");
     }
 }
 

@@ -1205,8 +1205,6 @@ pub(crate) async fn prove(
 
     trace!("params computed");
 
-    let now = Instant::now();
-
     // creates and verifies the proof
     let snark = match strategy {
         StrategyType::Single => {
@@ -1234,12 +1232,6 @@ pub(crate) async fn prove(
             )?
         }
     };
-    let elapsed = now.elapsed();
-    info!(
-        "proof took {}.{}",
-        elapsed.as_secs(),
-        elapsed.subsec_millis()
-    );
 
     if let Some(proof_path) = proof_path {
         snark.save(&proof_path)?;

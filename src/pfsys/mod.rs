@@ -291,6 +291,8 @@ where
     trace!("instances {:?}", instances);
 
     info!("proof started...");
+    // not wasm32 unknown
+    let now = Instant::now();
     create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
@@ -314,6 +316,12 @@ where
             strategy,
         )?;
     }
+    let elapsed = now.elapsed();
+    info!(
+        "proof took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
 
     Ok(checkable_pf)
 }
@@ -524,6 +532,7 @@ pub fn create_proof_circuit_kzg<
     }
 }
 
+#[allow(unused)]
 /// helper function
 pub(crate) fn verify_proof_circuit_kzg<
     'params,
