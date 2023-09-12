@@ -97,7 +97,7 @@ jobs:
         run: RUST_LOG=debug cargo nextest run conv_relu_col_ultra_overflow --no-capture -- --include-ignored
 
   model-serialization:
-    runs-on: 256gb
+    runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
