@@ -49,6 +49,10 @@ pub enum HybridOp {
         dim: usize,
         k: usize,
     },
+    OneHot {
+        dim: usize,
+        num_classes: usize,
+    },
     GatherElements {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
@@ -128,6 +132,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     let res = tensor::ops::gather(&x, &y.map(|x| x as usize), *dim)?;
                     (res.clone(), inter_equals)
                 }
+            }
+            HybridOp::OneHot { dim, num_classes } => {
+                let res = tensor::ops::one_hot(&x, *num_classes, *dim)?;
+                (res.clone(), vec![])
             }
             HybridOp::TopK { dim, k } => {
                 let res = tensor::ops::topk_axes(&x, *k, *dim)?;
@@ -216,25 +224,36 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     }
 
     fn as_string(&self) -> String {
-        let name = match self {
-            HybridOp::Abs => "ABS",
-            HybridOp::ReduceMax { .. } => "REDUCEMAX",
-            HybridOp::ReduceArgMax { .. } => "REDUCEARGMAX",
-            HybridOp::MaxPool2d { .. } => "MAXPOOL2D",
-            HybridOp::ReduceMin { .. } => "REDUCEMIN",
-            HybridOp::ReduceArgMin { .. } => "REDUCEARGMIN",
-            HybridOp::Softmax { .. } => "SOFTMAX",
-            HybridOp::RangeCheck(..) => "RANGECHECK",
-            HybridOp::Greater { .. } => "GREATER",
-            HybridOp::GreaterEqual { .. } => "GREATEREQUAL",
-            HybridOp::Less { .. } => "LESS",
-            HybridOp::LessEqual { .. } => "LESSEQUAL",
-            HybridOp::Equals => "EQUALS",
-            HybridOp::Gather { .. } => "GATHER",
-            HybridOp::TopK { .. } => "TOPK",
-            HybridOp::GatherElements { .. } => "GATHERELEMENTS",
-        };
-        name.into()
+        match self {
+            HybridOp::Abs => "ABS".into(),
+            HybridOp::ReduceMax { axes } => format!("REDUCEMAX (axes={:?})", axes),
+            HybridOp::ReduceArgMax { dim } => format!("REDUCEARGMAX (dim={})", dim),
+            HybridOp::MaxPool2d {
+                padding,
+                stride,
+                pool_dims,
+            } => format!(
+                "MAXPOOL2D (padding={:?}, stride={:?}, pool_dims={:?})",
+                padding, stride, pool_dims
+            ),
+            HybridOp::ReduceMin { axes } => format!("REDUCEMIN (axes={:?})", axes),
+            HybridOp::ReduceArgMin { dim } => format!("REDUCEARGMIN (dim={})", dim),
+            HybridOp::Softmax { scale, axes } => {
+                format!("SOFTMAX (scale={}, axes={:?})", scale, axes)
+            }
+            HybridOp::RangeCheck(p) => format!("RANGECHECK (tol={:?})", p),
+            HybridOp::Greater => "GREATER".into(),
+            HybridOp::GreaterEqual => "GREATEREQUAL".into(),
+            HybridOp::Less => "LESS".into(),
+            HybridOp::LessEqual => "LESSEQUAL".into(),
+            HybridOp::Equals => "EQUALS".into(),
+            HybridOp::Gather { dim, .. } => format!("GATHER (dim={})", dim),
+            HybridOp::TopK { k, dim } => format!("TOPK (k={}, dim={})", k, dim),
+            HybridOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
+            HybridOp::OneHot { dim, num_classes } => {
+                format!("ONEHOT (dim={}, num_classes={})", dim, num_classes)
+            }
+        }
     }
 
     fn layout(
@@ -303,6 +322,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::TopK { dim, k } => {
                 layouts::topk_axes(config, region, values[..].try_into()?, *k, *dim)?
             }
+            HybridOp::OneHot { dim, num_classes } => {
+                layouts::one_hot_axis(config, region, values[..].try_into()?, *num_classes, *dim)?
+            }
         }))
     }
 
@@ -320,6 +342,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::Less { .. }
             | HybridOp::LessEqual { .. }
             | HybridOp::ReduceArgMax { .. }
+            | HybridOp::OneHot { .. }
             | HybridOp::ReduceArgMin { .. } => 0,
             HybridOp::Softmax { .. } => 2 * in_scales[0],
             _ => in_scales[0],
@@ -359,6 +382,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::Less { .. }
             | HybridOp::Equals
             | HybridOp::Gather { .. }
+            | HybridOp::OneHot { .. }
             | HybridOp::TopK { .. }
             | HybridOp::GatherElements { .. } => {
                 vec![LookupOp::GreaterThan {

@@ -620,6 +620,128 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     Ok(assigned_output)
 }
 
+fn one_hot<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    num_classes: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // assert values is flat
+    assert_eq!(values[0].dims().len(), 1);
+    // assert its a single elelemnt
+    assert_eq!(values[0].len(), 1);
+    let input = values[0].clone();
+    let is_assigned = !input.any_unknowns();
+
+    let output: ValTensor<F> = if is_assigned {
+        let int_evals = input.get_int_evals()?;
+        let res = tensor::ops::one_hot(&int_evals, num_classes, 1)?;
+        res.iter()
+            .map(|x| Value::known(i128_to_felt(*x)))
+            .collect::<Tensor<_>>()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); num_classes]),
+            &[num_classes],
+        )?
+    }
+    .into();
+
+    let assigned_input = region.assign(&config.inputs[0], &input)?;
+
+    // now assert all elems are 0 or 1
+    let assigned_output = region.assign(&config.inputs[1], &output)?;
+    for i in 0..assigned_output.len() {
+        let (x, y) = config.output.cartesian_coord(region.offset() + i);
+        let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
+        region.enable(selector, y)?;
+    }
+    region.increment(std::cmp::max(assigned_output.len(), assigned_input.len()));
+
+    let sum = sum(config, region, &[assigned_output.clone()])?;
+    // assert sum is 1
+    let mut unit = Tensor::from(vec![F::from(1)].into_iter());
+    unit.set_visibility(crate::graph::Visibility::Public);
+    let unit = region.assign(&config.inputs[1], &unit.into())?;
+    region.assign(&config.output, &sum)?;
+
+    let (x, y) = config.output.cartesian_coord(region.offset());
+    let selector = config.selectors.get(&(BaseOp::Identity, x));
+    region.enable(selector, y)?;
+
+    region.increment(1);
+
+    let gathered = gather(
+        config,
+        region,
+        &[assigned_output.clone(), assigned_input.clone()],
+        0,
+    )?;
+
+    region.assign(&config.inputs[1], &unit)?;
+    region.assign(&config.output, &gathered)?;
+
+    let (x, y) = config.output.cartesian_coord(region.offset());
+    let selector = config.selectors.get(&(BaseOp::Identity, x));
+    region.enable(selector, y)?;
+
+    region.increment(assigned_input.len());
+
+    Ok(assigned_output)
+}
+
+/// One hot accumulated layout
+pub fn one_hot_axis<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    num_classes: usize,
+    dim: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let input = values[0].clone();
+    let input_inner = input.get_inner_tensor()?;
+
+    let mut output_dims = values[0].dims().to_vec();
+    output_dims.insert(dim, num_classes);
+
+    let op_tensors = input_inner.enum_map(|_: usize, inp| {
+        let tensor = Tensor::new(Some(&[inp.clone()]), &[1]).unwrap();
+        let res = one_hot(config, region, &[tensor.into()], num_classes).map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+
+        Ok::<_, halo2_proofs::plonk::Error>(res)
+    })?;
+
+    // Allocate memory for the output tensor
+    let cartesian_coord = output_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let mut output = Tensor::<ValType<F>>::new(None, &output_dims)?;
+
+    output = output.enum_map(|i, _| {
+        let coord = cartesian_coord[i].clone();
+        let mut op_idx = coord.clone();
+        let coord_at_dims = vec![coord[dim]];
+        op_idx.remove(dim);
+
+        let op_tensor = op_tensors.get(&op_idx).get_inner_tensor().map_err(|e| {
+            error!("{}", e);
+            halo2_proofs::plonk::Error::Synthesis
+        })?;
+
+        let one_hot_val = op_tensor.get(&coord_at_dims).clone();
+
+        Ok::<_, halo2_proofs::plonk::Error>(one_hot_val)
+    })?;
+
+    Ok(output.into())
+}
+
 /// Gather accumulated layout
 pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
@@ -641,6 +763,12 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the output tensor size
     let input_dims = input.dims();
     let mut output_size = input_dims.to_vec();
+    if index.dims().is_empty() {
+        output_size.remove(dim);
+        input.reshape(&output_size)?;
+        return Ok(input);
+    }
+
     output_size[dim] = index.dims()[0];
 
     // Allocate memory for the output tensor
@@ -671,7 +799,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     let output = output?;
 
     let mut output: ValTensor<F> = Tensor::new(Some(&output), &[output.len()])?.into();
-    // Reshape the output tensor
+
     output.reshape(&output_size)?;
 
     Ok(output)
@@ -887,10 +1015,10 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd>(
                 prod_dims.push(*c..*c + 1);
             }
         }
-        res.set(
-            coord,
-            op(config, region, &[a.get_slice(&prod_dims)?])?.get_inner_tensor()?[0].clone(),
-        );
+        let values = a.get_slice(&prod_dims)?;
+        let op = op(config, region, &[values])?;
+
+        res.set(coord, op.get_inner_tensor()?[0].clone());
     }
 
     Ok(res.into())
@@ -1863,7 +1991,9 @@ pub fn concat<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let collected_inner: Result<Vec<Tensor<_>>, _> =
         values.iter().map(|e| e.get_inner_tensor()).collect();
-    Ok(tensor::ops::concat(&collected_inner?, *axis)?.into())
+    let collected_inner = collected_inner?;
+
+    Ok(tensor::ops::concat(&collected_inner, *axis)?.into())
 }
 
 /// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
