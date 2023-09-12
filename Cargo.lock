@@ -1631,6 +1631,7 @@ dependencies = [
  "tract-onnx",
  "unzip-n",
  "wasm-bindgen",
+ "wasm-bindgen-console-logger",
  "wasm-bindgen-rayon",
  "wasm-bindgen-test",
 ]
@@ -5391,6 +5392,16 @@ dependencies = [
  "quote",
  "syn 2.0.22",
  "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-console-logger"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7530a275e7faf7b5b83aabdf78244fb8d9a68a2ec4b26935a05ecc0c9b0185ed"
+dependencies = [
+ "log",
+ "wasm-bindgen",
 ]
 
 [[package]]

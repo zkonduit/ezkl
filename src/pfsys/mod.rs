@@ -25,9 +25,9 @@ use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
 use instant::Instant;
 use log::{debug, info, trace};
-#[cfg(not(feature = "det-debug"))]
+#[cfg(not(feature = "det-prove"))]
 use rand::rngs::OsRng;
-#[cfg(feature = "det-debug")]
+#[cfg(feature = "det-prove")]
 use rand::rngs::StdRng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
