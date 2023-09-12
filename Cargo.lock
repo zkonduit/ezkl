@@ -1119,7 +1119,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/parallel-lookup-permute#e29658ce6913d21bd5d3b76ceaf18f2928606d34"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/debug-statements#4ac66208f851939e8ae27ef6fcc9599662f7a482"
 dependencies = [
  "integer",
  "num-bigint",
@@ -2045,7 +2045,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/parallel-lookup-permute#de8b892259ffe340339f219a1d27602e2bf69d1a"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/debug-statements#b4c3648ae61bf12b0388694e4c24e3fa421b3e78"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2062,12 +2062,13 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/parallel-lookup-permute#de8b892259ffe340339f219a1d27602e2bf69d1a"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/debug-statements#b4c3648ae61bf12b0388694e4c24e3fa421b3e78"
 dependencies = [
  "blake2b_simd",
  "ff",
  "group",
  "halo2curves 0.1.0",
+ "log",
  "plotters",
  "rand_chacha",
  "rand_core 0.6.4",
@@ -2120,7 +2121,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/parallel-lookup-permute#e29658ce6913d21bd5d3b76ceaf18f2928606d34"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/debug-statements#4ac66208f851939e8ae27ef6fcc9599662f7a482"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2460,7 +2461,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/parallel-lookup-permute#e29658ce6913d21bd5d3b76ceaf18f2928606d34"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/debug-statements#4ac66208f851939e8ae27ef6fcc9599662f7a482"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2703,7 +2704,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/parallel-lookup-permute#e29658ce6913d21bd5d3b76ceaf18f2928606d34"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/debug-statements#4ac66208f851939e8ae27ef6fcc9599662f7a482"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -4483,7 +4484,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/parallel-lookup-permute#d6734640c7134ff1ef8afb743c3626f08768efff"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/debug-statements#40b903a8f587a91bc9fcf5dfae05bb9bd6bc1eb0"
 dependencies = [
  "ecc",
  "halo2_proofs",

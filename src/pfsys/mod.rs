@@ -275,6 +275,7 @@ where
         + WithSmallOrderMulGroup<3>
         + Ord,
     Scheme::Curve: Serialize + DeserializeOwned,
+    TW: std::fmt::Debug,
 {
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
     #[cfg(feature = "det-prove")]
