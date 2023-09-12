@@ -169,6 +169,7 @@ mod matmul_col_overflow {
 }
 
 #[cfg(test)]
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod matmul_col_ultra_overflow {
     use halo2_proofs::poly::commitment::ParamsProver;
 
@@ -785,6 +786,7 @@ mod conv {
 }
 
 #[cfg(test)]
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod conv_col_ultra_overflow {
     use halo2_proofs::poly::commitment::ParamsProver;
 
@@ -866,6 +868,152 @@ mod conv_col_ultra_overflow {
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width })
                 .map(|i| F::from(i as u64)),
+        );
+        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+        kernels.set_visibility(crate::graph::Visibility::Private);
+
+        let circuit = ConvCircuit::<F> {
+            image: ValTensor::from(image),
+            kernel: kernels,
+            _marker: PhantomData,
+        };
+
+        let params = crate::pfsys::srs::gen_srs::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<_>,
+        >(K as u32);
+
+        let pk = crate::pfsys::create_keys::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
+            F,
+            ConvCircuit<F>,
+        >(&circuit, &params)
+        .unwrap();
+
+        let prover = crate::pfsys::create_proof_circuit_kzg(
+            circuit.clone(),
+            &params,
+            vec![],
+            &pk,
+            crate::pfsys::TranscriptType::EVM,
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
+            // use safe mode to verify that the proof is correct
+            CheckMode::SAFE,
+        );
+
+        assert!(prover.is_ok());
+
+        let proof = prover.unwrap();
+
+        let strategy =
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
+        let vk = pk.get_vk();
+        let result =
+            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
+
+        assert!(result.is_ok());
+
+        println!("done.");
+    }
+}
+
+#[cfg(test)]
+// not wasm 32 unknown
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+mod conv_relu_col_ultra_overflow {
+    use halo2_proofs::poly::commitment::ParamsProver;
+
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 28;
+
+    #[derive(Clone)]
+    struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
+        image: ValTensor<F>,
+        kernel: Tensor<F>,
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for ConvCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let mut base_config =
+                Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE);
+            // sets up a new relu table
+            base_config
+                .configure_lookup(cs, &b, &output, K, &LookupOp::ReLU)
+                .unwrap();
+            base_config.clone()
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
+                        let output = config
+                            .layout(
+                                &mut region,
+                                &[self.image.clone()],
+                                Box::new(PolyOp::Conv {
+                                    kernel: self.kernel.clone(),
+                                    bias: None,
+                                    padding: [(1, 1); 2],
+                                    stride: (2, 2),
+                                }),
+                            )
+                            .map_err(|_| Error::Synthesis);
+                        let _output = config
+                            .layout(
+                                &mut region,
+                                &[output.unwrap().unwrap()],
+                                Box::new(LookupOp::ReLU),
+                            )
+                            .unwrap();
+                        Ok(())
+                    },
+                )
+                .unwrap();
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn conv_relu_circuit() {
+        // parameters
+        let kernel_height = 2;
+        let kernel_width = 2;
+        let image_height = LEN;
+        let image_width = LEN;
+        let in_channels = 3;
+        let out_channels = 2;
+
+        // get some logs fam
+        crate::logger::init_logger();
+        let mut image =
+            Tensor::from((0..in_channels * image_height * image_width).map(|_| F::from(0)));
+        image.reshape(&[1, in_channels, image_height, image_width]);
+        image.set_visibility(crate::graph::Visibility::Private);
+
+        let mut kernels = Tensor::from(
+            (0..{ out_channels * in_channels * kernel_height * kernel_width }).map(|_| F::from(0)),
         );
         kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
         kernels.set_visibility(crate::graph::Visibility::Private);
