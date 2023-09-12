@@ -86,11 +86,15 @@ jobs:
       - name: Matmul overflow (wasi)
         run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       - name: Conv overflow (wasi)
-        run: cargo wasi test run conv_col_ultra_overflow -- --include-ignored --nocapture
+        run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
+      - name: Conv + relu overflow (wasi)
+        run: cargo wasi test conv_relu_col_ultra_overflow -- --include-ignored --nocapture
       - name: Matmul overflow
         run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv overflow
         run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture -- --include-ignored
+      - name: Conv + relu overflow
+        run: RUST_LOG=debug cargo nextest run conv_relu_col_ultra_overflow --no-capture -- --include-ignored
 
   model-serialization:
     runs-on: 256gb
