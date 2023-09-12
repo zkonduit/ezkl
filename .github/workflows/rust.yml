@@ -84,9 +84,9 @@ jobs:
       - name: Install cargo-wasi
         run: cargo install cargo-wasi
       - name: Matmul overflow (wasi)
-        run: RUST_LOG=debug cargo wasi test matmul_col_ultra_overflow --no-capture -- --include-ignored
+        run: RUST_LOG=debug cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       - name: Conv overflow (wasi)
-        run: RUST_LOG=debug cargo wasi test run conv_col_ultra_overflow --no-capture -- --include-ignored
+        run: RUST_LOG=debug cargo wasi test run conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: Matmul overflow
         run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv overflow
