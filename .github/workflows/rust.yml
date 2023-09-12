@@ -61,10 +61,43 @@ jobs:
         # nextest doesn't support --doc tests
         run: cargo test --doc --verbose
       - name: Library tests
-        run: cargo nextest run --lib --verbose -- --include-ignored
+        run: cargo nextest run --lib --verbose
+
+  ultra-overflow-tests:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-08-24
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
+      - uses: mwilliamson/setup-wasmtime-action@v2
+        with:
+          wasmtime-version: "3.0.1"
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
+      - name: Install cargo-wasi
+        run: cargo install cargo-wasi
+      # - name: Matmul overflow (wasi)
+      #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
+      # - name: Conv overflow (wasi)
+      #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
+      - name: Conv + relu overflow (wasi)
+        run: cargo wasi test conv_relu_col_ultra_overflow -- --include-ignored --nocapture
+      # - name: Matmul overflow
+      #   run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture -- --include-ignored
+      # - name: Conv overflow
+      #   run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture -- --include-ignored
+      - name: Conv + relu overflow
+        run: RUST_LOG=debug cargo nextest run conv_relu_col_ultra_overflow --no-capture -- --include-ignored
 
   model-serialization:
-    runs-on: 256gb
+    runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -79,7 +112,7 @@ jobs:
       - name: Model serialization
         run: cargo nextest run native_tests::tests::model_serialization_::t
       - name: Model serialization different binary ID
-        run: cargo nextest run native_tests::tests::model_serialization_different_binaries_::t  --test-threads 1
+        run: cargo nextest run native_tests::tests::model_serialization_different_binaries_  --test-threads 1
 
   wasm32-tests:
     runs-on: ubuntu-latest

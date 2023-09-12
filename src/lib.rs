@@ -52,7 +52,7 @@ pub mod fieldutils;
 #[cfg(feature = "onnx")]
 pub mod graph;
 /// beautiful logging
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 pub mod logger;
 /// Tools for proofs and verification used by cli
 pub mod pfsys;

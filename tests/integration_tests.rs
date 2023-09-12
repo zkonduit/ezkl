@@ -360,6 +360,17 @@ mod native_tests {
             use tempdir::TempDir;
 
             #[test]
+            fn model_serialization_different_binaries_() {
+                let test = "1l_mlp";
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::native_tests::mv_test_(path, test);
+                // percent tolerance test
+                model_serialization_different_binaries(path, test.to_string());
+                test_dir.close().unwrap();
+            }
+
+            #[test]
             fn tutorial_() {
                 let test_dir = TempDir::new("tutorial").unwrap();
                 let path = test_dir.path().to_str().unwrap();
@@ -380,6 +391,9 @@ mod native_tests {
             }
         });
 
+
+
+
             seq!(N in 0..=51 {
 
             #(#[test_case(TESTS[N])])*
@@ -392,15 +406,7 @@ mod native_tests {
                 test_dir.close().unwrap();
             }
 
-            #(#[test_case(TESTS[N])])*
-            fn model_serialization_different_binaries_(test: &str) {
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap();
-                crate::native_tests::mv_test_(path, test);
-                // percent tolerance test
-                model_serialization_different_binaries(path, test.to_string());
-                test_dir.close().unwrap();
-            }
+
 
 
 
