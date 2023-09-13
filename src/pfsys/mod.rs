@@ -25,7 +25,10 @@ use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
 use instant::Instant;
 use log::{debug, info, trace};
+#[cfg(not(feature = "det-prove"))]
 use rand::rngs::OsRng;
+#[cfg(feature = "det-prove")]
+use rand::rngs::StdRng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use snark_verifier::loader::native::NativeLoader;
@@ -274,6 +277,9 @@ where
     Scheme::Curve: Serialize + DeserializeOwned,
 {
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
+    #[cfg(feature = "det-prove")]
+    let mut rng = <StdRng as rand::SeedableRng>::from_seed([0u8; 32]);
+    #[cfg(not(feature = "det-prove"))]
     let mut rng = OsRng;
     let number_instance = instances.iter().map(|x| x.len()).collect();
     trace!("number_instance {:?}", number_instance);
@@ -291,6 +297,8 @@ where
     trace!("instances {:?}", instances);
 
     info!("proof started...");
+    // not wasm32 unknown
+    let now = Instant::now();
     create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
@@ -314,6 +322,12 @@ where
             strategy,
         )?;
     }
+    let elapsed = now.elapsed();
+    info!(
+        "proof took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
 
     Ok(checkable_pf)
 }
@@ -524,6 +538,7 @@ pub fn create_proof_circuit_kzg<
     }
 }
 
+#[allow(unused)]
 /// helper function
 pub(crate) fn verify_proof_circuit_kzg<
     'params,

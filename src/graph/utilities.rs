@@ -22,7 +22,7 @@ use std::sync::Arc;
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_core::ops::{
-    array::{Gather, GatherElements, Slice, Topk},
+    array::{Gather, GatherElements, OneHot, Slice, Topk},
     change_axes::AxisOp,
     cnn::DeconvUnary,
     einsum::EinSum,
@@ -97,14 +97,13 @@ fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
 ) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
     let dt = input.datum_type();
-    let mut dims = input.shape().to_vec();
-    if dims.is_empty() {
-        dims.push(1)
-    } else if dims.iter().product::<usize>() == 1 {
-        dims = vec![1];
-    };
+    let dims = input.shape().to_vec();
 
     let mut const_value: Tensor<f32>;
+    if dims.is_empty() {
+        const_value = Tensor::<f32>::new(None, &dims)?;
+        return Ok(const_value);
+    }
 
     match dt {
         DatumType::F32 => {
@@ -245,6 +244,16 @@ pub fn new_op_from_onnx(
 
             SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK { dim: axis, k })
         }
+        "Onehot" => {
+            let op = load_op::<OneHot>(node.op(), idx, node.op().name().to_string())?;
+            let axis = op.axis;
+            let num_classes = op.dim;
+
+            SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::OneHot {
+                dim: axis,
+                num_classes,
+            })
+        }
         "GatherElements" => {
             if inputs.len() != 2 {
                 return Err(Box::new(GraphError::InvalidDims(
@@ -333,7 +342,12 @@ pub fn new_op_from_onnx(
                 quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
 
             let mut c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
-            c.num_uses += node.outputs.len();
+
+            c.num_uses += node
+                .outputs
+                .iter()
+                .map(|outlet| outlet.successors.len())
+                .sum::<usize>();
             // Create a constant op
             SupportedOp::Constant(c)
         }

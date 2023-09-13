@@ -1631,6 +1631,7 @@ dependencies = [
  "tract-onnx",
  "unzip-n",
  "wasm-bindgen",
+ "wasm-bindgen-console-logger",
  "wasm-bindgen-rayon",
  "wasm-bindgen-test",
 ]
@@ -5056,7 +5057,7 @@ dependencies = [
 [[package]]
 name = "tract-core"
 version = "0.20.19-pre"
-source = "git+https://github.com/sonos/tract/?rev=561614519e6cb49eea4d88dcee3b880f127813cb#561614519e6cb49eea4d88dcee3b880f127813cb"
+source = "git+https://github.com/sonos/tract/?rev=2ea76c09678f092d00713ebbe6fdb046c0a9ad0f#2ea76c09678f092d00713ebbe6fdb046c0a9ad0f"
 dependencies = [
  "anyhow",
  "bit-set",
@@ -5079,7 +5080,7 @@ dependencies = [
 [[package]]
 name = "tract-data"
 version = "0.20.19-pre"
-source = "git+https://github.com/sonos/tract/?rev=561614519e6cb49eea4d88dcee3b880f127813cb#561614519e6cb49eea4d88dcee3b880f127813cb"
+source = "git+https://github.com/sonos/tract/?rev=2ea76c09678f092d00713ebbe6fdb046c0a9ad0f#2ea76c09678f092d00713ebbe6fdb046c0a9ad0f"
 dependencies = [
  "anyhow",
  "half 2.2.1",
@@ -5098,7 +5099,7 @@ dependencies = [
 [[package]]
 name = "tract-hir"
 version = "0.20.19-pre"
-source = "git+https://github.com/sonos/tract/?rev=561614519e6cb49eea4d88dcee3b880f127813cb#561614519e6cb49eea4d88dcee3b880f127813cb"
+source = "git+https://github.com/sonos/tract/?rev=2ea76c09678f092d00713ebbe6fdb046c0a9ad0f#2ea76c09678f092d00713ebbe6fdb046c0a9ad0f"
 dependencies = [
  "derive-new",
  "log",
@@ -5108,7 +5109,7 @@ dependencies = [
 [[package]]
 name = "tract-linalg"
 version = "0.20.19-pre"
-source = "git+https://github.com/sonos/tract/?rev=561614519e6cb49eea4d88dcee3b880f127813cb#561614519e6cb49eea4d88dcee3b880f127813cb"
+source = "git+https://github.com/sonos/tract/?rev=2ea76c09678f092d00713ebbe6fdb046c0a9ad0f#2ea76c09678f092d00713ebbe6fdb046c0a9ad0f"
 dependencies = [
  "cc",
  "derive-new",
@@ -5132,7 +5133,7 @@ dependencies = [
 [[package]]
 name = "tract-nnef"
 version = "0.20.19-pre"
-source = "git+https://github.com/sonos/tract/?rev=561614519e6cb49eea4d88dcee3b880f127813cb#561614519e6cb49eea4d88dcee3b880f127813cb"
+source = "git+https://github.com/sonos/tract/?rev=2ea76c09678f092d00713ebbe6fdb046c0a9ad0f#2ea76c09678f092d00713ebbe6fdb046c0a9ad0f"
 dependencies = [
  "byteorder",
  "flate2",
@@ -5146,7 +5147,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx"
 version = "0.20.19-pre"
-source = "git+https://github.com/sonos/tract/?rev=561614519e6cb49eea4d88dcee3b880f127813cb#561614519e6cb49eea4d88dcee3b880f127813cb"
+source = "git+https://github.com/sonos/tract/?rev=2ea76c09678f092d00713ebbe6fdb046c0a9ad0f#2ea76c09678f092d00713ebbe6fdb046c0a9ad0f"
 dependencies = [
  "bytes",
  "derive-new",
@@ -5163,7 +5164,7 @@ dependencies = [
 [[package]]
 name = "tract-onnx-opl"
 version = "0.20.19-pre"
-source = "git+https://github.com/sonos/tract/?rev=561614519e6cb49eea4d88dcee3b880f127813cb#561614519e6cb49eea4d88dcee3b880f127813cb"
+source = "git+https://github.com/sonos/tract/?rev=2ea76c09678f092d00713ebbe6fdb046c0a9ad0f#2ea76c09678f092d00713ebbe6fdb046c0a9ad0f"
 dependencies = [
  "getrandom",
  "log",
@@ -5391,6 +5392,16 @@ dependencies = [
  "quote",
  "syn 2.0.22",
  "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-console-logger"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7530a275e7faf7b5b83aabdf78244fb8d9a68a2ec4b26935a05ecc0c9b0185ed"
+dependencies = [
+ "log",
+ "wasm-bindgen",
 ]
 
 [[package]]

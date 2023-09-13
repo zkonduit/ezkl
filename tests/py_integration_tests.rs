@@ -110,7 +110,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 18] = [
+    const TESTS: [&str; 19] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -130,6 +130,7 @@ mod py_tests {
         "gradient_boosted_trees.ipynb",
         "xgboost.ipynb",
         "lightgbm.ipynb",
+        "svm.ipynb",
     ];
 
     macro_rules! test_func {
@@ -142,7 +143,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=17 {
+            seq!(N in 0..=18 {
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
                 crate::py_tests::init_binary();

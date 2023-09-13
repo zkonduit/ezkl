@@ -19,6 +19,7 @@ use rand::SeedableRng;
 
 use crate::tensor::TensorType;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_console_logger::DEFAULT_LOGGER;
 
 use console_error_panic_hook;
 
@@ -264,7 +265,10 @@ pub fn verify(
 
     let result = verify_proof_circuit_kzg(params.verifier_params(), snark, &vk, strategy);
 
-    Ok(if result.is_ok() { true } else { false })
+    match result {
+        Ok(_) => Ok(true),
+        Err(e) => Err(JsError::new(&format!("{}", e))),
+    }
 }
 
 /// Prove in browser using wasm
@@ -276,6 +280,11 @@ pub fn prove(
     settings: wasm_bindgen::Clamped<Vec<u8>>,
     srs: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
+    log::set_logger(&DEFAULT_LOGGER).unwrap();
+    #[cfg(feature = "det-prove")]
+    log::set_max_level(log::LevelFilter::Debug);
+    #[cfg(not(feature = "det-prove"))]
+    log::set_max_level(log::LevelFilter::Info);
     // read in kzg params
     let mut reader = std::io::BufReader::new(&srs[..]);
     let params: ParamsKZG<Bn256> =
