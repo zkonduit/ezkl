@@ -144,7 +144,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=18 {
+            seq!(N in 0..=19 {
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
                 crate::py_tests::init_binary();
