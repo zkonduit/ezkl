@@ -110,7 +110,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 19] = [
+    const TESTS: [&str; 20] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -131,6 +131,7 @@ mod py_tests {
         "xgboost.ipynb",
         "lightgbm.ipynb",
         "svm.ipynb",
+        "nbeats_timeseries_forecasting.ipynb",
     ];
 
     macro_rules! test_func {
