@@ -220,8 +220,12 @@ pub fn genWitness(
         serde_json::from_slice(&settings[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     // read in circuit
-    let mut circuit = GraphCircuit::new(compiled_model, &circuit_settings.run_args)
-        .map_err(|e| JsError::new(&format!("{}", e)))?;
+    let mut circuit = GraphCircuit::new_from_settings(
+        compiled_model,
+        circuit_settings,
+        crate::circuit::CheckMode::UNSAFE,
+    )
+    .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let mut input = circuit
         .load_graph_input(&input)
@@ -312,8 +316,12 @@ pub fn prove(
     let compiled_model: crate::graph::Model =
         bincode::deserialize(&compiled_model[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
-    let mut circuit = GraphCircuit::new(compiled_model, &circuit_settings.run_args)
-        .map_err(|e| JsError::new(&format!("{}", e)))?;
+    let mut circuit = GraphCircuit::new_from_settings(
+        compiled_model,
+        circuit_settings,
+        crate::circuit::CheckMode::UNSAFE,
+    )
+    .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     // prep public inputs
     circuit
