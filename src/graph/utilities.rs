@@ -634,7 +634,7 @@ pub fn new_op_from_onnx(
                 | DatumType::U16
                 | DatumType::U32
                 | DatumType::U64 => (0, InputType::Num),
-                DatumType::F16 | DatumType::F32 | DatumType::F64 => (0, InputType::Num),
+                DatumType::F16 | DatumType::F32 | DatumType::F64 => (scales.input, InputType::Num),
                 _ => todo!(),
             };
             SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
