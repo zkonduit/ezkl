@@ -361,7 +361,17 @@ pub fn new_op_from_onnx(
             // Raw values are always f32
             let raw_value = extract_tensor_value(op.0)?;
             // If bool or a tensor dimension then don't scale
-            let constant_scale = if dt == DatumType::Bool || dt == DatumType::TDim {
+            let constant_scale = if dt == DatumType::Bool
+                || dt == DatumType::TDim
+                || dt == DatumType::I64
+                || dt == DatumType::I32
+                || dt == DatumType::I16
+                || dt == DatumType::I8
+                || dt == DatumType::U8
+                || dt == DatumType::U16
+                || dt == DatumType::U32
+                || dt == DatumType::U64
+            {
                 0
             } else {
                 scales.params
@@ -617,6 +627,14 @@ pub fn new_op_from_onnx(
             let (scale, datum_type) = match node.outputs[0].fact.datum_type {
                 DatumType::Bool => (0, InputType::Bool),
                 DatumType::TDim => (0, InputType::TDim),
+                DatumType::I64 => (0, InputType::Num),
+                DatumType::I32 => (0, InputType::Num),
+                DatumType::I16 => (0, InputType::Num),
+                DatumType::I8 => (0, InputType::Num),
+                DatumType::U8 => (0, InputType::Num),
+                DatumType::U16 => (0, InputType::Num),
+                DatumType::U32 => (0, InputType::Num),
+                DatumType::U64 => (0, InputType::Num),
                 _ => (scales.input, InputType::Num),
             };
             SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
@@ -630,7 +648,16 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>();
             assert_eq!(input_scales.len(), 1);
             match dt {
-                DatumType::Bool => SupportedOp::Nonlinear(LookupOp::Div {
+                DatumType::Bool
+                | DatumType::TDim
+                | DatumType::I64
+                | DatumType::I32
+                | DatumType::I16
+                | DatumType::I8
+                | DatumType::U8
+                | DatumType::U16
+                | DatumType::U32
+                | DatumType::U64 => SupportedOp::Nonlinear(LookupOp::Div {
                     denom: crate::circuit::utils::F32(scale_to_multiplier(input_scales[0]) as f32),
                 }),
                 DatumType::String | DatumType::Blob => unimplemented!(),
