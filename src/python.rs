@@ -290,7 +290,7 @@ impl From<PyRunArgs> for RunArgs {
 impl Into<PyRunArgs> for RunArgs {
     fn into(self) -> PyRunArgs {
         PyRunArgs {
-            tolerance: self.tolerance.into(),
+            tolerance: self.tolerance.val.into(),
             input_scale: self.input_scale,
             param_scale: self.param_scale,
             scale_rebase_multiplier: self.scale_rebase_multiplier,
