@@ -65,7 +65,7 @@ def test_poseidon_hash():
 
 def test_elgamal():
     """
-    Test for poseidon_hash
+    Test for elgamal encryption and decryption
     """
     message = [1.0, 2.0, 3.0, 4.0]
     felt_message = [ezkl.float_to_vecu64(x, 7) for x in message]
