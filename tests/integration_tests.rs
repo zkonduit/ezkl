@@ -397,7 +397,6 @@ mod native_tests {
 
 
             seq!(N in 0..=53 {
-
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {
                 let test_dir = TempDir::new(test).unwrap();
