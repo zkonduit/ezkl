@@ -27,6 +27,12 @@ use console_error_panic_hook;
 pub use wasm_bindgen_rayon::init_thread_pool;
 
 #[wasm_bindgen]
+/// Initialize logger for wasm
+pub fn init_logger() {
+    log::set_logger(&DEFAULT_LOGGER).unwrap();
+}
+
+#[wasm_bindgen]
 /// Initialize panic hook for wasm
 pub fn init_panic_hook() {
     console_error_panic_hook::set_once();
@@ -284,7 +290,6 @@ pub fn prove(
     settings: wasm_bindgen::Clamped<Vec<u8>>,
     srs: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
-    log::set_logger(&DEFAULT_LOGGER).unwrap();
     #[cfg(feature = "det-prove")]
     log::set_max_level(log::LevelFilter::Debug);
     #[cfg(not(feature = "det-prove"))]
