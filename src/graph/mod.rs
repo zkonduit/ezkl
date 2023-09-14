@@ -245,16 +245,6 @@ fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
 }
 
 #[cfg(feature = "python-bindings")]
-use halo2curves::bn256::G1Affine;
-#[cfg(feature = "python-bindings")]
-fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
-    let g1affine_x = field_to_vecu64_montgomery(&g1affine.x);
-    let g1affine_y = field_to_vecu64_montgomery(&g1affine.y);
-    g1affine_dict.set_item("x", g1affine_x).unwrap();
-    g1affine_dict.set_item("y", g1affine_y).unwrap();
-}
-
-#[cfg(feature = "python-bindings")]
 use modules::ElGamalResult;
 #[cfg(feature = "python-bindings")]
 fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &ElGamalResult) {
@@ -283,33 +273,9 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
         .set_item("encrypted_messages", encrypted_messages)
         .unwrap();
 
-    let variables_dict = PyDict::new(py);
-    let variables = &elgamal_results.variables;
+    let variables: crate::python::PyElGamalVariables = elgamal_results.variables.clone().into();
 
-    let r = field_to_vecu64_montgomery(&variables.r);
-    variables_dict.set_item("r", r).unwrap();
-    // elgamal secret key
-    let sk = field_to_vecu64_montgomery(&variables.sk);
-    variables_dict.set_item("sk", sk).unwrap();
-
-    let pk_dict = PyDict::new(py);
-    // elgamal public key
-    g1affine_to_pydict(pk_dict, &variables.pk);
-    variables_dict.set_item("pk", pk_dict).unwrap();
-
-    let aux_generator_dict = PyDict::new(py);
-    // elgamal aux generator used in ecc chip
-    g1affine_to_pydict(aux_generator_dict, &variables.aux_generator);
-    variables_dict
-        .set_item("aux_generator", aux_generator_dict)
-        .unwrap();
-
-    // elgamal window size used in ecc chip
-    variables_dict
-        .set_item("window_size", variables.window_size)
-        .unwrap();
-
-    results_dict.set_item("variables", variables_dict).unwrap();
+    results_dict.set_item("variables", variables).unwrap();
 
     pydict.set_item("elgamal", results_dict).unwrap();
 
