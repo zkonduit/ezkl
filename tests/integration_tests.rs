@@ -169,7 +169,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 52] = [
+    const TESTS: [&str; 53] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -225,6 +225,7 @@ mod native_tests {
         "xgboost",
         "lightgbm",
         "hummingbird_decision_tree",
+        "oh_decision_tree",
     ];
 
     const TESTS_AGGR: [&str; 21] = [
@@ -394,7 +395,7 @@ mod native_tests {
 
 
 
-            seq!(N in 0..=51 {
+            seq!(N in 0..=52 {
 
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {
