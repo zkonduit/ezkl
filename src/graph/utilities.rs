@@ -106,6 +106,11 @@ fn extract_tensor_value(
     }
 
     match dt {
+        DatumType::F16 => {
+            let vec = input.as_slice::<tract_onnx::prelude::f16>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| (*x).into()).collect();
+            const_value = cast.into_iter().into();
+        }
         DatumType::F32 => {
             let vec = input.as_slice::<f32>()?.to_vec();
             const_value = vec.into_iter().into();
@@ -139,6 +144,30 @@ fn extract_tensor_value(
             let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
+        DatumType::U8 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<u8>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::U16 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<u16>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::U32 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<u32>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::U64 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<u64>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
         DatumType::Bool => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<bool>()?.to_vec();
@@ -154,7 +183,7 @@ fn extract_tensor_value(
                 .collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
-        _ => todo!(),
+        _ => todo!("unsupported type"),
     }
     const_value.reshape(&dims);
 
