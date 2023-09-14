@@ -1988,7 +1988,15 @@ pub fn one_hot(
         let mut coord_without_axis = coord.clone();
         coord_without_axis.remove(axis);
 
-        if coord_axis == tensor.get(&coord_without_axis) as usize {
+        let elem = tensor.get(&coord_without_axis) as usize;
+        if elem > num_classes {
+            panic!(
+                "Element {} is greater than num_classes {}",
+                elem, num_classes
+            );
+        };
+
+        if coord_axis == elem {
             *o = 1;
         } else {
             *o = 0;
