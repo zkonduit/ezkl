@@ -154,6 +154,55 @@ jobs:
       - name: Circuit Render
         run: cargo nextest run --release --verbose tests::tutorial_
 
+  setup-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-08-24
+          override: true
+          components: rustfmt, clippy
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - name: Add wasm32-unknown-unknown target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-server-runner
+        run: cargo install wasm-server-runner
+
+      - name: Add rust-src
+        run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
+
+      - name: Build wasm files for both web and nodejs compilation targets
+        run: |
+          wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+
+      - name: Replace memory definition in nodejs
+        run: |
+          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+
+  setup-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use pnpm 8
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - name: Use Node.js 18.12.1
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.12.1'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: |
+          cd tests/wasm
+          pnpm install --no-frozen-lockfile
+        env:
+          CI: false
+          NODE_ENV: development
+    
+
   mock-proving-tests:
     runs-on: self-hosted
     # needs: [build,  library-tests, docs]
@@ -242,7 +291,7 @@ jobs:
 
   prove-and-verify-tests:
     runs-on: ubuntu-latest-32-cores
-    needs: [build, library-tests, python-tests]
+    needs: [build, library-tests, python-tests, setup-js, setup-wasm]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1

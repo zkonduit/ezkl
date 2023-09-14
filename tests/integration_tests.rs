@@ -227,6 +227,64 @@ mod native_tests {
         "hummingbird_decision_tree",
     ];
 
+    const WASM_TESTS: [&str; 49] = [
+        "1l_mlp",
+        "1l_slice",
+        "1l_concat",
+        "1l_flatten",
+        // "1l_average",
+        "1l_div",
+        "1l_pad",
+        "1l_reshape",
+        "1l_eltwise_div",
+        "1l_sigmoid",
+        "1l_sqrt",
+        "1l_softmax",
+        // "1l_instance_norm",
+        "1l_batch_norm",
+        "1l_prelu",
+        "1l_leakyrelu",
+        "1l_gelu_noappx",
+        // "1l_gelu_tanh_appx",
+        "1l_relu",
+        "1l_downsample",
+        "1l_tanh",
+        "2l_relu_sigmoid_small",
+        "2l_relu_fc",
+        "2l_relu_small",
+        "2l_relu_sigmoid",
+        "1l_conv",
+        "2l_sigmoid_small",
+        "2l_relu_sigmoid_conv",
+        "3l_relu_conv_fc",
+        "4l_relu_conv_fc",
+        "1l_erf",
+        "1l_var",
+        "1l_elu",
+        "min",
+        "max",
+        "1l_max_pool",
+        "1l_conv_transpose",
+        "1l_upsample",
+        "1l_identity",
+        "idolmodel",
+        "trig",
+        "prelu_gmm",
+        "lstm",
+        "rnn",
+        "quantize_dequantize",
+        "1l_where",
+        "boolean",
+        "boolean_identity",
+        "decision_tree", // "variable_cnn",
+        "random_forest",
+        "gradient_boosted_trees",
+        "1l_topk",
+        // "xgboost",
+        // "lightgbm",
+        // "hummingbird_decision_tree",
+    ];
+
     const TESTS_AGGR: [&str; 21] = [
         "1l_mlp",
         "1l_flatten",
@@ -346,12 +404,14 @@ mod native_tests {
         mod tests {
             use seq_macro::seq;
             use crate::native_tests::TESTS;
+            use crate::native_tests::WASM_TESTS;
             use crate::native_tests::ACCURACY_CAL_TESTS;
             use crate::native_tests::LARGE_TESTS;
             use test_case::test_case;
             use crate::native_tests::mock;
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::kzg_prove_and_verify;
+            use crate::native_tests::wasm_tests;
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization;
@@ -610,16 +670,6 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn kzg_prove_and_verify_with_overflow_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                env_logger::init();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", Some(vec![0,1]), true);
-               test_dir.close().unwrap();
-            }
-
-            #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_public_input_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
@@ -666,6 +716,20 @@ mod native_tests {
 
             });
 
+            seq!(N in 0..=48 {
+
+                #(#[test_case(WASM_TESTS[N])])*
+                fn kzg_prove_and_verify_with_overflow_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    env_logger::init();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", Some(vec![0,1]), true);
+                    wasm_tests(path, test.to_string());
+                    test_dir.close().unwrap();
+                }
+
+            });
 
             seq!(N in 0..=4 {
 
@@ -1924,7 +1988,7 @@ mod native_tests {
 
     // prove-serialize-verify, the usual full path
     fn kzg_prove_and_verify(
-        test_dir: &str,
+        _test_dir: &str,
         example_name: String,
         checkmode: &str,
         input_visibility: &str,
@@ -1933,6 +1997,7 @@ mod native_tests {
         scales_to_use: Option<Vec<u32>>,
         overflow: bool,
     ) {
+        let test_dir = "./examples/onnx";
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2045,7 +2110,7 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=blake",
+                "--transcript=evm",
                 "--strategy=single",
                 format!("--settings-path={}", settings_path).as_str(),
                 &format!("--check-mode={}", checkmode),
@@ -2063,6 +2128,23 @@ mod native_tests {
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
             ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    // run js wasm tests for a given example
+    fn wasm_tests(test_dir: &str, example_name: String) {
+        let test_dir = format!("../../{}", test_dir);
+        let status = Command::new("pnpm")
+            .args(&[
+                "run",
+                "test",
+                "testWasm",
+                &format!("--example={}", example_name),
+                &format!("--dir={}", test_dir)
+            ])
+            .current_dir("tests/wasm") // Set the working directory
             .status()
             .expect("failed to execute process");
         assert!(status.success());
