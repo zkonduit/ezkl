@@ -265,7 +265,18 @@ struct PyRunArgs {
 impl PyRunArgs {
     #[new]
     fn new() -> Self {
-        RunArgs::default().into()
+        PyRunArgs {
+            tolerance: 0.0,
+            input_scale: 7,
+            param_scale: 7,
+            scale_rebase_multiplier: 1,
+            bits: 16,
+            logrows: 17,
+            input_visibility: Visibility::Private,
+            output_visibility: Visibility::Public,
+            param_visibility: Visibility::Private,
+            variables: vec![("batch_size".to_string(), 1)],
+        }
     }
 }
 
