@@ -42,3 +42,5 @@ var/
 .vscode/
 *.whl
 *.bak
+node_modules
+timingData.json

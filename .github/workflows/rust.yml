@@ -280,7 +280,6 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: |
-          cd tests/wasm
           pnpm install --no-frozen-lockfile
         env:
           CI: false

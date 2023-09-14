@@ -5,7 +5,7 @@ import {
  } from './utils';
 import fs from 'fs';
 exports.USER_NAME = require("minimist")(process.argv.slice(2))["example"];
-exports.PATH = require("minimist")(process.argv.slice(2))["path"];
+exports.PATH = require("minimist")(process.argv.slice(2))["dir"];
 
 const timingData: { 
     example: string,
