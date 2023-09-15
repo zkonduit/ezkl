@@ -1186,6 +1186,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
+    #[allow(clippy::too_many_arguments)]
     fn mock(
         test_dir: &str,
         example_name: String,
@@ -1988,6 +1989,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
+    #[allow(clippy::too_many_arguments)]
     fn kzg_prove_and_verify(
         test_dir: &str,
         example_name: String,
@@ -2141,7 +2143,7 @@ mod native_tests {
                 "test",
                 "testWasm",
                 &format!("--example={}", example_name),
-                &format!("--dir={}", test_dir)
+                &format!("--dir={}", test_dir),
             ])
             .status()
             .expect("failed to execute process");

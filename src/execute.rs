@@ -1174,6 +1174,7 @@ pub(crate) async fn setup_test_evm_witness(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn prove(
     data_path: PathBuf,
     compiled_model_path: PathBuf,
