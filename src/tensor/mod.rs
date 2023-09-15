@@ -496,7 +496,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Returns the number of elements in the tensor.
     pub fn len(&self) -> usize {
-        if !self.dims().is_empty() && (self.dims() != &[0]) {
+        if !self.dims().is_empty() && (self.dims() != [0]) {
             self.dims().iter().product::<usize>()
         } else {
             0
@@ -720,10 +720,10 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn reshape(&mut self, new_dims: &[usize]) {
         // in onnx parlance this corresponds to converting a tensor to a single element
         if new_dims.is_empty() {
-            assert!(self.len() == 1 || self.len() == 0);
+            assert!(self.len() == 1 || self.is_empty());
             self.flatten();
         } else {
-            let product = if new_dims != &[0] {
+            let product = if new_dims != [0] {
                 new_dims.iter().product::<usize>()
             } else {
                 0
@@ -920,7 +920,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.dims(), &[27]);
     /// ```
     pub fn flatten(&mut self) {
-        if !self.dims().is_empty() && (self.dims() != &[0]) {
+        if !self.dims().is_empty() && (self.dims() != [0]) {
             self.dims = Vec::from([self.dims.iter().product::<usize>()]);
         }
     }

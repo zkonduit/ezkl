@@ -811,7 +811,7 @@ impl GraphCircuit {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_run_args(
         run_args: &RunArgs,
-        model_path: &std::path::PathBuf,
+        model_path: &std::path::Path,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let model = Model::from_run_args(run_args, model_path)?;
         Self::new(model, run_args)
@@ -833,7 +833,7 @@ impl GraphCircuit {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_settings(
         params: &GraphSettings,
-        model_path: &std::path::PathBuf,
+        model_path: &std::path::Path,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let model = Model::from_run_args(&params.run_args, model_path)?;

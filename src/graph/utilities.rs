@@ -240,17 +240,13 @@ pub fn new_op_from_onnx(
             });
 
             // if param_visibility.is_public() {
-            match inputs[1].opkind().get_mutable_constant() {
-                // downscale
-                Some(c) => {
-                    inputs[1].decrement_const();
-                    deleted_indices.push(inputs.len() - 1);
-                    op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
-                        dim: axis,
-                        constant_idx: Some(c.raw_values.map(|x| x as usize)),
-                    })
-                }
-                _ => {}
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_const();
+                deleted_indices.push(inputs.len() - 1);
+                op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
+                    dim: axis,
+                    constant_idx: Some(c.raw_values.map(|x| x as usize)),
+                })
             }
             // }
 
@@ -300,18 +296,13 @@ pub fn new_op_from_onnx(
                 });
 
             // if param_visibility.is_public() {
-            match inputs[1].opkind().get_mutable_constant() {
-                // downscale
-                Some(c) => {
-                    inputs[1].decrement_const();
-                    deleted_indices.push(inputs.len() - 1);
-                    op =
-                        SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::GatherElements {
-                            dim: axis,
-                            constant_idx: Some(c.raw_values.map(|x| x as usize)),
-                        })
-                }
-                _ => {}
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_const();
+                deleted_indices.push(inputs.len() - 1);
+                op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
+                    dim: axis,
+                    constant_idx: Some(c.raw_values.map(|x| x as usize)),
+                })
             }
             // }
 
@@ -1089,11 +1080,8 @@ pub fn extract_conv_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> [Option
         .as_any()
         .downcast_ref::<crate::circuit::ops::poly::PolyOp<Fp>>();
 
-    if let Some(op) = op {
-        match op {
-            PolyOp::Conv { kernel, bias, .. } => return [Some(kernel.clone()), bias.clone()],
-            _ => {}
-        }
+    if let Some(PolyOp::Conv { kernel, bias, .. }) = op {
+        return [Some(kernel.clone()), bias.clone()];
     }
     [None, None]
 }
