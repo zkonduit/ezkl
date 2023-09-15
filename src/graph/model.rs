@@ -461,6 +461,7 @@ impl Model {
             total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
+            num_blinding_factors: None,
         })
     }
 
@@ -1106,10 +1107,11 @@ impl Model {
             };
 
             debug!(
-                "laying out {}: {}, offset:{}",
+                "laying out {}: {}, offset:{}, total_constants: {}",
                 idx,
                 node.as_str(),
-                region.offset()
+                region.offset(),
+                region.total_constants()
             );
             debug!("dims: {:?}", node.out_dims());
             debug!(

@@ -25,6 +25,11 @@ pub enum VarTensor {
 }
 
 impl VarTensor {
+    fn max_rows<F: PrimeField>(cs: &mut ConstraintSystem<F>, logrows: usize) -> usize {
+        let base = 2u32;
+        base.pow(logrows as u32) as usize - cs.blinding_factors() - 1
+    }
+
     /// Create a new VarTensor::Advice
     /// Arguments
     /// * `cs` - The constraint system
@@ -35,8 +40,7 @@ impl VarTensor {
         logrows: usize,
         capacity: usize,
     ) -> Self {
-        let base = 2u32;
-        let max_rows = base.pow(logrows as u32) as usize - cs.blinding_factors() - 1;
+        let max_rows = Self::max_rows(cs, logrows);
 
         let mut modulo = (capacity / max_rows) + 1;
         // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
@@ -45,7 +49,7 @@ impl VarTensor {
 
         if modulo > 1 {
             warn!(
-                "will be using column duplication for {} columns",
+                "will be using column duplication for {} advice columns",
                 modulo - 1
             );
         }
@@ -60,6 +64,36 @@ impl VarTensor {
             inner: advices,
             col_size: max_rows,
         }
+    }
+
+    /// Initializes fixed columns to support the VarTensor::Advice
+    /// Arguments
+    /// * `cs` - The constraint system
+    /// * `logrows` - log2 number of rows in the matrix, including any system and blinding rows.
+    /// * `capacity` - The number of advice cells to allocate
+    pub fn constant_cols<F: PrimeField>(
+        cs: &mut ConstraintSystem<F>,
+        logrows: usize,
+        num_constants: usize,
+    ) -> usize {
+        let max_rows = Self::max_rows(cs, logrows);
+
+        let mut modulo = (num_constants / max_rows) + 1;
+        // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
+        modulo = ((num_constants + modulo) / max_rows) + 1;
+
+        if modulo > 1 {
+            warn!(
+                "will be using column duplication for {} fixed columns",
+                modulo - 1
+            );
+        }
+
+        for _ in 0..modulo {
+            let col = cs.fixed_column();
+            cs.enable_constant(col);
+        }
+        modulo
     }
 
     /// Create a new VarTensor::Dummy
@@ -201,19 +235,20 @@ impl VarTensor {
         &self,
         offset: usize,
         values: &ValTensor<F>,
-    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
+    ) -> Result<(ValTensor<F>, usize, usize), halo2_proofs::plonk::Error> {
         match values {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims , ..} => {
                 // duplicates every nth element to adjust for column overflow
                 let mut res: ValTensor<F> = v.duplicate_every_n(self.col_size(), offset).unwrap().into();
                 let total_used_len = res.len();
+                let total_constants = res.num_constants();
                 res.remove_every_n(self.col_size(), offset).unwrap();
 
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());
 
-                Ok((res, total_used_len))
+                Ok((res, total_used_len, total_constants))
             }
         }
     }

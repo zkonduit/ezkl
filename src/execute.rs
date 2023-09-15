@@ -765,12 +765,7 @@ pub(crate) async fn calibrate(
                 + 1,
             best_params.run_args.bits as u32,
         );
-        if best_params.total_const_size > 0 {
-            reduction = std::cmp::max(
-                reduction,
-                (best_params.total_const_size as f32).log2().ceil() as u32 + 1,
-            );
-        }
+        reduction = std::cmp::max(reduction, crate::graph::MIN_LOGROWS);
 
         info!(
             "logrows > bits, shrinking logrows: {} -> {}",

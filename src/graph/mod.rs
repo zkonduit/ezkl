@@ -103,9 +103,19 @@ pub enum GraphError {
 }
 
 const ASSUMED_BLINDING_FACTORS: usize = 7;
+/// The minimum number of rows in the grid
+pub const MIN_LOGROWS: u32 = 4;
 
 /// 26
 const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
+
+use std::cell::RefCell;
+
+thread_local!(
+    /// This is a global variable that holds the settings for the graph
+    /// This is used to pass settings to the layouter and other parts of the circuit without needing to heavily modify the Halo2 API in a new fork
+    pub static GLOBAL_SETTINGS: RefCell<Option<GraphSettings>> = RefCell::new(None)
+);
 
 /// Result from a forward pass
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -303,6 +313,8 @@ pub struct GraphSettings {
     pub check_mode: CheckMode,
     /// ezkl version used
     pub version: String,
+    /// num blinding factors
+    pub num_blinding_factors: Option<usize>,
 }
 
 impl GraphSettings {
@@ -349,6 +361,20 @@ impl GraphSettings {
     /// Parse an ezkl configuration from a json
     pub fn from_json(arg_json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(arg_json)
+    }
+
+    fn set_num_blinding_factors(&mut self, num_blinding_factors: usize) {
+        self.num_blinding_factors = Some(num_blinding_factors);
+    }
+
+    ///
+    pub fn available_col_size(&self) -> usize {
+        if let Some(num_blinding_factors) = self.num_blinding_factors {
+            let base = 2u32;
+            base.pow(self.run_args.logrows) as usize - num_blinding_factors - 1
+        } else {
+            panic!("num_blinding_factors not set")
+        }
     }
 }
 
@@ -672,6 +698,54 @@ impl GraphCircuit {
         Ok(data)
     }
 
+    fn calc_min_logrows(
+        &mut self,
+        res: &GraphWitness,
+        blinding_offset: f64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let min_bits = (res.max_lookup_inputs as f64 + blinding_offset)
+            .log2()
+            .ceil() as usize
+            + 1;
+
+        let min_rows_from_constraints =
+            (self.settings.num_constraints as f32).log2().ceil() as usize;
+        let mut logrows = std::cmp::max(min_bits, min_rows_from_constraints);
+        // if public input then public inputs col will have public inputs len
+        if self.settings.run_args.input_visibility.is_public()
+            || self.settings.run_args.output_visibility.is_public()
+        {
+            let max_instance_len = self
+                .model
+                .instance_shapes()
+                .iter()
+                .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
+            let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize;
+            logrows = std::cmp::max(logrows, instance_len_logrows);
+            // this is for fixed const columns
+        }
+
+        // ensure logrows is at least 4
+        logrows = std::cmp::max(logrows, MIN_LOGROWS as usize);
+        logrows = std::cmp::min(logrows, MAX_PUBLIC_SRS as usize);
+
+        info!(
+            "setting bits to: {}, setting logrows to: {}",
+            min_bits, logrows
+        );
+        self.settings.run_args.bits = min_bits;
+        self.settings.run_args.logrows = logrows as u32;
+
+        self.settings = GraphCircuit::new(self.model.clone(), &self.settings.run_args)?.settings;
+
+        let total_const_len = self.settings.total_const_size;
+        let const_len_logrows = (total_const_len as f64).log2().ceil() as u32 + 1;
+        self.settings.run_args.logrows =
+            std::cmp::max(self.settings.run_args.logrows, const_len_logrows);
+
+        Ok(())
+    }
+
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec())?;
@@ -684,62 +758,18 @@ impl GraphCircuit {
                 .log2()
                 .ceil() as usize
                 + 1;
-
             if recommended_bits <= (MAX_PUBLIC_SRS - 1) as usize {
-                self.settings.run_args.bits = recommended_bits;
-                self.settings.run_args.logrows = recommended_bits as u32;
-                return self.calibrate(input);
+                self.calc_min_logrows(&res, blinding_offset)
             } else {
                 let err_string = format!(
                     "No possible value of bits (estimate {}) can accomodate max value.",
                     recommended_bits
                 );
-                return Err(err_string.into());
+                Err(err_string.into())
             }
         } else {
-            let min_bits = (res.max_lookup_inputs as f64 + blinding_offset)
-                .log2()
-                .ceil() as usize
-                + 1;
-
-            let min_rows_from_constraints =
-                (self.settings.num_constraints as f32).log2().ceil() as usize;
-            let mut logrows = std::cmp::max(min_bits, min_rows_from_constraints);
-            // if public input then public inputs col will have public inputs len
-            if self.settings.run_args.input_visibility.is_public()
-                || self.settings.run_args.output_visibility.is_public()
-            {
-                let max_instance_len = self
-                    .model
-                    .instance_shapes()
-                    .iter()
-                    .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
-                let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize;
-                logrows = std::cmp::max(logrows, instance_len_logrows);
-                // this is for fixed const columns
-            }
-
-            // ensure logrows is at least 7
-            logrows = std::cmp::max(logrows, ASSUMED_BLINDING_FACTORS);
-
-            logrows = std::cmp::min(logrows, MAX_PUBLIC_SRS as usize);
-
-            info!(
-                "setting bits to: {}, setting logrows to: {}",
-                min_bits, logrows
-            );
-            self.settings.run_args.bits = min_bits;
-            self.settings.run_args.logrows = logrows as u32;
+            self.calc_min_logrows(&res, blinding_offset)
         }
-
-        self.settings = GraphCircuit::new(self.model.clone(), &self.settings.run_args)?.settings;
-
-        let total_const_len = self.settings.total_const_size;
-        let const_len_logrows = (total_const_len as f64).log2().ceil() as u32 + 1;
-        self.settings.run_args.logrows =
-            std::cmp::max(self.settings.run_args.logrows, const_len_logrows);
-
-        Ok(())
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
@@ -971,12 +1001,18 @@ impl Circuit<Fp> for GraphCircuit {
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
+        let mut params = params.clone();
+        params.set_num_blinding_factors(cs.blinding_factors());
+        GLOBAL_SETTINGS.with(|settings| {
+            *settings.borrow_mut() = Some(params.clone());
+        });
         let visibility = VarVisibility::from_args(&params.run_args).unwrap();
 
         let vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
             params.num_constraints,
+            params.total_const_size,
             params.model_instance_shapes.clone(),
             params.run_args.input_scale,
         );

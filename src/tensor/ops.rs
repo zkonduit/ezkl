@@ -1238,7 +1238,7 @@ pub fn gather<T: TensorType + Send + Sync>(
     // Calculate the output tensor size
     let mut output_size = input.dims().to_vec();
     // Reshape the output tensor
-    if index.len() == 0 {
+    if index.is_empty() {
         output_size.remove(dim);
         let mut input = input.clone();
         input.reshape(&output_size);
@@ -1329,10 +1329,10 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
     Ok(output)
 }
 
-fn axes_op<T: TensorType>(
+fn axes_op<T: TensorType + Send + Sync>(
     a: &Tensor<T>,
     axes: &[usize],
-    op: impl Fn(&Tensor<T>) -> Result<Tensor<T>, TensorError>,
+    op: impl Fn(&Tensor<T>) -> Result<Tensor<T>, TensorError> + Send + Sync,
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
 
@@ -1349,7 +1349,7 @@ fn axes_op<T: TensorType>(
         }
     }
 
-    let mut res = Tensor::new(None, &new_dims)?;
+    let res = Tensor::new(None, &new_dims)?;
 
     let cartesian_coord = new_dims
         .iter()
@@ -1357,7 +1357,8 @@ fn axes_op<T: TensorType>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    for coord in cartesian_coord.iter() {
+    let res = res.par_enum_map(|i, _: T| {
+        let coord = cartesian_coord[i].clone();
         let mut prod_dims = vec![];
         for (i, c) in coord.iter().enumerate() {
             if axes.contains(&i) {
@@ -1367,8 +1368,8 @@ fn axes_op<T: TensorType>(
             }
         }
 
-        res.set(coord, op(&a.get_slice(&prod_dims)?)?[0].clone());
-    }
+        Ok(op(&a.get_slice(&prod_dims)?)?[0].clone())
+    })?;
 
     Ok(res)
 }
@@ -1393,7 +1394,7 @@ fn axes_op<T: TensorType>(
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn prod_axes<T: TensorType + Mul<Output = T>>(
+pub fn prod_axes<T: TensorType + Mul<Output = T> + Send + Sync>(
     a: &Tensor<T>,
     axes: &[usize],
 ) -> Result<Tensor<T>, TensorError> {
@@ -1468,7 +1469,7 @@ pub fn topk<T: TensorType + PartialOrd>(a: &Tensor<T>, k: usize) -> Result<Tenso
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn topk_axes<T: TensorType + PartialOrd>(
+pub fn topk_axes<T: TensorType + PartialOrd + Send + Sync>(
     a: &Tensor<T>,
     k: usize,
     dim: usize,
@@ -1476,7 +1477,7 @@ pub fn topk_axes<T: TensorType + PartialOrd>(
     let mut new_dims = a.dims().to_vec();
     new_dims[dim] = k;
 
-    let mut res = Tensor::new(None, &new_dims)?;
+    let res = Tensor::new(None, &new_dims)?;
 
     let cartesian_coord = new_dims
         .iter()
@@ -1484,7 +1485,8 @@ pub fn topk_axes<T: TensorType + PartialOrd>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    for coord in cartesian_coord.iter() {
+    let res = res.par_enum_map(|i, _: T| {
+        let coord = cartesian_coord[i].clone();
         let mut slice = vec![];
         for (i, c) in coord.iter().enumerate() {
             if i == dim {
@@ -1495,8 +1497,8 @@ pub fn topk_axes<T: TensorType + PartialOrd>(
         }
         let sliced_value = a.get_slice(&slice)?;
         let topk = topk(&sliced_value, k)?;
-        res.set(coord, topk[coord[dim]].clone());
-    }
+        Ok(topk[coord[dim]].clone())
+    })?;
 
     Ok(res)
 }
@@ -1521,7 +1523,7 @@ pub fn topk_axes<T: TensorType + PartialOrd>(
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn sum_axes<T: TensorType + Add<Output = T>>(
+pub fn sum_axes<T: TensorType + Add<Output = T> + Send + Sync>(
     a: &Tensor<T>,
     axes: &[usize],
 ) -> Result<Tensor<T>, TensorError> {
@@ -1549,14 +1551,14 @@ pub fn sum_axes<T: TensorType + Add<Output = T>>(
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
+pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + Send + Sync>(
     a: &Tensor<T>,
     axes: &[usize],
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
 
     let min_fn = |a: &Tensor<T>| -> Result<Tensor<T>, TensorError> {
-        Ok(vec![a.iter().min().unwrap().clone()].into_iter().into())
+        Ok(vec![a.par_iter().min().unwrap().clone()].into_iter().into())
     };
 
     axes_op(a, axes, min_fn)
@@ -1610,14 +1612,14 @@ pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
+pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + Send + Sync>(
     a: &Tensor<T>,
     axes: &[usize],
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
 
     let max_fn = |a: &Tensor<T>| -> Result<Tensor<T>, TensorError> {
-        Ok(vec![a.iter().max().unwrap().clone()].into_iter().into())
+        Ok(vec![a.par_iter().max().unwrap().clone()].into_iter().into())
     };
 
     axes_op(a, axes, max_fn)
@@ -1643,7 +1645,7 @@ pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord>(
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn argmax_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + From<u64>>(
+pub fn argmax_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + From<u64> + Send + Sync>(
     a: &Tensor<T>,
     dim: usize,
 ) -> Result<Tensor<T>, TensorError> {
@@ -1684,7 +1686,7 @@ pub fn argmax_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + From<u64>>(
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn argmin_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + From<u64>>(
+pub fn argmin_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + From<u64> + Send + Sync>(
     a: &Tensor<T>,
     dim: usize,
 ) -> Result<Tensor<T>, TensorError> {
@@ -2582,7 +2584,10 @@ where
 /// # Errors
 /// Returns a TensorError if the tensors in `inputs` have incompatible dimensions for concatenation along the specified `axis`.
 
-pub fn concat<T: TensorType>(inputs: &[Tensor<T>], axis: usize) -> Result<Tensor<T>, TensorError> {
+pub fn concat<T: TensorType + Send + Sync>(
+    inputs: &[Tensor<T>],
+    axis: usize,
+) -> Result<Tensor<T>, TensorError> {
     if inputs.len() == 1 {
         return Ok(inputs[0].clone());
     }
@@ -2615,7 +2620,7 @@ pub fn concat<T: TensorType>(inputs: &[Tensor<T>], axis: usize) -> Result<Tensor
         (input_idx, input_coord_at_idx)
     };
 
-    output = output.enum_map(|i, _: T| {
+    output = output.par_enum_map(|i, _: T| {
         let coord = cartesian_coord[i].clone();
         let mut index = 0;
         let mut input_index = 0;
@@ -2724,16 +2729,13 @@ pub mod nonlinearities {
     ///
     /// ```
     pub fn sigmoid(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input / (1.0 + (-kix).exp());
             let rounded = fout.round();
-            output[i] = rounded as i128;
-        }
-        output
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies exponential to a tensor of integers.
@@ -2766,16 +2768,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn exp(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.exp();
             let rounded = fout.round();
-            output[i] = rounded as i128;
-        }
-        output
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies exponential to a tensor of integers.
@@ -2808,16 +2807,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn ln(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.ln();
             let rounded = fout.round();
-            output[i] = rounded as i128;
-        }
-        output
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies sign to a tensor of integers.
@@ -2836,13 +2832,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn sign(a: &Tensor<i128>) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = a_i.signum();
-        }
-        output
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(a_i.signum()))
+            .unwrap()
     }
 
     /// softmax layout
@@ -2991,16 +2982,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn sqrt(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sqrt();
             let rounded = fout.round();
-            output[i] = rounded as i128;
-        }
-        output
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies reciprocal square root to a tensor of integers.
@@ -3022,16 +3010,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn rsqrt(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * (1.0 / kix.sqrt());
             let rounded = fout.round();
-            output[i] = rounded as i128;
-        }
-        output
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies cosine to a tensor of integers.
@@ -3052,15 +3037,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn cos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let cosz = scale_input * z.cos();
-            output[i] = cosz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.cos();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies arccosine to a tensor of integers.
@@ -3081,15 +3064,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn acos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let acos = scale_input * z.acos();
-            output[i] = acos as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.acos();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies cosh to a tensor of integers.
@@ -3110,15 +3091,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn cosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let coshz = scale_input * z.cosh();
-            output[i] = coshz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.cosh();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies arccosineh to a tensor of integers.
@@ -3139,15 +3118,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn acosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let acoshz = scale_input * z.acosh();
-            output[i] = acoshz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.acosh();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies sine to a tensor of integers.
@@ -3168,15 +3145,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn sin(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let sinz = scale_input * z.sin();
-            output[i] = sinz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.sin();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies arcsine to a tensor of integers.
@@ -3197,15 +3172,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn asin(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let asinz = scale_input * z.asin();
-            output[i] = asinz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.asin();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies sineh to a tensor of integers.
@@ -3226,15 +3199,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn sinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let asinz = scale_input * z.sinh();
-            output[i] = asinz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.sinh();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies arcsineh to a tensor of integers.
@@ -3255,15 +3226,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn asinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let asinhz = scale_input * z.asinh();
-            output[i] = asinhz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.asinh();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies tan activation to a tensor of integers.
@@ -3284,15 +3253,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn tan(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let tanz = scale_input * z.tan();
-            output[i] = tanz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.tan();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies arctan activation to a tensor of integers.
@@ -3313,15 +3280,13 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn atan(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let atanz = scale_input * z.atan();
-            output[i] = atanz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.atan();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies tanh activation to a tensor of integers.
@@ -3344,15 +3309,13 @@ pub mod nonlinearities {
     /// ```
 
     pub fn tanh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let tanhz: f64 = scale_input * z.tanh();
-            output[i] = tanhz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.tanh();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies arctanh activation to a tensor of integers.
@@ -3375,15 +3338,13 @@ pub mod nonlinearities {
     /// ```
 
     pub fn atanh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
-        for i in 0..a.len() {
-            let z = a[i] as f64 / scale_input;
-            let atanhz = scale_input * z.atanh();
-            output[i] = atanhz as i128;
-        }
-
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * kix.atanh();
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Applies error function (erf) on a tensor of integers.
@@ -3405,8 +3366,6 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn erffunc(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
-        let mut output = a.clone();
-
         const NCOEF: usize = 28;
         const COF: [f64; 28] = [
             -1.3026537197817094,
@@ -3463,12 +3422,13 @@ pub mod nonlinearities {
             }
         }
 
-        for i in 0..a.len() {
-            let mut z = a[i] as f64 / scale_input;
-            z = scale_input * (erf(z));
-            output[i] = z as i128;
-        }
-        output
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let fout = scale_input * erf(kix);
+            let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies leaky relu to a tensor of integers.
@@ -3490,19 +3450,17 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn leakyrelu(a: &Tensor<i128>, slope: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = if a_i < &0 {
-                let d_inv_x = (slope) * (*a_i as f64);
+        a.par_enum_map(|_, a_i| {
+            let rounded = if a_i < 0 {
+                let d_inv_x = (slope) * (a_i as f64);
                 d_inv_x.round() as i128
             } else {
-                let d_inv_x = *a_i as f64;
+                let d_inv_x = a_i as f64;
                 d_inv_x.round() as i128
             };
-        }
-        output
+            Ok::<_, TensorError>(rounded)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies max to a tensor of integers.
@@ -3528,18 +3486,16 @@ pub mod nonlinearities {
         threshold: f64,
     ) -> Tensor<i128> {
         // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            let d_inv_x = (*a_i as f64) / (in_scale as f64);
-            output[i] = if d_inv_x <= threshold {
+        a.par_enum_map(|_, a_i| {
+            let d_inv_x = (a_i as f64) / (in_scale as f64);
+            let rounded = if d_inv_x <= threshold {
                 (threshold * (out_scale as f64)).round() as i128
             } else {
                 (d_inv_x * (out_scale as f64)).round() as i128
             };
-        }
-
-        output
+            Ok::<_, TensorError>(rounded)
+        })
+        .unwrap()
     }
 
     /// Elementwise applies min to a tensor of integers.
@@ -3565,18 +3521,16 @@ pub mod nonlinearities {
         threshold: f64,
     ) -> Tensor<i128> {
         // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            let d_inv_x = (*a_i as f64) / (in_scale as f64);
-            output[i] = if d_inv_x >= threshold {
+        a.par_enum_map(|_, a_i| {
+            let d_inv_x = (a_i as f64) / (in_scale as f64);
+            let rounded = if d_inv_x >= threshold {
                 (threshold * (out_scale as f64)).round() as i128
             } else {
                 (d_inv_x * (out_scale as f64)).round() as i128
             };
-        }
-
-        output
+            Ok::<_, TensorError>(rounded)
+        })
+        .unwrap()
     }
 
     /// Elementwise divides a tensor with a const integer element.
@@ -3598,15 +3552,11 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn const_div(a: &Tensor<i128>, denom: f64) -> Tensor<i128> {
-        // calculate value of output
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            let d_inv_x = (*a_i as f64) / denom;
-            output[i] = d_inv_x.round() as i128;
-        }
-        output
+        a.par_enum_map(|_, a_i| {
+            let d_inv_x = (a_i as f64) / (denom);
+            Ok::<_, TensorError>(d_inv_x.round() as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise inverse.
@@ -3628,15 +3578,12 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn recip(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            let denom = (1_f64) / (*a_i as f64);
+        a.par_enum_map(|_, a_i| {
+            let denom = (1_f64) / (a_i as f64);
             let d_inv_x = scale * denom;
-            output[i] = d_inv_x.round() as i128;
-        }
-        output
+            Ok::<_, TensorError>(d_inv_x.round() as i128)
+        })
+        .unwrap()
     }
 
     /// Elementwise greater than
@@ -3658,13 +3605,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn greater_than(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = i128::from((*a_i as f64 - b) > 0_f64);
-        }
-        output
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) > 0_f64)))
+            .unwrap()
     }
 
     /// Elementwise greater than
@@ -3686,13 +3628,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn greater_than_equal(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = i128::from((*a_i as f64 - b) >= 0_f64);
-        }
-        output
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) >= 0_f64)))
+            .unwrap()
     }
 
     /// Elementwise less than
@@ -3715,13 +3652,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn less_than(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = i128::from((*a_i as f64 - b) < 0_f64);
-        }
-        output
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) < 0_f64)))
+            .unwrap()
     }
 
     /// Elementwise less than
@@ -3744,13 +3676,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn less_than_equal(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        // calculate value of output
-        let mut output: Tensor<i128> = a.clone();
-
-        for (i, a_i) in a.iter().enumerate() {
-            output[i] = i128::from((*a_i as f64 - b) <= 0_f64);
-        }
-        output
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) <= 0_f64)))
+            .unwrap()
     }
 
     /// Takes the mean of a tensor
@@ -3886,84 +3813,5 @@ pub mod accumulated {
             .collect();
 
         Ok(transcript)
-    }
-
-    /// Matrix multiplies two 2D tensors.
-    /// # Arguments
-    ///
-    /// * `inputs` - Vector of tensors of length 2
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::accumulated::matmul;
-    ///
-    /// let x = Tensor::<i128>::new(
-    ///     Some(&[5, 2, 3]),
-    ///     &[3, 1],
-    /// ).unwrap();
-    /// let k = Tensor::<i128>::new(
-    ///     Some(&[2, 1, 2, 1, 1, 1]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let result = matmul(&[k, x]).unwrap();
-    /// let expected = Tensor::<i128>::new(Some(&[10, 12, 18, 5, 7, 10]), &[2, 1, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn matmul<
-        T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
-    >(
-        inputs: &[Tensor<T>; 2],
-    ) -> Result<Tensor<T>, TensorError> {
-        let (mut a, mut b) = (inputs[0].clone(), inputs[1].clone());
-
-        if a.dims().len() == 1 {
-            a.reshape(&[1, a.dims()[0]]);
-        }
-        if b.dims().len() == 1 {
-            b.reshape(&[b.dims()[0], 1]);
-        }
-
-        if (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
-            || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
-        {
-            return Err(TensorError::DimMismatch("matmul".to_string()));
-        }
-
-        let mut dims = Vec::from(&a.dims()[0..a.dims().len() - 2]);
-        dims.push(a.dims()[a.dims().len() - 2]);
-        dims.push(b.dims()[a.dims().len() - 1]);
-        // calculate value of output
-
-        let indices = dims.iter().map(|d| 0..*d).collect::<Vec<_>>();
-
-        let cartesian_product = indices
-            .iter()
-            .cloned()
-            .multi_cartesian_product()
-            .collect::<Vec<_>>();
-        let mut transcripts = vec![Tensor::<T>::new(None, &[0])?; cartesian_product.len()];
-
-        transcripts.par_iter_mut().enumerate().for_each(|(i, t)| {
-            let row = cartesian_product[i][0..cartesian_product[i].len() - 1]
-                .iter()
-                .map(|&d| d..(d + 1))
-                .collect::<Vec<_>>();
-            let mut col = cartesian_product[i][0..cartesian_product[i].len()]
-                .iter()
-                .map(|&d| d..(d + 1))
-                .collect::<Vec<_>>();
-            col[cartesian_product[i].len() - 2] = 0..b.dims()[cartesian_product[i].len() - 2];
-            let dot_transcript = dot(&[
-                a.get_slice(&row[0..]).unwrap(),
-                b.get_slice(&col[0..]).unwrap(),
-            ])
-            .unwrap();
-            *t = dot_transcript;
-        });
-
-        let mut output = Tensor::new(Some(&transcripts), &[transcripts.len()])?.combine()?;
-        output.reshape(&[dims.as_slice(), &[transcripts[0].len()]].concat());
-
-        Ok(output)
     }
 }

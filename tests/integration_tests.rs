@@ -730,6 +730,17 @@ mod native_tests {
                     test_dir.close().unwrap();
                 }
 
+                #(#[test_case(WASM_TESTS[N])])*
+                fn kzg_prove_and_verify_with_overflow_public_params_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    env_logger::init();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "public", "public", Some(vec![0,1]), true);
+                    wasm_tests(path, test.to_string());
+                    test_dir.close().unwrap();
+                }
+
             });
 
             seq!(N in 0..=4 {
@@ -2136,12 +2147,12 @@ mod native_tests {
     // run js wasm tests for a given example
     fn wasm_tests(test_dir: &str, example_name: String) {
         let status = Command::new("pnpm")
-            .args(&[
+            .args([
                 "run",
                 "test",
                 "testWasm",
                 &format!("--example={}", example_name),
-                &format!("--dir={}", test_dir)
+                &format!("--dir={}", test_dir),
             ])
             .status()
             .expect("failed to execute process");

@@ -291,7 +291,9 @@ jobs:
       - name: KZG prove and verify tests (public outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --test-threads 8
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --test-threads 8
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w --test-threads 8
+      - name: KZG prove and verify tests (public outputs + public params + column overflow)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_overlow_public_params_::w --test-threads 8
       - name: KZG prove and verify tests (public inputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_inputs --test-threads 8
       - name: KZG prove and verify tests (public params)
