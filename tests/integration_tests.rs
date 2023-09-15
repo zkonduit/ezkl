@@ -2643,7 +2643,9 @@ mod native_tests {
         let status = Command::new("sed")
             .args([
                 "-i",
-                "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|",
+                // is required on macos
+                // '.js' 
+                "\"3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|\"",
                 "./tests/wasm/nodejs/ezkl.js",
             ])
             .status()
