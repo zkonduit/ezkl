@@ -75,12 +75,19 @@ impl VarTensor {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         num_constants: usize,
+        uses_modules: bool,
     ) -> usize {
+        if num_constants == 0 && !uses_modules {
+            return 0;
+        } else if num_constants == 0 && uses_modules {
+            return 1;
+        }
+
         let max_rows = Self::max_rows(cs, logrows);
 
-        let mut modulo = (num_constants / max_rows) + 1;
+        let mut modulo = num_constants / max_rows + 1;
         // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
-        modulo = ((num_constants + modulo) / max_rows) + 1;
+        modulo = (num_constants + modulo) / max_rows + 1;
 
         if modulo > 1 {
             warn!(

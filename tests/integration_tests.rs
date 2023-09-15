@@ -602,6 +602,15 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn mock_hashed_output_public_params_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "public", "public", "hashed", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn mock_encrypted_output_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
@@ -2644,8 +2653,8 @@ mod native_tests {
             .args([
                 "-i",
                 // is required on macos
-                // '.js' 
-                "\"3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|\"",
+                "\".js\"",
+                "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|",
                 "./tests/wasm/nodejs/ezkl.js",
             ])
             .status()

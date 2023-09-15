@@ -83,15 +83,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             var.assign(&mut region.borrow_mut(), self.offset, values)
         } else {
             self.total_constants += values.num_constants();
-            let assigned_tensor = crate::tensor::Tensor::new(
-                Some(&vec![
-                    halo2_proofs::circuit::Value::<F>::unknown();
-                    values.len()
-                ]),
-                values.dims(),
-            )
-            .map_err(|_| Error::Synthesis)?;
-            Ok(assigned_tensor.into())
+            Ok(values.clone())
         }
     }
     /// Assign a valtensor to a vartensor with duplication
@@ -105,18 +97,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             // duplicates every nth element to adjust for column overflow
             var.assign_with_duplication(&mut region.borrow_mut(), self.offset, values, check_mode)
         } else {
-            let (dup, len, total_assigned_constants) =
+            let (_, len, total_assigned_constants) =
                 var.dummy_assign_with_duplication(self.offset, values)?;
-            let assigned_tensor = crate::tensor::Tensor::new(
-                Some(&vec![
-                    halo2_proofs::circuit::Value::<F>::unknown();
-                    dup.len()
-                ]),
-                dup.dims(),
-            )
-            .map_err(|_| Error::Synthesis)?;
             self.total_constants += total_assigned_constants;
-            Ok((assigned_tensor.into(), len))
+            Ok((values.clone(), len))
         }
     }
 

@@ -376,6 +376,11 @@ impl GraphSettings {
             panic!("num_blinding_factors not set")
         }
     }
+
+    ///
+    pub fn uses_modules(&self) -> bool {
+        !self.module_sizes.max_constraints() > 0
+    }
 }
 
 /// Configuration for a computational graph / model loaded from a `.onnx` file.
@@ -1015,6 +1020,7 @@ impl Circuit<Fp> for GraphCircuit {
             params.total_const_size,
             params.model_instance_shapes.clone(),
             params.run_args.input_scale,
+            params.uses_modules(),
         );
 
         let base = Model::configure(

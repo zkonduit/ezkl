@@ -1089,7 +1089,7 @@ mod sumpool {
             let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
             let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
-            VarTensor::constant_cols(cs, K, 2);
+            VarTensor::constant_cols(cs, K, 2, false);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -1388,7 +1388,7 @@ mod add_with_overflow_and_poseidon {
             let output = VarTensor::new_advice(cs, K, LEN);
 
             let base = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE);
-            VarTensor::constant_cols(cs, K, 2);
+            VarTensor::constant_cols(cs, K, 2, false);
 
             let poseidon = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::configure(cs);
 

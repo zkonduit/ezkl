@@ -245,6 +245,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         num_constants: usize,
         instance_dims: Vec<Vec<usize>>,
         instance_scale: u32,
+        uses_modules: bool,
     ) -> Self {
         let advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, var_len))
@@ -261,7 +262,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
             .collect_vec();
         debug!("model uses {} instance columns", instances.len());
 
-        let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants);
+        let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);
         debug!("model uses {} fixed columns", num_const_cols);
 
         ModelVars { advices, instances }
