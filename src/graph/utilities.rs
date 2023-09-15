@@ -106,6 +106,11 @@ fn extract_tensor_value(
     }
 
     match dt {
+        DatumType::F16 => {
+            let vec = input.as_slice::<tract_onnx::prelude::f16>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| (*x).into()).collect();
+            const_value = cast.into_iter().into();
+        }
         DatumType::F32 => {
             let vec = input.as_slice::<f32>()?.to_vec();
             const_value = vec.into_iter().into();
@@ -139,6 +144,30 @@ fn extract_tensor_value(
             let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
+        DatumType::U8 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<u8>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::U16 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<u16>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::U32 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<u32>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
+        DatumType::U64 => {
+            // Generally a shape or hyperparam
+            let vec = input.as_slice::<u64>()?.to_vec();
+            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+        }
         DatumType::Bool => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<bool>()?.to_vec();
@@ -154,7 +183,7 @@ fn extract_tensor_value(
                 .collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
-        _ => todo!(),
+        _ => todo!("unsupported type"),
     }
     const_value.reshape(&dims);
 
@@ -332,10 +361,19 @@ pub fn new_op_from_onnx(
             // Raw values are always f32
             let raw_value = extract_tensor_value(op.0)?;
             // If bool or a tensor dimension then don't scale
-            let constant_scale = if dt == DatumType::Bool || dt == DatumType::TDim {
-                0
-            } else {
-                scales.params
+            let constant_scale = match dt {
+                DatumType::Bool
+                | DatumType::TDim
+                | DatumType::I64
+                | DatumType::I32
+                | DatumType::I16
+                | DatumType::I8
+                | DatumType::U8
+                | DatumType::U16
+                | DatumType::U32
+                | DatumType::U64 => 0,
+                DatumType::F16 | DatumType::F32 | DatumType::F64 => scales.params,
+                _ => todo!("unsupported type"),
             };
             // Quantize the raw value
             let quantized_value =
@@ -588,7 +626,16 @@ pub fn new_op_from_onnx(
             let (scale, datum_type) = match node.outputs[0].fact.datum_type {
                 DatumType::Bool => (0, InputType::Bool),
                 DatumType::TDim => (0, InputType::TDim),
-                _ => (scales.input, InputType::Num),
+                DatumType::I64
+                | DatumType::I32
+                | DatumType::I16
+                | DatumType::I8
+                | DatumType::U8
+                | DatumType::U16
+                | DatumType::U32
+                | DatumType::U64 => (0, InputType::Num),
+                DatumType::F16 | DatumType::F32 | DatumType::F64 => (scales.input, InputType::Num),
+                _ => todo!(),
             };
             SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
         }
@@ -600,12 +647,24 @@ pub fn new_op_from_onnx(
                 .flat_map(|x| x.out_scales())
                 .collect::<Vec<_>>();
             assert_eq!(input_scales.len(), 1);
+
             match dt {
-                DatumType::Bool => SupportedOp::Nonlinear(LookupOp::Div {
+                DatumType::Bool
+                | DatumType::TDim
+                | DatumType::I64
+                | DatumType::I32
+                | DatumType::I16
+                | DatumType::I8
+                | DatumType::U8
+                | DatumType::U16
+                | DatumType::U32
+                | DatumType::U64 => SupportedOp::Nonlinear(LookupOp::Div {
                     denom: crate::circuit::utils::F32(scale_to_multiplier(input_scales[0]) as f32),
                 }),
-                DatumType::String | DatumType::Blob => unimplemented!(),
-                _ => SupportedOp::Linear(PolyOp::Identity),
+                DatumType::F16 | DatumType::F32 | DatumType::F64 => {
+                    SupportedOp::Linear(PolyOp::Identity)
+                }
+                _ => todo!("unsupported type"),
             }
         }
         "Add" => SupportedOp::Linear(PolyOp::Add),

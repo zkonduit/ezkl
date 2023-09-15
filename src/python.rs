@@ -258,8 +258,6 @@ struct PyRunArgs {
     pub param_visibility: Visibility,
     #[pyo3(get, set)]
     pub variables: Vec<(String, usize)>,
-    #[pyo3(get, set)]
-    pub allocated_constraints: Option<usize>,
 }
 
 /// default instantiation of PyRunArgs
@@ -271,14 +269,13 @@ impl PyRunArgs {
             tolerance: 0.0,
             input_scale: 7,
             param_scale: 7,
-            scale_rebase_multiplier: 2,
+            scale_rebase_multiplier: 1,
             bits: 16,
             logrows: 17,
-            input_visibility: "public".into(),
-            output_visibility: "public".into(),
-            param_visibility: "private".into(),
+            input_visibility: Visibility::Private,
+            output_visibility: Visibility::Public,
+            param_visibility: Visibility::Private,
             variables: vec![("batch_size".to_string(), 1)],
-            allocated_constraints: None,
         }
     }
 }
@@ -297,6 +294,23 @@ impl From<PyRunArgs> for RunArgs {
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
             variables: py_run_args.variables,
+        }
+    }
+}
+
+impl Into<PyRunArgs> for RunArgs {
+    fn into(self) -> PyRunArgs {
+        PyRunArgs {
+            tolerance: self.tolerance.val.into(),
+            input_scale: self.input_scale,
+            param_scale: self.param_scale,
+            scale_rebase_multiplier: self.scale_rebase_multiplier,
+            bits: self.bits,
+            logrows: self.logrows,
+            input_visibility: self.input_visibility,
+            output_visibility: self.output_visibility,
+            param_visibility: self.param_visibility,
+            variables: self.variables,
         }
     }
 }
