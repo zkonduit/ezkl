@@ -1,17 +1,17 @@
 import * as wasmFunctions from './nodejs/ezkl'
-import { 
+import {
     readEzklArtifactsFile,
     readEzklSrsFile
- } from './utils';
+} from './utils';
 import fs from 'fs';
 exports.USER_NAME = require("minimist")(process.argv.slice(2))["example"];
 exports.PATH = require("minimist")(process.argv.slice(2))["dir"];
 
-const timingData: { 
+const timingData: {
     example: string,
-    proveTime: number, 
+    proveTime: number,
     verifyTime: number,
-    verifyResult: boolean | undefined 
+    verifyResult: boolean | undefined
 }[] = [];
 
 describe('Generate witness, prove and verify', () => {
@@ -26,7 +26,7 @@ describe('Generate witness, prove and verify', () => {
 
     const example = exports.USER_NAME || "1l_mlp"
     const path = exports.PATH || "../ezkl/examples/onnx"
-        
+
     it('prove', async () => {
         let result
         let witness = await readEzklArtifactsFile(path, example, 'input.json');
@@ -42,7 +42,7 @@ describe('Generate witness, prove and verify', () => {
         expect(result).toBeInstanceOf(Uint8Array);
     });
 
-    it('verify', async() => {
+    it('verify', async () => {
         let result
         const vk = await readEzklArtifactsFile(path, example, 'key.vk');
         const startTimeVerify = Date.now();

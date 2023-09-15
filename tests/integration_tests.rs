@@ -12,6 +12,7 @@ mod native_tests {
     use std::process::{Child, Command};
     use std::sync::Once;
     static COMPILE: Once = Once::new();
+    static COMPILE_WASM: Once = Once::new();
     static ENV_SETUP: Once = Once::new();
 
     //Sure to run this once
@@ -37,6 +38,12 @@ mod native_tests {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
             build_ezkl();
+        });
+    }
+
+    fn init_wasm() {
+        COMPILE_WASM.call_once(|| {
+            build_wasm_ezkl();
         });
     }
 
@@ -722,6 +729,7 @@ mod native_tests {
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
                     crate::native_tests::init_binary();
+                    crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
@@ -733,6 +741,7 @@ mod native_tests {
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_public_params_(test: &str) {
                     crate::native_tests::init_binary();
+                    crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
@@ -2606,6 +2615,36 @@ mod native_tests {
     fn build_ezkl() {
         let status = Command::new("cargo")
             .args(["build", "--release", "--bin", "ezkl"])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    fn build_wasm_ezkl() {
+        // wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+        let status = Command::new("wasm-pack")
+            .args([
+                "build",
+                "--target",
+                "nodejs",
+                "--out-dir",
+                "./tests/wasm/nodejs",
+                ".",
+                "--",
+                "-Z",
+                "build-std=panic_abort,std",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        // fix the memory size
+        //   sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+        let status = Command::new("sed")
+            .args([
+                "-i",
+                "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|",
+                "./tests/wasm/nodejs/ezkl.js",
+            ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
