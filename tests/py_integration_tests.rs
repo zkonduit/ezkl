@@ -91,7 +91,7 @@ mod py_tests {
     fn init_binary() {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-            // setup_py_env();
+            setup_py_env();
         });
     }
 
@@ -149,7 +149,7 @@ mod py_tests {
             fn run_notebook_(test: &str) {
                 crate::py_tests::init_binary();
                 let mut anvil_child = crate::py_tests::start_anvil();
-                let test_dir: TempDir = TempDir::new("example").unwrap();
+                let test_dir: TempDir = TempDir::new("nb").unwrap();
                 let path = test_dir.path().to_str().unwrap();
                 crate::py_tests::mv_test_(path, test);
                 run_notebook(path, test);
@@ -161,7 +161,7 @@ mod py_tests {
                 crate::py_tests::init_binary();
                 let mut anvil_child = crate::py_tests::start_anvil();
                 crate::py_tests::download_voice_data();
-                let test_dir: TempDir = TempDir::new("example").unwrap();
+                let test_dir: TempDir = TempDir::new("voice_judge").unwrap();
                 let path = test_dir.path().to_str().unwrap();
                 crate::py_tests::mv_test_(path, "voice_judge.ipynb");
                 run_notebook(path, "voice_judge.ipynb");
@@ -172,7 +172,7 @@ mod py_tests {
             #[test]
             fn nbeats_notebook_() {
                 crate::py_tests::init_binary();
-                let test_dir: TempDir = TempDir::new("example").unwrap();
+                let test_dir: TempDir = TempDir::new("nbeats").unwrap();
                 let path = test_dir.path().to_str().unwrap();
                 crate::py_tests::mv_test_(path, "nbeats_timeseries_forecasting.ipynb");
                 crate::py_tests::mv_test_(path, "eth_price.csv");
