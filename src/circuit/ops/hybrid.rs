@@ -134,8 +134,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 }
             }
             HybridOp::OneHot { dim, num_classes } => {
+                let inter_equals: Vec<Tensor<i128>> = vec![Tensor::from(0..*num_classes as i128)];
                 let res = tensor::ops::one_hot(&x, *num_classes, *dim)?;
-                (res.clone(), vec![])
+                (res.clone(), inter_equals)
             }
             HybridOp::TopK { dim, k } => {
                 let res = tensor::ops::topk_axes(&x, *k, *dim)?;
@@ -331,6 +332,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn requires_specific_input_scales(&self) -> Vec<(usize, u32)> {
         match self {
             HybridOp::Gather { .. } | HybridOp::GatherElements { .. } => vec![(1, 0)],
+            HybridOp::OneHot { .. } => vec![(0, 0)],
             _ => vec![],
         }
     }
