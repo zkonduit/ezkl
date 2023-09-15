@@ -580,7 +580,7 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
 
     // assert we have a single index
     assert_eq!(index.dims().iter().product::<usize>(), 1);
-    assert!(dim_indices.all_prev_assigned());
+    assert!(dim_indices.all_prev_assigned() || region.is_dummy());
 
     let is_assigned = !input.any_unknowns() && !index.any_unknowns();
 
