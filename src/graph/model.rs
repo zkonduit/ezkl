@@ -561,15 +561,11 @@ impl Model {
                         for ((mapping, inp), og_input) in
                             input_mappings.iter().zip(&mut inputs).zip(&orig_inputs)
                         {
-                            match mapping {
-                                InputMapping::Stacked { axis, chunk } => {
-                                    let start = i * chunk;
-                                    let end = (i + 1) * chunk;
-                                    let t =
-                                        crate::tensor::ops::slice(og_input, axis, &start, &end)?;
-                                    *inp = t;
-                                }
-                                _ => {}
+                            if let InputMapping::Stacked { axis, chunk } = mapping {
+                                let start = i * chunk;
+                                let end = (i + 1) * chunk;
+                                let t = crate::tensor::ops::slice(og_input, axis, &start, &end)?;
+                                *inp = t;
                             }
                         }
 
@@ -1170,15 +1166,12 @@ impl Model {
                         for ((mapping, inp), og_inp) in
                             input_mappings.iter().zip(&mut values).zip(&original_values)
                         {
-                            match mapping {
-                                InputMapping::Stacked { axis, chunk } => {
-                                    let start = i * chunk;
-                                    let end = (i + 1) * chunk;
-                                    let mut sliced_input = og_inp.clone();
-                                    sliced_input.slice(axis, &start, &end)?;
-                                    *inp = sliced_input;
-                                }
-                                _ => {}
+                            if let InputMapping::Stacked { axis, chunk } = mapping {
+                                let start = i * chunk;
+                                let end = (i + 1) * chunk;
+                                let mut sliced_input = og_inp.clone();
+                                sliced_input.slice(axis, &start, &end)?;
+                                *inp = sliced_input;
                             }
                         }
 
@@ -1356,8 +1349,8 @@ impl Model {
         let mut const_idx = 0;
         for node in self.graph.nodes.values_mut() {
             match node {
-                NodeType::Node(n) => match &n.opkind {
-                    SupportedOp::Constant(c) => {
+                NodeType::Node(n) => {
+                    if let SupportedOp::Constant(c) = &n.opkind {
                         let mut op = crate::circuit::Constant::new(
                             c.quantized_values.clone(),
                             c.raw_values.clone(),
@@ -1367,8 +1360,7 @@ impl Model {
 
                         const_idx += 1;
                     }
-                    _ => {}
-                },
+                }
                 NodeType::SubGraph { model, .. } => {
                     let total_consts = model.replace_consts(&consts[const_idx..]);
                     const_idx += total_consts;

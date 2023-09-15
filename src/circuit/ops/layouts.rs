@@ -384,11 +384,12 @@ fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
     };
 
     let assigned_sort = region.assign(&config.inputs[0], &sorted.into())?;
+    let input = region.assign(&config.inputs[1], &input)?;
 
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
     unit.set_visibility(crate::graph::Visibility::Public);
     let unit_len = unit.len();
-    let unit = region.assign(&config.inputs[1], &unit.into())?;
+    let unit = region.assign(&config.output, &unit.into())?;
 
     region.increment(assigned_sort.len());
 
@@ -571,12 +572,14 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
+    dim_indices: ValTensor<F>,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let (mut input, index) = (values[0].clone(), values[1].clone());
     input.flatten();
 
     // assert we have a single index
     assert_eq!(index.dims().iter().product::<usize>(), 1);
+    assert!(dim_indices.all_prev_assigned() || region.is_dummy());
 
     let is_assigned = !input.any_unknowns() && !index.any_unknowns();
 
@@ -594,13 +597,7 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     }
     .into();
 
-    // these will be assigned as constants
-    let mut indices = Tensor::from((0..values[0].len() as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Public);
-    let indices = region.assign(&config.inputs[1], &indices.into())?;
-    region.increment(indices.len());
-
-    let local_mask = equals(config, region, &[index, indices.clone()]).unwrap();
+    let local_mask = equals(config, region, &[index, dim_indices.clone()]).unwrap();
 
     let prod = pairwise(config, region, &[input, local_mask], BaseOp::Mult).unwrap();
 
@@ -769,6 +766,12 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
 
     output_size[dim] = index.dims()[0];
 
+    // these will be assigned as constants
+    let mut indices = Tensor::from((0..input.dims()[dim] as u64).map(|x| F::from(x)));
+    indices.set_visibility(crate::graph::Visibility::Public);
+    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    region.increment(indices.len());
+
     // Allocate memory for the output tensor
     let cartesian_coord = output_size
         .iter()
@@ -787,8 +790,13 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
             let mut sliced_input = input.get_slice(&slice)?;
             sliced_input.flatten();
 
-            let res =
-                select(config, region, &[sliced_input, index_val.clone()])?.get_inner_tensor()?;
+            let res = select(
+                config,
+                region,
+                &[sliced_input, index_val.clone()],
+                indices.clone(),
+            )?
+            .get_inner_tensor()?;
 
             Ok(res[0].clone())
         })
@@ -827,6 +835,12 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
     let input_dim = input.dims()[dim];
     let output_size = index.dims().to_vec();
 
+    // these will be assigned as constants
+    let mut indices = Tensor::from((0..input_dim as u64).map(|x| F::from(x)));
+    indices.set_visibility(crate::graph::Visibility::Public);
+    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    region.increment(indices.len());
+
     // Allocate memory for the output tensor
     let cartesian_coord = output_size
         .iter()
@@ -848,8 +862,13 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
             let index_valtensor: ValTensor<F> =
                 Tensor::from([index_val.clone()].into_iter()).into();
 
-            let res =
-                select(config, region, &[sliced_input, index_valtensor])?.get_inner_tensor()?;
+            let res = select(
+                config,
+                region,
+                &[sliced_input, index_valtensor],
+                indices.clone(),
+            )?
+            .get_inner_tensor()?;
 
             Ok(res[0].clone())
         })
@@ -1051,6 +1070,19 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     dim: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // these will be assigned as constants
+    let mut indices = Tensor::from((0..values[0].dims()[dim] as u64).map(|x| F::from(x)));
+    indices.set_visibility(crate::graph::Visibility::Public);
+    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    region.increment(indices.len());
+
+    let argmax = move |config: &BaseConfig<F>,
+                       region: &mut RegionCtx<F>,
+                       values: &[ValTensor<F>; 1]|
+          -> Result<ValTensor<F>, Box<dyn Error>> {
+        argmax(config, region, values, indices.clone())
+    };
+
     // calculate value of output
     axes_wise_op(config, region, values, &[dim], argmax)
 }
@@ -1075,6 +1107,18 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd>(
     dim: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // calculate value of output
+    // these will be assigned as constants
+    let mut indices = Tensor::from((0..values[0].dims()[dim] as u64).map(|x| F::from(x)));
+    indices.set_visibility(crate::graph::Visibility::Public);
+    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    region.increment(indices.len());
+
+    let argmin = move |config: &BaseConfig<F>,
+                       region: &mut RegionCtx<F>,
+                       values: &[ValTensor<F>; 1]|
+          -> Result<ValTensor<F>, Box<dyn Error>> {
+        argmax(config, region, values, indices.clone())
+    };
 
     axes_wise_op(config, region, values, &[dim], argmin)
 }
@@ -1334,16 +1378,7 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
 
-    let nil: ValTensor<F> =
-        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(0))?].into_iter())
-            .into();
-    region.next();
-
-    let greater_than_zero = greater(config, region, &[diff.clone(), nil.clone()])?;
-    let less_than_zero = less(config, region, &[diff, nil])?;
-
-    let res = or(config, region, &[greater_than_zero, less_than_zero])?;
-    let res = not(config, region, &[res])?;
+    let res = nonlinearity(config, region, &[diff], &LookupOp::KroneckerDelta)?;
 
     Ok(res)
 }
@@ -2140,6 +2175,7 @@ pub fn argmax<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
+    indices: ValTensor<F>,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // this is safe because we later constrain it
     let argmax = values[0]
@@ -2161,6 +2197,7 @@ pub fn argmax<F: PrimeField + TensorType + PartialOrd>(
         config,
         region,
         &[values[0].clone(), assigned_argmax.clone()],
+        indices,
     )?;
 
     let max_val = max(config, region, &[values[0].clone()])?;
@@ -2182,6 +2219,7 @@ pub fn argmin<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
+    indices: ValTensor<F>,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // this is safe because we later constrain it
     let argmin = values[0]
@@ -2204,6 +2242,7 @@ pub fn argmin<F: PrimeField + TensorType + PartialOrd>(
         config,
         region,
         &[values[0].clone(), assigned_argmin.clone()],
+        indices,
     )?;
     let min_val = min(config, region, &[values[0].clone()])?;
 
