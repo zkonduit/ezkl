@@ -80,6 +80,8 @@ impl VarTensor {
         if num_constants == 0 && !uses_modules {
             return 0;
         } else if num_constants == 0 && uses_modules {
+            let col = cs.fixed_column();
+            cs.enable_constant(col);
             return 1;
         }
 
