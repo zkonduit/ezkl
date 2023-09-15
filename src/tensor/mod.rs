@@ -720,7 +720,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn reshape(&mut self, new_dims: &[usize]) {
         // in onnx parlance this corresponds to converting a tensor to a single element
         if new_dims.is_empty() {
-            assert!(self.len() == 1 || self.len() == 0);
+            assert!(self.len() == 1 || self.is_empty());
             self.flatten();
         } else {
             let product = if new_dims != &[0] {

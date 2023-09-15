@@ -2471,7 +2471,7 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd>(
 
     let mut sorted_axes = axes.to_vec();
     // descending order
-    sorted_axes.sort_by(|x, y| y.cmp(&x));
+    sorted_axes.sort_by(|x, y| y.cmp(x));
 
     let mut output_size_without_dim = input_dims.to_vec();
     for dim in &sorted_axes {

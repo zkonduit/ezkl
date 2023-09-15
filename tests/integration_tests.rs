@@ -2136,7 +2136,7 @@ mod native_tests {
     // run js wasm tests for a given example
     fn wasm_tests(test_dir: &str, example_name: String) {
         let status = Command::new("pnpm")
-            .args(&[
+            .args([
                 "run",
                 "test",
                 "testWasm",

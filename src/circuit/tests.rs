@@ -273,7 +273,7 @@ mod matmul_col_ultra_overflow {
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
         let vk = pk.get_vk();
         let result =
-            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
+            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
 
         assert!(result.is_ok());
 
@@ -908,7 +908,7 @@ mod conv_col_ultra_overflow {
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
         let vk = pk.get_vk();
         let result =
-            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
+            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
 
         assert!(result.is_ok());
 
@@ -1054,7 +1054,7 @@ mod conv_relu_col_ultra_overflow {
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
         let vk = pk.get_vk();
         let result =
-            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
+            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
 
         assert!(result.is_ok());
 
