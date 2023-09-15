@@ -2,6 +2,7 @@ target
 pkg
 data
 *.csv
+!examples/notebooks/eth_price.csv
 *.ipynb_checkpoints
 *.sol
 !QuantizeData.sol
@@ -42,3 +43,5 @@ var/
 .vscode/
 *.whl
 *.bak
+node_modules
+timingData.json

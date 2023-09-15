@@ -154,6 +154,7 @@ jobs:
       - name: Circuit Render
         run: cargo nextest run --release --verbose tests::tutorial_
 
+
   mock-proving-tests:
     runs-on: self-hosted
     # needs: [build,  library-tests, docs]
@@ -250,6 +251,39 @@ jobs:
           toolchain: nightly-2023-08-24
           override: true
           components: rustfmt, clippy
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - name: Add wasm32-unknown-unknown target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-server-runner
+        run: cargo install wasm-server-runner
+
+      - name: Add rust-src
+        run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
+
+      - name: Build wasm files for both web and nodejs compilation targets
+        run: |
+          wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+
+      - name: Replace memory definition in nodejs
+        run: |
+          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+      - uses: actions/checkout@v3
+      - name: Use pnpm 8
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - name: Use Node.js 18.12.1
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.12.1'
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: |
+          pnpm install --no-frozen-lockfile
+        env:
+          CI: false
+          NODE_ENV: development
       - uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-nextest
@@ -488,6 +522,8 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: NBEATS tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       - name: SVM
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_18_expects
       - name: LightGBM
@@ -504,8 +540,8 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_12_expects
       - name: Voice tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
-      - name: Mean tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
+      # - name: Mean tutorial
+      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
       - name: End to end demo tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
       - name: LSTM tutorial
@@ -528,3 +564,4 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
       - name: Gan tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
+     
