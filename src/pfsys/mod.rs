@@ -71,6 +71,28 @@ impl ToPyObject for TranscriptType {
     }
 }
 
+#[cfg(feature = "python-bindings")]
+///
+pub fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
+    let g1affine_x = field_to_vecu64_montgomery(&g1affine.x);
+    let g1affine_y = field_to_vecu64_montgomery(&g1affine.y);
+    g1affine_dict.set_item("x", g1affine_x).unwrap();
+    g1affine_dict.set_item("y", g1affine_y).unwrap();
+}
+
+#[cfg(feature = "python-bindings")]
+use halo2curves::bn256::G1;
+#[cfg(feature = "python-bindings")]
+///
+pub fn g1_to_pydict(g1_dict: &PyDict, g1: &G1) {
+    let g1_x = field_to_vecu64_montgomery(&g1.x);
+    let g1_y = field_to_vecu64_montgomery(&g1.y);
+    let g1_z = field_to_vecu64_montgomery(&g1.z);
+    g1_dict.set_item("x", g1_x).unwrap();
+    g1_dict.set_item("y", g1_y).unwrap();
+    g1_dict.set_item("z", g1_z).unwrap();
+}
+
 /// converts fp into `Vec<u64>` in Montgomery form
 pub fn field_to_vecu64_montgomery<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
     let repr = serde_json::to_string(&fp).unwrap();
