@@ -2625,6 +2625,7 @@ mod native_tests {
         let status = Command::new("wasm-pack")
             .args([
                 "build",
+                "--release",
                 "--target",
                 "nodejs",
                 "--out-dir",
