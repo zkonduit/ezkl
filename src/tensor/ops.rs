@@ -263,16 +263,9 @@ pub fn equals<
 
     let diff = (a - b)?;
 
-    let zero_tensor = Tensor::<T>::from(vec![T::zero().ok_or(TensorError::DimError)?].into_iter());
+    let result = nonlinearities::is_zero(&diff);
 
-    let (greater_than_zero, mut inter) = greater(&diff, &zero_tensor)?;
-    let (less_than_zero, inter_2) = less(&diff, &zero_tensor)?;
-    inter.extend(inter_2);
-
-    let result = or(&greater_than_zero, &less_than_zero)?;
-    let result = not(&result)?;
-
-    Ok((result, inter))
+    Ok((result, vec![diff]))
 }
 
 /// Greater than operation.
@@ -2688,6 +2681,34 @@ pub fn slice<T: TensorType>(
 /// Activation functions
 pub mod nonlinearities {
     use super::*;
+
+    /// Elementwise determines if a tensor of integers is zero.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::is_zero;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[2, 15, 2, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = is_zero(&x);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn is_zero<T: TensorType + std::cmp::PartialEq>(a: &Tensor<T>) -> Tensor<T> {
+        let mut output = Tensor::new(None, a.dims()).unwrap();
+        for (i, a_i) in a.iter().enumerate() {
+            if a_i.clone() == T::zero().unwrap() {
+                output[i] = T::one().unwrap();
+            } else {
+                output[i] = T::zero().unwrap();
+            }
+        }
+        output
+    }
+
     /// Elementwise applies sigmoid to a tensor of integers.
     /// # Arguments
     ///

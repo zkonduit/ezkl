@@ -100,6 +100,7 @@ pub enum LookupOp {
         a: utils::F32,
     },
     Sign,
+    IsZero,
 }
 
 impl LookupOp {
@@ -131,6 +132,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
+            LookupOp::IsZero => Ok(tensor::ops::nonlinearities::is_zero(&x)),
             LookupOp::Max { scales, a } => Ok(tensor::ops::nonlinearities::max(
                 &x,
                 scales.0,
@@ -202,6 +204,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         match self {
+            LookupOp::IsZero => "IS_ZERO".into(),
             LookupOp::Max { scales, a } => format!("MAX w/ {:?} /t {}", scales, a),
             LookupOp::Min { scales, a } => format!("MIN w/ {:?} /t {}", scales, a),
             LookupOp::Sign => "SIGN".into(),

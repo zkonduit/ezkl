@@ -374,7 +374,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::Greater { .. }
             | HybridOp::Less { .. }
-            | HybridOp::Equals
             | HybridOp::Gather { .. }
             | HybridOp::OneHot { .. }
             | HybridOp::TopK { .. }
@@ -387,6 +386,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 vec![LookupOp::GreaterThanEqual {
                     a: circuit::utils::F32(0.),
                 }]
+            }
+            HybridOp::Equals { .. } => {
+                vec![LookupOp::IsZero]
             }
             HybridOp::ReduceArgMax { .. } | HybridOp::ReduceArgMin { .. } => {
                 vec![

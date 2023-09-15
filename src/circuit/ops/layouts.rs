@@ -1402,16 +1402,7 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
 
-    let nil: ValTensor<F> =
-        Tensor::from(vec![region.assign_constant(&config.inputs[0], F::from(0))?].into_iter())
-            .into();
-    region.next();
-
-    let greater_than_zero = greater(config, region, &[diff.clone(), nil.clone()])?;
-    let less_than_zero = less(config, region, &[diff, nil])?;
-
-    let res = or(config, region, &[greater_than_zero, less_than_zero])?;
-    let res = not(config, region, &[res])?;
+    let res = nonlinearity(config, region, &[diff], &LookupOp::IsZero)?;
 
     Ok(res)
 }
