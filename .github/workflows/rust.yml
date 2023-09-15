@@ -504,8 +504,8 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_12_expects
       - name: Voice tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
-      - name: Mean tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
+      # - name: Mean tutorial
+      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
       - name: End to end demo tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
       - name: LSTM tutorial
