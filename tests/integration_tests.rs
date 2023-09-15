@@ -1988,7 +1988,7 @@ mod native_tests {
 
     // prove-serialize-verify, the usual full path
     fn kzg_prove_and_verify(
-        _test_dir: &str,
+        test_dir: &str,
         example_name: String,
         checkmode: &str,
         input_visibility: &str,
@@ -1997,7 +1997,6 @@ mod native_tests {
         scales_to_use: Option<Vec<u32>>,
         overflow: bool,
     ) {
-        let test_dir = "./examples/onnx";
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2135,7 +2134,6 @@ mod native_tests {
 
     // run js wasm tests for a given example
     fn wasm_tests(test_dir: &str, example_name: String) {
-        let test_dir = format!("../../{}", test_dir);
         let status = Command::new("pnpm")
             .args(&[
                 "run",
@@ -2144,7 +2142,6 @@ mod native_tests {
                 &format!("--example={}", example_name),
                 &format!("--dir={}", test_dir)
             ])
-            .current_dir("tests/wasm") // Set the working directory
             .status()
             .expect("failed to execute process");
         assert!(status.success());
