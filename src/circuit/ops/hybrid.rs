@@ -329,14 +329,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         }))
     }
 
-    fn requires_specific_input_scales(&self) -> Vec<(usize, u32)> {
-        match self {
-            HybridOp::Gather { .. } | HybridOp::GatherElements { .. } => vec![(1, 0)],
-            HybridOp::OneHot { .. } => vec![(0, 0)],
-            _ => vec![],
-        }
-    }
-
     fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
         match self {
             HybridOp::Greater { .. }

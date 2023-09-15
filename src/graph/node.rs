@@ -391,19 +391,6 @@ impl Op<Fp> for SupportedOp {
         }
     }
 
-    fn requires_specific_input_scales(&self) -> Vec<(usize, u32)> {
-        match self {
-            SupportedOp::Linear(op) => Op::<Fp>::requires_specific_input_scales(op),
-            SupportedOp::Nonlinear(op) => Op::<Fp>::requires_specific_input_scales(op),
-            SupportedOp::Hybrid(op) => Op::<Fp>::requires_specific_input_scales(op),
-            SupportedOp::Input(op) => Op::<Fp>::requires_specific_input_scales(op),
-            SupportedOp::Constant(op) => Op::<Fp>::requires_specific_input_scales(op),
-            SupportedOp::Unknown(op) => Op::<Fp>::requires_specific_input_scales(op),
-            SupportedOp::Rescaled(op) => Op::<Fp>::requires_specific_input_scales(op),
-            SupportedOp::RebaseScale(op) => Op::<Fp>::requires_specific_input_scales(op),
-        }
-    }
-
     fn clone_dyn(&self) -> Box<dyn Op<Fp>> {
         match self {
             SupportedOp::Linear(op) => Box::new(op.clone()),
@@ -605,33 +592,6 @@ impl Node {
                 let out_scale = input_opkind.out_scale(vec![]);
                 input_node.bump_scale(out_scale);
                 in_scales[input] = out_scale;
-            }
-        }
-
-        let inputs_at_specific_scales = opkind.requires_specific_input_scales();
-        // rescale the inputs if necessary to get consistent fixed points
-        for (input, scale) in inputs_at_specific_scales
-            .into_iter()
-            .filter(|(i, _)| !deleted_indices.contains(i))
-        {
-            let input_node = other_nodes.get_mut(&inputs[input].idx()).unwrap();
-            let input_opkind = &mut input_node.opkind();
-            if let Some(constant) = input_opkind.get_mutable_constant() {
-                rescale_const_with_single_use(constant, in_scales.clone(), param_visibility)?;
-                input_node.replace_opkind(constant.clone_dyn().into());
-                let out_scale = input_opkind.out_scale(vec![]);
-                input_node.bump_scale(out_scale);
-                in_scales[input] = out_scale;
-            } else {
-                let scale_diff = in_scales[input] as i128 - scale as i128;
-                let rebased = if scale_diff > 0 {
-                    RebaseScale::rebase(input_opkind.clone(), scale, in_scales[input], 1)
-                } else {
-                    RebaseScale::rebase_up(input_opkind.clone(), scale, in_scales[input])
-                };
-                input_node.replace_opkind(rebased);
-                input_node.bump_scale(scale);
-                in_scales[input] = scale;
             }
         }
 

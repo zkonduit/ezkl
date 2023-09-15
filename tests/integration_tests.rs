@@ -169,7 +169,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 53] = [
+    const TESTS: [&str; 54] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -226,6 +226,7 @@ mod native_tests {
         "lightgbm",
         "hummingbird_decision_tree",
         "oh_decision_tree",
+        "linear_svc",
     ];
 
     const WASM_TESTS: [&str; 49] = [
@@ -455,8 +456,7 @@ mod native_tests {
 
 
 
-            seq!(N in 0..=52 {
-
+            seq!(N in 0..=53 {
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {
                 let test_dir = TempDir::new(test).unwrap();
