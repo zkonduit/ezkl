@@ -3053,7 +3053,7 @@ pub mod nonlinearities {
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = cos(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(& [0, 1, -1, 1, 1, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(& [-1, 2, -1, 2, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn cos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
@@ -3080,7 +3080,7 @@ pub mod nonlinearities {
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = acos(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn acos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
@@ -3107,7 +3107,7 @@ pub mod nonlinearities {
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = cosh(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[27, 36002449668, 1490, 1, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[27, 36002449669, 1490, 2, 2, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn cosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
@@ -3134,7 +3134,7 @@ pub mod nonlinearities {
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = acosh(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(& [2, 3, 2, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(& [2, 4, 3, 0, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn acosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
@@ -3161,7 +3161,7 @@ pub mod nonlinearities {
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = sin(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[3, 24, 7, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn sin(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
@@ -3215,7 +3215,7 @@ pub mod nonlinearities {
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = sinh(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[7, 268337, 54, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[7, 268337, 55, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn sinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
@@ -3242,7 +3242,7 @@ pub mod nonlinearities {
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = asinh(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[3, 24, 7, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn asinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
@@ -3296,7 +3296,7 @@ pub mod nonlinearities {
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = atan(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[3, 24, 7, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn atan(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
@@ -3324,7 +3324,7 @@ pub mod nonlinearities {
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = tanh(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[3, 24, 7, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
 
@@ -3353,7 +3353,7 @@ pub mod nonlinearities {
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = atanh(&x, 32.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 33, 8, 2, 2, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[4, 34, 8, 2, 2, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
 
@@ -3378,11 +3378,11 @@ pub mod nonlinearities {
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::erffunc;
     /// let x = Tensor::<i128>::new(
-    ///     Some(&[4, 25, 8, 1, 1, 0]),
+    ///     Some(&[5, 28, 9, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = erffunc(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 27, 9, 1, 1, 0]), &[2, 3]).unwrap(); // TODO
+    /// let expected = Tensor::<i128>::new(Some(&[6, 31, 10, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn erffunc(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
