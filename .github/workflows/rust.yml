@@ -489,7 +489,7 @@ jobs:
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
       - name: NBEATS tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_19_expects
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       - name: SVM
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_18_expects
       - name: LightGBM

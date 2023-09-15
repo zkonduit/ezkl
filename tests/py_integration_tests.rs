@@ -91,7 +91,7 @@ mod py_tests {
     fn init_binary() {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-            setup_py_env();
+            // setup_py_env();
         });
     }
 
@@ -110,7 +110,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 20] = [
+    const TESTS: [&str; 19] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -131,7 +131,6 @@ mod py_tests {
         "xgboost.ipynb",
         "lightgbm.ipynb",
         "svm.ipynb",
-        "nbeats_timeseries_forecasting.ipynb",
     ];
 
     macro_rules! test_func {
@@ -144,7 +143,8 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=19 {
+            seq!(N in 0..=18 {
+
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
                 crate::py_tests::init_binary();
@@ -169,6 +169,16 @@ mod py_tests {
                 anvil_child.kill().unwrap();
             }
 
+            #[test]
+            fn nbeats_notebook_() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("example").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "nbeats_timeseries_forecasting.ipynb");
+                crate::py_tests::mv_test_(path, "eth_price.csv");
+                run_notebook(path, "nbeats_timeseries_forecasting.ipynb");
+                test_dir.close().unwrap();
+            }
             });
 
     }
