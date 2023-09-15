@@ -387,17 +387,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     LookupOp::GreaterThan {
                         a: circuit::utils::F32(0.),
                     },
-                    LookupOp::IsZero,
+                    LookupOp::KroneckerDelta,
                 ]
             }
             HybridOp::Gather { .. }
             | HybridOp::OneHot { .. }
             | HybridOp::GatherElements { .. }
             | HybridOp::Equals { .. } => {
-                vec![LookupOp::IsZero]
+                vec![LookupOp::KroneckerDelta]
             }
             HybridOp::ReduceArgMax { .. } | HybridOp::ReduceArgMin { .. } => {
-                vec![LookupOp::ReLU, LookupOp::IsZero]
+                vec![LookupOp::ReLU, LookupOp::KroneckerDelta]
             }
         }
     }

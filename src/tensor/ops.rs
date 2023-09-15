@@ -243,7 +243,6 @@ pub fn and<
 /// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 0, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-
 pub fn equals<
     T: TensorType
         + std::marker::Send
@@ -263,7 +262,7 @@ pub fn equals<
 
     let diff = (a - b)?;
 
-    let result = nonlinearities::is_zero(&diff);
+    let result = nonlinearities::kronecker_delta(&diff);
 
     Ok((result, vec![diff]))
 }
@@ -2682,22 +2681,22 @@ pub fn slice<T: TensorType>(
 pub mod nonlinearities {
     use super::*;
 
-    /// Elementwise determines if a tensor of integers is zero.
+    /// Applies Kronecker delta to a tensor of integers.
     /// # Arguments
     /// * `a` - Tensor
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::is_zero;
+    /// use ezkl::tensor::ops::nonlinearities::kronecker_delta;
     /// let x = Tensor::<i128>::new(
     ///    Some(&[2, 15, 2, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
-    /// let result = is_zero(&x);
+    /// let result = kronecker_delta(&x);
     /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn is_zero<T: TensorType + std::cmp::PartialEq>(a: &Tensor<T>) -> Tensor<T> {
+    pub fn kronecker_delta<T: TensorType + std::cmp::PartialEq>(a: &Tensor<T>) -> Tensor<T> {
         let mut output = Tensor::new(None, a.dims()).unwrap();
         for (i, a_i) in a.iter().enumerate() {
             if a_i.clone() == T::zero().unwrap() {

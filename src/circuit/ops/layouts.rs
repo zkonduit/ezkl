@@ -1403,7 +1403,7 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
 
-    let res = nonlinearity(config, region, &[diff], &LookupOp::IsZero)?;
+    let res = nonlinearity(config, region, &[diff], &LookupOp::KroneckerDelta)?;
 
     Ok(res)
 }
