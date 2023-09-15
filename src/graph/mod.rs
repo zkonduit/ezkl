@@ -724,7 +724,9 @@ impl GraphCircuit {
                 .model
                 .instance_shapes()
                 .iter()
-                .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
+                .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()))
+                + ASSUMED_BLINDING_FACTORS
+                + 1;
             let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize;
             logrows = std::cmp::max(logrows, instance_len_logrows);
             // this is for fixed const columns
