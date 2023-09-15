@@ -386,11 +386,12 @@ fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
     };
 
     let assigned_sort = region.assign(&config.inputs[0], &sorted.into())?;
+    let input = region.assign(&config.inputs[1], &input)?;
 
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
     unit.set_visibility(crate::graph::Visibility::Public);
     let unit_len = unit.len();
-    let unit = region.assign(&config.inputs[1], &unit.into())?;
+    let unit = region.assign(&config.output, &unit.into())?;
 
     region.increment(assigned_sort.len());
 

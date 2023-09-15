@@ -372,7 +372,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 }
                 lookups
             }
-            HybridOp::Greater { .. } | HybridOp::Less { .. } | HybridOp::TopK { .. } => {
+            HybridOp::Greater { .. } | HybridOp::Less { .. } => {
                 vec![LookupOp::GreaterThan {
                     a: circuit::utils::F32(0.),
                 }]
@@ -382,6 +382,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     a: circuit::utils::F32(0.),
                 }]
             }
+            HybridOp::TopK { .. } => {
+                vec![
+                    LookupOp::GreaterThan {
+                        a: circuit::utils::F32(0.),
+                    },
+                    LookupOp::IsZero,
+                ]
+            }
             HybridOp::Gather { .. }
             | HybridOp::OneHot { .. }
             | HybridOp::GatherElements { .. }
@@ -389,12 +397,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 vec![LookupOp::IsZero]
             }
             HybridOp::ReduceArgMax { .. } | HybridOp::ReduceArgMin { .. } => {
-                vec![
-                    LookupOp::ReLU,
-                    LookupOp::GreaterThan {
-                        a: circuit::utils::F32(0.),
-                    },
-                ]
+                vec![LookupOp::ReLU, LookupOp::IsZero]
             }
         }
     }
