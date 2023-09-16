@@ -2642,7 +2642,7 @@ mod native_tests {
                 ".",
                 "--",
                 "-Z",
-                "build-std=panic_abort,std",
+                r#"build-std='panic_abort,std'"#,
             ])
             .status()
             .expect("failed to execute process");
@@ -2654,7 +2654,7 @@ mod native_tests {
                 "-i",
                 // is required on macos
                 // "\".js\"",
-                "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|",
+                r#"'3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|'"#,
                 "./tests/wasm/nodejs/ezkl.js",
             ])
             .status()
