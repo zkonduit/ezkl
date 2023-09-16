@@ -247,6 +247,12 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     # needs: [build, library-tests, python-tests]
     steps:
+      - name: Install binaryen
+        run: |
+            set -e
+            curl -L https://github.com/WebAssembly/binaryen/releases/download/version_116/binaryen-version_116-x86_64-linux.tar.gz | tar xzf -
+            export PATH=$PATH:$PWD/binaryen-version_116/bin
+            wasm-opt --version
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
@@ -283,12 +289,7 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Install binaryen
-        run: |
-            set -e
-            curl -L https://github.com/WebAssembly/binaryen/releases/download/version_116/binaryen-version_116-x86_64-linux.tar.gz | tar xzf -
-            export PATH=$PATH:$PWD/binaryen-version_116-x86_64-linux/bin
-            wasm-opt --version
+      
       - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w --test-threads 8
       - name: KZG prove and verify tests (public outputs + public params + column overflow)

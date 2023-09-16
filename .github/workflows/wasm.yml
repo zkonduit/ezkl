@@ -33,7 +33,7 @@ jobs:
         run: |
             set -e
             curl -L https://github.com/WebAssembly/binaryen/releases/download/version_116/binaryen-version_116-x86_64-linux.tar.gz | tar xzf -
-            export PATH=$PATH:$PWD/binaryen-version_116-x86_64-linux/bin
+            export PATH=$PATH:$PWD/binaryen-version_116/bin
             wasm-opt --version
       - name: Build wasm files for both web and nodejs compilation targets
         run: |
