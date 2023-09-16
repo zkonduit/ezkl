@@ -1,10 +1,13 @@
-use crate::tensor::{TensorType, ValTensor, ValType, VarTensor};
+use crate::tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor};
 use halo2_proofs::{
     circuit::Region,
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
-use std::cell::RefCell;
+use std::{
+    cell::RefCell,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 #[derive(Debug)]
 /// A context for a region
@@ -48,9 +51,59 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         }
     }
 
+    /// Create a new region context
+    pub fn new_dummy_with_constants(offset: usize, constants: usize) -> RegionCtx<'a, F> {
+        let region = None;
+        RegionCtx {
+            region,
+            offset,
+            total_constants: constants,
+        }
+    }
+
+    /// Create a new region context per loop iteration
+    /// hacky but it works
+    pub fn dummy_loop<T: TensorType + Send + Sync>(
+        &mut self,
+        output: &mut Tensor<T>,
+        inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> T + Sync + Send,
+    ) -> Result<(), Error> {
+        let offset = AtomicUsize::new(self.offset());
+        let constants = AtomicUsize::new(self.total_constants());
+        *output = output.par_enum_map(|idx, _| {
+            // we kick off the loop with the current offset
+            let starting_offset = offset.fetch_add(0, Ordering::Relaxed);
+            let starting_constants = constants.fetch_add(0, Ordering::Relaxed);
+            println!("starting offset: {}", starting_offset);
+            println!("starting constants: {}", starting_constants);
+            // we need to make sure that the region is not shared between threads
+            let mut local_reg = Self::new_dummy_with_constants(starting_offset, starting_constants);
+            let res = inner_loop_function(idx, &mut local_reg);
+            // we update the offset and constants
+            offset.fetch_add(local_reg.offset() - starting_offset, Ordering::Relaxed);
+            constants.fetch_add(
+                local_reg.total_constants() - starting_constants,
+                Ordering::Relaxed,
+            );
+            Ok::<_, Error>(res)
+        })?;
+        self.total_constants = constants.into_inner();
+        self.offset = offset.into_inner();
+        Ok(())
+    }
+
     /// Check if the region is dummy
     pub fn is_dummy(&self) -> bool {
         self.region.is_none()
+    }
+
+    /// duplicate_dummy
+    pub fn duplicate_dummy(&self) -> Self {
+        Self {
+            region: None,
+            offset: self.offset,
+            total_constants: self.total_constants,
+        }
     }
 
     /// Get the offset
