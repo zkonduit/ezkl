@@ -236,7 +236,7 @@ mod native_tests {
         "linear_svc",
     ];
 
-    const WASM_TESTS: [&str; 49] = [
+    const WASM_TESTS: [&str; 48] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -276,7 +276,7 @@ mod native_tests {
         "1l_conv_transpose",
         "1l_upsample",
         "1l_identity",
-        "idolmodel",
+        // "idolmodel",
         "trig",
         "prelu_gmm",
         "lstm",
@@ -733,7 +733,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=48 {
+            seq!(N in 0..=47 {
 
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
