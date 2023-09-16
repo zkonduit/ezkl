@@ -48,7 +48,7 @@ pub fn iff<
 ) -> Result<Tensor<T>, TensorError> {
     // assert is boolean
     assert!(
-        mask.iter()
+        mask.par_iter()
             .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
         "iff() only works on boolean mask"
     );
@@ -129,7 +129,7 @@ pub fn or<
 ) -> Result<Tensor<T>, TensorError> {
     // assert is boolean
     assert!(
-        b.iter()
+        b.par_iter()
             .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
         "or() only works on boolean mask"
     );
@@ -209,13 +209,13 @@ pub fn and<
 ) -> Result<Tensor<T>, TensorError> {
     // assert is boolean
     assert!(
-        b.iter()
+        b.par_iter()
             .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
         "and() only works on boolean values"
     );
 
     assert!(
-        a.iter()
+        a.par_iter()
             .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
         "and() only works on boolean values"
     );
@@ -473,7 +473,10 @@ pub fn less_equal<
 ///
 ///
 /// ```
-pub fn resize<T: TensorType>(a: &Tensor<T>, scales: &[usize]) -> Result<Tensor<T>, TensorError> {
+pub fn resize<T: TensorType + Send + Sync>(
+    a: &Tensor<T>,
+    scales: &[usize],
+) -> Result<Tensor<T>, TensorError> {
     let mut new_shape = vec![];
     for (s, d) in scales.iter().zip(a.dims()) {
         new_shape.push(s * d);
@@ -489,7 +492,7 @@ pub fn resize<T: TensorType>(a: &Tensor<T>, scales: &[usize]) -> Result<Tensor<T
 
     // resize using nearest neighbour interpolation
     // (i.e. just copy the value of the nearest neighbour to pad the tensor)
-    output.iter_mut().enumerate().for_each(|(i, o)| {
+    output = output.par_enum_map(|i, _| {
         let mut coord = vec![];
         for (j, (c, _d)) in cartesian_coord[i].iter().zip(new_shape.iter()).enumerate() {
             let scale = scales[j];
@@ -497,8 +500,8 @@ pub fn resize<T: TensorType>(a: &Tensor<T>, scales: &[usize]) -> Result<Tensor<T
             coord.push(fragment);
         }
 
-        *o = a.get(&coord);
-    });
+        Ok::<_, TensorError>(a.get(&coord))
+    })?;
 
     Ok(output)
 }
@@ -2701,16 +2704,17 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn kronecker_delta<T: TensorType + std::cmp::PartialEq>(a: &Tensor<T>) -> Tensor<T> {
-        let mut output = Tensor::new(None, a.dims()).unwrap();
-        for (i, a_i) in a.iter().enumerate() {
-            if a_i.clone() == T::zero().unwrap() {
-                output[i] = T::one().unwrap();
+    pub fn kronecker_delta<T: TensorType + std::cmp::PartialEq + Send + Sync>(
+        a: &Tensor<T>,
+    ) -> Tensor<T> {
+        a.par_enum_map(|_, a_i| {
+            if a_i == T::zero().unwrap() {
+                Ok::<_, TensorError>(T::one().unwrap())
             } else {
-                output[i] = T::zero().unwrap();
+                Ok::<_, TensorError>(T::zero().unwrap())
             }
-        }
-        output
+        })
+        .unwrap()
     }
 
     /// Elementwise applies sigmoid to a tensor of integers.

@@ -1159,8 +1159,16 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     // get indices of zeros
     let first_zero_indices = lhs.get_const_zero_indices()?;
     let second_zero_indices = rhs.get_const_zero_indices()?;
-    let mut removal_indices = first_zero_indices.clone();
-    removal_indices.extend(second_zero_indices.clone());
+    let mut removal_indices = match op {
+        BaseOp::Add | BaseOp::Mult => {
+            let mut removal_indices = first_zero_indices.clone();
+            removal_indices.extend(second_zero_indices.clone());
+            removal_indices
+        }
+        BaseOp::Sub => second_zero_indices.clone(),
+        _ => panic!(),
+    };
+
     removal_indices.par_sort_unstable();
     removal_indices.dedup();
 
@@ -1230,29 +1238,21 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
                         let a_is_null = first_zero_indices.contains(&i);
                         let b_is_null = second_zero_indices.contains(&i);
 
-                        if a_is_null {
-                            b_tensor[i].clone()
-                        } else if b_is_null {
-                            a_tensor[i].clone()
-                        } else {
+                        if a_is_null && b_is_null {
                             ValType::Constant(F::ZERO)
+                        } else if a_is_null {
+                            b_tensor[i].clone()
+                        } else {
+                            a_tensor[i].clone()
                         }
                     }
                     BaseOp::Sub => {
                         let a_is_null = first_zero_indices.contains(&i);
-                        let b_is_null = second_zero_indices.contains(&i);
-
+                        // by default b is null in this case for sub
                         if a_is_null {
-                            let tensor = Tensor::new(Some(&[b_tensor[i].clone()]), &[1]).unwrap();
-                            neg(config, region, &[tensor.into()])
-                                .unwrap()
-                                .get_inner_tensor()
-                                .unwrap()[0]
-                                .clone()
-                        } else if b_is_null {
-                            a_tensor[i].clone()
-                        } else {
                             ValType::Constant(F::ZERO)
+                        } else {
+                            a_tensor[i].clone()
                         }
                     }
                     BaseOp::Mult => ValType::Constant(F::ZERO),

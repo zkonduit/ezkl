@@ -247,6 +247,8 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         instance_scale: u32,
         uses_modules: bool,
     ) -> Self {
+        info!("number of blinding factors: {}", cs.blinding_factors());
+
         let advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, var_len))
             .collect_vec();
