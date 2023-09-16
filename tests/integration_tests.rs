@@ -738,7 +738,7 @@ mod native_tests {
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_wasm();
+                    // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
@@ -750,7 +750,7 @@ mod native_tests {
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_public_params_(test: &str) {
                     crate::native_tests::init_binary();
-                    crate::native_tests::init_wasm();
+                    // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
