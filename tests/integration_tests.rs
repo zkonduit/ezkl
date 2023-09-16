@@ -12,6 +12,8 @@ mod native_tests {
     use std::process::{Child, Command};
     use std::sync::Once;
     static COMPILE: Once = Once::new();
+    #[allow(dead_code)]
+    static COMPILE_WASM: Once = Once::new();
     static ENV_SETUP: Once = Once::new();
 
     //Sure to run this once
@@ -37,6 +39,14 @@ mod native_tests {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
             build_ezkl();
+        });
+    }
+
+    ///
+    #[allow(dead_code)]
+    pub fn init_wasm() {
+        COMPILE_WASM.call_once(|| {
+            build_wasm_ezkl();
         });
     }
 
@@ -595,6 +605,15 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn mock_hashed_output_public_params_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "public", "public", "hashed", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn mock_encrypted_output_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
@@ -722,10 +741,23 @@ mod native_tests {
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
                     crate::native_tests::init_binary();
+                    // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", Some(vec![0,1]), true);
+                    wasm_tests(path, test.to_string());
+                    test_dir.close().unwrap();
+                }
+
+                #(#[test_case(WASM_TESTS[N])])*
+                fn kzg_prove_and_verify_with_overflow_public_params_(test: &str) {
+                    crate::native_tests::init_binary();
+                    // crate::native_tests::init_wasm();
+                    let test_dir = TempDir::new(test).unwrap();
+                    env_logger::init();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "public", "public", Some(vec![0,1]), true);
                     wasm_tests(path, test.to_string());
                     test_dir.close().unwrap();
                 }
@@ -2595,6 +2627,40 @@ mod native_tests {
     fn build_ezkl() {
         let status = Command::new("cargo")
             .args(["build", "--release", "--bin", "ezkl"])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    #[allow(dead_code)]
+    fn build_wasm_ezkl() {
+        // wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+        let status = Command::new("wasm-pack")
+            .args([
+                "build",
+                "--release",
+                "--target",
+                "nodejs",
+                "--out-dir",
+                "./tests/wasm/nodejs",
+                ".",
+                "--",
+                "-Z",
+                "build-std=panic_abort,std",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        // fix the memory size
+        //   sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+        let status = Command::new("sed")
+            .args([
+                "-i",
+                // is required on macos
+                // "\".js\"",
+                "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|",
+                "./tests/wasm/nodejs/ezkl.js",
+            ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());

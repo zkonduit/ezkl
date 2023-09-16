@@ -42,7 +42,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         preexisting_input: Option<TableColumn>,
     ) -> Table<F> {
         let table_input = preexisting_input.unwrap_or_else(|| cs.lookup_table_column());
-        log::debug!("number of blinding factors {}", cs.blinding_factors());
         let range = nonlinearity.bit_range(bits, cs.blinding_factors());
 
         Table {

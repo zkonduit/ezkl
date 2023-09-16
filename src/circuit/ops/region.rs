@@ -97,8 +97,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             // duplicates every nth element to adjust for column overflow
             var.assign_with_duplication(&mut region.borrow_mut(), self.offset, values, check_mode)
         } else {
-            self.total_constants += values.num_constants();
-            var.dummy_assign_with_duplication(self.offset, values)
+            let (_, len, total_assigned_constants) =
+                var.dummy_assign_with_duplication(self.offset, values)?;
+            self.total_constants += total_assigned_constants;
+            Ok((values.clone(), len))
         }
     }
 

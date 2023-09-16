@@ -82,6 +82,17 @@ impl<'a, F: Field, CS: Assignment<F>> ModuleLayouter<'a, F, CS> {
         };
         Ok(ret)
     }
+
+    ///
+    fn get_constant_col_cartesian_coord(
+        &self,
+        linear_coord: usize,
+        col_size: usize,
+    ) -> (usize, usize) {
+        let x = linear_coord / col_size;
+        let y = linear_coord % col_size;
+        (x, y)
+    }
 }
 
 impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayouter<'a, F, CS> {
@@ -166,21 +177,32 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
                 return Err(Error::NotEnoughColumnsForConstants);
             }
         } else {
-            let constants_column = self.constants[0];
-
             for (constant, advice) in constants_to_assign {
+                // read path from OS env
+                let (constant_column, y) = crate::graph::GLOBAL_SETTINGS.with(|settings| {
+                    match settings.borrow().as_ref() {
+                        Some(settings) => {
+                            let col_size = settings.available_col_size();
+                            let (x, y) = self
+                                .get_constant_col_cartesian_coord(self.total_constants, col_size);
+                            (self.constants[x], y)
+                        }
+                        None => (self.constants[0], self.total_constants),
+                    }
+                });
+
                 self.cs.assign_fixed(
                     || format!("Constant({:?})", constant.evaluate()),
-                    constants_column,
-                    self.total_constants,
+                    constant_column,
+                    y,
                     || Value::known(constant),
                 )?;
 
                 let region_module = self.region_idx[&advice.region_index];
 
                 self.cs.copy(
-                    constants_column.into(),
-                    self.total_constants,
+                    constant_column.into(),
+                    y,
                     advice.column,
                     *self.regions[&region_module][&advice.region_index] + advice.row_offset,
                 )?;

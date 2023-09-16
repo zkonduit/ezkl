@@ -278,9 +278,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             });
         }
 
-        let col = meta.fixed_column();
-        meta.enable_constant(col);
-
         Self {
             selectors,
             lookup_selectors: BTreeMap::new(),
