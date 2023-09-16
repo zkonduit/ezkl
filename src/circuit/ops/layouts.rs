@@ -103,7 +103,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     if region.is_dummy() {
         region.increment(assigned_len);
         trace!("dummy dot layout took {:?}", global_start.elapsed());
-        return Ok(inputs[0].clone().into());
+        return Ok(Tensor::from([ValType::Value(Value::unknown())].into_iter()).into());
     }
 
     // Now we can assign the dot product
@@ -2090,6 +2090,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     let x = &values[0];
 
     let w = region.assign(&config.lookup_input, x)?;
+    let mut output = Tensor::new(Some(&vec![Value::<F>::unknown(); w.len()]), w.dims())?;
 
     if region.is_dummy() {
         region.increment(w.len());
@@ -2099,16 +2100,14 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
             timer.elapsed(),
             region.offset()
         );
-        return Ok(w);
+        return Ok(output.into());
     }
 
-    let output: Tensor<Value<F>> = if !w.any_unknowns() {
-        Op::<F>::f(nl, &[w.get_felt_evals()?])
+    if !w.any_unknowns() {
+        output = Op::<F>::f(nl, &[w.get_felt_evals()?])
             .unwrap()
             .output
             .map(|e| Value::known(e))
-    } else {
-        Tensor::new(Some(&vec![Value::<F>::unknown(); w.len()]), w.dims())?
     };
 
     let mut output = region.assign(&config.lookup_output, &output.into())?;
