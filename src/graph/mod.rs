@@ -708,14 +708,19 @@ impl GraphCircuit {
         res: &GraphWitness,
         blinding_offset: f64,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let reserved_blinding_rows = (ASSUMED_BLINDING_FACTORS + 1) as f32;
+
         let min_bits = (res.max_lookup_inputs as f64 + blinding_offset)
             .log2()
             .ceil() as usize
             + 1;
 
-        let min_rows_from_constraints =
-            (self.settings.num_constraints as f32).log2().ceil() as usize;
+        let min_rows_from_constraints = (self.settings.num_constraints as f32
+            + reserved_blinding_rows)
+            .log2()
+            .ceil() as usize;
         let mut logrows = std::cmp::max(min_bits, min_rows_from_constraints);
+
         // if public input then public inputs col will have public inputs len
         if self.settings.run_args.input_visibility.is_public()
             || self.settings.run_args.output_visibility.is_public()
@@ -725,9 +730,9 @@ impl GraphCircuit {
                 .instance_shapes()
                 .iter()
                 .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()))
-                + ASSUMED_BLINDING_FACTORS
-                + 1;
-            let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize;
+                as f32
+                + reserved_blinding_rows;
+            let instance_len_logrows = (max_instance_len).log2().ceil() as usize;
             logrows = std::cmp::max(logrows, instance_len_logrows);
             // this is for fixed const columns
         }
@@ -736,19 +741,28 @@ impl GraphCircuit {
         logrows = std::cmp::max(logrows, MIN_LOGROWS as usize);
         logrows = std::cmp::min(logrows, MAX_PUBLIC_SRS as usize);
 
-        info!(
-            "setting bits to: {}, setting logrows to: {}",
-            min_bits, logrows
-        );
         self.settings.run_args.bits = min_bits;
         self.settings.run_args.logrows = logrows as u32;
 
         self.settings = GraphCircuit::new(self.model.clone(), &self.settings.run_args)?.settings;
 
+        // recalculate the total const size give nthe new logrows
         let total_const_len = self.settings.total_const_size;
-        let const_len_logrows = (total_const_len as f64).log2().ceil() as u32 + 1;
+        let const_len_logrows = (total_const_len as f64).log2().ceil() as u32;
         self.settings.run_args.logrows =
             std::cmp::max(self.settings.run_args.logrows, const_len_logrows);
+        // recalculate the total number of constraints given the new logrows
+        let min_rows_from_constraints = (self.settings.num_constraints as f32
+            + reserved_blinding_rows)
+            .log2()
+            .ceil() as u32;
+        self.settings.run_args.logrows =
+            std::cmp::max(self.settings.run_args.logrows, min_rows_from_constraints);
+
+        info!(
+            "setting bits to: {}, setting logrows to: {}",
+            self.settings.run_args.bits, self.settings.run_args.logrows
+        );
 
         Ok(())
     }

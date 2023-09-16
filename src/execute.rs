@@ -624,17 +624,9 @@ pub(crate) async fn calibrate(
                         .await
                         .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
-                    loop {
-                        // ensures we have converged
-                        let params_before = circuit.settings.clone();
-                        circuit
-                            .calibrate(&data)
-                            .map_err(|e| format!("failed to calibrate: {}", e))?;
-                        let params_after = circuit.settings.clone();
-                        if params_before == params_after {
-                            break;
-                        }
-                    }
+                    circuit
+                        .calibrate(&data)
+                        .map_err(|e| format!("failed to calibrate: {}", e))?;
 
                     let found_run_args = RunArgs {
                         input_scale: circuit.settings.run_args.input_scale,

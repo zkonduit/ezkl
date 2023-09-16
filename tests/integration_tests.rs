@@ -12,6 +12,7 @@ mod native_tests {
     use std::process::{Child, Command};
     use std::sync::Once;
     static COMPILE: Once = Once::new();
+    #[allow(dead_code)]
     static COMPILE_WASM: Once = Once::new();
     static ENV_SETUP: Once = Once::new();
 
@@ -41,7 +42,9 @@ mod native_tests {
         });
     }
 
-    fn init_wasm() {
+    ///
+    #[allow(dead_code)]
+    pub fn init_wasm() {
         COMPILE_WASM.call_once(|| {
             build_wasm_ezkl();
         });
@@ -236,7 +239,7 @@ mod native_tests {
         "linear_svc",
     ];
 
-    const WASM_TESTS: [&str; 48] = [
+    const WASM_TESTS: [&str; 49] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -276,7 +279,7 @@ mod native_tests {
         "1l_conv_transpose",
         "1l_upsample",
         "1l_identity",
-        // "idolmodel",
+        "idolmodel",
         "trig",
         "prelu_gmm",
         "lstm",
@@ -733,7 +736,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=47 {
+            seq!(N in 0..=48 {
 
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
@@ -2629,6 +2632,7 @@ mod native_tests {
         assert!(status.success());
     }
 
+    #[allow(dead_code)]
     fn build_wasm_ezkl() {
         // wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
         let status = Command::new("wasm-pack")
