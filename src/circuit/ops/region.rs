@@ -6,6 +6,7 @@ use halo2_proofs::{
 use halo2curves::ff::PrimeField;
 use std::{
     cell::RefCell,
+    collections::HashSet,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -137,6 +138,27 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             Ok(values.clone())
         }
     }
+
+    /// Assign a valtensor to a vartensor
+    pub fn assign_with_omissions(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+        ommissions: &HashSet<&usize>,
+    ) -> Result<ValTensor<F>, Error> {
+        if let Some(region) = &self.region {
+            var.assign_with_omissions(&mut region.borrow_mut(), self.offset, values, ommissions)
+        } else {
+            self.total_constants += values.num_constants();
+            let mut inner_tensor = values.get_inner_tensor().unwrap();
+            inner_tensor.flatten();
+            for o in ommissions {
+                self.total_constants -= inner_tensor.get(&[**o]).is_constant() as usize;
+            }
+            Ok(values.clone())
+        }
+    }
+
     /// Assign a valtensor to a vartensor with duplication
     pub fn assign_with_duplication(
         &mut self,

@@ -1200,13 +1200,10 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub => second_zero_indices.clone(),
         _ => panic!(),
     };
-
-    removal_indices.par_sort_unstable();
     removal_indices.dedup();
 
-    // is already sorted
-    lhs.remove_indices(&mut removal_indices, true)?;
-    rhs.remove_indices(&mut removal_indices, true)?;
+    let removal_indices: HashSet<&usize> = HashSet::from_iter(removal_indices.iter());
+    let removal_indices_ptr = &removal_indices;
 
     if lhs.len() != rhs.len() {
         return Err(Box::new(CircuitError::DimMismatch(format!(
@@ -1218,7 +1215,8 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     let mut inputs = vec![];
     for (i, input) in [lhs.clone(), rhs.clone()].iter().enumerate() {
         let inp = {
-            let res = region.assign(&config.inputs[i], input)?;
+            let res =
+                region.assign_with_omissions(&config.inputs[i], input, removal_indices_ptr)?;
 
             res.get_inner()?
         };
@@ -1241,62 +1239,63 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     })?;
     let elapsed = start.elapsed();
 
-    let output = region.assign(&config.output, &op_result.into())?;
+    let assigned_len = inputs[0].len() - removal_indices.len();
+    let output =
+        region.assign_with_omissions(&config.output, &op_result.into(), removal_indices_ptr)?;
     trace!("pairwise {} calc took {:?}", op.as_str(), elapsed);
 
     // Enable the selectors
-    (0..inputs[0].len()).for_each(|i| {
+    (0..assigned_len).for_each(|i| {
         let (x, y) = config.inputs[0].cartesian_coord(region.offset() + i);
         let selector = config.selectors.get(&(op.clone(), x));
 
         region.enable(selector, y).unwrap();
     });
 
-    region.increment(output.len());
+    region.increment(assigned_len);
 
     let a_tensor = orig_lhs.get_inner_tensor()?;
     let b_tensor = orig_rhs.get_inner_tensor()?;
-    let output_tensor = output.get_inner_tensor()?;
-    let mut output_tensor = output_tensor.iter();
+
     let first_zero_indices: HashSet<&usize> = HashSet::from_iter(first_zero_indices.iter());
     let second_zero_indices: HashSet<&usize> = HashSet::from_iter(second_zero_indices.iter());
+
     // infill the zero indices with the correct values from values[0] or values[1]
 
-    let mut actual_output: ValTensor<F> =
-        Into::<Tensor<ValType<F>>>::into((0..broadcasted_shape.iter().product()).map(|i| {
-            if removal_indices.contains(&i) {
-                match op {
-                    BaseOp::Add => {
-                        let a_is_null = first_zero_indices.contains(&i);
-                        let b_is_null = second_zero_indices.contains(&i);
+    let mut actual_output = output.get_inner_tensor()?.par_enum_map(|i, o| {
+        let res = if removal_indices_ptr.contains(&i) {
+            match op {
+                BaseOp::Add => {
+                    let a_is_null = first_zero_indices.contains(&i);
+                    let b_is_null = second_zero_indices.contains(&i);
 
-                        if a_is_null && b_is_null {
-                            ValType::Constant(F::ZERO)
-                        } else if a_is_null {
-                            b_tensor[i].clone()
-                        } else {
-                            a_tensor[i].clone()
-                        }
+                    if a_is_null && b_is_null {
+                        ValType::Constant(F::ZERO)
+                    } else if a_is_null {
+                        b_tensor[i].clone()
+                    } else {
+                        a_tensor[i].clone()
                     }
-                    BaseOp::Sub => {
-                        let a_is_null = first_zero_indices.contains(&i);
-                        // by default b is null in this case for sub
-                        if a_is_null {
-                            ValType::Constant(F::ZERO)
-                        } else {
-                            a_tensor[i].clone()
-                        }
-                    }
-                    BaseOp::Mult => ValType::Constant(F::ZERO),
-                    _ => panic!(),
                 }
-            } else {
-                output_tensor.next().unwrap().clone()
+                BaseOp::Sub => {
+                    let a_is_null = first_zero_indices.contains(&i);
+                    // by default b is null in this case for sub
+                    if a_is_null {
+                        ValType::Constant(F::ZERO)
+                    } else {
+                        a_tensor[i].clone()
+                    }
+                }
+                BaseOp::Mult => ValType::Constant(F::ZERO),
+                _ => panic!(),
             }
-        }))
-        .into();
+        } else {
+            o
+        };
+        Ok::<_, TensorError>(res)
+    })?;
 
-    actual_output.reshape(&broadcasted_shape)?;
+    actual_output.reshape(&broadcasted_shape);
 
     let end = global_start.elapsed();
     trace!(
@@ -1306,7 +1305,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         region.offset()
     );
 
-    Ok(actual_output)
+    Ok(actual_output.into())
 }
 
 ///
