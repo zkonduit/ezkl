@@ -506,86 +506,6 @@ pub fn resize<T: TensorType + Send + Sync>(
     Ok(output)
 }
 
-/// Matrix multiplies two 2D tensors.
-/// # Arguments
-///
-/// * `inputs` - Vector of tensors of length 2
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::matmul;
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 2, 1, 1]),
-///     &[3, 4],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[2, 1, 2, 1, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = matmul(&vec![k, x]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[26, 7, 11, 3, 15, 3, 7, 2]), &[2, 4]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn matmul<
-    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
->(
-    inputs: &[Tensor<T>],
-) -> Result<Tensor<T>, TensorError> {
-    let (mut a, mut b) = (inputs[0].clone(), inputs[1].clone());
-
-    if a.dims().len() == 1 {
-        a.reshape(&[1, a.dims()[0]]);
-    }
-    if b.dims().len() == 1 {
-        b.reshape(&[b.dims()[0], 1]);
-    }
-
-    if (inputs.len() != 2)
-        || (a.dims()[a.dims().len() - 1] != b.dims()[a.dims().len() - 2])
-        || (a.dims()[0..a.dims().len() - 2] != b.dims()[0..a.dims().len() - 2])
-    {
-        return Err(TensorError::DimMismatch("matmul".to_string()));
-    }
-
-    let mut dims = Vec::from(&a.dims()[0..a.dims().len() - 2]);
-    dims.push(a.dims()[a.dims().len() - 2]);
-    dims.push(b.dims()[a.dims().len() - 1]);
-    // calculate value of output
-    let mut output: Tensor<T> = Tensor::new(None, &dims).unwrap();
-
-    let cartesian_coord = dims
-        .iter()
-        .map(|d| 0..*d)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    output
-        .par_iter_mut()
-        .enumerate()
-        .for_each(|(flat_index, o)| {
-            let coord = &cartesian_coord[flat_index];
-            let row = coord[0..coord.len() - 1]
-                .iter()
-                .map(|&d| d..(d + 1))
-                .collect::<Vec<_>>();
-            let mut col = coord[0..coord.len()]
-                .iter()
-                .map(|&d| d..(d + 1))
-                .collect::<Vec<_>>();
-            col[coord.len() - 2] = 0..b.dims()[coord.len() - 2];
-            let prod = dot(&[
-                a.get_slice(&row[0..]).unwrap(),
-                b.get_slice(&col[0..]).unwrap(),
-            ])
-            .unwrap();
-
-            *o = prod[0].clone();
-        });
-
-    Ok(output)
-}
-
 /// Computes the einstein sum of a set of tensors.
 /// # Arguments
 /// * `equation` - Einstein summation equation
@@ -1767,7 +1687,12 @@ pub fn argmin_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + From<u64> +
 /// assert_eq!(result, expected);
 /// ```
 pub fn conv<
-    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
+    T: TensorType
+        + Mul<Output = T>
+        + Add<Output = T>
+        + std::marker::Sync
+        + std::marker::Send
+        + std::iter::Sum,
 >(
     inputs: &[Tensor<T>],
     padding: [(usize, usize); 2],
@@ -2124,7 +2049,12 @@ pub fn one_hot(
 ///
 /// ```
 pub fn deconv<
-    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
+    T: TensorType
+        + Mul<Output = T>
+        + Add<Output = T>
+        + std::marker::Sync
+        + std::marker::Send
+        + std::iter::Sum,
 >(
     inputs: &[Tensor<T>],
     padding: [(usize, usize); 2],
@@ -2413,7 +2343,7 @@ pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send + std::c
 /// ).unwrap();
 /// assert_eq!(dot(&[x, y]).unwrap()[0], 86);
 /// ```
-pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync + std::iter::Sum>(
     inputs: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     if (inputs.len() != 2) || (inputs[0].clone().len() != inputs[1].clone().len()) {
@@ -2421,10 +2351,17 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
     }
 
     let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
-    let res = a
-        .iter()
-        .zip(b)
-        .fold(T::zero().unwrap(), |acc, (k, i)| acc + k.clone() * i);
+    let res: Vec<T> = a
+        .par_iter()
+        .zip(b.par_iter())
+        .fold(
+            || T::zero().unwrap(),
+            |acc, (k, i)| acc + k.clone() * i.clone(),
+        )
+        .collect();
+
+    let res = res.into_iter().sum();
+
     Tensor::new(Some(&[res]), &[1])
 }
 
