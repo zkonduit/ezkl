@@ -904,12 +904,33 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
     Ok(output.into())
 }
 
-/// Sum accumulated layout
+/// sum accumulated layout
 pub fn sum<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // time this entire function run
+    let global_start = instant::Instant::now();
+
+    let mut values = values.clone();
+
+    // this section has been optimized to death, don't mess with it
+    let mut removal_indices = values[0].get_const_zero_indices()?;
+    removal_indices.par_sort_unstable();
+    removal_indices.dedup();
+
+    // is already sorted
+    values[0].remove_indices(&mut removal_indices, true)?;
+
+    let elapsed = global_start.elapsed();
+    trace!("filtering const zero indices took: {:?}", elapsed);
+
+    // if empty return a const
+    if values[0].is_empty() {
+        return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
+    }
+
     let assigned_len: usize;
     let input = {
         let (res, len) =
@@ -955,12 +976,25 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
     Ok(last_elem)
 }
 
-/// Prod accumulated layout
+/// product accumulated layout
 pub fn prod<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // time this entire function run
+    let global_start = instant::Instant::now();
+
+    // this section has been optimized to death, don't mess with it
+    let removal_indices = values[0].get_const_zero_indices()?;
+
+    let elapsed = global_start.elapsed();
+    trace!("finding const zero indices took: {:?}", elapsed);
+    // if empty return a const
+    if removal_indices.len() > 0 {
+        return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
+    }
+
     let assigned_len: usize;
     let input = {
         let (res, len) =
