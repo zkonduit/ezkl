@@ -74,8 +74,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             // we kick off the loop with the current offset
             let starting_offset = offset.fetch_add(0, Ordering::Relaxed);
             let starting_constants = constants.fetch_add(0, Ordering::Relaxed);
-            println!("starting offset: {}", starting_offset);
-            println!("starting constants: {}", starting_constants);
             // we need to make sure that the region is not shared between threads
             let mut local_reg = Self::new_dummy_with_constants(starting_offset, starting_constants);
             let res = inner_loop_function(idx, &mut local_reg);
