@@ -96,6 +96,8 @@ pub fn node_output_shapes(
 fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
 ) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
+    use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+
     let dt = input.datum_type();
     let dims = input.shape().to_vec();
 
@@ -108,77 +110,77 @@ fn extract_tensor_value(
     match dt {
         DatumType::F16 => {
             let vec = input.as_slice::<tract_onnx::prelude::f16>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| (*x).into()).collect();
-            const_value = cast.into_iter().into();
+            let cast: Vec<f32> = vec.par_iter().map(|x| (*x).into()).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::F32 => {
             let vec = input.as_slice::<f32>()?.to_vec();
-            const_value = vec.into_iter().into();
+            const_value = Tensor::<f32>::new(Some(&vec), &dims)?;
         }
         DatumType::F64 => {
             let vec = input.as_slice::<f64>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
-            const_value = cast.into_iter().into();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as f32).collect();
+            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::I64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i64>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::I32 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i32>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::I16 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i16>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::I8 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<i8>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::U8 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<u8>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::U16 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<u16>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::U32 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<u32>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::U64 => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<u64>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as f32).collect();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::Bool => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<bool>()?.to_vec();
-            let cast: Vec<f32> = vec.iter().map(|x| *x as usize as f32).collect();
+            let cast: Vec<f32> = vec.par_iter().map(|x| *x as usize as f32).collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
         }
         DatumType::TDim => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<tract_onnx::prelude::TDim>()?.to_vec();
             let cast: Vec<f32> = vec
-                .iter()
+                .par_iter()
                 .map(|x| x.to_i64().map_or_else(|_| 1, |e| e) as f32)
                 .collect();
             const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
@@ -1092,18 +1094,14 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     scale: u32,
     visibility: Visibility,
 ) -> Result<Tensor<F>, Box<dyn std::error::Error>> {
-    let value: Result<Vec<F>, Box<dyn std::error::Error>> = const_value
-        .iter()
-        .map(|x| {
-            Ok(crate::fieldutils::i128_to_felt::<F>(quantize_float(
-                &(*x).into(),
-                0.0,
-                scale,
-            )?))
-        })
-        .collect();
+    let mut value: Tensor<F> = const_value.par_enum_map(|_, x| {
+        Ok::<_, TensorError>(crate::fieldutils::i128_to_felt::<F>(quantize_float(
+            &(x).into(),
+            0.0,
+            scale,
+        )?))
+    })?;
 
-    let mut value: Tensor<F> = value?.into_iter().into();
     value.reshape(const_value.dims());
     value.set_scale(scale);
     value.set_visibility(visibility);

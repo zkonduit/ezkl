@@ -1162,8 +1162,7 @@ pub fn prod<T: TensorType + Mul<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>,
 /// let result = downsample(&x, 1, 2, 2).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[3, 6]), &[2, 1]).unwrap();
 /// assert_eq!(result, expected);
-
-pub fn downsample<T: TensorType>(
+pub fn downsample<'a, T: TensorType + Send + Sync>(
     input: &Tensor<T>,
     dim: usize,
     stride: usize,
@@ -1193,10 +1192,10 @@ pub fn downsample<T: TensorType>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    output
-        .iter_mut()
-        .zip(indices.iter())
-        .for_each(|(o, i)| *o = input.get(i.as_slice()));
+    output = output.par_enum_map(|i, _: T| {
+        let coord = indices[i].clone();
+        Ok(input.get(&coord))
+    })?;
 
     Ok(output)
 }
