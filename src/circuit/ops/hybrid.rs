@@ -123,6 +123,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
+                    log::debug!("idx: {}", idx.show());
                     let res = tensor::ops::gather(&x, idx, *dim)?;
                     (res.clone(), vec![])
                 } else {
@@ -164,6 +165,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::GatherElements { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
+                    log::debug!("idx: {}", idx.show());
                     let res = tensor::ops::gather_elements(&x, idx, *dim)?;
                     (res.clone(), vec![])
                 } else {
