@@ -624,17 +624,9 @@ pub(crate) async fn calibrate(
                         .await
                         .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
-                    loop {
-                        // ensures we have converged
-                        let params_before = circuit.settings.clone();
-                        circuit
-                            .calibrate(&data)
-                            .map_err(|e| format!("failed to calibrate: {}", e))?;
-                        let params_after = circuit.settings.clone();
-                        if params_before == params_after {
-                            break;
-                        }
-                    }
+                    circuit
+                        .calibrate(&data)
+                        .map_err(|e| format!("failed to calibrate: {}", e))?;
 
                     let found_run_args = RunArgs {
                         input_scale: circuit.settings.run_args.input_scale,
@@ -765,12 +757,7 @@ pub(crate) async fn calibrate(
                 + 1,
             best_params.run_args.bits as u32,
         );
-        if best_params.total_const_size > 0 {
-            reduction = std::cmp::max(
-                reduction,
-                (best_params.total_const_size as f32).log2().ceil() as u32 + 1,
-            );
-        }
+        reduction = std::cmp::max(reduction, crate::graph::MIN_LOGROWS);
 
         info!(
             "logrows > bits, shrinking logrows: {} -> {}",

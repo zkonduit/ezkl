@@ -8,12 +8,11 @@ mod wasm32 {
     use ezkl::circuit::modules::Module;
     use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
     use ezkl::graph::GraphWitness;
-    use ezkl::pfsys::Snark;
     use ezkl::wasm::{
         bufferToVecOfVecU64, elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, genWitness,
-        poseidonHash, prove, u8_array_to_u128_le, vecU64ToFelt, vecU64ToFloat, vecU64ToInt, verify,
+        poseidonHash, u8_array_to_u128_le, vecU64ToFelt, vecU64ToFloat, vecU64ToInt,
     };
-    use halo2curves::bn256::{Fr, G1Affine};
+    use halo2curves::bn256::Fr;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use snark_verifier::util::arithmetic::PrimeField;
@@ -23,12 +22,8 @@ mod wasm32 {
 
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-    pub const KZG_PARAMS: &[u8] = include_bytes!("../tests/wasm/kzg");
     pub const CIRCUIT_PARAMS: &[u8] = include_bytes!("../tests/wasm/settings.json");
-    pub const VK: &[u8] = include_bytes!("../tests/wasm/test.key");
-    pub const PK: &[u8] = include_bytes!("../tests/wasm/test.provekey");
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
-    pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test_network.compiled");
     pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
 

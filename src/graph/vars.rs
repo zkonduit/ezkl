@@ -242,9 +242,13 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         var_len: usize,
+        num_constants: usize,
         instance_dims: Vec<Vec<usize>>,
         instance_scale: u32,
+        uses_modules: bool,
     ) -> Self {
+        info!("number of blinding factors: {}", cs.blinding_factors());
+
         let advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, var_len))
             .collect_vec();
@@ -258,8 +262,10 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         let instances = (0..instance_dims.len())
             .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), instance_scale))
             .collect_vec();
-
         debug!("model uses {} instance columns", instances.len());
+
+        let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);
+        debug!("model uses {} fixed columns", num_const_cols);
 
         ModelVars { advices, instances }
     }
