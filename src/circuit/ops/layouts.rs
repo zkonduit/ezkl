@@ -2079,8 +2079,11 @@ pub fn identity<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let output = region.assign(&config.output, &values[0])?;
-    region.increment(output.len());
+    let mut output = values[0].clone();
+    if !output.all_prev_assigned() {
+        output = region.assign(&config.output, &values[0])?;
+        region.increment(output.len());
+    }
 
     Ok(output)
 }
