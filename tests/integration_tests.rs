@@ -2592,7 +2592,7 @@ mod native_tests {
 
         let deployed_addr_arg = format!("--addr={}", addr);
 
-        let mut args = vec![
+        let args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
@@ -2604,6 +2604,39 @@ mod native_tests {
             .args(&args)
             .status()
             .expect("failed to execute process");
+        assert!(status.success());
+        // Create a new set of test on chain data
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "setup-test-evm-data",
+            "-D",
+            data_path.as_str(),
+            "-M",
+            &model_path,
+            format!("--settings-path={}", settings_path).as_str(),
+            "--test-data",
+            test_on_chain_data_path.as_str(),
+            rpc_arg.as_str(),
+            test_input_source.as_str(),
+            test_output_source.as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+
+        assert!(status.success());
+
+        let mut args = vec![
+            "test-update-account-calls",
+            deployed_addr_arg.as_str(),
+            "-D",
+            test_on_chain_data_path.as_str(),
+            rpc_arg.as_str(),
+        ];
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+
         assert!(status.success());
         // As sanity check, add example that should fail.
         args[2] = PF_FAILURE;

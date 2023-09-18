@@ -468,6 +468,19 @@ pub enum Commands {
     },
 
     #[cfg(not(target_arch = "wasm32"))]
+    TestUpdateAccountCalls {
+        /// The path to verfier contract's address
+        #[arg(long)]
+        addr: H160,
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: PathBuf,
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
+    },
+
+    #[cfg(not(target_arch = "wasm32"))]
     /// Loads model, data, and creates proof
     #[command(arg_required_else_help = true)]
     Prove {

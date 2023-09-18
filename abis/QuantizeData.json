@@ -27,5 +27,24 @@
 		],
 		"stateMutability": "pure",
 		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "int128[]",
+				"name": "quantized_data",
+				"type": "int128[]"
+			}
+		],
+		"name": "to_field_element",
+		"outputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "output",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "pure",
+		"type": "function"
 	}
 ]

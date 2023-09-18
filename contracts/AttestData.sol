@@ -31,6 +31,7 @@ contract DataAttestationVerifier {
     uint public constant INPUT_SCALE = 1 << 0;
     uint[] public outputScales;
 
+    address public admin;
 
     /**
      * @notice EZKL P value 
@@ -55,11 +56,39 @@ contract DataAttestationVerifier {
         bytes[][] memory _callData,
         uint256[][] memory _decimals,
         uint[] memory _outputScales,
-        uint8 _instanceOffset
+        uint8 _instanceOffset,
+        address _admin
     ) {
+        admin = _admin;
         for (uint i; i < _outputScales.length; i++) {
             outputScales.push(1 << _outputScales[i]);
         }
+        populateAccountCalls(_contractAddresses, _callData, _decimals);
+        instanceOffset = _instanceOffset;
+    }
+
+    function updateAdmin(address _admin) external {
+        require(msg.sender == admin, "Only admin can update admin");
+        if(_admin == address(0)) {
+            revert();
+        }
+        admin = _admin;
+    }
+
+    function updateAccountCalls(
+        address[] memory _contractAddresses,
+        bytes[][] memory _callData,
+        uint256[][] memory _decimals
+    ) external {
+        require(msg.sender == admin, "Only admin can update instanceOffset");
+        populateAccountCalls(_contractAddresses, _callData, _decimals);
+    }
+
+    function populateAccountCalls(
+        address[] memory _contractAddresses,
+        bytes[][] memory _callData,
+        uint256[][] memory _decimals
+    ) internal {
         require(
             _contractAddresses.length == _callData.length &&
                 accountCalls.length == _contractAddresses.length,
@@ -69,7 +98,6 @@ contract DataAttestationVerifier {
             _decimals.length == _contractAddresses.length,
             "Invalid number of decimals"
         );
-        uint total_calls = INPUT_CALLS + OUTPUT_CALLS;
         // fill in the accountCalls storage array
         uint counter = 0;
         for (uint256 i = 0; i < _contractAddresses.length; i++) {
@@ -83,9 +111,7 @@ contract DataAttestationVerifier {
             // count the total number of storage reads across all of the accounts
             counter += _callData[i].length;
         }
-        require(counter == total_calls, "Invalid number of calls");
-
-        instanceOffset = _instanceOffset;
+        require(counter == INPUT_CALLS + OUTPUT_CALLS, "Invalid number of calls");
     }
 
     function mulDiv(

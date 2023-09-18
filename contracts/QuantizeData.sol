@@ -10,7 +10,7 @@ contract QuantizeData {
      * @dev In order to prevent the verifier from accepting two version of the same instance, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
      * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
      */
-    uint256 constant SIZE_LIMIT = 21888242871839275222246405745257275088696311157297823662689037894645226208583; 
+    uint256 constant ORDER = uint256(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001); 
     /**
      * @notice Calculates floor(x * y / denominator) with full precision. Throws if result overflows a uint256 or denominator == 0
      * @dev Original credit to Remco Bloemen under MIT license (https://xn--2-umb.com/21/muldiv)
@@ -112,6 +112,13 @@ contract QuantizeData {
             // as it does on the EZKL cli.
             require(output <= uint128(type(int128).max), "Significant bit truncation");
             quantized_data[i] = neg ? int128(-int256(output)): int128(int256(output));
+        }
+    }
+
+    function to_field_element(int128[] memory quantized_data) public pure returns(uint256[] memory output) {
+        output = new uint256[](quantized_data.length);
+        for(uint i; i < quantized_data.length; i++){
+            output[i] = uint256(quantized_data[i] + int(ORDER)) % ORDER;
         }
     }
 }
