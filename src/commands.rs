@@ -453,7 +453,7 @@ pub enum Commands {
         settings_path: PathBuf,
         /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
         /// derived from the file information in the data .json file.
-        ///  Should include both the network input (possibly private) and the network output (public input to the proof)
+        /// Should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'T', long)]
         test_data: PathBuf,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state

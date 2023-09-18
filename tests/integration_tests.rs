@@ -773,29 +773,27 @@ mod native_tests {
             use tempdir::TempDir;
 
             /// Currently only on chain inputs that return a non-negative value are supported.
-            const TESTS_ON_CHAIN_INPUT: [&str; 11] = [
+            const TESTS_ON_CHAIN_INPUT: [&str; 17] = [
                 "1l_mlp",
                 "1l_average",
                 "1l_reshape",
-                // "1l_sigmoid",
+                "1l_sigmoid",
                 "1l_div",
                 "1l_sqrt",
-                // "1l_prelu",
+                "1l_prelu",
                 "1l_var",
                 "1l_leakyrelu",
                 "1l_gelu_noappx",
                 "1l_relu",
-                //"1l_tanh",
-                // "2l_relu_sigmoid_small",
-                // "2l_relu_small",
-                // "2l_relu_fc",
+                "1l_tanh",
+                "2l_relu_sigmoid_small",
+                "2l_relu_small",
+                "2l_relu_fc",
                 "min",
-                "max",
+                "max"
             ];
 
-
-
-            seq!(N in 0..= 10 {
+            seq!(N in 0..= 16 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
@@ -804,11 +802,8 @@ mod native_tests {
                     let _anvil_child = crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file");
                     test_dir.close().unwrap();
-
                 }
-            });
 
-            seq!(N in 0..= 10 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
@@ -817,12 +812,8 @@ mod native_tests {
                     let _anvil_child = crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain");
                     test_dir.close().unwrap();
-
                 }
-            });
 
-
-            seq!(N in 0..= 10 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
@@ -831,7 +822,6 @@ mod native_tests {
                     let _anvil_child = crate::native_tests::start_anvil();
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain");
                     test_dir.close().unwrap();
-
                 }
             });
 

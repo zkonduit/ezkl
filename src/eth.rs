@@ -17,7 +17,7 @@ use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
 use ethers::solc::{CompilerInput, Solc};
 use ethers::types::transaction::eip2718::TypedTransaction;
-use ethers::types::Bytes;
+use ethers::types::{Bytes, I256};
 use ethers::types::TransactionRequest;
 use ethers::types::H160;
 use ethers::types::U256;
@@ -335,7 +335,7 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
     for input in &data[0] {
         let decimal_places = count_decimal_places(*input) as u8;
         let scaled_by_decimals = input * f32::powf(10., decimal_places.into());
-        scaled_by_decimals_data.push(scaled_by_decimals as u128);
+        scaled_by_decimals_data.push(scaled_by_decimals as i128);
         decimals.push(decimal_places);
     }
 
@@ -446,9 +446,9 @@ pub async fn test_on_chain_data<M: 'static + Middleware>(
     // Get the encoded call data for each input
     let mut calldata = vec![];
     for (i, _) in data.iter().flatten().enumerate() {
-        let function = contract.method::<_, U256>("arr", i as u32).unwrap();
+        let function = contract.method::<_, I256>("arr", i as u32).unwrap();
         let call = function.calldata().unwrap();
-        // Push (call, decimals) to the calldata vector, and set the decimals to 0.
+        // Push (call, decimals) to the calldata vector.
         calldata.push((hex::encode(call), decimals[i]));
     }
     // Instantiate a new CallsToAccount struct
