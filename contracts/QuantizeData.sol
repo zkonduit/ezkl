@@ -99,14 +99,19 @@ contract QuantizeData {
     function quantize_data(bytes[] memory data, uint256[] memory decimals, uint256[] memory scales) external pure returns (int128[] memory quantized_data) {
         quantized_data = new int128[](data.length);
         for(uint i; i < data.length; i++){
-            uint x = abi.decode(data[i], (uint256));
+            int x = abi.decode(data[i], (int256));
+            bool neg = x < 0;
+            if (neg) x = -x;
             uint denom = 10**decimals[i];
-            uint output = mulDiv(x, scales[i], denom);
-            if (mulmod(x, scales[i], denom)*2 >= denom) {
+            uint output = mulDiv(uint256(x), scales[i], denom);
+            if (mulmod(uint256(x), scales[i], denom)*2 >= denom) {
                 output += 1;
             }
-            require(output < SIZE_LIMIT, "QuantizeData: overflow");
-            quantized_data[i] = int128(uint128(output));
+            // In the interest of keeping feature parity with the quantization done on the EZKL cli,
+            // we set the fixed point value type to be int128. Any value greater than that will throw an error
+            // as it does on the EZKL cli.
+            require(output <= uint128(type(int128).max), "Significant bit truncation");
+            quantized_data[i] = neg ? int128(-int256(output)): int128(int256(output));
         }
     }
 }

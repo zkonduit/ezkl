@@ -7,9 +7,9 @@ pragma solidity ^0.8.17;
 
 // Overview of the contract functionality:
 // 1. Initialization: Through the constructor, it sets up the contract calls that the EZKL model will read from.
-// 2. Data Quantization: Quantizes the returned data into a scaled fixed-point representation. See the `quantize_data` method for details.
+// 2. Data Quantization: Quantizes the returned data into a scaled fixed-point representation. See the `quantizeData` method for details.
 // 3. Static Calls: Makes static calls to fetch data from other contracts. See the `staticCall` method.
-// 4. Field Element Conversion: The fixed-point representation is then converted into a field element modulo P using the `to_field_element` method.
+// 4. Field Element Conversion: The fixed-point representation is then converted into a field element modulo P using the `toFieldElement` method.
 // 5. Data Attestation: The `attestData` method validates that the public instances match the data fetched and processed by the contract.
 // 6. Proof Verification: The `verifyWithDataAttestation` method has a stubbed assembly block to integrate proof verification.
 
@@ -143,7 +143,7 @@ contract DataAttestationVerifier {
      * @param decimals - The number of decimals the data returned from the account calls has (for floating point representation).
      * @param scale - The scale used to convert the floating point value into a fixed point value. 
      */
-    function quantize_data(
+    function quantizeData(
         bytes memory data,
         uint256 decimals,
         uint256 scale
@@ -189,7 +189,7 @@ contract DataAttestationVerifier {
      * @param x - The quantized data.
      * @return field_element - The field element.
      */
-    function to_field_element(int256 x) internal pure returns (uint256 field_element) {
+    function toFieldElement(int256 x) internal pure returns (uint256 field_element) {
         // The casting down to uint256 is safe because the order is about 2^254, and the value
         // of x ranges of -2^127 to 2^127, so x + int(ORDER) is always positive.
         return uint256(x + int(ORDER)) % ORDER;
@@ -217,12 +217,12 @@ contract DataAttestationVerifier {
                 if (counter >= INPUT_CALLS) {
                     scale = outputScales[counter - INPUT_CALLS];
                 }
-                int256 quantized_data = quantize_data(
+                int256 quantized_data = quantizeData(
                     returnData,
                     accountCalls[i].decimals[j],
                     scale
                 );
-                uint256 field_element = to_field_element(quantized_data);
+                uint256 field_element = toFieldElement(quantized_data);
                 require(
                     field_element == instances[counter + instanceOffset],
                     "Public input does not match"

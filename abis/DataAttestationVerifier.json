@@ -18,8 +18,13 @@
 			},
 			{
 				"internalType": "uint256[]",
-				"name": "_outputScale",
+				"name": "_outputScales",
 				"type": "uint256[]"
+			},
+			{
+				"internalType": "uint8",
+				"name": "_instanceOffset",
+				"type": "uint8"
 			}
 		],
 		"stateMutability": "nonpayable",
@@ -63,10 +68,42 @@
 		"type": "function"
 	},
 	{
+		"inputs": [],
+		"name": "instanceOffset",
+		"outputs": [
+			{
+				"internalType": "uint8",
+				"name": "",
+				"type": "uint8"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "outputScales",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
 		"inputs": [
 			{
 				"internalType": "uint256[]",
-				"name": "pubInputs",
+				"name": "instances",
 				"type": "uint256[]"
 			},
 			{
