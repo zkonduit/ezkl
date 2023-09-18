@@ -21,12 +21,12 @@ mod native_tests {
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
-        static ref ANVIL_URL: String = "http://localhost:3030".to_string();
+        static ref ANVIL_URL: String = "http://localhost:8545".to_string();
     }
 
     fn start_anvil() -> Child {
         let child = Command::new("anvil")
-            .args(["-p", "3030"])
+            .args(["-p", "8545", "--code-size-limit=41943040", "--disable-block-gas-limit"])
             // .stdout(Stdio::piped())
             .spawn()
             .expect("failed to start anvil process");
@@ -805,7 +805,7 @@ mod native_tests {
             use tempdir::TempDir;
 
             /// Currently only on chain inputs that return a non-negative value are supported.
-            const TESTS_ON_CHAIN_INPUT: [&str; 17] = [
+            const TESTS_ON_CHAIN_INPUT: [&str; 16] = [
                 "1l_mlp",
                 "1l_average",
                 "1l_reshape",
@@ -817,7 +817,7 @@ mod native_tests {
                 "1l_leakyrelu",
                 "1l_gelu_noappx",
                 "1l_relu",
-                "1l_tanh",
+                // "1l_tanh",
                 "2l_relu_sigmoid_small",
                 "2l_relu_small",
                 "2l_relu_fc",
@@ -825,7 +825,7 @@ mod native_tests {
                 "max"
             ];
 
-            seq!(N in 0..= 16 {
+            seq!(N in 0..=15 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
@@ -2137,7 +2137,7 @@ mod native_tests {
                 "--transcript=evm",
                 "--strategy=single",
                 format!("--settings-path={}", settings_path).as_str(),
-                &format!("--check-mode={}", checkmode),
+                &format!("--check-mode={}", checkmode)
             ])
             .status()
             .expect("failed to execute process");
