@@ -523,7 +523,10 @@ impl Model {
                         "------------ output node int {}: {} \n ------------ float: {}",
                         idx,
                         res.output.map(crate::fieldutils::felt_to_i32).show(),
-                        res.output.map(|x| crate::fieldutils::felt_to_f64(x) / scale_to_multiplier(n.out_scale)).show()
+                        res.output
+                            .map(|x| crate::fieldutils::felt_to_f64(x)
+                                / scale_to_multiplier(n.out_scale))
+                            .show()
                     );
                     results.insert(idx, vec![res.output]);
                 }

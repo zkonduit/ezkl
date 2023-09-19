@@ -237,7 +237,7 @@ mod native_tests {
         "hummingbird_decision_tree",
         "oh_decision_tree",
         "linear_svc",
-        "gather_elements", 
+        "gather_elements",
         "less",
         "xgboost_reg",
     ];

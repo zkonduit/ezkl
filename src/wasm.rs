@@ -214,24 +214,13 @@ pub fn elgamalDecrypt(
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn genWitness(
-    compiled_model: wasm_bindgen::Clamped<Vec<u8>>,
+    compiled_circuit: wasm_bindgen::Clamped<Vec<u8>>,
     input: wasm_bindgen::Clamped<Vec<u8>>,
-    settings: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
-    let compiled_model: crate::graph::Model =
-        bincode::deserialize(&compiled_model[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
+    let mut circuit: crate::graph::GraphCircuit =
+        bincode::deserialize(&compiled_circuit[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
     let input: crate::graph::input::GraphData =
         serde_json::from_slice(&input[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
-    let circuit_settings: crate::graph::GraphSettings =
-        serde_json::from_slice(&settings[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    // read in circuit
-    let mut circuit = GraphCircuit::new_from_settings(
-        compiled_model,
-        circuit_settings,
-        crate::circuit::CheckMode::UNSAFE,
-    )
-    .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let mut input = circuit
         .load_graph_input(&input)
@@ -286,8 +275,7 @@ pub fn verify(
 pub fn prove(
     witness: wasm_bindgen::Clamped<Vec<u8>>,
     pk: wasm_bindgen::Clamped<Vec<u8>>,
-    compiled_model: wasm_bindgen::Clamped<Vec<u8>>,
-    settings: wasm_bindgen::Clamped<Vec<u8>>,
+    compiled_circuit: wasm_bindgen::Clamped<Vec<u8>>,
     srs: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
     #[cfg(feature = "det-prove")]
@@ -300,31 +288,20 @@ pub fn prove(
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
             .map_err(|e| JsError::new(&format!("{}", e)))?;
 
+    // read in circuit
+    let mut circuit: crate::graph::GraphCircuit =
+        bincode::deserialize(&compiled_circuit[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
+
     // read in model input
     let data: crate::graph::GraphWitness =
         serde_json::from_slice(&witness[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    // read in circuit params
-    let circuit_settings: GraphSettings =
-        serde_json::from_slice(&settings[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     // read in proving key
     let mut reader = std::io::BufReader::new(&pk[..]);
     let pk = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
         halo2_proofs::SerdeFormat::RawBytes,
-        circuit_settings.clone(),
-    )
-    .map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    // read in circuit
-    let compiled_model: crate::graph::Model =
-        bincode::deserialize(&compiled_model[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    let mut circuit = GraphCircuit::new_from_settings(
-        compiled_model,
-        circuit_settings,
-        crate::circuit::CheckMode::UNSAFE,
+        circuit.settings().clone(),
     )
     .map_err(|e| JsError::new(&format!("{}", e)))?;
 

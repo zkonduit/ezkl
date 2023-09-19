@@ -254,7 +254,7 @@ def test_model_compile():
         folder_path,
         'settings.json'
     )
-    res = ezkl.compile_model(model_path, compiled_model_path, settings_path)
+    res = ezkl.compile_circuit(model_path, compiled_model_path, settings_path)
     assert res == True
 
 
@@ -276,13 +276,8 @@ def test_forward():
         folder_path,
         'witness.json'
     )
-    settings_path = os.path.join(
-        folder_path,
-        'settings.json'
-    )
 
-    res = ezkl.gen_witness(data_path, model_path,
-                           output_path, settings_path=settings_path)
+    res = ezkl.gen_witness(data_path, model_path, output_path)
 
     with open(output_path, "r") as f:
         data = json.load(f)
@@ -329,8 +324,7 @@ def test_mock():
 
     settings_path = os.path.join(folder_path, 'settings.json')
 
-    res = ezkl.mock(data_path, model_path,
-                    settings_path)
+    res = ezkl.mock(data_path, model_path)
     assert res == True
 
 
@@ -358,7 +352,6 @@ def test_setup():
         vk_path,
         pk_path,
         srs_path,
-        settings_path,
     )
     assert res == True
     assert os.path.isfile(vk_path)
@@ -382,19 +375,16 @@ def test_setup_evm():
 
     pk_path = os.path.join(folder_path, 'test_evm.pk')
     vk_path = os.path.join(folder_path, 'test_evm.vk')
-    settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl.setup(
         model_path,
         vk_path,
         pk_path,
         srs_path,
-        settings_path,
     )
     assert res == True
     assert os.path.isfile(vk_path)
     assert os.path.isfile(pk_path)
-    assert os.path.isfile(settings_path)
 
 
 def test_prove_and_verify():
@@ -414,7 +404,6 @@ def test_prove_and_verify():
 
     pk_path = os.path.join(folder_path, 'test.pk')
     proof_path = os.path.join(folder_path, 'test.pf')
-    settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl.prove(
         data_path,
@@ -424,11 +413,11 @@ def test_prove_and_verify():
         srs_path,
         "poseidon",
         "single",
-        settings_path,
     )
     assert res['transcript_type'] == 'Poseidon'
     assert os.path.isfile(proof_path)
 
+    settings_path = os.path.join(folder_path, 'settings.json')
     vk_path = os.path.join(folder_path, 'test.vk')
     res = ezkl.verify(proof_path, settings_path,
                       vk_path, srs_path)
@@ -453,7 +442,6 @@ def test_prove_evm():
 
     pk_path = os.path.join(folder_path, 'test_evm.pk')
     proof_path = os.path.join(folder_path, 'test_evm.pf')
-    settings_path = os.path.join(folder_path, 'settings.json')
     res = ezkl.prove(
         data_path,
         model_path,
@@ -462,7 +450,6 @@ def test_prove_evm():
         srs_path,
         "evm",
         "single",
-        settings_path,
     )
     assert res['transcript_type'] == 'EVM'
     assert os.path.isfile(proof_path)
@@ -575,7 +562,7 @@ async def aggregate_and_verify_aggr():
     assert res == True
     assert os.path.isfile(settings_path)
 
-    res = ezkl.compile_model(model_path, compiled_model_path, settings_path)
+    res = ezkl.compile_circuit(model_path, compiled_model_path, settings_path)
     assert res == True
 
     ezkl.setup(
@@ -583,7 +570,6 @@ async def aggregate_and_verify_aggr():
         vk_path,
         pk_path,
         srs_path,
-        settings_path,
     )
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
@@ -594,7 +580,7 @@ async def aggregate_and_verify_aggr():
     )
 
     res = ezkl.gen_witness(data_path, compiled_model_path,
-                           output_path, settings_path=settings_path)
+                           output_path)
 
     ezkl.prove(
         output_path,
@@ -604,7 +590,6 @@ async def aggregate_and_verify_aggr():
         srs_path,
         "poseidon",
         "accum",
-        settings_path,
     )
 
     # mock aggregate
@@ -694,7 +679,7 @@ async def evm_aggregate_and_verify_aggr():
         'compiled_relu.onnx'
     )
 
-    res = ezkl.compile_model(model_path, compiled_model_path, settings_path)
+    res = ezkl.compile_circuit(model_path, compiled_model_path, settings_path)
     assert res == True
 
     ezkl.setup(
@@ -702,7 +687,6 @@ async def evm_aggregate_and_verify_aggr():
         vk_path,
         pk_path,
         srs_path,
-        settings_path,
     )
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
@@ -713,7 +697,7 @@ async def evm_aggregate_and_verify_aggr():
     )
 
     res = ezkl.gen_witness(data_path, compiled_model_path,
-                           output_path, settings_path=settings_path)
+                           output_path)
 
     ezkl.prove(
         output_path,
@@ -723,7 +707,6 @@ async def evm_aggregate_and_verify_aggr():
         srs_path,
         "poseidon",
         "accum",
-        settings_path,
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_evm_1l_relu.pf')
