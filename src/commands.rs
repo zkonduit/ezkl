@@ -401,6 +401,9 @@ pub enum Commands {
         /// The path to output the proving key file
         #[arg(long, default_value = "pk.key")]
         pk_path: PathBuf,
+        /// The graph witness (optional)
+        #[arg(short = 'W', long)]
+        witness: Option<PathBuf>,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
