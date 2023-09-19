@@ -273,7 +273,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     }
 
     fn as_string(&self) -> String {
-        "CONST".into()
+        format!("CONST (scale={})", self.quantized_values.scale().unwrap())
     }
     fn layout(
         &self,

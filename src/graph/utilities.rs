@@ -651,9 +651,17 @@ pub fn new_op_from_onnx(
                 | DatumType::U8
                 | DatumType::U16
                 | DatumType::U32
-                | DatumType::U64 => SupportedOp::Nonlinear(LookupOp::Div {
-                    denom: crate::circuit::utils::F32(scale_to_multiplier(input_scales[0]) as f32),
-                }),
+                | DatumType::U64 => {
+                    if input_scales[0] != 0 {
+                        SupportedOp::Nonlinear(LookupOp::Div {
+                            denom: crate::circuit::utils::F32(
+                                scale_to_multiplier(input_scales[0]) as f32
+                            ),
+                        })
+                    } else {
+                        SupportedOp::Linear(PolyOp::Identity)
+                    }
+                }
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => {
                     SupportedOp::Linear(PolyOp::Identity)
                 }

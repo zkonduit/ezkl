@@ -70,7 +70,8 @@ def compare_outputs(zk_output, onnx_output):
                 zk_output = zk_output[0]
         except Exception as e:
             zk_output = zk_output[0]
-
+    print("zk ", zk_output)
+    print("onnx ", onnx_output)
     zip_object = zip(np.array(zk_output).flatten(),
                      np.array(onnx_output).flatten())
     for list1_i, list2_i in zip_object:
