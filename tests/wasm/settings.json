@@ -4,9 +4,9 @@
             "val": 0.0,
             "scale": 1.0
         },
-        "input_scale": 0,
-        "param_scale": 0,
-        "scale_rebase_multiplier": 2,
+        "input_scale": 20,
+        "param_scale": 20,
+        "scale_rebase_multiplier": 10,
         "bits": 5,
         "logrows": 7,
         "variables": [
