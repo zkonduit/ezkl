@@ -63,7 +63,7 @@ def compare_outputs(zk_output, onnx_output):
     res = []
 
     contains_sublist = any(isinstance(sub, list) for sub in zk_output)
-
+    print("zk ", zk_output)
     if contains_sublist:
         try:
             if len(onnx_output) == 1:

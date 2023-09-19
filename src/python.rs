@@ -652,22 +652,11 @@ fn calibrate_settings(
     data,
     model,
     output,
-    settings_path,
 ))]
-fn gen_witness(
-    data: PathBuf,
-    model: PathBuf,
-    output: Option<PathBuf>,
-    settings_path: PathBuf,
-) -> PyResult<PyObject> {
+fn gen_witness(data: PathBuf, model: PathBuf, output: Option<PathBuf>) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::gen_witness(
-            model,
-            data,
-            output,
-            settings_path,
-        ))
+        .block_on(crate::execute::gen_witness(model, data, output))
         .map_err(|e| {
             let err_str = format!("Failed to run generate witness: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -679,12 +668,11 @@ fn gen_witness(
 #[pyfunction(signature = (
     witness,
     model,
-    settings_path,
 ))]
-fn mock(witness: PathBuf, model: PathBuf, settings_path: PathBuf) -> PyResult<bool> {
+fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     Runtime::new()
         .unwrap()
-        .block_on(crate::execute::mock(model, witness, settings_path))
+        .block_on(crate::execute::mock(model, witness))
         .map_err(|e| {
             let err_str = format!("Failed to run mock: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -713,16 +701,14 @@ fn mock_aggregate(aggregation_snarks: Vec<PathBuf>, logrows: u32) -> PyResult<bo
     vk_path,
     pk_path,
     srs_path,
-    settings_path,
 ))]
 fn setup(
     model: PathBuf,
     vk_path: PathBuf,
     pk_path: PathBuf,
     srs_path: PathBuf,
-    settings_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    crate::execute::setup(model, srs_path, settings_path, vk_path, pk_path).map_err(|e| {
+    crate::execute::setup(model, srs_path, vk_path, pk_path).map_err(|e| {
         let err_str = format!("Failed to run setup: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
@@ -739,7 +725,6 @@ fn setup(
     srs_path,
     transcript,
     strategy,
-    settings_path,
 ))]
 fn prove(
     witness: PathBuf,
@@ -749,7 +734,6 @@ fn prove(
     srs_path: PathBuf,
     transcript: TranscriptType,
     strategy: StrategyType,
-    settings_path: PathBuf,
 ) -> PyResult<PyObject> {
     let snark = Runtime::new()
         .unwrap()
@@ -761,7 +745,6 @@ fn prove(
             srs_path,
             transcript,
             strategy,
-            settings_path,
             CheckMode::UNSAFE,
         ))
         .map_err(|e| {
@@ -819,15 +802,15 @@ fn setup_aggregate(
 
 #[pyfunction(signature = (
     model,
-    compiled_model,
+    compiled_circuit,
     settings_path,
 ))]
-fn compile_model(
+fn compile_circuit(
     model: PathBuf,
-    compiled_model: PathBuf,
+    compiled_circuit: PathBuf,
     settings_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    crate::execute::compile_model(model, compiled_model, settings_path).map_err(|e| {
+    crate::execute::compile_circuit(model, compiled_circuit, settings_path).map_err(|e| {
         let err_str = format!("Failed to setup aggregate: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
@@ -1124,7 +1107,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(mock_aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(setup_aggregate, m)?)?;
-    m.add_function(wrap_pyfunction!(compile_model, m)?)?;
+    m.add_function(wrap_pyfunction!(compile_circuit, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;

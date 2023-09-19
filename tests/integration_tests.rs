@@ -237,7 +237,7 @@ mod native_tests {
         "hummingbird_decision_tree",
         "oh_decision_tree",
         "linear_svc",
-        "gather_elements", 
+        "gather_elements",
         "less",
         "xgboost_reg",
     ];
@@ -1059,10 +1059,10 @@ mod native_tests {
                 "--bin",
                 "ezkl",
                 "--",
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1121,10 +1121,6 @@ mod native_tests {
                 &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
                 &format!("{}/{}/witness.json", test_dir, example_name),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1162,10 +1158,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1185,10 +1181,6 @@ mod native_tests {
                 &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
                 &format!("{}/{}/witness.json", test_dir, example_name),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1201,10 +1193,6 @@ mod native_tests {
                 format!("{}/{}/witness.json", test_dir, counter_example).as_str(),
                 "-M",
                 format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1281,10 +1269,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1304,10 +1292,6 @@ mod native_tests {
                 &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
                 &format!("{}/{}/witness_mock.json", test_dir, example_name),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1320,10 +1304,6 @@ mod native_tests {
                 format!("{}/{}/witness_mock.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1379,10 +1359,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1403,10 +1383,6 @@ mod native_tests {
                 &format!("{}/{}/network.compiled", test_dir, example_name),
                 "-O",
                 &format!("{}/{}/witness.json", test_dir, example_name),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .stdout(std::process::Stdio::null())
             .status()
@@ -1469,10 +1445,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
@@ -1489,7 +1465,6 @@ mod native_tests {
                 &format!("{}/tutorial/network.onnx", test_dir),
                 "-O",
                 &format!("{}/tutorial/witness_tutorial.json", test_dir),
-                &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
             .expect("failed to execute process");
@@ -1502,7 +1477,6 @@ mod native_tests {
                 format!("{}/tutorial/witness_tutorial.json", test_dir).as_str(),
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
-                &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
             .expect("failed to execute process");
@@ -1545,10 +1519,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1566,10 +1540,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -1590,10 +1560,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1612,10 +1578,6 @@ mod native_tests {
                 &srs_path,
                 "--transcript=poseidon",
                 "--strategy=accum",
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1668,10 +1630,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1689,10 +1651,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -1713,10 +1671,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1735,10 +1689,6 @@ mod native_tests {
                 &srs_path,
                 "--transcript=poseidon",
                 "--strategy=accum",
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1835,10 +1785,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1856,10 +1806,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -1880,10 +1826,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/evm.pk", test_dir, example_name),
                 &srs_path,
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1901,10 +1843,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/evm.pk", test_dir, example_name),
                 &srs_path,
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "--transcript=poseidon",
                 "--strategy=accum",
             ])
@@ -2088,10 +2026,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -2112,7 +2050,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                format!("--settings-path={}", settings_path).as_str(),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -2130,7 +2067,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -2149,7 +2085,6 @@ mod native_tests {
                 &srs_path,
                 "--transcript=evm",
                 "--strategy=single",
-                format!("--settings-path={}", settings_path).as_str(),
                 &format!("--check-mode={}", checkmode),
             ])
             .status()
@@ -2203,6 +2138,8 @@ mod native_tests {
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 &format!("--input-scale={}", scale),
                 &format!("--param-scale={}", scale),
+                &format!("--bits={}", bits),
+                &format!("--logrows={}", logrows),
             ])
             .status()
             .expect("failed to execute process");
@@ -2210,10 +2147,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings_fuzz.json",
@@ -2231,8 +2168,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--settings-path",
-                format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 "-O",
                 format!("{}/{}/witness_fuzz.json", test_dir, example_name).as_str(),
             ])
@@ -2247,10 +2182,6 @@ mod native_tests {
                 format!("{}/{}/witness_fuzz.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--bits={}", bits),
-                &format!("--logrows={}", logrows),
-                &format!("--input-scale={}", scale),
-                &format!("--param-scale={}", scale),
                 &format!("--num-runs={}", 5),
                 &format!("--transcript={}", transcript),
             ])
@@ -2300,10 +2231,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 (format!("--settings-path={}", settings_path).as_str()),
             ])
@@ -2321,7 +2252,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                format!("--settings-path={}", settings_path).as_str(),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -2339,7 +2269,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -2359,7 +2288,6 @@ mod native_tests {
                 &srs_path,
                 "--transcript=evm",
                 "--strategy=single",
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -2478,10 +2406,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 &model_path,
-                "--compiled-model",
+                "--compiled-circuit",
                 &model_path,
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -2499,7 +2427,6 @@ mod native_tests {
                 data_path.as_str(),
                 "-M",
                 &model_path,
-                format!("--settings-path={}", settings_path).as_str(),
                 "--test-data",
                 test_on_chain_data_path.as_str(),
                 rpc_arg.as_str(),
@@ -2517,7 +2444,6 @@ mod native_tests {
                 test_on_chain_data_path.as_str(),
                 "-M",
                 &model_path,
-                format!("--settings-path={}", settings_path).as_str(),
                 "-O",
                 &witness_path,
             ])
@@ -2535,7 +2461,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -2555,7 +2480,6 @@ mod native_tests {
                 &srs_path,
                 "--transcript=evm",
                 "--strategy=single",
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
