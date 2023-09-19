@@ -2427,7 +2427,6 @@ mod native_tests {
                 data_path.as_str(),
                 "-M",
                 &model_path,
-                format!("--settings-path={}", settings_path).as_str(),
                 "--test-data",
                 test_on_chain_data_path.as_str(),
                 rpc_arg.as_str(),
