@@ -1062,7 +1062,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1161,7 +1161,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1272,7 +1272,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1362,7 +1362,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1448,7 +1448,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
@@ -1522,7 +1522,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1633,7 +1633,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1788,7 +1788,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -2029,7 +2029,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -2138,6 +2138,8 @@ mod native_tests {
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 &format!("--input-scale={}", scale),
                 &format!("--param-scale={}", scale),
+                &format!("--bits={}", bits),
+                &format!("--logrows={}", logrows),
             ])
             .status()
             .expect("failed to execute process");
@@ -2148,7 +2150,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings_fuzz.json",
@@ -2232,7 +2234,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 (format!("--settings-path={}", settings_path).as_str()),
             ])
@@ -2407,7 +2409,7 @@ mod native_tests {
                 "compile-circuit",
                 "-M",
                 &model_path,
-                "--compiled-model",
+                "--compiled-circuit",
                 &model_path,
                 &format!(
                     "--settings-path={}/{}/settings.json",
