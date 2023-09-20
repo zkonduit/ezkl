@@ -87,11 +87,6 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
 
-    if region.is_dummy() {
-        region.increment(values[0].len());
-        return Ok(Tensor::<ValType<F>>::new(None, &[1])?.into());
-    }
-
     let start = instant::Instant::now();
     let mut inputs = vec![];
     let mut assigned_len = 0;
@@ -588,7 +583,7 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     input.flatten();
 
     // assert we have a single index
-    assert_eq!(index.dims().iter().product::<usize>(), 1);
+    // assert_eq!(index.dims().iter().product::<usize>(), 1);
     assert!(dim_indices.all_prev_assigned() || region.is_dummy());
 
     let is_assigned = !input.any_unknowns() && !index.any_unknowns();
@@ -1310,36 +1305,38 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     trace!("setting up indices took {:?}", start.elapsed());
 
     // infill the zero indices with the correct values from values[0] or values[1]
-    output
-        .get_inner_tensor_mut()?
-        .par_enum_map_mut_filtered(removal_indices_ptr, |i| {
-            let val = match op {
-                BaseOp::Add => {
-                    let a_is_null = first_zero_indices.contains(&i);
-                    let b_is_null = second_zero_indices.contains(&i);
+    if !removal_indices_ptr.is_empty() {
+        output
+            .get_inner_tensor_mut()?
+            .par_enum_map_mut_filtered(removal_indices_ptr, |i| {
+                let val = match op {
+                    BaseOp::Add => {
+                        let a_is_null = first_zero_indices.contains(&i);
+                        let b_is_null = second_zero_indices.contains(&i);
 
-                    if a_is_null && b_is_null {
-                        ValType::Constant(F::ZERO)
-                    } else if a_is_null {
-                        b_tensor[i].clone()
-                    } else {
-                        a_tensor[i].clone()
+                        if a_is_null && b_is_null {
+                            ValType::Constant(F::ZERO)
+                        } else if a_is_null {
+                            b_tensor[i].clone()
+                        } else {
+                            a_tensor[i].clone()
+                        }
                     }
-                }
-                BaseOp::Sub => {
-                    let a_is_null = first_zero_indices.contains(&i);
-                    // by default b is null in this case for sub
-                    if a_is_null {
-                        ValType::Constant(F::ZERO)
-                    } else {
-                        a_tensor[i].clone()
+                    BaseOp::Sub => {
+                        let a_is_null = first_zero_indices.contains(&i);
+                        // by default b is null in this case for sub
+                        if a_is_null {
+                            ValType::Constant(F::ZERO)
+                        } else {
+                            a_tensor[i].clone()
+                        }
                     }
-                }
-                BaseOp::Mult => ValType::Constant(F::ZERO),
-                _ => panic!(),
-            };
-            Ok::<_, TensorError>(val)
-        })?;
+                    BaseOp::Mult => ValType::Constant(F::ZERO),
+                    _ => panic!(),
+                };
+                Ok::<_, TensorError>(val)
+            })?;
+    }
 
     output.reshape(&broadcasted_shape)?;
 
@@ -2183,11 +2180,6 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let w = region.assign(&config.lookup_input, x)?;
     let mut output = Tensor::new(Some(&vec![Value::<F>::unknown(); w.len()]), w.dims())?;
-
-    if region.is_dummy() {
-        region.increment(output.len());
-        return Ok(output.into());
-    }
 
     if !w.any_unknowns() {
         output = Op::<F>::f(nl, &[w.get_felt_evals()?])
