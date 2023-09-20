@@ -805,7 +805,7 @@ mod native_tests {
             use tempdir::TempDir;
 
             /// Currently only on chain inputs that return a non-negative value are supported.
-            const TESTS_ON_CHAIN_INPUT: [&str; 16] = [
+            const TESTS_ON_CHAIN_INPUT: [&str; 17] = [
                 "1l_mlp",
                 "1l_average",
                 "1l_reshape",
@@ -817,7 +817,7 @@ mod native_tests {
                 "1l_leakyrelu",
                 "1l_gelu_noappx",
                 "1l_relu",
-                // "1l_tanh",
+                "1l_tanh",
                 "2l_relu_sigmoid_small",
                 "2l_relu_small",
                 "2l_relu_fc",
@@ -825,7 +825,7 @@ mod native_tests {
                 "max"
             ];
 
-            seq!(N in 0..=15 {
+            seq!(N in 0..=16 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
