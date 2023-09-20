@@ -233,13 +233,10 @@ pub enum Commands {
         data: PathBuf,
         /// The path to the compiled model file
         #[arg(short = 'M', long)]
-        compiled_model: PathBuf,
+        compiled_circuit: PathBuf,
         /// Path to the witness (public and private inputs) .json file
         #[arg(short = 'O', long, default_value = "witness.json")]
         output: PathBuf,
-        /// Path to circuit_settings .json file to read in
-        #[arg(short = 'S', long)]
-        settings_path: PathBuf,
     },
 
     /// Produces the proving hyperparameters, from run-args
@@ -314,9 +311,6 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
-        /// circuit params path
-        #[arg(short = 'S', long)]
-        settings_path: PathBuf,
     },
 
     /// Mock aggregate proofs
@@ -381,13 +375,13 @@ pub enum Commands {
     },
     /// Compiles a circuit from onnx to a simplified graph (einsum + other ops) and parameters as sets of field elements
     #[command(arg_required_else_help = true)]
-    CompileModel {
+    CompileCircuit {
         /// The path to the .onnx model file
         #[arg(short = 'M', long)]
         model: PathBuf,
         /// The path to output the processed model
         #[arg(long)]
-        compiled_model: PathBuf,
+        compiled_circuit: PathBuf,
         /// The path to load circuit params from
         #[arg(short = 'S', long)]
         settings_path: PathBuf,
@@ -397,7 +391,7 @@ pub enum Commands {
     Setup {
         /// The path to the compiled model file
         #[arg(short = 'M', long)]
-        compiled_model: PathBuf,
+        compiled_circuit: PathBuf,
         /// The srs path
         #[arg(long)]
         srs_path: PathBuf,
@@ -407,9 +401,6 @@ pub enum Commands {
         /// The path to output the proving key file
         #[arg(long, default_value = "pk.key")]
         pk_path: PathBuf,
-        /// The path to load circuit params from
-        #[arg(short = 'S', long)]
-        settings_path: PathBuf,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -421,7 +412,7 @@ pub enum Commands {
         witness: PathBuf,
         /// The path to the processed model file
         #[arg(short = 'M', long)]
-        compiled_model: PathBuf,
+        compiled_circuit: PathBuf,
         #[arg(
             long,
             require_equals = true,
@@ -430,15 +421,9 @@ pub enum Commands {
             value_enum
         )]
         transcript: TranscriptType,
-        /// proving arguments
-        #[clap(flatten)]
-        args: RunArgs,
         /// number of fuzz iterations
         #[arg(long, default_value = "10")]
         num_runs: usize,
-        /// optional circuit params path (overrides any run args set)
-        #[arg(short = 'S', long)]
-        settings_path: Option<PathBuf>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     SetupTestEVMData {
@@ -447,10 +432,7 @@ pub enum Commands {
         data: PathBuf,
         /// The path to the compiled model file
         #[arg(short = 'M', long)]
-        compiled_model: PathBuf,
-        /// The path to load circuit params from
-        #[arg(long)]
-        settings_path: PathBuf,
+        compiled_circuit: PathBuf,
         /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
         /// derived from the file information in the data .json file.
         /// Should include both the network input (possibly private) and the network output (public input to the proof)
@@ -489,7 +471,7 @@ pub enum Commands {
         witness: PathBuf,
         /// The path to the compiled model file
         #[arg(short = 'M', long)]
-        compiled_model: PathBuf,
+        compiled_circuit: PathBuf,
         /// The path to load the desired proving key file
         #[arg(long)]
         pk_path: PathBuf,
@@ -516,9 +498,6 @@ pub enum Commands {
             value_enum
         )]
         strategy: StrategyType,
-        /// The path to load circuit params from
-        #[arg(short = 'S', long)]
-        settings_path: PathBuf,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,

@@ -182,7 +182,6 @@ mod wasm32 {
         let witness = genWitness(
             wasm_bindgen::Clamped(NETWORK.to_vec()),
             wasm_bindgen::Clamped(INPUT.to_vec()),
-            wasm_bindgen::Clamped(CIRCUIT_PARAMS.to_vec()),
         )
         .map_err(|_| "failed")
         .unwrap();

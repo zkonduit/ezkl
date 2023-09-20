@@ -540,17 +540,15 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Display a tensor
     pub fn show(&self) -> String {
-        if self.len() > 10 {
-            let start = self[..5].to_vec();
-            let end = self[self.len() - 5..].to_vec();
+        if self.len() > 12 {
+            let start = self[..12].to_vec();
             // print the two split by ... in the middle
             format!(
-                "[{} ... {}]",
+                "[{} ...]",
                 start.iter().map(|x| format!("{:?}", x)).join(", "),
-                end.iter().map(|x| format!("{:?}", x)).join(", ")
             )
         } else {
-            format!("{:?}", self)
+            format!("[{:?}]", self.iter().map(|x| format!("{:?}", x)).join(", "))
         }
     }
 
