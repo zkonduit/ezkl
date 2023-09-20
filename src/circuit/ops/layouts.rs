@@ -799,7 +799,6 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     let mut output: Tensor<ValType<F>> = Tensor::new(None, &output_size)?;
 
     let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> ValType<F> {
-        let start = instant::Instant::now();
         let coord = cartesian_coord[i].clone();
         let index_val = index.get_single_elem(coord[dim]).unwrap();
 
