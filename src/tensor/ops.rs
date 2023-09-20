@@ -1796,8 +1796,10 @@ pub fn conv<
             .unwrap();
 
         let start_kernel_index = group * output_channels_per_group + i;
-        let local_kernel =
-            Tensor::from(vec![kernel.get_flat_index(start_kernel_index)].into_iter());
+        let end_kernel_index = start_kernel_index + 1;
+        let local_kernel = kernel
+            .get_slice(&[start_kernel_index..end_kernel_index])
+            .unwrap();
 
         let res = dot(&[local_image, local_kernel]).unwrap()[0].clone();
         if has_bias {
@@ -2481,21 +2483,21 @@ where
 /// // 1D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3]), &[3]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[4, 5, 6]), &[3]).unwrap();
-/// let result = concat(&[x, y], 0).unwrap();
+/// let result = concat(&[&x, &y], 0).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // 2D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[7, 8, 9]), &[3, 1]).unwrap();
-/// let result = concat(&[x, y], 1).unwrap();
+/// let result = concat(&[&x, &y], 1).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 7, 3, 4, 8, 5, 6, 9]), &[3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// /// 4D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[2, 2, 2, 2]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[2, 2, 1, 2]).unwrap();
-/// let result = concat(&[x, y], 2).unwrap();
+/// let result = concat(&[&x, &y], 2).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 17, 18, 5, 6, 7, 8, 19, 20, 9, 10, 11, 12, 21, 22, 13, 14, 15, 16, 23, 14]), &[2, 2, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -2503,7 +2505,7 @@ where
 /// // 5D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[8, 1, 1, 1, 2]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[4, 1, 1, 1, 2]).unwrap();
-/// let result = concat(&[x, y], 0).unwrap();
+/// let result = concat(&[&x, &y], 0).unwrap();
 ///
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 14]), &[12, 1, 1, 1, 2]).unwrap();
 /// assert_eq!(result, expected);
