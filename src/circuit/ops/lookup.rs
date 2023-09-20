@@ -93,7 +93,14 @@ pub enum LookupOp {
     LessThan {
         a: utils::F32,
     },
+    GreaterThanEqual {
+        a: utils::F32,
+    },
+    LessThanEqual {
+        a: utils::F32,
+    },
     Sign,
+    KroneckerDelta,
 }
 
 impl LookupOp {
@@ -125,6 +132,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
+            LookupOp::KroneckerDelta => Ok(tensor::ops::nonlinearities::kronecker_delta(&x)),
             LookupOp::Max { scales, a } => Ok(tensor::ops::nonlinearities::max(
                 &x,
                 scales.0,
@@ -142,10 +150,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 &x,
                 f32::from(*a).into(),
             )),
+            LookupOp::LessThanEqual { a } => Ok(tensor::ops::nonlinearities::less_than_equal(
+                &x,
+                f32::from(*a).into(),
+            )),
             LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
                 &x,
                 f32::from(*a).into(),
             )),
+            LookupOp::GreaterThanEqual { a } => Ok(
+                tensor::ops::nonlinearities::greater_than_equal(&x, f32::from(*a).into()),
+            ),
             LookupOp::Div { denom } => Ok(tensor::ops::nonlinearities::const_div(
                 &x,
                 f32::from(*denom).into(),
@@ -189,11 +204,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         match self {
+            LookupOp::KroneckerDelta => "K_DELTA".into(),
             LookupOp::Max { scales, a } => format!("MAX w/ {:?} /t {}", scales, a),
             LookupOp::Min { scales, a } => format!("MIN w/ {:?} /t {}", scales, a),
             LookupOp::Sign => "SIGN".into(),
             LookupOp::GreaterThan { .. } => "GREATER_THAN".into(),
+            LookupOp::GreaterThanEqual { .. } => "GREATER_THAN_EQUAL".into(),
             LookupOp::LessThan { .. } => "LESS_THAN".into(),
+            LookupOp::LessThanEqual { .. } => "LESS_THAN_EQUAL".into(),
             LookupOp::Recip { scale, .. } => format!("RECIP w/ {}", scale),
             LookupOp::Div { denom, .. } => format!("DIV w/ {}", denom),
             LookupOp::Ln { scale } => format!("LN w/ {:?}", scale),

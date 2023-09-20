@@ -448,7 +448,11 @@ impl<'data, T: Clone + TensorType + std::marker::Send + std::marker::Sync>
 impl<T: Clone + TensorType> Tensor<T> {
     /// Sets (copies) the tensor values to the provided ones.
     pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, TensorError> {
-        let total_dims: usize = dims.iter().product();
+        let total_dims: usize = if !dims.is_empty() {
+            dims.iter().product()
+        } else {
+            0
+        };
         match values {
             Some(v) => {
                 if total_dims != v.len() {
@@ -492,7 +496,11 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Returns the number of elements in the tensor.
     pub fn len(&self) -> usize {
-        self.dims().iter().product::<usize>()
+        if !self.dims().is_empty() && (self.dims() != [0]) {
+            self.dims().iter().product::<usize>()
+        } else {
+            0
+        }
     }
     /// Checks if the number of elements in tensor is 0.
     pub fn is_empty(&self) -> bool {
@@ -532,17 +540,15 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Display a tensor
     pub fn show(&self) -> String {
-        if self.len() > 10 {
-            let start = self[..5].to_vec();
-            let end = self[self.len() - 5..].to_vec();
+        if self.len() > 12 {
+            let start = self[..12].to_vec();
             // print the two split by ... in the middle
             format!(
-                "[{} ... {}]",
+                "[{} ...]",
                 start.iter().map(|x| format!("{:?}", x)).join(", "),
-                end.iter().map(|x| format!("{:?}", x)).join(", ")
             )
         } else {
-            format!("{:?}", self)
+            format!("[{:?}]", self.iter().map(|x| format!("{:?}", x)).join(", "))
         }
     }
 
@@ -710,8 +716,19 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.dims(), &[9, 3]);
     /// ```
     pub fn reshape(&mut self, new_dims: &[usize]) {
-        assert!(self.len() == new_dims.iter().product::<usize>());
-        self.dims = Vec::from(new_dims);
+        // in onnx parlance this corresponds to converting a tensor to a single element
+        if new_dims.is_empty() {
+            assert!(self.len() == 1 || self.is_empty());
+            self.flatten();
+        } else {
+            let product = if new_dims != [0] {
+                new_dims.iter().product::<usize>()
+            } else {
+                0
+            };
+            assert!(self.len() == product);
+            self.dims = Vec::from(new_dims);
+        }
     }
 
     /// Move axis of the tensor
@@ -901,7 +918,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.dims(), &[27]);
     /// ```
     pub fn flatten(&mut self) {
-        self.dims = Vec::from([self.dims.iter().product::<usize>()]);
+        if !self.dims().is_empty() && (self.dims() != [0]) {
+            self.dims = Vec::from([self.dims.iter().product::<usize>()]);
+        }
     }
 
     /// Maps a function to tensors

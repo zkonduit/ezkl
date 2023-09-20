@@ -159,8 +159,8 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
             inner: t.map(|x|
                 if let Some(vis) = t.visibility {
                     match vis {
-                        Visibility::Public => x.into(),
-                        Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted => {
+                        Visibility::Fixed => x.into(),
+                        Visibility::Public | Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted => {
                             Value::known(x).into()
                         }
                     }
@@ -207,15 +207,20 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 
 impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<usize>, scale: u32) -> Self {
+    pub fn new_instance(cs: &mut ConstraintSystem<F>, mut dims: Vec<usize>, scale: u32) -> Self {
         let col = cs.instance_column();
         cs.enable_equality(col);
+        // force there to be at least one dimension
+        if dims.is_empty() || dims == vec![0] {
+            dims = vec![1];
+        }
         ValTensor::Instance {
             inner: col,
             dims,
             scale,
         }
     }
+
     ///
     pub fn any_unknowns(&self) -> bool {
         match self {
@@ -589,7 +594,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     pub fn len(&self) -> usize {
         match self {
             ValTensor::Value { dims, .. } | ValTensor::Instance { dims, .. } => {
-                dims.iter().product::<usize>()
+                if !dims.is_empty() && (dims != &[0]) {
+                    dims.iter().product::<usize>()
+                } else {
+                    0
+                }
             }
         }
     }

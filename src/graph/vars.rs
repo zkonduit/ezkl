@@ -34,6 +34,8 @@ pub enum Visibility {
     },
     /// Mark an item as encrypted (public key and encrypted message sent in the proof submitted for verificatio)
     Encrypted,
+    /// assigned as a constant in the circuit
+    Fixed,
 }
 
 impl<'a> From<&'a str> for Visibility {
@@ -41,6 +43,7 @@ impl<'a> From<&'a str> for Visibility {
         match s {
             "private" => Visibility::Private,
             "public" => Visibility::Public,
+            "fixed" => Visibility::Fixed,
             "hashed" | "hashed/public" => Visibility::Hashed {
                 hash_is_public: true,
             },
@@ -60,6 +63,7 @@ impl IntoPy<PyObject> for Visibility {
         match self {
             Visibility::Private => "private".to_object(py),
             Visibility::Public => "public".to_object(py),
+            Visibility::Fixed => "fixed".to_object(py),
             Visibility::Hashed { hash_is_public } => {
                 if hash_is_public {
                     "hashed/public".to_object(py)
@@ -97,6 +101,10 @@ impl<'source> FromPyObject<'source> for Visibility {
 }
 
 impl Visibility {
+    #[allow(missing_docs)]
+    pub fn is_fixed(&self) -> bool {
+        matches!(&self, Visibility::Fixed)
+    }
     #[allow(missing_docs)]
     pub fn is_public(&self) -> bool {
         matches!(&self, Visibility::Public)
@@ -146,6 +154,7 @@ impl std::fmt::Display for Visibility {
         match self {
             Visibility::Private => write!(f, "private"),
             Visibility::Public => write!(f, "public"),
+            Visibility::Fixed => write!(f, "fixed"),
             Visibility::Hashed { .. } => write!(f, "hashed"),
             Visibility::Encrypted => write!(f, "encrypted"),
         }
@@ -207,9 +216,13 @@ impl VarVisibility {
         let input_vis = args.input_visibility;
         let params_vis = args.param_visibility;
         let output_vis = args.output_visibility;
+
         if !output_vis.is_public()
             & !params_vis.is_public()
             & !input_vis.is_public()
+            & !output_vis.is_fixed()
+            & !params_vis.is_fixed()
+            & !input_vis.is_fixed()
             & !output_vis.is_hashed()
             & !params_vis.is_hashed()
             & !input_vis.is_hashed()
@@ -242,9 +255,13 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         var_len: usize,
+        num_constants: usize,
         instance_dims: Vec<Vec<usize>>,
         instance_scale: u32,
+        uses_modules: bool,
     ) -> Self {
+        info!("number of blinding factors: {}", cs.blinding_factors());
+
         let advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, var_len))
             .collect_vec();
@@ -258,8 +275,10 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         let instances = (0..instance_dims.len())
             .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), instance_scale))
             .collect_vec();
-
         debug!("model uses {} instance columns", instances.len());
+
+        let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);
+        debug!("model uses {} fixed columns", num_const_cols);
 
         ModelVars { advices, instances }
     }

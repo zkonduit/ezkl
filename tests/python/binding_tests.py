@@ -52,6 +52,37 @@ def test_py_run_args():
     run_args.tolerance = 1.5
 
 
+def test_poseidon_hash():
+    """
+    Test for poseidon_hash
+    """
+    message = [1.0, 2.0, 3.0, 4.0]
+    message = [ezkl.float_to_vecu64(x, 7) for x in message]
+    res = ezkl.poseidon_hash(message)
+    assert ezkl.vecu64_to_felt(
+        res[0]) == "0x0da7e5e5c8877242fa699f586baf770d731defd54f952d4adeb85047a0e32f45"
+
+
+def test_elgamal():
+    """
+    Test for elgamal encryption and decryption
+    """
+    message = [1.0, 2.0, 3.0, 4.0]
+    felt_message = [ezkl.float_to_vecu64(x, 7) for x in message]
+
+    # list of len 32
+    rng = [0 for _ in range(32)]
+
+    variables = ezkl.elgamal_gen_random(rng)
+    encrypted_message = ezkl.elgamal_encrypt(
+        variables.pk, felt_message, variables.r)
+    decrypted_message = ezkl.elgamal_decrypt(encrypted_message, variables.sk)
+    assert decrypted_message == felt_message
+
+    recovered_message = [ezkl.vecu64_to_float(x, 7) for x in decrypted_message]
+    assert recovered_message == message
+
+
 def test_field_serialization():
     """
     Test field element serialization
@@ -70,6 +101,21 @@ def test_field_serialization():
     assert input == roundtrip_input
 
 
+def test_buffer_to_felts():
+    """
+    Test buffer_to_felt
+    """
+    buffer = bytearray("a sample string!", 'utf-8')
+    felts = ezkl.buffer_to_felts(buffer)
+    ref_felt_1 = "0x0000000000000000000000000000000021676e6972747320656c706d61732061"
+    assert felts == [ref_felt_1]
+
+    buffer = bytearray("a sample string!"+"high", 'utf-8')
+    felts = ezkl.buffer_to_felts(buffer)
+    ref_felt_2 = "0x0000000000000000000000000000000000000000000000000000000068676968"
+    assert felts == [ref_felt_1, ref_felt_2]
+
+
 def test_table_1l_average():
     """
     Test for table() with 1l_average.onnx
@@ -83,17 +129,17 @@ def test_table_1l_average():
 
     expected_table = (
         " \n"
-        "┌─────┬─────────┬───────────┬──────────┬──────────────┬──────────────────┐\n"
-        "│ idx │ opkind  │ out_scale │ inputs   │ out_dims     │ required_lookups │\n"
-        "├─────┼─────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
-        "│ 0   │ Input   │ 7         │          │ [1, 3, 2, 2] │ []               │\n"
-        "├─────┼─────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
-        "│ 1   │ PAD     │ 7         │ [(0, 0)] │ [1, 3, 4, 4] │ []               │\n"
-        "├─────┼─────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
-        "│ 2   │ SUMPOOL │ 7         │ [(1, 0)] │ [1, 3, 3, 3] │ []               │\n"
-        "├─────┼─────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
-        "│ 3   │ RESHAPE │ 7         │ [(2, 0)] │ [3, 3, 3]    │ []               │\n"
-        "└─────┴─────────┴───────────┴──────────┴──────────────┴──────────────────┘"
+        "┌─────┬────────────────┬───────────┬──────────┬──────────────┬──────────────────┐\n"
+        "│ idx │ opkind         │ out_scale │ inputs   │ out_dims     │ required_lookups │\n"
+        "├─────┼────────────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
+        "│ 0   │ Input          │ 7         │          │ [1, 3, 2, 2] │ []               │\n"
+        "├─────┼────────────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
+        "│ 1   │ PAD            │ 7         │ [(0, 0)] │ [1, 3, 4, 4] │ []               │\n"
+        "├─────┼────────────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
+        "│ 2   │ SUMPOOL        │ 7         │ [(1, 0)] │ [1, 3, 3, 3] │ []               │\n"
+        "├─────┼────────────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
+        "│ 4   │ GATHER (dim=0) │ 7         │ [(2, 0)] │ [3, 3, 3]    │ [\"K_DELTA\"]      │\n"
+        "└─────┴────────────────┴───────────┴──────────┴──────────────┴──────────────────┘"
     )
     assert ezkl.table(path) == expected_table
 
@@ -208,7 +254,7 @@ def test_model_compile():
         folder_path,
         'settings.json'
     )
-    res = ezkl.compile_model(model_path, compiled_model_path, settings_path)
+    res = ezkl.compile_circuit(model_path, compiled_model_path, settings_path)
     assert res == True
 
 
@@ -230,13 +276,8 @@ def test_forward():
         folder_path,
         'witness.json'
     )
-    settings_path = os.path.join(
-        folder_path,
-        'settings.json'
-    )
 
-    res = ezkl.gen_witness(data_path, model_path,
-                           output_path, settings_path=settings_path)
+    res = ezkl.gen_witness(data_path, model_path, output_path)
 
     with open(output_path, "r") as f:
         data = json.load(f)
@@ -283,8 +324,7 @@ def test_mock():
 
     settings_path = os.path.join(folder_path, 'settings.json')
 
-    res = ezkl.mock(data_path, model_path,
-                    settings_path)
+    res = ezkl.mock(data_path, model_path)
     assert res == True
 
 
@@ -312,7 +352,6 @@ def test_setup():
         vk_path,
         pk_path,
         srs_path,
-        settings_path,
     )
     assert res == True
     assert os.path.isfile(vk_path)
@@ -336,19 +375,16 @@ def test_setup_evm():
 
     pk_path = os.path.join(folder_path, 'test_evm.pk')
     vk_path = os.path.join(folder_path, 'test_evm.vk')
-    settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl.setup(
         model_path,
         vk_path,
         pk_path,
         srs_path,
-        settings_path,
     )
     assert res == True
     assert os.path.isfile(vk_path)
     assert os.path.isfile(pk_path)
-    assert os.path.isfile(settings_path)
 
 
 def test_prove_and_verify():
@@ -368,7 +404,6 @@ def test_prove_and_verify():
 
     pk_path = os.path.join(folder_path, 'test.pk')
     proof_path = os.path.join(folder_path, 'test.pf')
-    settings_path = os.path.join(folder_path, 'settings.json')
 
     res = ezkl.prove(
         data_path,
@@ -378,11 +413,11 @@ def test_prove_and_verify():
         srs_path,
         "poseidon",
         "single",
-        settings_path,
     )
     assert res['transcript_type'] == 'Poseidon'
     assert os.path.isfile(proof_path)
 
+    settings_path = os.path.join(folder_path, 'settings.json')
     vk_path = os.path.join(folder_path, 'test.vk')
     res = ezkl.verify(proof_path, settings_path,
                       vk_path, srs_path)
@@ -407,7 +442,6 @@ def test_prove_evm():
 
     pk_path = os.path.join(folder_path, 'test_evm.pk')
     proof_path = os.path.join(folder_path, 'test_evm.pf')
-    settings_path = os.path.join(folder_path, 'settings.json')
     res = ezkl.prove(
         data_path,
         model_path,
@@ -416,7 +450,6 @@ def test_prove_evm():
         srs_path,
         "evm",
         "single",
-        settings_path,
     )
     assert res['transcript_type'] == 'EVM'
     assert os.path.isfile(proof_path)
@@ -529,7 +562,7 @@ async def aggregate_and_verify_aggr():
     assert res == True
     assert os.path.isfile(settings_path)
 
-    res = ezkl.compile_model(model_path, compiled_model_path, settings_path)
+    res = ezkl.compile_circuit(model_path, compiled_model_path, settings_path)
     assert res == True
 
     ezkl.setup(
@@ -537,7 +570,6 @@ async def aggregate_and_verify_aggr():
         vk_path,
         pk_path,
         srs_path,
-        settings_path,
     )
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
@@ -548,7 +580,7 @@ async def aggregate_and_verify_aggr():
     )
 
     res = ezkl.gen_witness(data_path, compiled_model_path,
-                           output_path, settings_path=settings_path)
+                           output_path)
 
     ezkl.prove(
         output_path,
@@ -558,7 +590,6 @@ async def aggregate_and_verify_aggr():
         srs_path,
         "poseidon",
         "accum",
-        settings_path,
     )
 
     # mock aggregate
@@ -648,7 +679,7 @@ async def evm_aggregate_and_verify_aggr():
         'compiled_relu.onnx'
     )
 
-    res = ezkl.compile_model(model_path, compiled_model_path, settings_path)
+    res = ezkl.compile_circuit(model_path, compiled_model_path, settings_path)
     assert res == True
 
     ezkl.setup(
@@ -656,7 +687,6 @@ async def evm_aggregate_and_verify_aggr():
         vk_path,
         pk_path,
         srs_path,
-        settings_path,
     )
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
@@ -667,7 +697,7 @@ async def evm_aggregate_and_verify_aggr():
     )
 
     res = ezkl.gen_witness(data_path, compiled_model_path,
-                           output_path, settings_path=settings_path)
+                           output_path)
 
     ezkl.prove(
         output_path,
@@ -677,7 +707,6 @@ async def evm_aggregate_and_verify_aggr():
         srs_path,
         "poseidon",
         "accum",
-        settings_path,
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_evm_1l_relu.pf')

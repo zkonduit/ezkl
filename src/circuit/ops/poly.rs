@@ -93,7 +93,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Iff => "IFF".into(),
             PolyOp::Einsum { equation, .. } => format!("EINSUM {}", equation),
             PolyOp::Identity => "IDENTITY".into(),
-            PolyOp::Reshape(_) => "RESHAPE".into(),
+            PolyOp::Reshape(shape) => format!("RESHAPE (shape={:?})", shape),
             PolyOp::Flatten(_) => "FLATTEN".into(),
             PolyOp::Pad(_) => "PAD".into(),
             PolyOp::Add => "ADD".into(),
@@ -107,8 +107,10 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Conv { .. } => "CONV".into(),
             PolyOp::DeConv { .. } => "DECONV".into(),
             PolyOp::SumPool { .. } => "SUMPOOL".into(),
-            PolyOp::Concat { .. } => "CONCAT".into(),
-            PolyOp::Slice { .. } => "SLICE".into(),
+            PolyOp::Concat { axis } => format!("CONCAT (axis={})", axis),
+            PolyOp::Slice { axis, start, end } => {
+                format!("SLICE (axis={}, start={}, end={})", axis, start, end)
+            }
             PolyOp::Neg => "NEG".into(),
             PolyOp::Not => "NOT".into(),
             PolyOp::And => "AND".into(),
@@ -214,12 +216,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 tensor::ops::prod_axes(&inputs[0], axes)
             }
             PolyOp::GlobalSumPool => unreachable!(),
-            PolyOp::Concat { axis } => {
-                if inputs.len() < 2 {
-                    return Err(TensorError::DimMismatch("concat inputs".to_string()));
-                }
-                tensor::ops::concat(&inputs, *axis)
-            }
+            PolyOp::Concat { axis } => tensor::ops::concat(&inputs, *axis),
             PolyOp::Slice { axis, start, end } => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("slice inputs".to_string()));
@@ -332,12 +329,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 layouts::pack(config, region, values[..].try_into()?, *base, *scale)?
             }
             PolyOp::GlobalSumPool => unreachable!(),
-            PolyOp::Concat { axis } => {
-                if values.len() < 2 {
-                    return Err(Box::new(TensorError::DimError));
-                }
-                layouts::concat(values[..].try_into()?, axis)?
-            }
+            PolyOp::Concat { axis } => layouts::concat(values[..].try_into()?, axis)?,
             PolyOp::Slice { axis, start, end } => {
                 layouts::slice(config, region, values[..].try_into()?, axis, start, end)?
             }

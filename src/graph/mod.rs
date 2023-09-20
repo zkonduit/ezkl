@@ -12,7 +12,6 @@ pub mod utilities;
 pub mod vars;
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
-use halo2_proofs::circuit::Value;
 pub use input::DataSource;
 use itertools::Itertools;
 
@@ -103,9 +102,19 @@ pub enum GraphError {
 }
 
 const ASSUMED_BLINDING_FACTORS: usize = 7;
+/// The minimum number of rows in the grid
+pub const MIN_LOGROWS: u32 = 4;
 
 /// 26
 const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
+
+use std::cell::RefCell;
+
+thread_local!(
+    /// This is a global variable that holds the settings for the graph
+    /// This is used to pass settings to the layouter and other parts of the circuit without needing to heavily modify the Halo2 API in a new fork
+    pub static GLOBAL_SETTINGS: RefCell<Option<GraphSettings>> = RefCell::new(None)
+);
 
 /// Result from a forward pass
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -164,6 +173,15 @@ impl GraphWitness {
     ///
     pub fn get_input_tensor(&self) -> Vec<Tensor<Fp>> {
         self.inputs
+            .clone()
+            .into_iter()
+            .map(|i| Tensor::from(i.into_iter()))
+            .collect::<Vec<Tensor<Fp>>>()
+    }
+
+    ///
+    pub fn get_output_tensor(&self) -> Vec<Tensor<Fp>> {
+        self.outputs
             .clone()
             .into_iter()
             .map(|i| Tensor::from(i.into_iter()))
@@ -245,16 +263,6 @@ fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
 }
 
 #[cfg(feature = "python-bindings")]
-use halo2curves::bn256::G1Affine;
-#[cfg(feature = "python-bindings")]
-fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
-    let g1affine_x = field_to_vecu64_montgomery(&g1affine.x);
-    let g1affine_y = field_to_vecu64_montgomery(&g1affine.y);
-    g1affine_dict.set_item("x", g1affine_x).unwrap();
-    g1affine_dict.set_item("y", g1affine_y).unwrap();
-}
-
-#[cfg(feature = "python-bindings")]
 use modules::ElGamalResult;
 #[cfg(feature = "python-bindings")]
 fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &ElGamalResult) {
@@ -283,33 +291,9 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
         .set_item("encrypted_messages", encrypted_messages)
         .unwrap();
 
-    let variables_dict = PyDict::new(py);
-    let variables = &elgamal_results.variables;
+    let variables: crate::python::PyElGamalVariables = elgamal_results.variables.clone().into();
 
-    let r = field_to_vecu64_montgomery(&variables.r);
-    variables_dict.set_item("r", r).unwrap();
-    // elgamal secret key
-    let sk = field_to_vecu64_montgomery(&variables.sk);
-    variables_dict.set_item("sk", sk).unwrap();
-
-    let pk_dict = PyDict::new(py);
-    // elgamal public key
-    g1affine_to_pydict(pk_dict, &variables.pk);
-    variables_dict.set_item("pk", pk_dict).unwrap();
-
-    let aux_generator_dict = PyDict::new(py);
-    // elgamal aux generator used in ecc chip
-    g1affine_to_pydict(aux_generator_dict, &variables.aux_generator);
-    variables_dict
-        .set_item("aux_generator", aux_generator_dict)
-        .unwrap();
-
-    // elgamal window size used in ecc chip
-    variables_dict
-        .set_item("window_size", variables.window_size)
-        .unwrap();
-
-    results_dict.set_item("variables", variables_dict).unwrap();
+    results_dict.set_item("variables", variables).unwrap();
 
     pydict.set_item("elgamal", results_dict).unwrap();
 
@@ -337,6 +321,8 @@ pub struct GraphSettings {
     pub check_mode: CheckMode,
     /// ezkl version used
     pub version: String,
+    /// num blinding factors
+    pub num_blinding_factors: Option<usize>,
 }
 
 impl GraphSettings {
@@ -384,6 +370,25 @@ impl GraphSettings {
     pub fn from_json(arg_json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(arg_json)
     }
+
+    fn set_num_blinding_factors(&mut self, num_blinding_factors: usize) {
+        self.num_blinding_factors = Some(num_blinding_factors);
+    }
+
+    ///
+    pub fn available_col_size(&self) -> usize {
+        if let Some(num_blinding_factors) = self.num_blinding_factors {
+            let base = 2u32;
+            base.pow(self.run_args.logrows) as usize - num_blinding_factors - 1
+        } else {
+            panic!("num_blinding_factors not set")
+        }
+    }
+
+    ///
+    pub fn uses_modules(&self) -> bool {
+        !self.module_sizes.max_constraints() > 0
+    }
 }
 
 /// Configuration for a computational graph / model loaded from a `.onnx` file.
@@ -394,16 +399,57 @@ pub struct GraphConfig {
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct GraphCircuit {
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct CoreCircuit {
     /// The model / graph of computations.
     pub model: Model,
-    /// Vector of input tensors to the model / graph of computations.
-    pub graph_witness: GraphWitness,
-    /// The settings of the model / graph of computations.
+    /// The settings of the model.
     pub settings: GraphSettings,
+}
+
+/// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct GraphCircuit {
+    /// Core circuit
+    pub core: CoreCircuit,
+    /// The witness data for the model.
+    pub graph_witness: GraphWitness,
     /// The settings of the model's modules.
     pub module_settings: ModuleSettings,
+}
+
+impl GraphCircuit {
+    /// Settings for the graph
+    pub fn settings(&self) -> &GraphSettings {
+        &self.core.settings
+    }
+    /// Settings for the graph (mutable)
+    pub fn settings_mut(&mut self) -> &mut GraphSettings {
+        &mut self.core.settings
+    }
+    /// The model
+    pub fn model(&self) -> &Model {
+        &self.core.model
+    }
+    ///
+    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+        let f = std::fs::File::create(path)?;
+        let writer = std::io::BufWriter::new(f);
+        bincode::serialize_into(writer, &self)?;
+        Ok(())
+    }
+
+    ///
+    pub fn load(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        // read bytes from file
+        let mut f = std::fs::File::open(&path)
+            .unwrap_or_else(|_| panic!("failed to load model at {}", path.display()));
+        let metadata = std::fs::metadata(&path).expect("unable to read metadata");
+        let mut buffer = vec![0; metadata.len() as usize];
+        f.read_exact(&mut buffer).expect("buffer overflow");
+        let result = bincode::deserialize(&buffer)?;
+        Ok(result)
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -461,7 +507,6 @@ impl GraphCircuit {
 
         // dummy module settings, must load from GraphData after
         let module_settings = ModuleSettings::default();
-
         let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
 
         let mut num_params = 0;
@@ -484,10 +529,14 @@ impl GraphCircuit {
         // as they occupy independent rows
         settings.num_constraints = std::cmp::max(settings.num_constraints, sizes.max_constraints());
 
-        Ok(GraphCircuit {
+        let core = CoreCircuit {
             model,
+            settings: settings.clone(),
+        };
+
+        Ok(GraphCircuit {
+            core,
             graph_witness: GraphWitness::new(inputs, vec![]),
-            settings,
             module_settings,
         })
     }
@@ -510,10 +559,14 @@ impl GraphCircuit {
 
         settings.check_mode = check_mode;
 
-        Ok(GraphCircuit {
+        let core = CoreCircuit {
             model,
+            settings: settings.clone(),
+        };
+
+        Ok(GraphCircuit {
+            core,
             graph_witness: GraphWitness::new(inputs, vec![]),
-            settings,
             module_settings,
         })
     }
@@ -539,10 +592,10 @@ impl GraphCircuit {
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
         let mut public_inputs = vec![];
-        if self.settings.run_args.input_visibility.is_public() {
+        if self.settings().run_args.input_visibility.is_public() {
             public_inputs = self.graph_witness.inputs.clone();
         }
-        if self.settings.run_args.output_visibility.is_public() {
+        if self.settings().run_args.output_visibility.is_public() {
             public_inputs.extend(self.graph_witness.outputs.clone());
         }
         info!(
@@ -567,7 +620,7 @@ impl GraphCircuit {
             .collect::<Vec<Vec<Fp>>>();
 
         let module_instances =
-            GraphModules::public_inputs(data, VarVisibility::from_args(&self.settings.run_args)?);
+            GraphModules::public_inputs(data, VarVisibility::from_args(&self.settings().run_args)?);
 
         if !module_instances.is_empty() {
             pi_inner.extend(module_instances);
@@ -582,8 +635,8 @@ impl GraphCircuit {
         &mut self,
         data: &GraphData,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
-        let shapes = self.model.graph.input_shapes();
-        let scales = self.model.graph.get_input_scales();
+        let shapes = self.model().graph.input_shapes();
+        let scales = self.model().graph.get_input_scales();
         self.process_data_source(&data.input_data, shapes, scales)
     }
 
@@ -593,8 +646,8 @@ impl GraphCircuit {
         &mut self,
         data: &GraphData,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
-        let shapes = self.model.graph.input_shapes();
-        let scales = self.model.graph.get_input_scales();
+        let shapes = self.model().graph.input_shapes();
+        let scales = self.model().graph.get_input_scales();
         info!("input scales: {:?}", scales);
         self.process_data_source(&data.input_data, shapes, scales)
             .await
@@ -706,74 +759,99 @@ impl GraphCircuit {
         Ok(data)
     }
 
+    fn calc_min_logrows(
+        &mut self,
+        res: &GraphWitness,
+        blinding_offset: f64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let reserved_blinding_rows = (ASSUMED_BLINDING_FACTORS + 1) as f32;
+
+        let min_bits = (res.max_lookup_inputs as f64 + blinding_offset)
+            .log2()
+            .ceil() as usize
+            + 1;
+
+        let min_rows_from_constraints = (self.settings().num_constraints as f32
+            + reserved_blinding_rows)
+            .log2()
+            .ceil() as usize;
+        let mut logrows = std::cmp::max(min_bits, min_rows_from_constraints);
+
+        // if public input then public inputs col will have public inputs len
+        if self.settings().run_args.input_visibility.is_public()
+            || self.settings().run_args.output_visibility.is_public()
+        {
+            let max_instance_len = self
+                .model()
+                .instance_shapes()
+                .iter()
+                .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()))
+                as f32
+                + reserved_blinding_rows;
+            let instance_len_logrows = (max_instance_len).log2().ceil() as usize;
+            logrows = std::cmp::max(logrows, instance_len_logrows);
+            // this is for fixed const columns
+        }
+
+        // ensure logrows is at least 4
+        logrows = std::cmp::max(logrows, MIN_LOGROWS as usize);
+        logrows = std::cmp::min(logrows, MAX_PUBLIC_SRS as usize);
+        let model = self.model().clone();
+        let settings_mut = self.settings_mut();
+        settings_mut.run_args.bits = min_bits;
+        settings_mut.run_args.logrows = logrows as u32;
+
+        *settings_mut = GraphCircuit::new(model, &settings_mut.run_args)?
+            .settings()
+            .clone();
+
+        // recalculate the total const size give nthe new logrows
+        let total_const_len = settings_mut.total_const_size;
+        let const_len_logrows = (total_const_len as f64).log2().ceil() as u32;
+        settings_mut.run_args.logrows =
+            std::cmp::max(settings_mut.run_args.logrows, const_len_logrows);
+        // recalculate the total number of constraints given the new logrows
+        let min_rows_from_constraints = (settings_mut.num_constraints as f32
+            + reserved_blinding_rows)
+            .log2()
+            .ceil() as u32;
+        settings_mut.run_args.logrows =
+            std::cmp::max(settings_mut.run_args.logrows, min_rows_from_constraints);
+
+        info!(
+            "setting bits to: {}, setting logrows to: {}",
+            self.settings().run_args.bits,
+            self.settings().run_args.logrows
+        );
+
+        Ok(())
+    }
+
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec())?;
 
         let blinding_offset = (ASSUMED_BLINDING_FACTORS as f64 / 2.0).ceil() + 1.0;
-        let max_range = 2i128.pow(self.settings.run_args.bits as u32 - 1) - blinding_offset as i128;
+        let max_range =
+            2i128.pow(self.settings().run_args.bits as u32 - 1) - blinding_offset as i128;
 
         if res.max_lookup_inputs > max_range {
             let recommended_bits = (res.max_lookup_inputs as f64 + blinding_offset)
                 .log2()
                 .ceil() as usize
                 + 1;
-
             if recommended_bits <= (MAX_PUBLIC_SRS - 1) as usize {
-                self.settings.run_args.bits = recommended_bits;
-                self.settings.run_args.logrows = recommended_bits as u32;
-                return self.calibrate(input);
+                self.calc_min_logrows(&res, blinding_offset)
             } else {
                 let err_string = format!(
                     "No possible value of bits (estimate {}) can accomodate max value.",
                     recommended_bits
                 );
-                return Err(err_string.into());
+                Err(err_string.into())
             }
         } else {
-            let min_bits = (res.max_lookup_inputs as f64 + blinding_offset)
-                .log2()
-                .ceil() as usize
-                + 1;
-
-            let min_rows_from_constraints =
-                (self.settings.num_constraints as f32).log2().ceil() as usize;
-            let mut logrows = std::cmp::max(min_bits, min_rows_from_constraints);
-            // if public input then public inputs col will have public inputs len
-            if self.settings.run_args.input_visibility.is_public()
-                || self.settings.run_args.output_visibility.is_public()
-            {
-                let max_instance_len = self
-                    .model
-                    .instance_shapes()
-                    .iter()
-                    .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()));
-                let instance_len_logrows = (max_instance_len as f64).log2().ceil() as usize;
-                logrows = std::cmp::max(logrows, instance_len_logrows);
-                // this is for fixed const columns
-            }
-
-            // ensure logrows is at least 7
-            logrows = std::cmp::max(logrows, ASSUMED_BLINDING_FACTORS);
-
-            logrows = std::cmp::min(logrows, MAX_PUBLIC_SRS as usize);
-
-            info!(
-                "setting bits to: {}, setting logrows to: {}",
-                min_bits, logrows
-            );
-            self.settings.run_args.bits = min_bits;
-            self.settings.run_args.logrows = logrows as u32;
+            self.calc_min_logrows(&res, blinding_offset)
         }
-
-        self.settings = GraphCircuit::new(self.model.clone(), &self.settings.run_args)?.settings;
-
-        let total_const_len = self.settings.total_const_size;
-        let const_len_logrows = (total_const_len as f64).log2().ceil() as u32 + 1;
-        self.settings.run_args.logrows =
-            std::cmp::max(self.settings.run_args.logrows, const_len_logrows);
-
-        Ok(())
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
@@ -783,7 +861,7 @@ impl GraphCircuit {
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let original_inputs = inputs.to_vec();
 
-        let visibility = VarVisibility::from_args(&self.settings.run_args)?;
+        let visibility = VarVisibility::from_args(&self.settings().run_args)?;
         let mut processed_inputs = None;
         let mut processed_params = None;
         let mut processed_outputs = None;
@@ -797,7 +875,7 @@ impl GraphCircuit {
         }
 
         if visibility.params.requires_processing() {
-            let params = self.model.get_all_params();
+            let params = self.model().get_all_params();
             if !params.is_empty() {
                 let flattened_params = Tensor::new(Some(&params), &[params.len()])?.combine()?;
                 processed_params = Some(GraphModules::forward(
@@ -807,7 +885,7 @@ impl GraphCircuit {
             }
         }
 
-        let model_results = self.model.forward(inputs)?;
+        let model_results = self.model().forward(inputs)?;
 
         if visibility.output.requires_processing() {
             processed_outputs = Some(GraphModules::forward(
@@ -845,21 +923,9 @@ impl GraphCircuit {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_run_args(
         run_args: &RunArgs,
-        model_path: &std::path::PathBuf,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Model::from_run_args(run_args, model_path)?;
-        Self::new(model, run_args)
-    }
-
-    ///
-    pub fn preprocessed_from_run_args(
-        run_args: &RunArgs,
         model_path: &std::path::Path,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Model::load(model_path.to_path_buf()).map_err(|e| {
-            error!("failed to deserialize compiled model. have you called compile-model ?");
-            e
-        })?;
+        let model = Model::from_run_args(run_args, model_path)?;
         Self::new(model, run_args)
     }
 
@@ -867,23 +933,10 @@ impl GraphCircuit {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_settings(
         params: &GraphSettings,
-        model_path: &std::path::PathBuf,
-        check_mode: CheckMode,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Model::from_run_args(&params.run_args, model_path)?;
-        Self::new_from_settings(model, params.clone(), check_mode)
-    }
-
-    /// Create a new circuit from a set of input data and [GraphSettings].
-    pub fn preprocessed_from_settings(
-        params: &GraphSettings,
         model_path: &std::path::Path,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let model = Model::load(model_path.to_path_buf()).map_err(|e| {
-            error!("failed to deserialize compiled model. have you called compile-model ?");
-            e
-        })?;
+        let model = Model::from_run_args(&params.run_args, model_path)?;
         Self::new_from_settings(model, params.clone(), check_mode)
     }
 
@@ -901,7 +954,7 @@ impl GraphCircuit {
             TestDataSource::OnChain
         ) {
             // if not public then fail
-            if !self.settings.run_args.input_visibility.is_public() {
+            if !self.settings().run_args.input_visibility.is_public() {
                 return Err("Cannot use on-chain data source as private data".into());
             }
 
@@ -914,11 +967,11 @@ impl GraphCircuit {
             };
             // Get the flatten length of input_data
             let length = input_data.iter().map(|x| x.len()).sum();
-            let scales = vec![self.settings.run_args.input_scale; length];
+            let scales = vec![self.settings().run_args.input_scale; length];
             let datam: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 input_data,
                 scales,
-                self.model.graph.input_shapes(),
+                self.model().graph.input_shapes(),
                 test_on_chain_data.rpc.as_deref(),
             )
             .await?;
@@ -929,7 +982,7 @@ impl GraphCircuit {
             TestDataSource::OnChain
         ) {
             // if not public then fail
-            if !self.settings.run_args.output_visibility.is_public() {
+            if !self.settings().run_args.output_visibility.is_public() {
                 return Err("Cannot use on-chain data source as private data".into());
             }
 
@@ -943,8 +996,8 @@ impl GraphCircuit {
             };
             let datum: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 output_data,
-                self.model.graph.get_output_scales(),
-                self.model.graph.output_shapes(),
+                self.model().graph.get_output_scales(),
+                self.model().graph.output_shapes(),
                 test_on_chain_data.rpc.as_deref(),
             )
             .await?;
@@ -1001,18 +1054,25 @@ impl Circuit<Fp> for GraphCircuit {
 
     fn params(&self) -> Self::Params {
         // safe to clone because the model is Arc'd
-        self.settings.clone()
+        self.settings().clone()
     }
 
     fn configure_with_params(cs: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
+        let mut params = params.clone();
+        params.set_num_blinding_factors(cs.blinding_factors());
+        GLOBAL_SETTINGS.with(|settings| {
+            *settings.borrow_mut() = Some(params.clone());
+        });
         let visibility = VarVisibility::from_args(&params.run_args).unwrap();
 
         let vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
             params.num_constraints,
+            params.total_const_size,
             params.model_instance_shapes.clone(),
             params.run_args.input_scale,
+            params.uses_modules(),
         );
 
         let base = Model::configure(
@@ -1059,11 +1119,27 @@ impl Circuit<Fp> for GraphCircuit {
         mut layouter: impl Layouter<Fp>,
     ) -> Result<(), PlonkError> {
         trace!("Setting input in synthesize");
+        let input_vis = self.settings().run_args.input_visibility;
+        let output_vis = self.settings().run_args.output_visibility;
+
         let mut inputs = self
             .graph_witness
             .get_input_tensor()
-            .iter()
-            .map(|i| ValTensor::from(i.map(Value::known)))
+            .iter_mut()
+            .map(|i| {
+                i.set_visibility(input_vis);
+                ValTensor::from(i.clone())
+            })
+            .collect::<Vec<ValTensor<Fp>>>();
+
+        let outputs = self
+            .graph_witness
+            .get_output_tensor()
+            .iter_mut()
+            .map(|i| {
+                i.set_visibility(output_vis);
+                ValTensor::from(i.clone())
+            })
             .collect::<Vec<ValTensor<Fp>>>();
 
         let mut instance_offset = ModuleInstanceOffset::new();
@@ -1074,18 +1150,18 @@ impl Circuit<Fp> for GraphCircuit {
             &mut layouter,
             &config.module_configs,
             &mut inputs,
-            self.settings.run_args.input_visibility,
+            self.settings().run_args.input_visibility,
             &mut instance_offset,
             &self.module_settings.input,
         )?;
 
         // now we need to assign the flattened params to the model
-        let mut model = self.model.clone();
-        let param_visibility = self.settings.run_args.param_visibility;
+        let mut model = self.model().clone();
+        let param_visibility = self.settings().run_args.param_visibility;
         trace!("running params module layout");
-        if !self.model.get_all_params().is_empty() && param_visibility.requires_processing() {
+        if !self.model().get_all_params().is_empty() && param_visibility.requires_processing() {
             // now we need to flatten the params
-            let consts = self.model.get_all_params();
+            let consts = self.model().get_all_params();
 
             let mut flattened_params = {
                 let mut t = Tensor::new(Some(&consts), &[consts.len()])
@@ -1112,7 +1188,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &self.module_settings.params,
             )?;
 
-            let shapes = self.model.const_shapes();
+            let shapes = self.model().const_shapes();
             trace!("replacing processed consts");
             let split_params = split_valtensor(&flattened_params[0], shapes).map_err(|_| {
                 log::error!("failed to split params");
@@ -1130,9 +1206,10 @@ impl Circuit<Fp> for GraphCircuit {
             .layout(
                 config.model_config.clone(),
                 &mut layouter,
-                &self.settings.run_args,
+                &self.settings().run_args,
                 &inputs,
                 &config.model_config.vars,
+                &outputs,
             )
             .map_err(|e| {
                 log::error!("{}", e);
@@ -1145,7 +1222,7 @@ impl Circuit<Fp> for GraphCircuit {
             &mut layouter,
             &config.module_configs,
             &mut outputs,
-            self.settings.run_args.output_visibility,
+            self.settings().run_args.output_visibility,
             &mut instance_offset,
             &self.module_settings.output,
         )?;

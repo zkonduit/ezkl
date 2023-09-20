@@ -74,6 +74,7 @@ mod py_tests {
                     "scikit-learn==1.1.1",
                     "xgboost==1.7.6",
                     "hummingbird-ml==0.4.9",
+                    "lightgbm==4.0.0",
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -109,7 +110,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 17] = [
+    const TESTS: [&str; 19] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -128,6 +129,8 @@ mod py_tests {
         "random_forest.ipynb",
         "gradient_boosted_trees.ipynb",
         "xgboost.ipynb",
+        "lightgbm.ipynb",
+        "svm.ipynb",
     ];
 
     macro_rules! test_func {
@@ -140,12 +143,13 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=16 {
+            seq!(N in 0..=18 {
+
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
                 crate::py_tests::init_binary();
                 let mut anvil_child = crate::py_tests::start_anvil();
-                let test_dir: TempDir = TempDir::new("example").unwrap();
+                let test_dir: TempDir = TempDir::new("nb").unwrap();
                 let path = test_dir.path().to_str().unwrap();
                 crate::py_tests::mv_test_(path, test);
                 run_notebook(path, test);
@@ -157,7 +161,7 @@ mod py_tests {
                 crate::py_tests::init_binary();
                 let mut anvil_child = crate::py_tests::start_anvil();
                 crate::py_tests::download_voice_data();
-                let test_dir: TempDir = TempDir::new("example").unwrap();
+                let test_dir: TempDir = TempDir::new("voice_judge").unwrap();
                 let path = test_dir.path().to_str().unwrap();
                 crate::py_tests::mv_test_(path, "voice_judge.ipynb");
                 run_notebook(path, "voice_judge.ipynb");
@@ -165,6 +169,16 @@ mod py_tests {
                 anvil_child.kill().unwrap();
             }
 
+            #[test]
+            fn nbeats_notebook_() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("nbeats").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "nbeats_timeseries_forecasting.ipynb");
+                crate::py_tests::mv_test_(path, "eth_price.csv");
+                run_notebook(path, "nbeats_timeseries_forecasting.ipynb");
+                test_dir.close().unwrap();
+            }
             });
 
     }

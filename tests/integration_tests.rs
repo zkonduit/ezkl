@@ -12,6 +12,8 @@ mod native_tests {
     use std::process::{Child, Command};
     use std::sync::Once;
     static COMPILE: Once = Once::new();
+    #[allow(dead_code)]
+    static COMPILE_WASM: Once = Once::new();
     static ENV_SETUP: Once = Once::new();
 
     //Sure to run this once
@@ -37,6 +39,14 @@ mod native_tests {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
             build_ezkl();
+        });
+    }
+
+    ///
+    #[allow(dead_code)]
+    pub fn init_wasm() {
+        COMPILE_WASM.call_once(|| {
+            build_wasm_ezkl();
         });
     }
 
@@ -169,7 +179,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 50] = [
+    const TESTS: [&str; 57] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -223,6 +233,71 @@ mod native_tests {
         "gradient_boosted_trees",
         "1l_topk",
         "xgboost",
+        "lightgbm",
+        "hummingbird_decision_tree",
+        "oh_decision_tree",
+        "linear_svc",
+        "gather_elements",
+        "less",
+        "xgboost_reg",
+    ];
+
+    const WASM_TESTS: [&str; 48] = [
+        "1l_mlp",
+        "1l_slice",
+        "1l_concat",
+        "1l_flatten",
+        // "1l_average",
+        "1l_div",
+        "1l_pad",
+        "1l_reshape",
+        "1l_eltwise_div",
+        "1l_sigmoid",
+        "1l_sqrt",
+        "1l_softmax",
+        // "1l_instance_norm",
+        "1l_batch_norm",
+        "1l_prelu",
+        "1l_leakyrelu",
+        "1l_gelu_noappx",
+        // "1l_gelu_tanh_appx",
+        "1l_relu",
+        "1l_downsample",
+        "1l_tanh",
+        "2l_relu_sigmoid_small",
+        "2l_relu_fc",
+        "2l_relu_small",
+        "2l_relu_sigmoid",
+        "1l_conv",
+        "2l_sigmoid_small",
+        "2l_relu_sigmoid_conv",
+        "3l_relu_conv_fc",
+        "4l_relu_conv_fc",
+        "1l_erf",
+        "1l_var",
+        "1l_elu",
+        "min",
+        "max",
+        "1l_max_pool",
+        "1l_conv_transpose",
+        "1l_upsample",
+        "1l_identity",
+        // "idolmodel",
+        "trig",
+        "prelu_gmm",
+        "lstm",
+        "rnn",
+        "quantize_dequantize",
+        "1l_where",
+        "boolean",
+        "boolean_identity",
+        "decision_tree", // "variable_cnn",
+        "random_forest",
+        "gradient_boosted_trees",
+        "1l_topk",
+        // "xgboost",
+        // "lightgbm",
+        // "hummingbird_decision_tree",
     ];
 
     const TESTS_AGGR: [&str; 21] = [
@@ -344,18 +419,31 @@ mod native_tests {
         mod tests {
             use seq_macro::seq;
             use crate::native_tests::TESTS;
+            use crate::native_tests::WASM_TESTS;
             use crate::native_tests::ACCURACY_CAL_TESTS;
             use crate::native_tests::LARGE_TESTS;
             use test_case::test_case;
             use crate::native_tests::mock;
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::kzg_prove_and_verify;
+            use crate::native_tests::wasm_tests;
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization;
             use crate::native_tests::model_serialization_different_binaries;
             use crate::native_tests::tutorial as run_tutorial;
             use tempdir::TempDir;
+
+            #[test]
+            fn model_serialization_different_binaries_() {
+                let test = "1l_mlp";
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::native_tests::mv_test_(path, test);
+                // percent tolerance test
+                model_serialization_different_binaries(path, test.to_string());
+                test_dir.close().unwrap();
+            }
 
             #[test]
             fn tutorial_() {
@@ -378,8 +466,10 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=49 {
 
+
+
+            seq!(N in 0..=56 {
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {
                 let test_dir = TempDir::new(test).unwrap();
@@ -390,15 +480,7 @@ mod native_tests {
                 test_dir.close().unwrap();
             }
 
-            #(#[test_case(TESTS[N])])*
-            fn model_serialization_different_binaries_(test: &str) {
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap();
-                crate::native_tests::mv_test_(path, test);
-                // percent tolerance test
-                model_serialization_different_binaries(path, test.to_string());
-                test_dir.close().unwrap();
-            }
+
 
 
 
@@ -423,12 +505,12 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn accuracy_measurement_public_params_(test: &str) {
+            fn accuracy_measurement_fixed_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                accuracy_measurement(path, test.to_string(), "private", "public", "private", 1, "accuracy");
+                accuracy_measurement(path, test.to_string(), "private", "fixed", "private", 1, "accuracy");
                 test_dir.close().unwrap();
             }
 
@@ -472,11 +554,29 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn mock_public_params_(test: &str) {
+            fn mock_fixed_inputs_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                mock(path, test.to_string(), "private", "public", "private", 1, "resources", None);
+                mock(path, test.to_string(), "fixed", "private", "private", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_fixed_outputs_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "private", "fixed", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_fixed_params_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "fixed", "private", 1, "resources", None);
                 test_dir.close().unwrap();
             }
 
@@ -522,6 +622,15 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                 mock(path, test.to_string(), "public", "private", "hashed", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_output_fixed_params_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "public", "fixed", "hashed", 1, "resources", None);
                 test_dir.close().unwrap();
             }
 
@@ -602,16 +711,6 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn kzg_prove_and_verify_with_overflow_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                env_logger::init();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", Some(vec![0,1]), true);
-               test_dir.close().unwrap();
-            }
-
-            #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_public_input_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
@@ -621,11 +720,11 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn kzg_prove_and_verify_public_params_(test: &str) {
+            fn kzg_prove_and_verify_fixed_params_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "public", "public", None, false);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", None, false);
                test_dir.close().unwrap();
             }
 
@@ -658,6 +757,33 @@ mod native_tests {
 
             });
 
+            seq!(N in 0..=47 {
+
+                #(#[test_case(WASM_TESTS[N])])*
+                fn kzg_prove_and_verify_with_overflow_(test: &str) {
+                    crate::native_tests::init_binary();
+                    // crate::native_tests::init_wasm();
+                    let test_dir = TempDir::new(test).unwrap();
+                    env_logger::init();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", Some(vec![0,1]), true);
+                    wasm_tests(path, test.to_string());
+                    test_dir.close().unwrap();
+                }
+
+                #(#[test_case(WASM_TESTS[N])])*
+                fn kzg_prove_and_verify_with_overflow_fixed_params_(test: &str) {
+                    crate::native_tests::init_binary();
+                    // crate::native_tests::init_wasm();
+                    let test_dir = TempDir::new(test).unwrap();
+                    env_logger::init();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", Some(vec![0,1]), true);
+                    wasm_tests(path, test.to_string());
+                    test_dir.close().unwrap();
+                }
+
+            });
 
             seq!(N in 0..=4 {
 
@@ -951,10 +1077,10 @@ mod native_tests {
                 "--bin",
                 "ezkl",
                 "--",
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1013,10 +1139,6 @@ mod native_tests {
                 &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
                 &format!("{}/{}/witness.json", test_dir, example_name),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1054,10 +1176,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1077,10 +1199,6 @@ mod native_tests {
                 &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
                 &format!("{}/{}/witness.json", test_dir, example_name),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1093,10 +1211,6 @@ mod native_tests {
                 format!("{}/{}/witness.json", test_dir, counter_example).as_str(),
                 "-M",
                 format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1113,6 +1227,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
+    #[allow(clippy::too_many_arguments)]
     fn mock(
         test_dir: &str,
         example_name: String,
@@ -1172,10 +1287,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1195,10 +1310,6 @@ mod native_tests {
                 &format!("{}/{}/network.onnx", test_dir, example_name),
                 "-O",
                 &format!("{}/{}/witness_mock.json", test_dir, example_name),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1211,10 +1322,6 @@ mod native_tests {
                 format!("{}/{}/witness_mock.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1270,10 +1377,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1294,10 +1401,6 @@ mod native_tests {
                 &format!("{}/{}/network.compiled", test_dir, example_name),
                 "-O",
                 &format!("{}/{}/witness.json", test_dir, example_name),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .stdout(std::process::Stdio::null())
             .status()
@@ -1360,10 +1463,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
@@ -1380,7 +1483,6 @@ mod native_tests {
                 &format!("{}/tutorial/network.onnx", test_dir),
                 "-O",
                 &format!("{}/tutorial/witness_tutorial.json", test_dir),
-                &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
             .expect("failed to execute process");
@@ -1393,7 +1495,6 @@ mod native_tests {
                 format!("{}/tutorial/witness_tutorial.json", test_dir).as_str(),
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
-                &format!("--settings-path={}/tutorial/settings.json", test_dir),
             ])
             .status()
             .expect("failed to execute process");
@@ -1436,10 +1537,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1457,10 +1558,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -1481,10 +1578,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1503,10 +1596,6 @@ mod native_tests {
                 &srs_path,
                 "--transcript=poseidon",
                 "--strategy=accum",
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1559,10 +1648,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1580,10 +1669,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -1604,10 +1689,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1626,10 +1707,6 @@ mod native_tests {
                 &srs_path,
                 "--transcript=poseidon",
                 "--strategy=accum",
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1726,10 +1803,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -1747,10 +1824,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -1771,10 +1844,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/evm.pk", test_dir, example_name),
                 &srs_path,
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
             ])
             .status()
             .expect("failed to execute process");
@@ -1792,10 +1861,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/evm.pk", test_dir, example_name),
                 &srs_path,
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
                 "--transcript=poseidon",
                 "--strategy=accum",
             ])
@@ -1915,6 +1980,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
+    #[allow(clippy::too_many_arguments)]
     fn kzg_prove_and_verify(
         test_dir: &str,
         example_name: String,
@@ -1978,10 +2044,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -2002,7 +2068,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                format!("--settings-path={}", settings_path).as_str(),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -2020,7 +2085,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -2037,9 +2101,8 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=blake",
+                "--transcript=evm",
                 "--strategy=single",
-                format!("--settings-path={}", settings_path).as_str(),
                 &format!("--check-mode={}", checkmode),
             ])
             .status()
@@ -2054,6 +2117,21 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    // run js wasm tests for a given example
+    fn wasm_tests(test_dir: &str, example_name: String) {
+        let status = Command::new("pnpm")
+            .args([
+                "run",
+                "test",
+                "testWasm",
+                &format!("--example={}", example_name),
+                &format!("--dir={}", test_dir),
             ])
             .status()
             .expect("failed to execute process");
@@ -2078,6 +2156,8 @@ mod native_tests {
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 &format!("--input-scale={}", scale),
                 &format!("--param-scale={}", scale),
+                &format!("--bits={}", bits),
+                &format!("--logrows={}", logrows),
             ])
             .status()
             .expect("failed to execute process");
@@ -2085,10 +2165,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 &format!(
                     "--settings-path={}/{}/settings_fuzz.json",
@@ -2106,8 +2186,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--settings-path",
-                format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
                 "-O",
                 format!("{}/{}/witness_fuzz.json", test_dir, example_name).as_str(),
             ])
@@ -2122,10 +2200,6 @@ mod native_tests {
                 format!("{}/{}/witness_fuzz.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!("--bits={}", bits),
-                &format!("--logrows={}", logrows),
-                &format!("--input-scale={}", scale),
-                &format!("--param-scale={}", scale),
                 &format!("--num-runs={}", 5),
                 &format!("--transcript={}", transcript),
             ])
@@ -2175,10 +2249,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--compiled-model",
+                "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 (format!("--settings-path={}", settings_path).as_str()),
             ])
@@ -2196,7 +2270,6 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                format!("--settings-path={}", settings_path).as_str(),
                 "-O",
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
             ])
@@ -2214,7 +2287,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -2234,7 +2306,6 @@ mod native_tests {
                 &srs_path,
                 "--transcript=evm",
                 "--strategy=single",
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -2353,10 +2424,10 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "compile-model",
+                "compile-circuit",
                 "-M",
                 &model_path,
-                "--compiled-model",
+                "--compiled-circuit",
                 &model_path,
                 &format!(
                     "--settings-path={}/{}/settings.json",
@@ -2374,7 +2445,6 @@ mod native_tests {
                 data_path.as_str(),
                 "-M",
                 &model_path,
-                format!("--settings-path={}", settings_path).as_str(),
                 "--test-data",
                 test_on_chain_data_path.as_str(),
                 rpc_arg.as_str(),
@@ -2392,7 +2462,6 @@ mod native_tests {
                 test_on_chain_data_path.as_str(),
                 "-M",
                 &model_path,
-                format!("--settings-path={}", settings_path).as_str(),
                 "-O",
                 &witness_path,
             ])
@@ -2410,7 +2479,6 @@ mod native_tests {
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -2430,7 +2498,6 @@ mod native_tests {
                 &srs_path,
                 "--transcript=evm",
                 "--strategy=single",
-                format!("--settings-path={}", settings_path).as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -2505,6 +2572,40 @@ mod native_tests {
     fn build_ezkl() {
         let status = Command::new("cargo")
             .args(["build", "--release", "--bin", "ezkl"])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+    }
+
+    #[allow(dead_code)]
+    fn build_wasm_ezkl() {
+        // wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+        let status = Command::new("wasm-pack")
+            .args([
+                "build",
+                "--release",
+                "--target",
+                "nodejs",
+                "--out-dir",
+                "./tests/wasm/nodejs",
+                ".",
+                "--",
+                "-Z",
+                "build-std=panic_abort,std",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        // fix the memory size
+        //   sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+        let status = Command::new("sed")
+            .args([
+                "-i",
+                // is required on macos
+                // "\".js\"",
+                "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|",
+                "./tests/wasm/nodejs/ezkl.js",
+            ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());

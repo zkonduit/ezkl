@@ -25,7 +25,10 @@ use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
 use instant::Instant;
 use log::{debug, info, trace};
+#[cfg(not(feature = "det-prove"))]
 use rand::rngs::OsRng;
+#[cfg(feature = "det-prove")]
+use rand::rngs::StdRng;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use snark_verifier::loader::native::NativeLoader;
@@ -66,6 +69,28 @@ impl ToPyObject for TranscriptType {
             TranscriptType::EVM => "EVM".to_object(py),
         }
     }
+}
+
+#[cfg(feature = "python-bindings")]
+///
+pub fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
+    let g1affine_x = field_to_vecu64_montgomery(&g1affine.x);
+    let g1affine_y = field_to_vecu64_montgomery(&g1affine.y);
+    g1affine_dict.set_item("x", g1affine_x).unwrap();
+    g1affine_dict.set_item("y", g1affine_y).unwrap();
+}
+
+#[cfg(feature = "python-bindings")]
+use halo2curves::bn256::G1;
+#[cfg(feature = "python-bindings")]
+///
+pub fn g1_to_pydict(g1_dict: &PyDict, g1: &G1) {
+    let g1_x = field_to_vecu64_montgomery(&g1.x);
+    let g1_y = field_to_vecu64_montgomery(&g1.y);
+    let g1_z = field_to_vecu64_montgomery(&g1.z);
+    g1_dict.set_item("x", g1_x).unwrap();
+    g1_dict.set_item("y", g1_y).unwrap();
+    g1_dict.set_item("z", g1_z).unwrap();
 }
 
 /// converts fp into `Vec<u64>` in Montgomery form
@@ -274,6 +299,9 @@ where
     Scheme::Curve: Serialize + DeserializeOwned,
 {
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
+    #[cfg(feature = "det-prove")]
+    let mut rng = <StdRng as rand::SeedableRng>::from_seed([0u8; 32]);
+    #[cfg(not(feature = "det-prove"))]
     let mut rng = OsRng;
     let number_instance = instances.iter().map(|x| x.len()).collect();
     trace!("number_instance {:?}", number_instance);
@@ -291,6 +319,8 @@ where
     trace!("instances {:?}", instances);
 
     info!("proof started...");
+    // not wasm32 unknown
+    let now = Instant::now();
     create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
@@ -314,6 +344,12 @@ where
             strategy,
         )?;
     }
+    let elapsed = now.elapsed();
+    info!(
+        "proof took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
 
     Ok(checkable_pf)
 }
@@ -524,6 +560,7 @@ pub fn create_proof_circuit_kzg<
     }
 }
 
+#[allow(unused)]
 /// helper function
 pub(crate) fn verify_proof_circuit_kzg<
     'params,

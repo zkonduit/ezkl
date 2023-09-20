@@ -461,6 +461,7 @@ impl Model {
             total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
+            num_blinding_factors: None,
         })
     }
 
@@ -519,9 +520,13 @@ impl Model {
                         max_lookup_inputs = max_lookup_inputs.max(max);
                     }
                     debug!(
-                        "------------ output node {}: {:?}",
+                        "------------ output node int {}: {} \n ------------ float: {}",
                         idx,
-                        res.output.map(crate::fieldutils::felt_to_i32).show()
+                        res.output.map(crate::fieldutils::felt_to_i32).show(),
+                        res.output
+                            .map(|x| crate::fieldutils::felt_to_f64(x)
+                                / scale_to_multiplier(n.out_scale))
+                            .show()
                     );
                     results.insert(idx, vec![res.output]);
                 }
@@ -560,15 +565,11 @@ impl Model {
                         for ((mapping, inp), og_input) in
                             input_mappings.iter().zip(&mut inputs).zip(&orig_inputs)
                         {
-                            match mapping {
-                                InputMapping::Stacked { axis, chunk } => {
-                                    let start = i * chunk;
-                                    let end = (i + 1) * chunk;
-                                    let t =
-                                        crate::tensor::ops::slice(og_input, axis, &start, &end)?;
-                                    *inp = t;
-                                }
-                                _ => {}
+                            if let InputMapping::Stacked { axis, chunk } = mapping {
+                                let start = i * chunk;
+                                let end = (i + 1) * chunk;
+                                let t = crate::tensor::ops::slice(og_input, axis, &start, &end)?;
+                                *inp = t;
                             }
                         }
 
@@ -1009,6 +1010,7 @@ impl Model {
         run_args: &RunArgs,
         inputs: &[ValTensor<Fp>],
         vars: &ModelVars<Fp>,
+        witnessed_outputs: &[ValTensor<Fp>],
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         info!("model layout...");
 
@@ -1049,7 +1051,9 @@ impl Model {
                         halo2_proofs::plonk::Error::Synthesis
                     })?;
 
-                if run_args.output_visibility == Visibility::Public {
+                if run_args.output_visibility == Visibility::Public
+                    || run_args.output_visibility == Visibility::Fixed
+                {
                     let output_scales = self.graph.get_output_scales();
                     let _ = outputs
                         .iter()
@@ -1062,9 +1066,17 @@ impl Model {
                             if self.visibility.input.is_public() {
                                 instance_offset += inputs.len();
                             };
+
+                            let comparators = if run_args.output_visibility == Visibility::Public {
+                                vars.instances[instance_offset + i].clone()
+                            } else {
+                                assert_eq!(witnessed_outputs[i].len(), output.len());
+                                witnessed_outputs[i].clone()
+                            };
+
                             config.base.layout(
                                 &mut thread_safe_region,
-                                &[output.clone(), vars.instances[instance_offset + i].clone()],
+                                &[output.clone(), comparators],
                                 Box::new(HybridOp::RangeCheck(tolerance)),
                             )
                         })
@@ -1106,10 +1118,11 @@ impl Model {
             };
 
             debug!(
-                "laying out {}: {}, offset:{}",
+                "laying out {}: {}, offset:{}, total_constants: {}",
                 idx,
                 node.as_str(),
-                region.offset()
+                region.offset(),
+                region.total_constants()
             );
             debug!("dims: {:?}", node.out_dims());
             debug!(
@@ -1168,15 +1181,12 @@ impl Model {
                         for ((mapping, inp), og_inp) in
                             input_mappings.iter().zip(&mut values).zip(&original_values)
                         {
-                            match mapping {
-                                InputMapping::Stacked { axis, chunk } => {
-                                    let start = i * chunk;
-                                    let end = (i + 1) * chunk;
-                                    let mut sliced_input = og_inp.clone();
-                                    sliced_input.slice(axis, &start, &end)?;
-                                    *inp = sliced_input;
-                                }
-                                _ => {}
+                            if let InputMapping::Stacked { axis, chunk } = mapping {
+                                let start = i * chunk;
+                                let end = (i + 1) * chunk;
+                                let mut sliced_input = og_inp.clone();
+                                sliced_input.slice(axis, &start, &end)?;
+                                *inp = sliced_input;
                             }
                         }
 
@@ -1292,7 +1302,9 @@ impl Model {
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
-        if run_args.output_visibility == Visibility::Public {
+        if run_args.output_visibility == Visibility::Public
+            || run_args.output_visibility == Visibility::Fixed
+        {
             let _ = outputs
                 .into_iter()
                 .map(|output| {
@@ -1354,8 +1366,8 @@ impl Model {
         let mut const_idx = 0;
         for node in self.graph.nodes.values_mut() {
             match node {
-                NodeType::Node(n) => match &n.opkind {
-                    SupportedOp::Constant(c) => {
+                NodeType::Node(n) => {
+                    if let SupportedOp::Constant(c) = &n.opkind {
                         let mut op = crate::circuit::Constant::new(
                             c.quantized_values.clone(),
                             c.raw_values.clone(),
@@ -1365,8 +1377,7 @@ impl Model {
 
                         const_idx += 1;
                     }
-                    _ => {}
-                },
+                }
                 NodeType::SubGraph { model, .. } => {
                     let total_consts = model.replace_consts(&consts[const_idx..]);
                     const_idx += total_consts;
