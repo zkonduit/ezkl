@@ -21,7 +21,7 @@ mod py_tests {
 
     fn start_anvil() -> Child {
         let child = Command::new("anvil")
-            .args(["-p", "3030"])
+            .args(["-p", "3030", "--code-size-limit=41943040"])
             // .stdout(Stdio::piped())
             .spawn()
             .expect("failed to start anvil process");
