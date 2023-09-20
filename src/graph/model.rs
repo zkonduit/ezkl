@@ -1010,6 +1010,7 @@ impl Model {
         run_args: &RunArgs,
         inputs: &[ValTensor<Fp>],
         vars: &ModelVars<Fp>,
+        witnessed_outputs: &[ValTensor<Fp>],
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         info!("model layout...");
 
@@ -1050,7 +1051,9 @@ impl Model {
                         halo2_proofs::plonk::Error::Synthesis
                     })?;
 
-                if run_args.output_visibility == Visibility::Public {
+                if run_args.output_visibility == Visibility::Public
+                    || run_args.output_visibility == Visibility::Fixed
+                {
                     let output_scales = self.graph.get_output_scales();
                     let _ = outputs
                         .iter()
@@ -1063,9 +1066,17 @@ impl Model {
                             if self.visibility.input.is_public() {
                                 instance_offset += inputs.len();
                             };
+
+                            let comparators = if run_args.output_visibility == Visibility::Public {
+                                vars.instances[instance_offset + i].clone()
+                            } else {
+                                assert_eq!(witnessed_outputs[i].len(), output.len());
+                                witnessed_outputs[i].clone()
+                            };
+
                             config.base.layout(
                                 &mut thread_safe_region,
-                                &[output.clone(), vars.instances[instance_offset + i].clone()],
+                                &[output.clone(), comparators],
                                 Box::new(HybridOp::RangeCheck(tolerance)),
                             )
                         })
@@ -1291,7 +1302,9 @@ impl Model {
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
-        if run_args.output_visibility == Visibility::Public {
+        if run_args.output_visibility == Visibility::Public
+            || run_args.output_visibility == Visibility::Fixed
+        {
             let _ = outputs
                 .into_iter()
                 .map(|output| {

@@ -205,7 +205,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             srs_path,
             vk_path,
             pk_path,
-        } => setup(compiled_circuit, srs_path, vk_path, pk_path),
+            witness,
+        } => setup(compiled_circuit, srs_path, vk_path, pk_path, witness),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::SetupTestEVMData {
             data,
@@ -1078,9 +1079,14 @@ pub(crate) fn setup(
     srs_path: PathBuf,
     vk_path: PathBuf,
     pk_path: PathBuf,
+    witness: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
-    let circuit = GraphCircuit::load(compiled_circuit)?;
+    let mut circuit = GraphCircuit::load(compiled_circuit)?;
+    if let Some(witness) = witness {
+        let data = GraphWitness::from_path(witness)?;
+        circuit.load_graph_witness(&data)?;
+    }
 
     let params = load_params_cmd(srs_path, circuit.settings().run_args.logrows)?;
 
@@ -1159,6 +1165,7 @@ pub(crate) async fn prove(
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
     circuit.load_graph_witness(&data)?;
+
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let circuit_settings = circuit.settings().clone();
@@ -1230,6 +1237,7 @@ pub(crate) async fn fuzz(
         .map_err(Box::<dyn Error>::from)?;
 
     circuit.load_graph_witness(&data)?;
+
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let strategy = KZGSingleStrategy::new(&params);
