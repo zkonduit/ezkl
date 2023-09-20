@@ -701,14 +701,16 @@ fn mock_aggregate(aggregation_snarks: Vec<PathBuf>, logrows: u32) -> PyResult<bo
     vk_path,
     pk_path,
     srs_path,
+    witness_path = None
 ))]
 fn setup(
     model: PathBuf,
     vk_path: PathBuf,
     pk_path: PathBuf,
     srs_path: PathBuf,
+    witness_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
-    crate::execute::setup(model, srs_path, vk_path, pk_path).map_err(|e| {
+    crate::execute::setup(model, srs_path, vk_path, pk_path, witness_path).map_err(|e| {
         let err_str = format!("Failed to run setup: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
