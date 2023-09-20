@@ -150,10 +150,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             var.assign_with_omissions(&mut region.borrow_mut(), self.offset, values, ommissions)
         } else {
             self.total_constants += values.num_constants();
-            let mut inner_tensor = values.get_inner_tensor().unwrap();
-            inner_tensor.flatten();
+            let inner_tensor = values.get_inner_tensor().unwrap();
             for o in ommissions {
-                self.total_constants -= inner_tensor.get(&[**o]).is_constant() as usize;
+                self.total_constants -= inner_tensor.get_flat_index(**o).is_constant() as usize;
             }
             Ok(values.clone())
         }

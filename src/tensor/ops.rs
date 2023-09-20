@@ -1082,7 +1082,7 @@ pub fn prod<T: TensorType + Mul<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>,
 /// let result = downsample(&x, 1, 2, 2).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[3, 6]), &[2, 1]).unwrap();
 /// assert_eq!(result, expected);
-pub fn downsample<'a, T: TensorType + Send + Sync>(
+pub fn downsample<T: TensorType + Send + Sync>(
     input: &Tensor<T>,
     dim: usize,
     stride: usize,
@@ -1796,10 +1796,8 @@ pub fn conv<
             .unwrap();
 
         let start_kernel_index = group * output_channels_per_group + i;
-        let end_kernel_index = start_kernel_index + 1;
-        let local_kernel = kernel
-            .get_slice(&[start_kernel_index..end_kernel_index])
-            .unwrap();
+        let local_kernel =
+            Tensor::from(vec![kernel.get_flat_index(start_kernel_index)].into_iter());
 
         let res = dot(&[local_image, local_kernel]).unwrap()[0].clone();
         if has_bias {
@@ -2516,7 +2514,7 @@ where
 /// Returns a TensorError if the tensors in `inputs` have incompatible dimensions for concatenation along the specified `axis`.
 
 pub fn concat<T: TensorType + Send + Sync>(
-    inputs: &[Tensor<T>],
+    inputs: &[&Tensor<T>],
     axis: usize,
 ) -> Result<Tensor<T>, TensorError> {
     if inputs.len() == 1 {
@@ -2596,7 +2594,7 @@ pub fn concat<T: TensorType + Send + Sync>(
 /// assert_eq!(result, expected);
 /// ```
 ///
-pub fn slice<T: TensorType>(
+pub fn slice<T: TensorType + Send + Sync>(
     t: &Tensor<T>,
     axis: &usize,
     start: &usize,
