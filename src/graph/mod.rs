@@ -181,7 +181,7 @@ impl GraphWitness {
 
     ///
     pub fn get_output_tensor(&self) -> Vec<Tensor<Fp>> {
-        self.inputs
+        self.outputs
             .clone()
             .into_iter()
             .map(|i| Tensor::from(i.into_iter()))
@@ -507,7 +507,6 @@ impl GraphCircuit {
 
         // dummy module settings, must load from GraphData after
         let module_settings = ModuleSettings::default();
-
         let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
 
         let mut num_params = 0;

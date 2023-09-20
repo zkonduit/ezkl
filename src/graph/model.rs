@@ -1070,6 +1070,7 @@ impl Model {
                             let comparators = if run_args.output_visibility == Visibility::Public {
                                 vars.instances[instance_offset + i].clone()
                             } else {
+                                assert_eq!(witnessed_outputs[i].len(), output.len());
                                 witnessed_outputs[i].clone()
                             };
 
@@ -1301,7 +1302,9 @@ impl Model {
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
-        if run_args.output_visibility == Visibility::Public {
+        if run_args.output_visibility == Visibility::Public
+            || run_args.output_visibility == Visibility::Fixed
+        {
             let _ = outputs
                 .into_iter()
                 .map(|output| {
