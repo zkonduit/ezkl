@@ -87,6 +87,11 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
 
+    if region.is_dummy() {
+        region.increment(values[0].len());
+        return Ok(Tensor::<ValType<F>>::new(None, &[1])?.into());
+    }
+
     let start = instant::Instant::now();
     let mut inputs = vec![];
     let mut assigned_len = 0;
@@ -2178,6 +2183,11 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let w = region.assign(&config.lookup_input, x)?;
     let mut output = Tensor::new(Some(&vec![Value::<F>::unknown(); w.len()]), w.dims())?;
+
+    if region.is_dummy() {
+        region.increment(output.len());
+        return Ok(output.into());
+    }
 
     if !w.any_unknowns() {
         output = Op::<F>::f(nl, &[w.get_felt_evals()?])
