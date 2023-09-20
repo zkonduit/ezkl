@@ -505,12 +505,12 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn accuracy_measurement_public_params_(test: &str) {
+            fn accuracy_measurement_fixed_params_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                accuracy_measurement(path, test.to_string(), "private", "public", "private", 1, "accuracy");
+                accuracy_measurement(path, test.to_string(), "private", "fixed", "private", 1, "accuracy");
                 test_dir.close().unwrap();
             }
 
@@ -554,11 +554,29 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn mock_public_params_(test: &str) {
+            fn mock_fixed_inputs_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                mock(path, test.to_string(), "private", "public", "private", 1, "resources", None);
+                mock(path, test.to_string(), "fixed", "private", "private", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_fixed_outputs_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "private", "fixed", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_fixed_params_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "fixed", "private", 1, "resources", None);
                 test_dir.close().unwrap();
             }
 
@@ -608,11 +626,11 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn mock_hashed_output_public_params_(test: &str) {
+            fn mock_hashed_output_fixed_params_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                mock(path, test.to_string(), "public", "public", "hashed", 1, "resources", None);
+                mock(path, test.to_string(), "public", "fixed", "hashed", 1, "resources", None);
                 test_dir.close().unwrap();
             }
 
@@ -702,11 +720,11 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
-            fn kzg_prove_and_verify_public_params_(test: &str) {
+            fn kzg_prove_and_verify_fixed_params_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "public", "public", None, false);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", None, false);
                test_dir.close().unwrap();
             }
 
@@ -754,13 +772,13 @@ mod native_tests {
                 }
 
                 #(#[test_case(WASM_TESTS[N])])*
-                fn kzg_prove_and_verify_with_overflow_public_params_(test: &str) {
+                fn kzg_prove_and_verify_with_overflow_fixed_params_(test: &str) {
                     crate::native_tests::init_binary();
                     // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "public", "public", Some(vec![0,1]), true);
+                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", Some(vec![0,1]), true);
                     wasm_tests(path, test.to_string());
                     test_dir.close().unwrap();
                 }

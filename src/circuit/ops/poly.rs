@@ -108,7 +108,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::DeConv { .. } => "DECONV".into(),
             PolyOp::SumPool { .. } => "SUMPOOL".into(),
             PolyOp::Concat { axis } => format!("CONCAT (axis={})", axis),
-            PolyOp::Slice { axis, start, end } => format!("SLICE (axis={}, start={}, end={})", axis, start, end),
+            PolyOp::Slice { axis, start, end } => {
+                format!("SLICE (axis={}, start={}, end={})", axis, start, end)
+            }
             PolyOp::Neg => "NEG".into(),
             PolyOp::Not => "NOT".into(),
             PolyOp::And => "AND".into(),

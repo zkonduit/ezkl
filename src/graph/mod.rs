@@ -12,7 +12,6 @@ pub mod utilities;
 pub mod vars;
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
-use halo2_proofs::circuit::Value;
 pub use input::DataSource;
 use itertools::Itertools;
 
@@ -174,6 +173,15 @@ impl GraphWitness {
     ///
     pub fn get_input_tensor(&self) -> Vec<Tensor<Fp>> {
         self.inputs
+            .clone()
+            .into_iter()
+            .map(|i| Tensor::from(i.into_iter()))
+            .collect::<Vec<Tensor<Fp>>>()
+    }
+
+    ///
+    pub fn get_output_tensor(&self) -> Vec<Tensor<Fp>> {
+        self.outputs
             .clone()
             .into_iter()
             .map(|i| Tensor::from(i.into_iter()))
@@ -499,7 +507,6 @@ impl GraphCircuit {
 
         // dummy module settings, must load from GraphData after
         let module_settings = ModuleSettings::default();
-
         let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
 
         let mut num_params = 0;
@@ -1112,11 +1119,27 @@ impl Circuit<Fp> for GraphCircuit {
         mut layouter: impl Layouter<Fp>,
     ) -> Result<(), PlonkError> {
         trace!("Setting input in synthesize");
+        let input_vis = self.settings().run_args.input_visibility;
+        let output_vis = self.settings().run_args.output_visibility;
+
         let mut inputs = self
             .graph_witness
             .get_input_tensor()
-            .iter()
-            .map(|i| ValTensor::from(i.map(Value::known)))
+            .iter_mut()
+            .map(|i| {
+                i.set_visibility(input_vis);
+                ValTensor::from(i.clone())
+            })
+            .collect::<Vec<ValTensor<Fp>>>();
+
+        let outputs = self
+            .graph_witness
+            .get_output_tensor()
+            .iter_mut()
+            .map(|i| {
+                i.set_visibility(output_vis);
+                ValTensor::from(i.clone())
+            })
             .collect::<Vec<ValTensor<Fp>>>();
 
         let mut instance_offset = ModuleInstanceOffset::new();
@@ -1186,6 +1209,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &self.settings().run_args,
                 &inputs,
                 &config.model_config.vars,
+                &outputs,
             )
             .map_err(|e| {
                 log::error!("{}", e);

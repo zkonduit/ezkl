@@ -169,6 +169,10 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: Mock fixed inputs
+        run: cargo nextest run --release --verbose tests::mock_fixed_inputs_ --test-threads 32
+      - name: Mock fixed outputs
+        run: cargo nextest run --release --verbose tests::mock_fixed_outputs --test-threads 32
       - name: Mock accuracy calibration
         run: cargo nextest run --release --verbose tests::mock_accuracy_cal_tests::a
       - name: hashed inputs
@@ -179,8 +183,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_hashed_output_::t  --test-threads 32
       - name: hashed inputs + params + outputs
         run: cargo nextest run --release --verbose tests::mock_hashed_all_::t  --test-threads 32
-      - name: hashed inputs + public params
-        run: cargo nextest run --release --verbose tests::mock_hashed_output_public_params_::t  --test-threads 32
+      - name: hashed inputs + fixed params
+        run: cargo nextest run --release --verbose tests::mock_hashed_output_fixed_params_::t  --test-threads 32
       - name: encrypted inputs
         run: cargo nextest run --release --verbose tests::mock_encrypted_input_::t  --test-threads 32
       - name: encrypted params
@@ -207,8 +211,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_large_batch_public_outputs_ --test-threads 32
       - name: public inputs
         run: cargo nextest run --release --verbose tests::mock_public_inputs_ --test-threads 32
-      - name: public params
-        run: cargo nextest run --release --verbose tests::mock_public_params_ --test-threads 32
+      - name: fixed params
+        run: cargo nextest run --release --verbose tests::mock_fixed_params_ --test-threads 32
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
@@ -297,14 +301,14 @@ jobs:
             sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w --test-threads 8
-      - name: KZG prove and verify tests (public outputs + public params + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_public_params_
+      - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (public outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --test-threads 8
       - name: KZG prove and verify tests (public inputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input --test-threads 8
-      - name: KZG prove and verify tests (public params)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_params --test-threads 8
+      - name: KZG prove and verify tests (fixed params)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params --test-threads 8
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --test-threads 8
       - name: KZG prove and verify tests (encrypted outputs)
@@ -473,8 +477,8 @@ jobs:
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Public inputs
         run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_inputs_ --no-capture
-      - name: Public params
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_params_ --no-capture
+      - name: fixed params
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_fixed_params_ --no-capture
       - name: Public outputs
         run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_ --no-capture
 

@@ -159,8 +159,8 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
             inner: t.map(|x|
                 if let Some(vis) = t.visibility {
                     match vis {
-                        Visibility::Public => x.into(),
-                        Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted => {
+                        Visibility::Fixed => x.into(),
+                        Visibility::Public | Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted => {
                             Value::known(x).into()
                         }
                     }
@@ -220,6 +220,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             scale,
         }
     }
+
     ///
     pub fn any_unknowns(&self) -> bool {
         match self {
