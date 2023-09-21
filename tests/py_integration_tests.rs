@@ -19,9 +19,14 @@ mod py_tests {
         static ref ANVIL_URL: String = "http://localhost:3030".to_string();
     }
 
-    fn start_anvil() -> Child {
+    fn start_anvil(limitless: bool) -> Child {
+        let mut args = vec!["-p", "8545"];
+        if limitless {
+            args.push("--code-size-limit=41943040");
+            args.push("--disable-block-gas-limit");
+        }
         let child = Command::new("anvil")
-            .args(["-p", "3030", "--code-size-limit=41943040"])
+            .args(args)
             // .stdout(Stdio::piped())
             .spawn()
             .expect("failed to start anvil process");
@@ -148,7 +153,11 @@ mod py_tests {
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
                 crate::py_tests::init_binary();
-                let mut anvil_child = crate::py_tests::start_anvil();
+                let mut limitless = false;
+                if test == TESTS[5] {
+                    limitless = true;
+                }
+                let mut anvil_child = crate::py_tests::start_anvil(limitless);
                 let test_dir: TempDir = TempDir::new("nb").unwrap();
                 let path = test_dir.path().to_str().unwrap();
                 crate::py_tests::mv_test_(path, test);
@@ -159,7 +168,7 @@ mod py_tests {
             #[test]
             fn voice_notebook_() {
                 crate::py_tests::init_binary();
-                let mut anvil_child = crate::py_tests::start_anvil();
+                let mut anvil_child = crate::py_tests::start_anvil(false);
                 crate::py_tests::download_voice_data();
                 let test_dir: TempDir = TempDir::new("voice_judge").unwrap();
                 let path = test_dir.path().to_str().unwrap();
