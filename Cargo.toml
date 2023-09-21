@@ -13,8 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "ac/parallel-lookup-permute", default_features = false }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/parallel-lookup-permute", default_features = false }
+halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "ac/mv-lookup", default_features = false }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/mv-lookup", default_features = false }
 halo2curves = { version = "0.1.0" }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
@@ -24,8 +24,8 @@ serde_json = { version = "1.0.97", default_features = false, features = ["float_
 log = { version = "0.4.17", default_features = false, optional = true }
 thiserror = { version = "1.0.38", default_features = false }
 hex = { version = "0.4.3", default_features = false }
-halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/parallel-lookup-permute", default_features=false, package = "ecc" }
-snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/parallel-lookup-permute", features=["derive_serde"]}
+halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/mv-lookup", default_features=false, package = "ecc" }
+snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/mv-lookup", features=["derive_serde"]}
 rayon = { version = "1.7.0",  default_features = false }
 bincode = { version = "1.3.3", default_features = false }
 ark-std = { version = "^0.3.0", default-features = false }
