@@ -333,16 +333,40 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
 
     /// Calls `get_slice` on the inner tensor.
     pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<ValTensor<F>, Box<dyn Error>> {
+        if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims() {
+            return Ok(self.clone());
+        }
         let slice = match self {
             ValTensor::Value {
                 inner: v,
                 dims: _,
                 scale,
             } => {
-                let slice = v.get_slice(indices)?;
+                let inner = v.get_slice(indices)?;
+                let dims = inner.dims().to_vec();
                 ValTensor::Value {
-                    inner: slice.clone(),
-                    dims: slice.dims().to_vec(),
+                    inner,
+                    dims,
+                    scale: *scale,
+                }
+            }
+            _ => return Err(Box::new(TensorError::WrongMethod)),
+        };
+        Ok(slice)
+    }
+
+    /// Calls `get_slice` on the inner tensor.
+    pub fn get_single_elem(&self, index: usize) -> Result<ValTensor<F>, Box<dyn Error>> {
+        let slice = match self {
+            ValTensor::Value {
+                inner: v,
+                dims: _,
+                scale,
+            } => {
+                let inner = Tensor::from(vec![v.get_flat_index(index)].into_iter());
+                ValTensor::Value {
+                    inner,
+                    dims: vec![1],
                     scale: *scale,
                 }
             }
@@ -352,9 +376,17 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Fetches the inner tensor as a `Tensor<ValType<F>`
-    pub fn get_inner_tensor(&self) -> Result<Tensor<ValType<F>>, TensorError> {
+    pub fn get_inner_tensor(&self) -> Result<&Tensor<ValType<F>>, TensorError> {
         Ok(match self {
-            ValTensor::Value { inner: v, .. } => v.clone(),
+            ValTensor::Value { inner: v, .. } => v,
+            ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
+        })
+    }
+
+    /// Fetches the inner tensor as a `Tensor<ValType<F>`
+    pub fn get_inner_tensor_mut(&mut self) -> Result<&mut Tensor<ValType<F>>, TensorError> {
+        Ok(match self {
+            ValTensor::Value { inner: v, .. } => v,
             ValTensor::Instance { .. } => return Err(TensorError::WrongMethod),
         })
     }
@@ -625,7 +657,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     pub fn concat_axis(&self, other: Self, axis: &usize) -> Result<Self, TensorError> {
         let res = match (self, other) {
             (ValTensor::Value { inner: v1, .. }, ValTensor::Value { inner: v2, .. }) => {
-                let v = crate::tensor::ops::concat(&[v1.clone(), v2], *axis)?;
+                let v = crate::tensor::ops::concat(&[v1, &v2], *axis)?;
                 ValTensor::from(v)
             }
             _ => {

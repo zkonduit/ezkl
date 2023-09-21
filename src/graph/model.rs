@@ -587,10 +587,7 @@ impl Model {
                                     OutputMapping::Stacked { outlet, axis, .. } => {
                                         if !full_results.is_empty() {
                                             let stacked_res = crate::tensor::ops::concat(
-                                                &[
-                                                    full_results[*outlet].clone(),
-                                                    outlet_res.clone(),
-                                                ],
+                                                &[&full_results[*outlet], &outlet_res],
                                                 *axis,
                                             )?;
 
