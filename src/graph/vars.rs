@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use super::*;
 
 /// Label enum to track whether model input, model parameters, and model output are public, private, or hashed
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Visibility {
     /// Mark an item as private to the prover (not in the proof submitted for verification)
     #[default]
@@ -31,6 +31,8 @@ pub enum Visibility {
         /// if false the hash is used as an advice (not in the proof submitted for verification) and is then sent to the computational graph
         /// if true the hash is used as an instance (sent in the proof submitted for verification) the *inputs* to the hashing function are then sent to the computational graph
         hash_is_public: bool,
+        ///
+        outlets: Vec<usize>,
     },
     /// Mark an item as encrypted (public key and encrypted message sent in the proof submitted for verificatio)
     Encrypted,
@@ -40,15 +42,27 @@ pub enum Visibility {
 
 impl<'a> From<&'a str> for Visibility {
     fn from(s: &'a str) -> Self {
+        if s.contains("hashed/private") {
+            // split on last occurence of '/'
+            let (_, outlets) = s.split_at(s.rfind('/').unwrap());
+            let outlets = outlets
+                .trim_start_matches('/')
+                .split(',')
+                .map(|s| s.parse::<usize>().unwrap())
+                .collect_vec();
+
+            return Visibility::Hashed {
+                hash_is_public: false,
+                outlets,
+            };
+        }
         match s {
             "private" => Visibility::Private,
             "public" => Visibility::Public,
             "fixed" => Visibility::Fixed,
             "hashed" | "hashed/public" => Visibility::Hashed {
                 hash_is_public: true,
-            },
-            "hashed/private" => Visibility::Hashed {
-                hash_is_public: false,
+                outlets: vec![],
             },
             "encrypted" => Visibility::Encrypted,
             _ => panic!("Invalid visibility string"),
@@ -64,11 +78,19 @@ impl IntoPy<PyObject> for Visibility {
             Visibility::Private => "private".to_object(py),
             Visibility::Public => "public".to_object(py),
             Visibility::Fixed => "fixed".to_object(py),
-            Visibility::Hashed { hash_is_public } => {
+            Visibility::Hashed {
+                hash_is_public,
+                outlets,
+            } => {
                 if hash_is_public {
                     "hashed/public".to_object(py)
                 } else {
-                    "hashed/private".to_object(py)
+                    let outlets = outlets
+                        .iter()
+                        .map(|o| o.to_string())
+                        .collect_vec()
+                        .join(",");
+                    format!("hashed/private/{}", outlets).to_object(py)
                 }
             }
             Visibility::Encrypted => "encrypted".to_object(py),
@@ -82,18 +104,36 @@ impl<'source> FromPyObject<'source> for Visibility {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
         let trystr = <PyString as PyTryFrom>::try_from(ob)?;
         let strval = trystr.to_string();
+
+        let strval = strval.as_str();
+
+        if strval.contains("hashed/private") {
+            // split on last occurence of '/'
+            let (_, outlets) = strval.split_at(strval.rfind('/').unwrap());
+            let outlets = outlets
+                .trim_start_matches('/')
+                .split(',')
+                .map(|s| s.parse::<usize>().unwrap())
+                .collect_vec();
+
+            return Ok(Visibility::Hashed {
+                hash_is_public: false,
+                outlets,
+            });
+        }
+
         match strval.to_lowercase().as_str() {
             "private" => Ok(Visibility::Private),
             "public" => Ok(Visibility::Public),
             "hashed" => Ok(Visibility::Hashed {
                 hash_is_public: true,
+                outlets: vec![],
             }),
             "hashed/public" => Ok(Visibility::Hashed {
                 hash_is_public: true,
+                outlets: vec![],
             }),
-            "hashed/private" => Ok(Visibility::Hashed {
-                hash_is_public: false,
-            }),
+            "fixed" => Ok(Visibility::Fixed),
             "encrypted" => Ok(Visibility::Encrypted),
             _ => Err(PyValueError::new_err("Invalid value for Visibility")),
         }
@@ -115,21 +155,25 @@ impl Visibility {
     }
     #[allow(missing_docs)]
     pub fn is_hashed_public(&self) -> bool {
-        matches!(
-            &self,
-            Visibility::Hashed {
-                hash_is_public: true
-            }
-        )
+        if let Visibility::Hashed {
+            hash_is_public: true,
+            ..
+        } = self
+        {
+            return true;
+        }
+        false
     }
     #[allow(missing_docs)]
     pub fn is_hashed_private(&self) -> bool {
-        matches!(
-            &self,
-            Visibility::Hashed {
-                hash_is_public: false
-            }
-        )
+        if let Visibility::Hashed {
+            hash_is_public: false,
+            ..
+        } = self
+        {
+            return true;
+        }
+        false
     }
     #[allow(missing_docs)]
     pub fn is_encrypted(&self) -> bool {
@@ -140,13 +184,11 @@ impl Visibility {
         matches!(&self, Visibility::Encrypted) | matches!(&self, Visibility::Hashed { .. })
     }
     #[allow(missing_docs)]
-    pub fn overwrites_inputs(&self) -> bool {
-        matches!(
-            &self,
-            Visibility::Hashed {
-                hash_is_public: false
-            }
-        )
+    pub fn overwrites_inputs(&self) -> Vec<usize> {
+        if let Visibility::Hashed { outlets, .. } = self {
+            return outlets.clone();
+        }
+        vec![]
     }
 }
 impl std::fmt::Display for Visibility {
@@ -213,9 +255,9 @@ impl VarVisibility {
     /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
     /// Place in [VarVisibility] struct.
     pub fn from_args(args: &RunArgs) -> Result<Self, Box<dyn Error>> {
-        let input_vis = args.input_visibility;
-        let params_vis = args.param_visibility;
-        let output_vis = args.output_visibility;
+        let input_vis = &args.input_visibility;
+        let params_vis = &args.param_visibility;
+        let output_vis = &args.output_visibility;
 
         if !output_vis.is_public()
             & !params_vis.is_public()
@@ -233,9 +275,9 @@ impl VarVisibility {
             return Err(Box::new(GraphError::Visibility));
         }
         Ok(Self {
-            input: input_vis,
-            params: params_vis,
-            output: output_vis,
+            input: input_vis.clone(),
+            params: params_vis.clone(),
+            output: output_vis.clone(),
         })
     }
 }
