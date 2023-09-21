@@ -216,7 +216,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 tensor::ops::prod_axes(&inputs[0], axes)
             }
             PolyOp::GlobalSumPool => unreachable!(),
-            PolyOp::Concat { axis } => tensor::ops::concat(&inputs, *axis),
+            PolyOp::Concat { axis } => {
+                tensor::ops::concat(&inputs.iter().collect::<Vec<_>>(), *axis)
+            }
             PolyOp::Slice { axis, start, end } => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("slice inputs".to_string()));

@@ -1082,7 +1082,7 @@ pub fn prod<T: TensorType + Mul<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>,
 /// let result = downsample(&x, 1, 2, 2).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[3, 6]), &[2, 1]).unwrap();
 /// assert_eq!(result, expected);
-pub fn downsample<'a, T: TensorType + Send + Sync>(
+pub fn downsample<T: TensorType + Send + Sync>(
     input: &Tensor<T>,
     dim: usize,
     stride: usize,
@@ -2483,21 +2483,21 @@ where
 /// // 1D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3]), &[3]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[4, 5, 6]), &[3]).unwrap();
-/// let result = concat(&[x, y], 0).unwrap();
+/// let result = concat(&[&x, &y], 0).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // 2D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[7, 8, 9]), &[3, 1]).unwrap();
-/// let result = concat(&[x, y], 1).unwrap();
+/// let result = concat(&[&x, &y], 1).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 7, 3, 4, 8, 5, 6, 9]), &[3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// /// 4D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[2, 2, 2, 2]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[2, 2, 1, 2]).unwrap();
-/// let result = concat(&[x, y], 2).unwrap();
+/// let result = concat(&[&x, &y], 2).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 17, 18, 5, 6, 7, 8, 19, 20, 9, 10, 11, 12, 21, 22, 13, 14, 15, 16, 23, 14]), &[2, 2, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
@@ -2505,7 +2505,7 @@ where
 /// // 5D example
 /// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[8, 1, 1, 1, 2]).unwrap();
 /// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[4, 1, 1, 1, 2]).unwrap();
-/// let result = concat(&[x, y], 0).unwrap();
+/// let result = concat(&[&x, &y], 0).unwrap();
 ///
 /// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 14]), &[12, 1, 1, 1, 2]).unwrap();
 /// assert_eq!(result, expected);
@@ -2516,7 +2516,7 @@ where
 /// Returns a TensorError if the tensors in `inputs` have incompatible dimensions for concatenation along the specified `axis`.
 
 pub fn concat<T: TensorType + Send + Sync>(
-    inputs: &[Tensor<T>],
+    inputs: &[&Tensor<T>],
     axis: usize,
 ) -> Result<Tensor<T>, TensorError> {
     if inputs.len() == 1 {
@@ -2596,7 +2596,7 @@ pub fn concat<T: TensorType + Send + Sync>(
 /// assert_eq!(result, expected);
 /// ```
 ///
-pub fn slice<T: TensorType>(
+pub fn slice<T: TensorType + Send + Sync>(
     t: &Tensor<T>,
     axis: &usize,
     start: &usize,
