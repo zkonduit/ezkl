@@ -538,6 +538,20 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index].clone()
     }
 
+    /// Get a single value from the Tensor.
+    ///
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(None, &[2, 3, 5]).unwrap();
+    ///
+    /// let flat_index = 1*15 + 1*5 + 1;
+    /// a[1*15 + 1*5 + 1] = 5;
+    /// assert_eq!(a.get_flat_index(flat_index), 5);
+    /// ```
+    pub fn get_flat_index(&self, index: usize) -> T {
+        self[index].clone()
+    }
+
     /// Display a tensor
     pub fn show(&self) -> String {
         if self.len() > 12 {
@@ -561,27 +575,44 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// assert_eq!(a.get_slice(&[0..2]).unwrap(), b);
     /// ```
-    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorError> {
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorError>
+    where
+        T: Send + Sync,
+    {
         if self.dims.len() < indices.len() {
             return Err(TensorError::DimError);
         }
-        let mut res = Vec::new();
+        // else if slice is empty, return empty tensor
+        else if indices.is_empty() {
+            return Ok(Tensor::new(None, &[]).unwrap());
+        }
+        // else if slice is the same as dims
+        else if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims {
+            return Ok(self.clone());
+        }
+
         // if indices weren't specified we fill them in as required
         let mut full_indices = indices.to_vec();
 
         for i in 0..(self.dims.len() - indices.len()) {
             full_indices.push(0..self.dims()[indices.len() + i])
         }
-        for e in full_indices.iter().cloned().multi_cartesian_product() {
-            let index = self.get_index(&e);
-            res.push(self[index].clone())
-        }
+
+        let cartesian_coord: Vec<Vec<usize>> = full_indices
+            .iter()
+            .cloned()
+            .multi_cartesian_product()
+            .collect();
+
+        let res: Vec<T> = cartesian_coord
+            .par_iter()
+            .map(|e| {
+                let index = self.get_index(e);
+                self[index].clone()
+            })
+            .collect();
+
         let dims: Vec<usize> = full_indices.iter().map(|e| e.end - e.start).collect();
-        // for i in (0..indices.len()).rev() {
-        //     if (dims[i] == 1) && (dims.len() > 1) {
-        //         dims.remove(i);
-        //     }
-        // }
 
         Tensor::new(Some(&res), &dims)
     }
@@ -985,6 +1016,32 @@ impl<T: Clone + TensorType> Tensor<T> {
         let mut t: Tensor<G> = Tensor::from(vec?.iter().cloned());
         t.reshape(self.dims());
         Ok(t)
+    }
+
+    /// Maps a function to tensors and enumerates in parallel
+    /// ```
+    /// use ezkl::tensor::{Tensor, TensorError};
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(i32::pow(x + i as i32, 2))).unwrap();
+    /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
+    /// ```
+    pub fn par_enum_map_mut_filtered<
+        F: Fn(usize) -> Result<T, E> + std::marker::Send + std::marker::Sync,
+        E: Error + std::marker::Send + std::marker::Sync,
+    >(
+        &mut self,
+        filter_indices: &std::collections::HashSet<&usize>,
+        f: F,
+    ) -> Result<(), E>
+    where
+        T: std::marker::Send + std::marker::Sync,
+    {
+        self.inner
+            .par_iter_mut()
+            .enumerate()
+            .filter(|(i, _)| filter_indices.contains(i))
+            .for_each(move |(i, e)| *e = f(i).unwrap());
+        Ok(())
     }
 }
 

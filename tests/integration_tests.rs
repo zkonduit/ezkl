@@ -793,7 +793,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                kzg_prove_and_verify(path, test.to_string(), "unsafe", "private", "public", "public", Some(vec![0,6]), false);
+                kzg_prove_and_verify(path, test.to_string(), "unsafe", "private", "fixed", "public", Some(vec![0,6]), false);
                 test_dir.close().unwrap();
             }
 
@@ -803,7 +803,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                mock(path, test.to_string(), "private", "public", "public", 1, "resources", Some(vec![0,6]));
+                mock(path, test.to_string(), "private", "fixed", "public", 1, "resources", Some(vec![0,6]));
                 test_dir.close().unwrap();
             }
         });

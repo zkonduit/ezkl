@@ -269,14 +269,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Abs => layouts::abs(config, region, values[..].try_into()?)?,
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
-                    tensor::ops::gather(&values[0].get_inner_tensor()?, idx, *dim)?.into()
+                    tensor::ops::gather(values[0].get_inner_tensor()?, idx, *dim)?.into()
                 } else {
                     layouts::gather(config, region, values[..].try_into()?, *dim)?
                 }
             }
             HybridOp::GatherElements { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
-                    tensor::ops::gather_elements(&values[0].get_inner_tensor()?, idx, *dim)?.into()
+                    tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
                 } else {
                     layouts::gather_elements(config, region, values[..].try_into()?, *dim)?
                 }
