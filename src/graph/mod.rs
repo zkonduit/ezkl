@@ -896,24 +896,28 @@ impl GraphCircuit {
             }
         }
 
-        let model_results = self.model().forward(inputs)?;
+        let mut model_results = self.model().forward(inputs)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();
             if !module_outlets.is_empty() {
                 let mut module_inputs = vec![];
                 for outlet in &module_outlets {
-                    module_inputs.push(inputs[*outlet].clone());
+                    module_inputs.push(model_results.outputs[*outlet].clone());
                 }
                 let res = GraphModules::forward(&module_inputs, visibility.output.clone())?;
                 processed_outputs = Some(res.clone());
                 let module_results = res.get_result(visibility.output.clone());
 
                 for (i, outlet) in module_outlets.iter().enumerate() {
-                    inputs[*outlet] = Tensor::from(module_results[i].clone().into_iter());
+                    model_results.outputs[*outlet] =
+                        Tensor::from(module_results[i].clone().into_iter());
                 }
             } else {
-                processed_outputs = Some(GraphModules::forward(inputs, visibility.output)?);
+                processed_outputs = Some(GraphModules::forward(
+                    &model_results.outputs,
+                    visibility.output,
+                )?);
             }
         }
 
