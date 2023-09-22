@@ -322,10 +322,10 @@ pub fn runconv() {
     );
 
     l0_kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
-    l0_kernels.set_visibility(ezkl::graph::Visibility::Private);
+    l0_kernels.set_visibility(&ezkl::graph::Visibility::Private);
 
     let mut l0_bias = Tensor::<F>::from((0..OUT_CHANNELS).map(|_| fieldutils::i32_to_felt(0)));
-    l0_bias.set_visibility(ezkl::graph::Visibility::Private);
+    l0_bias.set_visibility(&ezkl::graph::Visibility::Private);
 
     let mut l2_biases = Tensor::<F>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * 32_f32;
@@ -333,7 +333,7 @@ pub fn runconv() {
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         fieldutils::i32_to_felt(integral)
     }));
-    l2_biases.set_visibility(ezkl::graph::Visibility::Private);
+    l2_biases.set_visibility(&ezkl::graph::Visibility::Private);
     l2_biases.reshape(&[l2_biases.len(), 1]);
 
     let mut l2_weights = Tensor::<F>::from(myparams.weights.into_iter().flatten().map(|fl| {
@@ -342,7 +342,7 @@ pub fn runconv() {
         let integral: i32 = unsafe { rounded.to_int_unchecked() };
         fieldutils::i32_to_felt(integral)
     }));
-    l2_weights.set_visibility(ezkl::graph::Visibility::Private);
+    l2_weights.set_visibility(&ezkl::graph::Visibility::Private);
     l2_weights.reshape(&[CLASSES, LEN]);
 
     let circuit = MyCircuit::<

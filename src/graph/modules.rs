@@ -148,6 +148,24 @@ pub struct ModuleForwardResult {
     pub elgamal: Option<ElGamalResult>,
 }
 
+impl ModuleForwardResult {
+    /// Get the result
+    pub fn get_result(&self, vis: Visibility) -> Vec<Vec<Fp>> {
+        if vis.is_hashed() {
+            self.poseidon_hash
+                .clone()
+                .unwrap()
+                .into_iter()
+                .map(|x| vec![x])
+                .collect()
+        } else if vis.is_encrypted() {
+            self.elgamal.clone().unwrap().encrypted_messages
+        } else {
+            vec![]
+        }
+    }
+}
+
 /// Result from a forward pass
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ModuleInstances {
@@ -331,7 +349,7 @@ impl GraphModules {
         layouter: &mut impl Layouter<Fp>,
         configs: &ModuleConfigs,
         values: &mut [ValTensor<Fp>],
-        element_visibility: Visibility,
+        element_visibility: &Visibility,
         instance_offset: &mut ModuleInstanceOffset,
         module_settings: &ModuleVarSettings,
     ) -> Result<(), Error> {

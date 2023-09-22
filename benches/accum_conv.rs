@@ -105,10 +105,10 @@ fn runcnvrl(c: &mut Criterion) {
                     .map(|_| Fr::random(OsRng)),
             );
             kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
-            kernel.set_visibility(ezkl::graph::Visibility::Private);
+            kernel.set_visibility(&ezkl::graph::Visibility::Private);
 
             let mut bias = Tensor::from((0..{ OUT_CHANNELS }).map(|_| Fr::random(OsRng)));
-            bias.set_visibility(ezkl::graph::Visibility::Private);
+            bias.set_visibility(&ezkl::graph::Visibility::Private);
 
             let circuit = MyCircuit {
                 image: ValTensor::from(image),

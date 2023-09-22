@@ -908,7 +908,7 @@ impl Model {
                 }
                 None => {
                     let mut n =
-                        Node::new(n.clone(), &mut nodes, scales, run_args.param_visibility, i)?;
+                        Node::new(n.clone(), &mut nodes, scales, &run_args.param_visibility, i)?;
                     if override_input_scales.is_some() {
                         if let Some(inp) = n.opkind.get_input() {
                             let scale = override_input_scales.as_ref().unwrap()[input_idx];

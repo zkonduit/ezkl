@@ -392,7 +392,7 @@ fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
     let input = region.assign(&config.inputs[1], &input)?;
 
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
-    unit.set_visibility(crate::graph::Visibility::Fixed);
+    unit.set_visibility(&crate::graph::Visibility::Fixed);
     let unit_len = unit.len();
     let unit = region.assign(&config.output, &unit.into())?;
 
@@ -479,7 +479,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
     let assigned_sort = region.assign(&config.inputs[0], &sorted.into())?;
 
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
-    unit.set_visibility(crate::graph::Visibility::Fixed);
+    unit.set_visibility(&crate::graph::Visibility::Fixed);
     let unit_len = unit.len();
     let unit = region.assign(&config.inputs[1], &unit.into())?;
 
@@ -664,7 +664,7 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
     let sum = sum(config, region, &[assigned_output.clone()])?;
     // assert sum is 1
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
-    unit.set_visibility(crate::graph::Visibility::Fixed);
+    unit.set_visibility(&crate::graph::Visibility::Fixed);
     let unit = region.assign(&config.inputs[1], &unit.into())?;
     region.assign(&config.output, &sum)?;
 
@@ -785,7 +785,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
 
     // these will be assigned as constants
     let mut indices = Tensor::from((0..input.dims()[dim] as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Fixed);
+    indices.set_visibility(&crate::graph::Visibility::Fixed);
     let indices = region.assign(&config.inputs[1], &indices.into())?;
     region.increment(indices.len());
 
@@ -858,7 +858,7 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
 
     // these will be assigned as constants
     let mut indices = Tensor::from((0..input_dim as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Fixed);
+    indices.set_visibility(&crate::graph::Visibility::Fixed);
     let indices = region.assign(&config.inputs[1], &indices.into())?;
     region.increment(indices.len());
 
@@ -1145,7 +1145,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // these will be assigned as constants
     let mut indices = Tensor::from((0..values[0].dims()[dim] as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Fixed);
+    indices.set_visibility(&crate::graph::Visibility::Fixed);
     let indices = region.assign(&config.inputs[1], &indices.into())?;
     region.increment(indices.len());
 
@@ -1182,7 +1182,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd>(
     // calculate value of output
     // these will be assigned as constants
     let mut indices = Tensor::from((0..values[0].dims()[dim] as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Fixed);
+    indices.set_visibility(&crate::graph::Visibility::Fixed);
     let indices = region.assign(&config.inputs[1], &indices.into())?;
     region.increment(indices.len());
 
