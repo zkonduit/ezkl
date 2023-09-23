@@ -201,12 +201,12 @@ pub fn runmlp() {
     )
     .unwrap()
     .map(i32_to_felt);
-    l0_kernel.set_visibility(ezkl::graph::Visibility::Private);
+    l0_kernel.set_visibility(&ezkl::graph::Visibility::Private);
 
     let mut l0_bias: Tensor<F> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
         .unwrap()
         .map(i32_to_felt);
-    l0_bias.set_visibility(ezkl::graph::Visibility::Private);
+    l0_bias.set_visibility(&ezkl::graph::Visibility::Private);
 
     let mut l2_kernel: Tensor<F> = Tensor::<i32>::new(
         Some(&[0, 3, 10, -1, 0, 10, 1, 0, 0, 1, 0, 12, 1, -2, 32, 0]),
@@ -214,7 +214,7 @@ pub fn runmlp() {
     )
     .unwrap()
     .map(i32_to_felt);
-    l2_kernel.set_visibility(ezkl::graph::Visibility::Private);
+    l2_kernel.set_visibility(&ezkl::graph::Visibility::Private);
     // input data, with 1 padding to allow for bias
     let input: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[4, 1])
         .unwrap()
@@ -222,7 +222,7 @@ pub fn runmlp() {
     let mut l2_bias: Tensor<F> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
         .unwrap()
         .map(i32_to_felt);
-    l2_bias.set_visibility(ezkl::graph::Visibility::Private);
+    l2_bias.set_visibility(&ezkl::graph::Visibility::Private);
 
     let circuit = MyCircuit::<4, 14> {
         input: input.into(),

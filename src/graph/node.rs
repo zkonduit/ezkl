@@ -528,7 +528,7 @@ impl Node {
         node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
         other_nodes: &mut BTreeMap<usize, super::NodeType>,
         scales: &VarScales,
-        param_visibility: Visibility,
+        param_visibility: &Visibility,
         idx: usize,
     ) -> Result<Self, Box<dyn Error>> {
         trace!("Create {:?}", node);
@@ -549,7 +549,7 @@ impl Node {
         });
 
         let (mut opkind, deleted_indices) =
-            new_op_from_onnx(idx, scales, param_visibility, node.clone(), &mut inputs)?; // parses the op name
+            new_op_from_onnx(idx, scales, &param_visibility, node.clone(), &mut inputs)?; // parses the op name
 
         // we can only take the inputs as mutable once -- so we need to collect them first
         other_nodes.extend(
@@ -587,7 +587,7 @@ impl Node {
             let input_node = other_nodes.get_mut(&inputs[input].idx()).unwrap();
             let input_opkind = &mut input_node.opkind();
             if let Some(constant) = input_opkind.get_mutable_constant() {
-                rescale_const_with_single_use(constant, in_scales.clone(), param_visibility)?;
+                rescale_const_with_single_use(constant, in_scales.clone(), &param_visibility)?;
                 input_node.replace_opkind(constant.clone_dyn().into());
                 let out_scale = input_opkind.out_scale(vec![]);
                 input_node.bump_scale(out_scale);
@@ -630,7 +630,7 @@ impl Node {
 fn rescale_const_with_single_use(
     constant: &mut Constant<Fp>,
     in_scales: Vec<u32>,
-    param_visibility: Visibility,
+    param_visibility: &Visibility,
 ) -> Result<(), Box<dyn Error>> {
     if constant.is_single_use() {
         let current_scale = constant.out_scale(vec![]);
@@ -638,7 +638,7 @@ fn rescale_const_with_single_use(
         if scale_max > &current_scale {
             let raw_values = constant.raw_values.clone();
             constant.quantized_values =
-                super::quantize_tensor(raw_values, *scale_max, param_visibility)?;
+                super::quantize_tensor(raw_values, *scale_max, &param_visibility)?;
         }
     }
 

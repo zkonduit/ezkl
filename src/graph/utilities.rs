@@ -220,7 +220,7 @@ fn load_op<C: tract_onnx::prelude::Op + Clone>(
 pub fn new_op_from_onnx(
     idx: usize,
     scales: &VarScales,
-    param_visibility: Visibility,
+    param_visibility: &Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut [super::NodeType],
 ) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
@@ -370,7 +370,7 @@ pub fn new_op_from_onnx(
             };
             // Quantize the raw value
             let quantized_value =
-                quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
+                quantize_tensor(raw_value.clone(), constant_scale, &param_visibility)?;
 
             let mut c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
 
@@ -816,7 +816,7 @@ pub fn new_op_from_onnx(
             };
 
             let kernel = extract_tensor_value(conv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
+            let kernel = quantize_tensor(kernel, scales.params, &param_visibility)?;
 
             let bias = match conv_node.bias.clone() {
                 Some(b) => {
@@ -825,7 +825,7 @@ pub fn new_op_from_onnx(
                     let val = quantize_tensor(
                         const_value,
                         scales.params + inputs[0].out_scales()[0],
-                        param_visibility,
+                        &param_visibility,
                     )?;
                     Some(val)
                 }
@@ -883,7 +883,7 @@ pub fn new_op_from_onnx(
             };
 
             let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
+            let kernel = quantize_tensor(kernel, scales.params, &param_visibility)?;
 
             let bias = match deconv_node.bias.clone() {
                 Some(b) => {
@@ -892,7 +892,7 @@ pub fn new_op_from_onnx(
                     let val = quantize_tensor(
                         const_value,
                         scales.params + inputs[0].out_scales()[0],
-                        param_visibility,
+                        &param_visibility,
                     )?;
                     Some(val)
                 }
@@ -1100,7 +1100,7 @@ pub fn extract_conv_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> [Option
 pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     const_value: Tensor<f32>,
     scale: u32,
-    visibility: Visibility,
+    visibility: &Visibility,
 ) -> Result<Tensor<F>, Box<dyn std::error::Error>> {
     let mut value: Tensor<F> = const_value.par_enum_map(|_, x| {
         Ok::<_, TensorError>(crate::fieldutils::i128_to_felt::<F>(quantize_float(
@@ -1201,7 +1201,7 @@ pub mod tests {
             .combine()
             .unwrap();
 
-        tensor.set_visibility(Visibility::Public);
+        tensor.set_visibility(&Visibility::Public);
 
         let flattened: ValTensor<Fp> = tensor.into();
 
