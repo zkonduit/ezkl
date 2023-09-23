@@ -1119,7 +1119,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/mv-lookup#f462b37bc2d8b60b97261e633c9bf925fa13e740"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/mv-lookup#b74aa44a53692dcb77e4d727b2670aaa4c87de1b"
 dependencies = [
  "integer",
  "num-bigint",
@@ -2045,7 +2045,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/mv-lookup#74815fb4babd70a127f786d056f94a4097533c85"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/mv-lookup2#4a467d4c24249269b88562e66521468ca138f421"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2062,7 +2062,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/mv-lookup#74815fb4babd70a127f786d056f94a4097533c85"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/mv-lookup2#4a467d4c24249269b88562e66521468ca138f421"
 dependencies = [
  "blake2b_simd",
  "ff",
@@ -2120,7 +2120,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/mv-lookup#f462b37bc2d8b60b97261e633c9bf925fa13e740"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/mv-lookup#b74aa44a53692dcb77e4d727b2670aaa4c87de1b"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2460,7 +2460,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/mv-lookup#f462b37bc2d8b60b97261e633c9bf925fa13e740"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/mv-lookup#b74aa44a53692dcb77e4d727b2670aaa4c87de1b"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2703,7 +2703,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/mv-lookup#f462b37bc2d8b60b97261e633c9bf925fa13e740"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/mv-lookup#b74aa44a53692dcb77e4d727b2670aaa4c87de1b"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -4483,7 +4483,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/mv-lookup#290f501dc324a3cdf5daf278662b66debee775ce"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/mv-lookup#e7a781eb95d0831c0832f38764ba184c9151a0bb"
 dependencies = [
  "ecc",
  "halo2_proofs",
