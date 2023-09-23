@@ -2045,7 +2045,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/mv-lookup2#4a467d4c24249269b88562e66521468ca138f421"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/mv-lookup2#d2de2de8ab5ca45490832e4a887675b6d4882525"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2062,7 +2062,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/mv-lookup2#4a467d4c24249269b88562e66521468ca138f421"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/mv-lookup2#d2de2de8ab5ca45490832e4a887675b6d4882525"
 dependencies = [
  "blake2b_simd",
  "ff",
