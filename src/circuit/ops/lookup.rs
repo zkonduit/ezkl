@@ -101,6 +101,9 @@ pub enum LookupOp {
     },
     Sign,
     KroneckerDelta,
+    Pow {
+        a: utils::F32,
+    },
 }
 
 impl LookupOp {
@@ -132,6 +135,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
+            LookupOp::Pow { a } => Ok(tensor::ops::nonlinearities::pow(&x, f32::from(*a).into())),
             LookupOp::KroneckerDelta => Ok(tensor::ops::nonlinearities::kronecker_delta(&x)),
             LookupOp::Max { scales, a } => Ok(tensor::ops::nonlinearities::max(
                 &x,
@@ -204,6 +208,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         match self {
+            LookupOp::Pow { a } => format!("POW /t {}", a),
             LookupOp::KroneckerDelta => "K_DELTA".into(),
             LookupOp::Max { scales, a } => format!("MAX w/ {:?} /t {}", scales, a),
             LookupOp::Min { scales, a } => format!("MIN w/ {:?} /t {}", scales, a),

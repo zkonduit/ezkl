@@ -773,6 +773,23 @@ pub fn new_op_from_onnx(
             SupportedOp::Linear(PolyOp::Identity)
         }
         "Sign" => SupportedOp::Nonlinear(LookupOp::Sign),
+        "Pow" => {
+            // Extract the slope layer hyperparams from a const
+
+            // if param_visibility.is_public() {
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_const();
+                deleted_indices.push(inputs.len() - 1);
+                if c.raw_values.len() > 1 {
+                    unimplemented!("only support scalar pow")
+                }
+                SupportedOp::Nonlinear(LookupOp::Pow {
+                    a: crate::circuit::utils::F32(c.raw_values[0]),
+                })
+            } else {
+                unimplemented!("only support constant pow for now")
+            }
+        }
         "Cube" => SupportedOp::Linear(PolyOp::Pow(3)),
         "Square" => SupportedOp::Linear(PolyOp::Pow(2)),
         "ConvUnary" => {
