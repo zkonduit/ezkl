@@ -784,6 +784,7 @@ pub fn new_op_from_onnx(
                     unimplemented!("only support scalar pow")
                 }
                 SupportedOp::Nonlinear(LookupOp::Pow {
+                    scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
                     a: crate::circuit::utils::F32(c.raw_values[0]),
                 })
             } else {

@@ -2641,9 +2641,10 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[4, 225, 4, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn pow(a: &Tensor<i128>, power: f64) -> Tensor<i128> {
+    pub fn pow(a: &Tensor<i128>, scale_input: f64, power: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
-            let kix = (a_i as f64).powf(power);
+            let kix = (a_i as f64) / scale_input;
+            let kix = scale_input * (kix).powf(power);
             let rounded = kix.round();
             Ok::<_, TensorError>(rounded as i128)
         })
