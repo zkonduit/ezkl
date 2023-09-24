@@ -20,7 +20,7 @@ mod py_tests {
     }
 
     fn start_anvil(limitless: bool) -> Child {
-        let mut args = vec!["-p", "8545"];
+        let mut args = vec!["-p", "3030"];
         if limitless {
             args.push("--code-size-limit=41943040");
             args.push("--disable-block-gas-limit");
