@@ -184,6 +184,29 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         }
     }
 
+    /// constrain equal
+    pub fn constrain_equal(&mut self, a: &ValTensor<F>, b: &ValTensor<F>) -> Result<(), Error> {
+        if let Some(region) = &self.region {
+            let a = a.get_inner_tensor().unwrap();
+            let b = b.get_inner_tensor().unwrap();
+            a.iter().zip(b.iter()).try_for_each(|(a, b)| {
+                let a = a.get_prev_assigned();
+                let b = b.get_prev_assigned();
+                // if they're both assigned, we can constrain them
+                if let (Some(a), Some(b)) = (&a, &b) {
+                    region.borrow_mut().constrain_equal(a.cell(), b.cell())
+                // if one is Some and the other is None -- panic
+                } else if a.is_some() || b.is_some() {
+                    panic!("constrain_equal: one of the tensors is assigned and the other is not")
+                } else {
+                    Ok(())
+                }
+            })
+        } else {
+            Ok(())
+        }
+    }
+
     /// Increment the offset by 1
     pub fn next(&mut self) {
         self.offset += 1
