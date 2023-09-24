@@ -2134,7 +2134,11 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let output = w.get_inner_tensor()?.par_enum_map(|i, e| {
         Ok::<_, TensorError>(if !removal_indices.contains(&i) {
-            e
+            if let Some(f) = e.get_felt_eval() {
+                Value::known(Op::<F>::f(nl, &[Tensor::from(vec![f].into_iter())])?.output[0]).into()
+            } else {
+                Value::<F>::unknown().into()
+            }
         } else {
             // this is safe because consts are always known
             ValType::Constant(e.get_felt_eval().unwrap())
