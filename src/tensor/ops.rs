@@ -2637,7 +2637,7 @@ pub mod nonlinearities {
     ///    Some(&[2, 15, 2, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
-    /// let result = pow(&x, 2.0);
+    /// let result = pow(&x, 1.0, 2.0);
     /// let expected = Tensor::<i128>::new(Some(&[4, 225, 4, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
