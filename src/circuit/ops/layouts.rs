@@ -2141,7 +2141,8 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
             }
         } else {
             // this is safe because consts are always known
-            ValType::Constant(e.get_felt_eval().unwrap())
+            let f = e.get_felt_eval().unwrap();
+            ValType::Constant(Op::<F>::f(nl, &[Tensor::from(vec![f].into_iter())])?.output[0])
         })
     })?;
 
