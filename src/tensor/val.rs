@@ -31,6 +31,15 @@ impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + Partia
     pub fn is_constant(&self) -> bool {
         matches!(self, ValType::Constant(_) | ValType::AssignedConstant(..))
     }
+
+    /// get_prev_assigned
+    pub fn get_prev_assigned(&self) -> Option<AssignedCell<F, F>> {
+        match self {
+            ValType::PrevAssigned(v) => Some(v.clone()),
+            ValType::AssignedConstant(v, _) => Some(v.clone()),
+            _ => None,
+        }
+    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
