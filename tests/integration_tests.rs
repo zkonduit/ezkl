@@ -21,14 +21,18 @@ mod native_tests {
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
-        static ref ANVIL_URL: String = "http://localhost:8545".to_string();
+        static ref ANVIL_URL: String = "http://localhost:3030".to_string();
+        static ref LIMITLESS_ANVIL_URL: String = "http://localhost:8545".to_string();
     }
 
     fn start_anvil(limitless: bool) -> Child {
-        let mut args = vec!["-p", "8545"];
+        let mut args = vec!["-p"];
         if limitless {
+            args.push("8545");
             args.push("--code-size-limit=41943040");
             args.push("--disable-block-gas-limit");
+        } else {
+            args.push("3030");
         }
         let child = Command::new("anvil")
             .args(args)
@@ -2412,7 +2416,7 @@ mod native_tests {
         let data_path = format!("{}/{}/input.json", test_dir, example_name);
         let witness_path = format!("{}/{}/witness.json", test_dir, example_name);
         let test_on_chain_data_path = format!("{}/{}/on_chain_input.json", test_dir, example_name);
-        let rpc_arg = format!("--rpc-url={}", ANVIL_URL.as_str());
+        let rpc_arg = format!("--rpc-url={}", LIMITLESS_ANVIL_URL.as_str());
 
         let test_input_source = format!("--input-source={}", input_source);
         let test_output_source = format!("--output-source={}", output_source);
