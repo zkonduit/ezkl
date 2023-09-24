@@ -2123,33 +2123,39 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     // time the entire operation
     let timer = instant::Instant::now();
 
-    let x = &values[0];
+    let x = values[0].clone();
 
-    let w = region.assign(&config.lookup_input, x)?;
-    let mut output = Tensor::new(Some(&vec![Value::<F>::unknown(); w.len()]), w.dims())?;
+    let mut removal_indices = values[0].get_const_indices()?;
+    removal_indices.par_sort_unstable();
+    let removal_indices: HashSet<&usize> = HashSet::from_iter(removal_indices.iter());
+    let removal_indices_ptr = &removal_indices;
 
-    if !w.any_unknowns() {
-        output = Op::<F>::f(nl, &[w.get_felt_evals()?])
-            .unwrap()
-            .output
-            .map(|e| Value::known(e))
-    };
+    let w = region.assign_with_omissions(&config.lookup_input, &x, removal_indices_ptr)?;
 
-    let mut output = region.assign(&config.lookup_output, &output.into())?;
+    let output = w.get_inner_tensor()?.par_enum_map(|i, e| {
+        Ok::<_, TensorError>(if !removal_indices.contains(&i) {
+            e
+        } else {
+            // this is safe because consts are always known
+            ValType::Constant(e.get_felt_eval().unwrap())
+        })
+    })?;
 
-    assert_eq!(w.len(), output.len());
+    let assigned_len = x.len() - removal_indices.len();
+    let mut output =
+        region.assign_with_omissions(&config.lookup_output, &output.into(), removal_indices_ptr)?;
 
     if !region.is_dummy() {
-        (0..output.len()).for_each(|i| {
+        (0..assigned_len).for_each(|i| {
             let (x, y) = config.lookup_input.cartesian_coord(region.offset() + i);
             let selector = config.lookup_selectors.get(&(nl.clone(), x));
             region.enable(selector, y).unwrap();
         });
     }
 
-    output.reshape(x.dims())?;
+    region.increment(assigned_len);
 
-    region.increment(output.len());
+    output.reshape(x.dims())?;
 
     let elapsed = timer.elapsed();
     trace!(
