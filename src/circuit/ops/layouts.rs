@@ -2133,16 +2133,14 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     let w = region.assign_with_omissions(&config.lookup_input, &x, removal_indices_ptr)?;
 
     let output = w.get_inner_tensor()?.par_enum_map(|i, e| {
-        Ok::<_, TensorError>(if !removal_indices.contains(&i) {
-            if let Some(f) = e.get_felt_eval() {
+        Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
+            if !removal_indices.contains(&i) {
                 Value::known(Op::<F>::f(nl, &[Tensor::from(vec![f].into_iter())])?.output[0]).into()
             } else {
-                Value::<F>::unknown().into()
+                ValType::Constant(Op::<F>::f(nl, &[Tensor::from(vec![f].into_iter())])?.output[0])
             }
         } else {
-            // this is safe because consts are always known
-            let f = e.get_felt_eval().unwrap();
-            ValType::Constant(Op::<F>::f(nl, &[Tensor::from(vec![f].into_iter())])?.output[0])
+            Value::<F>::unknown().into()
         })
     })?;
 
