@@ -392,8 +392,7 @@ fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
     let input = region.assign(&config.inputs[1], &input)?;
 
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
-    unit.set_visibility(crate::graph::Visibility::Fixed);
-    let unit_len = unit.len();
+    unit.set_visibility(&crate::graph::Visibility::Fixed);
     let unit = region.assign(&config.output, &unit.into())?;
 
     region.increment(assigned_sort.len());
@@ -418,14 +417,7 @@ fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
             &LookupOp::GreaterThan { a: 0.0.into() },
         )?;
 
-        region.assign(&config.inputs[1], &unit)?;
-        region.assign(&config.output, &greater_than)?;
-
-        let (x, y) = config.output.cartesian_coord(region.offset());
-        let selector = config.selectors.get(&(BaseOp::Identity, x));
-        region.enable(selector, y)?;
-
-        region.increment(unit_len);
+        enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
 
         // now assert that the elem is in the original vector
         let is_present = equals(config, region, &[window_a, input.clone()])?;
@@ -437,14 +429,7 @@ fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
             &LookupOp::GreaterThan { a: 0.0.into() },
         )?;
 
-        region.assign(&config.inputs[1], &unit)?;
-        region.assign(&config.output, &greater_than)?;
-
-        let (x, y) = config.output.cartesian_coord(region.offset());
-        let selector = config.selectors.get(&(BaseOp::Identity, x));
-        region.enable(selector, y)?;
-
-        region.increment(unit_len);
+        enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
     }
 
     Ok(assigned_sort)
@@ -479,8 +464,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
     let assigned_sort = region.assign(&config.inputs[0], &sorted.into())?;
 
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
-    unit.set_visibility(crate::graph::Visibility::Fixed);
-    let unit_len = unit.len();
+    unit.set_visibility(&crate::graph::Visibility::Fixed);
     let unit = region.assign(&config.inputs[1], &unit.into())?;
 
     region.increment(assigned_sort.len());
@@ -510,14 +494,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
             &LookupOp::GreaterThan { a: 0.0.into() },
         )?;
 
-        region.assign(&config.inputs[1], &unit)?;
-        region.assign(&config.output, &greater_than)?;
-
-        let (x, y) = config.output.cartesian_coord(region.offset());
-        let selector = config.selectors.get(&(BaseOp::Identity, x));
-        region.enable(selector, y)?;
-
-        region.increment(unit_len);
+        enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
 
         // now assert that the elem is in the original vector
         let is_present = equals(config, region, &[window_a, input.clone()])?;
@@ -529,14 +506,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
             &LookupOp::GreaterThan { a: 0.0.into() },
         )?;
 
-        region.assign(&config.inputs[1], &unit)?;
-        region.assign(&config.output, &greater_than)?;
-
-        let (x, y) = config.output.cartesian_coord(region.offset());
-        let selector = config.selectors.get(&(BaseOp::Identity, x));
-        region.enable(selector, y)?;
-
-        region.increment(unit_len);
+        enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
     }
 
     Ok(assigned_sort)
@@ -609,14 +579,7 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
 
     let dot = dot(config, region, &[input.clone(), local_mask.clone()]).unwrap();
 
-    region.assign(&config.inputs[1], &dot)?;
-    let assigned_output = region.assign(&config.output, &output)?;
-
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::Identity, x));
-    region.enable(selector, y)?;
-
-    region.increment(dot.len());
+    let assigned_output = enforce_equality(config, region, &[dot, output.clone()])?;
 
     Ok(assigned_output)
 }
@@ -664,15 +627,10 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
     let sum = sum(config, region, &[assigned_output.clone()])?;
     // assert sum is 1
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
-    unit.set_visibility(crate::graph::Visibility::Fixed);
-    let unit = region.assign(&config.inputs[1], &unit.into())?;
-    region.assign(&config.output, &sum)?;
+    unit.set_visibility(&crate::graph::Visibility::Fixed);
+    let unit: ValTensor<F> = unit.into();
 
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::Identity, x));
-    region.enable(selector, y)?;
-
-    region.increment(1);
+    enforce_equality(config, region, &[unit.clone(), sum])?;
 
     let gathered = gather(
         config,
@@ -681,14 +639,7 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
         0,
     )?;
 
-    region.assign(&config.inputs[1], &unit)?;
-    region.assign(&config.output, &gathered)?;
-
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::Identity, x));
-    region.enable(selector, y)?;
-
-    region.increment(assigned_input.len());
+    enforce_equality(config, region, &[unit, gathered])?;
 
     Ok(assigned_output)
 }
@@ -785,7 +736,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
 
     // these will be assigned as constants
     let mut indices = Tensor::from((0..input.dims()[dim] as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Fixed);
+    indices.set_visibility(&crate::graph::Visibility::Fixed);
     let indices = region.assign(&config.inputs[1], &indices.into())?;
     region.increment(indices.len());
 
@@ -858,7 +809,7 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
 
     // these will be assigned as constants
     let mut indices = Tensor::from((0..input_dim as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Fixed);
+    indices.set_visibility(&crate::graph::Visibility::Fixed);
     let indices = region.assign(&config.inputs[1], &indices.into())?;
     region.increment(indices.len());
 
@@ -1145,7 +1096,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // these will be assigned as constants
     let mut indices = Tensor::from((0..values[0].dims()[dim] as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Fixed);
+    indices.set_visibility(&crate::graph::Visibility::Fixed);
     let indices = region.assign(&config.inputs[1], &indices.into())?;
     region.increment(indices.len());
 
@@ -1182,7 +1133,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd>(
     // calculate value of output
     // these will be assigned as constants
     let mut indices = Tensor::from((0..values[0].dims()[dim] as u64).map(|x| F::from(x)));
-    indices.set_visibility(crate::graph::Visibility::Fixed);
+    indices.set_visibility(&crate::graph::Visibility::Fixed);
     let indices = region.assign(&config.inputs[1], &indices.into())?;
     region.increment(indices.len());
 
@@ -2141,24 +2092,20 @@ pub fn downsample<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
-/// layout for range check.
-pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
+/// layout for enforcing two sets of cells to be equal
+pub fn enforce_equality<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-    tol: i32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // assert of same len
+    assert_eq!(values[0].len(), values[1].len());
     // assigns the instance to the advice.
-    region.assign(&config.inputs[1], &values[0])?;
+    let input = region.assign(&config.inputs[1], &values[0])?;
     let output = region.assign(&config.output, &values[1])?;
 
     if !region.is_dummy() {
-        (0..values[0].len()).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::Range { tol }, x));
-
-            region.enable(selector, y).unwrap();
-        });
+        region.constrain_equal(&input, &output)?;
     }
 
     region.increment(output.len());
@@ -2176,33 +2123,42 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     // time the entire operation
     let timer = instant::Instant::now();
 
-    let x = &values[0];
+    let x = values[0].clone();
 
-    let w = region.assign(&config.lookup_input, x)?;
-    let mut output = Tensor::new(Some(&vec![Value::<F>::unknown(); w.len()]), w.dims())?;
+    let mut removal_indices = values[0].get_const_indices()?;
+    removal_indices.par_sort_unstable();
+    let removal_indices: HashSet<&usize> = HashSet::from_iter(removal_indices.iter());
+    let removal_indices_ptr = &removal_indices;
 
-    if !w.any_unknowns() {
-        output = Op::<F>::f(nl, &[w.get_felt_evals()?])
-            .unwrap()
-            .output
-            .map(|e| Value::known(e))
-    };
+    let w = region.assign_with_omissions(&config.lookup_input, &x, removal_indices_ptr)?;
 
-    let mut output = region.assign(&config.lookup_output, &output.into())?;
+    let output = w.get_inner_tensor()?.par_enum_map(|i, e| {
+        Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
+            if !removal_indices.contains(&i) {
+                Value::known(Op::<F>::f(nl, &[Tensor::from(vec![f].into_iter())])?.output[0]).into()
+            } else {
+                ValType::Constant(Op::<F>::f(nl, &[Tensor::from(vec![f].into_iter())])?.output[0])
+            }
+        } else {
+            Value::<F>::unknown().into()
+        })
+    })?;
 
-    assert_eq!(w.len(), output.len());
+    let assigned_len = x.len() - removal_indices.len();
+    let mut output =
+        region.assign_with_omissions(&config.lookup_output, &output.into(), removal_indices_ptr)?;
 
     if !region.is_dummy() {
-        (0..output.len()).for_each(|i| {
+        (0..assigned_len).for_each(|i| {
             let (x, y) = config.lookup_input.cartesian_coord(region.offset() + i);
             let selector = config.lookup_selectors.get(&(nl.clone(), x));
             region.enable(selector, y).unwrap();
         });
     }
 
-    output.reshape(x.dims())?;
+    region.increment(assigned_len);
 
-    region.increment(output.len());
+    output.reshape(x.dims())?;
 
     let elapsed = timer.elapsed();
     trace!(
@@ -2281,14 +2237,7 @@ pub fn argmax<F: PrimeField + TensorType + PartialOrd>(
 
     let max_val = max(config, region, &[values[0].clone()])?;
 
-    region.assign(&config.inputs[1], &claimed_val)?;
-    region.assign(&config.output, &max_val)?;
-
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::Identity, x));
-    region.enable(selector, y)?;
-
-    region.increment(max_val.len());
+    enforce_equality(config, region, &[claimed_val, max_val])?;
 
     Ok(assigned_argmax)
 }
@@ -2325,14 +2274,7 @@ pub fn argmin<F: PrimeField + TensorType + PartialOrd>(
     )?;
     let min_val = min(config, region, &[values[0].clone()])?;
 
-    region.assign(&config.inputs[1], &claimed_val)?;
-    region.assign(&config.output, &min_val)?;
-
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::Identity, x));
-    region.enable(selector, y)?;
-
-    region.increment(min_val.len());
+    enforce_equality(config, region, &[claimed_val, min_val])?;
 
     Ok(assigned_argmin)
 }
@@ -2662,7 +2604,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     if tol == 0.0 {
         // regular equality constraint
-        return range_check(config, region, values, 0);
+        return enforce_equality(config, region, values);
     }
 
     // Calculate the difference between the expected output and actual output

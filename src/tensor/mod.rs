@@ -480,8 +480,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 
     /// set the tensor's (optional) visibility parameter
-    pub fn set_visibility(&mut self, visibility: Visibility) {
-        self.visibility = Some(visibility)
+    pub fn set_visibility(&mut self, visibility: &Visibility) {
+        self.visibility = Some(visibility.clone())
     }
 
     /// getter for scale
@@ -491,7 +491,7 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// getter for visibility
     pub fn visibility(&self) -> Option<Visibility> {
-        self.visibility
+        self.visibility.clone()
     }
 
     /// Returns the number of elements in the tensor.

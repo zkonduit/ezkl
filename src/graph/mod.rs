@@ -866,12 +866,23 @@ impl GraphCircuit {
         let mut processed_params = None;
         let mut processed_outputs = None;
 
-        if visibility.input.is_hashed_private() {
-            let res = GraphModules::forward(inputs, visibility.input)?;
-            inputs[0] = res.clone().poseidon_hash.unwrap().into_iter().into();
-            processed_inputs = Some(res);
-        } else if visibility.input.requires_processing() {
-            processed_inputs = Some(GraphModules::forward(inputs, visibility.input)?);
+        if visibility.input.requires_processing() {
+            let module_outlets = visibility.input.overwrites_inputs();
+            if !module_outlets.is_empty() {
+                let mut module_inputs = vec![];
+                for outlet in &module_outlets {
+                    module_inputs.push(inputs[*outlet].clone());
+                }
+                let res = GraphModules::forward(&module_inputs, visibility.input.clone())?;
+                processed_inputs = Some(res.clone());
+                let module_results = res.get_result(visibility.input.clone());
+
+                for (i, outlet) in module_outlets.iter().enumerate() {
+                    inputs[*outlet] = Tensor::from(module_results[i].clone().into_iter());
+                }
+            } else {
+                processed_inputs = Some(GraphModules::forward(inputs, visibility.input)?);
+            }
         }
 
         if visibility.params.requires_processing() {
@@ -885,13 +896,29 @@ impl GraphCircuit {
             }
         }
 
-        let model_results = self.model().forward(inputs)?;
+        let mut model_results = self.model().forward(inputs)?;
 
         if visibility.output.requires_processing() {
-            processed_outputs = Some(GraphModules::forward(
-                &model_results.outputs,
-                visibility.output,
-            )?);
+            let module_outlets = visibility.output.overwrites_inputs();
+            if !module_outlets.is_empty() {
+                let mut module_inputs = vec![];
+                for outlet in &module_outlets {
+                    module_inputs.push(model_results.outputs[*outlet].clone());
+                }
+                let res = GraphModules::forward(&module_inputs, visibility.output.clone())?;
+                processed_outputs = Some(res.clone());
+                let module_results = res.get_result(visibility.output.clone());
+
+                for (i, outlet) in module_outlets.iter().enumerate() {
+                    model_results.outputs[*outlet] =
+                        Tensor::from(module_results[i].clone().into_iter());
+                }
+            } else {
+                processed_outputs = Some(GraphModules::forward(
+                    &model_results.outputs,
+                    visibility.output,
+                )?);
+            }
         }
 
         let witness = GraphWitness {
@@ -1119,8 +1146,8 @@ impl Circuit<Fp> for GraphCircuit {
         mut layouter: impl Layouter<Fp>,
     ) -> Result<(), PlonkError> {
         trace!("Setting input in synthesize");
-        let input_vis = self.settings().run_args.input_visibility;
-        let output_vis = self.settings().run_args.output_visibility;
+        let input_vis = &self.settings().run_args.input_visibility;
+        let output_vis = &self.settings().run_args.output_visibility;
 
         let mut inputs = self
             .graph_witness
@@ -1146,18 +1173,41 @@ impl Circuit<Fp> for GraphCircuit {
         trace!("running input module layout");
         // we reserve module 0 for poseidon
         // we reserve module 1 for elgamal
-        GraphModules::layout(
-            &mut layouter,
-            &config.module_configs,
-            &mut inputs,
-            self.settings().run_args.input_visibility,
-            &mut instance_offset,
-            &self.module_settings.input,
-        )?;
+
+        let input_visibility = &self.settings().run_args.input_visibility;
+        let outlets = input_visibility.overwrites_inputs();
+
+        if outlets.len() > 0 {
+            let mut input_outlets = vec![];
+            for outlet in &outlets {
+                input_outlets.push(inputs[*outlet].clone());
+            }
+            GraphModules::layout(
+                &mut layouter,
+                &config.module_configs,
+                &mut input_outlets,
+                input_visibility,
+                &mut instance_offset,
+                &self.module_settings.input,
+            )?;
+            // replace inputs with the outlets
+            for (i, outlet) in outlets.iter().enumerate() {
+                inputs[*outlet] = input_outlets[i].clone();
+            }
+        } else {
+            GraphModules::layout(
+                &mut layouter,
+                &config.module_configs,
+                &mut inputs,
+                input_visibility,
+                &mut instance_offset,
+                &self.module_settings.input,
+            )?;
+        }
 
         // now we need to assign the flattened params to the model
         let mut model = self.model().clone();
-        let param_visibility = self.settings().run_args.param_visibility;
+        let param_visibility = &self.settings().run_args.param_visibility;
         trace!("running params module layout");
         if !self.model().get_all_params().is_empty() && param_visibility.requires_processing() {
             // now we need to flatten the params
@@ -1217,15 +1267,39 @@ impl Circuit<Fp> for GraphCircuit {
             })?;
         trace!("running output module layout");
 
-        // this will re-enter module 0
-        GraphModules::layout(
-            &mut layouter,
-            &config.module_configs,
-            &mut outputs,
-            self.settings().run_args.output_visibility,
-            &mut instance_offset,
-            &self.module_settings.output,
-        )?;
+        let output_visibility = &self.settings().run_args.output_visibility;
+        let outlets = output_visibility.overwrites_inputs();
+
+        if outlets.len() > 0 {
+            let mut output_outlets = vec![];
+            for outlet in &outlets {
+                output_outlets.push(outputs[*outlet].clone());
+            }
+            // this will re-enter module 0
+            GraphModules::layout(
+                &mut layouter,
+                &config.module_configs,
+                &mut output_outlets,
+                &self.settings().run_args.output_visibility,
+                &mut instance_offset,
+                &self.module_settings.output,
+            )?;
+
+            // replace outputs with the outlets
+            for (i, outlet) in outlets.iter().enumerate() {
+                outputs[*outlet] = output_outlets[i].clone();
+            }
+        } else {
+            // this will re-enter module 0
+            GraphModules::layout(
+                &mut layouter,
+                &config.module_configs,
+                &mut outputs,
+                &self.settings().run_args.output_visibility,
+                &mut instance_offset,
+                &self.module_settings.output,
+            )?;
+        }
 
         Ok(())
     }

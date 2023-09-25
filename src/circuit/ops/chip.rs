@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use crate::{
     circuit::ops::base::BaseOp,
     circuit::{table::Table, utils},
-    fieldutils::i32_to_felt,
     tensor::{Tensor, TensorType, ValTensor, VarTensor},
 };
 use std::{collections::BTreeMap, error::Error, marker::PhantomData};
@@ -215,17 +214,10 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             selectors.insert((BaseOp::Sum, i), meta.selector());
             selectors.insert((BaseOp::Neg, i), meta.selector());
             selectors.insert((BaseOp::Mult, i), meta.selector());
-            selectors.insert((BaseOp::Range { tol: 0 }, i), meta.selector());
             selectors.insert((BaseOp::IsZero, i), meta.selector());
             selectors.insert((BaseOp::Identity, i), meta.selector());
             selectors.insert((BaseOp::IsBoolean, i), meta.selector());
         }
-
-        let range_check = |tol: i32, value: Expression<F>| {
-            (-tol..tol).fold(value.clone(), |expr, i| {
-                expr * (Expression::Constant(i32_to_felt(i)) - value.clone())
-            })
-        };
 
         for ((base_op, col_idx), selector) in selectors.iter() {
             meta.create_gate(base_op.as_str(), |meta| {
@@ -248,17 +240,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                 let (rotation_offset, rng) = base_op.query_offset_rng();
 
                 let constraints = match base_op {
-                    BaseOp::Range { tol } => {
-                        let expected_output: Tensor<Expression<F>> = output
-                            .query_rng(meta, rotation_offset, idx_offset, rng)
-                            .expect("poly: output query failed");
-
-                        let res = qis[1].clone();
-                        vec![range_check(
-                            *tol,
-                            res - expected_output[base_op.constraint_idx()].clone(),
-                        )]
-                    }
                     BaseOp::IsBoolean => {
                         vec![(qis[1].clone()) * (qis[1].clone() - Expression::Constant(F::from(1)))]
                     }

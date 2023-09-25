@@ -2625,6 +2625,32 @@ pub fn slice<T: TensorType + Send + Sync>(
 pub mod nonlinearities {
     use super::*;
 
+    /// Raises to a floating point power.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `power` - Floating point power
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::pow;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[2, 15, 2, 1, 1, 0]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = pow(&x, 1.0, 2.0);
+    /// let expected = Tensor::<i128>::new(Some(&[4, 225, 4, 1, 1, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn pow(a: &Tensor<i128>, scale_input: f64, power: f64) -> Tensor<i128> {
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let kix = scale_input * (kix).powf(power);
+            let rounded = kix.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
+    }
+
     /// Applies Kronecker delta to a tensor of integers.
     /// # Arguments
     /// * `a` - Tensor
