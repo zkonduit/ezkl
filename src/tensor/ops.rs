@@ -1217,7 +1217,6 @@ pub fn scatter<T: TensorType + Send + Sync>(
     src: &Tensor<T>,
     dim: usize,
 ) -> Result<Tensor<T>, TensorError> {
-    println!("scatter");
     // Writes all values from the tensor src into self at the indices specified in the index tensor.
     // For each value in src, its output index is specified by its index in src for dimension != dim and by the corresponding value in index for dimension = dim.
     assert_eq!(index.dims(), src.dims());

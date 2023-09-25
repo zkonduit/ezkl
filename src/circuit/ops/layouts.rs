@@ -791,7 +791,12 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
     dim: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // first create a claim
-    let (input, index, src) = (values[0].clone(), values[1].clone(), values[2].clone());
+    let (mut input, index, src) = (values[0].clone(), values[1].clone(), values[2].clone());
+
+    if !input.all_prev_assigned() {
+        input = region.assign(&config.inputs[0], &input)?;
+    }
+    let assigned_src = region.assign(&config.inputs[1], &src)?;
 
     let mut index_usize = if !index.any_unknowns() {
         index.get_int_evals()?.map(|x| x as usize)
@@ -800,27 +805,25 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
     };
     index_usize.reshape(index.dims());
 
+    // this will get copy constrained with the input when assigned
     let claimed_output = tensor::ops::scatter(
         input.get_inner_tensor()?,
         &index_usize,
-        src.get_inner_tensor()?,
+        assigned_src.get_inner_tensor()?,
         dim,
     )?;
-
-    let assigned_claimed_output = region.assign(&config.inputs[0], &claimed_output.into())?;
-    let assigned_src = region.assign(&config.inputs[1], &src)?;
-    let assigned_index = region.assign(&config.output, &index)?;
+    let assigned_claimed_output = region.assign(&config.output, &claimed_output.into())?;
 
     region.increment(std::cmp::max(
         assigned_claimed_output.len(),
-        std::cmp::max(assigned_src.len(), assigned_index.len()),
+        assigned_src.len(),
     ));
 
     // now assert that the claimed output gathered using the index is equal to the src
     let gathered = gather_elements(
         config,
         region,
-        &[assigned_claimed_output.clone(), assigned_index],
+        &[assigned_claimed_output.clone(), index],
         dim,
     )?;
 
