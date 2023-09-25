@@ -1739,7 +1739,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/aggr.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=blake",
             ])
             .status()
             .expect("failed to execute process");
