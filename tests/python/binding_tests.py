@@ -411,8 +411,7 @@ def test_prove_and_verify():
         pk_path,
         proof_path,
         srs_path,
-        "poseidon",
-        "single",
+        "for-aggr",
     )
     assert res['transcript_type'] == 'Poseidon'
     assert os.path.isfile(proof_path)
@@ -448,7 +447,6 @@ def test_prove_evm():
         pk_path,
         proof_path,
         srs_path,
-        "evm",
         "single",
     )
     assert res['transcript_type'] == 'EVM'
@@ -588,8 +586,7 @@ async def aggregate_and_verify_aggr():
         pk_path,
         proof_path,
         srs_path,
-        "poseidon",
-        "accum",
+        "for-aggr",
     )
 
     # mock aggregate
@@ -705,8 +702,7 @@ async def evm_aggregate_and_verify_aggr():
         pk_path,
         proof_path,
         srs_path,
-        "poseidon",
-        "accum",
+        "for-aggr",
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_evm_1l_relu.pf')

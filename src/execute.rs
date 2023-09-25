@@ -1,6 +1,6 @@
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::commands::{CalibrationTarget, StrategyType};
+use crate::commands::CalibrationTarget;
 use crate::commands::{Cli, Commands};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
@@ -17,7 +17,9 @@ use crate::pfsys::evm::evm_verify;
 use crate::pfsys::evm::{
     aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
 };
-use crate::pfsys::{create_keys, load_pk, load_vk, save_params, save_pk, Snark, TranscriptType};
+use crate::pfsys::{
+    create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
+};
 use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::pfsys::{save_vk, srs::*};
 use crate::RunArgs;
@@ -233,8 +235,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             pk_path,
             proof_path,
             srs_path,
-            transcript,
-            strategy,
+            proof_type,
             check_mode,
         } => prove(
             witness,
@@ -242,8 +243,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             pk_path,
             Some(proof_path),
             srs_path,
-            transcript,
-            strategy,
+            proof_type,
             check_mode,
         )
         .await
@@ -1123,6 +1123,9 @@ pub(crate) async fn setup_test_evm_witness(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+use crate::pfsys::ProofType;
+
+#[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn prove(
     data_path: PathBuf,
@@ -1130,8 +1133,7 @@ pub(crate) async fn prove(
     pk_path: PathBuf,
     proof_path: Option<PathBuf>,
     srs_path: PathBuf,
-    transcript: TranscriptType,
-    strategy: StrategyType,
+    proof_type: ProofType,
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let data = GraphWitness::from_path(data_path)?;
@@ -1149,6 +1151,9 @@ pub(crate) async fn prove(
         .map_err(Box::<dyn Error>::from)?;
 
     trace!("params computed");
+
+    let strategy: StrategyType = proof_type.into();
+    let transcript: TranscriptType = proof_type.into();
 
     // creates and verifies the proof
     let snark = match strategy {
