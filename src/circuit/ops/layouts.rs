@@ -783,6 +783,52 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     Ok(output.into())
 }
 
+///
+pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 3],
+    dim: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // first create a claim
+    let (input, index, src) = (values[0].clone(), values[1].clone(), values[2].clone());
+
+    let mut index_usize = if !index.any_unknowns() {
+        index.get_int_evals()?.map(|x| x as usize)
+    } else {
+        Tensor::new(None, index.dims())?
+    };
+    index_usize.reshape(index.dims());
+
+    let claimed_output = tensor::ops::scatter(
+        input.get_inner_tensor()?,
+        &index_usize,
+        src.get_inner_tensor()?,
+        dim,
+    )?;
+
+    let assigned_claimed_output = region.assign(&config.inputs[0], &claimed_output.into())?;
+    let assigned_src = region.assign(&config.inputs[1], &src)?;
+    let assigned_index = region.assign(&config.output, &index)?;
+
+    region.increment(std::cmp::max(
+        assigned_claimed_output.len(),
+        std::cmp::max(assigned_src.len(), assigned_index.len()),
+    ));
+
+    // now assert that the claimed output gathered using the index is equal to the src
+    let gathered = gather_elements(
+        config,
+        region,
+        &[assigned_claimed_output.clone(), assigned_index],
+        dim,
+    )?;
+
+    enforce_equality(config, region, &[gathered, assigned_src])?;
+
+    Ok(assigned_claimed_output)
+}
+
 /// Gather accumulated layout
 pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
