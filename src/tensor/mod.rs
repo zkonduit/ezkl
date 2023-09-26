@@ -567,7 +567,6 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 
     /// Get a slice from the Tensor.
-    ///
     /// ```
     /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
@@ -638,6 +637,29 @@ impl<T: Clone + TensorType> Tensor<T> {
             d *= self.dims[i];
         }
         index
+    }
+
+    /// Get the array index from rows / columns indices.
+    ///
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
+    ///
+    /// assert_eq!(a.get_mutable_index(&[2, 2, 2]), 26);
+    /// assert_eq!(a.get_mutable_index(&[1, 2, 2]), 17);
+    /// assert_eq!(a.get_mutable_index(&[1, 2, 0]), 15);
+    /// assert_eq!(a.get_mutable_index(&[1, 0, 1]), 10);
+    /// ```
+    pub fn get_mutable_index(&mut self, indices: &[usize]) -> &mut T {
+        assert_eq!(self.dims.len(), indices.len());
+        let mut index = 0;
+        let mut d = 1;
+        for i in (0..indices.len()).rev() {
+            assert!(self.dims[i] > indices[i]);
+            index += indices[i] * d;
+            d *= self.dims[i];
+        }
+        &mut self[index]
     }
 
     /// Duplicates every nth element
