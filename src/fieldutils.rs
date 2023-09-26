@@ -11,7 +11,7 @@ pub fn i32_to_felt<F: PrimeField>(x: i32) -> F {
     }
 }
 
-/// Converts an i32 to a PrimeField element.
+/// Converts an i128 to a PrimeField element.
 pub fn i128_to_felt<F: PrimeField>(x: i128) -> F {
     if x >= 0 {
         F::from_u128(x as u128)
