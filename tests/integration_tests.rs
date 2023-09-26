@@ -761,7 +761,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                kzg_fuzz(path, test.to_string(), 7, 16, 17, "blake");
+                kzg_fuzz(path, test.to_string(), 7, 16, 17, "evm");
                 test_dir.close().unwrap();
             }
 
@@ -1594,8 +1594,7 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=poseidon",
-                "--strategy=accum",
+                "--proof-type=for-aggr",
             ])
             .status()
             .expect("failed to execute process");
@@ -1705,8 +1704,7 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=poseidon",
-                "--strategy=accum",
+                "--proof-type=for-aggr",
             ])
             .status()
             .expect("failed to execute process");
@@ -1740,7 +1738,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/aggr.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=blake",
             ])
             .status()
             .expect("failed to execute process");
@@ -1861,8 +1858,7 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/evm.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=poseidon",
-                "--strategy=accum",
+                "--proof-type=for-aggr",
             ])
             .status()
             .expect("failed to execute process");
@@ -1896,7 +1892,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/evm_aggr.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=evm",
             ])
             .status()
             .expect("failed to execute process");
@@ -2101,8 +2096,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=evm",
-                "--strategy=single",
                 &format!("--check-mode={}", checkmode),
             ])
             .status()
@@ -2304,8 +2297,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=evm",
-                "--strategy=single",
             ])
             .status()
             .expect("failed to execute process");
@@ -2496,8 +2487,6 @@ mod native_tests {
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 &srs_path,
-                "--transcript=evm",
-                "--strategy=single",
             ])
             .status()
             .expect("failed to execute process");

@@ -96,7 +96,7 @@ fn runposeidon(c: &mut Criterion) {
                     &params,
                     output.clone(),
                     &pk,
-                    TranscriptType::Blake,
+                    TranscriptType::EVM,
                     SingleStrategy::new(&params),
                     CheckMode::UNSAFE,
                 );
