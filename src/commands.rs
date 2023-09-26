@@ -438,7 +438,7 @@ pub enum Commands {
         compiled_circuit: PathBuf,
         /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
         /// derived from the file information in the data .json file.
-        ///  Should include both the network input (possibly private) and the network output (public input to the proof)
+        /// Should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'T', long)]
         test_data: PathBuf,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
@@ -450,6 +450,19 @@ pub enum Commands {
         /// where does the output data come from
         #[arg(long, default_value = "on-chain")]
         output_source: TestDataSource,
+    },
+
+    #[cfg(not(target_arch = "wasm32"))]
+    TestUpdateAccountCalls {
+        /// The path to verfier contract's address
+        #[arg(long)]
+        addr: H160,
+        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        #[arg(short = 'D', long)]
+        data: PathBuf,
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        #[arg(short = 'U', long)]
+        rpc_url: Option<String>,
     },
 
     #[cfg(not(target_arch = "wasm32"))]

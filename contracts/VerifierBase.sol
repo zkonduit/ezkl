@@ -9,7 +9,7 @@ contract Verifier {
      * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P values.
      */
 
-    uint256 constant SIZE_LIMIT = 21888242871839275222246405745257275088696311157297823662689037894645226208583; 
+    uint256 constant SIZE_LIMIT = uint256(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001); 
 
     function verify(
         uint256[] calldata instances,

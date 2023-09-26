@@ -227,6 +227,19 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             .await
         }
         #[cfg(not(target_arch = "wasm32"))]
+        Commands::TestUpdateAccountCalls {
+            addr,
+            data,
+            rpc_url
+        } => {
+            test_update_account_calls(
+                addr,
+                data,
+                rpc_url
+            )
+            .await
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             witness,
             compiled_circuit,
@@ -1119,6 +1132,20 @@ pub(crate) async fn setup_test_evm_witness(
         .populate_on_chain_test_data(&mut data, test_on_chain_data)
         .await?;
 
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) async fn test_update_account_calls(
+    addr: H160,
+    data: PathBuf,
+    rpc_url: Option<String>
+) -> Result<(), Box<dyn Error>> {
+    use crate::eth::update_account_calls;
+
+    check_solc_requirement();
+    let _ = update_account_calls(addr, data, rpc_url.as_deref()).await?;
+    
     Ok(())
 }
 

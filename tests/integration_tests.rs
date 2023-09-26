@@ -22,11 +22,20 @@ mod native_tests {
         static ref CARGO_TARGET_DIR: String =
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
         static ref ANVIL_URL: String = "http://localhost:3030".to_string();
+        static ref LIMITLESS_ANVIL_URL: String = "http://localhost:8545".to_string();
     }
 
-    fn start_anvil() -> Child {
+    fn start_anvil(limitless: bool) -> Child {
+        let mut args = vec!["-p"];
+        if limitless {
+            args.push("8545");
+            args.push("--code-size-limit=41943040");
+            args.push("--disable-block-gas-limit");
+        } else {
+            args.push("3030");
+        }
         let child = Command::new("anvil")
-            .args(["-p", "3030"])
+            .args(args)
             // .stdout(Stdio::piped())
             .spawn()
             .expect("failed to start anvil process");
@@ -827,65 +836,55 @@ mod native_tests {
             use tempdir::TempDir;
 
             /// Currently only on chain inputs that return a non-negative value are supported.
-            const TESTS_ON_CHAIN_INPUT: [&str; 11] = [
+            const TESTS_ON_CHAIN_INPUT: [&str; 17] = [
                 "1l_mlp",
                 "1l_average",
                 "1l_reshape",
-                // "1l_sigmoid",
+                "1l_sigmoid",
                 "1l_div",
                 "1l_sqrt",
-                // "1l_prelu",
+                "1l_prelu",
                 "1l_var",
                 "1l_leakyrelu",
                 "1l_gelu_noappx",
                 "1l_relu",
-                //"1l_tanh",
-                // "2l_relu_sigmoid_small",
-                // "2l_relu_small",
-                // "2l_relu_fc",
+                "1l_tanh",
+                "2l_relu_sigmoid_small",
+                "2l_relu_small",
+                "2l_relu_fc",
                 "min",
-                "max",
+                "max"
             ];
 
-
-
-            seq!(N in 0..= 10 {
+            seq!(N in 0..=16 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil(true);
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file");
                     test_dir.close().unwrap();
-
                 }
-            });
 
-            seq!(N in 0..= 10 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil(true);
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain");
                     test_dir.close().unwrap();
-
                 }
-            });
 
-
-            seq!(N in 0..= 10 {
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
                 fn kzg_evm_on_chain_input_output_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil(true);
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain");
                     test_dir.close().unwrap();
-
                 }
             });
 
@@ -898,7 +897,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_aggr_prove_and_verify(path, test.to_string(), "private", "private", "public");
                     test_dir.close().unwrap();
                 }
@@ -911,7 +910,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_aggr_prove_and_verify(path, test.to_string(), "encrypted", "private", "public");
                     test_dir.close().unwrap();
                 }
@@ -925,7 +924,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "public");
                     test_dir.close().unwrap();
 
@@ -937,7 +936,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let mut _anvil_child = crate::native_tests::start_anvil();
+                    let mut _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "hashed", "private", "private");
                     test_dir.close().unwrap();
                 }
@@ -947,7 +946,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "hashed", "public");
                     test_dir.close().unwrap();
 
@@ -958,7 +957,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "hashed");
                     test_dir.close().unwrap();
 
@@ -970,7 +969,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    let _anvil_child = crate::native_tests::start_anvil();
+                    let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_fuzz(path, test.to_string(), 7, 16, 17, "evm");
                     test_dir.close().unwrap();
 
@@ -2418,7 +2417,7 @@ mod native_tests {
         let data_path = format!("{}/{}/input.json", test_dir, example_name);
         let witness_path = format!("{}/{}/witness.json", test_dir, example_name);
         let test_on_chain_data_path = format!("{}/{}/on_chain_input.json", test_dir, example_name);
-        let rpc_arg = format!("--rpc-url={}", ANVIL_URL.as_str());
+        let rpc_arg = format!("--rpc-url={}", LIMITLESS_ANVIL_URL.as_str());
 
         let test_input_source = format!("--input-source={}", input_source);
         let test_output_source = format!("--output-source={}", output_source);
@@ -2548,7 +2547,7 @@ mod native_tests {
 
         let deployed_addr_arg = format!("--addr={}", addr);
 
-        let mut args = vec![
+        let args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
@@ -2560,6 +2559,38 @@ mod native_tests {
             .args(&args)
             .status()
             .expect("failed to execute process");
+        assert!(status.success());
+        // Create a new set of test on chain data
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        .args([
+            "setup-test-evm-data",
+            "-D",
+            data_path.as_str(),
+            "-M",
+            &model_path,
+            "--test-data",
+            test_on_chain_data_path.as_str(),
+            rpc_arg.as_str(),
+            test_input_source.as_str(),
+            test_output_source.as_str(),
+        ])
+        .status()
+        .expect("failed to execute process");
+
+        assert!(status.success());
+
+        let mut args = vec![
+            "test-update-account-calls",
+            deployed_addr_arg.as_str(),
+            "-D",
+            test_on_chain_data_path.as_str(),
+            rpc_arg.as_str(),
+        ];
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+
         assert!(status.success());
         // As sanity check, add example that should fail.
         args[2] = PF_FAILURE;
