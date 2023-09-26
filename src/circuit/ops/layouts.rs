@@ -962,7 +962,7 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
 
         for (i, r) in res.get_inner_tensor().unwrap().iter().enumerate() {
             let coord = input_cartesian_coord.clone().nth(i).unwrap();
-            *mutable_input_inner.get_mutable_index(&coord) = r.clone();
+            *mutable_input_inner.get_mut(&coord) = r.clone();
         }
     };
 
