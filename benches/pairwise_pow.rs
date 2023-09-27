@@ -99,7 +99,7 @@ fn runpow(c: &mut Criterion) {
                     &params,
                     vec![],
                     &pk,
-                    TranscriptType::Blake,
+                    TranscriptType::EVM,
                     SingleStrategy::new(&params),
                     CheckMode::SAFE,
                 );

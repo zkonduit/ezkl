@@ -538,6 +538,27 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index].clone()
     }
 
+    /// Get a mutable array index from rows / columns indices.
+    ///
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(None, &[2, 3, 5]).unwrap();
+    ///
+    /// a[1*15 + 1*5 + 1] = 5;
+    /// assert_eq!(a.get(&[1, 1, 1]), 5);
+    /// ```
+    pub fn get_mut(&mut self, indices: &[usize]) -> &mut T {
+        assert_eq!(self.dims.len(), indices.len());
+        let mut index = 0;
+        let mut d = 1;
+        for i in (0..indices.len()).rev() {
+            assert!(self.dims[i] > indices[i]);
+            index += indices[i] * d;
+            d *= self.dims[i];
+        }
+        &mut self[index]
+    }
+
     /// Get a single value from the Tensor.
     ///
     /// ```
@@ -567,7 +588,6 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 
     /// Get a slice from the Tensor.
-    ///
     /// ```
     /// use ezkl::tensor::Tensor;
     /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();

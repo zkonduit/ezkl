@@ -1,6 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
+// This contract serves as a Data Attestation Verifier for the EZKL model.
+// It is designed to read and attest to instances of proofs generated from a specified circuit.
+// It is particularly constructed to read only int256 data from specified on-chain contracts' view functions.
+
+// Overview of the contract functionality:
+// 1. Initialization: Through the constructor, it sets up the contract calls that the EZKL model will read from.
+// 2. Data Quantization: Quantizes the returned data into a scaled fixed-point representation. See the `quantizeData` method for details.
+// 3. Static Calls: Makes static calls to fetch data from other contracts. See the `staticCall` method.
+// 4. Field Element Conversion: The fixed-point representation is then converted into a field element modulo P using the `toFieldElement` method.
+// 5. Data Attestation: The `attestData` method validates that the public instances match the data fetched and processed by the contract.
+// 6. Proof Verification: The `verifyWithDataAttestation` method has a stubbed assembly block to integrate proof verification.
+
+
 contract DataAttestationVerifier {
     /**
      * @notice Struct used to make view only calls to accounts to fetch the data that EZKL reads from.
@@ -18,21 +31,20 @@ contract DataAttestationVerifier {
     uint public constant INPUT_SCALE = 1 << 0;
     uint[] public outputScales;
 
+    address public admin;
 
     /**
      * @notice EZKL P value 
      * @dev In order to prevent the verifier from accepting two version of the same pubInput, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
      * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
      */
-    uint256 constant SIZE_LIMIT = 21888242871839275222246405745257275088696311157297823662689037894645226208583; 
+    uint256 constant ORDER = uint256(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001); 
 
     uint256 constant INPUT_CALLS = 0;
 
     uint256 constant OUTPUT_CALLS = 0;
 
     uint8 public instanceOffset;
-
-    //bytes[] constant output_scales = bytes(0x000);
 
     /**
      * @dev Initialize the contract with account calls the EZKL model will read from.
@@ -44,11 +56,39 @@ contract DataAttestationVerifier {
         bytes[][] memory _callData,
         uint256[][] memory _decimals,
         uint[] memory _outputScales,
-        uint8 _instanceOffset
+        uint8 _instanceOffset,
+        address _admin
     ) {
+        admin = _admin;
         for (uint i; i < _outputScales.length; i++) {
             outputScales.push(1 << _outputScales[i]);
         }
+        populateAccountCalls(_contractAddresses, _callData, _decimals);
+        instanceOffset = _instanceOffset;
+    }
+
+    function updateAdmin(address _admin) external {
+        require(msg.sender == admin, "Only admin can update admin");
+        if(_admin == address(0)) {
+            revert();
+        }
+        admin = _admin;
+    }
+
+    function updateAccountCalls(
+        address[] memory _contractAddresses,
+        bytes[][] memory _callData,
+        uint256[][] memory _decimals
+    ) external {
+        require(msg.sender == admin, "Only admin can update instanceOffset");
+        populateAccountCalls(_contractAddresses, _callData, _decimals);
+    }
+
+    function populateAccountCalls(
+        address[] memory _contractAddresses,
+        bytes[][] memory _callData,
+        uint256[][] memory _decimals
+    ) internal {
         require(
             _contractAddresses.length == _callData.length &&
                 accountCalls.length == _contractAddresses.length,
@@ -58,7 +98,6 @@ contract DataAttestationVerifier {
             _decimals.length == _contractAddresses.length,
             "Invalid number of decimals"
         );
-        uint total_calls = INPUT_CALLS + OUTPUT_CALLS;
         // fill in the accountCalls storage array
         uint counter = 0;
         for (uint256 i = 0; i < _contractAddresses.length; i++) {
@@ -72,9 +111,7 @@ contract DataAttestationVerifier {
             // count the total number of storage reads across all of the accounts
             counter += _callData[i].length;
         }
-        require(counter == total_calls, "Invalid number of calls");
-
-        instanceOffset = _instanceOffset;
+        require(counter == INPUT_CALLS + OUTPUT_CALLS, "Invalid number of calls");
     }
 
     function mulDiv(
@@ -126,21 +163,36 @@ contract DataAttestationVerifier {
             return result;
         }
     }
-
-    function quantize_data(
+    /**
+     * @dev Quantize the data returned from the account calls to the scale used by the EZKL model.
+     * @param data - The data returned from the account calls.
+     * @param decimals - The number of decimals the data returned from the account calls has (for floating point representation).
+     * @param scale - The scale used to convert the floating point value into a fixed point value. 
+     */
+    function quantizeData(
         bytes memory data,
         uint256 decimals,
         uint256 scale
-    ) internal pure returns (uint128 quantized_data) {
-        uint x = abi.decode(data, (uint256));
-        uint output = mulDiv(x, scale, decimals);
-        if (mulmod(x, scale, decimals) * 2 >= decimals) {
+    ) internal pure returns (int256 quantized_data) {
+        int x = abi.decode(data, (int256));
+        bool neg = x < 0;
+        if (neg) x = -x;
+        uint output = mulDiv(uint256(x), scale, decimals);
+        if (mulmod(uint256(x), scale, decimals) * 2 >= decimals) {
             output += 1;
         }
-        require(output < SIZE_LIMIT, "QuantizeData: overflow");
-        quantized_data = uint128(output);
+        // In the interest of keeping feature parity with the quantization done on the EZKL cli,
+        // we set the fixed point value type to be int128. Any value greater than that will throw an error
+        // as it does on the EZKL cli.
+        require(output <= uint128(type(int128).max), "Significant bit truncation");
+        quantized_data = neg ? -int256(output): int256(output);
     }
-
+    /**
+     * @dev Make a static call to the account to fetch the data that EZKL reads from.
+     * @param target - The address of the account to make calls to.
+     * @param data  - The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.
+     * @return The data returned from the account calls. (Must come from either a view or pure function. Will throw an error otherwise)
+     */
     function staticCall(
         address target,
         bytes memory data
@@ -158,7 +210,21 @@ contract DataAttestationVerifier {
             revert("Address: low-level call failed");
         }
     }
+    /**
+     * @dev Convert the fixed point quantized data into a field element.
+     * @param x - The quantized data.
+     * @return field_element - The field element.
+     */
+    function toFieldElement(int256 x) internal pure returns (uint256 field_element) {
+        // The casting down to uint256 is safe because the order is about 2^254, and the value
+        // of x ranges of -2^127 to 2^127, so x + int(ORDER) is always positive.
+        return uint256(x + int(ORDER)) % ORDER;
+    }
 
+    /**
+     * @dev Make the account calls to fetch the data that EZKL reads from and attest to the data.
+     * @param instances - The public instances to the proof (the data in the proof that publicly accessible to the verifier).
+     */
     function attestData(uint256[] calldata instances) internal view {
         require(
             instances.length >= INPUT_CALLS + OUTPUT_CALLS,
@@ -177,13 +243,14 @@ contract DataAttestationVerifier {
                 if (counter >= INPUT_CALLS) {
                     scale = outputScales[counter - INPUT_CALLS];
                 }
-                uint256 quantized_data = quantize_data(
+                int256 quantized_data = quantizeData(
                     returnData,
                     accountCalls[i].decimals[j],
                     scale
                 );
+                uint256 field_element = toFieldElement(quantized_data);
                 require(
-                    quantized_data == instances[counter + instanceOffset],
+                    field_element == instances[counter + instanceOffset],
                     "Public input does not match"
                 );
                 counter++;

@@ -57,6 +57,10 @@ pub enum HybridOp {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
     },
+    ScatterElements {
+        dim: usize,
+        constant_idx: Option<Tensor<usize>>,
+    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
@@ -64,6 +68,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         match self {
             HybridOp::Greater | HybridOp::Less | HybridOp::Equals => vec![0, 1],
+            HybridOp::ScatterElements { .. } => vec![0, 2],
             _ => vec![],
         }
     }
@@ -176,6 +181,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res.clone(), inter_equals)
                 }
             }
+            HybridOp::ScatterElements { dim, constant_idx } => {
+                let src = inputs[2].clone().map(|x| felt_to_i128(x));
+                if let Some(idx) = constant_idx {
+                    log::debug!("idx: {}", idx.show());
+                    let res = tensor::ops::scatter(&x, idx, &src, *dim)?;
+                    (res.clone(), vec![])
+                } else {
+                    let idx = inputs[1].clone().map(|x| felt_to_i128(x));
+                    let inter_equals: Vec<Tensor<i128>> =
+                        vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                    let res = tensor::ops::scatter(&x, &idx.map(|x| x as usize), &src, *dim)?;
+                    (res.clone(), inter_equals)
+                }
+            }
             HybridOp::MaxPool2d {
                 padding,
                 stride,
@@ -253,6 +272,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Gather { dim, .. } => format!("GATHER (dim={})", dim),
             HybridOp::TopK { k, dim } => format!("TOPK (k={}, dim={})", k, dim),
             HybridOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
+            HybridOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
             HybridOp::OneHot { dim, num_classes } => {
                 format!("ONEHOT (dim={}, num_classes={})", dim, num_classes)
             }
@@ -279,6 +299,19 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
                 } else {
                     layouts::gather_elements(config, region, values[..].try_into()?, *dim)?
+                }
+            }
+            HybridOp::ScatterElements { dim, constant_idx } => {
+                if let Some(idx) = constant_idx {
+                    tensor::ops::scatter(
+                        values[0].get_inner_tensor()?,
+                        idx,
+                        values[1].get_inner_tensor()?,
+                        *dim,
+                    )?
+                    .into()
+                } else {
+                    layouts::scatter_elements(config, region, values[..].try_into()?, *dim)?
                 }
             }
             HybridOp::MaxPool2d {
@@ -395,6 +428,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Gather { .. }
             | HybridOp::OneHot { .. }
             | HybridOp::GatherElements { .. }
+            | HybridOp::ScatterElements { .. }
             | HybridOp::Equals { .. } => {
                 vec![LookupOp::KroneckerDelta]
             }

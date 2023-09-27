@@ -16,10 +16,7 @@ use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Pro
 use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG};
 use halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
 use halo2_proofs::poly::VerificationStrategy;
-use halo2_proofs::transcript::{
-    Blake2bRead, Blake2bWrite, Challenge255, EncodedChallenge, TranscriptReadBuffer,
-    TranscriptWriterBuffer,
-};
+use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
 use halo2curves::ff::{FromUniformBytes, PrimeField, WithSmallOrderMulGroup};
 use halo2curves::serde::SerdeObject;
 use halo2curves::CurveAffine;
@@ -44,6 +41,97 @@ use thiserror::Error as thisError;
 
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
+#[allow(missing_docs)]
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum ProofType {
+    Single,
+    ForAggr,
+}
+
+impl Into<TranscriptType> for ProofType {
+    fn into(self) -> TranscriptType {
+        match self {
+            ProofType::Single => TranscriptType::EVM,
+            ProofType::ForAggr => TranscriptType::Poseidon,
+        }
+    }
+}
+
+impl Into<StrategyType> for ProofType {
+    fn into(self) -> StrategyType {
+        match self {
+            ProofType::Single => StrategyType::Single,
+            ProofType::ForAggr => StrategyType::Accum,
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+impl ToPyObject for ProofType {
+    fn to_object(&self, py: Python) -> PyObject {
+        match self {
+            ProofType::Single => "Single".to_object(py),
+            ProofType::ForAggr => "ForAggr".to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains StrategyType from PyObject (Required for StrategyType to be compatible with Python)
+impl<'source> pyo3::FromPyObject<'source> for ProofType {
+    fn extract(ob: &'source pyo3::PyAny) -> pyo3::PyResult<Self> {
+        let trystr = <pyo3::types::PyString as pyo3::PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "single" => Ok(ProofType::Single),
+            "for-aggr" => Ok(ProofType::ForAggr),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(
+                "Invalid value for ProofType",
+            )),
+        }
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum StrategyType {
+    Single,
+    Accum,
+}
+impl std::fmt::Display for StrategyType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_possible_value()
+            .expect("no values are skipped")
+            .get_name()
+            .fmt(f)
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Converts StrategyType into a PyObject (Required for StrategyType to be compatible with Python)
+impl pyo3::IntoPy<PyObject> for StrategyType {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            StrategyType::Single => "single".to_object(py),
+            StrategyType::Accum => "accum".to_object(py),
+        }
+    }
+}
+#[cfg(feature = "python-bindings")]
+/// Obtains StrategyType from PyObject (Required for StrategyType to be compatible with Python)
+impl<'source> pyo3::FromPyObject<'source> for StrategyType {
+    fn extract(ob: &'source pyo3::PyAny) -> pyo3::PyResult<Self> {
+        let trystr = <pyo3::types::PyString as pyo3::PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "single" => Ok(StrategyType::Single),
+            "accum" => Ok(StrategyType::Accum),
+            _ => Err(pyo3::exceptions::PyValueError::new_err(
+                "Invalid value for StrategyType",
+            )),
+        }
+    }
+}
+
 #[derive(thisError, Debug)]
 /// Errors related to pfsys
 pub enum PfSysError {
@@ -55,7 +143,6 @@ pub enum PfSysError {
 #[allow(missing_docs)]
 #[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub enum TranscriptType {
-    Blake,
     Poseidon,
     EVM,
 }
@@ -64,7 +151,6 @@ pub enum TranscriptType {
 impl ToPyObject for TranscriptType {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
-            TranscriptType::Blake => "Blake".to_object(py),
             TranscriptType::Poseidon => "Poseidon".to_object(py),
             TranscriptType::EVM => "EVM".to_object(py),
         }
@@ -537,26 +623,6 @@ pub fn create_proof_circuit_kzg<
             transcript,
         )
         .map_err(Box::<dyn Error>::from),
-        TranscriptType::Blake => create_proof_circuit::<
-            KZGCommitmentScheme<_>,
-            Fr,
-            _,
-            ProverGWC<_>,
-            VerifierGWC<'_, Bn256>,
-            _,
-            Challenge255<_>,
-            Blake2bWrite<_, _, _>,
-            Blake2bRead<_, _, _>,
-        >(
-            circuit,
-            public_inputs,
-            params,
-            pk,
-            strategy,
-            check_mode,
-            transcript,
-        )
-        .map_err(Box::<dyn Error>::from),
     }
 }
 
@@ -572,14 +638,6 @@ pub(crate) fn verify_proof_circuit_kzg<
     strategy: Strategy,
 ) -> Result<Strategy::Output, halo2_proofs::plonk::Error> {
     match proof.transcript_type {
-        TranscriptType::Blake => verify_proof_circuit::<
-            Fr,
-            VerifierGWC<'_, Bn256>,
-            _,
-            _,
-            Challenge255<_>,
-            Blake2bRead<_, _, _>,
-        >(&proof, params, vk, strategy),
         TranscriptType::EVM => verify_proof_circuit::<
             Fr,
             VerifierGWC<'_, Bn256>,

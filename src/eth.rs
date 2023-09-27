@@ -17,7 +17,7 @@ use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
 use ethers::solc::{CompilerInput, Solc};
 use ethers::types::transaction::eip2718::TypedTransaction;
-use ethers::types::Bytes;
+use ethers::types::{Bytes, I256};
 use ethers::types::TransactionRequest;
 use ethers::types::H160;
 use ethers::types::U256;
@@ -159,22 +159,7 @@ pub async fn deploy_da_verifier_via_solidity(
     }
 
     let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
-        let mut contract_addresses = vec![];
-        let mut call_data = vec![];
-        let mut decimals: Vec<Vec<u8>> = vec![];
-        for (i, val) in calls_to_accounts.iter().enumerate() {
-            let contract_address_bytes = hex::decode(val.address.clone())?;
-            let contract_address = H160::from_slice(&contract_address_bytes);
-            contract_addresses.push(contract_address);
-            call_data.push(vec![]);
-            decimals.push(vec![]);
-            for (call, decimal) in &val.call_data {
-                let call_data_bytes = hex::decode(call)?;
-                call_data[i].push(ethers::types::Bytes::from(call_data_bytes));
-                decimals[i].push(*decimal);
-            }
-        }
-        (contract_addresses, call_data, decimals)
+        parse_calls_to_accounts(calls_to_accounts)?
     } else {
         panic!("Data source for either input_data or output_data must be OnChain")
     };
@@ -195,11 +180,90 @@ pub async fn deploy_da_verifier_via_solidity(
             decimals,
             scales,
             contract_instance_offset as u32,
+            client.address(),
         ))?
         .send()
         .await?;
 
     Ok(contract.address())
+}
+
+fn parse_calls_to_accounts(
+    calls_to_accounts: Vec<CallsToAccount>,
+) -> Result<(Vec<H160>, Vec<Vec<Bytes>>, Vec<Vec<U256>>),Box<dyn Error>> {
+    let mut contract_addresses = vec![];
+    let mut call_data = vec![];
+    let mut decimals: Vec<Vec<U256>> = vec![];
+    for (i, val) in calls_to_accounts.iter().enumerate() {
+        let contract_address_bytes = hex::decode(val.address.clone())?;
+        let contract_address = H160::from_slice(&contract_address_bytes);
+        contract_addresses.push(contract_address);
+        call_data.push(vec![]);
+        decimals.push(vec![]);
+        for (call, decimal) in &val.call_data {
+            let call_data_bytes = hex::decode(call)?;
+            call_data[i].push(ethers::types::Bytes::from(call_data_bytes));
+            decimals[i].push(ethers::types::U256::from_dec_str(&decimal.to_string())?);
+        }
+    }
+    Ok((contract_addresses, call_data, decimals))
+}
+
+pub async fn update_account_calls(
+    addr: H160,
+    input: PathBuf,
+    rpc_url: Option<&str>
+) -> Result<(), Box<dyn Error>> {
+
+    let input = GraphData::from_path(input)?;
+
+    // The data that will be stored in the test contracts that will eventually be read from.
+    let mut calls_to_accounts = vec![];
+
+    if let DataSource::OnChain(source) = input.input_data {
+        for call in source.calls {
+            calls_to_accounts.push(call);
+        }
+    }
+
+    if let Some(DataSource::OnChain(source)) = input.output_data {
+        for call in source.calls {
+            calls_to_accounts.push(call);
+        }
+    }
+
+    let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
+        parse_calls_to_accounts(calls_to_accounts)?
+    } else {
+        panic!("Data source for either input_data or output_data must be OnChain")
+    };
+
+    let (anvil, client) = setup_eth_backend(rpc_url).await?;
+
+    let contract = DataAttestationVerifier::new(addr, client.clone());
+
+    contract
+        .update_account_calls(contract_addresses.clone(), call_data.clone(), decimals.clone())
+        .send()
+        .await?;
+
+    // Instantiate a different wallet
+    let wallet: LocalWallet = anvil.keys()[1].clone().into();
+
+    let client = Arc::new(client.with_signer(wallet.with_chain_id(anvil.chain_id())));
+
+    // update contract signer with non admin account
+    let contract = DataAttestationVerifier::new(addr, client.clone());
+
+    // call to update_account_calls should fail
+
+    if (contract.update_account_calls(contract_addresses, call_data, decimals).send().await).is_err(){
+        info!("update_account_calls failed as expected");
+    } else {
+        panic!("update_account_calls should have failed for non admin account call");
+    }
+
+    Ok(())
 }
 
 /// Verify a proof using a Solidity verifier contract
@@ -335,7 +399,7 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
     for input in &data[0] {
         let decimal_places = count_decimal_places(*input) as u8;
         let scaled_by_decimals = input * f32::powf(10., decimal_places.into());
-        scaled_by_decimals_data.push(scaled_by_decimals as u128);
+        scaled_by_decimals_data.push(scaled_by_decimals as i128);
         decimals.push(decimal_places);
     }
 
@@ -446,9 +510,9 @@ pub async fn test_on_chain_data<M: 'static + Middleware>(
     // Get the encoded call data for each input
     let mut calldata = vec![];
     for (i, _) in data.iter().flatten().enumerate() {
-        let function = contract.method::<_, U256>("arr", i as u32).unwrap();
+        let function = contract.method::<_, I256>("arr", i as u32).unwrap();
         let call = function.calldata().unwrap();
-        // Push (call, decimals) to the calldata vector, and set the decimals to 0.
+        // Push (call, decimals) to the calldata vector.
         calldata.push((hex::encode(call), decimals[i]));
     }
     // Instantiate a new CallsToAccount struct
@@ -537,12 +601,17 @@ pub async fn evm_quantize<M: 'static + Middleware>(
     let results = contract
         .quantize_data(fetched_inputs, decimals, scales)
         .call()
-        .await;
+        .await.unwrap();
 
-    let results = results
-        .unwrap()
+    let felts = contract.
+        to_field_element(results.clone())
+        .call()
+        .await.unwrap();
+    info!("evm quantization contract results: {:#?}", felts,);
+
+    let results = felts
         .iter()
-        .map(|x| crate::fieldutils::i128_to_felt(*x))
+        .map(|x| PrimeField::from_str_vartime(&x.to_string()).unwrap())
         .collect::<Vec<Fr>>();
     info!("evm quantization results: {:#?}", results,);
     Ok(results.to_vec())

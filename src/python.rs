@@ -5,7 +5,7 @@ use crate::circuit::modules::poseidon::{
 };
 use crate::circuit::modules::Module;
 use crate::circuit::{CheckMode, Tolerance};
-use crate::commands::{CalibrationTarget, StrategyType};
+use crate::commands::CalibrationTarget;
 use crate::fieldutils::{felt_to_i128, i128_to_felt};
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
 use crate::graph::{
@@ -13,7 +13,7 @@ use crate::graph::{
 };
 use crate::pfsys::evm::aggregation::AggregationCircuit;
 use crate::pfsys::{
-    load_pk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, Snark, TranscriptType,
+    load_pk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, ProofType, Snark, TranscriptType,
 };
 use crate::RunArgs;
 use ethers::types::H160;
@@ -725,8 +725,7 @@ fn setup(
     pk_path,
     proof_path,
     srs_path,
-    transcript,
-    strategy,
+    proof_type,
 ))]
 fn prove(
     witness: PathBuf,
@@ -734,8 +733,7 @@ fn prove(
     pk_path: PathBuf,
     proof_path: Option<PathBuf>,
     srs_path: PathBuf,
-    transcript: TranscriptType,
-    strategy: StrategyType,
+    proof_type: ProofType,
 ) -> PyResult<PyObject> {
     let snark = Runtime::new()
         .unwrap()
@@ -745,8 +743,7 @@ fn prove(
             pk_path,
             proof_path,
             srs_path,
-            transcript,
-            strategy,
+            proof_type,
             CheckMode::UNSAFE,
         ))
         .map_err(|e| {

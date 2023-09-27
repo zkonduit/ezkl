@@ -251,12 +251,6 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     needs: [build, library-tests, python-tests]
     steps:
-      - name: Install binaryen
-        run: |
-            set -e
-            curl -L https://github.com/WebAssembly/binaryen/releases/download/version_116/binaryen-version_116-x86_64-linux.tar.gz | tar xzf -
-            export PATH=$PATH:$PWD/binaryen-version_116/bin
-            wasm-opt --version
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
@@ -273,6 +267,13 @@ jobs:
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
 
+      - name: Build wasm files for both web and nodejs compilation targets
+        run: |
+          wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+
+      - name: Replace memory definition in nodejs
+        run: |
+          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - uses: actions/checkout@v3
       - name: Use pnpm 8
         uses: pnpm/action-setup@v2
@@ -304,6 +305,8 @@ jobs:
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (public outputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --test-threads 8
+      - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --test-threads 8
       - name: KZG prove and verify tests (public inputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input --test-threads 8
@@ -543,7 +546,7 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_17_expects
       - name: XGBoost
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_16_expects
-      - name: Gradient boosted tress
+      - name: Gradient boosted tres
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_15_expects
       - name: Random Forest
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_14_expects

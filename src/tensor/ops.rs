@@ -1186,6 +1186,67 @@ pub fn gather<T: TensorType + Send + Sync>(
     Ok(output)
 }
 
+/// Scatters a tensor along a dimension.
+/// # Arguments
+/// * `input` - Tensor
+/// * `dim` - Dimension to scatter along
+/// * `index` - Tensor of indices to scatter
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::scatter;
+/// let x = Tensor::<f64>::new(
+///   Some(&[1.0, 2.0, 3.0, 4.0]),
+/// &[2, 2],
+/// ).unwrap();
+/// let src = Tensor::<f64>::new(
+///  Some(&[5.0, 6.0, 7.0, 8.0]),
+/// &[2, 2],
+/// ).unwrap();
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 0, 1, 0]),
+/// &[2, 2],
+/// ).unwrap();
+/// let result = scatter(&x, &index, &src, 0).unwrap();
+/// let expected = Tensor::<f64>::new(Some(&[5.0, 8.0, 7.0, 4.0]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn scatter<T: TensorType + Send + Sync>(
+    input: &Tensor<T>,
+    index: &Tensor<usize>,
+    src: &Tensor<T>,
+    dim: usize,
+) -> Result<Tensor<T>, TensorError> {
+    // Writes all values from the tensor src into self at the indices specified in the index tensor.
+    // For each value in src, its output index is specified by its index in src for dimension != dim and by the corresponding value in index for dimension = dim.
+    assert_eq!(index.dims(), src.dims());
+    // Calculate the output tensor size
+    let src_size = src.dims().to_vec();
+
+    // For a 3-D tensor, self is updated as:
+    // self[index[i][j][k]][j][k] = src[i][j][k]  # if dim == 0
+    // self[i][index[i][j][k]][k] = src[i][j][k]  # if dim == 1
+    // self[i][j][index[i][j][k]] = src[i][j][k]  # if dim == 2
+
+    let mut output = input.clone();
+
+    let cartesian_coord = src_size
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    cartesian_coord.iter().for_each(|coord| {
+        let mut new_coord = coord.clone();
+        let index_val = index.get(&coord);
+        new_coord[dim] = index_val;
+        let val = src.get(&coord);
+        output.set(&new_coord, val);
+    });
+
+    Ok(output)
+}
+
 /// Gathers a tensor along a dimension.
 /// # Arguments
 /// * `input` - Tensor

@@ -105,7 +105,7 @@ fn runelgamal(c: &mut Criterion) {
                     &params,
                     public_inputs.clone(),
                     &pk,
-                    TranscriptType::Blake,
+                    TranscriptType::EVM,
                     SingleStrategy::new(&params),
                     CheckMode::UNSAFE,
                 );

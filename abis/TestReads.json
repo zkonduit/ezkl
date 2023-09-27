@@ -2,9 +2,9 @@
 	{
 		"inputs": [
 			{
-				"internalType": "uint256[]",
+				"internalType": "int256[]",
 				"name": "_numbers",
-				"type": "uint256[]"
+				"type": "int256[]"
 			}
 		],
 		"stateMutability": "nonpayable",
@@ -21,9 +21,9 @@
 		"name": "arr",
 		"outputs": [
 			{
-				"internalType": "uint256",
+				"internalType": "int256",
 				"name": "",
-				"type": "uint256"
+				"type": "int256"
 			}
 		],
 		"stateMutability": "view",
