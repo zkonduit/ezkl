@@ -204,7 +204,10 @@ impl AggregationCircuit {
                 &snark.instances,
                 &mut transcript,
             )
-            .map_err(|_| AggregationError::ProofRead)?;
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                AggregationError::ProofRead
+            })?;
             let mut accum = PlonkSuccinctVerifier::verify(
                 svk,
                 snark.protocol.as_ref().unwrap(),
