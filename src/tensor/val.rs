@@ -378,7 +378,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(slice)
     }
 
-    /// Calls `get_slice` on the inner tensor.
+    /// Calls `get_single_elem` on the inner tensor.
     pub fn get_single_elem(&self, index: usize) -> Result<ValTensor<F>, Box<dyn Error>> {
         let slice = match self {
             ValTensor::Value {

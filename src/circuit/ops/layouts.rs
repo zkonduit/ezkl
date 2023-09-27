@@ -553,7 +553,7 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     input.flatten();
 
     // assert we have a single index
-    // assert_eq!(index.dims().iter().product::<usize>(), 1);
+    assert_eq!(index.dims().iter().product::<usize>(), 1);
     assert!(dim_indices.all_prev_assigned() || region.is_dummy());
 
     let is_assigned = !input.any_unknowns() && !index.any_unknowns();
@@ -715,13 +715,19 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     let (mut input, mut index) = (values[0].clone(), values[1].clone());
     index.flatten();
 
+    let mut assigned_len = vec![];
     if !input.all_prev_assigned() {
         input = region.assign(&config.inputs[0], &input)?;
+        assigned_len.push(input.len());
     }
     if !index.all_prev_assigned() {
         index = region.assign(&config.inputs[1], &index)?;
+        assigned_len.push(index.len());
     }
-    region.increment(std::cmp::max(input.len(), index.len()));
+
+    if !assigned_len.is_empty() {
+        region.increment(assigned_len.iter().max().unwrap().clone());
+    }
 
     // Calculate the output tensor size
     let input_dims = input.dims();
@@ -856,6 +862,115 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
     };
 
     Ok(output.into())
+}
+
+/// Gather accumulated layout
+pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 3],
+    dim: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let (mut input, mut index, mut src) = (values[0].clone(), values[1].clone(), values[2].clone());
+
+    assert_eq!(input.dims().len(), index.dims().len());
+
+    let mut assigned_len = vec![];
+
+    if !input.all_prev_assigned() {
+        input = region.assign(&config.inputs[0], &input)?;
+        assigned_len.push(input.len());
+    }
+    if !index.all_prev_assigned() {
+        index = region.assign(&config.inputs[1], &index)?;
+        assigned_len.push(index.len());
+    }
+    if !src.all_prev_assigned() {
+        src = region.assign(&config.output, &src)?;
+        assigned_len.push(src.len());
+    }
+
+    if !assigned_len.is_empty() {
+        region.increment(*assigned_len.iter().max().unwrap());
+    }
+
+    // Calculate the output tensor size
+    let input_dim = input.dims()[dim];
+    let output_size = index.dims().to_vec();
+
+    // these will be assigned as constants
+    let mut indices = Tensor::from((0..input_dim as u64).map(|x| F::from(x)));
+    indices.set_visibility(&crate::graph::Visibility::Fixed);
+    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    region.increment(indices.len());
+
+    // Allocate memory for the output tensor
+    let cartesian_coord = output_size
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let mut unit = Tensor::from(vec![F::from(1)].into_iter());
+    unit.set_visibility(&crate::graph::Visibility::Fixed);
+    let unit: ValTensor<F> = unit.into();
+    region.assign(&config.inputs[1], &unit).unwrap();
+    region.increment(1);
+
+    let mut output = Tensor::new(None, &output_size)?;
+
+    let mut inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> () {
+        let coord = cartesian_coord[i].clone();
+        let index_val = index.get_inner_tensor().unwrap().get(&coord);
+
+        let src_val = src.get_inner_tensor().unwrap().get(&coord);
+        let src_valtensor: ValTensor<F> = Tensor::from([src_val.clone()].into_iter()).into();
+
+        let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+        slice[dim] = 0..input_dim;
+
+        let mut sliced_input = input.get_slice(&slice).unwrap();
+        sliced_input.flatten();
+
+        let index_valtensor: ValTensor<F> = Tensor::from([index_val.clone()].into_iter()).into();
+
+        let mask = equals(config, region, &[index_valtensor, indices.clone()]).unwrap();
+
+        let one_minus_mask =
+            pairwise(config, region, &[unit.clone(), mask.clone()], BaseOp::Sub).unwrap();
+
+        let pairwise_prod = pairwise(config, region, &[src_valtensor, mask], BaseOp::Mult).unwrap();
+        let pairwise_prod_2 = pairwise(
+            config,
+            region,
+            &[sliced_input, one_minus_mask],
+            BaseOp::Mult,
+        )
+        .unwrap();
+
+        let res = pairwise(
+            config,
+            region,
+            &[pairwise_prod, pairwise_prod_2],
+            BaseOp::Add,
+        )
+        .unwrap();
+
+        let input_cartesian_coord = slice.into_iter().multi_cartesian_product();
+
+        let mutable_input_inner = input.get_inner_tensor_mut().unwrap();
+
+        for (i, r) in res.get_inner_tensor().unwrap().iter().enumerate() {
+            let coord = input_cartesian_coord.clone().nth(i).unwrap();
+            *mutable_input_inner.get_mut(&coord) = r.clone();
+        }
+    };
+
+    output.iter_mut().enumerate().for_each(|(i, o)| {
+        *o = inner_loop_function(i, region);
+    });
+
+    Ok(input)
 }
 
 /// sum accumulated layout
@@ -1750,20 +1865,21 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
 
     // we specifically want to use the same kernel and image for all the convolutions and need to enforce this by assigning them
     // 1. assign the kernel
-    let mut assigned_kernel_len = 0;
+    let mut assigned_len = vec![];
+
     if !kernel.all_prev_assigned() {
         kernel = region.assign(&config.inputs[0], &kernel)?;
-        assigned_kernel_len = kernel.len();
+        assigned_len.push(kernel.len());
     }
     // 2. assign the image
-    let mut assigned_image_len = 0;
     if !image.all_prev_assigned() {
         image = region.assign(&config.inputs[1], &image)?;
-        assigned_image_len = image.len();
+        assigned_len.push(image.len());
     }
 
-    // increment the region
-    region.increment(std::cmp::max(assigned_kernel_len, assigned_image_len));
+    if !assigned_len.is_empty() {
+        region.increment(*assigned_len.iter().max().unwrap());
+    }
 
     let og_dims = image.dims().to_vec();
 
@@ -2446,13 +2562,12 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd>(
 
     if !input.all_prev_assigned() {
         input = region.assign(&config.inputs[0], &input)?;
+        region.increment(input.len());
     }
 
     if input.dims().len() == 1 {
         return op(config, region, &[input]);
     }
-
-    region.increment(input.len());
 
     // Calculate the output tensor size
     let input_dims = input.dims();
