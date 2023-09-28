@@ -121,7 +121,7 @@ jobs:
         run: |
           sed -i '51i\
           // import serialize and deserialize from utils.js\
-          import { serialize, deserialize } from '\''./utils.js'\'';\
+          import { serialize, deserialize } from '\''../utils.js'\'';\
           export { serialize, deserialize };' pkg/web/ezkl.js
       - name: Add serialize and deserialize imports to nodejs ezkl.d.ts
         run: |
