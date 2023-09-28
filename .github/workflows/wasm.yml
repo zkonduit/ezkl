@@ -134,6 +134,12 @@ jobs:
           sed -i '1i\
           export declare function serialize(data: object | string): Uint8ClampedArray;\
           export declare function deserialize(buffer: Uint8ClampedArray | Uint8Array): any;' pkg/web/ezkl.d.ts
+          - name: Create README.md in pkg folder
+
+      - name: Create README.md in pkg folder
+        run: |
+          curl -s "https://raw.githubusercontent.com/zkonduit/ezkljs-engine/main/README.md" > ./pkg/README.md
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
