@@ -1,7 +1,9 @@
 import * as wasmFunctions from './nodejs/ezkl'
 import {
     readEzklArtifactsFile,
-    readEzklSrsFile
+    readEzklSrsFile,
+    serialize,
+    deserialize
 } from './utils';
 import fs from 'fs';
 exports.USER_NAME = require("minimist")(process.argv.slice(2))["example"];
@@ -38,6 +40,11 @@ describe('Generate witness, prove and verify', () => {
         result = wasmFunctions.prove(witness, pk, circuit_ser, params_ser);
         const endTimeProve = Date.now();
         proof_ser = new Uint8ClampedArray(result.buffer);
+        // test serialization/deserialization methods
+        const proof_ser_ref = serialize(deserialize(proof_ser));
+        const test = serialize("text");
+        console.log(test);
+        expect(proof_ser_ref).toEqual(proof_ser);
         proveTime = endTimeProve - startTimeProve;
         expect(result).toBeInstanceOf(Uint8Array);
     });
@@ -50,6 +57,7 @@ describe('Generate witness, prove and verify', () => {
         const endTimeVerify = Date.now();
         verifyTime = endTimeVerify - startTimeVerify;
         verifyResult = result;
+        // test serialization/deserialization methods
         expect(typeof result).toBe('boolean');
         expect(result).toBe(true);
     });

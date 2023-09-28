@@ -294,7 +294,7 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Build wasm files for both web and nodejs compilation targets
+      - name: Build wasm package for nodejs target.
         run: |
             wasm-pack build --release --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
       - name: Replace memory definition in nodejs
