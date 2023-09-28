@@ -538,6 +538,10 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: Simple tutorial (public network and outputs)
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_20_expects
+      - name: Simple tutorial (public inputs and outputs)
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_19_expects
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       - name: SVM
@@ -572,7 +576,7 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
       - name: Hashed tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_3_expects
-      - name: Simple tutorial
+      - name: Simple tutorial (all public)
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_4_expects
       - name: Data attestation tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
