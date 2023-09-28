@@ -473,12 +473,18 @@ impl Model {
     pub fn forward(&self, model_inputs: &[Tensor<Fp>]) -> Result<ForwardResult, Box<dyn Error>> {
         let mut results: BTreeMap<&usize, Vec<Tensor<Fp>>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
-        let mut input_idx = 0;
+
+        let input_shapes = self.graph.input_shapes();
+        for (i, input_idx) in self.graph.inputs.iter().enumerate() {
+            let mut input = model_inputs[i].clone();
+            input.reshape(&input_shapes[i]);
+            results.insert(input_idx, vec![input]);
+        }
+
         for (idx, n) in self.graph.nodes.iter() {
             let mut inputs = vec![];
             if n.is_input() {
-                let t = model_inputs[input_idx].clone();
-                input_idx += 1;
+                let t = results.get(idx).unwrap()[0].clone();
                 inputs.push(t);
             } else {
                 for (idx, outlet) in n.inputs().iter() {
@@ -1013,24 +1019,16 @@ impl Model {
 
         let start_time = instant::Instant::now();
 
-        // reshape inputs
-        let inputs: Vec<ValTensor<Fp>> = inputs
-            .iter()
-            .zip(self.graph.input_shapes().iter())
-            .map(|(input, shape)| {
-                let mut t = input.clone();
-                t.reshape(shape).unwrap();
-                t
-            })
-            .collect_vec();
-
         let mut results = BTreeMap::<usize, Vec<ValTensor<Fp>>>::new();
 
+        let input_shapes = self.graph.input_shapes();
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
                 results.insert(*input_idx, vec![vars.instances[i].clone()]);
             } else {
-                results.insert(*input_idx, vec![inputs[i].clone()]);
+                let mut input = inputs[i].clone();
+                input.reshape(&input_shapes[i]).unwrap();
+                results.insert(*input_idx, vec![input]);
             }
         }
 
