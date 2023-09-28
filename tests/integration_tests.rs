@@ -221,17 +221,17 @@ mod native_tests {
         "4l_relu_conv_fc",
         "1l_erf",
         "1l_var",
-        "1l_elu",
+        "1l_elu", //30
         "min",
         "max",
         "1l_max_pool",
         "1l_conv_transpose",
-        "1l_upsample",
+        "1l_upsample", //35
         "1l_identity",
         "idolmodel",
         "trig",
         "prelu_gmm",
-        "lstm",
+        "lstm", //40
         "rnn",
         "quantize_dequantize",
         "1l_where",
@@ -241,7 +241,7 @@ mod native_tests {
         "random_forest",
         "gradient_boosted_trees",
         "1l_topk",
-        "xgboost",
+        "xgboost", //50
         "lightgbm",
         "hummingbird_decision_tree",
         "oh_decision_tree",
@@ -2552,20 +2552,20 @@ mod native_tests {
         assert!(status.success());
         // Create a new set of test on chain data
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-        .args([
-            "setup-test-evm-data",
-            "-D",
-            data_path.as_str(),
-            "-M",
-            &model_path,
-            "--test-data",
-            test_on_chain_data_path.as_str(),
-            rpc_arg.as_str(),
-            test_input_source.as_str(),
-            test_output_source.as_str(),
-        ])
-        .status()
-        .expect("failed to execute process");
+            .args([
+                "setup-test-evm-data",
+                "-D",
+                data_path.as_str(),
+                "-M",
+                &model_path,
+                "--test-data",
+                test_on_chain_data_path.as_str(),
+                rpc_arg.as_str(),
+                test_input_source.as_str(),
+                test_output_source.as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
 
         assert!(status.success());
 

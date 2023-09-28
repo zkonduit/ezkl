@@ -475,6 +475,7 @@ impl Model {
         let mut max_lookup_inputs = 0;
 
         let input_shapes = self.graph.input_shapes();
+
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             let mut input = model_inputs[i].clone();
             input.reshape(&input_shapes[i]);
@@ -543,16 +544,8 @@ impl Model {
                     inputs: input_tuple,
                     ..
                 } => {
-                    let mut orig_inputs = inputs.clone();
-                    let mut input_mappings = input_mappings.clone();
-                    (input_mappings, inputs, orig_inputs) = input_mappings
-                        .iter()
-                        .zip(inputs)
-                        .zip(orig_inputs)
-                        .zip(model.graph.inputs.iter())
-                        .sorted_by_key(|(_, source)| *source)
-                        .map(|(((x, y), z), _)| (x.clone(), y.clone(), z.clone()))
-                        .unzip_n_vec();
+                    let orig_inputs = inputs.clone();
+                    let input_mappings = input_mappings.clone();
 
                     let input_dims = inputs.iter().map(|inp| inp.dims());
                     let num_iter = number_of_iterations(&input_mappings, input_dims.collect());
@@ -1149,16 +1142,8 @@ impl Model {
                     input_mappings,
                     ..
                 } => {
-                    let mut original_values = values.clone();
-                    let mut input_mappings = input_mappings.clone();
-                    (input_mappings, values, original_values) = input_mappings
-                        .iter()
-                        .zip(values)
-                        .zip(original_values)
-                        .zip(model.graph.inputs.iter())
-                        .sorted_by_key(|(_, source)| *source)
-                        .map(|(((x, y), z), _)| (x.clone(), y.clone(), z.clone()))
-                        .unzip_n_vec();
+                    let original_values = values.clone();
+                    let input_mappings = input_mappings.clone();
 
                     let input_dims = values.iter().map(|inp| inp.dims());
                     let num_iter = number_of_iterations(&input_mappings, input_dims.collect());
@@ -1191,7 +1176,6 @@ impl Model {
                                 .inputs
                                 .clone()
                                 .into_iter()
-                                .sorted()
                                 .zip(values.clone().into_iter().map(|v| vec![v])),
                         );
 
