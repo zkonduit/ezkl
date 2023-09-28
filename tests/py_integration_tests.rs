@@ -115,13 +115,13 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 19] = [
+    const TESTS: [&str; 21] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
         "encrypted_vis.ipynb",
         "hashed_vis.ipynb",
-        "simple_demo.ipynb",
+        "simple_demo_all_public.ipynb",
         "data_attest.ipynb",
         "variance.ipynb",
         "mean_postgres.ipynb",
@@ -136,6 +136,8 @@ mod py_tests {
         "xgboost.ipynb",
         "lightgbm.ipynb",
         "svm.ipynb",
+        "simple_demo_public_input_output.ipynb",
+        "simple_demo_public_network_output.ipynb",
     ];
 
     macro_rules! test_func {
@@ -148,7 +150,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=18 {
+            seq!(N in 0..=20 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
