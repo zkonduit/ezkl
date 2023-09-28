@@ -304,7 +304,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         for x in 0..input.num_cols() {
             let qlookup = cs.complex_selector();
             selectors.insert((nl.clone(), x), qlookup);
-            let _ = cs.lookup(Op::<F>::as_string(nl), |cs| {
+            let _ = cs.lookup("", |cs| {
                 let qlookup = cs.query_selector(qlookup);
                 let not_qlookup = Expression::Constant(<F as Field>::ONE) - qlookup.clone();
                 let (default_x, default_y): (F, F) = nl.default_pair();
