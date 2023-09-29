@@ -21,9 +21,15 @@ EZKL
 
 > "I ran this publicly available neural network on some private data and it produced this output"
 
+[![Notebook](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zkonduit/ezkl/blob/main/examples/notebooks/simple_demo_public_network_output.ipynb) 
+
 > "I ran my private neural network on some public data and it produced this output"
 
+[![Notebook](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zkonduit/ezkl/blob/main/examples/notebooks/simple_demo_public_input_output.ipynb) 
+
 > "I correctly ran this publicly available neural network on some public data and it produced this output"
+
+[![Notebook](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zkonduit/ezkl/blob/main/examples/notebooks/simple_demo_all_public.ipynb) 
 
 In the backend we use [Halo2](https://github.com/privacy-scaling-explorations/halo2) as a proof system.
 
