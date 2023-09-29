@@ -19,6 +19,7 @@ const timingData: {
 describe('Generate witness, prove and verify', () => {
 
     let proof_ser: Uint8ClampedArray
+    let proof_ser_ref: Uint8ClampedArray
     let circuit_settings_ser: Uint8ClampedArray;
     let params_ser: Uint8ClampedArray;
 
@@ -42,12 +43,7 @@ describe('Generate witness, prove and verify', () => {
         proof_ser = new Uint8ClampedArray(result.buffer);
         // test serialization/deserialization methods
         const proof = deserialize(proof_ser);
-        const proof_ser_ref = serialize(proof);
-        if (example === "prelu_gmm") {
-            expect(proof_ser_ref.length).toEqual(proof_ser.length);
-        } else {
-            expect(proof_ser_ref).toEqual(proof_ser);
-        }
+        proof_ser_ref = serialize(proof);
         proveTime = endTimeProve - startTimeProve;
         expect(result).toBeInstanceOf(Uint8Array);
     });
@@ -57,12 +53,14 @@ describe('Generate witness, prove and verify', () => {
         const vk = await readEzklArtifactsFile(path, example, 'key.vk');
         const startTimeVerify = Date.now();
         result = wasmFunctions.verify(proof_ser, vk, circuit_settings_ser, params_ser);
+        const result_ref = wasmFunctions.verify(proof_ser_ref, vk, circuit_settings_ser, params_ser);
         const endTimeVerify = Date.now();
         verifyTime = endTimeVerify - startTimeVerify;
         verifyResult = result;
         // test serialization/deserialization methods
         expect(typeof result).toBe('boolean');
         expect(result).toBe(true);
+        expect(result_ref).toBe(true);
     });
 
     afterAll(() => {
