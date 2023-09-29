@@ -818,7 +818,8 @@ impl GraphCircuit {
         settings_mut.run_args.logrows =
             std::cmp::max(settings_mut.run_args.logrows, min_rows_from_constraints);
 
-        settings_mut.run_args.logrows = std::cmp::min(MAX_PUBLIC_SRS, min_rows_from_constraints);
+        settings_mut.run_args.logrows =
+            std::cmp::min(MAX_PUBLIC_SRS, settings_mut.run_args.logrows);
 
         info!(
             "setting bits to: {}, setting logrows to: {}",
