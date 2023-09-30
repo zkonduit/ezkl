@@ -1,7 +1,9 @@
 import * as wasmFunctions from './nodejs/ezkl'
 import {
     readEzklArtifactsFile,
-    readEzklSrsFile
+    readEzklSrsFile,
+    serialize,
+    deserialize
 } from './utils';
 import fs from 'fs';
 exports.USER_NAME = require("minimist")(process.argv.slice(2))["example"];
@@ -17,6 +19,7 @@ const timingData: {
 describe('Generate witness, prove and verify', () => {
 
     let proof_ser: Uint8ClampedArray
+    let proof_ser_ref: Uint8ClampedArray
     let circuit_settings_ser: Uint8ClampedArray;
     let params_ser: Uint8ClampedArray;
 
@@ -38,6 +41,9 @@ describe('Generate witness, prove and verify', () => {
         result = wasmFunctions.prove(witness, pk, circuit_ser, params_ser);
         const endTimeProve = Date.now();
         proof_ser = new Uint8ClampedArray(result.buffer);
+        // test serialization/deserialization methods
+        const proof = deserialize(proof_ser);
+        proof_ser_ref = serialize(proof);
         proveTime = endTimeProve - startTimeProve;
         expect(result).toBeInstanceOf(Uint8Array);
     });
@@ -47,11 +53,14 @@ describe('Generate witness, prove and verify', () => {
         const vk = await readEzklArtifactsFile(path, example, 'key.vk');
         const startTimeVerify = Date.now();
         result = wasmFunctions.verify(proof_ser, vk, circuit_settings_ser, params_ser);
+        const result_ref = wasmFunctions.verify(proof_ser_ref, vk, circuit_settings_ser, params_ser);
         const endTimeVerify = Date.now();
         verifyTime = endTimeVerify - startTimeVerify;
         verifyResult = result;
+        // test serialization/deserialization methods
         expect(typeof result).toBe('boolean');
         expect(result).toBe(true);
+        expect(result_ref).toBe(true);
     });
 
     afterAll(() => {

@@ -47,6 +47,10 @@ jobs:
           echo '{
             "name": "@ezkljs/engine",
             "version": "${{ github.ref_name }}",
+            "dependencies": {
+              "@types/json-bigint": "^1.0.1",
+              "json-bigint": "^1.0.0"
+            },
             "files": [
               "nodejs/ezkl_bg.wasm",
               "nodejs/ezkl.js",
@@ -57,7 +61,8 @@ jobs:
               "web/ezkl.d.ts",
               "web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js",
               "web/package.json",
-              "ezkl.d.ts"
+              "ezkl.d.ts",
+              "utils.js"
             ],
             "main": "nodejs/ezkl.js",
             "module": "web/ezkl.js",
@@ -66,15 +71,73 @@ jobs:
               "web/snippets/*"
             ]
           }' > pkg/package.json
-
+    
       - name: Create ezkl.d.ts in pkg folder
         run: |
-          echo "export const nodejs: typeof import('./nodejs/ezkl');" >> pkg/ezkl.d.ts
-          echo "export const web: typeof import('./web/ezkl');" >> pkg/ezkl.d.ts
+          echo '
+            export const nodejs: typeof import("./nodejs/ezkl");
+            export const web: typeof import("./web/ezkl");
+          ' > pkg/ezkl.d.ts
 
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
+
+      - name: Add serialize and deserialize methods
+        run: |
+          echo '
+          const JSONBig = require("json-bigint");
+
+          function deserialize(buffer) { // buffer is a Uint8ClampedArray | Uint8Array // return a JSON object
+            if (buffer instanceof Uint8ClampedArray) {
+                buffer = new Uint8Array(buffer.buffer);
+            }
+            const string = new TextDecoder().decode(buffer);
+            const jsonObject = JSONBig.parse(string);
+            return jsonObject;
+          }
+          
+          function serialize(data) { // data is an object // return a Uint8ClampedArray
+            // Step 1: Stringify the Object with BigInt support
+            if (typeof data === "object") {
+                data = JSONBig.stringify(data);
+            }
+            // Step 2: Encode the JSON String
+            const uint8Array = new TextEncoder().encode(data);
+          
+            // Step 3: Convert to Uint8ClampedArray
+            return new Uint8ClampedArray(uint8Array.buffer);
+          }
+          
+          module.exports = {
+            deserialize,
+            serialize
+          };
+          ' > pkg/utils.js
+      - name: Add serialize and deserialize imports to nodejs target
+        run: |
+          sed -i '53i// import serialize and deserialize from utils.js\nconst { serialize, deserialize } = require(`../utils.js`);\nmodule.exports.serialize = serialize;\nmodule.exports.deserialize = deserialize;' pkg/nodejs/ezkl.js
+      - name: Add serialize and deserialize imports to web target
+        run: |
+          sed -i '51i\
+          // import serialize and deserialize from utils.js\
+          import { serialize, deserialize } from '\''../utils.js'\'';\
+          export { serialize, deserialize };' pkg/web/ezkl.js
+      - name: Add serialize and deserialize imports to nodejs ezkl.d.ts
+        run: |
+          sed -i '1i\
+          export declare function serialize(data: object | string): Uint8ClampedArray;\
+          export declare function deserialize(buffer: Uint8ClampedArray | Uint8Array): any;' pkg/nodejs/ezkl.d.ts
+
+      - name: Add serialize and deserialize imports to web ezkl.d.ts
+        run: |
+          sed -i '1i\
+          export declare function serialize(data: object | string): Uint8ClampedArray;\
+          export declare function deserialize(buffer: Uint8ClampedArray | Uint8Array): any;' pkg/web/ezkl.d.ts
+
+      - name: Create README.md in pkg folder
+        run: |
+          curl -s "https://raw.githubusercontent.com/zkonduit/ezkljs-engine/main/README.md" > ./pkg/README.md
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
