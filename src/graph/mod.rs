@@ -851,7 +851,7 @@ impl GraphCircuit {
                 .log2()
                 .ceil() as usize
                 + 1;
-            if recommended_bits <= (MAX_PUBLIC_SRS - 1) as usize {
+            if recommended_bits <= MAX_PUBLIC_SRS as usize {
                 self.calc_min_logrows(&res, blinding_offset)
             } else {
                 let err_string = format!(

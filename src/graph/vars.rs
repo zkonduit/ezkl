@@ -221,6 +221,11 @@ impl std::fmt::Display for VarScales {
 }
 
 impl VarScales {
+    ///
+    pub fn get_max(&self) -> u32 {
+        std::cmp::max(self.input, self.params)
+    }
+
     /// Place in [VarScales] struct.
     pub fn from_args(args: &RunArgs) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
