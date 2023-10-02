@@ -255,7 +255,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         cs.enable_equality(col);
         // force there to be at least one dimension
         if dims.is_empty() || dims == vec![vec![0]] {
-            dims = vec![vec![1]];
+            dims = vec![vec![0]];
         }
         ValTensor::Instance {
             inner: col,

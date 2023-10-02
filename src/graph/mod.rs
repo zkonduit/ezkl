@@ -32,7 +32,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{self, Fr as Fp};
 use halo2curves::ff::PrimeField;
-use log::{error, info, trace};
+use log::{debug, error, info, trace};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
@@ -606,7 +606,7 @@ impl GraphCircuit {
             public_inputs.extend(processed_outputs.get_instances().into_iter().flatten());
         }
 
-        trace!("{:?}", public_inputs);
+        debug!("public inputs: {:?}", public_inputs);
 
         Ok(public_inputs)
     }

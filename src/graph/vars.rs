@@ -365,10 +365,8 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
                 instance_scale,
                 existing_instance,
             ))
-        } else if !instance_dims.is_empty() {
-            Some(ValTensor::new_instance(cs, instance_dims, instance_scale))
         } else {
-            None
+            Some(ValTensor::new_instance(cs, instance_dims, instance_scale))
         };
 
         let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);
