@@ -302,6 +302,16 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         self.instance.increment_idx();
     }
 
+    /// Reset the instance offset
+    pub fn set_instance_idx(&mut self, val: usize) {
+        self.instance.set_idx(val);
+    }
+
+    /// Get the instance offset
+    pub fn get_instance_idx(&self) -> usize {
+        self.instance.get_idx()
+    }
+
     /// Allocate all columns that will be assigned to by a model.
     pub fn new(
         cs: &mut ConstraintSystem<F>,

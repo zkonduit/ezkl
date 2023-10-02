@@ -780,13 +780,22 @@ impl GraphCircuit {
         if self.settings().run_args.input_visibility.is_public()
             || self.settings().run_args.output_visibility.is_public()
         {
-            let max_instance_len = self
+            let mut max_instance_len = self
                 .model()
                 .instance_shapes()
                 .iter()
                 .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()))
                 as f32
                 + reserved_blinding_rows;
+            // if there are modules then we need to add the max module size
+            if self.settings().uses_modules() {
+                max_instance_len += self
+                    .settings()
+                    .module_sizes
+                    .num_instances()
+                    .iter()
+                    .sum::<usize>() as f32;
+            }
             let instance_len_logrows = (max_instance_len).log2().ceil() as usize;
             logrows = std::cmp::max(logrows, instance_len_logrows);
             // this is for fixed const columns

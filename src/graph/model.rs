@@ -1026,12 +1026,16 @@ impl Model {
             }
         }
 
+        let instance_idx = vars.get_instance_idx();
+
         config.base.layout_tables(layouter)?;
 
         let outputs = layouter.assign_region(
             || "model",
             |region| {
                 let mut thread_safe_region = RegionCtx::new(region, 0);
+                // we need to do this as this loop is called multiple times
+                vars.set_instance_idx(instance_idx);
 
                 let outputs = self
                     .layout_nodes(&mut config, &mut thread_safe_region, &mut results)
