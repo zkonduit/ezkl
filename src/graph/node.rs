@@ -147,14 +147,23 @@ impl RebaseScale {
             && !inner.is_constant()
             && !inner.is_input()
         {
-            SupportedOp::RebaseScale(RebaseScale {
-                inner: Box::new(inner),
-                target_scale: global_scale * scale_rebase_multiplier,
-                multiplier: scale_to_multiplier(
-                    op_out_scale - global_scale * scale_rebase_multiplier,
-                ),
-                original_scale: op_out_scale,
-            })
+            let multiplier =
+                scale_to_multiplier(op_out_scale - global_scale * scale_rebase_multiplier);
+            if let Some(op) = inner.get_rebased() {
+                return SupportedOp::RebaseScale(RebaseScale {
+                    inner: op.inner.clone(),
+                    target_scale: op.target_scale,
+                    multiplier: op.multiplier * multiplier,
+                    original_scale: op.original_scale,
+                });
+            } else {
+                SupportedOp::RebaseScale(RebaseScale {
+                    inner: Box::new(inner),
+                    target_scale: global_scale * scale_rebase_multiplier,
+                    multiplier,
+                    original_scale: op_out_scale,
+                })
+            }
         } else {
             inner
         }
@@ -163,12 +172,22 @@ impl RebaseScale {
     ///
     pub fn rebase_up(inner: SupportedOp, target_scale: u32, op_out_scale: u32) -> SupportedOp {
         if (op_out_scale < (target_scale)) && !inner.is_constant() && !inner.is_input() {
-            SupportedOp::RebaseScale(RebaseScale {
-                inner: Box::new(inner),
-                target_scale,
-                multiplier: scale_to_multiplier_neg(op_out_scale as i32 - target_scale as i32),
-                original_scale: op_out_scale,
-            })
+            let multiplier = scale_to_multiplier_neg(op_out_scale as i32 - target_scale as i32);
+            if let Some(op) = inner.get_rebased() {
+                return SupportedOp::RebaseScale(RebaseScale {
+                    inner: op.inner.clone(),
+                    target_scale: op.target_scale,
+                    multiplier: op.multiplier * multiplier,
+                    original_scale: op.original_scale,
+                });
+            } else {
+                SupportedOp::RebaseScale(RebaseScale {
+                    inner: Box::new(inner),
+                    target_scale,
+                    multiplier,
+                    original_scale: op_out_scale,
+                })
+            }
         } else {
             inner
         }
@@ -260,6 +279,14 @@ impl SupportedOp {
     pub fn get_input(&self) -> Option<Input> {
         match self {
             SupportedOp::Input(op) => Some(op.clone()),
+            _ => None,
+        }
+    }
+
+    ///
+    pub fn get_rebased(&self) -> Option<&RebaseScale> {
+        match self {
+            SupportedOp::RebaseScale(op) => Some(op),
             _ => None,
         }
     }
@@ -597,7 +624,10 @@ impl Node {
 
         opkind = opkind.homogenous_rescale(in_scales.clone()).into();
         let mut out_scale = opkind.out_scale(in_scales.clone());
-        opkind = RebaseScale::rebase(opkind, scales.input, out_scale, scales.rebase_multiplier);
+        // rescale the inputs if necessary to get consistent fixed points, we select the largest scale (highest precision)
+        let global_scale = scales.get_max();
+        opkind = RebaseScale::rebase(opkind, global_scale, out_scale, scales.rebase_multiplier);
+
         out_scale = opkind.out_scale(in_scales);
 
         // get the output shape

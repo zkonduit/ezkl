@@ -232,15 +232,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::TestUpdateAccountCalls {
             addr,
             data,
-            rpc_url
-        } => {
-            test_update_account_calls(
-                addr,
-                data,
-                rpc_url
-            )
-            .await
-        }
+            rpc_url,
+        } => test_update_account_calls(addr, data, rpc_url).await,
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             witness,
@@ -1141,13 +1134,13 @@ use crate::pfsys::ProofType;
 pub(crate) async fn test_update_account_calls(
     addr: H160,
     data: PathBuf,
-    rpc_url: Option<String>
+    rpc_url: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
     use crate::eth::update_account_calls;
 
     check_solc_requirement();
     let _ = update_account_calls(addr, data, rpc_url.as_deref()).await?;
-    
+
     Ok(())
 }
 
