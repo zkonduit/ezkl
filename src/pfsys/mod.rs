@@ -576,7 +576,7 @@ pub fn create_proof_circuit_kzg<
 >(
     circuit: C,
     params: &'params ParamsKZG<Bn256>,
-    public_inputs: Vec<Vec<Fr>>,
+    public_inputs: Vec<Fr>,
     pk: &ProvingKey<G1Affine>,
     transcript: TranscriptType,
     strategy: Strategy,
@@ -595,7 +595,7 @@ pub fn create_proof_circuit_kzg<
             EvmTranscript<G1Affine, _, _, _>,
         >(
             circuit,
-            public_inputs,
+            vec![public_inputs],
             params,
             pk,
             strategy,
@@ -615,7 +615,7 @@ pub fn create_proof_circuit_kzg<
             PoseidonTranscript<NativeLoader, _>,
         >(
             circuit,
-            public_inputs,
+            vec![public_inputs],
             params,
             pk,
             strategy,

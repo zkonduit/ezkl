@@ -24,7 +24,6 @@ use self::modules::{
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
-use crate::fieldutils::felt_to_i128;
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
 use halo2_proofs::{
@@ -586,46 +585,30 @@ impl GraphCircuit {
     pub fn prepare_public_inputs(
         &mut self,
         data: &GraphWitness,
-    ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Fp>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
-        let mut public_inputs = vec![];
+        let mut public_inputs: Vec<Fp> = vec![];
         if self.settings().run_args.input_visibility.is_public() {
-            public_inputs = self.graph_witness.inputs.clone();
+            public_inputs.extend(self.graph_witness.inputs.clone().into_iter().flatten())
+        } else if let Some(processed_inputs) = &data.processed_inputs {
+            public_inputs.extend(processed_inputs.get_instances().into_iter().flatten());
         }
+
+        if let Some(processed_params) = &data.processed_params {
+            public_inputs.extend(processed_params.get_instances().into_iter().flatten());
+        }
+
         if self.settings().run_args.output_visibility.is_public() {
-            public_inputs.extend(self.graph_witness.outputs.clone());
-        }
-        info!(
-            "public inputs lengths: {:?}",
-            public_inputs
-                .iter()
-                .map(|i| i.len())
-                .collect::<Vec<usize>>()
-        );
-        trace!(
-            "{:?}",
-            public_inputs
-                .clone()
-                .into_iter()
-                .map(|x| x.into_iter().map(felt_to_i128).collect::<Vec<_>>())
-                .collect::<Vec<_>>()
-        );
-
-        let mut pi_inner: Vec<Vec<Fp>> = public_inputs
-            .iter()
-            .map(|i| i.clone().into_iter().collect::<Vec<Fp>>())
-            .collect::<Vec<Vec<Fp>>>();
-
-        let module_instances =
-            GraphModules::public_inputs(data, VarVisibility::from_args(&self.settings().run_args)?);
-
-        if !module_instances.is_empty() {
-            pi_inner.extend(module_instances);
+            public_inputs.extend(self.graph_witness.outputs.clone().into_iter().flatten());
+        } else if let Some(processed_outputs) = &data.processed_outputs {
+            public_inputs.extend(processed_outputs.get_instances().into_iter().flatten());
         }
 
-        Ok(pi_inner)
+        trace!("{:?}", public_inputs);
+
+        Ok(public_inputs)
     }
 
     ///
@@ -1285,7 +1268,7 @@ impl Circuit<Fp> for GraphCircuit {
         let output_visibility = &self.settings().run_args.output_visibility;
         let outlets = output_visibility.overwrites_inputs();
 
-        instance_offset += vars.instance.get_total_instance_len();
+        instance_offset += vars.get_instance_len();
 
         if outlets.len() > 0 {
             let mut output_outlets = vec![];

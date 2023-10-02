@@ -178,29 +178,16 @@ impl ModuleForwardResult {
             vec![]
         }
     }
-}
 
-/// Result from a forward pass
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct ModuleInstances {
-    poseidon: Vec<Fp>,
-    elgamal: Vec<Fp>,
-}
-
-impl ModuleInstances {
-    /// Flatten the instances in order of module config
-    pub fn flatten(&self) -> Vec<Vec<Fp>> {
-        let mut instances = vec![];
-        // check if poseidon is empty
-        if !self.poseidon.is_empty() {
-            // we push as its a 1D vector
-            instances.push(self.poseidon.clone());
+    /// get instances
+    pub fn get_instances(&self) -> Vec<Vec<Fp>> {
+        if let Some(poseidon) = &self.poseidon_hash {
+            poseidon.into_iter().map(|x| vec![*x]).collect()
+        } else if let Some(elgamal) = &self.elgamal {
+            elgamal.ciphertexts.clone()
+        } else {
+            vec![]
         }
-        if !self.elgamal.is_empty() {
-            // we extend as its a 2D vector
-            instances.push(self.elgamal.clone());
-        }
-        instances
     }
 }
 
@@ -247,40 +234,6 @@ impl ModuleSizes {
 pub struct GraphModules;
 
 impl GraphModules {
-    /// Get the instances for the module
-    fn instances_from_visibility(
-        visibility: Visibility,
-        module_res: &Option<ModuleForwardResult>,
-        instances: &mut ModuleInstances,
-    ) {
-        if let Some(res) = module_res {
-            if visibility.is_hashed_public() {
-                instances
-                    .poseidon
-                    .extend(res.poseidon_hash.clone().unwrap());
-            } else if visibility.is_encrypted() {
-                instances.elgamal.extend(
-                    res.elgamal
-                        .clone()
-                        .unwrap()
-                        .ciphertexts
-                        .into_iter()
-                        .flatten(),
-                );
-            }
-        }
-    }
-
-    /// Generate the public inputs for the circuit
-    pub fn public_inputs(data: &GraphWitness, visibility: VarVisibility) -> Vec<Vec<Fp>> {
-        let mut instances = ModuleInstances::default();
-        Self::instances_from_visibility(visibility.input, &data.processed_inputs, &mut instances);
-        Self::instances_from_visibility(visibility.params, &data.processed_params, &mut instances);
-        Self::instances_from_visibility(visibility.output, &data.processed_outputs, &mut instances);
-
-        instances.flatten()
-    }
-
     fn num_constraint_given_shapes(
         visibility: Visibility,
         shapes: Vec<Vec<usize>>,

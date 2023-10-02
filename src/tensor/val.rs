@@ -343,15 +343,6 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         }
     }
 
-    /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_dummy() -> Self {
-        ValTensor::Value {
-            inner: Tensor::new(None, &[0]).unwrap(),
-            dims: vec![],
-            scale: 0,
-        }
-    }
-
     ///
     pub fn any_unknowns(&self) -> bool {
         match self {

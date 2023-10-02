@@ -1024,7 +1024,7 @@ impl Model {
         let input_shapes = self.graph.input_shapes();
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
-                results.insert(*input_idx, vec![vars.instance.clone()]);
+                results.insert(*input_idx, vec![vars.instance.as_ref().unwrap().clone()]);
                 vars.increment_instance_idx();
             } else {
                 let mut input = inputs[i].clone();
@@ -1063,7 +1063,7 @@ impl Model {
                             tolerance.scale = scale_to_multiplier(output_scales[i]).into();
 
                             let comparators = if run_args.output_visibility == Visibility::Public {
-                                let res = vars.instance.clone();
+                                let res = vars.instance.as_ref().unwrap().clone();
                                 vars.increment_instance_idx();
                                 res
                             } else {

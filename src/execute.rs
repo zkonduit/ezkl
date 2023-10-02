@@ -772,7 +772,7 @@ pub(crate) async fn mock(
     let prover = halo2_proofs::dev::MockProver::run(
         circuit.settings().run_args.logrows,
         &circuit,
-        public_inputs,
+        vec![public_inputs],
     )
     .map_err(Box::<dyn Error>::from)?;
     prover
@@ -1276,10 +1276,7 @@ pub(crate) async fn fuzz(
     info!("fuzzing public inputs");
 
     let fuzz_public_inputs = || {
-        let mut bad_inputs = vec![];
-        for l in &public_inputs {
-            bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
-        }
+        let bad_inputs = vec![Fr::random(rand::rngs::OsRng); public_inputs.len()];
 
         let bad_proof = create_proof_circuit_kzg(
             circuit.clone(),
@@ -1499,7 +1496,7 @@ pub(crate) fn mock_aggregate(
 
     let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks)?;
 
-    let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, circuit.instances())
+    let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, vec![circuit.instances()])
         .map_err(Box::<dyn Error>::from)?;
     prover
         .verify_par()

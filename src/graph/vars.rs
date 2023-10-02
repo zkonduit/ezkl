@@ -293,28 +293,47 @@ pub struct ModelVars<F: PrimeField + TensorType + PartialOrd> {
     #[allow(missing_docs)]
     pub advices: Vec<VarTensor>,
     #[allow(missing_docs)]
-    pub instance: ValTensor<F>,
+    pub instance: Option<ValTensor<F>>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
     /// Set the initial instance offset
     pub fn set_initial_instance_offset(&mut self, offset: usize) {
-        self.instance.set_initial_instance_offset(offset);
+        if let Some(instance) = &mut self.instance {
+            instance.set_initial_instance_offset(offset);
+        }
+    }
+
+    /// Get the total instance len
+    pub fn get_instance_len(&self) -> usize {
+        if let Some(instance) = &self.instance {
+            instance.get_total_instance_len()
+        } else {
+            0
+        }
     }
 
     /// Increment the instance offset
     pub fn increment_instance_idx(&mut self) {
-        self.instance.increment_idx();
+        if let Some(instance) = &mut self.instance {
+            instance.increment_idx();
+        }
     }
 
     /// Reset the instance offset
     pub fn set_instance_idx(&mut self, val: usize) {
-        self.instance.set_idx(val);
+        if let Some(instance) = &mut self.instance {
+            instance.set_idx(val);
+        }
     }
 
     /// Get the instance offset
     pub fn get_instance_idx(&self) -> usize {
-        self.instance.get_idx()
+        if let Some(instance) = &self.instance {
+            instance.get_idx()
+        } else {
+            0
+        }
     }
 
     /// Allocate all columns that will be assigned to by a model.
@@ -341,9 +360,15 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
 
         let instance = if let Some(existing_instance) = existing_instance {
             debug!("using existing instance");
-            ValTensor::new_instance_from_col(instance_dims, instance_scale, existing_instance)
+            Some(ValTensor::new_instance_from_col(
+                instance_dims,
+                instance_scale,
+                existing_instance,
+            ))
+        } else if !instance_dims.is_empty() {
+            Some(ValTensor::new_instance(cs, instance_dims, instance_scale))
         } else {
-            ValTensor::new_instance(cs, instance_dims, instance_scale)
+            None
         };
 
         let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);
@@ -356,7 +381,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
     pub fn new_dummy() -> Self {
         ModelVars {
             advices: vec![],
-            instance: ValTensor::new_dummy(),
+            instance: None,
         }
     }
 }
