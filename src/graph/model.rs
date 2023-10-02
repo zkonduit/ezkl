@@ -1005,7 +1005,7 @@ impl Model {
         layouter: &mut impl Layouter<Fp>,
         run_args: &RunArgs,
         inputs: &[ValTensor<Fp>],
-        vars: &ModelVars<Fp>,
+        vars: &mut ModelVars<Fp>,
         witnessed_outputs: &[ValTensor<Fp>],
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         info!("model layout...");
@@ -1017,7 +1017,8 @@ impl Model {
         let input_shapes = self.graph.input_shapes();
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
-                results.insert(*input_idx, vec![vars.instances[i].clone()]);
+                results.insert(*input_idx, vec![vars.instance.clone()]);
+                vars.increment_instance_idx();
             } else {
                 let mut input = inputs[i].clone();
                 input.reshape(&input_shapes[i]).unwrap();
@@ -1050,13 +1051,10 @@ impl Model {
                             let mut tolerance = run_args.tolerance;
                             tolerance.scale = scale_to_multiplier(output_scales[i]).into();
 
-                            let mut instance_offset = 0;
-                            if self.visibility.input.is_public() {
-                                instance_offset += inputs.len();
-                            };
-
                             let comparators = if run_args.output_visibility == Visibility::Public {
-                                vars.instances[instance_offset + i].clone()
+                                let res = vars.instance.clone();
+                                vars.increment_instance_idx();
+                                res
                             } else {
                                 assert_eq!(witnessed_outputs[i].len(), output.len());
                                 witnessed_outputs[i].clone()

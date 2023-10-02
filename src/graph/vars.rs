@@ -3,7 +3,7 @@ use std::error::Error;
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
 use crate::RunArgs;
-use halo2_proofs::plonk::ConstraintSystem;
+use halo2_proofs::plonk::{Column, ConstraintSystem, Instance};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::debug;
@@ -288,10 +288,20 @@ pub struct ModelVars<F: PrimeField + TensorType + PartialOrd> {
     #[allow(missing_docs)]
     pub advices: Vec<VarTensor>,
     #[allow(missing_docs)]
-    pub instances: Vec<ValTensor<F>>,
+    pub instance: ValTensor<F>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
+    /// Set the initial instance offset
+    pub fn set_initial_instance_offset(&mut self, offset: usize) {
+        self.instance.set_initial_instance_offset(offset);
+    }
+
+    /// Increment the instance offset
+    pub fn increment_instance_idx(&mut self) {
+        self.instance.increment_idx();
+    }
+
     /// Allocate all columns that will be assigned to by a model.
     pub fn new(
         cs: &mut ConstraintSystem<F>,
@@ -301,6 +311,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         instance_dims: Vec<Vec<usize>>,
         instance_scale: u32,
         uses_modules: bool,
+        existing_instance: Option<Column<Instance>>,
     ) -> Self {
         info!("number of blinding factors: {}", cs.blinding_factors());
 
@@ -313,23 +324,24 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
             advices.iter().map(|v| v.num_cols()).sum::<usize>()
         );
 
-        // will be empty if instances dims has len 0
-        let instances = (0..instance_dims.len())
-            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), instance_scale))
-            .collect_vec();
-        debug!("model uses {} instance columns", instances.len());
+        let instance = if let Some(existing_instance) = existing_instance {
+            debug!("using existing instance");
+            ValTensor::new_instance_from_col(instance_dims, instance_scale, existing_instance)
+        } else {
+            ValTensor::new_instance(cs, instance_dims, instance_scale)
+        };
 
         let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);
         debug!("model uses {} fixed columns", num_const_cols);
 
-        ModelVars { advices, instances }
+        ModelVars { advices, instance }
     }
 
     /// Allocate all columns that will be assigned to by a model.
     pub fn new_dummy() -> Self {
         ModelVars {
             advices: vec![],
-            instances: vec![],
+            instance: ValTensor::new_dummy(),
         }
     }
 }

@@ -4,7 +4,7 @@ use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::Module;
 use crate::tensor::{Tensor, ValTensor, ValType};
 use halo2_proofs::circuit::{Layouter, Value};
-use halo2_proofs::plonk::{ConstraintSystem, Error};
+use halo2_proofs::plonk::{Column, ConstraintSystem, Error, Instance};
 use halo2curves::bn256::Fr as Fp;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,8 @@ pub struct ModuleConfigs {
     poseidon: Option<ModulePoseidonConfig>,
     /// ElGamal
     elgamal: Option<ElGamalConfig>,
+    /// Instance
+    pub instance: Option<Column<Instance>>,
 }
 
 impl ModuleConfigs {
@@ -39,6 +41,16 @@ impl ModuleConfigs {
     ) -> Self {
         let mut config = Self::default();
 
+        if (visibility.input.is_encrypted()
+            || visibility.output.is_encrypted()
+            || visibility.params.is_encrypted())
+            && module_size.elgamal.1[0] > 0
+        {
+            let elgamal = ElGamalGadget::configure(cs);
+            config.instance = Some(elgamal.instance);
+            config.elgamal = Some(elgamal);
+        };
+
         if (visibility.input.is_hashed()
             || visibility.output.is_hashed()
             || visibility.params.is_hashed())
@@ -48,22 +60,24 @@ impl ModuleConfigs {
                 || visibility.output.is_hashed_public()
                 || visibility.params.is_hashed_public()
             {
-                config.poseidon = Some(ModulePoseidon::configure(cs))
+                if let Some(inst) = config.instance {
+                    config.poseidon = Some(ModulePoseidon::configure_with_optional_instance(
+                        cs,
+                        Some(inst),
+                    ));
+                } else {
+                    let poseidon = ModulePoseidon::configure(cs);
+                    config.instance = poseidon.instance;
+                    config.poseidon = Some(poseidon);
+                }
             } else if visibility.input.is_hashed_private()
                 || visibility.output.is_hashed_private()
                 || visibility.params.is_hashed_private()
             {
-                config.poseidon = Some(ModulePoseidon::configure_without_instance(cs))
+                config.poseidon = Some(ModulePoseidon::configure_with_optional_instance(cs, None));
             }
         };
 
-        if (visibility.input.is_encrypted()
-            || visibility.output.is_encrypted()
-            || visibility.params.is_encrypted())
-            && module_size.elgamal.1[0] > 0
-        {
-            config.elgamal = Some(ElGamalGadget::configure(cs))
-        };
         config
     }
 }
@@ -190,23 +204,6 @@ impl ModuleInstances {
     }
 }
 
-/// Offset for the instances
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct ModuleInstanceOffset {
-    poseidon: Vec<usize>,
-    elgamal: Vec<usize>,
-}
-
-impl ModuleInstanceOffset {
-    ///
-    pub fn new() -> Self {
-        ModuleInstanceOffset {
-            poseidon: vec![0; crate::circuit::modules::poseidon::NUM_INSTANCE_COLUMNS],
-            elgamal: vec![0; crate::circuit::modules::elgamal::NUM_INSTANCE_COLUMNS],
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 ///
 pub struct ModuleSizes {
@@ -326,18 +323,18 @@ impl GraphModules {
         module: &impl Module<Fp>,
         layouter: &mut impl Layouter<Fp>,
         values: &mut [Vec<ValTensor<Fp>>],
-        instance_offset: &mut [usize],
+        instance_offset: &mut usize,
     ) -> Result<(), Error> {
         // reserve module 0 for ... modules
         values.iter_mut().for_each(|x| {
             // hash the input and replace the constrained cells in the input
             let cloned_x = (*x).clone();
             x[0] = module
-                .layout(layouter, &cloned_x, instance_offset.to_owned())
+                .layout(layouter, &cloned_x, vec![instance_offset.to_owned()])
                 .unwrap();
-            for (i, inc) in module.instance_increment_input().iter().enumerate() {
+            for inc in module.instance_increment_input().iter() {
                 // increment the instance offset to make way for future module layouts
-                instance_offset[i] += inc;
+                *instance_offset += inc;
             }
         });
 
@@ -350,7 +347,7 @@ impl GraphModules {
         configs: &ModuleConfigs,
         values: &mut [ValTensor<Fp>],
         element_visibility: &Visibility,
-        instance_offset: &mut ModuleInstanceOffset,
+        instance_offset: &mut usize,
         module_settings: &ModuleVarSettings,
     ) -> Result<(), Error> {
         // If the module is hashed, then we need to hash the inputs
@@ -364,7 +361,7 @@ impl GraphModules {
             // concat values and sk to get the inputs
             let mut inputs = values.iter_mut().map(|x| vec![x.clone()]).collect_vec();
             // layout the module
-            Self::layout_module(&chip, layouter, &mut inputs, &mut instance_offset.poseidon)?;
+            Self::layout_module(&chip, layouter, &mut inputs, instance_offset)?;
             // replace the inputs with the outputs
             values.iter_mut().enumerate().for_each(|(i, x)| {
                 x.clone_from(&inputs[i][0]);
@@ -390,7 +387,7 @@ impl GraphModules {
                 .map(|x| vec![x.clone(), sk.clone().into()])
                 .collect_vec();
             // layout the module
-            Self::layout_module(&chip, layouter, &mut inputs, &mut instance_offset.elgamal)?;
+            Self::layout_module(&chip, layouter, &mut inputs, instance_offset)?;
             // replace the inputs with the outputs
             values.iter_mut().enumerate().for_each(|(i, x)| {
                 x.clone_from(&inputs[i][0]);

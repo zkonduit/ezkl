@@ -84,8 +84,9 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     PoseidonChip<S, WIDTH, RATE, L>
 {
     /// Configuration of the PoseidonChip
-    pub fn configure_without_instance(
+    pub fn configure_with_optional_instance(
         meta: &mut ConstraintSystem<Fp>,
+        instance: Option<Column<Instance>>,
     ) -> PoseidonConfig<WIDTH, RATE> {
         //  instantiate the required columns
         let hash_inputs = (0..WIDTH).map(|_| meta.advice_column()).collect::<Vec<_>>();
@@ -108,7 +109,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
             rc_a.try_into().unwrap(),
             rc_b.try_into().unwrap(),
             hash_inputs,
-            None,
+            instance,
         )
     }
 }
@@ -210,10 +211,13 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                         })
                         .collect(),
                     ValTensor::Instance {
-                        inner: col, dims, ..
+                        inner: col,
+                        dims,
+                        idx,
+                        ..
                     } => {
                         // this should never ever fail
-                        let num_elems = dims.iter().product::<usize>();
+                        let num_elems = dims[*idx].iter().product::<usize>();
                         (0..num_elems)
                             .map(|i| {
                                 let x = i % WIDTH;

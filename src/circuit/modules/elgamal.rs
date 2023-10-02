@@ -71,7 +71,8 @@ pub struct ElGamalConfig {
     poseidon_config: PoseidonConfig<POSEIDON_WIDTH, POSEIDON_RATE>,
     add_config: AddConfig,
     plaintext_col: Column<Advice>,
-    ciphertext_c1_exp_col: Column<Instance>,
+    /// The column used for the instance.
+    pub instance: Column<Instance>,
 }
 
 impl ElGamalConfig {
@@ -115,7 +116,7 @@ impl ElGamalChip {
         let main_gate_config = MainGate::<Fr>::configure(meta);
         let advices = main_gate_config.advices();
         let main_fixed_columns = main_gate_config.fixed();
-        let ciphertext_c1_exp_col = main_gate_config.instance();
+        let instance = main_gate_config.instance();
 
         let rc_a = main_fixed_columns[3..5].try_into().unwrap();
         let rc_b = [meta.fixed_column(), meta.fixed_column()];
@@ -154,7 +155,7 @@ impl ElGamalChip {
             range_config,
             add_config,
             plaintext_col,
-            ciphertext_c1_exp_col,
+            instance,
         }
     }
 }
@@ -555,10 +556,14 @@ impl Module<Fr> for ElGamalGadget {
                         })
                         .collect(),
                     ValTensor::Instance {
-                        inner: col, dims, ..
+                        inner: col,
+                        dims,
+                        idx,
+                        initial_offset,
+                        ..
                     } => {
                         // this should never ever fail
-                        let num_elems = dims.iter().product::<usize>();
+                        let num_elems = initial_offset + dims[*idx].iter().product::<usize>();
                         (0..num_elems)
                             .map(|i| {
                                 region.assign_advice_from_instance(
@@ -627,17 +632,17 @@ impl Module<Fr> for ElGamalGadget {
         layouter
             .constrain_instance(
                 c1.x().native().cell(),
-                self.config.ciphertext_c1_exp_col,
+                self.config.instance,
                 C1_X + row_offset,
             )
             .and(layouter.constrain_instance(
                 c1.y().native().cell(),
-                self.config.ciphertext_c1_exp_col,
+                self.config.instance,
                 C1_Y + row_offset,
             ))
             .and(layouter.constrain_instance(
                 sk_hash.cell(),
-                self.config.ciphertext_c1_exp_col,
+                self.config.instance,
                 SK_H + row_offset,
             ))?;
 
@@ -661,11 +666,7 @@ impl Module<Fr> for ElGamalGadget {
             &c2,
         )?;
 
-        layouter.constrain_instance(
-            c2_hash.cell(),
-            self.config.ciphertext_c1_exp_col,
-            C2_H + row_offset,
-        )?;
+        layouter.constrain_instance(c2_hash.cell(), self.config.instance, C2_H + row_offset)?;
 
         let mut assigned_input: Tensor<ValType<Fr>> =
             msg_var.iter().map(|e| ValType::from(e.clone())).into();

@@ -135,7 +135,7 @@ impl TensorType for f64 {
     }
 }
 
-tensor_type!(bool, Bool, true, false);
+tensor_type!(bool, Bool, false, true);
 tensor_type!(i128, Int128, 0, 1);
 tensor_type!(i32, Int32, 0, 1);
 tensor_type!(usize, USize, 0, 1);

@@ -25,7 +25,6 @@ use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
 use crate::fieldutils::felt_to_i128;
-use crate::graph::modules::ModuleInstanceOffset;
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
 use halo2_proofs::{
@@ -843,7 +842,7 @@ impl GraphCircuit {
                 .log2()
                 .ceil() as usize
                 + 1;
-            if recommended_bits <= (MAX_PUBLIC_SRS-1) as usize {
+            if recommended_bits <= (MAX_PUBLIC_SRS - 1) as usize {
                 self.calc_min_logrows(&res, blinding_offset)
             } else {
                 let err_string = format!(
@@ -1095,6 +1094,9 @@ impl Circuit<Fp> for GraphCircuit {
         });
         let visibility = VarVisibility::from_args(&params.run_args).unwrap();
 
+        let module_configs =
+            ModuleConfigs::from_visibility(cs, visibility, params.module_sizes.clone());
+
         let vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
@@ -1103,6 +1105,7 @@ impl Circuit<Fp> for GraphCircuit {
             params.model_instance_shapes.clone(),
             params.run_args.input_scale,
             params.uses_modules(),
+            module_configs.instance.clone(),
         );
 
         let base = Model::configure(
@@ -1115,8 +1118,6 @@ impl Circuit<Fp> for GraphCircuit {
         .unwrap();
 
         let model_config = ModelConfig { base, vars };
-
-        let module_configs = ModuleConfigs::from_visibility(cs, visibility, params.module_sizes);
 
         trace!(
             "log2_ceil of degrees {:?}",
@@ -1172,10 +1173,8 @@ impl Circuit<Fp> for GraphCircuit {
             })
             .collect::<Vec<ValTensor<Fp>>>();
 
-        let mut instance_offset = ModuleInstanceOffset::new();
+        let mut instance_offset = 0;
         trace!("running input module layout");
-        // we reserve module 0 for poseidon
-        // we reserve module 1 for elgamal
 
         let input_visibility = &self.settings().run_args.input_visibility;
         let outlets = input_visibility.overwrites_inputs();
@@ -1255,13 +1254,17 @@ impl Circuit<Fp> for GraphCircuit {
         // create a new module for the model (space 2)
         layouter.assign_region(|| "_new_module", |_| Ok(()))?;
         trace!("laying out model");
+
+        let mut vars = config.model_config.vars.clone();
+        vars.set_initial_instance_offset(instance_offset);
+
         let mut outputs = model
             .layout(
                 config.model_config.clone(),
                 &mut layouter,
                 &self.settings().run_args,
                 &inputs,
-                &config.model_config.vars,
+                &mut vars,
                 &outputs,
             )
             .map_err(|e| {
@@ -1272,6 +1275,8 @@ impl Circuit<Fp> for GraphCircuit {
 
         let output_visibility = &self.settings().run_args.output_visibility;
         let outlets = output_visibility.overwrites_inputs();
+
+        instance_offset += vars.instance.get_total_instance_len();
 
         if outlets.len() > 0 {
             let mut output_outlets = vec![];
