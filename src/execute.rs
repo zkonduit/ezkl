@@ -812,7 +812,7 @@ pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(
     halo2_proofs::dev::CircuitLayout::default()
         // We hide labels, else most circuits become impossible to decipher because of overlaid text
         .show_labels(false)
-        .render(circuit.settings.run_args.logrows, &circuit, &root)?;
+        .render(circuit.settings().run_args.logrows, &circuit, &root)?;
     Ok(())
 }
 
