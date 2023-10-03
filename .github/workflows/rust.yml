@@ -88,13 +88,13 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: Conv + relu overflow (wasi)
-        run: cargo wasi test conv_relu_col_ultra_overflow -- --include-ignored --nocapture
+        run: cargo wasi test --release conv_relu_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Matmul overflow
       #   run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture -- --include-ignored
       # - name: Conv overflow
       #   run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv + relu overflow
-        run: RUST_LOG=debug cargo nextest run conv_relu_col_ultra_overflow --no-capture -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture -- --include-ignored
 
   model-serialization:
     runs-on: ubuntu-latest-16-cores
@@ -153,7 +153,6 @@ jobs:
           locked: true
       - name: Circuit Render
         run: cargo nextest run --release --verbose tests::tutorial_
-
 
   mock-proving-tests:
     runs-on: self-hosted
@@ -282,8 +281,8 @@ jobs:
       - name: Use Node.js 18.12.1
         uses: actions/setup-node@v3
         with:
-          node-version: '18.12.1'
-          cache: 'pnpm'
+          node-version: "18.12.1"
+          cache: "pnpm"
       - name: Install dependencies
         run: |
           pnpm install --no-frozen-lockfile
@@ -296,10 +295,10 @@ jobs:
           locked: true
       - name: Build wasm package for nodejs target.
         run: |
-            wasm-pack build --release --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+          wasm-pack build --release --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
       - name: Replace memory definition in nodejs
         run: |
-            sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w --test-threads 8
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
@@ -584,4 +583,3 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
       - name: Gan tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
-     
