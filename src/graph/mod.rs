@@ -1149,6 +1149,8 @@ impl Circuit<Fp> for GraphCircuit {
         let input_vis = &self.settings().run_args.input_visibility;
         let output_vis = &self.settings().run_args.output_visibility;
 
+        let mut config = config.clone();
+
         let mut inputs = self
             .graph_witness
             .get_input_tensor()
@@ -1182,7 +1184,7 @@ impl Circuit<Fp> for GraphCircuit {
             }
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut input_outlets,
                 input_visibility,
                 &mut instance_offset,
@@ -1195,7 +1197,7 @@ impl Circuit<Fp> for GraphCircuit {
         } else {
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut inputs,
                 input_visibility,
                 &mut instance_offset,
@@ -1229,7 +1231,7 @@ impl Circuit<Fp> for GraphCircuit {
             // now do stuff to the model params
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut flattened_params,
                 param_visibility,
                 &mut instance_offset,
@@ -1254,8 +1256,6 @@ impl Circuit<Fp> for GraphCircuit {
         let mut vars = config.model_config.vars.clone();
         vars.set_initial_instance_offset(instance_offset);
 
-        println!("instance offset: {}", instance_offset);
-
         let mut outputs = model
             .layout(
                 config.model_config.clone(),
@@ -1276,8 +1276,6 @@ impl Circuit<Fp> for GraphCircuit {
 
         instance_offset += vars.get_instance_len();
 
-        println!("instance offset: {}", instance_offset);
-
         if outlets.len() > 0 {
             let mut output_outlets = vec![];
             for outlet in &outlets {
@@ -1286,7 +1284,7 @@ impl Circuit<Fp> for GraphCircuit {
             // this will re-enter module 0
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut output_outlets,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
@@ -1301,7 +1299,7 @@ impl Circuit<Fp> for GraphCircuit {
             // this will re-enter module 0
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut outputs,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,

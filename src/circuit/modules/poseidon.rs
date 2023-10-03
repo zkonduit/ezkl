@@ -210,8 +210,28 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                             }
                         })
                         .collect(),
-                    ValTensor::Instance { .. } => {
-                        unimplemented!()
+                    ValTensor::Instance {
+                        dims,
+                        inner: col,
+                        idx,
+                        initial_offset,
+                        ..
+                    } => {
+                        // this should never ever fail
+                        let num_elems = dims[*idx].iter().product::<usize>();
+                        (0..num_elems)
+                            .map(|i| {
+                                let x = i % WIDTH;
+                                let y = i / WIDTH;
+                                region.assign_advice_from_instance(
+                                    || "pub input anchor",
+                                    *col,
+                                    initial_offset + i,
+                                    self.config.hash_inputs[x],
+                                    y,
+                                )
+                            })
+                            .collect()
                     }
                 };
 

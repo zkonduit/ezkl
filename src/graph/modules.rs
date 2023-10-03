@@ -275,21 +275,19 @@ impl GraphModules {
     fn layout_module(
         module: &impl Module<Fp>,
         layouter: &mut impl Layouter<Fp>,
-        values: &mut [Vec<ValTensor<Fp>>],
+        x: &mut Vec<ValTensor<Fp>>,
         instance_offset: &mut usize,
     ) -> Result<(), Error> {
         // reserve module 0 for ... modules
-        values.iter_mut().for_each(|x| {
-            // hash the input and replace the constrained cells in the input
-            let cloned_x = (*x).clone();
-            x[0] = module
-                .layout(layouter, &cloned_x, instance_offset.to_owned())
-                .unwrap();
-            for inc in module.instance_increment_input().iter() {
-                // increment the instance offset to make way for future module layouts
-                *instance_offset += inc;
-            }
-        });
+        // hash the input and replace the constrained cells in the input
+        let cloned_x = (*x).clone();
+        x[0] = module
+            .layout(layouter, &cloned_x, instance_offset.to_owned())
+            .unwrap();
+        for inc in module.instance_increment_input().iter() {
+            // increment the instance offset to make way for future module layouts
+            *instance_offset += inc;
+        }
 
         Ok(())
     }
@@ -297,7 +295,7 @@ impl GraphModules {
     /// Layout the module
     pub fn layout(
         layouter: &mut impl Layouter<Fp>,
-        configs: &ModuleConfigs,
+        configs: &mut ModuleConfigs,
         values: &mut [ValTensor<Fp>],
         element_visibility: &Visibility,
         instance_offset: &mut usize,
@@ -305,46 +303,56 @@ impl GraphModules {
     ) -> Result<(), Error> {
         // If the module is hashed, then we need to hash the inputs
         if element_visibility.is_hashed() && !values.is_empty() {
-            // reserve module 0 for poseidon modules
-            layouter.assign_region(|| "_enter_module_0", |_| Ok(()))?;
-            // config for poseidon
-            let poseidon_config = configs.poseidon.clone().unwrap();
-            // create the module
-            let chip = ModulePoseidon::new(poseidon_config);
-            // concat values and sk to get the inputs
-            let mut inputs = values.iter_mut().map(|x| vec![x.clone()]).collect_vec();
-            // layout the module
-            Self::layout_module(&chip, layouter, &mut inputs, instance_offset)?;
-            // replace the inputs with the outputs
-            values.iter_mut().enumerate().for_each(|(i, x)| {
-                x.clone_from(&inputs[i][0]);
-            });
-
+            if let Some(config) = &mut configs.poseidon {
+                // reserve module 0 for poseidon modules
+                layouter.assign_region(|| "_enter_module_0", |_| Ok(()))?;
+                // create the module
+                let chip = ModulePoseidon::new(config.clone());
+                // concat values and sk to get the inputs
+                let mut inputs = values.iter_mut().map(|x| vec![x.clone()]).collect_vec();
+                // layout the module
+                inputs.iter_mut().for_each(|x| {
+                    Self::layout_module(&chip, layouter, x, instance_offset).unwrap();
+                });
+                // replace the inputs with the outputs
+                values.iter_mut().enumerate().for_each(|(i, x)| {
+                    x.clone_from(&inputs[i][0]);
+                });
+            } else {
+                panic!("Poseidon config not initialized");
+            }
         // If the module is encrypted, then we need to encrypt the inputs
         } else if element_visibility.is_encrypted() && !values.is_empty() {
-            // reserve module 1 for elgamal modules
-            layouter.assign_region(|| "_enter_module_1", |_| Ok(()))?;
-            // config for elgamal
-            let elgamal_config = configs.elgamal.clone().unwrap();
-            // create the module
-            let mut chip = ElGamalGadget::new(elgamal_config);
-            // load the variables
-            let variables = module_settings.elgamal.as_ref().unwrap().clone();
-            chip.load_variables(variables.clone());
-            // load the sk:
-            let sk: Tensor<ValType<Fp>> =
-                Tensor::new(Some(&[Value::known(variables.sk).into()]), &[1]).unwrap();
-            // concat values and sk to get the inputs
-            let mut inputs = values
-                .iter_mut()
-                .map(|x| vec![x.clone(), sk.clone().into()])
-                .collect_vec();
-            // layout the module
-            Self::layout_module(&chip, layouter, &mut inputs, instance_offset)?;
-            // replace the inputs with the outputs
-            values.iter_mut().enumerate().for_each(|(i, x)| {
-                x.clone_from(&inputs[i][0]);
-            });
+            if let Some(config) = &mut configs.elgamal {
+                // reserve module 1 for elgamal modules
+                layouter.assign_region(|| "_enter_module_1", |_| Ok(()))?;
+                // create the module
+                let mut chip = ElGamalGadget::new(config.clone());
+                // load the variables
+                let variables = module_settings.elgamal.as_ref().unwrap().clone();
+                chip.load_variables(variables.clone());
+                // load the sk:
+                let sk: Tensor<ValType<Fp>> =
+                    Tensor::new(Some(&[Value::known(variables.sk).into()]), &[1]).unwrap();
+                // concat values and sk to get the inputs
+                let mut inputs = values
+                    .iter_mut()
+                    .map(|x| vec![x.clone(), sk.clone().into()])
+                    .collect_vec();
+                // layout the module
+                inputs.iter_mut().for_each(|x| {
+                    Self::layout_module(&chip, layouter, x, instance_offset).unwrap();
+                    chip.config.initialized = true;
+                });
+                // replace the inputs with the outputs
+                values.iter_mut().enumerate().for_each(|(i, x)| {
+                    x.clone_from(&inputs[i][0]);
+                });
+
+                config.initialized = true;
+            } else {
+                panic!("ElGamal config not initialized");
+            }
         }
 
         Ok(())

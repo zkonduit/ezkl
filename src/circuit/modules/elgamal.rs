@@ -54,7 +54,7 @@ pub const POSEIDON_LEN: usize = 2;
 /// A chip implementing ElGamal encryption.
 pub struct ElGamalChip {
     /// The configuration for this chip.
-    config: ElGamalConfig,
+    pub config: ElGamalConfig,
     /// The ECC chip.
     ecc: BaseFieldEccChip<G1Affine, NUMBER_OF_LIMBS, BIT_LEN_LIMB>,
     /// The Poseidon hash chip.
@@ -73,6 +73,8 @@ pub struct ElGamalConfig {
     plaintext_col: Column<Advice>,
     /// The column used for the instance.
     pub instance: Column<Instance>,
+    /// The config has been initialized.
+    pub initialized: bool,
 }
 
 impl ElGamalConfig {
@@ -156,6 +158,7 @@ impl ElGamalChip {
             add_config,
             plaintext_col,
             instance,
+            initialized: false,
         }
     }
 }
@@ -233,7 +236,7 @@ pub struct ElGamalCipher {
 /// A gadget implementing ElGamal encryption.
 pub struct ElGamalGadget {
     /// The configuration for this gadget.
-    config: ElGamalConfig,
+    pub config: ElGamalConfig,
     /// The variables used in this gadget.
     variables: Option<ElGamalVariables>,
 }
@@ -555,8 +558,26 @@ impl Module<Fr> for ElGamalGadget {
                             e => panic!("wrong input type {:?}, must be previously assigned", e),
                         })
                         .collect(),
-                    ValTensor::Instance { .. } => {
-                        unimplemented!()
+                    ValTensor::Instance {
+                        dims,
+                        inner: col,
+                        idx,
+                        initial_offset,
+                        ..
+                    } => {
+                        // this should never ever fail
+                        let num_elems = dims[*idx].iter().product::<usize>();
+                        (0..num_elems)
+                            .map(|i| {
+                                region.assign_advice_from_instance(
+                                    || "pub input anchor",
+                                    *col,
+                                    initial_offset + i,
+                                    self.config.plaintext_col,
+                                    i,
+                                )
+                            })
+                            .collect()
                     }
                 };
 
@@ -590,8 +611,8 @@ impl Module<Fr> for ElGamalGadget {
         let start_time = instant::Instant::now();
 
         // if all equivalent to 0, then we are in the first row of the circuit
-        if row_offset == 0 {
-            self.config.config_range(layouter)?;
+        if !self.config.initialized {
+            self.config.config_range(layouter).unwrap();
         }
 
         let (msg_var, sk_var) = self.layout_inputs(layouter, inputs)?;
