@@ -28,12 +28,12 @@ pub enum SimpleError {
 pub fn gen_evm_verifier(
     params: &ParamsKZG<Bn256>,
     vk: &VerifyingKey<G1Affine>,
-    num_instance: Vec<usize>,
+    num_instance: usize,
 ) -> Result<YulCode, SimpleError> {
     let protocol = compile(
         params,
         vk,
-        Config::kzg().with_num_instance(num_instance.clone()),
+        Config::kzg().with_num_instance(vec![num_instance.clone()]),
     );
     let vk = (params.get_g()[0], params.g2(), params.s_g2()).into();
 
@@ -41,7 +41,7 @@ pub fn gen_evm_verifier(
     let protocol = protocol.loaded(&loader);
     let mut transcript = EvmTranscript::<_, Rc<EvmLoader>, _, _>::new(&loader);
 
-    let instances = transcript.load_instances(num_instance);
+    let instances = transcript.load_instances(vec![num_instance]);
     let proof = PlonkVerifier::read_proof(&vk, &protocol, &instances, &mut transcript)
         .map_err(|_| SimpleError::ProofRead)?;
     PlonkVerifier::verify(&vk, &protocol, &instances, &proof)
