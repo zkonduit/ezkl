@@ -297,6 +297,18 @@ pub struct ModelVars<F: PrimeField + TensorType + PartialOrd> {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
+    /// Get instance col
+    pub fn get_instance_col(&self) -> Option<&Column<Instance>> {
+        if let Some(instance) = &self.instance {
+            match instance {
+                ValTensor::Instance { inner, .. } => Some(inner),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
     /// Set the initial instance offset
     pub fn set_initial_instance_offset(&mut self, offset: usize) {
         if let Some(instance) = &mut self.instance {
@@ -336,16 +348,34 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         }
     }
 
+    ///
+    pub fn instantiate_instance(
+        &mut self,
+        cs: &mut ConstraintSystem<F>,
+        instance_dims: Vec<Vec<usize>>,
+        instance_scale: u32,
+        existing_instance: Option<Column<Instance>>,
+    ) {
+        debug!("model uses {:?} instance dims", instance_dims);
+        self.instance = if let Some(existing_instance) = existing_instance {
+            debug!("using existing instance");
+            Some(ValTensor::new_instance_from_col(
+                instance_dims,
+                instance_scale,
+                existing_instance,
+            ))
+        } else {
+            Some(ValTensor::new_instance(cs, instance_dims, instance_scale))
+        };
+    }
+
     /// Allocate all columns that will be assigned to by a model.
     pub fn new(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         var_len: usize,
         num_constants: usize,
-        instance_dims: Vec<Vec<usize>>,
-        instance_scale: u32,
         uses_modules: bool,
-        existing_instance: Option<Column<Instance>>,
     ) -> Self {
         info!("number of blinding factors: {}", cs.blinding_factors());
 
@@ -358,21 +388,13 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
             advices.iter().map(|v| v.num_cols()).sum::<usize>()
         );
 
-        let instance = if let Some(existing_instance) = existing_instance {
-            debug!("using existing instance");
-            Some(ValTensor::new_instance_from_col(
-                instance_dims,
-                instance_scale,
-                existing_instance,
-            ))
-        } else {
-            Some(ValTensor::new_instance(cs, instance_dims, instance_scale))
-        };
-
         let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);
         debug!("model uses {} fixed columns", num_const_cols);
 
-        ModelVars { advices, instance }
+        ModelVars {
+            advices,
+            instance: None,
+        }
     }
 
     /// Allocate all columns that will be assigned to by a model.

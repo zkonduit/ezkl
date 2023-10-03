@@ -631,7 +631,7 @@ impl Node {
         out_scale = opkind.out_scale(in_scales);
 
         // get the output shape
-        let out_dims = {
+        let mut out_dims = {
             let output_shapes = match node_output_shapes(&node) {
                 Ok(s) => Some(s),
                 _ => None,
@@ -645,6 +645,10 @@ impl Node {
                 panic!("Could not get output shape for node {:?}", node);
             }
         };
+
+        if out_dims.is_empty() {
+            out_dims = vec![1];
+        }
 
         Ok(Node {
             idx,

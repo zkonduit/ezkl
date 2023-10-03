@@ -1086,18 +1086,22 @@ impl Circuit<Fp> for GraphCircuit {
         });
         let visibility = VarVisibility::from_args(&params.run_args).unwrap();
 
-        let module_configs =
-            ModuleConfigs::from_visibility(cs, visibility, params.module_sizes.clone());
-
-        let vars = ModelVars::new(
+        let mut vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
             params.num_constraints,
             params.total_const_size,
-            params.model_instance_shapes.clone(),
-            params.run_args.input_scale,
             params.uses_modules(),
-            module_configs.instance.clone(),
+        );
+
+        let module_configs =
+            ModuleConfigs::from_visibility(cs, visibility, params.module_sizes.clone());
+
+        vars.instantiate_instance(
+            cs,
+            params.model_instance_shapes,
+            params.run_args.input_scale,
+            module_configs.instance,
         );
 
         let base = Model::configure(

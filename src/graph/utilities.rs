@@ -1106,7 +1106,10 @@ pub fn new_op_from_onnx(
         "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams
             let shapes = node_output_shapes(&node)?;
-            let output_shape = shapes[0].as_ref().unwrap().clone();
+            let mut output_shape = shapes[0].as_ref().unwrap().clone();
+            if output_shape.is_empty() {
+                output_shape = vec![1];
+            }
 
             SupportedOp::Linear(PolyOp::Reshape(output_shape))
         }
