@@ -345,7 +345,7 @@ impl ElGamalGadget {
             chip.poseidon.layout(
                 &mut layouter.namespace(|| "Poseidon hash (encrypted_msg)"),
                 &[poseidon_message.into()],
-                vec![],
+                0,
             )?
         };
 
@@ -377,7 +377,7 @@ impl ElGamalGadget {
             chip.poseidon.layout(
                 &mut layouter.namespace(|| "Poseidon hash (sk)"),
                 &[poseidon_message.into()],
-                vec![],
+                0,
             )?
         };
 
@@ -457,7 +457,7 @@ impl ElGamalGadget {
             chip.poseidon.layout(
                 &mut layouter.namespace(|| "Poseidon hasher"),
                 &[poseidon_message.into()],
-                vec![0],
+                0,
             )?
         };
 
@@ -555,26 +555,8 @@ impl Module<Fr> for ElGamalGadget {
                             e => panic!("wrong input type {:?}, must be previously assigned", e),
                         })
                         .collect(),
-                    ValTensor::Instance {
-                        inner: col,
-                        dims,
-                        idx,
-                        initial_offset,
-                        ..
-                    } => {
-                        // this should never ever fail
-                        let num_elems = initial_offset + dims[*idx].iter().product::<usize>();
-                        (0..num_elems)
-                            .map(|i| {
-                                region.assign_advice_from_instance(
-                                    || "pub input anchor",
-                                    *col,
-                                    i,
-                                    self.config.plaintext_col,
-                                    i,
-                                )
-                            })
-                            .collect()
+                    ValTensor::Instance { .. } => {
+                        unimplemented!()
                     }
                 };
 
@@ -603,16 +585,14 @@ impl Module<Fr> for ElGamalGadget {
         &self,
         layouter: &mut impl Layouter<Fr>,
         inputs: &[ValTensor<Fr>],
-        row_offsets: Vec<usize>,
+        row_offset: usize,
     ) -> Result<ValTensor<Fr>, Error> {
         let start_time = instant::Instant::now();
 
         // if all equivalent to 0, then we are in the first row of the circuit
-        if row_offsets.iter().all(|&x| x == 0) {
+        if row_offset == 0 {
             self.config.config_range(layouter)?;
         }
-
-        let row_offset = row_offsets[0];
 
         let (msg_var, sk_var) = self.layout_inputs(layouter, inputs)?;
 
@@ -758,11 +738,7 @@ mod tests {
             chip.load_variables(self.variables.clone());
             let sk: Tensor<ValType<Fr>> =
                 Tensor::new(Some(&[Value::known(self.variables.sk).into()]), &[1]).unwrap();
-            chip.layout(
-                &mut layouter,
-                &[self.message.clone(), sk.into()],
-                vec![0; NUM_INSTANCE_COLUMNS],
-            )?;
+            chip.layout(&mut layouter, &[self.message.clone(), sk.into()], 0)?;
             Ok(())
         }
     }

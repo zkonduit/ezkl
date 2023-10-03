@@ -46,11 +46,7 @@ impl Circuit<Fr> for MyCircuit {
     ) -> Result<(), Error> {
         let chip: PoseidonChip<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, L> =
             PoseidonChip::new(config);
-        chip.layout(
-            &mut layouter,
-            &[self.image.clone()],
-            vec![0; NUM_INSTANCE_COLUMNS],
-        )?;
+        chip.layout(&mut layouter, &[self.image.clone()], 0)?;
         Ok(())
     }
 }

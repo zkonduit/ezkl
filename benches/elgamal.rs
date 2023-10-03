@@ -49,11 +49,7 @@ impl Circuit<Fr> for EncryptytionCircuit {
         chip.load_variables(self.variables.clone());
         let sk: Tensor<ValType<Fr>> =
             Tensor::new(Some(&[Value::known(self.variables.sk).into()]), &[1]).unwrap();
-        chip.layout(
-            &mut layouter,
-            &[self.message.clone(), sk.into()],
-            vec![0; NUM_INSTANCE_COLUMNS],
-        )?;
+        chip.layout(&mut layouter, &[self.message.clone(), sk.into()], 0)?;
         Ok(())
     }
 }

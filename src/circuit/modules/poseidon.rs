@@ -210,27 +210,8 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                             }
                         })
                         .collect(),
-                    ValTensor::Instance {
-                        inner: col,
-                        dims,
-                        idx,
-                        ..
-                    } => {
-                        // this should never ever fail
-                        let num_elems = dims[*idx].iter().product::<usize>();
-                        (0..num_elems)
-                            .map(|i| {
-                                let x = i % WIDTH;
-                                let y = i / WIDTH;
-                                region.assign_advice_from_instance(
-                                    || "pub input anchor",
-                                    *col,
-                                    i,
-                                    self.config.hash_inputs[x],
-                                    y,
-                                )
-                            })
-                            .collect()
+                    ValTensor::Instance { .. } => {
+                        unimplemented!()
                     }
                 };
 
@@ -263,7 +244,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         &self,
         layouter: &mut impl Layouter<Fp>,
         input: &[ValTensor<Fp>],
-        row_offset: Vec<usize>,
+        row_offset: usize,
     ) -> Result<ValTensor<Fp>, Error> {
         let (mut input_cells, zero_val) = self.layout_inputs(layouter, input)?;
         // extract the values from the input cells
@@ -331,7 +312,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                     let expected_var = region.assign_advice_from_instance(
                         || "pub input anchor",
                         instance,
-                        row_offset[0],
+                        row_offset,
                         self.config.hash_inputs[0],
                         0,
                     )?;
@@ -462,11 +443,7 @@ mod tests {
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
             let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, L> = PoseidonChip::new(config);
-            chip.layout(
-                &mut layouter,
-                &[self.message.clone()],
-                vec![0; NUM_INSTANCE_COLUMNS],
-            )?;
+            chip.layout(&mut layouter, &[self.message.clone()], 0)?;
 
             Ok(())
         }

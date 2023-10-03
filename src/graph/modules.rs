@@ -283,7 +283,7 @@ impl GraphModules {
             // hash the input and replace the constrained cells in the input
             let cloned_x = (*x).clone();
             x[0] = module
-                .layout(layouter, &cloned_x, vec![instance_offset.to_owned()])
+                .layout(layouter, &cloned_x, instance_offset.to_owned())
                 .unwrap();
             for inc in module.instance_increment_input().iter() {
                 // increment the instance offset to make way for future module layouts

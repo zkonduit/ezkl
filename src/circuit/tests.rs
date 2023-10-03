@@ -1403,10 +1403,8 @@ mod add_with_overflow_and_poseidon {
             let poseidon_chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, WIDTH> =
                 PoseidonChip::new(config.poseidon.clone());
 
-            let assigned_inputs_a =
-                poseidon_chip.layout(&mut layouter, &self.inputs[0..1], vec![0])?;
-            let assigned_inputs_b =
-                poseidon_chip.layout(&mut layouter, &self.inputs[1..2], vec![1])?;
+            let assigned_inputs_a = poseidon_chip.layout(&mut layouter, &self.inputs[0..1], 0)?;
+            let assigned_inputs_b = poseidon_chip.layout(&mut layouter, &self.inputs[1..2], 1)?;
 
             layouter.assign_region(|| "_new_module", |_| Ok(()))?;
 
