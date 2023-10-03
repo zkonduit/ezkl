@@ -246,17 +246,10 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 
 impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance(
-        cs: &mut ConstraintSystem<F>,
-        mut dims: Vec<Vec<usize>>,
-        scale: u32,
-    ) -> Self {
+    pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<Vec<usize>>, scale: u32) -> Self {
         let col = cs.instance_column();
         cs.enable_equality(col);
-        // force there to be at least one dimension
-        if dims.is_empty() || dims == vec![vec![0]] {
-            dims = vec![vec![0]];
-        }
+
         ValTensor::Instance {
             inner: col,
             dims,
@@ -267,15 +260,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance_from_col(
-        mut dims: Vec<Vec<usize>>,
-        scale: u32,
-        col: Column<Instance>,
-    ) -> Self {
-        // force there to be at least one dimension
-        if dims.is_empty() || dims == vec![vec![0]] {
-            dims = vec![vec![1]];
-        }
+    pub fn new_instance_from_col(dims: Vec<Vec<usize>>, scale: u32, col: Column<Instance>) -> Self {
         ValTensor::Instance {
             inner: col,
             dims,
@@ -288,9 +273,16 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     ///
     pub fn get_total_instance_len(&self) -> usize {
         match self {
-            ValTensor::Instance { dims, .. } => {
-                dims.iter().map(|x| x.iter().product::<usize>()).sum()
-            }
+            ValTensor::Instance { dims, .. } => dims
+                .iter()
+                .map(|x| {
+                    if !x.is_empty() {
+                        x.iter().product::<usize>()
+                    } else {
+                        0
+                    }
+                })
+                .sum(),
             _ => 0,
         }
     }

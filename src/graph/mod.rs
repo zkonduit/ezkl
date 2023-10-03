@@ -1254,6 +1254,8 @@ impl Circuit<Fp> for GraphCircuit {
         let mut vars = config.model_config.vars.clone();
         vars.set_initial_instance_offset(instance_offset);
 
+        println!("instance offset: {}", instance_offset);
+
         let mut outputs = model
             .layout(
                 config.model_config.clone(),
@@ -1273,6 +1275,8 @@ impl Circuit<Fp> for GraphCircuit {
         let outlets = output_visibility.overwrites_inputs();
 
         instance_offset += vars.get_instance_len();
+
+        println!("instance offset: {}", instance_offset);
 
         if outlets.len() > 0 {
             let mut output_outlets = vec![];
