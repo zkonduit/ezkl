@@ -99,7 +99,7 @@ fn runelgamal(c: &mut Criterion) {
                 let prover = create_proof_circuit_kzg(
                     circuit.clone(),
                     &params,
-                    public_inputs.clone(),
+                    public_inputs[0].clone(),
                     &pk,
                     TranscriptType::EVM,
                     SingleStrategy::new(&params),
