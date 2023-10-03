@@ -403,10 +403,15 @@ where
         .collect::<Vec<&[Scheme::Scalar]>>();
     let pi_inner: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
     trace!("instances {:?}", instances);
+    trace!(
+        "pk num instance column: {:?}",
+        pk.get_vk().cs().num_instance_columns()
+    );
 
     info!("proof started...");
     // not wasm32 unknown
     let now = Instant::now();
+
     create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
@@ -582,6 +587,12 @@ pub fn create_proof_circuit_kzg<
     strategy: Strategy,
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
+    let public_inputs = if !public_inputs.is_empty() {
+        vec![public_inputs]
+    } else {
+        vec![]
+    };
+
     match transcript {
         TranscriptType::EVM => create_proof_circuit::<
             KZGCommitmentScheme<_>,
@@ -595,7 +606,7 @@ pub fn create_proof_circuit_kzg<
             EvmTranscript<G1Affine, _, _, _>,
         >(
             circuit,
-            vec![public_inputs],
+            public_inputs,
             params,
             pk,
             strategy,
@@ -615,7 +626,7 @@ pub fn create_proof_circuit_kzg<
             PoseidonTranscript<NativeLoader, _>,
         >(
             circuit,
-            vec![public_inputs],
+            public_inputs,
             params,
             pk,
             strategy,
