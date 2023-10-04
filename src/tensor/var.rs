@@ -27,7 +27,7 @@ pub enum VarTensor {
 }
 
 impl VarTensor {
-    fn max_rows<F: PrimeField>(cs: &mut ConstraintSystem<F>, logrows: usize) -> usize {
+    fn max_rows<F: PrimeField>(cs: &ConstraintSystem<F>, logrows: usize) -> usize {
         let base = 2u32;
         base.pow(logrows as u32) as usize - cs.blinding_factors() - 1
     }

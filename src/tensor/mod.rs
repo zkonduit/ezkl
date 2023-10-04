@@ -601,13 +601,11 @@ impl<T: Clone + TensorType> Tensor<T> {
     {
         if self.dims.len() < indices.len() {
             return Err(TensorError::DimError);
-        }
-        // else if slice is empty, return empty tensor
-        else if indices.is_empty() {
+        } else if indices.is_empty() {
+            // else if slice is empty, return empty tensor
             return Ok(Tensor::new(None, &[]).unwrap());
-        }
-        // else if slice is the same as dims
-        else if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims {
+        } else if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims {
+            // else if slice is the same as dims, return self
             return Ok(self.clone());
         }
 

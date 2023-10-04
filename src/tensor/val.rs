@@ -289,31 +289,22 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
 
     ///
     pub fn set_initial_instance_offset(&mut self, offset: usize) {
-        match self {
-            ValTensor::Instance { initial_offset, .. } => {
-                *initial_offset = offset;
-            }
-            _ => {}
+        if let ValTensor::Instance { initial_offset, .. } = self {
+            *initial_offset = offset;
         }
     }
 
     ///
     pub fn increment_idx(&mut self) {
-        match self {
-            ValTensor::Instance { idx, .. } => {
-                *idx += 1;
-            }
-            _ => {}
+        if let ValTensor::Instance { idx, .. } = self {
+            *idx += 1;
         }
     }
 
     ///
     pub fn set_idx(&mut self, val: usize) {
-        match self {
-            ValTensor::Instance { idx, .. } => {
-                *idx = val;
-            }
-            _ => {}
+        if let ValTensor::Instance { idx, .. } = self {
+            *idx = val;
         }
     }
 
