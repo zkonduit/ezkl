@@ -721,7 +721,8 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the output tensor size
     let input_dims = input.dims();
     let mut output_size = input_dims.to_vec();
-    if index.dims().is_empty() {
+    if index.is_singleton() {
+        assert_eq!(input_dims[dim], 1);
         output_size.remove(dim);
         input.reshape(&output_size)?;
         return Ok(input);

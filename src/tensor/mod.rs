@@ -498,15 +498,16 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Returns the number of elements in the tensor.
     pub fn len(&self) -> usize {
-        if !self.dims().is_empty() && (self.dims() != [0]) {
-            self.dims().iter().product::<usize>()
-        } else {
-            0
-        }
+        self.dims().iter().product::<usize>()
     }
     /// Checks if the number of elements in tensor is 0.
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.inner.len() == 0
+    }
+
+    /// Checks if the number of elements in tensor is 1 but with an empty dimension (this is for onnx compatibility).
+    pub fn is_singleton(&self) -> bool {
+        self.dims().is_empty() && self.len() == 1
     }
 
     /// Set one single value on the tensor.
