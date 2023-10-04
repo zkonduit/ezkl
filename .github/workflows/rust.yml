@@ -416,7 +416,7 @@ jobs:
         run: cargo nextest run --release tests_examples
 
   neg-tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
