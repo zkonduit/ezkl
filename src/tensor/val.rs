@@ -298,16 +298,6 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     ///
-    pub fn reset_inital_instance_offset(&mut self) {
-        match self {
-            ValTensor::Instance { initial_offset, .. } => {
-                *initial_offset = 0;
-            }
-            _ => {}
-        }
-    }
-
-    ///
     pub fn increment_idx(&mut self) {
         match self {
             ValTensor::Instance { idx, .. } => {
