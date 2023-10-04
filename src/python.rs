@@ -936,13 +936,13 @@ fn create_evm_data_attestation_verifier(
     addr_path,
     sol_code_path,
     rpc_url=None,
-    optimizer_runs=None
+    optimizer_runs=1
 ))]
 fn deploy_evm(
     addr_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
-    optimizer_runs: Option<usize>,
+    optimizer_runs: usize,
 ) -> Result<bool, PyErr> {
     Runtime::new()
         .unwrap()
@@ -966,7 +966,7 @@ fn deploy_evm(
     settings_path,
     sol_code_path,
     rpc_url=None,
-    optimizer_runs=None
+    optimizer_runs=1
 ))]
 fn deploy_da_evm(
     addr_path: PathBuf,
@@ -974,7 +974,7 @@ fn deploy_da_evm(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
-    optimizer_runs: Option<usize>,
+    optimizer_runs: usize,
 ) -> Result<bool, PyErr> {
     Runtime::new()
         .unwrap()

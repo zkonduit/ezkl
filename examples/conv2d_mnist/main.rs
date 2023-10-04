@@ -6,7 +6,7 @@ use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
-use halo2_proofs::poly::kzg::multiopen::VerifierGWC;
+use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
@@ -17,7 +17,6 @@ use halo2_proofs::{
         commitment::ParamsProver,
         kzg::{
             commitment::{KZGCommitmentScheme, ParamsKZG},
-            multiopen::ProverGWC,
             strategy::SingleStrategy,
         },
     },
@@ -427,7 +426,7 @@ pub fn runconv() {
     let now = Instant::now();
     let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
     let mut rng = OsRng;
-    create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
+    create_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
         &params,
         &pk,
         &[circuit],
@@ -447,7 +446,7 @@ pub fn runconv() {
     let now = Instant::now();
     let strategy = SingleStrategy::new(&params);
     let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-    let verify = verify_proof::<_, VerifierGWC<_>, _, _, _>(
+    let verify = verify_proof::<_, VerifierSHPLONK<_>, _, _, _>(
         &params,
         pk.get_vk(),
         strategy,

@@ -17,10 +17,10 @@ use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
 use ethers::solc::{CompilerInput, Solc};
 use ethers::types::transaction::eip2718::TypedTransaction;
-use ethers::types::{Bytes, I256};
 use ethers::types::TransactionRequest;
 use ethers::types::H160;
 use ethers::types::U256;
+use ethers::types::{Bytes, I256};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::{
     prelude::{LocalWallet, Wallet},
@@ -59,10 +59,9 @@ pub async fn setup_eth_backend(
     rpc_url: Option<&str>,
 ) -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
     // Launch anvil
-    let anvil = Anvil::new().args([
-        "--code-size-limit=41943040",
-        "--disable-block-gas-limit"
-    ]).spawn();
+    let anvil = Anvil::new()
+        .args(["--code-size-limit=41943040", "--disable-block-gas-limit"])
+        .spawn();
 
     // Instantiate the wallet
     let wallet: LocalWallet = anvil.keys()[0].clone().into();
@@ -92,12 +91,13 @@ pub async fn setup_eth_backend(
 pub async fn deploy_verifier_via_solidity(
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
-    runs: Option<usize>,
+    runs: usize,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "Verifier", runs)?;
+        get_contract_artifacts(sol_code_path, "Halo2Verifier", runs)?;
+
     let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone())?;
 
     let contract = factory.deploy(())?.send().await?;
@@ -111,7 +111,7 @@ pub async fn deploy_da_verifier_via_solidity(
     input: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
-    runs: Option<usize>,
+    runs: usize,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
@@ -190,7 +190,7 @@ pub async fn deploy_da_verifier_via_solidity(
 
 fn parse_calls_to_accounts(
     calls_to_accounts: Vec<CallsToAccount>,
-) -> Result<(Vec<H160>, Vec<Vec<Bytes>>, Vec<Vec<U256>>),Box<dyn Error>> {
+) -> Result<(Vec<H160>, Vec<Vec<Bytes>>, Vec<Vec<U256>>), Box<dyn Error>> {
     let mut contract_addresses = vec![];
     let mut call_data = vec![];
     let mut decimals: Vec<Vec<U256>> = vec![];
@@ -212,9 +212,8 @@ fn parse_calls_to_accounts(
 pub async fn update_account_calls(
     addr: H160,
     input: PathBuf,
-    rpc_url: Option<&str>
+    rpc_url: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
-
     let input = GraphData::from_path(input)?;
 
     // The data that will be stored in the test contracts that will eventually be read from.
@@ -243,7 +242,11 @@ pub async fn update_account_calls(
     let contract = DataAttestationVerifier::new(addr, client.clone());
 
     contract
-        .update_account_calls(contract_addresses.clone(), call_data.clone(), decimals.clone())
+        .update_account_calls(
+            contract_addresses.clone(),
+            call_data.clone(),
+            decimals.clone(),
+        )
         .send()
         .await?;
 
@@ -257,7 +260,12 @@ pub async fn update_account_calls(
 
     // call to update_account_calls should fail
 
-    if (contract.update_account_calls(contract_addresses, call_data, decimals).send().await).is_err(){
+    if (contract
+        .update_account_calls(contract_addresses, call_data, decimals)
+        .send()
+        .await)
+        .is_err()
+    {
         info!("update_account_calls failed as expected");
     } else {
         panic!("update_account_calls should have failed for non admin account call");
@@ -273,51 +281,13 @@ pub async fn verify_proof_via_solidity(
     addr: ethers::types::Address,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
-    use ethers::abi::{Function, Param, ParamType, StateMutability, Token};
-
-    let mut public_inputs: Vec<U256> = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
 
-    for val in flattened_instances {
-        let bytes = val.to_repr();
-        let u = U256::from_little_endian(bytes.as_slice());
-        public_inputs.push(u);
-    }
-
-    info!("public_inputs: {:#?}", public_inputs);
-    info!(
-        "proof: {:#?}",
-        ethers::types::Bytes::from(proof.proof.to_vec())
+    let encoded = halo2_solidity_verifier::encode_calldata(
+        None,
+        &proof.proof,
+        &flattened_instances.collect::<Vec<_>>(),
     );
-
-    #[allow(deprecated)]
-    let func = Function {
-        name: "verify".to_owned(),
-        inputs: vec![
-            Param {
-                name: "pubInputs".to_owned(),
-                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()),
-                internal_type: None,
-            },
-            Param {
-                name: "proof".to_owned(),
-                kind: ParamType::Bytes,
-                internal_type: None,
-            },
-        ],
-        outputs: vec![Param {
-            name: "success".to_owned(),
-            kind: ParamType::Bool,
-            internal_type: None,
-        }],
-        constant: None,
-        state_mutability: StateMutability::View,
-    };
-
-    let encoded = func.encode_input(&[
-        Token::FixedArray(public_inputs.into_iter().map(Token::Uint).collect()),
-        Token::Bytes(proof.proof),
-    ])?;
 
     info!("encoded: {:#?}", hex::encode(&encoded));
     let (anvil, client) = setup_eth_backend(rpc_url).await?;
@@ -334,7 +304,7 @@ pub async fn verify_proof_via_solidity(
         return Err(Box::new(EvmVerificationError::SolidityExecution));
     }
     let result = result.unwrap();
-    info!("result: {:#?}", result);
+    info!("result: {:#?}", result.to_vec());
     // decode return bytes value into uint8
     let result = result.to_vec().last().unwrap() == &1u8;
     if !result {
@@ -343,10 +313,7 @@ pub async fn verify_proof_via_solidity(
 
     let gas = client.estimate_gas(&tx, None).await?;
 
-    info!(
-        "estimated verify gas cost: {:#?}",
-        gas
-    );
+    info!("estimated verify gas cost: {:#?}", gas);
 
     // if gas is greater than 30 million warn the user that the gas cost is above ethereum's 30 million block gas limit
     if gas > 30_000_000.into() {
@@ -357,7 +324,7 @@ pub async fn verify_proof_via_solidity(
         warn!(
             "Gas cost of verify transaction is greater than 15 million, the target block size for ethereum"
         );
-    } 
+    }
 
     drop(anvil);
     Ok(true)
@@ -389,7 +356,7 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
 
     // Compile the contract
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_path, "TestReads", None).unwrap();
+        get_contract_artifacts(sol_path, "TestReads", 0).unwrap();
 
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
@@ -568,7 +535,7 @@ pub async fn evm_quantize<M: 'static + Middleware>(
     sol_path.push("quantizedata.sol");
     std::fs::write(&sol_path, QUANTIZE_DATA_SOL)?;
 
-    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_path, "QuantizeData", None)?;
+    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_path, "QuantizeData", 0)?;
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
 
@@ -601,12 +568,14 @@ pub async fn evm_quantize<M: 'static + Middleware>(
     let results = contract
         .quantize_data(fetched_inputs, decimals, scales)
         .call()
-        .await.unwrap();
+        .await
+        .unwrap();
 
-    let felts = contract.
-        to_field_element(results.clone())
+    let felts = contract
+        .to_field_element(results.clone())
         .call()
-        .await.unwrap();
+        .await
+        .unwrap();
     info!("evm quantization contract results: {:#?}", felts,);
 
     let results = felts
@@ -645,18 +614,21 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
 pub fn get_contract_artifacts(
     sol_code_path: PathBuf,
     contract_name: &str,
-    runs: Option<usize>,
+    runs: usize,
 ) -> Result<(Contract, Bytes, Bytes), Box<dyn Error>> {
     assert!(sol_code_path.exists());
     // Create the compiler input, enabling the optimizer and setting the optimzer runs.
-    let input: CompilerInput = if let Some(r) = runs {
-        let mut i = CompilerInput::new(sol_code_path)?[0].clone().optimizer(r);
+    let input: CompilerInput = if runs > 0 {
+        let mut i = CompilerInput::new(sol_code_path)?[0]
+            .clone()
+            .optimizer(runs);
         i.settings.optimizer.enable();
         i
     } else {
         CompilerInput::new(sol_code_path)?[0].clone()
     };
     let compiled = Solc::default().compile(&input).unwrap();
+
     let (abi, bytecode, runtime_bytecode) = compiled
         .find(contract_name)
         .expect("could not find contract")

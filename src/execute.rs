@@ -14,9 +14,7 @@ use crate::pfsys::evm::aggregation::AggregationCircuit;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::evm_verify;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::{
-    aggregation::gen_aggregation_evm_verifier, single::gen_evm_verifier, DeploymentCode, YulCode,
-};
+use crate::pfsys::evm::{single::gen_evm_verifier, DeploymentCode, YulCode};
 use crate::pfsys::{
     create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
 };
@@ -834,18 +832,21 @@ pub(crate) fn create_evm_verifier(
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
     trace!("params computed");
 
-    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
+    let generator = halo2_solidity_verifier::SolidityGenerator::new(
+        &params,
+        &vk,
+        halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
+        num_instance,
+    );
+    let verifier_solidity = generator.render().unwrap();
 
-    let mut f = File::create(sol_code_path.clone())?;
-    let _ = f.write(yul_code.as_bytes());
-
-    let output = fix_verifier_sol(sol_code_path.clone(), num_instance as u32, None, None)?;
-
-    let mut f = File::create(sol_code_path.clone())?;
-    let _ = f.write(output.as_bytes());
+    File::create(sol_code_path.clone())
+        .unwrap()
+        .write_all(verifier_solidity.as_bytes())
+        .unwrap();
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Verifier", None)?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -918,7 +919,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestationVerifier", None)?;
+        let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestationVerifier", 0)?;
         // save abi to file
         serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
     } else {
@@ -936,7 +937,7 @@ pub(crate) async fn deploy_da_evm(
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
     addr_path: PathBuf,
-    runs: Option<usize>,
+    runs: usize,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
     let contract_address = deploy_da_verifier_via_solidity(
@@ -960,7 +961,7 @@ pub(crate) async fn deploy_evm(
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
     addr_path: PathBuf,
-    runs: Option<usize>,
+    runs: usize,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
     let contract_address =
@@ -1014,39 +1015,41 @@ pub(crate) fn create_evm_aggregate_verifier(
         .map(|path| GraphSettings::load(path).unwrap())
         .collect::<Vec<_>>();
 
-    let num_public_inputs: usize = settings
+    let num_instance: usize = settings
         .iter()
         .map(|s| s.total_instances().iter().sum::<usize>())
         .sum();
 
+    let num_instance = AggregationCircuit::num_instance(num_instance);
+    assert_eq!(num_instance.len(), 1);
+    let num_instance = num_instance[0];
+
     let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
 
-    let yul_code = gen_aggregation_evm_verifier(
+    let mut generator = halo2_solidity_verifier::SolidityGenerator::new(
         &params,
         &agg_vk,
-        AggregationCircuit::num_instance(num_public_inputs),
-        AggregationCircuit::accumulator_indices(),
-    )?;
+        halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
+        num_instance,
+    );
 
-    let mut f = File::create(sol_code_path.clone())?;
-    let _ = f.write(yul_code.as_bytes());
+    let acc_encoding = halo2_solidity_verifier::AccumulatorEncoding::new(
+        0,
+        AggregationCircuit::num_limbs(),
+        AggregationCircuit::num_bits(),
+    );
 
-    let output = fix_verifier_sol(
-        sol_code_path.clone(),
-        AggregationCircuit::num_instance(num_public_inputs)
-            .iter()
-            .sum::<usize>()
-            .try_into()
-            .unwrap(),
-        None,
-        None,
-    )?;
+    generator = generator.set_acc_encoding(Some(acc_encoding));
 
-    let mut f = File::create(sol_code_path.clone())?;
-    let _ = f.write(output.as_bytes());
+    let verifier_solidity = generator.render().unwrap();
+
+    File::create(sol_code_path.clone())
+        .unwrap()
+        .write_all(verifier_solidity.as_bytes())
+        .unwrap();
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Verifier", None)?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 

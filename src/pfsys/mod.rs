@@ -14,7 +14,7 @@ use halo2_proofs::plonk::{
 };
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
 use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG};
-use halo2_proofs::poly::kzg::multiopen::{ProverGWC, VerifierGWC};
+use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
 use halo2curves::ff::{FromUniformBytes, PrimeField, WithSmallOrderMulGroup};
@@ -577,7 +577,7 @@ pub fn save_params<Scheme: CommitmentScheme>(
 pub fn create_proof_circuit_kzg<
     'params,
     C: Circuit<Fr>,
-    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,
+    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierSHPLONK<'params, Bn256>>,
 >(
     circuit: C,
     params: &'params ParamsKZG<Bn256>,
@@ -598,8 +598,8 @@ pub fn create_proof_circuit_kzg<
             KZGCommitmentScheme<_>,
             Fr,
             _,
-            ProverGWC<_>,
-            VerifierGWC<_>,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
             _,
             _,
             EvmTranscript<G1Affine, _, _, _>,
@@ -618,8 +618,8 @@ pub fn create_proof_circuit_kzg<
             KZGCommitmentScheme<_>,
             Fr,
             _,
-            ProverGWC<_>,
-            VerifierGWC<_>,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
             _,
             _,
             PoseidonTranscript<NativeLoader, _>,
@@ -641,7 +641,7 @@ pub fn create_proof_circuit_kzg<
 /// helper function
 pub(crate) fn verify_proof_circuit_kzg<
     'params,
-    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierGWC<'params, Bn256>>,
+    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierSHPLONK<'params, Bn256>>,
 >(
     params: &'params ParamsKZG<Bn256>,
     proof: Snark<Fr, G1Affine>,
@@ -651,7 +651,7 @@ pub(crate) fn verify_proof_circuit_kzg<
     match proof.transcript_type {
         TranscriptType::EVM => verify_proof_circuit::<
             Fr,
-            VerifierGWC<'_, Bn256>,
+            VerifierSHPLONK<'_, Bn256>,
             _,
             _,
             _,
@@ -659,7 +659,7 @@ pub(crate) fn verify_proof_circuit_kzg<
         >(&proof, params, vk, strategy),
         TranscriptType::Poseidon => verify_proof_circuit::<
             Fr,
-            VerifierGWC<'_, Bn256>,
+            VerifierSHPLONK<'_, Bn256>,
             _,
             _,
             _,
