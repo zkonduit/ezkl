@@ -22,7 +22,6 @@ mod wasm32 {
 
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-    pub const CIRCUIT_PARAMS: &[u8] = include_bytes!("../tests/wasm/settings.json");
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test_network.compiled");
     pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
