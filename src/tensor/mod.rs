@@ -1035,7 +1035,6 @@ impl<T: Clone + TensorType> Tensor<T> {
             .map(move |(i, e)| f(i, e.clone()))
             .collect();
         let mut t: Tensor<G> = Tensor::from(vec?.iter().cloned());
-        println!("{:?}", self.dims());
         t.reshape(self.dims());
         Ok(t)
     }
