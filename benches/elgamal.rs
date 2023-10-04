@@ -1,7 +1,7 @@
 use ark_std::test_rng;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::circuit::modules::elgamal::{
-    ElGamalConfig, ElGamalGadget, ElGamalVariables, NUM_INSTANCE_COLUMNS,
+    ElGamalConfig, ElGamalGadget, ElGamalVariables,
 };
 use ezkl::circuit::modules::Module;
 use ezkl::circuit::*;

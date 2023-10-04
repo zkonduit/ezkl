@@ -834,7 +834,7 @@ pub(crate) fn create_evm_verifier(
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
     trace!("params computed");
 
-    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance.clone())?;
+    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
 
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
@@ -875,7 +875,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings.clone())?;
     trace!("params computed");
 
-    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance.clone())?;
+    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
 
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
@@ -1136,7 +1136,7 @@ pub(crate) async fn test_update_account_calls(
     use crate::eth::update_account_calls;
 
     check_solc_requirement();
-    let _ = update_account_calls(addr, data, rpc_url.as_deref()).await?;
+    update_account_calls(addr, data, rpc_url.as_deref()).await?;
 
     Ok(())
 }

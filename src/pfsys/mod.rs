@@ -48,18 +48,18 @@ pub enum ProofType {
     ForAggr,
 }
 
-impl Into<TranscriptType> for ProofType {
-    fn into(self) -> TranscriptType {
-        match self {
+impl From<ProofType> for TranscriptType {
+    fn from(val: ProofType) -> Self {
+        match val {
             ProofType::Single => TranscriptType::EVM,
             ProofType::ForAggr => TranscriptType::Poseidon,
         }
     }
 }
 
-impl Into<StrategyType> for ProofType {
-    fn into(self) -> StrategyType {
-        match self {
+impl From<ProofType> for StrategyType {
+    fn from(val: ProofType) -> Self {
+        match val {
             ProofType::Single => StrategyType::Single,
             ProofType::ForAggr => StrategyType::Accum,
         }

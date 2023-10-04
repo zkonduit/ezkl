@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
-use ezkl::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig, NUM_INSTANCE_COLUMNS};
+use ezkl::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use ezkl::circuit::modules::Module;
 use ezkl::circuit::*;
 use ezkl::pfsys::create_keys;

@@ -33,7 +33,7 @@ pub fn gen_evm_verifier(
     let protocol = compile(
         params,
         vk,
-        Config::kzg().with_num_instance(vec![num_instance.clone()]),
+        Config::kzg().with_num_instance(vec![num_instance]),
     );
     let vk = (params.get_g()[0], params.g2(), params.s_g2()).into();
 

@@ -182,7 +182,7 @@ impl ModuleForwardResult {
     /// get instances
     pub fn get_instances(&self) -> Vec<Vec<Fp>> {
         if let Some(poseidon) = &self.poseidon_hash {
-            poseidon.into_iter().map(|x| vec![*x]).collect()
+            poseidon.iter().map(|x| vec![*x]).collect()
         } else if let Some(elgamal) = &self.elgamal {
             elgamal.ciphertexts.clone()
         } else {

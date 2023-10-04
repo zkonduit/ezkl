@@ -1177,7 +1177,7 @@ impl Circuit<Fp> for GraphCircuit {
         let input_visibility = &self.settings().run_args.input_visibility;
         let outlets = input_visibility.overwrites_inputs();
 
-        if outlets.len() > 0 {
+        if !outlets.is_empty() {
             let mut input_outlets = vec![];
             for outlet in &outlets {
                 input_outlets.push(inputs[*outlet].clone());
@@ -1276,7 +1276,7 @@ impl Circuit<Fp> for GraphCircuit {
 
         instance_offset += vars.get_instance_len();
 
-        if outlets.len() > 0 {
+        if !outlets.is_empty() {
             let mut output_outlets = vec![];
             for outlet in &outlets {
                 output_outlets.push(outputs[*outlet].clone());

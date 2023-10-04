@@ -150,12 +150,12 @@ impl RebaseScale {
             let multiplier =
                 scale_to_multiplier(op_out_scale - global_scale * scale_rebase_multiplier);
             if let Some(op) = inner.get_rebased() {
-                return SupportedOp::RebaseScale(RebaseScale {
+                SupportedOp::RebaseScale(RebaseScale {
                     inner: op.inner.clone(),
                     target_scale: op.target_scale,
                     multiplier: op.multiplier * multiplier,
                     original_scale: op.original_scale,
-                });
+                })
             } else {
                 SupportedOp::RebaseScale(RebaseScale {
                     inner: Box::new(inner),
@@ -174,12 +174,12 @@ impl RebaseScale {
         if (op_out_scale < (target_scale)) && !inner.is_constant() && !inner.is_input() {
             let multiplier = scale_to_multiplier_neg(op_out_scale as i32 - target_scale as i32);
             if let Some(op) = inner.get_rebased() {
-                return SupportedOp::RebaseScale(RebaseScale {
+                SupportedOp::RebaseScale(RebaseScale {
                     inner: op.inner.clone(),
                     target_scale: op.target_scale,
                     multiplier: op.multiplier * multiplier,
                     original_scale: op.original_scale,
-                });
+                })
             } else {
                 SupportedOp::RebaseScale(RebaseScale {
                     inner: Box::new(inner),
@@ -576,7 +576,7 @@ impl Node {
         });
 
         let (mut opkind, deleted_indices) =
-            new_op_from_onnx(idx, scales, &param_visibility, node.clone(), &mut inputs)?; // parses the op name
+            new_op_from_onnx(idx, scales, param_visibility, node.clone(), &mut inputs)?; // parses the op name
 
         // we can only take the inputs as mutable once -- so we need to collect them first
         other_nodes.extend(
@@ -614,7 +614,7 @@ impl Node {
             let input_node = other_nodes.get_mut(&inputs[input].idx()).unwrap();
             let input_opkind = &mut input_node.opkind();
             if let Some(constant) = input_opkind.get_mutable_constant() {
-                rescale_const_with_single_use(constant, in_scales.clone(), &param_visibility)?;
+                rescale_const_with_single_use(constant, in_scales.clone(), param_visibility)?;
                 input_node.replace_opkind(constant.clone_dyn().into());
                 let out_scale = input_opkind.out_scale(vec![]);
                 input_node.bump_scale(out_scale);
@@ -672,7 +672,7 @@ fn rescale_const_with_single_use(
         if scale_max > &current_scale {
             let raw_values = constant.raw_values.clone();
             constant.quantized_values =
-                super::quantize_tensor(raw_values, *scale_max, &param_visibility)?;
+                super::quantize_tensor(raw_values, *scale_max, param_visibility)?;
         }
     }
 
