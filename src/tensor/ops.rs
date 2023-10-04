@@ -740,6 +740,7 @@ pub fn einsum<
                             slice.push(0..inputs[idx].dims()[i]);
                         }
                     }
+
                     // Get the slice of the input tensor
                     inputs[idx].get_slice(&slice).unwrap()
                 })

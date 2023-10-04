@@ -102,7 +102,7 @@ fn extract_tensor_value(
     let dims = input.shape().to_vec();
 
     let mut const_value: Tensor<f32>;
-    if dims.is_empty() {
+    if dims.is_empty() && input.len() == 0 {
         const_value = Tensor::<f32>::new(None, &dims)?;
         return Ok(const_value);
     }

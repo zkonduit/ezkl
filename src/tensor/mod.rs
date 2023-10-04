@@ -450,6 +450,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, TensorError> {
         let total_dims: usize = if !dims.is_empty() {
             dims.iter().product()
+        } else if let Some(_) = values {
+            1
         } else {
             0
         };
@@ -496,15 +498,11 @@ impl<T: Clone + TensorType> Tensor<T> {
 
     /// Returns the number of elements in the tensor.
     pub fn len(&self) -> usize {
-        if !self.dims().is_empty() && (self.dims() != [0]) {
-            self.dims().iter().product::<usize>()
-        } else {
-            0
-        }
+        self.inner.len()
     }
     /// Checks if the number of elements in tensor is 0.
     pub fn is_empty(&self) -> bool {
-        self.dims().iter().product::<usize>() == 0
+        self.len() == 0
     }
 
     /// Set one single value on the tensor.
@@ -599,11 +597,11 @@ impl<T: Clone + TensorType> Tensor<T> {
     where
         T: Send + Sync,
     {
+        if indices.is_empty() {
+            return Ok(self.clone());
+        }
         if self.dims.len() < indices.len() {
             return Err(TensorError::DimError);
-        } else if indices.is_empty() {
-            // else if slice is empty, return empty tensor
-            return Ok(Tensor::new(None, &[]).unwrap());
         } else if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims {
             // else if slice is the same as dims, return self
             return Ok(self.clone());
