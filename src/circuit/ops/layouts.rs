@@ -163,17 +163,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     let output_eq = equation.next().unwrap();
     let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
 
-    for (i, input) in inputs.iter_mut().enumerate() {
-        if input.dims().len() != inputs_eq[i].len()
-            && input.dims().len() == 1
-            && inputs_eq[i].len() == 2
-        {
-            input.reshape(&[1, input.dims()[0]])?;
-        } else if input.dims().len() != inputs_eq[i].len() {
-            return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
-        }
-    }
-
     // Check that the number of inputs matches the number of inputs in the equation
     if inputs.len() != inputs_eq.len() {
         return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
@@ -663,7 +652,7 @@ pub fn one_hot_axis<F: PrimeField + TensorType + PartialOrd>(
     let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> ValTensor<F> {
         let inp = input_inner[i].clone();
         let tensor = Tensor::new(Some(&[inp.clone()]), &[1]).unwrap();
-        
+
         one_hot(config, region, &[tensor.into()], num_classes).unwrap()
     };
 
@@ -732,7 +721,8 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the output tensor size
     let input_dims = input.dims();
     let mut output_size = input_dims.to_vec();
-    if index.dims().is_empty() {
+    if index.is_singleton() {
+        assert_eq!(input_dims[dim], 1);
         output_size.remove(dim);
         input.reshape(&output_size)?;
         return Ok(input);

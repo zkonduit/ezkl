@@ -102,7 +102,7 @@ fn extract_tensor_value(
     let dims = input.shape().to_vec();
 
     let mut const_value: Tensor<f32>;
-    if dims.is_empty() {
+    if dims.is_empty() && input.len() == 0 {
         const_value = Tensor::<f32>::new(None, &dims)?;
         return Ok(const_value);
     }
@@ -248,7 +248,7 @@ pub fn new_op_from_onnx(
                 op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
                     dim: axis,
                     constant_idx: Some(c.raw_values.map(|x| x as usize)),
-                })
+                });
             }
             // }
 
@@ -1170,7 +1170,6 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
         )?))
     })?;
 
-    value.reshape(const_value.dims());
     value.set_scale(scale);
     value.set_visibility(visibility);
     Ok(value)
