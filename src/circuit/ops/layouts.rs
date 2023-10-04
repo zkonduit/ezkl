@@ -663,8 +663,8 @@ pub fn one_hot_axis<F: PrimeField + TensorType + PartialOrd>(
     let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> ValTensor<F> {
         let inp = input_inner[i].clone();
         let tensor = Tensor::new(Some(&[inp.clone()]), &[1]).unwrap();
-        let res = one_hot(config, region, &[tensor.into()], num_classes).unwrap();
-        res
+        
+        one_hot(config, region, &[tensor.into()], num_classes).unwrap()
     };
 
     if !region.is_dummy() {
@@ -726,7 +726,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if !assigned_len.is_empty() {
-        region.increment(assigned_len.iter().max().unwrap().clone());
+        region.increment(*assigned_len.iter().max().unwrap());
     }
 
     // Calculate the output tensor size
@@ -919,7 +919,7 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
 
     let mut output = Tensor::new(None, &output_size)?;
 
-    let mut inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> () {
+    let mut inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
         let coord = cartesian_coord[i].clone();
         let index_val = index.get_inner_tensor().unwrap().get(&coord);
 

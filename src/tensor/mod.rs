@@ -135,7 +135,7 @@ impl TensorType for f64 {
     }
 }
 
-tensor_type!(bool, Bool, true, false);
+tensor_type!(bool, Bool, false, true);
 tensor_type!(i128, Int128, 0, 1);
 tensor_type!(i32, Int32, 0, 1);
 tensor_type!(usize, USize, 0, 1);
@@ -601,13 +601,11 @@ impl<T: Clone + TensorType> Tensor<T> {
     {
         if self.dims.len() < indices.len() {
             return Err(TensorError::DimError);
-        }
-        // else if slice is empty, return empty tensor
-        else if indices.is_empty() {
+        } else if indices.is_empty() {
+            // else if slice is empty, return empty tensor
             return Ok(Tensor::new(None, &[]).unwrap());
-        }
-        // else if slice is the same as dims
-        else if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims {
+        } else if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims {
+            // else if slice is the same as dims, return self
             return Ok(self.clone());
         }
 

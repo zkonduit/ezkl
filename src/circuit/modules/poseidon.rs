@@ -84,8 +84,9 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     PoseidonChip<S, WIDTH, RATE, L>
 {
     /// Configuration of the PoseidonChip
-    pub fn configure_without_instance(
+    pub fn configure_with_optional_instance(
         meta: &mut ConstraintSystem<Fp>,
+        instance: Option<Column<Instance>>,
     ) -> PoseidonConfig<WIDTH, RATE> {
         //  instantiate the required columns
         let hash_inputs = (0..WIDTH).map(|_| meta.advice_column()).collect::<Vec<_>>();
@@ -108,7 +109,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
             rc_a.try_into().unwrap(),
             rc_b.try_into().unwrap(),
             hash_inputs,
-            None,
+            instance,
         )
     }
 }
@@ -210,10 +211,14 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                         })
                         .collect(),
                     ValTensor::Instance {
-                        inner: col, dims, ..
+                        dims,
+                        inner: col,
+                        idx,
+                        initial_offset,
+                        ..
                     } => {
                         // this should never ever fail
-                        let num_elems = dims.iter().product::<usize>();
+                        let num_elems = dims[*idx].iter().product::<usize>();
                         (0..num_elems)
                             .map(|i| {
                                 let x = i % WIDTH;
@@ -221,7 +226,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                                 region.assign_advice_from_instance(
                                     || "pub input anchor",
                                     *col,
-                                    i,
+                                    initial_offset + i,
                                     self.config.hash_inputs[x],
                                     y,
                                 )
@@ -259,7 +264,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         &self,
         layouter: &mut impl Layouter<Fp>,
         input: &[ValTensor<Fp>],
-        row_offset: Vec<usize>,
+        row_offset: usize,
     ) -> Result<ValTensor<Fp>, Error> {
         let (mut input_cells, zero_val) = self.layout_inputs(layouter, input)?;
         // extract the values from the input cells
@@ -327,7 +332,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                     let expected_var = region.assign_advice_from_instance(
                         || "pub input anchor",
                         instance,
-                        row_offset[0],
+                        row_offset,
                         self.config.hash_inputs[0],
                         0,
                     )?;
@@ -458,11 +463,7 @@ mod tests {
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
             let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, L> = PoseidonChip::new(config);
-            chip.layout(
-                &mut layouter,
-                &[self.message.clone()],
-                vec![0; NUM_INSTANCE_COLUMNS],
-            )?;
+            chip.layout(&mut layouter, &[self.message.clone()], 0)?;
 
             Ok(())
         }

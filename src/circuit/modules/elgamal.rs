@@ -54,7 +54,7 @@ pub const POSEIDON_LEN: usize = 2;
 /// A chip implementing ElGamal encryption.
 pub struct ElGamalChip {
     /// The configuration for this chip.
-    config: ElGamalConfig,
+    pub config: ElGamalConfig,
     /// The ECC chip.
     ecc: BaseFieldEccChip<G1Affine, NUMBER_OF_LIMBS, BIT_LEN_LIMB>,
     /// The Poseidon hash chip.
@@ -71,7 +71,10 @@ pub struct ElGamalConfig {
     poseidon_config: PoseidonConfig<POSEIDON_WIDTH, POSEIDON_RATE>,
     add_config: AddConfig,
     plaintext_col: Column<Advice>,
-    ciphertext_c1_exp_col: Column<Instance>,
+    /// The column used for the instance.
+    pub instance: Column<Instance>,
+    /// The config has been initialized.
+    pub initialized: bool,
 }
 
 impl ElGamalConfig {
@@ -115,7 +118,7 @@ impl ElGamalChip {
         let main_gate_config = MainGate::<Fr>::configure(meta);
         let advices = main_gate_config.advices();
         let main_fixed_columns = main_gate_config.fixed();
-        let ciphertext_c1_exp_col = main_gate_config.instance();
+        let instance = main_gate_config.instance();
 
         let rc_a = main_fixed_columns[3..5].try_into().unwrap();
         let rc_b = [meta.fixed_column(), meta.fixed_column()];
@@ -154,7 +157,8 @@ impl ElGamalChip {
             range_config,
             add_config,
             plaintext_col,
-            ciphertext_c1_exp_col,
+            instance,
+            initialized: false,
         }
     }
 }
@@ -232,7 +236,7 @@ pub struct ElGamalCipher {
 /// A gadget implementing ElGamal encryption.
 pub struct ElGamalGadget {
     /// The configuration for this gadget.
-    config: ElGamalConfig,
+    pub config: ElGamalConfig,
     /// The variables used in this gadget.
     variables: Option<ElGamalVariables>,
 }
@@ -344,7 +348,7 @@ impl ElGamalGadget {
             chip.poseidon.layout(
                 &mut layouter.namespace(|| "Poseidon hash (encrypted_msg)"),
                 &[poseidon_message.into()],
-                vec![],
+                0,
             )?
         };
 
@@ -376,7 +380,7 @@ impl ElGamalGadget {
             chip.poseidon.layout(
                 &mut layouter.namespace(|| "Poseidon hash (sk)"),
                 &[poseidon_message.into()],
-                vec![],
+                0,
             )?
         };
 
@@ -456,7 +460,7 @@ impl ElGamalGadget {
             chip.poseidon.layout(
                 &mut layouter.namespace(|| "Poseidon hasher"),
                 &[poseidon_message.into()],
-                vec![0],
+                0,
             )?
         };
 
@@ -555,16 +559,20 @@ impl Module<Fr> for ElGamalGadget {
                         })
                         .collect(),
                     ValTensor::Instance {
-                        inner: col, dims, ..
+                        dims,
+                        inner: col,
+                        idx,
+                        initial_offset,
+                        ..
                     } => {
                         // this should never ever fail
-                        let num_elems = dims.iter().product::<usize>();
+                        let num_elems = dims[*idx].iter().product::<usize>();
                         (0..num_elems)
                             .map(|i| {
                                 region.assign_advice_from_instance(
                                     || "pub input anchor",
                                     *col,
-                                    i,
+                                    initial_offset + i,
                                     self.config.plaintext_col,
                                     i,
                                 )
@@ -598,16 +606,14 @@ impl Module<Fr> for ElGamalGadget {
         &self,
         layouter: &mut impl Layouter<Fr>,
         inputs: &[ValTensor<Fr>],
-        row_offsets: Vec<usize>,
+        row_offset: usize,
     ) -> Result<ValTensor<Fr>, Error> {
         let start_time = instant::Instant::now();
 
         // if all equivalent to 0, then we are in the first row of the circuit
-        if row_offsets.iter().all(|&x| x == 0) {
-            self.config.config_range(layouter)?;
+        if !self.config.initialized {
+            self.config.config_range(layouter).unwrap();
         }
-
-        let row_offset = row_offsets[0];
 
         let (msg_var, sk_var) = self.layout_inputs(layouter, inputs)?;
 
@@ -627,17 +633,17 @@ impl Module<Fr> for ElGamalGadget {
         layouter
             .constrain_instance(
                 c1.x().native().cell(),
-                self.config.ciphertext_c1_exp_col,
+                self.config.instance,
                 C1_X + row_offset,
             )
             .and(layouter.constrain_instance(
                 c1.y().native().cell(),
-                self.config.ciphertext_c1_exp_col,
+                self.config.instance,
                 C1_Y + row_offset,
             ))
             .and(layouter.constrain_instance(
                 sk_hash.cell(),
-                self.config.ciphertext_c1_exp_col,
+                self.config.instance,
                 SK_H + row_offset,
             ))?;
 
@@ -661,11 +667,7 @@ impl Module<Fr> for ElGamalGadget {
             &c2,
         )?;
 
-        layouter.constrain_instance(
-            c2_hash.cell(),
-            self.config.ciphertext_c1_exp_col,
-            C2_H + row_offset,
-        )?;
+        layouter.constrain_instance(c2_hash.cell(), self.config.instance, C2_H + row_offset)?;
 
         let mut assigned_input: Tensor<ValType<Fr>> =
             msg_var.iter().map(|e| ValType::from(e.clone())).into();
@@ -757,11 +759,7 @@ mod tests {
             chip.load_variables(self.variables.clone());
             let sk: Tensor<ValType<Fr>> =
                 Tensor::new(Some(&[Value::known(self.variables.sk).into()]), &[1]).unwrap();
-            chip.layout(
-                &mut layouter,
-                &[self.message.clone(), sk.into()],
-                vec![0; NUM_INSTANCE_COLUMNS],
-            )?;
+            chip.layout(&mut layouter, &[self.message.clone(), sk.into()], 0)?;
             Ok(())
         }
     }

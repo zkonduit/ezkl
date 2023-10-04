@@ -43,7 +43,7 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
         &self,
         layouter: &mut impl Layouter<F>,
         input: &[ValTensor<F>],
-        row_offsets: Vec<usize>,
+        row_offset: usize,
     ) -> Result<ValTensor<F>, Error>;
     /// Number of instance values the module uses every time it is applied
     fn instance_increment_input(&self) -> Vec<usize>;

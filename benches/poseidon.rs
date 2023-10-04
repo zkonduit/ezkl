@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
-use ezkl::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig, NUM_INSTANCE_COLUMNS};
+use ezkl::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use ezkl::circuit::modules::Module;
 use ezkl::circuit::*;
 use ezkl::pfsys::create_keys;
@@ -46,11 +46,7 @@ impl Circuit<Fr> for MyCircuit {
     ) -> Result<(), Error> {
         let chip: PoseidonChip<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, L> =
             PoseidonChip::new(config);
-        chip.layout(
-            &mut layouter,
-            &[self.image.clone()],
-            vec![0; NUM_INSTANCE_COLUMNS],
-        )?;
+        chip.layout(&mut layouter, &[self.image.clone()], 0)?;
         Ok(())
     }
 }
@@ -94,7 +90,7 @@ fn runposeidon(c: &mut Criterion) {
                 let prover = create_proof_circuit_kzg(
                     circuit.clone(),
                     &params,
-                    output.clone(),
+                    output[0].clone(),
                     &pk,
                     TranscriptType::EVM,
                     SingleStrategy::new(&params),

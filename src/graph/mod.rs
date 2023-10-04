@@ -24,8 +24,6 @@ use self::modules::{
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::CheckMode;
-use crate::fieldutils::felt_to_i128;
-use crate::graph::modules::ModuleInstanceOffset;
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
 use halo2_proofs::{
@@ -34,7 +32,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{self, Fr as Fp};
 use halo2curves::ff::PrimeField;
-use log::{error, info, trace};
+use log::{debug, error, info, trace};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
@@ -587,46 +585,30 @@ impl GraphCircuit {
     pub fn prepare_public_inputs(
         &mut self,
         data: &GraphWitness,
-    ) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Fp>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
-        let mut public_inputs = vec![];
+        let mut public_inputs: Vec<Fp> = vec![];
         if self.settings().run_args.input_visibility.is_public() {
-            public_inputs = self.graph_witness.inputs.clone();
+            public_inputs.extend(self.graph_witness.inputs.clone().into_iter().flatten())
+        } else if let Some(processed_inputs) = &data.processed_inputs {
+            public_inputs.extend(processed_inputs.get_instances().into_iter().flatten());
         }
+
+        if let Some(processed_params) = &data.processed_params {
+            public_inputs.extend(processed_params.get_instances().into_iter().flatten());
+        }
+
         if self.settings().run_args.output_visibility.is_public() {
-            public_inputs.extend(self.graph_witness.outputs.clone());
-        }
-        info!(
-            "public inputs lengths: {:?}",
-            public_inputs
-                .iter()
-                .map(|i| i.len())
-                .collect::<Vec<usize>>()
-        );
-        trace!(
-            "{:?}",
-            public_inputs
-                .clone()
-                .into_iter()
-                .map(|x| x.into_iter().map(felt_to_i128).collect::<Vec<_>>())
-                .collect::<Vec<_>>()
-        );
-
-        let mut pi_inner: Vec<Vec<Fp>> = public_inputs
-            .iter()
-            .map(|i| i.clone().into_iter().collect::<Vec<Fp>>())
-            .collect::<Vec<Vec<Fp>>>();
-
-        let module_instances =
-            GraphModules::public_inputs(data, VarVisibility::from_args(&self.settings().run_args)?);
-
-        if !module_instances.is_empty() {
-            pi_inner.extend(module_instances);
+            public_inputs.extend(self.graph_witness.outputs.clone().into_iter().flatten());
+        } else if let Some(processed_outputs) = &data.processed_outputs {
+            public_inputs.extend(processed_outputs.get_instances().into_iter().flatten());
         }
 
-        Ok(pi_inner)
+        debug!("public inputs: {:?}", public_inputs);
+
+        Ok(public_inputs)
     }
 
     ///
@@ -781,13 +763,22 @@ impl GraphCircuit {
         if self.settings().run_args.input_visibility.is_public()
             || self.settings().run_args.output_visibility.is_public()
         {
-            let max_instance_len = self
+            let mut max_instance_len = self
                 .model()
                 .instance_shapes()
                 .iter()
                 .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()))
                 as f32
                 + reserved_blinding_rows;
+            // if there are modules then we need to add the max module size
+            if self.settings().uses_modules() {
+                max_instance_len += self
+                    .settings()
+                    .module_sizes
+                    .num_instances()
+                    .iter()
+                    .sum::<usize>() as f32;
+            }
             let instance_len_logrows = (max_instance_len).log2().ceil() as usize;
             logrows = std::cmp::max(logrows, instance_len_logrows);
             // this is for fixed const columns
@@ -1095,14 +1086,22 @@ impl Circuit<Fp> for GraphCircuit {
         });
         let visibility = VarVisibility::from_args(&params.run_args).unwrap();
 
-        let vars = ModelVars::new(
+        let mut vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
             params.num_constraints,
             params.total_const_size,
-            params.model_instance_shapes.clone(),
-            params.run_args.input_scale,
             params.uses_modules(),
+        );
+
+        let module_configs =
+            ModuleConfigs::from_visibility(cs, visibility, params.module_sizes.clone());
+
+        vars.instantiate_instance(
+            cs,
+            params.model_instance_shapes,
+            params.run_args.input_scale,
+            module_configs.instance,
         );
 
         let base = Model::configure(
@@ -1115,8 +1114,6 @@ impl Circuit<Fp> for GraphCircuit {
         .unwrap();
 
         let model_config = ModelConfig { base, vars };
-
-        let module_configs = ModuleConfigs::from_visibility(cs, visibility, params.module_sizes);
 
         trace!(
             "log2_ceil of degrees {:?}",
@@ -1152,6 +1149,8 @@ impl Circuit<Fp> for GraphCircuit {
         let input_vis = &self.settings().run_args.input_visibility;
         let output_vis = &self.settings().run_args.output_visibility;
 
+        let mut config = config.clone();
+
         let mut inputs = self
             .graph_witness
             .get_input_tensor()
@@ -1172,22 +1171,20 @@ impl Circuit<Fp> for GraphCircuit {
             })
             .collect::<Vec<ValTensor<Fp>>>();
 
-        let mut instance_offset = ModuleInstanceOffset::new();
+        let mut instance_offset = 0;
         trace!("running input module layout");
-        // we reserve module 0 for poseidon
-        // we reserve module 1 for elgamal
 
         let input_visibility = &self.settings().run_args.input_visibility;
         let outlets = input_visibility.overwrites_inputs();
 
-        if outlets.len() > 0 {
+        if !outlets.is_empty() {
             let mut input_outlets = vec![];
             for outlet in &outlets {
                 input_outlets.push(inputs[*outlet].clone());
             }
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut input_outlets,
                 input_visibility,
                 &mut instance_offset,
@@ -1200,7 +1197,7 @@ impl Circuit<Fp> for GraphCircuit {
         } else {
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut inputs,
                 input_visibility,
                 &mut instance_offset,
@@ -1234,7 +1231,7 @@ impl Circuit<Fp> for GraphCircuit {
             // now do stuff to the model params
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut flattened_params,
                 param_visibility,
                 &mut instance_offset,
@@ -1255,13 +1252,17 @@ impl Circuit<Fp> for GraphCircuit {
         // create a new module for the model (space 2)
         layouter.assign_region(|| "_new_module", |_| Ok(()))?;
         trace!("laying out model");
+
+        let mut vars = config.model_config.vars.clone();
+        vars.set_initial_instance_offset(instance_offset);
+
         let mut outputs = model
             .layout(
                 config.model_config.clone(),
                 &mut layouter,
                 &self.settings().run_args,
                 &inputs,
-                &config.model_config.vars,
+                &mut vars,
                 &outputs,
             )
             .map_err(|e| {
@@ -1273,7 +1274,9 @@ impl Circuit<Fp> for GraphCircuit {
         let output_visibility = &self.settings().run_args.output_visibility;
         let outlets = output_visibility.overwrites_inputs();
 
-        if outlets.len() > 0 {
+        instance_offset += vars.get_instance_len();
+
+        if !outlets.is_empty() {
             let mut output_outlets = vec![];
             for outlet in &outlets {
                 output_outlets.push(outputs[*outlet].clone());
@@ -1281,7 +1284,7 @@ impl Circuit<Fp> for GraphCircuit {
             // this will re-enter module 0
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut output_outlets,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
@@ -1296,7 +1299,7 @@ impl Circuit<Fp> for GraphCircuit {
             // this will re-enter module 0
             GraphModules::layout(
                 &mut layouter,
-                &config.module_configs,
+                &mut config.module_configs,
                 &mut outputs,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,

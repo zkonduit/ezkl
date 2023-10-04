@@ -162,7 +162,11 @@ pub enum ValTensor<F: PrimeField + TensorType + PartialOrd> {
         /// [Instance]
         inner: Column<Instance>,
         /// Vector of dimensions of the tensor.
-        dims: Vec<usize>,
+        dims: Vec<Vec<usize>>,
+        /// Current instance num
+        idx: usize,
+        ///
+        initial_offset: usize,
         ///
         scale: u32,
     },
@@ -242,17 +246,73 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 
 impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance(cs: &mut ConstraintSystem<F>, mut dims: Vec<usize>, scale: u32) -> Self {
+    pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<Vec<usize>>, scale: u32) -> Self {
         let col = cs.instance_column();
         cs.enable_equality(col);
-        // force there to be at least one dimension
-        if dims.is_empty() || dims == vec![0] {
-            dims = vec![1];
-        }
+
         ValTensor::Instance {
             inner: col,
             dims,
+            initial_offset: 0,
+            idx: 0,
             scale,
+        }
+    }
+
+    /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
+    pub fn new_instance_from_col(dims: Vec<Vec<usize>>, scale: u32, col: Column<Instance>) -> Self {
+        ValTensor::Instance {
+            inner: col,
+            dims,
+            idx: 0,
+            initial_offset: 0,
+            scale,
+        }
+    }
+
+    ///
+    pub fn get_total_instance_len(&self) -> usize {
+        match self {
+            ValTensor::Instance { dims, .. } => dims
+                .iter()
+                .map(|x| {
+                    if !x.is_empty() {
+                        x.iter().product::<usize>()
+                    } else {
+                        0
+                    }
+                })
+                .sum(),
+            _ => 0,
+        }
+    }
+
+    ///
+    pub fn set_initial_instance_offset(&mut self, offset: usize) {
+        if let ValTensor::Instance { initial_offset, .. } = self {
+            *initial_offset = offset;
+        }
+    }
+
+    ///
+    pub fn increment_idx(&mut self) {
+        if let ValTensor::Instance { idx, .. } = self {
+            *idx += 1;
+        }
+    }
+
+    ///
+    pub fn set_idx(&mut self, val: usize) {
+        if let ValTensor::Instance { idx, .. } = self {
+            *idx = val;
+        }
+    }
+
+    ///
+    pub fn get_idx(&self) -> usize {
+        match self {
+            ValTensor::Instance { idx, .. } => *idx,
+            _ => 0,
         }
     }
 
@@ -469,11 +529,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 v.reshape(new_dims);
                 *d = v.dims().to_vec();
             }
-            ValTensor::Instance { dims: d, .. } => {
-                if d.iter().product::<usize>() != new_dims.iter().product::<usize>() {
+            ValTensor::Instance { dims: d, idx, .. } => {
+                if d[*idx].iter().product::<usize>() != new_dims.iter().product::<usize>() {
                     return Err(Box::new(TensorError::DimError));
                 }
-                *d = new_dims.to_vec();
+                d[*idx] = new_dims.to_vec();
             }
         };
         Ok(())
@@ -509,8 +569,8 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 v.flatten();
                 *d = v.dims().to_vec();
             }
-            ValTensor::Instance { dims: d, .. } => {
-                *d = vec![d.iter().product()];
+            ValTensor::Instance { dims: d, idx, .. } => {
+                d[*idx] = vec![d[*idx].iter().product()];
             }
         }
     }
@@ -666,7 +726,15 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// Calls `len` on the inner [Tensor].
     pub fn len(&self) -> usize {
         match self {
-            ValTensor::Value { dims, .. } | ValTensor::Instance { dims, .. } => {
+            ValTensor::Value { dims, .. } => {
+                if !dims.is_empty() && (dims != &[0]) {
+                    dims.iter().product::<usize>()
+                } else {
+                    0
+                }
+            }
+            ValTensor::Instance { dims, idx, .. } => {
+                let dims = dims[*idx].clone();
                 if !dims.is_empty() && (dims != &[0]) {
                     dims.iter().product::<usize>()
                 } else {
@@ -711,7 +779,8 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// Returns the `dims` attribute of the [ValTensor].
     pub fn dims(&self) -> &[usize] {
         match self {
-            ValTensor::Value { dims: d, .. } | ValTensor::Instance { dims: d, .. } => d,
+            ValTensor::Value { dims: d, .. } => d,
+            ValTensor::Instance { dims: d, idx, .. } => &d[*idx],
         }
     }
     /// A [String] representation of the [ValTensor] for display, for example in showing intermediate values in a computational graph.

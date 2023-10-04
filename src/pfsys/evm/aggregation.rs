@@ -253,7 +253,7 @@ impl AggregationCircuit {
     }
 
     /// Instance variables for the aggregation circuit, fed to verifier.
-    pub fn instances(&self) -> Vec<Vec<Fr>> {
+    pub fn instances(&self) -> Vec<Fr> {
         // also get snark instances here
         let mut snark_instances: Vec<Vec<Vec<Value<Fr>>>> = self
             .snarks
@@ -262,14 +262,14 @@ impl AggregationCircuit {
             .collect_vec();
 
         // reduce from Vec<Vec<Vec<Value<Fr>>>> to Vec<Vec<Value<Fr>>>
-        let mut instances: Vec<Vec<Fr>> = vec![self.instances.clone()];
+        let mut instances: Vec<Fr> = self.instances.clone();
         for snark_instance in snark_instances.iter_mut() {
             for instance in snark_instance.iter_mut() {
                 let mut felt_evals = vec![];
                 for value in instance.iter_mut() {
                     value.map(|v| felt_evals.push(v));
                 }
-                instances[0].extend(felt_evals);
+                instances.extend(felt_evals);
             }
         }
 

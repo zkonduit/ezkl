@@ -48,18 +48,18 @@ pub enum ProofType {
     ForAggr,
 }
 
-impl Into<TranscriptType> for ProofType {
-    fn into(self) -> TranscriptType {
-        match self {
+impl From<ProofType> for TranscriptType {
+    fn from(val: ProofType) -> Self {
+        match val {
             ProofType::Single => TranscriptType::EVM,
             ProofType::ForAggr => TranscriptType::Poseidon,
         }
     }
 }
 
-impl Into<StrategyType> for ProofType {
-    fn into(self) -> StrategyType {
-        match self {
+impl From<ProofType> for StrategyType {
+    fn from(val: ProofType) -> Self {
+        match val {
             ProofType::Single => StrategyType::Single,
             ProofType::ForAggr => StrategyType::Accum,
         }
@@ -403,10 +403,15 @@ where
         .collect::<Vec<&[Scheme::Scalar]>>();
     let pi_inner: &[&[&[Scheme::Scalar]]] = &[&pi_inner];
     trace!("instances {:?}", instances);
+    trace!(
+        "pk num instance column: {:?}",
+        pk.get_vk().cs().num_instance_columns()
+    );
 
     info!("proof started...");
     // not wasm32 unknown
     let now = Instant::now();
+
     create_proof::<Scheme, P, _, _, TW, _>(
         params,
         pk,
@@ -576,12 +581,18 @@ pub fn create_proof_circuit_kzg<
 >(
     circuit: C,
     params: &'params ParamsKZG<Bn256>,
-    public_inputs: Vec<Vec<Fr>>,
+    public_inputs: Vec<Fr>,
     pk: &ProvingKey<G1Affine>,
     transcript: TranscriptType,
     strategy: Strategy,
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
+    let public_inputs = if !public_inputs.is_empty() {
+        vec![public_inputs]
+    } else {
+        vec![]
+    };
+
     match transcript {
         TranscriptType::EVM => create_proof_circuit::<
             KZGCommitmentScheme<_>,

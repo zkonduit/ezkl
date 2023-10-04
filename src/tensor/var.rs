@@ -27,7 +27,7 @@ pub enum VarTensor {
 }
 
 impl VarTensor {
-    fn max_rows<F: PrimeField>(cs: &mut ConstraintSystem<F>, logrows: usize) -> usize {
+    fn max_rows<F: PrimeField>(cs: &ConstraintSystem<F>, logrows: usize) -> usize {
         let base = 2u32;
         base.pow(logrows as u32) as usize - cs.blinding_factors() - 1
     }
@@ -238,9 +238,17 @@ impl VarTensor {
             ValTensor::Instance {
                 inner: instance,
                 dims,
+                idx,
+                initial_offset,
                 ..
             } => match &self {
                 VarTensor::Advice { inner: v, .. } => {
+                    let total_offset: usize = initial_offset
+                        + dims[..*idx]
+                            .iter()
+                            .map(|x| x.iter().product::<usize>())
+                            .sum::<usize>();
+                    let dims = &dims[*idx];
                     // this should never ever fail
                     let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
                     Ok(t.enum_map(|coord, _| {
@@ -248,7 +256,7 @@ impl VarTensor {
                         region.assign_advice_from_instance(
                             || "pub input anchor",
                             *instance,
-                            coord,
+                            coord + total_offset,
                             v[x],
                             y,
                         )
