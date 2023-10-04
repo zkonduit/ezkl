@@ -12,9 +12,7 @@ use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation::AggregationCircuit;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::evm_verify;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::{single::gen_evm_verifier, DeploymentCode, YulCode};
+use crate::pfsys::evm::{single::gen_evm_verifier, YulCode};
 use crate::pfsys::{
     create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
 };
@@ -50,8 +48,6 @@ use plotters::prelude::*;
 use rand::Rng;
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-#[cfg(not(target_arch = "wasm32"))]
-use snark_verifier::loader::evm;
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
@@ -787,13 +783,6 @@ pub(crate) fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>>
     info!("{}", hex::encode(proof.proof));
     Ok(())
 }
-/// helper function to generate the deployment code from yul code
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn gen_deployment_code(yul_code: YulCode) -> Result<DeploymentCode, Box<dyn Error>> {
-    Ok(DeploymentCode {
-        code: evm::compile_yul(&yul_code),
-    })
-}
 
 #[cfg(feature = "render")]
 pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(), Box<dyn Error>> {
@@ -1384,65 +1373,6 @@ pub(crate) async fn fuzz(
     };
 
     run_fuzz_fn(num_runs, fuzz_proof_instances, &passed);
-
-    if matches!(transcript, TranscriptType::EVM) {
-        let num_instance = circuit.settings().total_instances();
-        let num_instance: usize = num_instance.iter().sum::<usize>();
-
-        let yul_code = gen_evm_verifier(&params, pk.get_vk(), num_instance)?;
-        let deployment_code = gen_deployment_code(yul_code).unwrap();
-
-        info!("fuzzing proof bytes for evm verifier");
-
-        let fuzz_evm_proof_bytes = || {
-            let mut rng = rand::thread_rng();
-
-            let bad_proof_bytes: Vec<u8> = (0..proof.proof.len())
-                .map(|_| rng.gen_range(0..20))
-                .collect();
-
-            let bad_proof = Snark::<_, _> {
-                instances: proof.instances.clone(),
-                proof: bad_proof_bytes,
-                protocol: proof.protocol.clone(),
-                transcript_type: transcript,
-            };
-
-            let res = evm_verify(deployment_code.clone(), bad_proof);
-
-            match res {
-                Ok(_) => Ok(()),
-                Err(_) => Err(()),
-            }
-        };
-
-        run_fuzz_fn(num_runs, fuzz_evm_proof_bytes, &passed);
-
-        info!("fuzzing proof instances for evm verifier");
-
-        let fuzz_evm_instances = || {
-            let mut bad_inputs = vec![];
-            for l in &proof.instances {
-                bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
-            }
-
-            let bad_proof = Snark::<_, _> {
-                instances: bad_inputs.clone(),
-                proof: proof.proof.clone(),
-                protocol: proof.protocol.clone(),
-                transcript_type: transcript,
-            };
-
-            let res = evm_verify(deployment_code.clone(), bad_proof);
-
-            match res {
-                Ok(_) => Ok(()),
-                Err(_) => Err(()),
-            }
-        };
-
-        run_fuzz_fn(num_runs, fuzz_evm_instances, &passed);
-    }
 
     if !passed.into_inner() {
         Err("fuzzing failed".into())
