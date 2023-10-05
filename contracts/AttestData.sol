@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.20;
 
 // This contract serves as a Data Attestation Verifier for the EZKL model.
 // It is designed to read and attest to instances of proofs generated from a specified circuit.
@@ -11,10 +11,10 @@ pragma solidity ^0.8.17;
 // 3. Static Calls: Makes static calls to fetch data from other contracts. See the `staticCall` method.
 // 4. Field Element Conversion: The fixed-point representation is then converted into a field element modulo P using the `toFieldElement` method.
 // 5. Data Attestation: The `attestData` method validates that the public instances match the data fetched and processed by the contract.
-// 6. Proof Verification: The `verifyWithDataAttestation` method has a stubbed assembly block to integrate proof verification.
+// 6. Proof Verification: The `verifyWithDataAttestation` method parses the instances out of the encoded calldata and calls the `attestData` method to validate the public instances,
+//  then calls the `verifyProof` method to verify the proof on the verifier.
 
-
-contract DataAttestationVerifier {
+contract DataAttestation {
     /**
      * @notice Struct used to make view only calls to accounts to fetch the data that EZKL reads from.
      * @param the address of the account to make calls to
@@ -225,7 +225,7 @@ contract DataAttestationVerifier {
      * @dev Make the account calls to fetch the data that EZKL reads from and attest to the data.
      * @param instances - The public instances to the proof (the data in the proof that publicly accessible to the verifier).
      */
-    function attestData(uint256[] calldata instances) internal view {
+    function attestData(uint256[] memory instances) internal view {
         require(
             instances.length >= INPUT_CALLS + OUTPUT_CALLS,
             "Invalid public inputs length"
@@ -259,13 +259,48 @@ contract DataAttestationVerifier {
     }
 
     function verifyWithDataAttestation(
-        uint256[] calldata instances,
-        bytes calldata proof
+        address verifier,
+        bytes memory encoded
     ) public view returns (bool) {
-        bool success = true;
-        bytes32[] memory transcript;
+        require(verifier.code.length > 0,"Address: call to non-contract");
+        bytes4 fnSelector;
+        uint256[] memory instances;
+        bytes memory paramData = new bytes(encoded.length - 4);
+        assembly {
+            /* 
+                4 (fun sig) + 
+                32 (verifier address) + 
+                32 (offset encoded) + 
+                32 (length encoded) = 100 bytes = 0x64
+            */
+            fnSelector := calldataload(0x64)
+
+            mstore(add(paramData, 0x20), sub(mload(add(encoded, 0x20)), 4))
+            for {
+                let i := 0
+            } lt(i, sub(mload(encoded), 4)) {
+                i := add(i, 0x20)
+            } {
+                mstore(add(paramData, add(0x20, i)), mload(add(encoded, add(0x24, i))))
+            }
+        }
+        if (fnSelector == 0xaf83a18d) {
+            // abi decode verifyProof(address,bytes,uint256[])
+            (,,instances) = abi.decode(paramData, (address, bytes, uint256[]));
+        } else {
+            // abi decode verifyProof(bytes,uint256[])
+            (,instances) = abi.decode(paramData, (bytes, uint256[]));
+        }
         attestData(instances);
-        assembly { /* This is where the proof verification happens*/ }
-        return success;
+        
+        // static call the verifier contract to verify the proof
+        (bool success, bytes memory returndata) = verifier.staticcall(encoded);
+
+        if (success) {
+            return abi.decode(returndata, (bool));
+        } else {
+            revert("low-level call to verifier failed");
+        }
+        
     }
 }

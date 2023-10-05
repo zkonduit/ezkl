@@ -17,10 +17,10 @@ use ethers::providers::{Http, Provider};
 use ethers::signers::Signer;
 use ethers::solc::{CompilerInput, Solc};
 use ethers::types::transaction::eip2718::TypedTransaction;
-use ethers::types::{Bytes, I256};
 use ethers::types::TransactionRequest;
 use ethers::types::H160;
 use ethers::types::U256;
+use ethers::types::{Bytes, I256};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::{
     prelude::{LocalWallet, Wallet},
@@ -30,7 +30,6 @@ use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use log::{debug, info, warn};
 use std::error::Error;
-use std::fmt::Write;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
@@ -41,17 +40,15 @@ pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>
 
 // Generate contract bindings OUTSIDE the functions so they are part of library
 abigen!(TestReads, "./abis/TestReads.json");
-abigen!(Verifier, "./abis/Verifier.json");
 abigen!(
-    DataAttestationVerifier,
-    "./abis/DataAttestationVerifier.json"
+    DataAttestation,
+    "./abis/DataAttestation.json"
 );
 abigen!(QuantizeData, "./abis/QuantizeData.json");
 
 const TESTREADS_SOL: &str = include_str!("../contracts/TestReads.sol");
 const QUANTIZE_DATA_SOL: &str = include_str!("../contracts/QuantizeData.sol");
 const ATTESTDATA_SOL: &str = include_str!("../contracts/AttestData.sol");
-const VERIFIERBASE_SOL: &str = include_str!("../contracts/VerifierBase.sol");
 
 /// Return an instance of Anvil and a client for the given RPC URL. If none is provided, a local client is used.
 #[cfg(not(target_arch = "wasm32"))]
@@ -59,10 +56,9 @@ pub async fn setup_eth_backend(
     rpc_url: Option<&str>,
 ) -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
     // Launch anvil
-    let anvil = Anvil::new().args([
-        "--code-size-limit=41943040",
-        "--disable-block-gas-limit"
-    ]).spawn();
+    let anvil = Anvil::new()
+        .args(["--code-size-limit=41943040", "--disable-block-gas-limit"])
+        .spawn();
 
     // Instantiate the wallet
     let wallet: LocalWallet = anvil.keys()[0].clone().into();
@@ -92,12 +88,13 @@ pub async fn setup_eth_backend(
 pub async fn deploy_verifier_via_solidity(
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
-    runs: Option<usize>,
+    runs: usize,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "Verifier", runs)?;
+        get_contract_artifacts(sol_code_path, "Halo2Verifier", runs)?;
+
     let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone())?;
 
     let contract = factory.deploy(())?.send().await?;
@@ -111,7 +108,7 @@ pub async fn deploy_da_verifier_via_solidity(
     input: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
-    runs: Option<usize>,
+    runs: usize,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     let (_, client) = setup_eth_backend(rpc_url).await?;
 
@@ -165,7 +162,7 @@ pub async fn deploy_da_verifier_via_solidity(
     };
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestationVerifier", runs)?;
+        get_contract_artifacts(sol_code_path, "DataAttestation", runs)?;
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
 
@@ -190,7 +187,7 @@ pub async fn deploy_da_verifier_via_solidity(
 
 fn parse_calls_to_accounts(
     calls_to_accounts: Vec<CallsToAccount>,
-) -> Result<(Vec<H160>, Vec<Vec<Bytes>>, Vec<Vec<U256>>),Box<dyn Error>> {
+) -> Result<(Vec<H160>, Vec<Vec<Bytes>>, Vec<Vec<U256>>), Box<dyn Error>> {
     let mut contract_addresses = vec![];
     let mut call_data = vec![];
     let mut decimals: Vec<Vec<U256>> = vec![];
@@ -212,9 +209,8 @@ fn parse_calls_to_accounts(
 pub async fn update_account_calls(
     addr: H160,
     input: PathBuf,
-    rpc_url: Option<&str>
+    rpc_url: Option<&str>,
 ) -> Result<(), Box<dyn Error>> {
-
     let input = GraphData::from_path(input)?;
 
     // The data that will be stored in the test contracts that will eventually be read from.
@@ -240,10 +236,14 @@ pub async fn update_account_calls(
 
     let (anvil, client) = setup_eth_backend(rpc_url).await?;
 
-    let contract = DataAttestationVerifier::new(addr, client.clone());
+    let contract = DataAttestation::new(addr, client.clone());
 
     contract
-        .update_account_calls(contract_addresses.clone(), call_data.clone(), decimals.clone())
+        .update_account_calls(
+            contract_addresses.clone(),
+            call_data.clone(),
+            decimals.clone(),
+        )
         .send()
         .await?;
 
@@ -253,11 +253,16 @@ pub async fn update_account_calls(
     let client = Arc::new(client.with_signer(wallet.with_chain_id(anvil.chain_id())));
 
     // update contract signer with non admin account
-    let contract = DataAttestationVerifier::new(addr, client.clone());
+    let contract = DataAttestation::new(addr, client.clone());
 
     // call to update_account_calls should fail
 
-    if (contract.update_account_calls(contract_addresses, call_data, decimals).send().await).is_err(){
+    if (contract
+        .update_account_calls(contract_addresses, call_data, decimals)
+        .send()
+        .await)
+        .is_err()
+    {
         info!("update_account_calls failed as expected");
     } else {
         panic!("update_account_calls should have failed for non admin account call");
@@ -273,51 +278,13 @@ pub async fn verify_proof_via_solidity(
     addr: ethers::types::Address,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
-    use ethers::abi::{Function, Param, ParamType, StateMutability, Token};
-
-    let mut public_inputs: Vec<U256> = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
 
-    for val in flattened_instances {
-        let bytes = val.to_repr();
-        let u = U256::from_little_endian(bytes.as_slice());
-        public_inputs.push(u);
-    }
-
-    info!("public_inputs: {:#?}", public_inputs);
-    info!(
-        "proof: {:#?}",
-        ethers::types::Bytes::from(proof.proof.to_vec())
+    let encoded = halo2_solidity_verifier::encode_calldata(
+        None,
+        &proof.proof,
+        &flattened_instances.collect::<Vec<_>>(),
     );
-
-    #[allow(deprecated)]
-    let func = Function {
-        name: "verify".to_owned(),
-        inputs: vec![
-            Param {
-                name: "pubInputs".to_owned(),
-                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()),
-                internal_type: None,
-            },
-            Param {
-                name: "proof".to_owned(),
-                kind: ParamType::Bytes,
-                internal_type: None,
-            },
-        ],
-        outputs: vec![Param {
-            name: "success".to_owned(),
-            kind: ParamType::Bool,
-            internal_type: None,
-        }],
-        constant: None,
-        state_mutability: StateMutability::View,
-    };
-
-    let encoded = func.encode_input(&[
-        Token::FixedArray(public_inputs.into_iter().map(Token::Uint).collect()),
-        Token::Bytes(proof.proof),
-    ])?;
 
     info!("encoded: {:#?}", hex::encode(&encoded));
     let (anvil, client) = setup_eth_backend(rpc_url).await?;
@@ -334,7 +301,7 @@ pub async fn verify_proof_via_solidity(
         return Err(Box::new(EvmVerificationError::SolidityExecution));
     }
     let result = result.unwrap();
-    info!("result: {:#?}", result);
+    info!("result: {:#?}", result.to_vec());
     // decode return bytes value into uint8
     let result = result.to_vec().last().unwrap() == &1u8;
     if !result {
@@ -343,10 +310,7 @@ pub async fn verify_proof_via_solidity(
 
     let gas = client.estimate_gas(&tx, None).await?;
 
-    info!(
-        "estimated verify gas cost: {:#?}",
-        gas
-    );
+    info!("estimated verify gas cost: {:#?}", gas);
 
     // if gas is greater than 30 million warn the user that the gas cost is above ethereum's 30 million block gas limit
     if gas > 30_000_000.into() {
@@ -357,7 +321,7 @@ pub async fn verify_proof_via_solidity(
         warn!(
             "Gas cost of verify transaction is greater than 15 million, the target block size for ethereum"
         );
-    } 
+    }
 
     drop(anvil);
     Ok(true)
@@ -389,7 +353,7 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
 
     // Compile the contract
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_path, "TestReads", None).unwrap();
+        get_contract_artifacts(sol_path, "TestReads", 0).unwrap();
 
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
@@ -407,12 +371,13 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
     Ok((contract, decimals))
 }
 
-/// Verify a proof using a Solidity DataAttestationVerifier contract.
+/// Verify a proof using a Solidity DataAttestation contract.
 /// Used for testing purposes.
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn verify_proof_with_data_attestation(
     proof: Snark<Fr, G1Affine>,
-    addr: ethers::types::Address,
+    addr_verifier: ethers::types::Address,
+    addr_da: ethers::types::Address,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
     use ethers::abi::{Function, Param, ParamType, StateMutability, Token};
@@ -420,11 +385,19 @@ pub async fn verify_proof_with_data_attestation(
     let mut public_inputs: Vec<U256> = vec![];
     let flattened_instances = proof.instances.into_iter().flatten();
 
-    for val in flattened_instances {
+    for val in flattened_instances.clone() {
         let bytes = val.to_repr();
         let u = U256::from_little_endian(bytes.as_slice());
         public_inputs.push(u);
     }
+
+    let encoded_verifier = halo2_solidity_verifier::encode_calldata(
+        None,
+        &proof.proof,
+        &flattened_instances.collect::<Vec<_>>(),
+    );
+
+    info!("encoded: {:#?}", hex::encode(&encoded_verifier));
 
     info!("public_inputs: {:#?}", public_inputs);
     info!(
@@ -437,12 +410,12 @@ pub async fn verify_proof_with_data_attestation(
         name: "verifyWithDataAttestation".to_owned(),
         inputs: vec![
             Param {
-                name: "pubInputs".to_owned(),
-                kind: ParamType::FixedArray(Box::new(ParamType::Uint(256)), public_inputs.len()),
+                name: "verifier".to_owned(),
+                kind: ParamType::Address,
                 internal_type: None,
             },
             Param {
-                name: "proof".to_owned(),
+                name: "encoded".to_owned(),
                 kind: ParamType::Bytes,
                 internal_type: None,
             },
@@ -457,14 +430,14 @@ pub async fn verify_proof_with_data_attestation(
     };
 
     let encoded = func.encode_input(&[
-        Token::FixedArray(public_inputs.into_iter().map(Token::Uint).collect()),
-        Token::Bytes(proof.proof),
+        Token::Address(addr_verifier),
+        Token::Bytes(encoded_verifier),
     ])?;
 
     info!("encoded: {:#?}", hex::encode(&encoded));
     let (anvil, client) = setup_eth_backend(rpc_url).await?;
     let tx: TypedTransaction = TransactionRequest::default()
-        .to(addr)
+        .to(addr_da)
         .from(client.address())
         .data(encoded)
         .into();
@@ -568,7 +541,7 @@ pub async fn evm_quantize<M: 'static + Middleware>(
     sol_path.push("quantizedata.sol");
     std::fs::write(&sol_path, QUANTIZE_DATA_SOL)?;
 
-    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_path, "QuantizeData", None)?;
+    let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_path, "QuantizeData", 0)?;
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone()).unwrap();
 
@@ -601,12 +574,14 @@ pub async fn evm_quantize<M: 'static + Middleware>(
     let results = contract
         .quantize_data(fetched_inputs, decimals, scales)
         .call()
-        .await.unwrap();
+        .await
+        .unwrap();
 
-    let felts = contract.
-        to_field_element(results.clone())
+    let felts = contract
+        .to_field_element(results.clone())
         .call()
-        .await.unwrap();
+        .await
+        .unwrap();
     info!("evm quantization contract results: {:#?}", felts,);
 
     let results = felts
@@ -645,18 +620,21 @@ fn get_sol_contract_factory<M: 'static + Middleware>(
 pub fn get_contract_artifacts(
     sol_code_path: PathBuf,
     contract_name: &str,
-    runs: Option<usize>,
+    runs: usize,
 ) -> Result<(Contract, Bytes, Bytes), Box<dyn Error>> {
     assert!(sol_code_path.exists());
     // Create the compiler input, enabling the optimizer and setting the optimzer runs.
-    let input: CompilerInput = if let Some(r) = runs {
-        let mut i = CompilerInput::new(sol_code_path)?[0].clone().optimizer(r);
+    let input: CompilerInput = if runs > 0 {
+        let mut i = CompilerInput::new(sol_code_path)?[0]
+            .clone()
+            .optimizer(runs);
         i.settings.optimizer.enable();
         i
     } else {
         CompilerInput::new(sol_code_path)?[0].clone()
     };
     let compiled = Solc::default().compile(&input).unwrap();
+
     let (abi, bytecode, runtime_bytecode) = compiled
         .find(contract_name)
         .expect("could not find contract")
@@ -664,346 +642,39 @@ pub fn get_contract_artifacts(
     Ok((abi, bytecode, runtime_bytecode))
 }
 
-use regex::Regex;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-
-/// Reads in raw bytes code and generates equivalent .sol file
-/// Can optionally attest to on-chain inputs
-pub fn fix_verifier_sol(
-    input_file: PathBuf,
-    num_instances: u32,
+/// Sets the constants stored in the da verifier
+pub fn fix_da_sol(
     input_data: Option<(u32, Vec<CallsToAccount>)>,
     output_data: Option<Vec<CallsToAccount>>,
 ) -> Result<String, Box<dyn Error>> {
-    let mut transcript_addrs: Vec<u32> = Vec::new();
-    let mut modified_lines: Vec<String> = Vec::new();
 
-    // convert calldataload 0x0 to 0x40 to read from pubInputs, and the rest
-    // from proof
-    let calldata_pattern = Regex::new(r"^.*(calldataload\((0x[a-f0-9]+)\)).*$")?;
-    let mstore_pattern = Regex::new(r"^\s*(mstore\(0x([0-9a-fA-F]+)+),.+\)")?;
-    let mstore8_pattern = Regex::new(r"^\s*(mstore8\((\d+)+),.+\)")?;
-    let mstoren_pattern = Regex::new(r"^\s*(mstore\((\d+)+),.+\)")?;
-    let mload_pattern = Regex::new(r"(mload\((0x[0-9a-fA-F]+))\)")?;
-    let keccak_pattern = Regex::new(r"(keccak256\((0x[0-9a-fA-F]+))")?;
-    let modexp_pattern =
-        Regex::new(r"(staticcall\(gas\(\), 0x5, (0x[0-9a-fA-F]+), 0xc0, (0x[0-9a-fA-F]+), 0x20)")?;
-    let ecmul_pattern =
-        Regex::new(r"(staticcall\(gas\(\), 0x7, (0x[0-9a-fA-F]+), 0x60, (0x[0-9a-fA-F]+), 0x40)")?;
-    let ecadd_pattern =
-        Regex::new(r"(staticcall\(gas\(\), 0x6, (0x[0-9a-fA-F]+), 0x80, (0x[0-9a-fA-F]+), 0x40)")?;
-    let ecpairing_pattern =
-        Regex::new(r"(staticcall\(gas\(\), 0x8, (0x[0-9a-fA-F]+), 0x180, (0x[0-9a-fA-F]+), 0x20)")?;
-    let bool_pattern = Regex::new(r":bool")?;
+    let mut accounts_len = 0;
+    let mut contract = ATTESTDATA_SOL.to_string();
+    // fill in the quantization params and total calls
+    // as constants to the contract to save on gas
+    if let Some(input_data) = input_data {
+        let input_calls: usize = input_data.1.iter().map(|v| v.call_data.len()).sum();
+        let input_scale = input_data.0;
+        accounts_len = input_data.1.len();
+        contract = contract.replace(
+            "uint public constant INPUT_SCALE = 1 << 0;",
+            &format!("uint public constant INPUT_SCALE = 1 << {};", input_scale),
+        );
 
-    let mut max_pubinputs_addr: u32 = 0;
-    if num_instances > 0 {
-        max_pubinputs_addr = num_instances * 32 - 32;
+        contract = contract.replace(
+            "uint256 constant INPUT_CALLS = 0;",
+            &format!("uint256 constant INPUT_CALLS = {};", input_calls),
+        );
     }
-
-    let file = File::open(input_file.clone())
-        .map_err(|_| format!("failed to load verfier at {}", input_file.display()))?;
-    let reader = BufReader::new(file);
-
-    for line in reader.lines() {
-        let mut line = line?;
-        let m = bool_pattern.captures(&line);
-        if m.is_some() {
-            line = line.replace(":bool", "");
-        }
-
-        let m = calldata_pattern.captures(&line);
-        if let Some(m) = m {
-            let calldata_and_addr = m.get(1).unwrap().as_str();
-            let addr = m.get(2).unwrap().as_str();
-            let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
-            if addr_as_num <= max_pubinputs_addr {
-                let pub_addr = format!("{:#x}", addr_as_num);
-                line = line.replace(
-                    calldata_and_addr,
-                    &format!("calldataload(add(pubInputs, {}))", pub_addr),
-                );
-            } else {
-                let proof_addr = format!("{:#x}", 32 + addr_as_num - max_pubinputs_addr);
-                line = line.replace(
-                    calldata_and_addr,
-                    &format!("calldataload(add(proof, {}))", proof_addr),
-                );
-            }
-        }
-
-        let m = mstore8_pattern.captures(&line);
-        if let Some(m) = m {
-            let mstore = m.get(1).unwrap().as_str();
-            let addr = m.get(2).unwrap().as_str();
-            let addr_as_num = addr.parse::<u32>()?;
-            let transcript_addr = format!("{:#x}", addr_as_num);
-            transcript_addrs.push(addr_as_num);
-            line = line.replace(
-                mstore,
-                &format!("mstore8(add(transcript, {})", transcript_addr),
-            );
-        }
-
-        let m = mstoren_pattern.captures(&line);
-        if let Some(m) = m {
-            let mstore = m.get(1).unwrap().as_str();
-            let addr = m.get(2).unwrap().as_str();
-            let addr_as_num = addr.parse::<u32>()?;
-            let transcript_addr = format!("{:#x}", addr_as_num);
-            transcript_addrs.push(addr_as_num);
-            line = line.replace(
-                mstore,
-                &format!("mstore(add(transcript, {})", transcript_addr),
-            );
-        }
-
-        let m = modexp_pattern.captures(&line);
-        if let Some(m) = m {
-            let modexp = m.get(1).unwrap().as_str();
-            let start_addr = m.get(2).unwrap().as_str();
-            let result_addr = m.get(3).unwrap().as_str();
-            let start_addr_as_num =
-                u32::from_str_radix(start_addr.strip_prefix("0x").unwrap(), 16)?;
-            let result_addr_as_num =
-                u32::from_str_radix(result_addr.strip_prefix("0x").unwrap(), 16)?;
-
-            let transcript_addr = format!("{:#x}", start_addr_as_num);
-            transcript_addrs.push(start_addr_as_num);
-            let result_addr = format!("{:#x}", result_addr_as_num);
-            line = line.replace(
-                modexp,
-                &format!(
-                    "staticcall(gas(), 0x5, add(transcript, {}), 0xc0, add(transcript, {}), 0x20",
-                    transcript_addr, result_addr
-                ),
-            );
-        }
-
-        let m = ecmul_pattern.captures(&line);
-        if let Some(m) = m {
-            let ecmul = m.get(1).unwrap().as_str();
-            let start_addr = m.get(2).unwrap().as_str();
-            let result_addr = m.get(3).unwrap().as_str();
-            let start_addr_as_num =
-                u32::from_str_radix(start_addr.strip_prefix("0x").unwrap(), 16)?;
-            let result_addr_as_num =
-                u32::from_str_radix(result_addr.strip_prefix("0x").unwrap(), 16)?;
-
-            let transcript_addr = format!("{:#x}", start_addr_as_num);
-            let result_addr = format!("{:#x}", result_addr_as_num);
-            transcript_addrs.push(start_addr_as_num);
-            transcript_addrs.push(result_addr_as_num);
-            line = line.replace(
-                ecmul,
-                &format!(
-                    "staticcall(gas(), 0x7, add(transcript, {}), 0x60, add(transcript, {}), 0x40",
-                    transcript_addr, result_addr
-                ),
-            );
-        }
-
-        let m = ecadd_pattern.captures(&line);
-        if let Some(m) = m {
-            let ecadd = m.get(1).unwrap().as_str();
-            let start_addr = m.get(2).unwrap().as_str();
-            let result_addr = m.get(3).unwrap().as_str();
-            let start_addr_as_num =
-                u32::from_str_radix(start_addr.strip_prefix("0x").unwrap(), 16)?;
-            let result_addr_as_num =
-                u32::from_str_radix(result_addr.strip_prefix("0x").unwrap(), 16)?;
-
-            let transcript_addr = format!("{:#x}", start_addr_as_num);
-            let result_addr = format!("{:#x}", result_addr_as_num);
-            transcript_addrs.push(start_addr_as_num);
-            transcript_addrs.push(result_addr_as_num);
-            line = line.replace(
-                ecadd,
-                &format!(
-                    "staticcall(gas(), 0x6, add(transcript, {}), 0x80, add(transcript, {}), 0x40",
-                    transcript_addr, result_addr
-                ),
-            );
-        }
-
-        let m = ecpairing_pattern.captures(&line);
-        if let Some(m) = m {
-            let ecpairing = m.get(1).unwrap().as_str();
-            let start_addr = m.get(2).unwrap().as_str();
-            let result_addr = m.get(3).unwrap().as_str();
-            let start_addr_as_num =
-                u32::from_str_radix(start_addr.strip_prefix("0x").unwrap(), 16)?;
-            let result_addr_as_num =
-                u32::from_str_radix(result_addr.strip_prefix("0x").unwrap(), 16)?;
-
-            let transcript_addr = format!("{:#x}", start_addr_as_num);
-            let result_addr = format!("{:#x}", result_addr_as_num);
-            transcript_addrs.push(start_addr_as_num);
-            transcript_addrs.push(result_addr_as_num);
-            line = line.replace(
-                ecpairing,
-                &format!(
-                    "staticcall(gas(), 0x8, add(transcript, {}), 0x180, add(transcript, {}), 0x20",
-                    transcript_addr, result_addr
-                ),
-            );
-        }
-
-        let m = mstore_pattern.captures(&line);
-        if let Some(m) = m {
-            let mstore = m.get(1).unwrap().as_str();
-            let addr = m.get(2).unwrap().as_str();
-            let addr_as_num = u32::from_str_radix(addr, 16)?;
-            let transcript_addr = format!("{:#x}", addr_as_num);
-            transcript_addrs.push(addr_as_num);
-            line = line.replace(
-                mstore,
-                &format!("mstore(add(transcript, {})", transcript_addr),
-            );
-        }
-
-        let m = keccak_pattern.captures(&line);
-        if let Some(m) = m {
-            let keccak = m.get(1).unwrap().as_str();
-            let addr = m.get(2).unwrap().as_str();
-            let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
-            let transcript_addr = format!("{:#x}", addr_as_num);
-            transcript_addrs.push(addr_as_num);
-            line = line.replace(
-                keccak,
-                &format!("keccak256(add(transcript, {})", transcript_addr),
-            );
-        }
-
-        // mload can show up multiple times per line
-        loop {
-            let m = mload_pattern.captures(&line);
-            if m.is_none() {
-                break;
-            }
-            let mload = m.as_ref().unwrap().get(1).unwrap().as_str();
-            let addr = m.as_ref().unwrap().get(2).unwrap().as_str();
-
-            let addr_as_num = u32::from_str_radix(addr.strip_prefix("0x").unwrap(), 16)?;
-            let transcript_addr = format!("{:#x}", addr_as_num);
-            transcript_addrs.push(addr_as_num);
-            line = line.replace(
-                mload,
-                &format!("mload(add(transcript, {})", transcript_addr),
-            );
-        }
-
-        modified_lines.push(line);
+    if let Some(output_data) = output_data {
+        let output_calls: usize = output_data.iter().map(|v| v.call_data.len()).sum();
+        accounts_len += output_data.len();
+        contract = contract.replace(
+            "uint256 constant OUTPUT_CALLS = 0;",
+            &format!("uint256 constant OUTPUT_CALLS = {};", output_calls),
+        );
     }
+    contract = contract.replace("AccountCall[]", &format!("AccountCall[{}]", accounts_len));
 
-    // get the max transcript addr
-    let max_transcript_addr = transcript_addrs.iter().max().unwrap() / 32;
-
-    let contract = if input_data.is_some() || output_data.is_some() {
-        let mut accounts_len = 0;
-        let mut contract = ATTESTDATA_SOL.to_string();
-        // fill in the quantization params and total calls
-        // as constants to the contract to save on gas
-        if let Some(input_data) = input_data {
-            let input_calls: usize = input_data.1.iter().map(|v| v.call_data.len()).sum();
-            let input_scale = input_data.0;
-            accounts_len = input_data.1.len();
-            contract = contract.replace(
-                "uint public constant INPUT_SCALE = 1 << 0;",
-                &format!("uint public constant INPUT_SCALE = 1 << {};", input_scale),
-            );
-
-            contract = contract.replace(
-                "uint256 constant INPUT_CALLS = 0;",
-                &format!("uint256 constant INPUT_CALLS = {};", input_calls),
-            );
-        }
-        if let Some(output_data) = output_data {
-            let output_calls: usize = output_data.iter().map(|v| v.call_data.len()).sum();
-            accounts_len += output_data.len();
-            contract = contract.replace(
-                "uint256 constant OUTPUT_CALLS = 0;",
-                &format!("uint256 constant OUTPUT_CALLS = {};", output_calls),
-            );
-        }
-        contract.replace("AccountCall[]", &format!("AccountCall[{}]", accounts_len))
-    } else {
-        VERIFIERBASE_SOL.to_string()
-    };
-
-    // Insert the max_transcript_addr into the contract string at the correct position.
-    let mut contract = contract.replace(
-        "bytes32[] memory transcript",
-        &format!("bytes32[{}] memory transcript", max_transcript_addr),
-    );
-
-    // Hardcode the fixed array length of pubInputs param
-    contract = contract.replace(
-        "uint256[] calldata",
-        &format!("uint256[{}] calldata", num_instances),
-    );
-
-    // Find the index of "assembly {"
-    let end_index =
-        match contract.find("assembly { /* This is where the proof verification happens*/ }") {
-            Some(index) => index + 10,
-            None => {
-                panic!("assembly {{ not found in the contract");
-            }
-        };
-
-    // Take a slice from the start of the contract string up to the "assembly {" position
-    let contract_slice = &contract[..end_index];
-
-    let mut contract_slice_string = contract_slice.to_string();
-
-    // using a boxed Write trait object here to show it works for any Struct impl'ing Write
-    // you may also use a std::fs::File here
-    let write: Box<&mut dyn Write> = Box::new(&mut contract_slice_string);
-
-    for line in modified_lines[16..modified_lines.len() - 7].iter() {
-        write!(write, "{}", line).unwrap();
-    }
-    writeln!(write, "}} return success; }} }}")?;
-
-    // free memory pointer initialization
-    let mut offset = 4;
-
-    // replace all mload(add(pubInputs, 0x...))) with mload(0x...
-    contract_slice_string = replace_vars_with_offset(
-        &contract_slice_string,
-        r"add\(pubInputs, (0x[0-9a-fA-F]+)\)",
-        offset,
-    );
-
-    offset += 32 * num_instances;
-
-    // replace all mload(add(proof, 0x...))) with mload(0x...
-    contract_slice_string = replace_vars_with_offset(
-        &contract_slice_string,
-        r"add\(proof, (0x[0-9a-fA-F]+)\)",
-        offset,
-    );
-
-    offset = 128;
-
-    // replace all (add(transcript, 0x...))) with (0x...)
-    contract_slice_string = replace_vars_with_offset(
-        &contract_slice_string,
-        r"add\(transcript, (0x[0-9a-fA-F]+)\)",
-        offset,
-    );
-
-    Ok(contract_slice_string)
-}
-
-fn replace_vars_with_offset(contract: &str, regex_pattern: &str, offset: u32) -> String {
-    let re = Regex::new(regex_pattern).unwrap();
-    let replaced = re.replace_all(contract, |caps: &regex::Captures| {
-        let addr_as_num = u32::from_str_radix(caps[1].strip_prefix("0x").unwrap(), 16).unwrap();
-        let new_addr = addr_as_num + offset;
-        format!("{:#x}", new_addr)
-    });
-    replaced.into_owned()
+    Ok(contract)
 }

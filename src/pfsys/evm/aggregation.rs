@@ -1,11 +1,9 @@
-use crate::pfsys::evm::YulCode;
 use crate::pfsys::{Snark, SnarkWitness};
 use halo2_proofs::circuit::AssignedCell;
-use halo2_proofs::plonk::{self, VerifyingKey};
+use halo2_proofs::plonk::{self};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{Circuit, ConstraintSystem},
-    poly::{commitment::ParamsProver, kzg::commitment::ParamsKZG},
 };
 use halo2_wrong_ecc::{
     integer::rns::Rns,
@@ -20,11 +18,12 @@ use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::trace;
 use rand::rngs::OsRng;
+use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::{
     loader,
     pcs::{
         kzg::{
-            Gwc19, KzgAccumulator, KzgAs, KzgSuccinctVerifyingKey, LimbsEncoding,
+            Bdfg21, KzgAccumulator, KzgAs, KzgSuccinctVerifyingKey, LimbsEncoding,
             LimbsEncodingInstructions,
         },
         AccumulationScheme, AccumulationSchemeProver,
@@ -33,20 +32,14 @@ use snark_verifier::{
     util::arithmetic::fe_to_limbs,
     verifier::{self, SnarkVerifier},
 };
-use snark_verifier::{loader::evm::EvmLoader, system::halo2::transcript::evm::EvmTranscript};
-use snark_verifier::{
-    loader::native::NativeLoader,
-    system::halo2::{compile, Config},
-};
 use std::rc::Rc;
 use thiserror::Error;
 
 const LIMBS: usize = 4;
 const BITS: usize = 68;
-type As = KzgAs<Bn256, Gwc19>;
+type As = KzgAs<Bn256, Bdfg21>;
 /// Type for aggregator verification
 type PlonkSuccinctVerifier = verifier::plonk::PlonkSuccinctVerifier<As, LimbsEncoding<LIMBS, BITS>>;
-type PlonkVerifier = verifier::plonk::PlonkVerifier<As, LimbsEncoding<LIMBS, BITS>>;
 
 const T: usize = 5;
 const RATE: usize = 4;
@@ -241,6 +234,15 @@ impl AggregationCircuit {
         })
     }
 
+    ///
+    pub fn num_limbs() -> usize {
+        LIMBS
+    }
+    ///
+    pub fn num_bits() -> usize {
+        BITS
+    }
+
     /// Accumulator indices used in generating verifier.
     pub fn accumulator_indices() -> Vec<(usize, usize)> {
         (0..4 * LIMBS).map(|idx| (0, idx)).collect()
@@ -357,33 +359,4 @@ impl Circuit<Fr> for AggregationCircuit {
 
         Ok(())
     }
-}
-
-/// Create aggregation EVM verifier deployment and sol code.
-pub fn gen_aggregation_evm_verifier(
-    params: &ParamsKZG<Bn256>,
-    vk: &VerifyingKey<G1Affine>,
-    num_instance: Vec<usize>,
-    accumulator_indices: Vec<(usize, usize)>,
-) -> Result<YulCode, AggregationError> {
-    let protocol = compile(
-        params,
-        vk,
-        Config::kzg()
-            .with_num_instance(num_instance.clone())
-            .with_accumulator_indices(Some(accumulator_indices)),
-    );
-    let vk = (params.get_g()[0], params.g2(), params.s_g2()).into();
-
-    let loader = EvmLoader::new::<Fq, Fr>();
-    let protocol = protocol.loaded(&loader);
-    let mut transcript = EvmTranscript::<_, Rc<EvmLoader>, _, _>::new(&loader);
-
-    let instances = transcript.load_instances(num_instance);
-    let proof = PlonkVerifier::read_proof(&vk, &protocol, &instances, &mut transcript)
-        .map_err(|_| AggregationError::ProofRead)?;
-    PlonkVerifier::verify(&vk, &protocol, &instances, &proof)
-        .map_err(|_| AggregationError::ProofVerify)?;
-    let yul_code = &loader.yul_code();
-    Ok(yul_code.clone())
 }
