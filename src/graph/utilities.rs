@@ -102,7 +102,7 @@ fn extract_tensor_value(
     let dims = input.shape().to_vec();
 
     let mut const_value: Tensor<f32>;
-    if dims.is_empty() {
+    if dims.is_empty() && input.len() == 0 {
         const_value = Tensor::<f32>::new(None, &dims)?;
         return Ok(const_value);
     }
@@ -248,7 +248,7 @@ pub fn new_op_from_onnx(
                 op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
                     dim: axis,
                     constant_idx: Some(c.raw_values.map(|x| x as usize)),
-                })
+                });
             }
             // }
 
@@ -409,7 +409,7 @@ pub fn new_op_from_onnx(
             };
             // Quantize the raw value
             let quantized_value =
-                quantize_tensor(raw_value.clone(), constant_scale, &param_visibility)?;
+                quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
 
             let mut c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
 
@@ -873,7 +873,7 @@ pub fn new_op_from_onnx(
             };
 
             let kernel = extract_tensor_value(conv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scales.params, &param_visibility)?;
+            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match conv_node.bias.clone() {
                 Some(b) => {
@@ -882,7 +882,7 @@ pub fn new_op_from_onnx(
                     let val = quantize_tensor(
                         const_value,
                         scales.params + inputs[0].out_scales()[0],
-                        &param_visibility,
+                        param_visibility,
                     )?;
                     Some(val)
                 }
@@ -940,7 +940,7 @@ pub fn new_op_from_onnx(
             };
 
             let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scales.params, &param_visibility)?;
+            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match deconv_node.bias.clone() {
                 Some(b) => {
@@ -949,7 +949,7 @@ pub fn new_op_from_onnx(
                     let val = quantize_tensor(
                         const_value,
                         scales.params + inputs[0].out_scales()[0],
-                        &param_visibility,
+                        param_visibility,
                     )?;
                     Some(val)
                 }
@@ -1106,7 +1106,10 @@ pub fn new_op_from_onnx(
         "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams
             let shapes = node_output_shapes(&node)?;
-            let output_shape = shapes[0].as_ref().unwrap().clone();
+            let mut output_shape = shapes[0].as_ref().unwrap().clone();
+            if output_shape.is_empty() {
+                output_shape = vec![1];
+            }
 
             SupportedOp::Linear(PolyOp::Reshape(output_shape))
         }
@@ -1167,7 +1170,6 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
         )?))
     })?;
 
-    value.reshape(const_value.dims());
     value.set_scale(scale);
     value.set_visibility(visibility);
     Ok(value)

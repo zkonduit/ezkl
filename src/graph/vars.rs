@@ -3,7 +3,7 @@ use std::error::Error;
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
 use crate::RunArgs;
-use halo2_proofs::plonk::ConstraintSystem;
+use halo2_proofs::plonk::{Column, ConstraintSystem, Instance};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::debug;
@@ -221,6 +221,11 @@ impl std::fmt::Display for VarScales {
 }
 
 impl VarScales {
+    ///
+    pub fn get_max(&self) -> u32 {
+        std::cmp::max(self.input, self.params)
+    }
+
     /// Place in [VarScales] struct.
     pub fn from_args(args: &RunArgs) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
@@ -288,18 +293,88 @@ pub struct ModelVars<F: PrimeField + TensorType + PartialOrd> {
     #[allow(missing_docs)]
     pub advices: Vec<VarTensor>,
     #[allow(missing_docs)]
-    pub instances: Vec<ValTensor<F>>,
+    pub instance: Option<ValTensor<F>>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
+    /// Get instance col
+    pub fn get_instance_col(&self) -> Option<&Column<Instance>> {
+        if let Some(instance) = &self.instance {
+            match instance {
+                ValTensor::Instance { inner, .. } => Some(inner),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Set the initial instance offset
+    pub fn set_initial_instance_offset(&mut self, offset: usize) {
+        if let Some(instance) = &mut self.instance {
+            instance.set_initial_instance_offset(offset);
+        }
+    }
+
+    /// Get the total instance len
+    pub fn get_instance_len(&self) -> usize {
+        if let Some(instance) = &self.instance {
+            instance.get_total_instance_len()
+        } else {
+            0
+        }
+    }
+
+    /// Increment the instance offset
+    pub fn increment_instance_idx(&mut self) {
+        if let Some(instance) = &mut self.instance {
+            instance.increment_idx();
+        }
+    }
+
+    /// Reset the instance offset
+    pub fn set_instance_idx(&mut self, val: usize) {
+        if let Some(instance) = &mut self.instance {
+            instance.set_idx(val);
+        }
+    }
+
+    /// Get the instance offset
+    pub fn get_instance_idx(&self) -> usize {
+        if let Some(instance) = &self.instance {
+            instance.get_idx()
+        } else {
+            0
+        }
+    }
+
+    ///
+    pub fn instantiate_instance(
+        &mut self,
+        cs: &mut ConstraintSystem<F>,
+        instance_dims: Vec<Vec<usize>>,
+        instance_scale: u32,
+        existing_instance: Option<Column<Instance>>,
+    ) {
+        debug!("model uses {:?} instance dims", instance_dims);
+        self.instance = if let Some(existing_instance) = existing_instance {
+            debug!("using existing instance");
+            Some(ValTensor::new_instance_from_col(
+                instance_dims,
+                instance_scale,
+                existing_instance,
+            ))
+        } else {
+            Some(ValTensor::new_instance(cs, instance_dims, instance_scale))
+        };
+    }
+
     /// Allocate all columns that will be assigned to by a model.
     pub fn new(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         var_len: usize,
         num_constants: usize,
-        instance_dims: Vec<Vec<usize>>,
-        instance_scale: u32,
         uses_modules: bool,
     ) -> Self {
         info!("number of blinding factors: {}", cs.blinding_factors());
@@ -313,23 +388,20 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
             advices.iter().map(|v| v.num_cols()).sum::<usize>()
         );
 
-        // will be empty if instances dims has len 0
-        let instances = (0..instance_dims.len())
-            .map(|i| ValTensor::new_instance(cs, instance_dims[i].clone(), instance_scale))
-            .collect_vec();
-        debug!("model uses {} instance columns", instances.len());
-
         let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);
         debug!("model uses {} fixed columns", num_const_cols);
 
-        ModelVars { advices, instances }
+        ModelVars {
+            advices,
+            instance: None,
+        }
     }
 
     /// Allocate all columns that will be assigned to by a model.
     pub fn new_dummy() -> Self {
         ModelVars {
             advices: vec![],
-            instances: vec![],
+            instance: None,
         }
     }
 }

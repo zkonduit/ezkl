@@ -1,7 +1,7 @@
 use ark_std::test_rng;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::circuit::modules::elgamal::{
-    ElGamalConfig, ElGamalGadget, ElGamalVariables, NUM_INSTANCE_COLUMNS,
+    ElGamalConfig, ElGamalGadget, ElGamalVariables,
 };
 use ezkl::circuit::modules::Module;
 use ezkl::circuit::*;
@@ -49,11 +49,7 @@ impl Circuit<Fr> for EncryptytionCircuit {
         chip.load_variables(self.variables.clone());
         let sk: Tensor<ValType<Fr>> =
             Tensor::new(Some(&[Value::known(self.variables.sk).into()]), &[1]).unwrap();
-        chip.layout(
-            &mut layouter,
-            &[self.message.clone(), sk.into()],
-            vec![0; NUM_INSTANCE_COLUMNS],
-        )?;
+        chip.layout(&mut layouter, &[self.message.clone(), sk.into()], 0)?;
         Ok(())
     }
 }
@@ -103,7 +99,7 @@ fn runelgamal(c: &mut Criterion) {
                 let prover = create_proof_circuit_kzg(
                     circuit.clone(),
                     &params,
-                    public_inputs.clone(),
+                    public_inputs[0].clone(),
                     &pk,
                     TranscriptType::EVM,
                     SingleStrategy::new(&params),

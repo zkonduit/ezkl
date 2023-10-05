@@ -232,15 +232,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::TestUpdateAccountCalls {
             addr,
             data,
-            rpc_url
-        } => {
-            test_update_account_calls(
-                addr,
-                data,
-                rpc_url
-            )
-            .await
-        }
+            rpc_url,
+        } => test_update_account_calls(addr, data, rpc_url).await,
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             witness,
@@ -779,7 +772,7 @@ pub(crate) async fn mock(
     let prover = halo2_proofs::dev::MockProver::run(
         circuit.settings().run_args.logrows,
         &circuit,
-        public_inputs,
+        vec![public_inputs],
     )
     .map_err(Box::<dyn Error>::from)?;
     prover
@@ -819,7 +812,7 @@ pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(
     halo2_proofs::dev::CircuitLayout::default()
         // We hide labels, else most circuits become impossible to decipher because of overlaid text
         .show_labels(false)
-        .render(circuit.settings.run_args.logrows, &circuit, &root)?;
+        .render(circuit.settings().run_args.logrows, &circuit, &root)?;
     Ok(())
 }
 
@@ -836,21 +829,17 @@ pub(crate) fn create_evm_verifier(
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
 
     let num_instance = circuit_settings.total_instances();
+    let num_instance: usize = num_instance.iter().sum::<usize>();
 
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
     trace!("params computed");
 
-    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance.clone())?;
+    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
 
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
 
-    let output = fix_verifier_sol(
-        sol_code_path.clone(),
-        num_instance.iter().sum::<usize>().try_into().unwrap(),
-        None,
-        None,
-    )?;
+    let output = fix_verifier_sol(sol_code_path.clone(), num_instance as u32, None, None)?;
 
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(output.as_bytes());
@@ -881,11 +870,12 @@ pub(crate) fn create_evm_data_attestation_verifier(
     let visibility = VarVisibility::from_args(&settings.run_args)?;
 
     let num_instance = settings.total_instances();
+    let num_instance: usize = num_instance.iter().sum::<usize>();
 
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings.clone())?;
     trace!("params computed");
 
-    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance.clone())?;
+    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
 
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(yul_code.as_bytes());
@@ -921,7 +911,7 @@ pub(crate) fn create_evm_data_attestation_verifier(
     if input_data.is_some() || output_data.is_some() {
         let output = fix_verifier_sol(
             sol_code_path.clone(),
-            num_instance.iter().sum::<usize>().try_into().unwrap(),
+            num_instance as u32,
             input_data,
             output_data,
         )?;
@@ -1141,13 +1131,13 @@ use crate::pfsys::ProofType;
 pub(crate) async fn test_update_account_calls(
     addr: H160,
     data: PathBuf,
-    rpc_url: Option<String>
+    rpc_url: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
     use crate::eth::update_account_calls;
 
     check_solc_requirement();
-    let _ = update_account_calls(addr, data, rpc_url.as_deref()).await?;
-    
+    update_account_calls(addr, data, rpc_url.as_deref()).await?;
+
     Ok(())
 }
 
@@ -1283,10 +1273,7 @@ pub(crate) async fn fuzz(
     info!("fuzzing public inputs");
 
     let fuzz_public_inputs = || {
-        let mut bad_inputs = vec![];
-        for l in &public_inputs {
-            bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
-        }
+        let bad_inputs = vec![Fr::random(rand::rngs::OsRng); public_inputs.len()];
 
         let bad_proof = create_proof_circuit_kzg(
             circuit.clone(),
@@ -1397,6 +1384,7 @@ pub(crate) async fn fuzz(
 
     if matches!(transcript, TranscriptType::EVM) {
         let num_instance = circuit.settings().total_instances();
+        let num_instance: usize = num_instance.iter().sum::<usize>();
 
         let yul_code = gen_evm_verifier(&params, pk.get_vk(), num_instance)?;
         let deployment_code = gen_deployment_code(yul_code).unwrap();
@@ -1506,7 +1494,7 @@ pub(crate) fn mock_aggregate(
 
     let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks)?;
 
-    let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, circuit.instances())
+    let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, vec![circuit.instances()])
         .map_err(Box::<dyn Error>::from)?;
     prover
         .verify_par()

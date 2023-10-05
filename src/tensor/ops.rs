@@ -740,6 +740,7 @@ pub fn einsum<
                             slice.push(0..inputs[idx].dims()[i]);
                         }
                     }
+
                     // Get the slice of the input tensor
                     inputs[idx].get_slice(&slice).unwrap()
                 })
@@ -1152,7 +1153,8 @@ pub fn gather<T: TensorType + Send + Sync>(
     // Calculate the output tensor size
     let mut output_size = input.dims().to_vec();
     // Reshape the output tensor
-    if index.is_empty() {
+    if index.is_singleton() {
+        assert_eq!(output_size[dim], 1);
         output_size.remove(dim);
         let mut input = input.clone();
         input.reshape(&output_size);
@@ -1238,9 +1240,9 @@ pub fn scatter<T: TensorType + Send + Sync>(
 
     cartesian_coord.iter().for_each(|coord| {
         let mut new_coord = coord.clone();
-        let index_val = index.get(&coord);
+        let index_val = index.get(coord);
         new_coord[dim] = index_val;
-        let val = src.get(&coord);
+        let val = src.get(coord);
         output.set(&new_coord, val);
     });
 
