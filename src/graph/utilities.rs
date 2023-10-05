@@ -719,7 +719,7 @@ pub fn new_op_from_onnx(
                 .map(|(i, _)| i)
                 .collect::<Vec<_>>();
 
-            assert_eq!(const_idx.len(), 1);
+            assert!(const_idx.len() <= 1);
             let const_idx = const_idx[0];
 
             if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
