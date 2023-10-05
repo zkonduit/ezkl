@@ -1950,7 +1950,7 @@ mod native_tests {
         let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
             .expect("failed to read address file");
 
-        let deployed_addr_arg = format!("--addr-verifier", addr);
+        let deployed_addr_arg = format!("--addr-verifier={}", addr);
 
         let pf_arg = format!("{}/{}/evm_aggr.pf", test_dir, example_name);
 
@@ -2350,7 +2350,7 @@ mod native_tests {
         let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
             .expect("failed to read address file");
 
-        let deployed_addr_arg = format!("--addr-verifier", addr);
+        let deployed_addr_arg = format!("--addr-verifier={}", addr);
 
         // now verify the proof
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
@@ -2619,7 +2619,7 @@ mod native_tests {
 
         assert!(status.success());
 
-        let deployed_addr_arg = format!("--addr-verifier", addr_da);
+        let deployed_addr_arg = format!("--addr-verifier={}", addr_da);
 
         let mut args = vec![
             "test-update-account-calls",
