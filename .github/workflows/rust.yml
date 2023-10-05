@@ -215,7 +215,7 @@ jobs:
 
   prove-and-verify-evm-tests:
     runs-on: ubuntu-latest-16-cores
-    # needs: [build, library-tests, python-tests]
+    needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
