@@ -727,7 +727,8 @@ pub fn new_op_from_onnx(
                     inputs[const_idx].decrement_const();
                     deleted_indices.push(const_idx);
                     op = SupportedOp::Nonlinear(LookupOp::Div {
-                        denom: crate::circuit::utils::F32(c.raw_values[0]),
+                        // we invert the constant for division
+                        denom: crate::circuit::utils::F32(1. / c.raw_values[0]),
                     })
                 }
             }
