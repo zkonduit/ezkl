@@ -2290,7 +2290,7 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/mvlookup#4eddb5d540e9b8090ba1f9760324919f16e78622"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/mv-lookup2#188d9aaedd9ee22607ff37c37618f286234c83c1"
 dependencies = [
  "askama",
  "blake2b_simd",

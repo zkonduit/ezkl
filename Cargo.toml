@@ -42,7 +42,7 @@ openssl = { version = "0.10.55", features = ["vendored"] }
 postgres = "0.19.5"
 pg_bigdecimal = "0.1.5"
 lazy_static = "1.4.0"
-halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", branch= "ac/mvlookup" }
+halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", branch= "ac/mv-lookup2" }
 colored_json =  { version = "3.0.1",  default_features = false, optional = true}
 plotters = { version = "0.3.0", default_features = false, optional = true }
 regex = { version = "1", default_features = false }
