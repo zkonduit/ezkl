@@ -723,7 +723,7 @@ pub fn new_op_from_onnx(
             let const_idx = const_idx[0];
 
             if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
-                if c.raw_values.len() == 1 && c.raw_values[const_idx] < 1. {
+                if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
                     inputs[const_idx].decrement_const();
                     deleted_indices.push(const_idx);
                     op = SupportedOp::Nonlinear(LookupOp::Div {
