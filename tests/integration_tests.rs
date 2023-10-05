@@ -2619,7 +2619,7 @@ mod native_tests {
 
         assert!(status.success());
 
-        let deployed_addr_arg = format!("--addr-verifier={}", addr_da);
+        let deployed_addr_arg = format!("--addr={}", addr_da);
 
         let mut args = vec![
             "test-update-account-calls",
