@@ -382,6 +382,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(res)
     }
 
+    /// Calls is_singleton on the inner tensor.
+    pub fn is_singleton(&self) -> bool {
+        match self {
+            ValTensor::Value { inner, .. } => inner.is_singleton(),
+            ValTensor::Instance { .. } => false,
+        }
+    }
+
     /// Calls `int_evals` on the inner tensor.
     pub fn get_int_evals(&self) -> Result<Tensor<i128>, Box<dyn Error>> {
         // finally convert to vector of integers
