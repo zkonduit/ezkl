@@ -11,13 +11,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2022-11-03
+          toolchain: nightly-2023-08-24
           override: true
           components: rustfmt, clippy
-      - name: mobilenet Mock
-        run: cargo test --release --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
-      - name: mobilenet KZG prove and verify large tests
-        run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_2_expects -- --include-ignored
       - name: nanoGPT Mock
         run: cargo test --release --verbose tests::large_mock_::large_tests_1_expects -- --include-ignored
       - name: nanoGPT KZG prove and verify large tests
@@ -26,3 +22,7 @@ jobs:
         run: cargo test --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
       - name: Self Attention KZG prove and verify large tests
         run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_0_expects -- --include-ignored
+      - name: mobilenet Mock
+        run: cargo test --release --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
+      - name: mobilenet KZG prove and verify large tests
+        run: cargo test --release --verbose tests::large_kzg_prove_and_verify_::large_tests_2_expects -- --include-ignored
