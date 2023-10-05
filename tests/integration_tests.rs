@@ -2495,12 +2495,52 @@ mod native_tests {
 
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
 
+        let settings_arg = format!("--settings-path={}", settings_path);
+
+        // create the verifier
+        let mut args = vec![
+            "create-evm-verifier",
+            &srs_path,
+            "--vk-path",
+            &vk_arg,
+            &settings_arg,
+        ];
+
+        let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
+
+        args.push("--sol-code-path");
+        args.push(sol_arg.as_str());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let addr_path_verifier_arg = format!("--addr-path={}/{}/addr_verifier.txt", test_dir, example_name);
+
+        // deploy the verifier
+        let mut args = vec![
+            "deploy-evm-verifier",
+            rpc_arg.as_str(),
+            addr_path_verifier_arg.as_str(),
+        ];
+
+        args.push("--sol-code-path");
+        args.push(sol_arg.as_str());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "create-evm-da-verifier",
-                format!("--settings-path={}", settings_path).as_str(),
+                "create-evm-da",
+                &settings_arg,
                 "--sol-code-path",
                 sol_arg.as_str(),
                 &srs_path,
@@ -2513,36 +2553,42 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
+        let addr_path_da_arg = format!("--addr-path={}/{}/addr_da.txt", test_dir, example_name);
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "deploy-evm-da-verifier",
+                "deploy-evm-da",
                 format!("--settings-path={}", settings_path).as_str(),
                 "-D",
                 test_on_chain_data_path.as_str(),
                 "--sol-code-path",
                 sol_arg.as_str(),
                 rpc_arg.as_str(),
-                addr_path_arg.as_str(),
+                addr_path_da_arg.as_str(),
             ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
 
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
-        let uses_data_attestation = "--data-attestation".to_string();
-        // read in the address
-        let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
+        // read in the verifier address
+        let addr_verifier = std::fs::read_to_string(format!("{}/{}/addr_verifier.txt", test_dir, example_name))
             .expect("failed to read address file");
 
-        let deployed_addr_arg = format!("--addr={}", addr);
+        let deployed_addr_verifier_arg = format!("--addr-verifier={}", addr_verifier);
+
+        // read in the da address
+        let addr_da = std::fs::read_to_string(format!("{}/{}/addr_da.txt", test_dir, example_name))
+            .expect("failed to read address file");
+
+        let deployed_addr_da_arg = format!("--addr-da={}", addr_da);
+
 
         let args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
-            deployed_addr_arg.as_str(),
-            uses_data_attestation.as_str(),
+            deployed_addr_verifier_arg.as_str(),
+            deployed_addr_da_arg.as_str(),
             rpc_arg.as_str(),
         ];
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2568,6 +2614,8 @@ mod native_tests {
             .expect("failed to execute process");
 
         assert!(status.success());
+
+        let deployed_addr_arg = format!("--addr={}", addr_da);
 
         let mut args = vec![
             "test-update-account-calls",

@@ -478,8 +478,8 @@ pub enum Commands {
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier that attests to on-chain inputs for a single proof
-    #[command(name = "create-evm-da-verifier", arg_required_else_help = true)]
-    CreateEVMDataAttestationVerifier {
+    #[command(name = "create-evm-da", arg_required_else_help = true)]
+    CreateEVMDataAttestation {
         /// The path to load the desired srs file from
         #[arg(long)]
         srs_path: PathBuf,
@@ -573,8 +573,8 @@ pub enum Commands {
         optimizer_runs: usize,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    #[command(name = "deploy-evm-da-verifier", arg_required_else_help = true)]
-    DeployEvmDataAttestationVerifier {
+    #[command(name = "deploy-evm-da", arg_required_else_help = true)]
+    DeployEvmDataAttestation {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
         data: PathBuf,
@@ -603,13 +603,13 @@ pub enum Commands {
         proof_path: PathBuf,
         /// The path to verfier contract's address
         #[arg(long)]
-        addr: H160,
+        addr_verifier: H160,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
         /// does the verifier use data attestation ?
-        #[arg(long, default_value = "false")]
-        data_attestation: bool,
+        #[arg(long)]
+        addr_da: Option<H160>,
     },
 
     /// Print the proof in hexadecimal

@@ -908,7 +908,7 @@ fn create_evm_verifier(
     abi_path,
     input_data
 ))]
-fn create_evm_data_attestation_verifier(
+fn create_evm_data_attestation(
     vk_path: PathBuf,
     srs_path: PathBuf,
     settings_path: PathBuf,
@@ -996,28 +996,38 @@ fn deploy_da_evm(
 /// verifies an evm compatible proof, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     proof_path,
-    addr,
+    addr_verifier,
     rpc_url=None,
-    data_attestation = false,
+    addr_da = None,
 ))]
 fn verify_evm(
     proof_path: PathBuf,
-    addr: &str,
+    addr_verifier: &str,
     rpc_url: Option<String>,
-    data_attestation: bool,
+    addr_da: Option<&str>
 ) -> Result<bool, PyErr> {
-    let addr = H160::from_str(addr).map_err(|e| {
+    let addr_verifier = H160::from_str(addr_verifier).map_err(|e| {
         let err_str = format!("address is invalid: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
+    let addr_da = if let Some(addr_da) = addr_da {
+        let addr_da = H160::from_str(addr_da).map_err(|e| {
+            let err_str = format!("address is invalid: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+        Some(addr_da)
+    } else {
+        None
+    };
+    
 
     Runtime::new()
         .unwrap()
         .block_on(crate::execute::verify_evm(
             proof_path,
-            addr,
+            addr_verifier,
             rpc_url,
-            data_attestation,
+            addr_da,
         ))
         .map_err(|e| {
             let err_str = format!("Failed to run verify_evm: {}", e);
@@ -1114,7 +1124,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
     m.add_function(wrap_pyfunction!(print_proof_hex, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
-    m.add_function(wrap_pyfunction!(create_evm_data_attestation_verifier, m)?)?;
+    m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
 
     Ok(())
 }

@@ -5,7 +5,7 @@ use crate::commands::{Cli, Commands};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{fix_verifier_sol, get_contract_artifacts, verify_proof_via_solidity};
+use crate::eth::{fix_da_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 #[cfg(not(target_arch = "wasm32"))]
@@ -162,7 +162,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             abi_path,
         } => create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::CreateEVMDataAttestationVerifier {
+        Commands::CreateEVMDataAttestation {
             vk_path,
             srs_path,
             settings_path,
@@ -296,7 +296,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             optimizer_runs,
         } => deploy_evm(sol_code_path, rpc_url, addr_path, optimizer_runs).await,
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::DeployEvmDataAttestationVerifier {
+        Commands::DeployEvmDataAttestation {
             data,
             settings_path,
             sol_code_path,
@@ -317,10 +317,10 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         #[cfg(not(target_arch = "wasm32"))]
         Commands::VerifyEVM {
             proof_path,
-            addr,
+            addr_verifier,
             rpc_url,
-            data_attestation,
-        } => verify_evm(proof_path, addr, rpc_url, data_attestation).await,
+            addr_da,
+        } => verify_evm(proof_path, addr_verifier, rpc_url, addr_da).await,
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
     }
 }
@@ -899,16 +899,14 @@ pub(crate) fn create_evm_data_attestation_verifier(
     };
 
     if input_data.is_some() || output_data.is_some() {
-        let output = fix_verifier_sol(
-            sol_code_path.clone(),
-            num_instance as u32,
+        let output = fix_da_sol(
             input_data,
             output_data,
         )?;
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestationVerifier", 0)?;
+        let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestation", 0)?;
         // save abi to file
         serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
     } else {
@@ -966,19 +964,19 @@ pub(crate) async fn deploy_evm(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn verify_evm(
     proof_path: PathBuf,
-    addr: H160,
+    addr_verifier: H160,
     rpc_url: Option<String>,
-    uses_data_attestation: bool,
+    addr_da: Option<H160>,
 ) -> Result<(), Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
     check_solc_requirement();
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
-    let result = if !uses_data_attestation {
-        verify_proof_via_solidity(proof.clone(), addr, rpc_url.as_deref()).await?
+    let result = if let Some(addr_da) = addr_da {
+        verify_proof_with_data_attestation(proof.clone(), addr_verifier, addr_da, rpc_url.as_deref()).await?
     } else {
-        verify_proof_with_data_attestation(proof.clone(), addr, rpc_url.as_deref()).await?
+        verify_proof_via_solidity(proof.clone(), addr_verifier, rpc_url.as_deref()).await?
     };
 
     info!("Solidity verification result: {}", result);
