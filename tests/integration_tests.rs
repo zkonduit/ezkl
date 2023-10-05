@@ -1950,7 +1950,7 @@ mod native_tests {
         let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
             .expect("failed to read address file");
 
-        let deployed_addr_arg = format!("--addr={}", addr);
+        let deployed_addr_arg = format!("--addr-verifier", addr);
 
         let pf_arg = format!("{}/{}/evm_aggr.pf", test_dir, example_name);
 
@@ -2350,7 +2350,7 @@ mod native_tests {
         let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
             .expect("failed to read address file");
 
-        let deployed_addr_arg = format!("--addr={}", addr);
+        let deployed_addr_arg = format!("--addr-verifier", addr);
 
         // now verify the proof
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
@@ -2518,7 +2518,10 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let addr_path_verifier_arg = format!("--addr-path={}/{}/addr_verifier.txt", test_dir, example_name);
+        let addr_path_verifier_arg = format!(
+            "--addr-path={}/{}/addr_verifier.txt",
+            test_dir, example_name
+        );
 
         // deploy the verifier
         let mut args = vec![
@@ -2572,8 +2575,9 @@ mod native_tests {
 
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
         // read in the verifier address
-        let addr_verifier = std::fs::read_to_string(format!("{}/{}/addr_verifier.txt", test_dir, example_name))
-            .expect("failed to read address file");
+        let addr_verifier =
+            std::fs::read_to_string(format!("{}/{}/addr_verifier.txt", test_dir, example_name))
+                .expect("failed to read address file");
 
         let deployed_addr_verifier_arg = format!("--addr-verifier={}", addr_verifier);
 
@@ -2582,7 +2586,6 @@ mod native_tests {
             .expect("failed to read address file");
 
         let deployed_addr_da_arg = format!("--addr-da={}", addr_da);
-
 
         let args = vec![
             "verify-evm",
@@ -2616,7 +2619,7 @@ mod native_tests {
 
         assert!(status.success());
 
-        let deployed_addr_arg = format!("--addr={}", addr_da);
+        let deployed_addr_arg = format!("--addr-verifier", addr_da);
 
         let mut args = vec![
             "test-update-account-calls",
