@@ -584,3 +584,5 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
       - name: Gan tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
+      - name: GCN tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_21_expects
