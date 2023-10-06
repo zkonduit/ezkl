@@ -164,7 +164,7 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure [BaseOp].
     pub selectors: BTreeMap<(BaseOp, usize), Selector>,
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
-    pub lookup_selectors: BTreeMap<(LookupOp, usize), Vec<Selector>>,
+    pub lookup_selectors: BTreeMap<(LookupOp, usize), Selector>,
     ///
     pub tables: BTreeMap<LookupOp, Table<F>>,
     /// Activate sanity checks
@@ -303,26 +303,29 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         };
 
         for x in 0..input.num_cols() {
-            let qlookups = (0..table.table_inputs.len())
-                .map(|i| cs.complex_selector())
-                .collect::<Vec<_>>();
-            selectors.insert((nl.clone(), x), qlookups);
+            let qlookups: Vec<Selector> = (0..table.table_inputs.len())
+                .map(|_| cs.complex_selector())
+                .collect();
+
             cs.lookup("", |cs| {
-                let qlookups = (0..table.table_inputs.len())
-                    .map(|i| cs.query_selector(qlookups[i]))
-                    .collect::<Vec<_>>();
-                let not_qlookups = (0..table.table_inputs.len())
-                    .map(|i| Expression::Constant(<F as Field>::ONE) - qlookups[i])
-                    .collect::<Vec<_>>();
+                let qlookups: Vec<Expression<F>> = (0..qlookups.len())
+                    .map(|i| cs.query_selector(qlookups[i]).clone())
+                    .collect();
+                let not_qlookups: Vec<Expression<F>> = (0..qlookups.len())
+                    .map(|i| Expression::Constant(<F as Field>::ONE) - qlookups[i].clone())
+                    .collect();
                 let (default_x, default_y): (F, F) = nl.default_pair();
                 let mut res = vec![];
 
-                for (input_col, output_col) in table
+                for (i, (input_col, output_col)) in table
                     .table_inputs
                     .clone()
                     .into_iter()
                     .zip(table.table_outputs.clone().into_iter())
+                    .enumerate()
                 {
+                    let qlookup = qlookups[i].clone();
+                    let not_qlookup = not_qlookups[i].clone();
                     res.extend([
                         (
                             match &input {
@@ -346,8 +349,20 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                         ),
                     ]);
                 }
+
                 res
             });
+            let aggregate_selector = cs.selector();
+            cs.create_gate("", |cs| {
+                let mut start = Expression::Constant(<F as Field>::ONE);
+                for selector in qlookups.iter() {
+                    let selector = cs.query_selector(*selector);
+                    start = start * selector.clone();
+                }
+                vec![start]
+            });
+
+            selectors.insert((nl.clone(), x), aggregate_selector);
         }
         self.lookup_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now
