@@ -460,6 +460,7 @@ impl Model {
             num_constraints,
             required_lookups: lookup_ops,
             model_output_scales: self.graph.get_output_scales(),
+            model_input_scales: self.graph.get_input_scales(),
             total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),

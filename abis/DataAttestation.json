@@ -18,7 +18,7 @@
 			},
 			{
 				"internalType": "uint256[]",
-				"name": "_outputScales",
+				"name": "_scales",
 				"type": "uint256[]"
 			},
 			{
@@ -34,19 +34,6 @@
 		],
 		"stateMutability": "nonpayable",
 		"type": "constructor"
-	},
-	{
-		"inputs": [],
-		"name": "INPUT_SCALE",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
 	},
 	{
 		"inputs": [
@@ -106,7 +93,7 @@
 				"type": "uint256"
 			}
 		],
-		"name": "outputScales",
+		"name": "scales",
 		"outputs": [
 			{
 				"internalType": "uint256",

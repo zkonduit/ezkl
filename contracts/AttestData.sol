@@ -28,8 +28,7 @@ contract DataAttestation {
     }
     AccountCall[] public accountCalls;
 
-    uint public constant INPUT_SCALE = 1 << 0;
-    uint[] public outputScales;
+    uint[] public scales;
 
     address public admin;
 
@@ -55,13 +54,13 @@ contract DataAttestation {
         address[] memory _contractAddresses,
         bytes[][] memory _callData,
         uint256[][] memory _decimals,
-        uint[] memory _outputScales,
+        uint[] memory _scales,
         uint8 _instanceOffset,
         address _admin
     ) {
         admin = _admin;
-        for (uint i; i < _outputScales.length; i++) {
-            outputScales.push(1 << _outputScales[i]);
+        for (uint i; i < _scales.length; i++) {
+            scales.push(1 << _scales[i]);
         }
         populateAccountCalls(_contractAddresses, _callData, _decimals);
         instanceOffset = _instanceOffset;
@@ -239,10 +238,7 @@ contract DataAttestation {
                     account,
                     accountCalls[i].callData[j]
                 );
-                uint256 scale = INPUT_SCALE;
-                if (counter >= INPUT_CALLS) {
-                    scale = outputScales[counter - INPUT_CALLS];
-                }
+                uint256 scale = scales[counter];
                 int256 quantized_data = quantizeData(
                     returnData,
                     accountCalls[i].decimals[j],
