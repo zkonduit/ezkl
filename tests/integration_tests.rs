@@ -1815,7 +1815,7 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-
+ 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-witness",

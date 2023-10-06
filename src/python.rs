@@ -916,7 +916,7 @@ fn create_evm_data_attestation(
     abi_path: PathBuf,
     input_data: PathBuf,
 ) -> Result<bool, PyErr> {
-    crate::execute::create_evm_data_attestation_verifier(
+    crate::execute::create_evm_data_attestation(
         vk_path,
         srs_path,
         settings_path,
@@ -925,7 +925,7 @@ fn create_evm_data_attestation(
         input_data,
     )
     .map_err(|e| {
-        let err_str = format!("Failed to run create_evm_data_attestation_verifier: {}", e);
+        let err_str = format!("Failed to run create_evm_data_attestation: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
 
