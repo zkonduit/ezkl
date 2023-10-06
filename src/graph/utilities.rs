@@ -709,7 +709,33 @@ pub fn new_op_from_onnx(
         }
         "Add" => SupportedOp::Linear(PolyOp::Add),
         "Sub" => SupportedOp::Linear(PolyOp::Sub),
-        "Mul" => SupportedOp::Linear(PolyOp::Mult),
+        "Mul" => {
+            let mut op = SupportedOp::Linear(PolyOp::Mult);
+
+            let const_idx = inputs
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| n.is_constant())
+                .map(|(i, _)| i)
+                .collect::<Vec<_>>();
+
+            assert!(const_idx.len() <= 1);
+
+            if const_idx.len() == 1 {
+                let const_idx = const_idx[0];
+                if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
+                    if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
+                        inputs[const_idx].decrement_const();
+                        deleted_indices.push(const_idx);
+                        op = SupportedOp::Nonlinear(LookupOp::Div {
+                            // we invert the constant for division
+                            denom: crate::circuit::utils::F32(1. / c.raw_values[0]),
+                        })
+                    }
+                }
+            }
+            op
+        }
         "Iff" => SupportedOp::Linear(PolyOp::Iff),
         "Less" => {
             if inputs.len() == 2 {
