@@ -164,7 +164,7 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure [BaseOp].
     pub selectors: BTreeMap<(BaseOp, usize), Selector>,
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
-    pub lookup_selectors: BTreeMap<(LookupOp, usize), Selector>,
+    pub lookup_selectors: BTreeMap<(LookupOp, usize), Vec<Selector>>,
     ///
     pub tables: BTreeMap<LookupOp, Table<F>>,
     /// Activate sanity checks
@@ -279,6 +279,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         input: &VarTensor,
         output: &VarTensor,
         bits: usize,
+        logrows: usize,
         nl: &LookupOp,
     ) -> Result<(), Box<dyn Error>>
     where
@@ -291,9 +292,9 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         let table = if !self.tables.contains_key(nl) {
             // as all tables have the same input we see if there's another table who's input we can reuse
             let table = if let Some(table) = self.tables.values().next() {
-                Table::<F>::configure(cs, bits, nl, Some(table.table_input))
+                Table::<F>::configure(cs, bits, logrows, nl, Some(table.table_inputs.clone()))
             } else {
-                Table::<F>::configure(cs, bits, nl, None)
+                Table::<F>::configure(cs, bits, logrows, nl, None)
             };
             self.tables.insert(nl.clone(), table.clone());
             table
@@ -302,34 +303,50 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         };
 
         for x in 0..input.num_cols() {
-            let qlookup = cs.complex_selector();
-            selectors.insert((nl.clone(), x), qlookup);
+            let qlookups = (0..table.table_inputs.len())
+                .map(|i| cs.complex_selector())
+                .collect::<Vec<_>>();
+            selectors.insert((nl.clone(), x), qlookups);
             cs.lookup("", |cs| {
-                let qlookup = cs.query_selector(qlookup);
-                let not_qlookup = Expression::Constant(<F as Field>::ONE) - qlookup.clone();
+                let qlookups = (0..table.table_inputs.len())
+                    .map(|i| cs.query_selector(qlookups[i]))
+                    .collect::<Vec<_>>();
+                let not_qlookups = (0..table.table_inputs.len())
+                    .map(|i| Expression::Constant(<F as Field>::ONE) - qlookups[i])
+                    .collect::<Vec<_>>();
                 let (default_x, default_y): (F, F) = nl.default_pair();
-                vec![
-                    (
-                        match &input {
-                            VarTensor::Advice { inner: advices, .. } => {
-                                qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
-                                    + not_qlookup.clone() * default_x
-                            }
-                            _ => panic!("wrong input type"),
-                        },
-                        table.table_input,
-                    ),
-                    (
-                        match &output {
-                            VarTensor::Advice { inner: advices, .. } => {
-                                qlookup * cs.query_advice(advices[x], Rotation(0))
-                                    + not_qlookup * default_y
-                            }
-                            _ => panic!("wrong output type"),
-                        },
-                        table.table_output,
-                    ),
-                ]
+                let mut res = vec![];
+
+                for (input_col, output_col) in table
+                    .table_inputs
+                    .clone()
+                    .into_iter()
+                    .zip(table.table_outputs.clone().into_iter())
+                {
+                    res.extend([
+                        (
+                            match &input {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
+                                        + not_qlookup.clone() * default_x
+                                }
+                                _ => panic!("wrong input type"),
+                            },
+                            input_col,
+                        ),
+                        (
+                            match &output {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
+                                        + not_qlookup.clone() * default_y
+                                }
+                                _ => panic!("wrong output type"),
+                            },
+                            output_col,
+                        ),
+                    ]);
+                }
+                res
             });
         }
         self.lookup_selectors.extend(selectors);

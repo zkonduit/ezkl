@@ -10,7 +10,7 @@ use halo2_proofs::{
 use crate::{
     circuit::CircuitError,
     fieldutils::i128_to_felt,
-    tensor::{Tensor, TensorType},
+    tensor::{Tensor, TensorType, VarTensor},
 };
 
 use crate::circuit::lookup::LookupOp;
@@ -23,9 +23,11 @@ pub struct Table<F: PrimeField> {
     /// Non-linearity to be used in table.
     pub nonlinearity: LookupOp,
     /// Input to table.
-    pub table_input: TableColumn,
+    pub table_inputs: Vec<TableColumn>,
+    /// col size
+    pub col_size: usize,
     /// Output of table
-    pub table_output: TableColumn,
+    pub table_outputs: Vec<TableColumn>,
     /// Flags if table has been previously assigned to.
     pub is_assigned: bool,
     /// Number of bits used in lookup table.
@@ -38,21 +40,49 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
         bits: usize,
+        logrows: usize,
         nonlinearity: &LookupOp,
-        preexisting_input: Option<TableColumn>,
+        preexisting_inputs: Option<Vec<TableColumn>>,
     ) -> Table<F> {
-        let table_input = preexisting_input.unwrap_or_else(|| cs.lookup_table_column());
         let range = nonlinearity.bit_range(bits, cs.blinding_factors());
+        let max_rows = VarTensor::max_rows(&cs, logrows) as i128;
+
+        let table_inputs = preexisting_inputs.unwrap_or_else(|| {
+            let capacity = range.1 - range.0;
+
+            let mut modulo = (capacity / max_rows) + 1;
+            // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
+            modulo = ((capacity + modulo) / max_rows) + 1;
+            let mut cols = vec![];
+            for _ in 0..modulo {
+                cols.push(cs.lookup_table_column());
+            }
+            cols
+        });
+
+        let table_outputs = table_inputs
+            .iter()
+            .map(|_| cs.lookup_table_column())
+            .collect::<Vec<_>>();
 
         Table {
             nonlinearity: nonlinearity.clone(),
-            table_input,
-            table_output: cs.lookup_table_column(),
+            table_inputs,
+            table_outputs,
             is_assigned: false,
+            col_size: max_rows as usize,
             range,
             _marker: PhantomData,
         }
     }
+
+    /// Take a linear coordinate and output the (column, row) position in the storage block.
+    pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize) {
+        let x = linear_coord / self.col_size;
+        let y = linear_coord % self.col_size;
+        (x, y)
+    }
+
     /// Assigns values to the constraints generated when calling `configure`.
     pub fn layout(
         &mut self,
@@ -78,11 +108,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
                         .iter()
                         .enumerate()
                         .map(|(row_offset, input)| {
+                            let (x, y) = self.cartesian_coord(row_offset);
                             if !preassigned_input {
                                 table.assign_cell(
                                     || format!("nl_i_col row {}", row_offset),
-                                    self.table_input,
-                                    row_offset,
+                                    self.table_inputs[x],
+                                    y,
                                     || Value::known(*input),
                                 )?;
                             }
@@ -91,8 +122,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
 
                             table.assign_cell(
                                 || format!("nl_o_col row {}", row_offset),
-                                self.table_output,
-                                row_offset,
+                                self.table_outputs[x],
+                                y,
                                 || Value::known(output),
                             )?;
                             Ok(())

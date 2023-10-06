@@ -53,7 +53,7 @@ impl Circuit<Fr> for MyCircuit {
 
         // sets up a new relu table
         base_config
-            .configure_lookup(cs, &b, &output, BITS, &LookupOp::ReLU)
+            .configure_lookup(cs, &b, &output, BITS, K, &LookupOp::ReLU)
             .unwrap();
 
         MyConfig { base_config }

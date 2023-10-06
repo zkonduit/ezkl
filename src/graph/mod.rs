@@ -1108,6 +1108,7 @@ impl Circuit<Fp> for GraphCircuit {
             cs,
             &vars,
             params.run_args.bits,
+            params.run_args.logrows as usize,
             params.required_lookups,
             params.check_mode,
         )

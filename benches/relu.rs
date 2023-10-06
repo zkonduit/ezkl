@@ -43,7 +43,7 @@ impl Circuit<Fr> for NLCircuit {
             let mut config = Config::default();
 
             config
-                .configure_lookup(cs, &advices[0], &advices[1], BITS, &nl)
+                .configure_lookup(cs, &advices[0], &advices[1], BITS, K, &nl)
                 .unwrap();
 
             config
