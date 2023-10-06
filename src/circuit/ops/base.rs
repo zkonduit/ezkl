@@ -28,11 +28,13 @@ impl BaseOp {
         T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Neg<Output = T>,
     >(
         &self,
-        inputs: (T, T, T),
+        inputs: (T, T),
+        prev_row: (T, T, T),
     ) -> T {
-        let (a, b, m) = inputs;
+        let (a, b) = inputs;
+        let (m, c, d) = prev_row;
         match &self {
-            BaseOp::Dot => a * b + m,
+            BaseOp::Dot => a * b + c * d + m,
             BaseOp::Add => a + b,
             BaseOp::Identity => b,
             BaseOp::Sum => b + m,
@@ -68,7 +70,7 @@ impl BaseOp {
         match self {
             BaseOp::Identity => (0, 1),
             BaseOp::Neg => (0, 1),
-            BaseOp::Dot => (-1, 2),
+            BaseOp::Dot => (-2, 3),
             BaseOp::CumProd => (-1, 2),
             BaseOp::Add => (0, 1),
             BaseOp::Sub => (0, 1),
@@ -102,7 +104,7 @@ impl BaseOp {
         match self {
             BaseOp::Identity => 0,
             BaseOp::Neg => 0,
-            BaseOp::Dot => 1,
+            BaseOp::Dot => 2,
             BaseOp::Add => 0,
             BaseOp::Sub => 0,
             BaseOp::Mult => 0,

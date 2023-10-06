@@ -123,7 +123,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     // enable the selectors
     if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
+        (0..assigned_len).step_by(2).for_each(|i| {
             let (x, y) = config.output.cartesian_coord(region.offset() + i);
             // hop over duplicates at start of column
             if y == 0 && i > 0 {

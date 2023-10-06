@@ -249,8 +249,27 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                             .query_rng(meta, rotation_offset, idx_offset, rng)
                             .expect("poly: output query failed");
 
-                        let res =
-                            base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
+                        let previous_row: Vec<Tensor<Expression<F>>> =
+                            if matches!(base_op, BaseOp::Dot) {
+                                inputs
+                                    .iter()
+                                    .map(|x| {
+                                        x.query_rng(meta, -1, idx_offset, 1)
+                                            .expect("poly: input query failed")
+                                    })
+                                    .collect()
+                            } else {
+                                vec![expected_output.clone(), expected_output.clone()]
+                            };
+
+                        let res = base_op.f(
+                            (qis[0].clone(), qis[1].clone()),
+                            (
+                                expected_output[0].clone(),
+                                previous_row[0][0].clone(),
+                                previous_row[1][0].clone(),
+                            ),
+                        );
                         vec![expected_output[base_op.constraint_idx()].clone() - res]
                     }
                 };
