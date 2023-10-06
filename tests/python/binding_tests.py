@@ -31,7 +31,7 @@ anvil_url = "http://localhost:3030"
 def setup_module(module):
     """setup anvil."""
     global proc
-    # requries an anvil install
+    # requires an anvil install
     proc = subprocess.Popen(["anvil", "-p", "3030"])
     time.sleep(1)
 
@@ -481,7 +481,7 @@ def test_create_evm_verifier():
 
 def test_deploy_evm():
     """
-    Verifies an evm proof
+    Test deployment of the verifier smart contract
     In order to run this you will need to install solc in your environment
     """
     addr_path = os.path.join(folder_path, 'address.json')
@@ -497,6 +497,39 @@ def test_deploy_evm():
     )
 
     assert res == True
+
+
+def test_deploy_evm_with_private_key():
+    """
+    Test deployment of the verifier smart contract using a custom private key
+    In order to run this you will need to install solc in your environment
+    """
+    addr_path = os.path.join(folder_path, 'address.json')
+    sol_code_path = os.path.join(folder_path, 'test.sol')
+
+    # TODO: without optimization there will be out of gas errors
+    # sol_code_path = os.path.join(folder_path, 'test.sol')
+
+    anvil_default_private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+    
+    res = ezkl.deploy_evm(
+        addr_path,
+        sol_code_path,
+        rpc_url=anvil_url,
+        private_key=anvil_default_private_key
+    )
+
+    assert res == True
+
+    custom_zero_balance_private_key = "ff9dfe0b6d31e93ba13460a4d6f63b5e31dd9532b1304f1cbccea7092a042aa4"
+
+    with pytest.raises(RuntimeError, match = "Failed to run deploy_evm"):
+        res = ezkl.deploy_evm(
+            addr_path,
+            sol_code_path,
+            rpc_url=anvil_url,
+            private_key=custom_zero_balance_private_key
+        )
 
 
 def test_verify_evm():

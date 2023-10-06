@@ -295,7 +295,17 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             rpc_url,
             addr_path,
             optimizer_runs,
-        } => deploy_evm(sol_code_path, rpc_url, addr_path, optimizer_runs).await,
+            private_key,
+        } => {
+            deploy_evm(
+                sol_code_path,
+                rpc_url,
+                addr_path,
+                optimizer_runs,
+                private_key,
+            )
+            .await
+        }
         #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvmDataAttestation {
             data,
@@ -304,6 +314,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             rpc_url,
             addr_path,
             optimizer_runs,
+            private_key,
         } => {
             deploy_da_evm(
                 data,
@@ -312,6 +323,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
                 rpc_url,
                 addr_path,
                 optimizer_runs,
+                private_key,
             )
             .await
         }
@@ -924,6 +936,7 @@ pub(crate) async fn deploy_da_evm(
     rpc_url: Option<String>,
     addr_path: PathBuf,
     runs: usize,
+    private_key: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
     let contract_address = deploy_da_verifier_via_solidity(
@@ -932,6 +945,7 @@ pub(crate) async fn deploy_da_evm(
         sol_code_path,
         rpc_url.as_deref(),
         runs,
+        private_key.as_deref(),
     )
     .await?;
     info!("Contract deployed at: {}", contract_address);
@@ -948,10 +962,16 @@ pub(crate) async fn deploy_evm(
     rpc_url: Option<String>,
     addr_path: PathBuf,
     runs: usize,
+    private_key: Option<String>,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
-    let contract_address =
-        deploy_verifier_via_solidity(sol_code_path, rpc_url.as_deref(), runs).await?;
+    let contract_address = deploy_verifier_via_solidity(
+        sol_code_path,
+        rpc_url.as_deref(),
+        runs,
+        private_key.as_deref(),
+    )
+    .await?;
 
     info!("Contract deployed at: {:#?}", contract_address);
 

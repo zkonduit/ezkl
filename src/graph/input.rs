@@ -258,7 +258,7 @@ impl OnChainSource {
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
-        let (anvil, client) = crate::eth::setup_eth_backend(rpc).await?;
+        let (anvil, client) = crate::eth::setup_eth_backend(rpc, None).await?;
 
         let address = client.address();
 
