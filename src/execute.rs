@@ -22,6 +22,7 @@ use crate::RunArgs;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::types::H160;
 #[cfg(not(target_arch = "wasm32"))]
+use halo2_solidity_verifier;
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::poly::commitment::Params;
