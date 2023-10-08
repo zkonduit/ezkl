@@ -538,6 +538,8 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: Stacked Regression tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_23_expects
       - name: Linear Regression tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_22_expects
       - name: Simple tutorial (public network and outputs)
