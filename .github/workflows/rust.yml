@@ -266,14 +266,6 @@ jobs:
 
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
-
-      - name: Build wasm files for both web and nodejs compilation targets
-        run: |
-          wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
-
-      - name: Replace memory definition in nodejs
-        run: |
-          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - uses: actions/checkout@v3
       - name: Use pnpm 8
         uses: pnpm/action-setup@v2

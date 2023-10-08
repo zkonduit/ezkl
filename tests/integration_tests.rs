@@ -439,7 +439,7 @@ mod native_tests {
             use crate::native_tests::mock;
             use crate::native_tests::accuracy_measurement;
             use crate::native_tests::kzg_prove_and_verify;
-            use crate::native_tests::wasm_tests;
+            use crate::native_tests::run_js_tests;
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization;
@@ -780,7 +780,7 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", Some(vec![0,1]), true);
-                    wasm_tests(path, test.to_string());
+                    run_js_tests(path, test.to_string(), "testWasm");
                     test_dir.close().unwrap();
                 }
 
@@ -792,7 +792,7 @@ mod native_tests {
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     kzg_prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", Some(vec![0,1]), true);
-                    wasm_tests(path, test.to_string());
+                    run_js_tests(path, test.to_string(), "testWasm");
                     test_dir.close().unwrap();
                 }
 
@@ -833,6 +833,7 @@ mod native_tests {
             use crate::native_tests::TESTS_EVM_AGGR;
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
+            use crate::native_tests::run_js_tests;
             use crate::native_tests::kzg_evm_on_chain_input_prove_and_verify;
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
@@ -929,10 +930,24 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "public");
+                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
 
                 }
 
+                // these take a particularly long time to run
+                #[test]
+                #[ignore]
+                fn kzg_evm_prove_and_verify_encrypted_input_() {
+                    let test = "1l_mlp";
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    kzg_evm_prove_and_verify(path, test.to_string(), "encrypted", "private", "public");
+                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    test_dir.close().unwrap();
+                }
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_input_prove_and_verify_(test: &str) {
@@ -941,6 +956,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "hashed", "private", "private");
+                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
                 }
 
@@ -951,6 +967,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "hashed", "public");
+                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
 
                 }
@@ -962,8 +979,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "hashed");
+                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
-
                 }
 
 
@@ -2119,20 +2136,6 @@ mod native_tests {
         assert!(status.success());
     }
 
-    // run js wasm tests for a given example
-    fn wasm_tests(test_dir: &str, example_name: String) {
-        let status = Command::new("pnpm")
-            .args([
-                "run",
-                "test",
-                "testWasm",
-                &format!("--example={}", example_name),
-                &format!("--dir={}", test_dir),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-    }
 
     // prove-serialize-verify, the usual full path
     fn kzg_fuzz(
@@ -2375,6 +2378,21 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(!status.success());
+    }
+
+    // run js browser evm verify tests for a given example
+    fn run_js_tests(test_dir: &str, example_name: String, js_test: &str) {
+        let status = Command::new("pnpm")
+            .args([
+                "run",
+                "test",
+                js_test,
+                &format!("--example={}", example_name),
+                &format!("--dir={}", test_dir),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
     }
 
     fn kzg_evm_on_chain_input_prove_and_verify(
