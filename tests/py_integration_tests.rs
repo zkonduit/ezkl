@@ -76,7 +76,7 @@ mod py_tests {
                     "tf2onnx==1.14.0",
                     "pytorch-lightning==2.0.6",
                     "sk2torch==1.2.0",
-                    "scikit-learn==1.1.1",
+                    "scikit-learn==1.3.1",
                     "xgboost==1.7.6",
                     "hummingbird-ml==0.4.9",
                     "lightgbm==4.0.0",
