@@ -311,6 +311,8 @@ pub struct GraphSettings {
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
     pub model_output_scales: Vec<u32>,
+    /// model input scales
+    pub model_input_scales: Vec<u32>,
     /// the of instance cells used by modules
     pub module_sizes: ModuleSizes,
     /// required_lookups

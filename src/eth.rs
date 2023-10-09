@@ -126,8 +126,17 @@ pub async fn deploy_da_verifier_via_solidity(
     let mut contract_instance_offset = 0;
 
     if let DataSource::OnChain(source) = input.input_data {
+        let input_scales = settings.model_input_scales;
         for call in source.calls {
             calls_to_accounts.push(call);
+        }
+
+        // give each input a scale
+        for scale in input_scales {
+            scales.extend(vec![
+                scale;
+                instance_shapes[instance_idx].iter().product::<usize>()
+            ]);
             instance_idx += 1;
         }
     } else if let DataSource::File(source) = input.input_data {
@@ -644,7 +653,7 @@ pub fn get_contract_artifacts(
 
 /// Sets the constants stored in the da verifier
 pub fn fix_da_sol(
-    input_data: Option<(u32, Vec<CallsToAccount>)>,
+    input_data: Option<Vec<CallsToAccount>>,
     output_data: Option<Vec<CallsToAccount>>,
 ) -> Result<String, Box<dyn Error>> {
 
@@ -653,14 +662,8 @@ pub fn fix_da_sol(
     // fill in the quantization params and total calls
     // as constants to the contract to save on gas
     if let Some(input_data) = input_data {
-        let input_calls: usize = input_data.1.iter().map(|v| v.call_data.len()).sum();
-        let input_scale = input_data.0;
-        accounts_len = input_data.1.len();
-        contract = contract.replace(
-            "uint public constant INPUT_SCALE = 1 << 0;",
-            &format!("uint public constant INPUT_SCALE = 1 << {};", input_scale),
-        );
-
+        let input_calls: usize = input_data.iter().map(|v| v.call_data.len()).sum();
+        accounts_len = input_data.len();
         contract = contract.replace(
             "uint256 constant INPUT_CALLS = 0;",
             &format!("uint256 constant INPUT_CALLS = {};", input_calls),
