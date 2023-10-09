@@ -227,6 +227,22 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - uses: actions/checkout@v3
+      - name: Use pnpm 8
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - name: Use Node.js 18.12.1
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18.12.1"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: |
+          pnpm install --no-frozen-lockfile
+        env:
+          CI: false
+          NODE_ENV: development
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil

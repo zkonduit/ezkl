@@ -1,6 +1,6 @@
 import localEVMVerify, { Hardfork } from '@ezkljs/verify'
 import { serialize, deserialize } from '@ezkljs/engine/nodejs'
-import { parseProof, compileContracts } from './utils'
+import { compileContracts } from './utils'
 import * as fs from 'fs'
 
 exports.USER_NAME = require("minimist")(process.argv.slice(2))["example"];
