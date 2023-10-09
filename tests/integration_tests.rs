@@ -930,12 +930,11 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "public");
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
 
                 }
 
-                // these take a particularly long time to run
                 #[test]
                 #[ignore]
                 fn kzg_evm_prove_and_verify_encrypted_input_() {
@@ -945,7 +944,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "encrypted", "private", "public");
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
                 }
 
@@ -956,7 +955,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "hashed", "private", "private");
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
                 }
 
@@ -967,7 +966,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "hashed", "public");
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
 
                 }
@@ -979,7 +978,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(false);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "hashed");
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
                 }
 
@@ -994,9 +993,6 @@ mod native_tests {
                     test_dir.close().unwrap();
 
                 }
-
-
-
             });
     }
     };

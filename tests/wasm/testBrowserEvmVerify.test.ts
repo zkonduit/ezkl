@@ -1,5 +1,7 @@
 import localEVMVerify, { Hardfork } from '@ezkljs/verify'
+import { serialize, deserialize } from '@ezkljs/engine/nodejs'
 import { parseProof, compileContracts } from './utils'
+import * as fs from 'fs'
 
 exports.USER_NAME = require("minimist")(process.argv.slice(2))["example"];
 exports.PATH = require("minimist")(process.argv.slice(2))["dir"];
@@ -8,9 +10,7 @@ describe('localEVMVerify', () => {
 
   let bytecode: string
 
-  let instances: string[]
-
-  let proof: string
+  let proof: any
 
   const example = exports.USER_NAME || "1l_mlp"
   const path = exports.PATH || "../ezkl/examples/onnx"
@@ -26,37 +26,31 @@ describe('localEVMVerify', () => {
   })
 
   it('should return true when verification succeeds', async () => {
-    ;[instances, proof] = parseProof(path, example)
-    console.log('instances', instances)
-    console.log('proof', proof)
+    const proofFileBuffer = fs.readFileSync(`${path}/${example}/proof.pf`)
 
-    const result = await localEVMVerify(
-      proof,
-      instances,
-      bytecode,
-      Hardfork['London'],
-    )
+    proof = deserialize(proofFileBuffer)
+
+    const result = await localEVMVerify(proofFileBuffer, bytecode)
 
     expect(result).toBe(true)
   })
 
   it('should fail to verify faulty proofs', async () => {
     let result: boolean = true
+    console.log(proof.proof)
     try {
-      let index = Math.floor(Math.random() * (proof.length - 2)) + 2
-      let number = (parseInt(proof[index] || '0', 16) + 1) % 16
-      let newChar = number.toString(16)
+      let index = Math.floor(Math.random() * (proof.proof.length - 2)) + 2
+      let number = (proof.proof[index] + 1) % 16
       console.log('index', index)
-      console.log('newChar', newChar)
-      const proofModified =
-        proof.slice(0, index) + newChar + proof.slice(index + 1)
-      console.log('proofModified', proofModified)
-      result = await localEVMVerify(proofModified, instances, bytecode)
+      console.log('new number', number)
+      proof.proof[index] = number
+      const proofModified = serialize(proof)
+      result = await localEVMVerify(proofModified, bytecode)
     } catch (error) {
       // Check if the error thrown is the "out of gas" error.
       expect(error).toEqual(
         expect.objectContaining({
-          error: 'out of gas',
+          error: 'revert',
           errorType: 'EvmError',
         }),
       )

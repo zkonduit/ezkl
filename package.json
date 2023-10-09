@@ -7,8 +7,8 @@
     "test": "jest"
   },
   "devDependencies": {
-    "@ezkljs/engine": "^2.4.4",
-    "@ezkljs/verify": "^0.0.5",
+    "@ezkljs/engine": "^2.4.5",
+    "@ezkljs/verify": "^0.0.6",
     "@jest/types": "^29.6.3",
     "@types/file-saver": "^2.0.5",
     "@types/jest": "^29.5.3",

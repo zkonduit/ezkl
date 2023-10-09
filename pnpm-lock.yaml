@@ -6,11 +6,11 @@ settings:
 
 devDependencies:
   '@ezkljs/engine':
-    specifier: ^2.4.4
-    version: 2.4.4
+    specifier: ^2.4.5
+    version: 2.4.5
   '@ezkljs/verify':
-    specifier: ^0.0.5
-    version: 0.0.5(buffer@6.0.3)
+    specifier: ^0.0.6
+    version: 0.0.6(buffer@6.0.3)
   '@jest/types':
     specifier: ^29.6.3
     version: 29.6.3
@@ -741,15 +741,15 @@ packages:
       '@ethersproject/strings': 5.7.0
     dev: true
 
-  /@ezkljs/engine@2.4.4:
-    resolution: {integrity: sha512-ueWx0yt7GW6iT9i8ynNGl0vMxrBF3a5lD34Vs18pWE1ZMEvlwWiYFv4d63VQc6pwK4FB9PXMSLU/dJDapJej/w==}
+  /@ezkljs/engine@2.4.5:
+    resolution: {integrity: sha512-brUP3RvsRiyLbwLX01/Fi7+nMZohE2fPjWmUSTNfwJMBu+ENH0dYxoC9eBdzTVWBaiCo7N4lEfd1/XQYymwtnw==}
     dependencies:
       '@types/json-bigint': 1.0.1
       json-bigint: 1.0.0
     dev: true
 
-  /@ezkljs/verify@0.0.5(buffer@6.0.3):
-    resolution: {integrity: sha512-RR4lXNUiJQntYsWlJDBdjbHMjfKYz92epCwbRLskVxMWRYwu+n1P+KBYxyMg3ynKZhAg0oiECpf0rEJZS392qA==}
+  /@ezkljs/verify@0.0.6(buffer@6.0.3):
+    resolution: {integrity: sha512-9DHoEhLKl1DBGuUVseXLThuMyYceY08Zymr/OsLH0zbdA9OoISYhb77j4QPm4ANRKEm5dCi8oHDqkwGbFc2xFQ==}
     dependencies:
       '@ethereumjs/common': 4.0.0(buffer@6.0.3)
       '@ethereumjs/evm': 2.0.0(buffer@6.0.3)
@@ -758,7 +758,7 @@ packages:
       '@ethereumjs/util': 9.0.0
       '@ethereumjs/vm': 7.0.0(buffer@6.0.3)
       '@ethersproject/abi': 5.7.0
-      '@ezkljs/engine': 2.4.4
+      '@ezkljs/engine': 2.4.5
       ethers: 6.7.1
       json-bigint: 1.0.0
     transitivePeerDependencies:
