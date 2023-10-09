@@ -10,11 +10,13 @@ mod wasm32 {
     use ezkl::graph::GraphWitness;
     use ezkl::wasm::{
         bufferToVecOfVecU64, elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, genWitness,
-        poseidonHash, u8_array_to_u128_le, vecU64ToFelt, vecU64ToFloat, vecU64ToInt,
+        poseidonHash, u8_array_to_u128_le, vecU64ToFelt, vecU64ToFloat, vecU64ToInt, encodeVerifierCalldata
     };
-    use halo2curves::bn256::Fr;
+    use halo2curves::bn256::{Fr, G1Affine};
+    use halo2_solidity_verifier::encode_calldata;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use ezkl::pfsys;
     use snark_verifier::util::arithmetic::PrimeField;
     #[cfg(feature = "web")]
     pub use wasm_bindgen_rayon::init_thread_pool;
@@ -25,6 +27,50 @@ mod wasm32 {
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test_network.compiled");
     pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
+    pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
+
+    #[wasm_bindgen_test]
+    async fn verify_encode_verifier_calldata() {
+
+        let ser_proof = wasm_bindgen::Clamped(PROOF.to_vec());
+
+        // with no vk address
+        let calldata = encodeVerifierCalldata(ser_proof.clone(), None)
+            .map_err(|_| "failed")
+            .unwrap();
+
+        let snark: pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&PROOF).unwrap();
+        let flattened_instances = snark.instances.into_iter().flatten();
+        let reference_calldata = 
+            encode_calldata(
+                None,
+                &snark.proof,
+                &flattened_instances.clone().collect::<Vec<_>>()
+            );
+        assert_eq!(calldata, reference_calldata);
+        // with vk address
+        let vk_address = hex::decode("0000000000000000000000000000000000000000").unwrap();
+
+        let vk_address: [u8; 20] = {
+            let mut array = [0u8; 20];
+            array.copy_from_slice(&vk_address);
+            array
+        };
+
+        let serialized = serde_json::to_vec(&vk_address).unwrap();
+    
+        let calldata = encodeVerifierCalldata(ser_proof, Some(serialized))
+            .map_err(|_| "failed")
+            .unwrap();
+        let reference_calldata = 
+            encode_calldata(
+                Some(vk_address),
+                &snark.proof,
+                &flattened_instances.collect::<Vec<_>>()
+            );
+        assert_eq!(calldata, reference_calldata);
+
+    }
 
     #[wasm_bindgen_test]
     async fn verify_field_serialization_roundtrip() {

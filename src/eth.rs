@@ -28,6 +28,7 @@ use ethers::{
 };
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
+use halo2_solidity_verifier::encode_calldata;
 use log::{debug, info, warn};
 use std::error::Error;
 use std::path::PathBuf;
@@ -289,7 +290,7 @@ pub async fn verify_proof_via_solidity(
 ) -> Result<bool, Box<dyn Error>> {
     let flattened_instances = proof.instances.into_iter().flatten();
 
-    let encoded = halo2_solidity_verifier::encode_calldata(
+    let encoded = encode_calldata(
         None,
         &proof.proof,
         &flattened_instances.collect::<Vec<_>>(),
@@ -400,7 +401,7 @@ pub async fn verify_proof_with_data_attestation(
         public_inputs.push(u);
     }
 
-    let encoded_verifier = halo2_solidity_verifier::encode_calldata(
+    let encoded_verifier = encode_calldata(
         None,
         &proof.proof,
         &flattened_instances.collect::<Vec<_>>(),
