@@ -22,6 +22,7 @@ use crate::RunArgs;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::types::H160;
 #[cfg(not(target_arch = "wasm32"))]
+use halo2_solidity_verifier;
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::poly::commitment::Params;
@@ -169,7 +170,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             abi_path,
             data,
-        } => create_evm_data_attestation_verifier(
+        } => create_evm_data_attestation(
             vk_path,
             srs_path,
             settings_path,
@@ -615,6 +616,7 @@ pub(crate) async fn calibrate(
                         run_args: found_run_args,
                         required_lookups: settings.required_lookups,
                         model_output_scales: settings.model_output_scales,
+                        model_input_scales: settings.model_input_scales,
                         num_constraints: settings.num_constraints,
                         total_const_size: settings.total_const_size,
                         ..original_settings.clone()
@@ -843,7 +845,7 @@ pub(crate) fn create_evm_verifier(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn create_evm_data_attestation_verifier(
+pub(crate) fn create_evm_data_attestation(
     vk_path: PathBuf,
     srs_path: PathBuf,
     settings_path: PathBuf,
@@ -893,16 +895,13 @@ pub(crate) fn create_evm_data_attestation_verifier(
         for call in source.calls {
             on_chain_input_data.push(call);
         }
-        Some((settings.run_args.input_scale, on_chain_input_data))
+        Some(on_chain_input_data)
     } else {
         None
     };
 
     if input_data.is_some() || output_data.is_some() {
-        let output = fix_da_sol(
-            input_data,
-            output_data,
-        )?;
+        let output = fix_da_sol(input_data, output_data)?;
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
@@ -974,7 +973,13 @@ pub(crate) async fn verify_evm(
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
     let result = if let Some(addr_da) = addr_da {
-        verify_proof_with_data_attestation(proof.clone(), addr_verifier, addr_da, rpc_url.as_deref()).await?
+        verify_proof_with_data_attestation(
+            proof.clone(),
+            addr_verifier,
+            addr_da,
+            rpc_url.as_deref(),
+        )
+        .await?
     } else {
         verify_proof_via_solidity(proof.clone(), addr_verifier, rpc_url.as_deref()).await?
     };
