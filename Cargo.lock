@@ -4775,7 +4775,7 @@ dependencies = [
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#325c53c4680311a1d7ba7a2587d144122991ab99"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#b2f3b8a91f06be829ab88abc46bd278ad8f2357d"
 dependencies = [
  "ecc",
  "halo2_proofs",
