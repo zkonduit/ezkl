@@ -901,10 +901,7 @@ pub(crate) fn create_evm_data_attestation(
     };
 
     if input_data.is_some() || output_data.is_some() {
-        let output = fix_da_sol(
-            input_data,
-            output_data,
-        )?;
+        let output = fix_da_sol(input_data, output_data)?;
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
@@ -976,7 +973,13 @@ pub(crate) async fn verify_evm(
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
     let result = if let Some(addr_da) = addr_da {
-        verify_proof_with_data_attestation(proof.clone(), addr_verifier, addr_da, rpc_url.as_deref()).await?
+        verify_proof_with_data_attestation(
+            proof.clone(),
+            addr_verifier,
+            addr_da,
+            rpc_url.as_deref(),
+        )
+        .await?
     } else {
         verify_proof_via_solidity(proof.clone(), addr_verifier, rpc_url.as_deref()).await?
     };
