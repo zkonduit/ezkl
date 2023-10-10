@@ -107,7 +107,7 @@ pub const MIN_LOGROWS: u32 = 4;
 const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
 
 /// 27
-const MAX_PUBLIC_SRS_BITS: u32 = bn256::Fr::S - 1;
+const MAX_PUBLIC_SRS_BITS: u32 = bn256::Fr::S - 2;
 
 use std::cell::RefCell;
 
@@ -753,7 +753,7 @@ impl GraphCircuit {
     fn calc_min_logrows(&mut self, res: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
         let reserved_blinding_rows = Self::reserved_blinding_rows();
 
-        let min_bits = (res.max_lookup_inputs as f64 + 2. * reserved_blinding_rows)
+        let min_bits = (res.max_lookup_inputs as f64 + reserved_blinding_rows)
             .log2()
             .ceil() as usize
             + 1;
@@ -762,8 +762,7 @@ impl GraphCircuit {
             + reserved_blinding_rows)
             .log2()
             .ceil() as usize;
-        // can fit bits over 2 cols so we subtract 1
-        let mut logrows = std::cmp::max(min_bits - 1, min_rows_from_constraints);
+        let mut logrows = std::cmp::max(min_bits, min_rows_from_constraints);
 
         // if public input then public inputs col will have public inputs len
         if self.settings().run_args.input_visibility.is_public()
@@ -827,8 +826,9 @@ impl GraphCircuit {
         Ok(())
     }
 
-    fn cal_max_range(&self, bits: usize, logrows: u32) -> i128 {
-        let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
+    fn cal_max_range(&self, _bits: usize, logrows: u32) -> i128 {
+        // let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
+        let num_cols = 1;
         let col_size = 2u32.pow(logrows) as usize - Self::reserved_blinding_rows() as usize;
         let (_, max_range) = LookupOp::bit_range(num_cols * col_size);
         max_range
@@ -838,14 +838,12 @@ impl GraphCircuit {
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec())?;
 
-        let reserved_blinding_rows = Self::reserved_blinding_rows();
-
         let bits = self.settings().run_args.bits;
         let logrows = self.settings().run_args.logrows;
         let max_range = self.cal_max_range(bits, logrows);
 
         if res.max_lookup_inputs > max_range {
-            let recommended_bits = (res.max_lookup_inputs as f64 + 2. * reserved_blinding_rows)
+            let recommended_bits = (res.max_lookup_inputs as f64 + Self::reserved_blinding_rows())
                 .log2()
                 .ceil() as usize
                 + 1;
