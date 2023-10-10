@@ -1301,6 +1301,12 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
+        // bump bits by 1 to test for overflow
+        let mut settings = GraphSettings::load(&settings_path.clone().into()).unwrap();
+        settings.run_args.bits += 1;
+        settings.save(&settings_path.into()).unwrap();
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "compile-circuit",
@@ -1829,7 +1835,7 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
- 
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-witness",
@@ -2131,7 +2137,6 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
     }
-
 
     // prove-serialize-verify, the usual full path
     fn kzg_fuzz(
