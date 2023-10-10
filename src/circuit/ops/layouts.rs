@@ -2231,8 +2231,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let x = values[0].clone();
 
-    let mut removal_indices = values[0].get_const_indices()?;
-    removal_indices.par_sort_unstable();
+    let removal_indices = values[0].get_const_indices()?;
     let removal_indices: HashSet<&usize> = HashSet::from_iter(removal_indices.iter());
     let removal_indices_ptr = &removal_indices;
 
@@ -2276,6 +2275,8 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
             })
         })?
         .into();
+
+    log::debug!("table index: {}", table_index.show());
 
     region.assign_with_omissions(&config.lookup_index, &table_index, removal_indices_ptr)?;
 

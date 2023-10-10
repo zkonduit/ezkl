@@ -118,18 +118,9 @@ impl LookupOp {
     }
 
     /// Returns the range of values that can be represented by the table
-    pub fn bit_range(&self, allocated_bits: usize, max_len: usize) -> (i128, i128) {
-        let base = 2i128;
-        let range = base.pow(allocated_bits as u32 - 1);
-        let diff = 2 * range - max_len as i128;
-
-        // trim range to fit in max_len bits
-        let range = if diff > 0 {
-            ((max_len - 1) as f32 / 2.0).floor() as i128
-        } else {
-            range
-        };
-
+    pub fn bit_range(&self, max_len: usize) -> (i128, i128) {
+        let range = (max_len - 1) as f64 / 2_f64;
+        let range = range as i128;
         (-range, range)
     }
 }

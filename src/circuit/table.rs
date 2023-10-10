@@ -71,7 +71,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     ) -> Table<F> {
         let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
         let col_size = VarTensor::max_rows(cs, logrows) - 2;
-        let range = nonlinearity.bit_range(bits, num_cols * col_size);
+        let range = nonlinearity.bit_range(num_cols * col_size);
+
+        log::debug!("table range: {:?}", range);
 
         let table_inputs = preexisting_inputs.unwrap_or_else(|| {
             let mut cols = vec![];
@@ -127,6 +129,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let inputs = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
         let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
         let chunked_inputs = inputs.chunks(self.col_size);
+
+        println!("chunked_inputs: {:?}", chunked_inputs.len());
 
         self.is_assigned = true;
 
