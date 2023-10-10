@@ -826,11 +826,14 @@ impl GraphCircuit {
         Ok(())
     }
 
-    fn cal_max_range(&self, _bits: usize, logrows: u32) -> i128 {
+    fn cal_max_range(&self, bits: usize, logrows: u32) -> i128 {
         // let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
         let num_cols = 1;
         let col_size = 2u32.pow(logrows) as usize - Self::reserved_blinding_rows() as usize;
-        let (_, max_range) = LookupOp::bit_range(num_cols * col_size);
+        let bit_range = 2u32.pow(bits as u32) as usize - Self::reserved_blinding_rows() as usize;
+        // take the min len
+        let len = std::cmp::min(num_cols * col_size, bit_range);
+        let (_, max_range) = LookupOp::bit_range(len);
         max_range
     }
 
