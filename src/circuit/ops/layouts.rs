@@ -2254,7 +2254,32 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     let mut output =
         region.assign_with_omissions(&config.lookup_output, &output.into(), removal_indices_ptr)?;
 
-    if !region.is_dummy() {
+    let region_is_dummy = region.is_dummy();
+
+    let table_index: ValTensor<F> = x
+        .get_inner_tensor()?
+        .par_enum_map(|i, e| {
+            Ok::<_, TensorError>(if region_is_dummy {
+                Value::<F>::unknown().into()
+            } else {
+                if let Some(f) = e.get_felt_eval() {
+                    let table = config.tables.get(nl).unwrap();
+                    let col_idx = table.get_col_index(f);
+                    if !removal_indices.contains(&i) {
+                        Value::known(col_idx).into()
+                    } else {
+                        ValType::Constant(col_idx)
+                    }
+                } else {
+                    Value::<F>::unknown().into()
+                }
+            })
+        })?
+        .into();
+
+    region.assign(&config.lookup_index, &table_index)?;
+
+    if !region_is_dummy {
         (0..assigned_len).for_each(|i| {
             let (x, y) = config.lookup_input.cartesian_coord(region.offset() + i);
             let selector = config.lookup_selectors.get(&(nl.clone(), x));

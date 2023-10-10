@@ -948,10 +948,10 @@ mod conv_relu_col_ultra_overflow {
             let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
             let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
             let mut base_config =
-                Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE);
+                Self::Config::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // sets up a new relu table
             base_config
-                .configure_lookup(cs, &b, &output, 3, K, &LookupOp::ReLU)
+                .configure_lookup(cs, &b, &output, &a, 3, K, &LookupOp::ReLU)
                 .unwrap();
             base_config.clone()
         }
@@ -1783,10 +1783,10 @@ mod matmul_relu {
             let output = VarTensor::new_advice(cs, K, LEN);
 
             let mut base_config =
-                BaseConfig::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE);
+                BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // sets up a new relu table
             base_config
-                .configure_lookup(cs, &b, &output, 16, K, &LookupOp::ReLU)
+                .configure_lookup(cs, &b, &output, &a, 16, K, &LookupOp::ReLU)
                 .unwrap();
 
             MyConfig { base_config }
@@ -1879,14 +1879,17 @@ mod rangecheckpercent {
             let a = VarTensor::new_advice(cs, K, LEN);
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
-            let mut config = Self::Config::configure(cs, &[a, b.clone()], &output, CheckMode::SAFE);
+            let mut config =
+                Self::Config::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // set up a new GreaterThan and Recip tables
             let nl = &LookupOp::GreaterThan {
                 a: circuit::utils::F32((RANGE * scale.0) / 100.0),
             };
-            config.configure_lookup(cs, &b, &output, 16, K, nl).unwrap();
             config
-                .configure_lookup(cs, &b, &output, 16, K, &LookupOp::Recip { scale })
+                .configure_lookup(cs, &b, &output, &a, 16, K, nl)
+                .unwrap();
+            config
+                .configure_lookup(cs, &b, &output, &a, 16, K, &LookupOp::Recip { scale })
                 .unwrap();
             config
         }
@@ -1992,7 +1995,7 @@ mod relu {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let advices = (0..2)
+            let advices = (0..3)
                 .map(|_| VarTensor::new_advice(cs, 4, 3))
                 .collect::<Vec<_>>();
 
@@ -2001,7 +2004,7 @@ mod relu {
             let mut config = BaseConfig::default();
 
             config
-                .configure_lookup(cs, &advices[0], &advices[1], 4, 4, &nl)
+                .configure_lookup(cs, &advices[0], &advices[1], &advices[2], 4, 4, &nl)
                 .unwrap();
             config
         }
@@ -2075,7 +2078,7 @@ mod softmax {
             let b = VarTensor::new_advice(cs, K, LEN);
             let output = VarTensor::new_advice(cs, K, LEN);
             let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE);
-            let advices = (0..2)
+            let advices = (0..3)
                 .map(|_| VarTensor::new_advice(cs, K, LEN))
                 .collect::<Vec<_>>();
 
@@ -2084,6 +2087,7 @@ mod softmax {
                     cs,
                     &advices[0],
                     &advices[1],
+                    &advices[2],
                     16,
                     K,
                     &LookupOp::Exp {
@@ -2096,8 +2100,9 @@ mod softmax {
                     cs,
                     &advices[0],
                     &advices[1],
-                    K,
+                    &advices[2],
                     16,
+                    K,
                     &LookupOp::Recip {
                         scale: SCALE.powf(2.0).into(),
                     },

@@ -995,8 +995,9 @@ impl Model {
         // set scale for HybridOp::RangeCheck and call self.conf_lookup on that op for percentage tolerance case
         let input = &vars.advices[0];
         let output = &vars.advices[1];
+        let index = &vars.advices[2];
         for op in required_lookups {
-            base_gate.configure_lookup(meta, input, output, num_bits, logrows, &op)?;
+            base_gate.configure_lookup(meta, input, output, index, num_bits, logrows, &op)?;
         }
 
         Ok(base_gate)

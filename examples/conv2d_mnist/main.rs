@@ -142,11 +142,15 @@ where
 
         println!("INPUT COL {:#?}", input);
 
-        let mut layer_config =
-            PolyConfig::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE);
+        let mut layer_config = PolyConfig::configure(
+            cs,
+            &[input.clone(), params.clone()],
+            &output,
+            CheckMode::SAFE,
+        );
 
         layer_config
-            .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU)
+            .configure_lookup(cs, &input, &output, &params, BITS, K, &LookupOp::ReLU)
             .unwrap();
 
         layer_config
@@ -154,7 +158,9 @@ where
                 cs,
                 &input,
                 &output,
+                &params,
                 BITS,
+                K,
                 &LookupOp::Div { denom: 32.0.into() },
             )
             .unwrap();

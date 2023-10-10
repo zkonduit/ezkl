@@ -161,6 +161,8 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     /// the VarTensor reserved for lookup operations (could be an element of inputs or the same as output)
     /// Note that you should be careful to ensure that the lookup_output is not simultaneously assigned to by other non-lookup operations eg. in the case of composite ops.
     pub lookup_output: VarTensor,
+    ///
+    pub lookup_index: VarTensor,
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure [BaseOp].
     pub selectors: BTreeMap<(BaseOp, usize), Selector>,
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
@@ -180,6 +182,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             lookup_input: VarTensor::dummy(col_size),
             output: VarTensor::dummy(col_size),
             lookup_output: VarTensor::dummy(col_size),
+            lookup_index: VarTensor::dummy(col_size),
             selectors: BTreeMap::new(),
             lookup_selectors: BTreeMap::new(),
             tables: BTreeMap::new(),
@@ -265,6 +268,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             inputs: inputs.to_vec(),
             lookup_input: VarTensor::Empty,
             lookup_output: VarTensor::Empty,
+            lookup_index: VarTensor::Empty,
             tables: BTreeMap::new(),
             output: output.clone(),
             check_mode,
@@ -278,6 +282,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
         output: &VarTensor,
+        index: &VarTensor,
         bits: usize,
         logrows: usize,
         nl: &LookupOp,
@@ -303,66 +308,84 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         };
 
         for x in 0..input.num_cols() {
-            let qlookups: Vec<Selector> = (0..table.table_inputs.len())
-                .map(|_| cs.complex_selector())
-                .collect();
+            let len = table.table_inputs.len();
 
-            cs.lookup("", |cs| {
-                let qlookups: Vec<Expression<F>> = (0..qlookups.len())
-                    .map(|i| cs.query_selector(qlookups[i]).clone())
-                    .collect();
-                let not_qlookups: Vec<Expression<F>> = (0..qlookups.len())
-                    .map(|i| Expression::Constant(<F as Field>::ONE) - qlookups[i].clone())
-                    .collect();
-                let (default_x, default_y): (F, F) = nl.default_pair();
-                let mut res = vec![];
+            // for now we only support len == 2 at most
+            assert!(
+                len <= 2,
+                "unsupported number of columns for lookup table (>2)"
+            );
 
-                for (i, (input_col, output_col)) in table
-                    .table_inputs
-                    .clone()
-                    .into_iter()
-                    .zip(table.table_outputs.clone().into_iter())
-                    .enumerate()
-                {
-                    let qlookup = qlookups[i].clone();
-                    let not_qlookup = not_qlookups[i].clone();
-                    res.extend([
-                        (
-                            match &input {
+            let multi_col_selector = cs.complex_selector();
+
+            for ((col_idx, input_col), output_col) in table.table_inputs[..len]
+                .iter()
+                .enumerate()
+                .zip(table.table_outputs[..len].iter())
+            {
+                cs.lookup("", |cs| {
+                    let mut res = vec![];
+                    let sel = cs.query_selector(multi_col_selector.clone());
+
+                    let col_expressions = match len {
+                        1 => vec![Expression::Constant(F::from(1))],
+                        2 => {
+                            let synthetic_idx = match index {
                                 VarTensor::Advice { inner: advices, .. } => {
-                                    qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
-                                        + not_qlookup.clone() * default_x
+                                    cs.query_advice(advices[x], Rotation(0))
                                 }
                                 _ => panic!("wrong input type"),
-                            },
-                            input_col,
+                            };
+                            vec![
+                                // 1 if synthetic_idx == 0
+                                Expression::Constant(F::from(1)) - synthetic_idx.clone(),
+                                // 1 if synthetic_idx == 1
+                                synthetic_idx.clone(),
+                                // if it's not 0 or 1 then both expressions will be =/= 0 which breaks the lookup table, preventing malicious (non-boolean) inputs
+                            ]
+                        }
+                        _ => panic!("unsupported number of columns"),
+                    };
+
+                    let input_query = match &input {
+                        VarTensor::Advice { inner: advices, .. } => {
+                            cs.query_advice(advices[x], Rotation(0))
+                        }
+                        _ => panic!("wrong input type"),
+                    };
+
+                    let output_query = match &output {
+                        VarTensor::Advice { inner: advices, .. } => {
+                            cs.query_advice(advices[x], Rotation(0))
+                        }
+                        _ => panic!("wrong input type"),
+                    };
+
+                    // we index from 1 to avoid the zero element creating soundness issues
+                    // this is 0 if the index is the same as the column index (starting from 1)
+                    let col_expr = sel.clone() * col_expressions[col_idx].clone();
+                    // !!!!!! remove this when we expand beyond 2 columns !!!!!!!!!
+                    let not_expr = Expression::Constant(F::from(1)) - col_expr.clone();
+
+                    let (default_x, default_y) = table.get_first_element(col_idx);
+
+                    res.extend([
+                        (
+                            col_expr.clone() * input_query.clone()
+                                + not_expr.clone() * Expression::Constant(default_x),
+                            input_col.clone(),
                         ),
                         (
-                            match &output {
-                                VarTensor::Advice { inner: advices, .. } => {
-                                    qlookup.clone() * cs.query_advice(advices[x], Rotation(0))
-                                        + not_qlookup.clone() * default_y
-                                }
-                                _ => panic!("wrong output type"),
-                            },
-                            output_col,
+                            col_expr.clone() * output_query.clone()
+                                + not_expr.clone() * Expression::Constant(default_y),
+                            output_col.clone(),
                         ),
                     ]);
-                }
 
-                res
-            });
-            let aggregate_selector = cs.selector();
-            cs.create_gate("", |cs| {
-                let mut start = Expression::Constant(<F as Field>::ONE);
-                for selector in qlookups.iter() {
-                    let selector = cs.query_selector(*selector);
-                    start = start * selector.clone();
-                }
-                vec![start]
-            });
-
-            selectors.insert((nl.clone(), x), aggregate_selector);
+                    res
+                });
+            }
+            selectors.insert((nl.clone(), x), multi_col_selector);
         }
         self.lookup_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now
@@ -373,6 +396,10 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         if let VarTensor::Empty = self.lookup_output {
             debug!("assigning lookup output");
             self.lookup_output = output.clone();
+        }
+        if let VarTensor::Empty = self.lookup_index {
+            debug!("assigning lookup index");
+            self.lookup_index = index.clone();
         }
         Ok(())
     }

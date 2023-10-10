@@ -6,6 +6,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{ConstraintSystem, TableColumn},
 };
+use log::warn;
 
 use crate::{
     circuit::CircuitError,
@@ -36,6 +37,31 @@ pub struct Table<F: PrimeField> {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
+    /// get column index given input
+    pub fn get_col_index(&self, input: F) -> F {
+        //    range is split up into chunks of size col_size, find the chunk that input is in
+
+        let chunk =
+            (crate::fieldutils::felt_to_i128(input) - self.range.0).abs() / (self.col_size as i128);
+
+        i128_to_felt(chunk)
+    }
+
+    /// get first_element of column
+    pub fn get_first_element(&self, chunk: usize) -> (F, F) {
+        let chunk = chunk as i128;
+        // we index from 1 to prevent soundness issues
+        let first_element = i128_to_felt(chunk * (self.col_size as i128) + self.range.0);
+        let op_f = Op::<F>::f(
+            &self.nonlinearity,
+            &[Tensor::from(vec![first_element].into_iter())],
+        )
+        .unwrap();
+        (first_element, op_f.output[0])
+    }
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     /// Configures the table.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
@@ -44,21 +70,24 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         nonlinearity: &LookupOp,
         preexisting_inputs: Option<Vec<TableColumn>>,
     ) -> Table<F> {
-        let range = nonlinearity.bit_range(bits, cs.blinding_factors());
-        let max_rows = VarTensor::max_rows(&cs, logrows) as i128;
+        let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
+        let col_size = VarTensor::max_rows(cs, logrows) - 2;
+        let range = nonlinearity.bit_range(bits, num_cols * col_size);
 
         let table_inputs = preexisting_inputs.unwrap_or_else(|| {
-            let capacity = range.1 - range.0;
-
-            let mut modulo = (capacity / max_rows) + 1;
-            // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
-            modulo = ((capacity + modulo) / max_rows) + 1;
             let mut cols = vec![];
-            for _ in 0..modulo {
+            for _ in 0..num_cols {
                 cols.push(cs.lookup_table_column());
             }
             cols
         });
+
+        if table_inputs.len() > 1 {
+            warn!(
+                "Using {} columns for non-linearity table.",
+                table_inputs.len()
+            );
+        }
 
         let table_outputs = table_inputs
             .iter()
@@ -70,7 +99,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
             table_inputs,
             table_outputs,
             is_assigned: false,
-            col_size: max_rows as usize,
+            col_size,
             range,
             _marker: PhantomData,
         }
@@ -98,40 +127,49 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
 
         let inputs = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
         let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
+        let chunked_inputs = inputs.chunks(self.col_size);
 
         self.is_assigned = true;
-        layouter
-            .assign_table(
-                || "nl table",
-                |mut table| {
-                    let _ = inputs
-                        .iter()
-                        .enumerate()
-                        .map(|(row_offset, input)| {
-                            let (x, y) = self.cartesian_coord(row_offset);
-                            if !preassigned_input {
+
+        let _ = chunked_inputs
+            .enumerate()
+            .map(|(chunk_idx, inputs)| {
+                // println!("chunk_idx: {}", chunk_idx);
+                layouter.assign_table(
+                    || "nl table",
+                    |mut table| {
+                        let _ = inputs
+                            .iter()
+                            .enumerate()
+                            .map(|(mut row_offset, input)| {
+                                row_offset += chunk_idx * self.col_size;
+                                let (x, y) = self.cartesian_coord(row_offset);
+                                if !preassigned_input {
+                                    table.assign_cell(
+                                        || format!("nl_i_col row {}", row_offset),
+                                        self.table_inputs[x],
+                                        y,
+                                        || Value::known(*input),
+                                    )?;
+                                }
+
+                                let output = evals.output[row_offset];
+
                                 table.assign_cell(
-                                    || format!("nl_i_col row {}", row_offset),
-                                    self.table_inputs[x],
+                                    || format!("nl_o_col row {}", row_offset),
+                                    self.table_outputs[x],
                                     y,
-                                    || Value::known(*input),
+                                    || Value::known(output),
                                 )?;
-                            }
 
-                            let output = evals.output[row_offset];
-
-                            table.assign_cell(
-                                || format!("nl_o_col row {}", row_offset),
-                                self.table_outputs[x],
-                                y,
-                                || Value::known(output),
-                            )?;
-                            Ok(())
-                        })
-                        .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
-                    Ok(())
-                },
-            )
-            .map_err(Box::<dyn Error>::from)
+                                Ok(())
+                            })
+                            .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
+                        Ok(())
+                    },
+                )
+            })
+            .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
+        Ok(())
     }
 }
