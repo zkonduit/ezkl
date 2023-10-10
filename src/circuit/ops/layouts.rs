@@ -2276,6 +2276,8 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         })?
         .into();
 
+    log::debug!("w: {}", w.show());
+    log::debug!("output: {}", output.show());
     log::debug!("table index: {}", table_index.show());
 
     region.assign_with_omissions(&config.lookup_index, &table_index, removal_indices_ptr)?;
