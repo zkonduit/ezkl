@@ -690,7 +690,7 @@ impl GraphCircuit {
         scales: Vec<u32>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
-        let (_, client) = setup_eth_backend(Some(&source.rpc)).await?;
+        let (_, client) = setup_eth_backend(Some(&source.rpc), None).await?;
         let inputs = read_on_chain_inputs(client.clone(), client.address(), &source.calls).await?;
         // quantize the supplied data using the provided scale + QuantizeData.sol
         let quantized_evm_inputs = evm_quantize(
