@@ -2277,7 +2277,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         })?
         .into();
 
-    region.assign(&config.lookup_index, &table_index)?;
+    region.assign_with_omissions(&config.lookup_index, &table_index, removal_indices_ptr)?;
 
     if !region_is_dummy {
         (0..assigned_len).for_each(|i| {

@@ -40,7 +40,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     /// get column index given input
     pub fn get_col_index(&self, input: F) -> F {
         //    range is split up into chunks of size col_size, find the chunk that input is in
-
         let chunk =
             (crate::fieldutils::felt_to_i128(input) - self.range.0).abs() / (self.col_size as i128);
 
