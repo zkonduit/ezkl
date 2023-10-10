@@ -21,8 +21,6 @@ use crate::pfsys::{save_vk, srs::*};
 use crate::RunArgs;
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::types::H160;
-#[cfg(not(target_arch = "wasm32"))]
-use halo2_solidity_verifier;
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::poly::commitment::Params;
@@ -32,6 +30,8 @@ use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy;
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 #[cfg(not(target_arch = "wasm32"))]
 use halo2curves::ff::Field;

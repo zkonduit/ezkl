@@ -2253,36 +2253,32 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     let mut output =
         region.assign_with_omissions(&config.lookup_output, &output.into(), removal_indices_ptr)?;
 
-    let region_is_dummy = region.is_dummy();
+    let is_dummy = region.is_dummy();
 
-    let table_index: ValTensor<F> = x
+    let table_index: ValTensor<F> = w
         .get_inner_tensor()?
         .par_enum_map(|i, e| {
-            Ok::<_, TensorError>(if region_is_dummy {
-                Value::<F>::unknown().into()
-            } else {
-                if let Some(f) = e.get_felt_eval() {
+            Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
+                let col_idx = if !is_dummy {
                     let table = config.tables.get(nl).unwrap();
-                    let col_idx = table.get_col_index(f);
-                    if !removal_indices.contains(&i) {
-                        Value::known(col_idx).into()
-                    } else {
-                        ValType::Constant(col_idx)
-                    }
+                    table.get_col_index(f)
                 } else {
-                    Value::<F>::unknown().into()
+                    F::ZERO
+                };
+                if !removal_indices.contains(&i) {
+                    Value::known(col_idx).into()
+                } else {
+                    ValType::Constant(col_idx)
                 }
+            } else {
+                Value::<F>::unknown().into()
             })
         })?
         .into();
 
-    log::debug!("w: {}", w.show());
-    log::debug!("output: {}", output.show());
-    log::debug!("table index: {}", table_index.show());
-
     region.assign_with_omissions(&config.lookup_index, &table_index, removal_indices_ptr)?;
 
-    if !region_is_dummy {
+    if !is_dummy {
         (0..assigned_len).for_each(|i| {
             let (x, y) = config.lookup_input.cartesian_coord(region.offset() + i);
             let selector = config.lookup_selectors.get(&(nl.clone(), x));
