@@ -58,6 +58,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         .unwrap();
         (first_element, op_f.output[0])
     }
+
+    ///
+    pub fn cal_range(
+        bits: usize,
+        logrows: usize,
+        reserved_blinding_rows: usize,
+        num_available_cols: usize,
+    ) -> (i128, i128) {
+        let col_size = 2usize.pow(logrows as u32) - reserved_blinding_rows;
+        let bit_range = 2usize.pow(bits as u32) - reserved_blinding_rows;
+        // take the min len
+        let len = std::cmp::min(num_available_cols * col_size, bit_range);
+        LookupOp::bit_range(len)
+    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
@@ -70,8 +84,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         preexisting_inputs: Option<Vec<TableColumn>>,
     ) -> Table<F> {
         let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
+        let range = Self::cal_range(bits, logrows, cs.blinding_factors() + 2, num_cols);
         let col_size = VarTensor::max_rows(cs, logrows) - 2;
-        let range = LookupOp::bit_range(num_cols * col_size);
 
         log::debug!("table range: {:?}", range);
 
