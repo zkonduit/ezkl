@@ -2231,8 +2231,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let x = values[0].clone();
 
-    let mut removal_indices = values[0].get_const_indices()?;
-    removal_indices.par_sort_unstable();
+    let removal_indices = values[0].get_const_indices()?;
     let removal_indices: HashSet<&usize> = HashSet::from_iter(removal_indices.iter());
     let removal_indices_ptr = &removal_indices;
 
@@ -2254,7 +2253,32 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     let mut output =
         region.assign_with_omissions(&config.lookup_output, &output.into(), removal_indices_ptr)?;
 
-    if !region.is_dummy() {
+    let is_dummy = region.is_dummy();
+
+    let table_index: ValTensor<F> = w
+        .get_inner_tensor()?
+        .par_enum_map(|i, e| {
+            Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
+                let col_idx = if !is_dummy {
+                    let table = config.tables.get(nl).unwrap();
+                    table.get_col_index(f)
+                } else {
+                    F::ZERO
+                };
+                if !removal_indices.contains(&i) {
+                    Value::known(col_idx).into()
+                } else {
+                    ValType::Constant(col_idx)
+                }
+            } else {
+                Value::<F>::unknown().into()
+            })
+        })?
+        .into();
+
+    region.assign_with_omissions(&config.lookup_index, &table_index, removal_indices_ptr)?;
+
+    if !is_dummy {
         (0..assigned_len).for_each(|i| {
             let (x, y) = config.lookup_input.cartesian_coord(region.offset() + i);
             let selector = config.lookup_selectors.get(&(nl.clone(), x));

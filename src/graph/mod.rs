@@ -106,6 +106,9 @@ pub const MIN_LOGROWS: u32 = 4;
 /// 26
 const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
 
+/// 27
+const MAX_PUBLIC_SRS_BITS: u32 = bn256::Fr::S - 2;
+
 use std::cell::RefCell;
 
 thread_local!(
@@ -743,19 +746,19 @@ impl GraphCircuit {
         Ok(data)
     }
 
-    fn calc_min_logrows(
-        &mut self,
-        res: &GraphWitness,
-        blinding_offset: f64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let reserved_blinding_rows = (ASSUMED_BLINDING_FACTORS + 1) as f32;
+    fn reserved_blinding_rows() -> f64 {
+        (ASSUMED_BLINDING_FACTORS + 1) as f64
+    }
 
-        let min_bits = (res.max_lookup_inputs as f64 + blinding_offset)
+    fn calc_min_logrows(&mut self, res: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
+        let reserved_blinding_rows = Self::reserved_blinding_rows();
+
+        let min_bits = (res.max_lookup_inputs as f64 + reserved_blinding_rows)
             .log2()
             .ceil() as usize
             + 1;
 
-        let min_rows_from_constraints = (self.settings().num_constraints as f32
+        let min_rows_from_constraints = (self.settings().num_constraints as f64
             + reserved_blinding_rows)
             .log2()
             .ceil() as usize;
@@ -770,7 +773,7 @@ impl GraphCircuit {
                 .instance_shapes()
                 .iter()
                 .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()))
-                as f32
+                as f64
                 + reserved_blinding_rows;
             // if there are modules then we need to add the max module size
             if self.settings().uses_modules() {
@@ -779,7 +782,7 @@ impl GraphCircuit {
                     .module_sizes
                     .num_instances()
                     .iter()
-                    .sum::<usize>() as f32;
+                    .sum::<usize>() as f64;
             }
             let instance_len_logrows = (max_instance_len).log2().ceil() as usize;
             logrows = std::cmp::max(logrows, instance_len_logrows);
@@ -804,7 +807,7 @@ impl GraphCircuit {
         settings_mut.run_args.logrows =
             std::cmp::max(settings_mut.run_args.logrows, const_len_logrows);
         // recalculate the total number of constraints given the new logrows
-        let min_rows_from_constraints = (settings_mut.num_constraints as f32
+        let min_rows_from_constraints = (settings_mut.num_constraints as f64
             + reserved_blinding_rows)
             .log2()
             .ceil() as u32;
@@ -823,21 +826,30 @@ impl GraphCircuit {
         Ok(())
     }
 
+    fn cal_max_range(&self, _bits: usize, logrows: u32) -> i128 {
+        // let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
+        let num_cols = 1;
+        let col_size = 2u32.pow(logrows) as usize - Self::reserved_blinding_rows() as usize;
+        let (_, max_range) = LookupOp::bit_range(num_cols * col_size);
+        max_range
+    }
+
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec())?;
 
-        let blinding_offset = (ASSUMED_BLINDING_FACTORS as f64 / 2.0).ceil() + 1.0;
-        let max_range =
-            2i128.pow(self.settings().run_args.bits as u32 - 1) - blinding_offset as i128;
+        let bits = self.settings().run_args.bits;
+        let logrows = self.settings().run_args.logrows;
+        let max_range = self.cal_max_range(bits, logrows);
 
         if res.max_lookup_inputs > max_range {
-            let recommended_bits = (res.max_lookup_inputs as f64 + blinding_offset)
+            let recommended_bits = (res.max_lookup_inputs as f64 + Self::reserved_blinding_rows())
                 .log2()
                 .ceil() as usize
                 + 1;
-            if recommended_bits <= MAX_PUBLIC_SRS as usize {
-                self.calc_min_logrows(&res, blinding_offset)
+
+            if recommended_bits <= MAX_PUBLIC_SRS_BITS as usize {
+                self.calc_min_logrows(&res)
             } else {
                 let err_string = format!(
                     "No possible value of bits (estimate {}) can accomodate max value.",
@@ -846,7 +858,7 @@ impl GraphCircuit {
                 Err(err_string.into())
             }
         } else {
-            self.calc_min_logrows(&res, blinding_offset)
+            self.calc_min_logrows(&res)
         }
     }
 
@@ -1110,6 +1122,7 @@ impl Circuit<Fp> for GraphCircuit {
             cs,
             &vars,
             params.run_args.bits,
+            params.run_args.logrows as usize,
             params.required_lookups,
             params.check_mode,
         )
