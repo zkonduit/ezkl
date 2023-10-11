@@ -951,7 +951,7 @@ mod conv_relu_col_ultra_overflow {
                 Self::Config::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // sets up a new relu table
             base_config
-                .configure_lookup(cs, &b, &output, &a, (-4, 4), K, &LookupOp::ReLU)
+                .configure_lookup(cs, &b, &output, &a, (-3, 3), K, &LookupOp::ReLU)
                 .unwrap();
             base_config.clone()
         }
