@@ -305,7 +305,7 @@ impl Into<PyRunArgs> for RunArgs {
             input_scale: self.input_scale,
             param_scale: self.param_scale,
             scale_rebase_multiplier: self.scale_rebase_multiplier,
-            bits: self.bits,
+            lookup_range: self.lookup_range,
             logrows: self.logrows,
             input_visibility: self.input_visibility,
             output_visibility: self.output_visibility,
