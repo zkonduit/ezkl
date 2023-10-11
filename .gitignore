@@ -9,6 +9,7 @@ data
 !TestReads.sol
 !AttestData.sol
 !VerifierBase.sol
+!LoadInstances.sol
 *.pf
 *.vk
 *.pk

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
+import './LoadInstances.sol';
 
 // This contract serves as a Data Attestation Verifier for the EZKL model.
 // It is designed to read and attest to instances of proofs generated from a specified circuit.
@@ -14,7 +15,7 @@ pragma solidity ^0.8.20;
 // 6. Proof Verification: The `verifyWithDataAttestation` method parses the instances out of the encoded calldata and calls the `attestData` method to validate the public instances,
 //  then calls the `verifyProof` method to verify the proof on the verifier.
 
-contract DataAttestation {
+contract DataAttestation is LoadInstances {
     /**
      * @notice Struct used to make view only calls to accounts to fetch the data that EZKL reads from.
      * @param the address of the account to make calls to
@@ -254,41 +255,13 @@ contract DataAttestation {
         }
     }
 
+
     function verifyWithDataAttestation(
         address verifier,
-        bytes memory encoded
+        bytes calldata encoded
     ) public view returns (bool) {
         require(verifier.code.length > 0,"Address: call to non-contract");
-        bytes4 fnSelector;
-        uint256[] memory instances;
-        bytes memory paramData = new bytes(encoded.length - 4);
-        assembly {
-            /* 
-                4 (fun sig) + 
-                32 (verifier address) + 
-                32 (offset encoded) + 
-                32 (length encoded) = 100 bytes = 0x64
-            */
-            fnSelector := calldataload(0x64)
-
-            mstore(add(paramData, 0x20), sub(mload(add(encoded, 0x20)), 4))
-            for {
-                let i := 0
-            } lt(i, sub(mload(encoded), 4)) {
-                i := add(i, 0x20)
-            } {
-                mstore(add(paramData, add(0x20, i)), mload(add(encoded, add(0x24, i))))
-            }
-        }
-        if (fnSelector == 0xaf83a18d) {
-            // abi decode verifyProof(address,bytes,uint256[])
-            (,,instances) = abi.decode(paramData, (address, bytes, uint256[]));
-        } else {
-            // abi decode verifyProof(bytes,uint256[])
-            (,instances) = abi.decode(paramData, (bytes, uint256[]));
-        }
-        attestData(instances);
-        
+        attestData(getInstancesCalldata(encoded));
         // static call the verifier contract to verify the proof
         (bool success, bytes memory returndata) = verifier.staticcall(encoded);
 
@@ -297,6 +270,5 @@ contract DataAttestation {
         } else {
             revert("low-level call to verifier failed");
         }
-        
     }
 }
