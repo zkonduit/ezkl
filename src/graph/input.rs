@@ -1,3 +1,4 @@
+use crate::circuit::InputType;
 use crate::fieldutils::i128_to_felt;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::tensor::Tensor;
@@ -92,6 +93,15 @@ impl FileSourceInner {
     /// Create a new FileSourceInner
     pub fn new_bool(f: bool) -> Self {
         FileSourceInner::Bool(f)
+    }
+
+    ///
+    pub fn as_type(&mut self, input_type: &InputType) {
+        match self {
+            FileSourceInner::Float(f) => input_type.roundtrip(f),
+            FileSourceInner::Bool(_) => assert!(matches!(input_type, InputType::Bool)),
+            FileSourceInner::Field(_) => {}
+        }
     }
 
     /// Convert to a field element
