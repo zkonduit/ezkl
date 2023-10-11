@@ -1,7 +1,6 @@
 use std::{any::Any, error::Error};
 
 use serde::{Deserialize, Serialize};
-use tract_onnx::prelude::f16;
 
 use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
 use halo2curves::ff::PrimeField;
@@ -135,10 +134,8 @@ impl InputType {
                 *input = T::from_i64(boolean_input).unwrap();
             }
             InputType::F16 => {
+                // TODO: implement f16
                 let f32_input = input.clone().to_f32().unwrap();
-                let f16_input = f16::from_f32(f32_input);
-                // convert back to f32
-                let f32_input = Into::<f32>::into(f16_input);
                 *input = T::from_f32(f32_input).unwrap();
             }
             InputType::F32 => {

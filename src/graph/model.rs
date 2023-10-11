@@ -6,7 +6,6 @@ use super::GraphError;
 use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::RegionCtx;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::Input;
 use crate::circuit::InputType;
 use crate::circuit::Unknown;

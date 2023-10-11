@@ -625,7 +625,8 @@ impl GraphCircuit {
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model().graph.input_shapes();
         let scales = self.model().graph.get_input_scales();
-        self.process_data_source(&data.input_data, shapes, scales)
+        let input_types = self.model().graph.get_input_types();
+        self.process_data_source(&data.input_data, shapes, scales, input_types)
     }
 
     ///
@@ -650,9 +651,12 @@ impl GraphCircuit {
         data: &DataSource,
         shapes: Vec<Vec<usize>>,
         scales: Vec<u32>,
+        input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         match &data {
-            DataSource::File(file_data) => self.load_file_data(file_data, &shapes, scales),
+            DataSource::File(file_data) => {
+                self.load_file_data(file_data, &shapes, scales, input_types)
+            }
             DataSource::OnChain(_) => {
                 panic!("Cannot use non-file data source as input for wasm rn.")
             }
