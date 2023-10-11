@@ -58,6 +58,8 @@ pub struct ForwardResult {
     pub outputs: Vec<Tensor<Fp>>,
     /// The maximum value of any input to a lookup operation.
     pub max_lookup_inputs: i128,
+    /// The minimum value of any input to a lookup operation.
+    pub min_lookup_inputs: i128,
 }
 
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
@@ -487,6 +489,7 @@ impl Model {
     pub fn forward(&self, model_inputs: &[Tensor<Fp>]) -> Result<ForwardResult, Box<dyn Error>> {
         let mut results: BTreeMap<&usize, Vec<Tensor<Fp>>> = BTreeMap::new();
         let mut max_lookup_inputs = 0;
+        let mut min_lookup_inputs = 0;
 
         let input_shapes = self.graph.input_shapes();
 
@@ -518,11 +521,13 @@ impl Model {
             );
 
             if !n.required_lookups().is_empty() {
-                let mut max = 0;
+                let (mut min, mut max) = (0, 0);
                 for i in &inputs {
-                    max = max.max(i.iter().map(|x| felt_to_i128(*x).abs()).max().unwrap());
+                    max = max.max(i.iter().map(|x| felt_to_i128(*x)).max().unwrap());
+                    min = min.min(i.iter().map(|x| felt_to_i128(*x)).min().unwrap());
                 }
                 max_lookup_inputs = max_lookup_inputs.max(max);
+                min_lookup_inputs = min_lookup_inputs.min(min);
             }
 
             match n {
@@ -534,11 +539,13 @@ impl Model {
                     trace!("op took: {:?}", elapsed);
                     // see if any of the intermediate lookup calcs are the max
                     if !res.intermediate_lookups.is_empty() {
-                        let mut max = 0;
+                        let (mut min, mut max) = (0, 0);
                         for i in &res.intermediate_lookups {
-                            max = max.max(i.iter().map(|x| x.abs()).max().unwrap());
+                            max = max.max(i.clone().into_iter().max().unwrap());
+                            min = min.min(i.clone().into_iter().min().unwrap());
                         }
                         max_lookup_inputs = max_lookup_inputs.max(max);
+                        min_lookup_inputs = min_lookup_inputs.min(min);
                     }
                     debug!(
                         "------------ output node int {}: {} \n ------------ float: {}",
@@ -589,6 +596,7 @@ impl Model {
                         let res = model.forward(&inputs)?;
                         // recursively get the max lookup inputs for subgraphs
                         max_lookup_inputs = max_lookup_inputs.max(res.max_lookup_inputs);
+                        min_lookup_inputs = min_lookup_inputs.min(res.min_lookup_inputs);
 
                         let mut outlets = BTreeMap::new();
                         for (mappings, outlet_res) in output_mappings.iter().zip(res.outputs) {
@@ -653,6 +661,7 @@ impl Model {
         let res = ForwardResult {
             outputs,
             max_lookup_inputs,
+            min_lookup_inputs,
         };
 
         Ok(res)
@@ -990,7 +999,7 @@ impl Model {
     pub fn configure(
         meta: &mut ConstraintSystem<Fp>,
         vars: &ModelVars<Fp>,
-        num_bits: usize,
+        lookup_range: (i128, i128),
         logrows: usize,
         required_lookups: Vec<LookupOp>,
         check_mode: CheckMode,
@@ -1008,7 +1017,7 @@ impl Model {
         let output = &vars.advices[1];
         let index = &vars.advices[2];
         for op in required_lookups {
-            base_gate.configure_lookup(meta, input, output, index, num_bits, logrows, &op)?;
+            base_gate.configure_lookup(meta, input, output, index, lookup_range, logrows, &op)?;
         }
 
         Ok(base_gate)

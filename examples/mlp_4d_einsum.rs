@@ -23,7 +23,8 @@ struct MyConfig {
 #[derive(Clone)]
 struct MyCircuit<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
-    const BITS: usize,
+    const LOOKUP_MIN: i128,
+    const LOOKUP_MAX: i128,
 > {
     // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
@@ -33,7 +34,9 @@ struct MyCircuit<
     _marker: PhantomData<F>,
 }
 
-impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
+impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F>
+    for MyCircuit<LEN, LOOKUP_MIN, LOOKUP_MAX>
+{
     type Config = MyConfig;
     type FloorPlanner = SimpleFloorPlanner;
     type Params = PhantomData<F>;
@@ -59,7 +62,15 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         layer_config
-            .configure_lookup(cs, &input, &output, &params, BITS, K, &LookupOp::ReLU)
+            .configure_lookup(
+                cs,
+                &input,
+                &output,
+                &params,
+                (LOOKUP_MIN, LOOKUP_MAX),
+                K,
+                &LookupOp::ReLU,
+            )
             .unwrap();
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
@@ -69,7 +80,7 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
                 &input,
                 &output,
                 &params,
-                BITS,
+                (LOOKUP_MIN, LOOKUP_MAX),
                 K,
                 &LookupOp::Div {
                     denom: ezkl::circuit::utils::F32::from(128.),
@@ -230,7 +241,7 @@ pub fn runmlp() {
         .map(i32_to_felt);
     l2_bias.set_visibility(&ezkl::graph::Visibility::Private);
 
-    let circuit = MyCircuit::<4, 14> {
+    let circuit = MyCircuit::<4, -8192, 8192> {
         input: input.into(),
         l0_params: [l0_kernel, l0_bias],
         l2_params: [l2_kernel, l2_bias],

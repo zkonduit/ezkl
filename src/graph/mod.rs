@@ -23,7 +23,7 @@ use self::modules::{
 };
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::table::Table;
+use crate::circuit::table::{Table, RANGE_MULTIPLIER};
 use crate::circuit::{CheckMode, InputType};
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
@@ -107,9 +107,6 @@ pub const MIN_LOGROWS: u32 = 4;
 /// 26
 const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
 
-/// 27
-const MAX_PUBLIC_SRS_BITS: u32 = bn256::Fr::S - 2;
-
 use std::cell::RefCell;
 
 thread_local!(
@@ -133,6 +130,8 @@ pub struct GraphWitness {
     pub processed_outputs: Option<ModuleForwardResult>,
     /// max lookup input
     pub max_lookup_inputs: i128,
+    /// max lookup input
+    pub min_lookup_inputs: i128,
 }
 
 impl GraphWitness {
@@ -145,6 +144,7 @@ impl GraphWitness {
             processed_params: None,
             processed_outputs: None,
             max_lookup_inputs: 0,
+            min_lookup_inputs: 0,
         }
     }
     /// Export the ezkl witness as json
@@ -773,18 +773,38 @@ impl GraphCircuit {
         (ASSUMED_BLINDING_FACTORS + 1) as f64
     }
 
+    fn calc_safe_range(res: &GraphWitness) -> (i128, i128) {
+        (
+            RANGE_MULTIPLIER * res.min_lookup_inputs,
+            RANGE_MULTIPLIER * res.max_lookup_inputs,
+        )
+    }
+
     fn calc_min_logrows(&mut self, res: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
         let reserved_blinding_rows = Self::reserved_blinding_rows();
+        let safe_range = Self::calc_safe_range(res);
 
-        let min_bits = (res.max_lookup_inputs as f64 + reserved_blinding_rows)
+        let max_col_size =
+            Table::<Fp>::cal_col_size(MAX_PUBLIC_SRS as usize, reserved_blinding_rows as usize);
+        let num_cols = Table::<Fp>::num_cols_required(safe_range, max_col_size);
+
+        if num_cols > 1 {
+            let err_string = format!(
+                "No possible lookup range can accomodate max value min and max value ({}, {})",
+                safe_range.0, safe_range.1
+            );
+            return Err(err_string.into());
+        }
+
+        let min_bits = ((safe_range.1 - safe_range.0) as f64 + reserved_blinding_rows)
             .log2()
-            .ceil() as usize
-            + 1;
+            .ceil() as usize;
 
         let min_rows_from_constraints = (self.settings().num_constraints as f64
             + reserved_blinding_rows)
             .log2()
             .ceil() as usize;
+
         let mut logrows = std::cmp::max(min_bits, min_rows_from_constraints);
 
         // if public input then public inputs col will have public inputs len
@@ -817,7 +837,7 @@ impl GraphCircuit {
         logrows = std::cmp::min(logrows, MAX_PUBLIC_SRS as usize);
         let model = self.model().clone();
         let settings_mut = self.settings_mut();
-        settings_mut.run_args.bits = min_bits;
+        settings_mut.run_args.lookup_range = safe_range;
         settings_mut.run_args.logrows = logrows as u32;
 
         *settings_mut = GraphCircuit::new(model, &settings_mut.run_args)?
@@ -841,8 +861,8 @@ impl GraphCircuit {
             std::cmp::min(MAX_PUBLIC_SRS, settings_mut.run_args.logrows);
 
         info!(
-            "setting bits to: {}, setting logrows to: {}",
-            self.settings().run_args.bits,
+            "setting lookup_range to: {:?}, setting logrows to: {}",
+            self.settings().run_args.lookup_range,
             self.settings().run_args.logrows
         );
 
@@ -853,30 +873,7 @@ impl GraphCircuit {
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec())?;
 
-        let bits = self.settings().run_args.bits;
-        let logrows = self.settings().run_args.logrows;
-        let blinding_rows = Self::reserved_blinding_rows();
-        let (_, max_range) =
-            Table::<Fp>::cal_range(bits, logrows as usize, blinding_rows as usize, 1);
-
-        if res.max_lookup_inputs > max_range {
-            let recommended_bits = (res.max_lookup_inputs as f64 + Self::reserved_blinding_rows())
-                .log2()
-                .ceil() as usize
-                + 1;
-
-            if recommended_bits <= MAX_PUBLIC_SRS_BITS as usize {
-                self.calc_min_logrows(&res)
-            } else {
-                let err_string = format!(
-                    "No possible value of bits (estimate {}) can accomodate max value.",
-                    recommended_bits
-                );
-                Err(err_string.into())
-            }
-        } else {
-            self.calc_min_logrows(&res)
-        }
+        self.calc_min_logrows(&res)
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
@@ -960,6 +957,7 @@ impl GraphCircuit {
             processed_params,
             processed_outputs,
             max_lookup_inputs: model_results.max_lookup_inputs,
+            min_lookup_inputs: model_results.min_lookup_inputs,
         };
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -1138,7 +1136,7 @@ impl Circuit<Fp> for GraphCircuit {
         let base = Model::configure(
             cs,
             &vars,
-            params.run_args.bits,
+            params.run_args.lookup_range,
             params.run_args.logrows as usize,
             params.required_lookups,
             params.check_mode,

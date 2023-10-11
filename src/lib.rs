@@ -80,9 +80,9 @@ pub struct RunArgs {
     /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
     #[arg(long, default_value = "1")]
     pub scale_rebase_multiplier: u32,
-    /// The number of bits used in lookup tables
-    #[arg(short = 'B', long, default_value = "16")]
-    pub bits: usize,
+    /// The min and max elements in the lookup table input column
+    #[arg(short = 'B', long, value_parser = parse_tuple::<i128>, default_value = "(-32768,32768)")]
+    pub lookup_range: (i128, i128),
     /// The log_2 number of rows
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
@@ -131,4 +131,25 @@ where
         .find('=')
         .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{s}`"))?;
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
+}
+
+/// Parse a tuple
+fn parse_tuple<T>(s: &str) -> Result<(T, T), Box<dyn std::error::Error + Send + Sync + 'static>>
+where
+    T: std::str::FromStr + Clone,
+    T::Err: std::error::Error + Send + Sync + 'static,
+{
+    let res = s.trim_matches(|p| p == '(' || p == ')').split(',');
+
+    let res = res
+        .map(|x| {
+            // remove blank space
+            let x = x.trim();
+            x.parse::<T>()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if res.len() != 2 {
+        return Err("invalid tuple".into());
+    }
+    Ok((res[0].clone(), res[1].clone()))
 }

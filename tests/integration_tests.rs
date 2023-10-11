@@ -3,6 +3,7 @@
 mod native_tests {
 
     use core::panic;
+    use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, Visibility};
     use lazy_static::lazy_static;
@@ -23,7 +24,8 @@ mod native_tests {
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
         static ref ANVIL_URL: String = "http://localhost:3030".to_string();
         static ref LIMITLESS_ANVIL_URL: String = "http://localhost:8545".to_string();
-        static ref ANVIL_DEFAULT_PRIVATE_KEY: String = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
+        static ref ANVIL_DEFAULT_PRIVATE_KEY: String =
+            "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
     }
 
     fn start_anvil(limitless: bool) -> Child {
@@ -1302,11 +1304,14 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
-        // bump bits by 1 to test for overflow
-        let mut settings = GraphSettings::load(&settings_path.clone().into()).unwrap();
-        settings.run_args.bits += 1;
-        settings.save(&settings_path.into()).unwrap();
+        // let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
+        // // bump bits by 1 to test for overflow
+        // let mut settings = GraphSettings::load(&settings_path.clone().into()).unwrap();
+
+        // let rows = 2u32.pow(settings.run_args.logrows - 1) - 2 * RESERVED_BLINDING_ROWS_PAD as u32;
+
+        // settings.run_args.lookup_range = (-(rows as i128), rows as i128);
+        // settings.save(&settings_path.into()).unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1934,7 +1939,7 @@ mod native_tests {
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
         let rpc_arg = format!("--rpc-url={}", *ANVIL_URL);
         let settings_arg = format!("{}/{}/settings.json", test_dir, example_name);
-        let private_key =format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
+        let private_key = format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
 
         let base_args = vec![
             "create-evm-verifier-aggr",

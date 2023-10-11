@@ -618,7 +618,7 @@ pub(crate) async fn calibrate(
                     let found_run_args = RunArgs {
                         input_scale: settings.run_args.input_scale,
                         param_scale: settings.run_args.param_scale,
-                        bits: settings.run_args.bits,
+                        lookup_range: settings.run_args.lookup_range,
                         logrows: settings.run_args.logrows,
                         scale_rebase_multiplier: settings.run_args.scale_rebase_multiplier,
                         ..run_args.clone()
@@ -650,13 +650,25 @@ pub(crate) async fn calibrate(
         std::mem::drop(_r);
         std::mem::drop(_q);
 
-        if let Some(best) = res.into_iter().max_by_key(|p| {
+        let max_lookup_range = res
+            .iter()
+            .map(|x| x.run_args.lookup_range.1)
+            .max()
+            .unwrap_or(0);
+        let min_lookup_range = res
+            .iter()
+            .map(|x| x.run_args.lookup_range.0)
+            .min()
+            .unwrap_or(0);
+
+        if let Some(mut best) = res.into_iter().max_by_key(|p| {
             (
-                p.run_args.bits,
+                p.run_args.logrows,
                 p.run_args.input_scale,
                 p.run_args.param_scale,
             )
         }) {
+            best.run_args.lookup_range = (min_lookup_range, max_lookup_range);
             // pick the one with the largest logrows
             found_params.push(best.clone());
             debug!(
@@ -734,6 +746,10 @@ pub(crate) async fn calibrate(
     };
 
     if matches!(target, CalibrationTarget::Resources { col_overflow: true }) {
+        let lookup_log_rows = ((best_params.run_args.lookup_range.1
+            - best_params.run_args.lookup_range.0) as f32)
+            .log2()
+            .ceil() as u32;
         let mut reduction = std::cmp::max(
             (best_params
                 .model_instance_shapes
@@ -743,7 +759,7 @@ pub(crate) async fn calibrate(
                 .log2()
                 .ceil() as u32
                 + 1,
-            best_params.run_args.bits as u32,
+            lookup_log_rows,
         );
         reduction = std::cmp::max(reduction, crate::graph::MIN_LOGROWS);
 
