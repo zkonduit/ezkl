@@ -749,7 +749,8 @@ pub(crate) async fn calibrate(
         let lookup_log_rows = ((best_params.run_args.lookup_range.1
             - best_params.run_args.lookup_range.0) as f32)
             .log2()
-            .ceil() as u32;
+            .ceil() as u32
+            + 1;
         let mut reduction = std::cmp::max(
             (best_params
                 .model_instance_shapes
