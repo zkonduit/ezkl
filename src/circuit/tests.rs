@@ -951,7 +951,7 @@ mod conv_relu_col_ultra_overflow {
                 Self::Config::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // sets up a new relu table
             base_config
-                .configure_lookup(cs, &b, &output, &a, 3, K, &LookupOp::ReLU)
+                .configure_lookup(cs, &b, &output, &a, (-3, 3), K, &LookupOp::ReLU)
                 .unwrap();
             base_config.clone()
         }
@@ -1786,7 +1786,7 @@ mod matmul_relu {
                 BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // sets up a new relu table
             base_config
-                .configure_lookup(cs, &b, &output, &a, 16, K, &LookupOp::ReLU)
+                .configure_lookup(cs, &b, &output, &a, (-32768, 32768), K, &LookupOp::ReLU)
                 .unwrap();
 
             MyConfig { base_config }
@@ -1886,10 +1886,18 @@ mod rangecheckpercent {
                 a: circuit::utils::F32((RANGE * scale.0) / 100.0),
             };
             config
-                .configure_lookup(cs, &b, &output, &a, 16, K, nl)
+                .configure_lookup(cs, &b, &output, &a, (-32768, 32768), K, nl)
                 .unwrap();
             config
-                .configure_lookup(cs, &b, &output, &a, 16, K, &LookupOp::Recip { scale })
+                .configure_lookup(
+                    cs,
+                    &b,
+                    &output,
+                    &a,
+                    (-32768, 32768),
+                    K,
+                    &LookupOp::Recip { scale },
+                )
                 .unwrap();
             config
         }
@@ -2004,7 +2012,7 @@ mod relu {
             let mut config = BaseConfig::default();
 
             config
-                .configure_lookup(cs, &advices[0], &advices[1], &advices[2], 4, 4, &nl)
+                .configure_lookup(cs, &advices[0], &advices[1], &advices[2], (-6, 6), 4, &nl)
                 .unwrap();
             config
         }
@@ -2088,7 +2096,7 @@ mod softmax {
                     &advices[0],
                     &advices[1],
                     &advices[2],
-                    16,
+                    (-32768, 32768),
                     K,
                     &LookupOp::Exp {
                         scale: SCALE.into(),
@@ -2101,7 +2109,7 @@ mod softmax {
                     &advices[0],
                     &advices[1],
                     &advices[2],
-                    16,
+                    (-32768, 32768),
                     K,
                     &LookupOp::Recip {
                         scale: SCALE.powf(2.0).into(),

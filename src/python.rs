@@ -247,7 +247,7 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub scale_rebase_multiplier: u32,
     #[pyo3(get, set)]
-    pub bits: usize,
+    pub lookup_range: (i128, i128),
     #[pyo3(get, set)]
     pub logrows: u32,
     #[pyo3(get, set)]
@@ -270,7 +270,7 @@ impl PyRunArgs {
             input_scale: 7,
             param_scale: 7,
             scale_rebase_multiplier: 1,
-            bits: 16,
+            lookup_range: (-32768, 32768),
             logrows: 17,
             input_visibility: Visibility::Private,
             output_visibility: Visibility::Public,
@@ -288,7 +288,7 @@ impl From<PyRunArgs> for RunArgs {
             input_scale: py_run_args.input_scale,
             param_scale: py_run_args.param_scale,
             scale_rebase_multiplier: py_run_args.scale_rebase_multiplier,
-            bits: py_run_args.bits,
+            lookup_range: py_run_args.lookup_range,
             logrows: py_run_args.logrows,
             input_visibility: py_run_args.input_visibility,
             output_visibility: py_run_args.output_visibility,
@@ -305,7 +305,7 @@ impl Into<PyRunArgs> for RunArgs {
             input_scale: self.input_scale,
             param_scale: self.param_scale,
             scale_rebase_multiplier: self.scale_rebase_multiplier,
-            bits: self.bits,
+            lookup_range: self.lookup_range,
             logrows: self.logrows,
             input_visibility: self.input_visibility,
             output_visibility: self.output_visibility,
@@ -944,7 +944,7 @@ fn deploy_evm(
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
     optimizer_runs: usize,
-    private_key: Option<String>
+    private_key: Option<String>,
 ) -> Result<bool, PyErr> {
     Runtime::new()
         .unwrap()

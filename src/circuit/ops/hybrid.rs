@@ -110,7 +110,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::ReduceArgMax { dim } => {
                 let res = tensor::ops::argmax_axes(&x, *dim)?;
-                let mut inter_equals = vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                let indices = Tensor::from(0..x.dims()[*dim] as i128);
+                let mut inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                 let inter =
                     Op::f(&HybridOp::ReduceMax { axes: vec![*dim] }, inputs)?.intermediate_lookups;
                 inter_equals.extend(inter);
@@ -119,7 +120,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::ReduceArgMin { dim } => {
                 let res = tensor::ops::argmin_axes(&x, *dim)?;
-                let mut inter_equals = vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                let indices = Tensor::from(0..x.dims()[*dim] as i128);
+                let mut inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                 let inter =
                     Op::f(&HybridOp::ReduceMin { axes: vec![*dim] }, inputs)?.intermediate_lookups;
                 inter_equals.extend(inter);
@@ -133,14 +135,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res.clone(), vec![])
                 } else {
                     let y = inputs[1].clone().map(|x| felt_to_i128(x));
-                    let inter_equals: Vec<Tensor<i128>> =
-                        vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                    let indices = Tensor::from(0..x.dims()[*dim] as i128);
+                    let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                     let res = tensor::ops::gather(&x, &y.map(|x| x as usize), *dim)?;
                     (res.clone(), inter_equals)
                 }
             }
             HybridOp::OneHot { dim, num_classes } => {
-                let inter_equals: Vec<Tensor<i128>> = vec![Tensor::from(0..*num_classes as i128)];
+                let indices = Tensor::from(0..x.dims()[*dim] as i128);
+                let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                 let res = tensor::ops::one_hot(&x, *num_classes, *dim)?;
                 (res.clone(), inter_equals)
             }
@@ -175,8 +178,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res.clone(), vec![])
                 } else {
                     let y = inputs[1].clone().map(|x| felt_to_i128(x));
-                    let inter_equals: Vec<Tensor<i128>> =
-                        vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                    let indices = Tensor::from(0..x.dims()[*dim] as i128);
+                    let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                     let res = tensor::ops::gather_elements(&x, &y.map(|x| x as usize), *dim)?;
                     (res.clone(), inter_equals)
                 }
@@ -189,8 +192,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res.clone(), vec![])
                 } else {
                     let idx = inputs[1].clone().map(|x| felt_to_i128(x));
-                    let inter_equals: Vec<Tensor<i128>> =
-                        vec![Tensor::from(0..x.dims()[*dim] as i128)];
+                    let indices = Tensor::from(0..x.dims()[*dim] as i128);
+                    let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                     let res = tensor::ops::scatter(&x, &idx.map(|x| x as usize), &src, *dim)?;
                     (res.clone(), inter_equals)
                 }
@@ -200,10 +203,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 stride,
                 pool_dims,
                 ..
-            } => (
-                tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
-                vec![],
-            ),
+            } => {
+                let max_minus_one =
+                    Tensor::from(vec![x.clone().into_iter().max().unwrap() - 1].into_iter());
+                let unit = Tensor::from(vec![1].into_iter());
+                // relu(x - max(x - 1)
+                let inter_1 = (x.clone() - max_minus_one)?;
+                // relu(1 - sum(relu(inter_1)))
+                let inter_2 = (unit
+                    - tensor::ops::sum(&tensor::ops::nonlinearities::leakyrelu(&inter_1, 0.0))?)?;
+                (
+                    tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
+                    vec![inter_1, inter_2],
+                )
+            }
             HybridOp::Softmax { scale, axes } => {
                 tensor::ops::nonlinearities::softmax_axes(&x, scale.into(), axes)
             }

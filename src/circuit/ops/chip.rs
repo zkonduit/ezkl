@@ -283,7 +283,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         input: &VarTensor,
         output: &VarTensor,
         index: &VarTensor,
-        bits: usize,
+        lookup_range: (i128, i128),
         logrows: usize,
         nl: &LookupOp,
     ) -> Result<(), Box<dyn Error>>
@@ -297,9 +297,15 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         let table = if !self.tables.contains_key(nl) {
             // as all tables have the same input we see if there's another table who's input we can reuse
             let table = if let Some(table) = self.tables.values().next() {
-                Table::<F>::configure(cs, bits, logrows, nl, Some(table.table_inputs.clone()))
+                Table::<F>::configure(
+                    cs,
+                    lookup_range,
+                    logrows,
+                    nl,
+                    Some(table.table_inputs.clone()),
+                )
             } else {
-                Table::<F>::configure(cs, bits, logrows, nl, None)
+                Table::<F>::configure(cs, lookup_range, logrows, nl, None)
             };
             self.tables.insert(nl.clone(), table.clone());
             table
