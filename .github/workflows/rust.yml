@@ -88,7 +88,7 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: Conv + relu overflow (wasi)
-        run: cargo wasi test --release conv_relu_col_ultra_overflow -- --include-ignored --nocapture
+        run: RUST_LOG=debug cargo wasi test --release conv_relu_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Matmul overflow
       #   run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture -- --include-ignored
       # - name: Conv overflow
@@ -261,7 +261,6 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed outputs)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify --test-threads 1
-      
 
   prove-and-verify-tests:
     runs-on: ubuntu-latest-32-cores
@@ -546,6 +545,8 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: Little transformer tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects --no-capture
       - name: Stacked Regression tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_23_expects
       - name: Linear Regression tutorial
@@ -584,8 +585,6 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
       - name: Simple aggregation tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_9_expects
-      - name: Little transformer tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects --no-capture
       - name: Encrypted tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
       - name: Hashed tutorial

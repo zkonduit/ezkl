@@ -41,10 +41,7 @@ pub type EthersClient = Arc<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>
 
 // Generate contract bindings OUTSIDE the functions so they are part of library
 abigen!(TestReads, "./abis/TestReads.json");
-abigen!(
-    DataAttestation,
-    "./abis/DataAttestation.json"
-);
+abigen!(DataAttestation, "./abis/DataAttestation.json");
 abigen!(QuantizeData, "./abis/QuantizeData.json");
 
 const TESTREADS_SOL: &str = include_str!("../contracts/TestReads.sol");
@@ -56,31 +53,48 @@ const LOADINSTANCES_SOL: &str = include_str!("../contracts/LoadInstances.sol");
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn setup_eth_backend(
     rpc_url: Option<&str>,
+    private_key: Option<&str>,
 ) -> Result<(AnvilInstance, EthersClient), Box<dyn Error>> {
     // Launch anvil
     let anvil = Anvil::new()
         .args(["--code-size-limit=41943040", "--disable-block-gas-limit"])
         .spawn();
 
-    // Instantiate the wallet
-    let wallet: LocalWallet = anvil.keys()[0].clone().into();
-
-    let endpoint = if let Some(rpc_url) = rpc_url {
-        rpc_url.to_string()
+    let endpoint: String;
+    if let Some(rpc_url) = rpc_url {
+        endpoint = rpc_url.to_string();
     } else {
-        anvil.endpoint()
+        endpoint = anvil.endpoint();
     };
 
     // Connect to the network
     let provider = Provider::<Http>::try_from(endpoint)?.interval(Duration::from_millis(10u64));
 
-    let chain_id = provider.get_chainid().await?;
+    let chain_id = provider.get_chainid().await?.as_u64();
     info!("using chain {}", chain_id);
 
-    // Instantiate the client with the wallet
+    // Instantiate the wallet
+    let wallet: LocalWallet;
+    if let Some(private_key) = private_key {
+        debug!("using private key {}", private_key);
+        // Sanity checks for private_key
+        let private_key_format_error =
+            "Private key must be in hex format, 64 chars, without 0x prefix";
+        if private_key.len() != 64 {
+            panic!("{}", private_key_format_error);
+        }
+        let private_key_buffer = hex::decode(private_key).expect(private_key_format_error);
+        let signing_key =
+            SigningKey::from_slice(&private_key_buffer).expect(private_key_format_error);
+        wallet = LocalWallet::from(signing_key);
+    } else {
+        wallet = anvil.keys()[0].clone().into();
+    }
+
+    // Instantiate the client with the signer
     let client = Arc::new(SignerMiddleware::new(
         provider,
-        wallet.with_chain_id(anvil.chain_id()),
+        wallet.with_chain_id(chain_id),
     ));
 
     Ok((anvil, client))
@@ -91,16 +105,19 @@ pub async fn deploy_verifier_via_solidity(
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
     runs: usize,
+    private_key: Option<&str>,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
-    let (_, client) = setup_eth_backend(rpc_url).await?;
+    // anvil instance must be alive at least until the factory completes the deploy
+    let (anvil, client) = setup_eth_backend(rpc_url, private_key).await?;
 
     let (abi, bytecode, runtime_bytecode) =
         get_contract_artifacts(sol_code_path, "Halo2Verifier", runs)?;
 
     let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone())?;
-
     let contract = factory.deploy(())?.send().await?;
     let addr = contract.address();
+
+    drop(anvil);
     Ok(addr)
 }
 
@@ -111,8 +128,9 @@ pub async fn deploy_da_verifier_via_solidity(
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
     runs: usize,
+    private_key: Option<&str>,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
-    let (_, client) = setup_eth_backend(rpc_url).await?;
+    let (anvil, client) = setup_eth_backend(rpc_url, private_key).await?;
 
     let input = GraphData::from_path(input)?;
 
@@ -193,6 +211,7 @@ pub async fn deploy_da_verifier_via_solidity(
         .send()
         .await?;
 
+    drop(anvil);
     Ok(contract.address())
 }
 
@@ -245,7 +264,7 @@ pub async fn update_account_calls(
         panic!("Data source for either input_data or output_data must be OnChain")
     };
 
-    let (anvil, client) = setup_eth_backend(rpc_url).await?;
+    let (anvil, client) = setup_eth_backend(rpc_url, None).await?;
 
     let contract = DataAttestation::new(addr, client.clone());
 
@@ -298,7 +317,7 @@ pub async fn verify_proof_via_solidity(
     );
 
     info!("encoded: {:#?}", hex::encode(&encoded));
-    let (anvil, client) = setup_eth_backend(rpc_url).await?;
+    let (anvil, client) = setup_eth_backend(rpc_url, None).await?;
     let tx: TypedTransaction = TransactionRequest::default()
         .to(addr)
         .from(client.address())
@@ -446,7 +465,7 @@ pub async fn verify_proof_with_data_attestation(
     ])?;
 
     info!("encoded: {:#?}", hex::encode(&encoded));
-    let (anvil, client) = setup_eth_backend(rpc_url).await?;
+    let (anvil, client) = setup_eth_backend(rpc_url, None).await?;
     let tx: TypedTransaction = TransactionRequest::default()
         .to(addr_da)
         .from(client.address())
@@ -658,7 +677,6 @@ pub fn fix_da_sol(
     input_data: Option<Vec<CallsToAccount>>,
     output_data: Option<Vec<CallsToAccount>>,
 ) -> Result<String, Box<dyn Error>> {
-
     let mut accounts_len = 0;
     let mut contract = ATTESTDATA_SOL.to_string();
     let load_instances = LOADINSTANCES_SOL.to_string();

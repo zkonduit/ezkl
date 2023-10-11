@@ -50,12 +50,16 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
         let output = VarTensor::new_advice(cs, K, LEN);
         // tells the config layer to add an affine op to the circuit gate
 
-        let mut layer_config =
-            PolyConfig::<F>::configure(cs, &[input.clone(), params], &output, CheckMode::SAFE);
+        let mut layer_config = PolyConfig::<F>::configure(
+            cs,
+            &[input.clone(), params.clone()],
+            &output,
+            CheckMode::SAFE,
+        );
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         layer_config
-            .configure_lookup(cs, &input, &output, BITS, &LookupOp::ReLU)
+            .configure_lookup(cs, &input, &output, &params, BITS, K, &LookupOp::ReLU)
             .unwrap();
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
@@ -64,7 +68,9 @@ impl<const LEN: usize, const BITS: usize> Circuit<F> for MyCircuit<LEN, BITS> {
                 cs,
                 &input,
                 &output,
+                &params,
                 BITS,
+                K,
                 &LookupOp::Div {
                     denom: ezkl::circuit::utils::F32::from(128.),
                 },

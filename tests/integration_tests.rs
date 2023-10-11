@@ -23,6 +23,7 @@ mod native_tests {
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
         static ref ANVIL_URL: String = "http://localhost:3030".to_string();
         static ref LIMITLESS_ANVIL_URL: String = "http://localhost:8545".to_string();
+        static ref ANVIL_DEFAULT_PRIVATE_KEY: String = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
     }
 
     fn start_anvil(limitless: bool) -> Child {
@@ -1301,6 +1302,12 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
+        // bump bits by 1 to test for overflow
+        let mut settings = GraphSettings::load(&settings_path.clone().into()).unwrap();
+        settings.run_args.bits += 1;
+        settings.save(&settings_path.into()).unwrap();
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "compile-circuit",
@@ -1829,7 +1836,7 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
- 
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-witness",
@@ -1927,6 +1934,7 @@ mod native_tests {
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
         let rpc_arg = format!("--rpc-url={}", *ANVIL_URL);
         let settings_arg = format!("{}/{}/settings.json", test_dir, example_name);
+        let private_key =format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
 
         let base_args = vec![
             "create-evm-verifier-aggr",
@@ -1952,6 +1960,7 @@ mod native_tests {
             addr_path_arg.as_str(),
             "--sol-code-path",
             sol_arg.as_str(),
+            private_key.as_str(),
         ];
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2131,7 +2140,6 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
     }
-
 
     // prove-serialize-verify, the usual full path
     fn kzg_fuzz(
@@ -2426,6 +2434,7 @@ mod native_tests {
         let witness_path = format!("{}/{}/witness.json", test_dir, example_name);
         let test_on_chain_data_path = format!("{}/{}/on_chain_input.json", test_dir, example_name);
         let rpc_arg = format!("--rpc-url={}", LIMITLESS_ANVIL_URL.as_str());
+        let private_key = format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
 
         let test_input_source = format!("--input-source={}", input_source);
         let test_output_source = format!("--output-source={}", output_source);
@@ -2583,6 +2592,7 @@ mod native_tests {
                 sol_arg.as_str(),
                 rpc_arg.as_str(),
                 addr_path_da_arg.as_str(),
+                private_key.as_str(),
             ])
             .status()
             .expect("failed to execute process");
