@@ -2168,6 +2168,23 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "calibrate-settings",
+                "--data",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                format!(
+                    "--settings-path={}/{}/settings_fuzz.json",
+                    test_dir, example_name
+                )
+                .as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "compile-circuit",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),

@@ -11,7 +11,7 @@ use log::warn;
 use crate::{
     circuit::CircuitError,
     fieldutils::i128_to_felt,
-    tensor::{Tensor, TensorType, VarTensor},
+    tensor::{Tensor, TensorType},
 };
 
 use crate::circuit::lookup::LookupOp;
@@ -58,6 +58,30 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         .unwrap();
         (first_element, op_f.output[0])
     }
+
+    ///
+    pub fn cal_col_size(logrows: usize, reserved_blinding_rows: usize) -> usize {
+        2usize.pow(logrows as u32) - reserved_blinding_rows
+    }
+
+    ///
+    pub fn cal_bit_range(bits: usize, reserved_blinding_rows: usize) -> usize {
+        2usize.pow(bits as u32) - reserved_blinding_rows
+    }
+
+    ///
+    pub fn cal_range(
+        bits: usize,
+        logrows: usize,
+        reserved_blinding_rows: usize,
+        num_available_cols: usize,
+    ) -> (i128, i128) {
+        let col_size = Self::cal_col_size(logrows, reserved_blinding_rows);
+        let bit_range = Self::cal_bit_range(bits, reserved_blinding_rows);
+        // take the min len
+        let len = std::cmp::min(num_available_cols * col_size, bit_range);
+        LookupOp::bit_range(len)
+    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
@@ -70,8 +94,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         preexisting_inputs: Option<Vec<TableColumn>>,
     ) -> Table<F> {
         let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
-        let col_size = VarTensor::max_rows(cs, logrows) - 2;
-        let range = LookupOp::bit_range(num_cols * col_size);
+        let factors = cs.blinding_factors() + 3;
+        let range = Self::cal_range(bits, logrows, factors, num_cols);
+        let col_size = Self::cal_col_size(logrows, factors);
 
         log::debug!("table range: {:?}", range);
 

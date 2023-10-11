@@ -364,6 +364,8 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                     // we index from 1 to avoid the zero element creating soundness issues
                     // this is 0 if the index is the same as the column index (starting from 1)
                     let col_expr = sel.clone() * col_expressions[col_idx].clone();
+
+                    log::debug!("col_expr: {:?}", col_expr);
                     // !!!!!! remove this when we expand beyond 2 columns !!!!!!!!!
                     let not_expr = Expression::Constant(F::from(1)) - col_expr.clone();
 

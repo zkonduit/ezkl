@@ -1010,7 +1010,7 @@ fn verify_evm(
     proof_path: PathBuf,
     addr_verifier: &str,
     rpc_url: Option<String>,
-    addr_da: Option<&str>
+    addr_da: Option<&str>,
 ) -> Result<bool, PyErr> {
     let addr_verifier = H160::from_str(addr_verifier).map_err(|e| {
         let err_str = format!("address is invalid: {}", e);
@@ -1025,7 +1025,6 @@ fn verify_evm(
     } else {
         None
     };
-    
 
     Runtime::new()
         .unwrap()
