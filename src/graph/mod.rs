@@ -23,6 +23,7 @@ use self::modules::{
 };
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
+use crate::circuit::table::Table;
 use crate::circuit::CheckMode;
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
@@ -826,21 +827,15 @@ impl GraphCircuit {
         Ok(())
     }
 
-    fn cal_max_range(&self, _bits: usize, logrows: u32) -> i128 {
-        // let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
-        let num_cols = 1;
-        let col_size = 2u32.pow(logrows) as usize - Self::reserved_blinding_rows() as usize;
-        let (_, max_range) = LookupOp::bit_range(num_cols * col_size);
-        max_range
-    }
-
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec())?;
 
         let bits = self.settings().run_args.bits;
         let logrows = self.settings().run_args.logrows;
-        let max_range = self.cal_max_range(bits, logrows);
+        let blinding_rows = Self::reserved_blinding_rows();
+        let (_, max_range) =
+            Table::<Fp>::cal_range(bits, logrows as usize, blinding_rows as usize, 1);
 
         if res.max_lookup_inputs > max_range {
             let recommended_bits = (res.max_lookup_inputs as f64 + Self::reserved_blinding_rows())
