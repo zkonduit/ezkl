@@ -20,7 +20,7 @@ use super::Op;
 
 /// The safety factor for the range of the lookup table.
 pub const RANGE_MULTIPLIER: i128 = 2;
-/// The safety factor for the number of rows in the lookup table.
+/// The safety factor offset for the number of rows in the lookup table.
 pub const RESERVED_BLINDING_ROWS_PAD: usize = 3;
 
 /// Halo2 lookup table for element wise non-linearities.

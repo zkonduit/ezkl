@@ -23,7 +23,7 @@ use self::modules::{
 };
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::table::{Table, RANGE_MULTIPLIER};
+use crate::circuit::table::{Table, RANGE_MULTIPLIER, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
@@ -100,7 +100,7 @@ pub enum GraphError {
     PackingExponent,
 }
 
-const ASSUMED_BLINDING_FACTORS: usize = 7;
+const ASSUMED_BLINDING_FACTORS: usize = 5;
 /// The minimum number of rows in the grid
 pub const MIN_LOGROWS: u32 = 4;
 
@@ -770,7 +770,7 @@ impl GraphCircuit {
     }
 
     fn reserved_blinding_rows() -> f64 {
-        (ASSUMED_BLINDING_FACTORS + 1) as f64
+        (ASSUMED_BLINDING_FACTORS + RESERVED_BLINDING_ROWS_PAD) as f64
     }
 
     fn calc_safe_range(res: &GraphWitness) -> (i128, i128) {
@@ -796,7 +796,7 @@ impl GraphCircuit {
             return Err(err_string.into());
         }
 
-        let min_bits = ((safe_range.1 - safe_range.0) as f64 + reserved_blinding_rows)
+        let min_bits = ((safe_range.1 - safe_range.0) as f64 + reserved_blinding_rows + 1.)
             .log2()
             .ceil() as usize;
 
