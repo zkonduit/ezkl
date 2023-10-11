@@ -2012,7 +2012,7 @@ mod relu {
             let mut config = BaseConfig::default();
 
             config
-                .configure_lookup(cs, &advices[0], &advices[1], &advices[2], (-8, 8), 4, &nl)
+                .configure_lookup(cs, &advices[0], &advices[1], &advices[2], (-6, 6), 4, &nl)
                 .unwrap();
             config
         }
