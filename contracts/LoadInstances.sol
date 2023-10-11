@@ -32,7 +32,7 @@ contract LoadInstances {
             // (right after the length field).
             for {
                 let i := 0x20
-            } lt(i, mul(instances_length, 0x21)) {
+            } lt(i, add(mul(instances_length, 0x20), 0x20)) {
                 i := add(i, 0x20)
             } {
                 mstore(
