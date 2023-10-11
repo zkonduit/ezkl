@@ -54,6 +54,7 @@ def get_onnx_output(model_file, input_file):
         print("Error in ONNX runtime: ", e)
         print("using inputs[output_data]")
         onnx_output = inputs['output_data']
+    print("onnx ", onnx_output)
     return onnx_output[0]
 
 
@@ -71,7 +72,7 @@ def compare_outputs(zk_output, onnx_output):
         except Exception as e:
             zk_output = zk_output[0]
     print("zk ", zk_output)
-    print("onnx ", onnx_output)
+
     zip_object = zip(np.array(zk_output).flatten(),
                      np.array(onnx_output).flatten())
     for list1_i, list2_i in zip_object:

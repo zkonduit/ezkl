@@ -8,6 +8,7 @@ use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::RegionCtx;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::Input;
+use crate::circuit::InputType;
 use crate::circuit::Unknown;
 use crate::fieldutils::felt_to_i128;
 use crate::{
@@ -320,6 +321,17 @@ impl ParsedNodes {
     pub fn num_inputs(&self) -> usize {
         let input_nodes = self.inputs.iter();
         input_nodes.len()
+    }
+
+    /// Input types
+    pub fn get_input_types(&self) -> Vec<InputType> {
+        self.inputs
+            .iter()
+            .map(|o| match self.nodes.get(o).unwrap().opkind() {
+                SupportedOp::Input(Input { datum_type, .. }) => datum_type.clone(),
+                _ => panic!("Expected input type"),
+            })
+            .collect_vec()
     }
 
     ///  Returns shapes of the computational graph's inputs

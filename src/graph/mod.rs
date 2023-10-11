@@ -24,7 +24,7 @@ use self::modules::{
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::table::Table;
-use crate::circuit::CheckMode;
+use crate::circuit::{CheckMode, InputType};
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
 use halo2_proofs::{
@@ -636,8 +636,10 @@ impl GraphCircuit {
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model().graph.input_shapes();
         let scales = self.model().graph.get_input_scales();
+        let input_types = self.model().graph.get_input_types();
         info!("input scales: {:?}", scales);
-        self.process_data_source(&data.input_data, shapes, scales)
+
+        self.process_data_source(&data.input_data, shapes, scales, input_types)
             .await
     }
 
@@ -664,6 +666,7 @@ impl GraphCircuit {
         data: &DataSource,
         shapes: Vec<Vec<usize>>,
         scales: Vec<u32>,
+        input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         match &data {
             DataSource::OnChain(source) => {
@@ -674,10 +677,12 @@ impl GraphCircuit {
                 self.load_on_chain_data(source.clone(), &shapes, per_item_scale)
                     .await
             }
-            DataSource::File(file_data) => self.load_file_data(file_data, &shapes, scales),
+            DataSource::File(file_data) => {
+                self.load_file_data(file_data, &shapes, scales, input_types)
+            }
             DataSource::DB(pg) => {
                 let data = pg.fetch_and_format_as_file()?;
-                self.load_file_data(&data, &shapes, scales)
+                self.load_file_data(&data, &shapes, scales, input_types)
             }
         }
     }
@@ -717,11 +722,25 @@ impl GraphCircuit {
         file_data: &FileSource,
         shapes: &Vec<Vec<usize>>,
         scales: Vec<u32>,
+        input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+        println!("loading file data from {:?}", file_data);
         // quantize the supplied data using the provided scale.
         let mut data: Vec<Tensor<Fp>> = vec![];
-        for ((d, shape), scale) in file_data.iter().zip(shapes).zip(scales) {
-            let t: Vec<Fp> = d.par_iter().map(|x| x.to_field(scale)).collect();
+        for (((d, shape), scale), input_type) in file_data
+            .iter()
+            .zip(shapes)
+            .zip(scales)
+            .zip(input_types.iter())
+        {
+            let t: Vec<Fp> = d
+                .par_iter()
+                .map(|x| {
+                    let mut x = x.clone();
+                    x.as_type(input_type);
+                    x.to_field(scale)
+                })
+                .collect();
 
             let mut t: Tensor<Fp> = t.into_iter().into();
             t.reshape(shape);
