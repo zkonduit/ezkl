@@ -113,9 +113,45 @@ pub enum InputType {
     ///
     Bool,
     ///
-    Num,
+    F16,
+    ///
+    F32,
+    ///
+    F64,
+    ///
+    Int,
     ///
     TDim,
+}
+
+impl InputType {
+    ///
+    pub fn roundtrip<T: num::ToPrimitive + num::FromPrimitive + Clone>(&self, input: &mut T) {
+        match self {
+            InputType::Bool => {
+                let boolean_input = input.clone().to_i64().unwrap();
+                assert!(boolean_input == 0 || boolean_input == 1);
+                *input = T::from_i64(boolean_input).unwrap();
+            }
+            InputType::F16 => {
+                // TODO: implement f16
+                let f32_input = input.clone().to_f32().unwrap();
+                *input = T::from_f32(f32_input).unwrap();
+            }
+            InputType::F32 => {
+                let f32_input = input.clone().to_f32().unwrap();
+                *input = T::from_f32(f32_input).unwrap();
+            }
+            InputType::F64 => {
+                let f64_input = input.clone().to_f64().unwrap();
+                *input = T::from_f64(f64_input).unwrap();
+            }
+            InputType::Int | InputType::TDim => {
+                let int_input = input.clone().to_i128().unwrap();
+                *input = T::from_i128(int_input).unwrap();
+            }
+        }
+    }
 }
 
 ///
@@ -156,11 +192,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
         let value = values[0].clone();
         if !value.all_prev_assigned() {
             match self.datum_type {
-                InputType::Num | InputType::TDim => Ok(Some(super::layouts::identity(
-                    config,
-                    region,
-                    values[..].try_into()?,
-                )?)),
                 InputType::Bool => {
                     log::debug!("constraining input to be boolean");
                     Ok(Some(super::layouts::boolean_identity(
@@ -169,6 +200,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
                         values[..].try_into()?,
                     )?))
                 }
+                _ => Ok(Some(super::layouts::identity(
+                    config,
+                    region,
+                    values[..].try_into()?,
+                )?)),
             }
         } else {
             Ok(Some(value))
