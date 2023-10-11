@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 contract LoadInstances {
     /**
-     * @dev Parse the instances array from the Hal2Verifier encoded calldata. 
+     * @dev Parse the instances array from the Halo2Verifier encoded calldata. 
      * @notice must pass encoded bytes from memory
-     * @param encoded - The data returned from the account calls.
+     * @param encoded - verifier calldata
      */
     function getInstancesMemory(
         bytes memory encoded
@@ -43,9 +43,9 @@ contract LoadInstances {
         }
     }
     /**
-     * @dev Parse the instances array from the Hal2Verifier encoded calldata. 
+     * @dev Parse the instances array from the Halo2Verifier encoded calldata. 
      * @notice must pass encoded bytes from calldata
-     * @param encoded - The data returned from the account calls.
+     * @param encoded - verifier calldata
      */
     function getInstancesCalldata(
         bytes calldata encoded
