@@ -728,7 +728,6 @@ impl GraphCircuit {
         scales: Vec<u32>,
         input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
-        println!("loading file data from {:?}", file_data);
         // quantize the supplied data using the provided scale.
         let mut data: Vec<Tensor<Fp>> = vec![];
         for (((d, shape), scale), input_type) in file_data
