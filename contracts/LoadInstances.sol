@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 contract LoadInstances {
+    /**
+     * @dev Parse the instances array from the Hal2Verifier encoded calldata. 
+     * @notice must pass encoded bytes from memory
+     * @param encoded - The data returned from the account calls.
+     */
     function getInstancesMemory(
         bytes memory encoded
     ) internal pure returns (uint256[] memory instances) {
         bytes4 funcSig;
         uint256 instances_offset;
         uint256 instances_length;
-        // uint256 instance;
         assembly {
             // fetch function sig. Either `verifyProof(bytes,uint256[])` or `verifyProof(address,bytes,uint256[])`
             funcSig := mload(add(encoded, 0x20))
@@ -38,14 +42,17 @@ contract LoadInstances {
             }
         }
     }
-
+    /**
+     * @dev Parse the instances array from the Hal2Verifier encoded calldata. 
+     * @notice must pass encoded bytes from calldata
+     * @param encoded - The data returned from the account calls.
+     */
     function getInstancesCalldata(
         bytes calldata encoded
     ) internal pure returns (uint256[] memory instances) {
         bytes4 funcSig;
         uint256 instances_offset;
         uint256 instances_length;
-        // uint256 instance;
         assembly {
             // fetch function sig. Either `verifyProof(bytes,uint256[])` or `verifyProof(address,bytes,uint256[])`
             funcSig := calldataload(encoded.offset)
