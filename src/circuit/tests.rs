@@ -2059,8 +2059,8 @@ mod lookup_ultra_overflow {
     use super::*;
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
         plonk::{Circuit, ConstraintSystem, Error},
+        poly::commitment::ParamsProver,
     };
 
     #[derive(Clone)]
@@ -2126,15 +2126,48 @@ mod lookup_ultra_overflow {
     fn relucircuit() {
         // get some logs fam
         crate::logger::init_logger();
-        let input: Tensor<Value<F>> =
-            Tensor::new(Some(&[Value::<F>::known(F::from(1_u64)); 4]), &[4]).unwrap();
+        // parameters
+        let a = Tensor::from((0..4).map(|i| Value::known(F::from(i + 1))));
 
         let circuit = ReLUCircuit::<F> {
-            input: ValTensor::from(input),
+            input: ValTensor::from(a),
         };
 
-        let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        let params = crate::pfsys::srs::gen_srs::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<_>,
+        >(4_u32);
+
+        let pk = crate::pfsys::create_keys::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
+            F,
+            ReLUCircuit<F>,
+        >(&circuit, &params)
+        .unwrap();
+
+        let prover = crate::pfsys::create_proof_circuit_kzg(
+            circuit.clone(),
+            &params,
+            vec![],
+            &pk,
+            crate::pfsys::TranscriptType::EVM,
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
+            // use safe mode to verify that the proof is correct
+            CheckMode::SAFE,
+        );
+
+        assert!(prover.is_ok());
+
+        let proof = prover.unwrap();
+
+        let strategy =
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
+        let vk = pk.get_vk();
+        let result =
+            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
+
+        assert!(result.is_ok());
+
+        println!("done.");
     }
 }
 
