@@ -2054,6 +2054,90 @@ mod relu {
 }
 
 #[cfg(test)]
+mod lookup_ultra_overflow {
+    use super::*;
+    use halo2_proofs::{
+        circuit::{Layouter, SimpleFloorPlanner, Value},
+        dev::MockProver,
+        plonk::{Circuit, ConstraintSystem, Error},
+    };
+
+    #[derive(Clone)]
+    struct ReLUCircuit<F: PrimeField + TensorType + PartialOrd> {
+        pub input: ValTensor<F>,
+    }
+
+    impl Circuit<F> for ReLUCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let advices = (0..3)
+                .map(|_| VarTensor::new_advice(cs, 4, 3))
+                .collect::<Vec<_>>();
+
+            let nl = LookupOp::ReLU;
+
+            let mut config = BaseConfig::default();
+
+            config
+                .configure_lookup(
+                    cs,
+                    &advices[0],
+                    &advices[1],
+                    &advices[2],
+                    (-1024, 1024),
+                    4,
+                    &nl,
+                )
+                .unwrap();
+            config
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
+        ) -> Result<(), Error> {
+            config.layout_tables(&mut layouter).unwrap();
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0);
+                        config
+                            .layout(&mut region, &[self.input.clone()], Box::new(LookupOp::ReLU))
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn relucircuit() {
+        // get some logs fam
+        crate::logger::init_logger();
+        let input: Tensor<Value<F>> =
+            Tensor::new(Some(&[Value::<F>::known(F::from(1_u64)); 4]), &[4]).unwrap();
+
+        let circuit = ReLUCircuit::<F> {
+            input: ValTensor::from(input),
+        };
+
+        let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied_par();
+    }
+}
+
+#[cfg(test)]
 mod softmax {
 
     use super::*;
