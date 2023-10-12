@@ -564,7 +564,7 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     }
     .into();
 
-    let local_mask = equals(config, region, &[index, dim_indices.clone()]).unwrap();
+    let local_mask = equals(config, region, &[dim_indices.clone(), index]).unwrap();
 
     let dot = dot(config, region, &[input.clone(), local_mask.clone()]).unwrap();
 

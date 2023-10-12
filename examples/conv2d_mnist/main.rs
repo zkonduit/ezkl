@@ -40,7 +40,8 @@ const K: usize = 20;
 struct Config<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
-    const BITS: usize,
+    const LOOKUP_MIN: i128,
+    const LOOKUP_MAX: i128,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -63,7 +64,8 @@ struct Config<
 struct MyCircuit<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const CLASSES: usize,
-    const BITS: usize,
+    const LOOKUP_MIN: i128,
+    const LOOKUP_MAX: i128,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -86,7 +88,8 @@ struct MyCircuit<
 impl<
         const LEN: usize,
         const CLASSES: usize,
-        const BITS: usize,
+        const LOOKUP_MIN: i128,
+        const LOOKUP_MAX: i128,
         // Convolution
         const KERNEL_HEIGHT: usize,
         const KERNEL_WIDTH: usize,
@@ -100,7 +103,8 @@ impl<
     for MyCircuit<
         LEN,
         CLASSES,
-        BITS,
+        LOOKUP_MIN,
+        LOOKUP_MAX,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
         OUT_CHANNELS,
@@ -116,7 +120,8 @@ where
     type Config = Config<
         LEN,
         CLASSES,
-        BITS,
+        LOOKUP_MIN,
+        LOOKUP_MAX,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
         OUT_CHANNELS,
@@ -150,7 +155,15 @@ where
         );
 
         layer_config
-            .configure_lookup(cs, &input, &output, &params, BITS, K, &LookupOp::ReLU)
+            .configure_lookup(
+                cs,
+                &input,
+                &output,
+                &params,
+                (LOOKUP_MIN, LOOKUP_MAX),
+                K,
+                &LookupOp::ReLU,
+            )
             .unwrap();
 
         layer_config
@@ -159,7 +172,7 @@ where
                 &input,
                 &output,
                 &params,
-                BITS,
+                (LOOKUP_MIN, LOOKUP_MAX),
                 K,
                 &LookupOp::Div { denom: 32.0.into() },
             )
@@ -353,7 +366,8 @@ pub fn runconv() {
     let circuit = MyCircuit::<
         LEN,
         10,
-        16,
+        -32768,
+        32768,
         KERNEL_HEIGHT,
         KERNEL_WIDTH,
         OUT_CHANNELS,

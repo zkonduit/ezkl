@@ -18,6 +18,11 @@ use crate::circuit::lookup::LookupOp;
 
 use super::Op;
 
+/// The safety factor for the range of the lookup table.
+pub const RANGE_MULTIPLIER: i128 = 2;
+/// The safety factor offset for the number of rows in the lookup table.
+pub const RESERVED_BLINDING_ROWS_PAD: usize = 3;
+
 /// Halo2 lookup table for element wise non-linearities.
 #[derive(Clone, Debug)]
 pub struct Table<F: PrimeField> {
@@ -70,17 +75,11 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     }
 
     ///
-    pub fn cal_range(
-        bits: usize,
-        logrows: usize,
-        reserved_blinding_rows: usize,
-        num_available_cols: usize,
-    ) -> (i128, i128) {
-        let col_size = Self::cal_col_size(logrows, reserved_blinding_rows);
-        let bit_range = Self::cal_bit_range(bits, reserved_blinding_rows);
-        // take the min len
-        let len = std::cmp::min(num_available_cols * col_size, bit_range);
-        LookupOp::bit_range(len)
+    pub fn num_cols_required(range: (i128, i128), col_size: usize) -> usize {
+        // double it to be safe
+        let range_len = range.1 - range.0;
+        // number of cols needed to store the range
+        (range_len / (col_size as i128)) as usize + 1
     }
 }
 
@@ -88,15 +87,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     /// Configures the table.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
-        bits: usize,
+        range: (i128, i128),
         logrows: usize,
         nonlinearity: &LookupOp,
         preexisting_inputs: Option<Vec<TableColumn>>,
     ) -> Table<F> {
-        let num_cols = std::cmp::max(1, 1 + bits as i128 - logrows as i128) as usize;
-        let factors = cs.blinding_factors() + 3;
-        let range = Self::cal_range(bits, logrows, factors, num_cols);
+        let factors = cs.blinding_factors() + RESERVED_BLINDING_ROWS_PAD;
         let col_size = Self::cal_col_size(logrows, factors);
+        // number of cols needed to store the range
+        let num_cols = Self::num_cols_required(range, col_size);
 
         log::debug!("table range: {:?}", range);
 

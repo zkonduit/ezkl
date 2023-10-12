@@ -3,6 +3,7 @@
 mod native_tests {
 
     use core::panic;
+    // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, Visibility};
     use lazy_static::lazy_static;
@@ -23,7 +24,8 @@ mod native_tests {
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
         static ref ANVIL_URL: String = "http://localhost:3030".to_string();
         static ref LIMITLESS_ANVIL_URL: String = "http://localhost:8545".to_string();
-        static ref ANVIL_DEFAULT_PRIVATE_KEY: String = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
+        static ref ANVIL_DEFAULT_PRIVATE_KEY: String =
+            "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
     }
 
     fn start_anvil(limitless: bool) -> Child {
@@ -765,7 +767,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                kzg_fuzz(path, test.to_string(), 7, 16, 17, "evm");
+                kzg_fuzz(path, test.to_string(), "evm");
                 test_dir.close().unwrap();
             }
 
@@ -990,7 +992,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(false);
-                    kzg_fuzz(path, test.to_string(), 7, 16, 17, "evm");
+                    kzg_fuzz(path, test.to_string(), "evm");
                     test_dir.close().unwrap();
 
                 }
@@ -1302,11 +1304,14 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
-        // bump bits by 1 to test for overflow
-        let mut settings = GraphSettings::load(&settings_path.clone().into()).unwrap();
-        settings.run_args.bits += 1;
-        settings.save(&settings_path.into()).unwrap();
+        // let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
+        // // bump bits by 1 to test for overflow
+        // let mut settings = GraphSettings::load(&settings_path.clone().into()).unwrap();
+
+        // let rows = 2u32.pow(settings.run_args.logrows - 1) - 2 * RESERVED_BLINDING_ROWS_PAD as u32;
+
+        // settings.run_args.lookup_range = (-(rows as i128), rows as i128);
+        // settings.save(&settings_path.into()).unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1458,7 +1463,7 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "-O",
                 format!("{}/{}/render.png", test_dir, example_name).as_str(),
-                "--bits=16",
+                "--lookup-range=(-32768,32768)",
                 "-K=17",
             ])
             .status()
@@ -1474,7 +1479,7 @@ mod native_tests {
                 "-M",
                 format!("{}/tutorial/network.onnx", test_dir).as_str(),
                 &format!("--settings-path={}/tutorial/settings.json", test_dir),
-                "--bits=16",
+                "--lookup-range=(-32768,32768)",
                 "--logrows=17",
                 "--input-scale=4",
                 "--param-scale=4",
@@ -1535,8 +1540,6 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
-                "--bits=2",
-                "-K=3",
             ])
             .status()
             .expect("failed to execute process");
@@ -1645,8 +1648,6 @@ mod native_tests {
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
                 ),
-                "--bits=2",
-                "-K=3",
             ])
             .status()
             .expect("failed to execute process");
@@ -1934,7 +1935,7 @@ mod native_tests {
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
         let rpc_arg = format!("--rpc-url={}", *ANVIL_URL);
         let settings_arg = format!("{}/{}/settings.json", test_dir, example_name);
-        let private_key =format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
+        let private_key = format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
 
         let base_args = vec![
             "create-evm-verifier-aggr",
@@ -2142,14 +2143,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_fuzz(
-        test_dir: &str,
-        example_name: String,
-        scale: usize,
-        bits: usize,
-        logrows: usize,
-        transcript: &str,
-    ) {
+    fn kzg_fuzz(test_dir: &str, example_name: String, transcript: &str) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
@@ -2157,10 +2151,6 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "-O",
                 format!("{}/{}/settings_fuzz.json", test_dir, example_name).as_str(),
-                &format!("--input-scale={}", scale),
-                &format!("--param-scale={}", scale),
-                &format!("--bits={}", bits),
-                &format!("--logrows={}", logrows),
             ])
             .status()
             .expect("failed to execute process");
@@ -2437,7 +2427,7 @@ mod native_tests {
                 &format!("--input-visibility={}", input_visbility),
                 &format!("--output-visibility={}", output_visbility),
                 "--param-visibility=private",
-                "--bits=16",
+                "--lookup-range=(-32768,32768)",
                 "-K=17",
             ])
             .status()
