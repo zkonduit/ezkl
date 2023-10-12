@@ -47,6 +47,7 @@ abigen!(QuantizeData, "./abis/QuantizeData.json");
 const TESTREADS_SOL: &str = include_str!("../contracts/TestReads.sol");
 const QUANTIZE_DATA_SOL: &str = include_str!("../contracts/QuantizeData.sol");
 const ATTESTDATA_SOL: &str = include_str!("../contracts/AttestData.sol");
+const LOADINSTANCES_SOL: &str = include_str!("../contracts/LoadInstances.sol");
 
 /// Return an instance of Anvil and a client for the given RPC URL. If none is provided, a local client is used.
 #[cfg(not(target_arch = "wasm32"))]
@@ -678,6 +679,14 @@ pub fn fix_da_sol(
 ) -> Result<String, Box<dyn Error>> {
     let mut accounts_len = 0;
     let mut contract = ATTESTDATA_SOL.to_string();
+    let load_instances = LOADINSTANCES_SOL.to_string();
+    // replace the import statment with the load_instances contract, not including the 
+    // `SPDX-License-Identifier: MIT pragma solidity ^0.8.20;` at the top of the file
+    contract = contract.replace(
+        "import './LoadInstances.sol';",
+        &load_instances[load_instances.find("contract").unwrap()..],
+    );
+    
     // fill in the quantization params and total calls
     // as constants to the contract to save on gas
     if let Some(input_data) = input_data {
