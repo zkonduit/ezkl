@@ -7,6 +7,7 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Expression, TableColumn},
 };
 use log::warn;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     circuit::CircuitError,
@@ -44,25 +45,24 @@ impl<F: PrimeField> SelectorConstructor<F> {
     ///
     pub fn get_expr_at_idx(&self, i: usize, expr: Expression<F>) -> Expression<F> {
         let indices = 0..self.degree;
-        let expr = indices.filter(|x| *x != i).map(|i| {
-            if i == 0 {
-                expr.clone()
-            } else {
-                (Expression::Constant(F::from(i as u64))) - expr.clone()
-            }
-        });
-
-        let mut total_expr = Expression::Constant(F::from(1_u64));
-        for e in expr {
-            total_expr = total_expr * e;
-        }
-        total_expr
+        indices
+            .into_par_iter()
+            .filter(|x| *x != i)
+            .map(|i| {
+                if i == 0 {
+                    expr.clone()
+                } else {
+                    (Expression::Constant(F::from(i as u64))) - expr.clone()
+                }
+            })
+            .reduce(|| Expression::Constant(F::from(1_u64)), |acc, x| acc * x)
     }
 
     ///
     pub fn get_selector_val_at_idx(&self, i: usize) -> F {
         let indices = 0..self.degree;
         indices
+            .into_par_iter()
             .filter(|x| *x != i)
             .map(|x| {
                 if x == 0 {
