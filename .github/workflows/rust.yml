@@ -90,7 +90,7 @@ jobs:
       - name: lookup overflow (wasi)
         run: RUST_LOG=debug cargo wasi test --release lookup_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow (wasi)
-        run: RUST_LOG=debug cargo nextest run  --release lookup_ultra_overflow -- --include-ignored --nocapture
+        run: RUST_LOG=debug cargo nextest run  --release lookup_ultra_overflow --no-capture -- --include-ignored
       - name: Conv + relu overflow (wasi)
         run: RUST_LOG=debug cargo wasi test --release conv_relu_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Matmul overflow
