@@ -2054,6 +2054,7 @@ mod relu {
 }
 
 #[cfg(test)]
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod lookup_ultra_overflow {
     use super::*;
     use halo2_proofs::{
