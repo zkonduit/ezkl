@@ -314,43 +314,28 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         };
 
         for x in 0..input.num_cols() {
-            let len = table.table_inputs.len();
-
-            // for now we only support len == 2 at most
-            assert!(
-                len <= 2,
-                "unsupported number of columns for lookup table (>2)"
-            );
+            let len = table.selector_constructor.degree;
 
             let multi_col_selector = cs.complex_selector();
 
-            for ((col_idx, input_col), output_col) in table.table_inputs[..len]
+            for ((col_idx, input_col), output_col) in table
+                .table_inputs
                 .iter()
                 .enumerate()
-                .zip(table.table_outputs[..len].iter())
+                .zip(table.table_outputs.iter())
             {
                 cs.lookup("", |cs| {
                     let mut res = vec![];
                     let sel = cs.query_selector(multi_col_selector.clone());
 
-                    let col_expressions = match len {
-                        1 => vec![Expression::Constant(F::from(1))],
-                        2 => {
-                            let synthetic_idx = match index {
-                                VarTensor::Advice { inner: advices, .. } => {
-                                    cs.query_advice(advices[x], Rotation(0))
-                                }
-                                _ => panic!("wrong input type"),
-                            };
-                            vec![
-                                // 1 if synthetic_idx == 0
-                                Expression::Constant(F::from(1)) - synthetic_idx.clone(),
-                                // 1 if synthetic_idx == 1
-                                synthetic_idx.clone(),
-                                // if it's not 0 or 1 then both expressions will be =/= 0 which breaks the lookup table, preventing malicious (non-boolean) inputs
-                            ]
-                        }
-                        _ => panic!("unsupported number of columns"),
+                    let synthetic_sel = match len {
+                        1 => Expression::Constant(F::from(1)),
+                        _ => match index {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                cs.query_advice(advices[x], Rotation(0))
+                            }
+                            _ => panic!("wrong input type"),
+                        },
                     };
 
                     let input_query = match &input {
@@ -369,11 +354,18 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
                     // we index from 1 to avoid the zero element creating soundness issues
                     // this is 0 if the index is the same as the column index (starting from 1)
-                    let col_expr = sel.clone() * col_expressions[col_idx].clone();
 
-                    log::debug!("col_expr: {:?}", col_expr);
-                    // !!!!!! remove this when we expand beyond 2 columns !!!!!!!!!
-                    let not_expr = Expression::Constant(F::from(1)) - col_expr.clone();
+                    let col_expr = sel.clone()
+                        * table
+                            .selector_constructor
+                            .get_expr_at_idx(col_idx, synthetic_sel);
+
+                    let multiplier = table.selector_constructor.get_selector_val_at_idx(col_idx);
+
+                    log::debug!("col expr at idx {:?}: {:?}", col_idx, col_expr,);
+                    log::debug!("col multiplier at idx {:?}: {:?}", col_idx, multiplier);
+
+                    let not_expr = Expression::Constant(multiplier) - col_expr.clone();
 
                     let (default_x, default_y) = if len > 1 {
                         table.get_first_element(col_idx)
