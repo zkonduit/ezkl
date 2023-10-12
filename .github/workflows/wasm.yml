@@ -64,9 +64,17 @@ jobs:
               "ezkl.d.ts",
               "utils.js"
             ],
-            "main": "nodejs/ezkl.js",
-            "module": "web/ezkl.js",
-            "types": "ezkl.d.ts",
+            "exports": {
+              ".": {
+                "import": "./web/ezkl.js",
+                "require": "./nodejs/ezkl.js"
+              },
+              "./types": {
+                "import": "./web/ezkl.d.ts",
+                "require": "./nodejs/ezkl.d.ts"
+              }
+            },
+            "types": "./types",
             "sideEffects": [
               "web/snippets/*"
             ]
