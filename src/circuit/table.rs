@@ -4,9 +4,10 @@ use halo2curves::ff::PrimeField;
 
 use halo2_proofs::{
     circuit::{Layouter, Value},
-    plonk::{ConstraintSystem, TableColumn},
+    plonk::{ConstraintSystem, Expression, TableColumn},
 };
 use log::warn;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     circuit::CircuitError,
@@ -23,6 +24,57 @@ pub const RANGE_MULTIPLIER: i128 = 2;
 /// The safety factor offset for the number of rows in the lookup table.
 pub const RESERVED_BLINDING_ROWS_PAD: usize = 3;
 
+#[derive(Debug, Clone)]
+///
+pub struct SelectorConstructor<F: PrimeField> {
+    ///
+    pub degree: usize,
+    ///
+    _marker: PhantomData<F>,
+}
+
+impl<F: PrimeField> SelectorConstructor<F> {
+    ///
+    pub fn new(degree: usize) -> Self {
+        Self {
+            degree,
+            _marker: PhantomData,
+        }
+    }
+
+    ///
+    pub fn get_expr_at_idx(&self, i: usize, expr: Expression<F>) -> Expression<F> {
+        let indices = 0..self.degree;
+        indices
+            .into_par_iter()
+            .filter(|x| *x != i)
+            .map(|i| {
+                if i == 0 {
+                    expr.clone()
+                } else {
+                    (Expression::Constant(F::from(i as u64))) - expr.clone()
+                }
+            })
+            .reduce(|| Expression::Constant(F::from(1_u64)), |acc, x| acc * x)
+    }
+
+    ///
+    pub fn get_selector_val_at_idx(&self, i: usize) -> F {
+        let indices = 0..self.degree;
+        indices
+            .into_par_iter()
+            .filter(|x| *x != i)
+            .map(|x| {
+                if x == 0 {
+                    F::from(i as u64)
+                } else {
+                    F::from(x as u64) - F::from(i as u64)
+                }
+            })
+            .product()
+    }
+}
+
 /// Halo2 lookup table for element wise non-linearities.
 #[derive(Clone, Debug)]
 pub struct Table<F: PrimeField> {
@@ -34,6 +86,8 @@ pub struct Table<F: PrimeField> {
     pub col_size: usize,
     /// Output of table
     pub table_outputs: Vec<TableColumn>,
+    /// selector cn
+    pub selector_constructor: SelectorConstructor<F>,
     /// Flags if table has been previously assigned to.
     pub is_assigned: bool,
     /// Number of bits used in lookup table.
@@ -107,11 +161,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
             cols
         });
 
-        if table_inputs.len() > 1 {
-            warn!(
-                "Using {} columns for non-linearity table.",
-                table_inputs.len()
-            );
+        let num_cols = table_inputs.len();
+
+        if num_cols > 1 {
+            warn!("Using {} columns for non-linearity table.", num_cols);
         }
 
         let table_outputs = table_inputs
@@ -124,6 +177,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
             table_inputs,
             table_outputs,
             is_assigned: false,
+            selector_constructor: SelectorConstructor::new(num_cols),
             col_size,
             range,
             _marker: PhantomData,
@@ -156,6 +210,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
 
         self.is_assigned = true;
 
+        let col_multipliers: Vec<F> = (0..chunked_inputs.len())
+            .map(|x| self.selector_constructor.get_selector_val_at_idx(x))
+            .collect();
+
         let _ = chunked_inputs
             .enumerate()
             .map(|(chunk_idx, inputs)| {
@@ -166,6 +224,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
                             .iter()
                             .enumerate()
                             .map(|(mut row_offset, input)| {
+                                let col_multiplier = col_multipliers[chunk_idx];
+
                                 row_offset += chunk_idx * self.col_size;
                                 let (x, y) = self.cartesian_coord(row_offset);
                                 if !preassigned_input {
@@ -173,7 +233,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
                                         || format!("nl_i_col row {}", row_offset),
                                         self.table_inputs[x],
                                         y,
-                                        || Value::known(*input),
+                                        || Value::known(*input * col_multiplier),
                                     )?;
                                 }
 
@@ -183,7 +243,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
                                     || format!("nl_o_col row {}", row_offset),
                                     self.table_outputs[x],
                                     y,
-                                    || Value::known(output),
+                                    || Value::known(output * col_multiplier),
                                 )?;
 
                                 Ok(())
