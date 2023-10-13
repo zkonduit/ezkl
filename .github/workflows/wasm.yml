@@ -64,28 +64,13 @@ jobs:
               "ezkl.d.ts",
               "utils.js"
             ],
-            "exports": {
-              ".": {
-                "import": "./web/ezkl.js",
-                "require": "./nodejs/ezkl.js"
-              },
-              "./types": {
-                "import": "./web/ezkl.d.ts",
-                "require": "./nodejs/ezkl.d.ts"
-              }
-            },
-            "types": "./types",
+            "main": "nodejs/ezkl.js",
+            "module": "web/ezkl.js",
+            "types": "nodejs/ezkl.d.ts",
             "sideEffects": [
               "web/snippets/*"
             ]
           }' > pkg/package.json
-    
-      - name: Create ezkl.d.ts in pkg folder
-        run: |
-          echo '
-            export const nodejs: typeof import("./nodejs/ezkl");
-            export const web: typeof import("./web/ezkl");
-          ' > pkg/ezkl.d.ts
 
       - name: Replace memory definition in nodejs
         run: |
