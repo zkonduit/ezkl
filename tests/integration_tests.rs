@@ -2512,20 +2512,6 @@ mod native_tests {
 
         println!("input is {:?}", input);
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "gen-witness",
-                "-D",
-                test_on_chain_data_path.as_str(),
-                "-M",
-                &model_path,
-                "-O",
-                &witness_path,
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
         input.save(data_path.clone().into()).unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2540,6 +2526,20 @@ mod native_tests {
                 rpc_arg.as_str(),
                 test_input_source.as_str(),
                 test_output_source.as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-witness",
+                "-D",
+                test_on_chain_data_path.as_str(),
+                "-M",
+                &model_path,
+                "-O",
+                &witness_path,
             ])
             .status()
             .expect("failed to execute process");
