@@ -3,20 +3,26 @@
 pragma solidity ^0.8.17;
 
 contract QuantizeData {
-
-
     /**
      * @notice EZKL P value
      * @dev In order to prevent the verifier from accepting two version of the same instance, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
      * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
      */
-    uint256 constant ORDER = uint256(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001); 
+    uint256 constant ORDER =
+        uint256(
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
+        );
+
     /**
      * @notice Calculates floor(x * y / denominator) with full precision. Throws if result overflows a uint256 or denominator == 0
      * @dev Original credit to Remco Bloemen under MIT license (https://xn--2-umb.com/21/muldiv)
      * with further edits by Uniswap Labs also under MIT license.
      */
-    function mulDiv(uint256 x, uint256 y, uint256 denominator) internal pure returns (uint256 result) {
+    function mulDiv(
+        uint256 x,
+        uint256 y,
+        uint256 denominator
+    ) internal pure returns (uint256 result) {
         unchecked {
             // 512-bit multiply [prod1 prod0] = x * y. Compute the product mod 2^256 and mod 2^256 - 1, then use
             // use the Chinese Remainder Theorem to reconstruct the 512 bit result. The result is stored in two 256
@@ -96,28 +102,32 @@ contract QuantizeData {
             return result;
         }
     }
-    function quantize_data(bytes[] memory data, uint256[] memory decimals, uint256[] memory scales) external pure returns (int128[] memory quantized_data) {
-        quantized_data = new int128[](data.length);
-        for(uint i; i < data.length; i++){
+
+    function quantize_data(
+        bytes[] memory data,
+        uint256[] memory decimals,
+        uint256[] memory scales
+    ) external pure returns (int256[] memory quantized_data) {
+        quantized_data = new int256[](data.length);
+        for (uint i; i < data.length; i++) {
             int x = abi.decode(data[i], (int256));
             bool neg = x < 0;
             if (neg) x = -x;
-            uint denom = 10**decimals[i];
+            uint denom = 10 ** decimals[i];
             uint output = mulDiv(uint256(x), scales[i], denom);
-            if (mulmod(uint256(x), scales[i], denom)*2 >= denom) {
+            if (mulmod(uint256(x), scales[i], denom) * 2 >= denom) {
                 output += 1;
             }
-            // In the interest of keeping feature parity with the quantization done on the EZKL cli,
-            // we set the fixed point value type to be int128. Any value greater than that will throw an error
-            // as it does on the EZKL cli.
-            require(output <= uint128(type(int128).max), "Significant bit truncation");
-            quantized_data[i] = neg ? int128(-int256(output)): int128(int256(output));
+
+            quantized_data[i] = neg ? -int256(output) : int256(output);
         }
     }
 
-    function to_field_element(int128[] memory quantized_data) public pure returns(uint256[] memory output) {
+    function to_field_element(
+        int128[] memory quantized_data
+    ) public pure returns (uint256[] memory output) {
         output = new uint256[](quantized_data.length);
-        for(uint i; i < quantized_data.length; i++){
+        for (uint i; i < quantized_data.length; i++) {
             output[i] = uint256(quantized_data[i] + int(ORDER)) % ORDER;
         }
     }

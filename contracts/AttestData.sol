@@ -181,10 +181,6 @@ contract DataAttestation is LoadInstances {
         if (mulmod(uint256(x), scale, decimals) * 2 >= decimals) {
             output += 1;
         }
-        // In the interest of keeping feature parity with the quantization done on the EZKL cli,
-        // we set the fixed point value type to be int128. Any value greater than that will throw an error
-        // as it does on the EZKL cli.
-        require(output <= uint128(type(int128).max), "Significant bit truncation");
         quantized_data = neg ? -int256(output): int256(output);
     }
     /**

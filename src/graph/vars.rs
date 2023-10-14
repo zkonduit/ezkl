@@ -146,6 +146,11 @@ impl Visibility {
         matches!(&self, Visibility::Fixed)
     }
     #[allow(missing_docs)]
+    pub fn is_private(&self) -> bool {
+        matches!(&self, Visibility::Private) || self.is_hashed_private()
+    }
+
+    #[allow(missing_docs)]
     pub fn is_public(&self) -> bool {
         matches!(&self, Visibility::Public)
     }

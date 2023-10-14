@@ -37,6 +37,21 @@ pub enum FileSourceInner {
     Field(Fp),
 }
 
+impl FileSourceInner {
+    ///
+    pub fn is_float(&self) -> bool {
+        matches!(self, FileSourceInner::Float(_))
+    }
+    ///
+    pub fn is_bool(&self) -> bool {
+        matches!(self, FileSourceInner::Bool(_))
+    }
+    ///
+    pub fn is_field(&self) -> bool {
+        matches!(self, FileSourceInner::Field(_))
+    }
+}
+
 impl Serialize for FileSourceInner {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -259,12 +274,11 @@ impl OnChainSource {
     pub async fn test_from_file_data(
         data: &FileSource,
         scales: Vec<u32>,
-        shapes: Vec<Vec<usize>>,
+        mut shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
     ) -> Result<(Vec<Tensor<Fp>>, Self), Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
         use crate::graph::scale_to_multiplier;
-        use itertools::Itertools;
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
@@ -272,15 +286,16 @@ impl OnChainSource {
 
         let address = client.address();
 
-        let scales: Vec<f64> = scales.into_iter().map(scale_to_multiplier).collect();
+        let mut scales: Vec<f64> = scales.into_iter().map(scale_to_multiplier).collect();
+        // set scales to 1 where data is a field element
+        for (idx, i) in data.iter().enumerate() {
+            if i.iter().all(|e| e.is_field()) {
+                scales[idx] = 1.0;
+                shapes[idx] = vec![i.len()];
+            }
+        }
 
-        // unquantize data
-        let float_data = data
-            .iter()
-            .map(|t| t.iter().map(|e| (e.to_float() as f32)).collect_vec())
-            .collect::<Vec<Vec<f32>>>();
-
-        let calls_to_accounts = test_on_chain_data(client.clone(), &float_data).await?;
+        let calls_to_accounts = test_on_chain_data(client.clone(), &data).await?;
         debug!("Calls to accounts: {:?}", calls_to_accounts);
         let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
         debug!("Inputs: {:?}", inputs);
@@ -348,6 +363,7 @@ pub enum DataSource {
     #[cfg(not(target_arch = "wasm32"))]
     DB(PostgresSource),
 }
+
 impl Default for DataSource {
     fn default() -> Self {
         DataSource::File(vec![vec![]])

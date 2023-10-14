@@ -1,4 +1,5 @@
-use crate::graph::input::{CallsToAccount, GraphData};
+use crate::graph::input::{CallsToAccount, FileSourceInner, GraphData};
+use crate::graph::modules::{ELGAMAL_INSTANCES, POSEIDON_INSTANCES};
 use crate::graph::DataSource;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::GraphSettings;
@@ -26,9 +27,9 @@ use ethers::{
     prelude::{LocalWallet, Wallet},
     utils::{Anvil, AnvilInstance},
 };
+use halo2_solidity_verifier::encode_calldata;
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
-use halo2_solidity_verifier::encode_calldata;
 use log::{debug, info, warn};
 use std::error::Error;
 use std::path::PathBuf;
@@ -140,7 +141,31 @@ pub async fn deploy_da_verifier_via_solidity(
     // The data that will be stored in the test contracts that will eventually be read from.
     let mut calls_to_accounts = vec![];
 
-    let instance_shapes = settings.model_instance_shapes;
+    let mut instance_shapes = vec![];
+
+    if settings.run_args.input_visibility.is_hashed() {
+        instance_shapes.push(POSEIDON_INSTANCES)
+    } else if settings.run_args.input_visibility.is_encrypted() {
+        instance_shapes.push(ELGAMAL_INSTANCES)
+    }
+
+    if settings.run_args.param_visibility.is_hashed() {
+        instance_shapes.push(POSEIDON_INSTANCES)
+    } else if settings.run_args.param_visibility.is_encrypted() {
+        instance_shapes.push(ELGAMAL_INSTANCES)
+    }
+
+    for shape in settings.model_instance_shapes {
+        instance_shapes.push(shape.iter().product::<usize>());
+    }
+
+    if settings.run_args.output_visibility.is_hashed() {
+        instance_shapes.push(POSEIDON_INSTANCES)
+    } else if settings.run_args.output_visibility.is_encrypted() {
+        instance_shapes.push(ELGAMAL_INSTANCES)
+    }
+
+    println!("instance_shapes: {:#?}", instance_shapes);
 
     let mut instance_idx = 0;
     let mut contract_instance_offset = 0;
@@ -153,10 +178,9 @@ pub async fn deploy_da_verifier_via_solidity(
 
         // give each input a scale
         for scale in input_scales {
-            scales.extend(vec![
-                scale;
-                instance_shapes[instance_idx].iter().product::<usize>()
-            ]);
+            println!("scale: {:#?}", scale);
+            println!("instance_idx: {:#?}", instance_idx);
+            scales.extend(vec![scale; instance_shapes[instance_idx]]);
             instance_idx += 1;
         }
     } else if let DataSource::File(source) = input.input_data {
@@ -176,10 +200,7 @@ pub async fn deploy_da_verifier_via_solidity(
 
         // give each input a scale
         for scale in output_scales {
-            scales.extend(vec![
-                scale;
-                instance_shapes[instance_idx].iter().product::<usize>()
-            ]);
+            scales.extend(vec![scale; instance_shapes[instance_idx]]);
             instance_idx += 1;
         }
     }
@@ -310,11 +331,7 @@ pub async fn verify_proof_via_solidity(
 ) -> Result<bool, Box<dyn Error>> {
     let flattened_instances = proof.instances.into_iter().flatten();
 
-    let encoded = encode_calldata(
-        None,
-        &proof.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
+    let encoded = encode_calldata(None, &proof.proof, &flattened_instances.collect::<Vec<_>>());
 
     info!("encoded: {:#?}", hex::encode(&encoded));
     let (anvil, client) = setup_eth_backend(rpc_url, None).await?;
@@ -374,7 +391,7 @@ fn count_decimal_places(num: f32) -> usize {
 ///
 pub async fn setup_test_contract<M: 'static + Middleware>(
     client: Arc<M>,
-    data: &[Vec<f32>],
+    data: &[Vec<FileSourceInner>],
 ) -> Result<(ContractInstance<Arc<M>, M>, Vec<u8>), Box<dyn Error>> {
     // save the abi to a tmp file
     let mut sol_path = std::env::temp_dir();
@@ -391,10 +408,18 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
     let mut decimals = vec![];
     let mut scaled_by_decimals_data = vec![];
     for input in &data[0] {
-        let decimal_places = count_decimal_places(*input) as u8;
-        let scaled_by_decimals = input * f32::powf(10., decimal_places.into());
-        scaled_by_decimals_data.push(scaled_by_decimals as i128);
-        decimals.push(decimal_places);
+        if input.is_float() {
+            let input = input.to_float() as f32;
+            let decimal_places = count_decimal_places(input) as u8;
+            let scaled_by_decimals = input * f32::powf(10., decimal_places.into());
+            scaled_by_decimals_data.push(I256::from(scaled_by_decimals as i128));
+            decimals.push(decimal_places);
+        } else if input.is_field() {
+            let input = input.to_field(0);
+            let hex_str_fr = format!("{:?}", input);
+            scaled_by_decimals_data.push(I256::from_raw(U256::from_str_radix(&hex_str_fr, 16)?));
+            decimals.push(0);
+        }
     }
 
     let contract = factory.deploy(scaled_by_decimals_data)?.send().await?;
@@ -421,11 +446,8 @@ pub async fn verify_proof_with_data_attestation(
         public_inputs.push(u);
     }
 
-    let encoded_verifier = encode_calldata(
-        None,
-        &proof.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
+    let encoded_verifier =
+        encode_calldata(None, &proof.proof, &flattened_instances.collect::<Vec<_>>());
 
     info!("encoded: {:#?}", hex::encode(&encoded_verifier));
 
@@ -504,7 +526,7 @@ pub fn get_provider(rpc_url: &str) -> Result<Provider<Http>, Box<dyn Error>> {
 /// the number of decimals of the floating point value on chain.
 pub async fn test_on_chain_data<M: 'static + Middleware>(
     client: Arc<M>,
-    data: &[Vec<f32>],
+    data: &[Vec<FileSourceInner>],
 ) -> Result<Vec<CallsToAccount>, Box<dyn Error>> {
     let (contract, decimals) = setup_test_contract(client.clone(), data).await?;
 
@@ -680,13 +702,13 @@ pub fn fix_da_sol(
     let mut accounts_len = 0;
     let mut contract = ATTESTDATA_SOL.to_string();
     let load_instances = LOADINSTANCES_SOL.to_string();
-    // replace the import statment with the load_instances contract, not including the 
+    // replace the import statment with the load_instances contract, not including the
     // `SPDX-License-Identifier: MIT pragma solidity ^0.8.20;` at the top of the file
     contract = contract.replace(
         "import './LoadInstances.sol';",
         &load_instances[load_instances.find("contract").unwrap()..],
     );
-    
+
     // fill in the quantization params and total calls
     // as constants to the contract to save on gas
     if let Some(input_data) = input_data {
