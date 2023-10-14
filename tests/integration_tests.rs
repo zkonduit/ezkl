@@ -2533,20 +2533,6 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
-                "-D",
-                test_on_chain_data_path.as_str(),
-                "-M",
-                &model_path,
-                "-O",
-                &witness_path,
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
                 "setup",
                 "-M",
                 &model_path,
