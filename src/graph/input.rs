@@ -290,7 +290,7 @@ impl OnChainSource {
         // set scales to 1 where data is a field element
         for (idx, i) in data.iter().enumerate() {
             if i.iter().all(|e| e.is_field()) {
-                scales[idx] = 1.0;
+                scales[idx] = scale_to_multiplier(0);
                 shapes[idx] = vec![i.len()];
             }
         }
