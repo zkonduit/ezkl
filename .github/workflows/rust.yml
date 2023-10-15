@@ -257,6 +257,8 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_output_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs & outputs)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + on chain inputs & outputs hashes)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_hashed_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed inputs)
@@ -445,7 +447,7 @@ jobs:
         run: cargo nextest run neg_tests::neg_examples_
 
   python-tests:
-    runs-on: 256gb
+    runs-on: self-hosted
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4

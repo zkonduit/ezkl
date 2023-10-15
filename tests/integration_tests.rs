@@ -898,12 +898,10 @@ mod native_tests {
                 fn kzg_evm_on_chain_input_output_hashed_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
-                    let path = test_dir.into_path();
-                    let path = path.to_str().unwrap();
-                    crate::native_tests::mv_test_(path, test);
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(true);
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed");
-                    // test_dir.close().unwrap();
+                    test_dir.close().unwrap();
                 }
             });
 
