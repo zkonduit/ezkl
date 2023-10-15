@@ -1685,9 +1685,6 @@ pub(crate) async fn deploy_model(
     //make form part of file
     let input_file = reqwest::multipart::Part::stream(input_file_body).file_name("input");
 
-    // let organization_id = "4ad1aa99-3fbe-430f-9eee-53312b93ee90";
-    // let organization_id = reqwest::multipart::Part::text("samtvlabs");
-
     // the graphql request map
     let map = r#"{
             "uncompiledModel": [
@@ -1726,7 +1723,7 @@ pub(crate) async fn deploy_model(
 }
 
 /// Generates proofs on the hub
-pub(crate) async fn hub_prove(
+pub async fn hub_prove(
     url: Option<&str>,
     id: &str,
     input: &PathBuf,

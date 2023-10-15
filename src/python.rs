@@ -1089,31 +1089,46 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
 
 /// deploys a model to the hub
 #[pyfunction(signature = (url, model, input))]
-pub async fn deploy_model(url: &str, model: PathBuf, input: PathBuf) -> Result<bool, PyErr> {
-    crate::execute::deploy_model(Some(url), &model, &input)
-        .await
+pub fn deploy_model(url: Option<&str>, model: PathBuf, input: PathBuf) -> PyResult<PyObject> {
+    let output = Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::deploy_model(url, &model, &input))
         .map_err(|e| {
             let err_str = format!("Failed to deploy model to hub: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
-    Ok(true)
+    Python::with_gil(|py| Ok(output.to_object(py)))
 }
 
 /// Generate a proof on the hub.
-#[pyfunction(signature = (url, model, input))]
-pub async fn hub_prove(
+#[pyfunction(signature = (url, id, input, transcript_type))]
+pub fn hub_prove(
     url: Option<&str>,
     id: &str,
-    input: &PathBuf,
+    input: PathBuf,
     transcript_type: Option<&str>,
-) -> Result<bool, PyErr> {
-    crate::execute::hub_prove(Some(url), id, input, transcript_type)
-        .await
+) -> PyResult<PyObject> {
+    let output = Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::hub_prove(url, id, &input, transcript_type))
         .map_err(|e| {
-            let err_str = format!("Failed to deploy model to hub: {}", e);
+            let err_str = format!("Failed to generate proof on hub: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
-    Ok(true)
+    Python::with_gil(|py| Ok(output.to_object(py)))
+}
+
+/// Fetches proof from hub
+#[pyfunction(signature = (url, id))]
+fn get_hub_proof(url: Option<&str>, id: &str) -> PyResult<PyObject> {
+    let output = Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::get_hub_proof(url, id))
+        .map_err(|e| {
+            let err_str = format!("Failed to get proof from hub: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+    Python::with_gil(|py| Ok(output.to_object(py)))
 }
 
 // Python Module
@@ -1161,6 +1176,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_model, m)?)?;
     m.add_function(wrap_pyfunction!(hub_prove, m)?)?;
+    m.add_function(wrap_pyfunction!(get_hub_proof, m)?)?;
 
     Ok(())
 }
