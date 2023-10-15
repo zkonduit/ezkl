@@ -142,15 +142,17 @@ pub async fn deploy_da_verifier_via_solidity(
     let mut calls_to_accounts = vec![];
 
     let mut instance_shapes = vec![];
+    let mut model_instance_offset = 0;
 
     if settings.run_args.input_visibility.is_hashed() {
         instance_shapes.push(POSEIDON_INSTANCES)
     } else if settings.run_args.input_visibility.is_encrypted() {
         instance_shapes.push(ELGAMAL_INSTANCES)
-    } else {
-        for idx in 0..(settings.model_input_scales.len() - 1) {
+    } else if settings.run_args.input_visibility.is_public() {
+        for idx in 0..settings.model_input_scales.len() {
             let shape = &settings.model_instance_shapes[idx];
             instance_shapes.push(shape.iter().product::<usize>());
+            model_instance_offset += 1;
         }
     }
 
@@ -164,8 +166,9 @@ pub async fn deploy_da_verifier_via_solidity(
         instance_shapes.push(POSEIDON_INSTANCES)
     } else if settings.run_args.output_visibility.is_encrypted() {
         instance_shapes.push(ELGAMAL_INSTANCES)
-    } else {
-        for idx in 0..(settings.model_output_scales.len() - 1) {
+    } else if settings.run_args.output_visibility.is_public() {
+        for idx in model_instance_offset..model_instance_offset + settings.model_output_scales.len()
+        {
             let shape = &settings.model_instance_shapes[idx];
             instance_shapes.push(shape.iter().product::<usize>());
         }
