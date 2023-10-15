@@ -4,8 +4,8 @@ mod native_tests {
 
     use core::panic;
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
-    use ezkl::graph::input::{FileSource, GraphData};
-    use ezkl::graph::{DataSource, GraphSettings, Visibility};
+    use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
+    use ezkl::graph::{DataSource, GraphSettings, GraphWitness, Visibility};
     use lazy_static::lazy_static;
     use rand::Rng;
     use std::env::var;
@@ -870,7 +870,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(true);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private");
                     test_dir.close().unwrap();
                 }
 
@@ -880,7 +880,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(true);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public");
                     test_dir.close().unwrap();
                 }
 
@@ -890,7 +890,17 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                     let _anvil_child = crate::native_tests::start_anvil(true);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "public", "public");
+                    test_dir.close().unwrap();
+                }
+
+                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
+                fn kzg_evm_on_chain_input_output_hashed_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let _anvil_child = crate::native_tests::start_anvil(true);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed");
                     test_dir.close().unwrap();
                 }
             });
@@ -2411,10 +2421,9 @@ mod native_tests {
         example_name: String,
         input_source: &str,
         output_source: &str,
+        input_visbility: &str,
+        output_visbility: &str,
     ) {
-        // set up the circuit
-        let input_visbility = "public";
-        let output_visbility = "public";
         let model_path = format!("{}/{}/network.onnx", test_dir, example_name);
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
 
@@ -2464,6 +2473,47 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
+                "gen-witness",
+                "-D",
+                data_path.as_str(),
+                "-M",
+                &model_path,
+                "-O",
+                &witness_path,
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // load witness
+        let witness: GraphWitness = GraphWitness::from_path(witness_path.clone().into()).unwrap();
+        let mut input: GraphData = GraphData::from_path(data_path.clone().into()).unwrap();
+
+        if input_visbility == "hashed" {
+            let hashes = witness.processed_inputs.unwrap().poseidon_hash.unwrap();
+            input.input_data = DataSource::File(
+                hashes
+                    .iter()
+                    .map(|h| vec![FileSourceInner::Field(*h)])
+                    .collect(),
+            );
+        }
+        if output_visbility == "hashed" {
+            let hashes = witness.processed_outputs.unwrap().poseidon_hash.unwrap();
+            input.output_data = Some(DataSource::File(
+                hashes
+                    .iter()
+                    .map(|h| vec![FileSourceInner::Field(*h)])
+                    .collect(),
+            ));
+        }
+
+        println!("input is {:?}", input);
+
+        input.save(data_path.clone().into()).unwrap();
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
                 "setup-test-evm-data",
                 "-D",
                 data_path.as_str(),
@@ -2474,20 +2524,6 @@ mod native_tests {
                 rpc_arg.as_str(),
                 test_input_source.as_str(),
                 test_output_source.as_str(),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "gen-witness",
-                "-D",
-                test_on_chain_data_path.as_str(),
-                "-M",
-                &model_path,
-                "-O",
-                &witness_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -2653,7 +2689,7 @@ mod native_tests {
 
         let deployed_addr_arg = format!("--addr={}", addr_da);
 
-        let mut args = vec![
+        let args = vec![
             "test-update-account-calls",
             deployed_addr_arg.as_str(),
             "-D",
@@ -2667,7 +2703,14 @@ mod native_tests {
 
         assert!(status.success());
         // As sanity check, add example that should fail.
-        args[2] = PF_FAILURE;
+        let args = vec![
+            "verify-evm",
+            "--proof-path",
+            PF_FAILURE,
+            deployed_addr_verifier_arg.as_str(),
+            deployed_addr_da_arg.as_str(),
+            rpc_arg.as_str(),
+        ];
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(args)
             .status()

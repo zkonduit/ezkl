@@ -904,8 +904,8 @@ pub(crate) fn create_evm_data_attestation(
     let data = GraphData::from_path(input)?;
 
     let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
-        if !visibility.output.is_public() {
-            todo!("we currently don't support private output data on chain")
+        if visibility.output.is_private() {
+            todo!("private output data on chain is not supported on chain")
         }
         let mut on_chain_output_data = vec![];
         for call in source.calls {
@@ -917,7 +917,7 @@ pub(crate) fn create_evm_data_attestation(
     };
 
     let input_data = if let DataSource::OnChain(source) = data.input_data {
-        if !visibility.input.is_public() {
+        if visibility.input.is_private() {
             todo!("we currently don't support private input data on chain")
         }
         let mut on_chain_input_data = vec![];
