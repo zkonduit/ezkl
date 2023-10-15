@@ -705,7 +705,7 @@ impl GraphCircuit {
         // quantize the supplied data using the provided scale + QuantizeData.sol
         let quantized_evm_inputs = evm_quantize(
             client,
-            scales.into_iter().map(scale_to_multiplier).collect(),
+            scales,
             &inputs,
         )
         .await?;

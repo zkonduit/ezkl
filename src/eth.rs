@@ -161,14 +161,6 @@ pub async fn deploy_da_verifier_via_solidity(
     //     instance_shapes.push(ELGAMAL_INSTANCES)
     // }
 
-    // for idx in 0..settings.model_input_scales.len() {
-    //     let shape = &settings.model_instance_shapes[idx];
-    //     instance_shapes.push(shape.iter().product::<usize>());
-    // }
-
-    // for shape in settings.model_instance_shapes {
-    //     instance_shapes.push(shape.iter().product::<usize>());
-    // }
 
     if settings.run_args.output_visibility.is_hashed() {
         instance_shapes.push(POSEIDON_INSTANCES)
@@ -634,7 +626,7 @@ pub async fn read_on_chain_inputs<M: 'static + Middleware>(
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn evm_quantize<M: 'static + Middleware>(
     client: Arc<M>,
-    scales: Vec<f64>,
+    scales: Vec<u32>,
     data: &(Vec<ethers::types::Bytes>, Vec<u8>),
 ) -> Result<Vec<Fr>, Box<dyn Error>> {
     // save the sol to a tmp file

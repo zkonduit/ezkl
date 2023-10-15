@@ -278,7 +278,6 @@ impl OnChainSource {
         rpc: Option<&str>,
     ) -> Result<(Vec<Tensor<Fp>>, Self), Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
-        use crate::graph::scale_to_multiplier;
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
@@ -286,11 +285,11 @@ impl OnChainSource {
 
         let address = client.address();
 
-        let mut scales: Vec<f64> = scales.into_iter().map(scale_to_multiplier).collect();
+        let mut scales: Vec<u32> = scales;
         // set scales to 1 where data is a field element
         for (idx, i) in data.iter().enumerate() {
             if i.iter().all(|e| e.is_field()) {
-                scales[idx] = scale_to_multiplier(0);
+                scales[idx] = 0;
                 shapes[idx] = vec![i.len()];
             }
         }
