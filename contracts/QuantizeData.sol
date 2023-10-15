@@ -114,8 +114,9 @@ contract QuantizeData {
             bool neg = x < 0;
             if (neg) x = -x;
             uint denom = 10 ** decimals[i];
-            uint output = mulDiv(uint256(x), scales[i], denom);
-            if (mulmod(uint256(x), scales[i], denom) * 2 >= denom) {
+            uint scale = 1 << scales[i];
+            uint output = mulDiv(uint256(x), scale, denom);
+            if (mulmod(uint256(x), scale, denom) * 2 >= denom) {
                 output += 1;
             }
 

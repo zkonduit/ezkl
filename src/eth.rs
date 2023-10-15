@@ -147,22 +147,30 @@ pub async fn deploy_da_verifier_via_solidity(
         instance_shapes.push(POSEIDON_INSTANCES)
     } else if settings.run_args.input_visibility.is_encrypted() {
         instance_shapes.push(ELGAMAL_INSTANCES)
+    } else {
+        for idx in 0..(settings.model_input_scales.len() - 1) {
+            let shape = &settings.model_instance_shapes[idx];
+            instance_shapes.push(shape.iter().product::<usize>());
+        }
     }
 
-    if settings.run_args.param_visibility.is_hashed() {
-        instance_shapes.push(POSEIDON_INSTANCES)
-    } else if settings.run_args.param_visibility.is_encrypted() {
-        instance_shapes.push(ELGAMAL_INSTANCES)
-    }
+    // TODO: Add support for attesting params later. 
+    // if settings.run_args.param_visibility.is_hashed() {
+    //     instance_shapes.push(POSEIDON_INSTANCES)
+    // } else if settings.run_args.param_visibility.is_encrypted() {
+    //     instance_shapes.push(ELGAMAL_INSTANCES)
+    // }
 
-    for shape in settings.model_instance_shapes {
-        instance_shapes.push(shape.iter().product::<usize>());
-    }
 
     if settings.run_args.output_visibility.is_hashed() {
         instance_shapes.push(POSEIDON_INSTANCES)
     } else if settings.run_args.output_visibility.is_encrypted() {
         instance_shapes.push(ELGAMAL_INSTANCES)
+    } else {
+        for idx in 0..(settings.model_output_scales.len() -1) {
+            let shape = &settings.model_instance_shapes[idx];
+            instance_shapes.push(shape.iter().product::<usize>());
+        }
     }
 
     println!("instance_shapes: {:#?}", instance_shapes);
@@ -171,20 +179,37 @@ pub async fn deploy_da_verifier_via_solidity(
     let mut contract_instance_offset = 0;
 
     if let DataSource::OnChain(source) = input.input_data {
-        let input_scales = settings.model_input_scales;
+        if settings.run_args.input_visibility.is_hashed_public() {
+            // set scales 1.0 
+            println!("scale: {:#?}", 0);
+            println!("instance_idx: {:#?}", instance_idx);
+            println!("instance_shapes: {:#?}", instance_shapes[instance_idx]);
+            scales.extend(vec![0; instance_shapes[instance_idx]]);
+            instance_idx += 1;
+        } else if settings.run_args.input_visibility.is_encrypted() {
+            // set scales 1.0 
+            println!("scale: {:#?}", 0);
+            println!("instance_idx: {:#?}", instance_idx);
+            println!("instance_shapes: {:#?}", instance_shapes[instance_idx]);
+            scales.extend(vec![0; instance_shapes[instance_idx]]);
+            instance_idx += 1;
+        } else {
+            let input_scales = settings.model_input_scales;
+            // give each input a scale
+            for scale in input_scales {
+                println!("scale: {:#?}", scale);
+                println!("instance_idx: {:#?}", instance_idx);
+                println!("instance_shapes: {:#?}", instance_shapes[instance_idx]);
+                scales.extend(vec![scale; instance_shapes[instance_idx]]);
+                instance_idx += 1;
+            }
+        }
         for call in source.calls {
             calls_to_accounts.push(call);
         }
 
-        // give each input a scale
-        for scale in input_scales {
-            println!("scale: {:#?}", scale);
-            println!("instance_idx: {:#?}", instance_idx);
-            scales.extend(vec![scale; instance_shapes[instance_idx]]);
-            instance_idx += 1;
-        }
     } else if let DataSource::File(source) = input.input_data {
-        if settings.run_args.input_visibility.is_public() {
+        if settings.run_args.input_visibility.is_public() { 
             instance_idx += source.len();
             for s in source {
                 contract_instance_offset += s.len();
@@ -193,15 +218,31 @@ pub async fn deploy_da_verifier_via_solidity(
     }
 
     if let Some(DataSource::OnChain(source)) = input.output_data {
-        let output_scales = settings.model_output_scales;
+        if settings.run_args.output_visibility.is_hashed_public() {
+            // set scales 1.0 
+            println!("scale: {:#?}", 0);
+            println!("instance_idx: {:#?}", instance_idx);
+            println!("instance_shapes: {:#?}", instance_shapes[instance_idx]);
+            scales.extend(vec![0; instance_shapes[instance_idx]]);
+        } else if settings.run_args.output_visibility.is_encrypted() {
+            // set scales 1.0 
+            println!("scale: {:#?}", 0);
+            println!("instance_idx: {:#?}", instance_idx);
+            println!("instance_shapes: {:#?}", instance_shapes[instance_idx]);
+            scales.extend(vec![0; instance_shapes[instance_idx]]);
+        } else {
+            let input_scales = settings.model_output_scales;
+            // give each output a scale
+            for scale in input_scales {
+                println!("scale: {:#?}", scale);
+                println!("instance_idx: {:#?}", instance_idx);
+                println!("instance_shapes: {:#?}", instance_shapes[instance_idx]);
+                scales.extend(vec![scale; instance_shapes[instance_idx]]);
+                instance_idx += 1;
+            }
+        }
         for call in source.calls {
             calls_to_accounts.push(call);
-        }
-
-        // give each input a scale
-        for scale in output_scales {
-            scales.extend(vec![scale; instance_shapes[instance_idx]]);
-            instance_idx += 1;
         }
     }
 
@@ -585,7 +626,7 @@ pub async fn read_on_chain_inputs<M: 'static + Middleware>(
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn evm_quantize<M: 'static + Middleware>(
     client: Arc<M>,
-    scales: Vec<f64>,
+    scales: Vec<u32>,
     data: &(Vec<ethers::types::Bytes>, Vec<u8>),
 ) -> Result<Vec<Fr>, Box<dyn Error>> {
     // save the sol to a tmp file
