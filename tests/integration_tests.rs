@@ -2691,7 +2691,7 @@ mod native_tests {
 
         let deployed_addr_arg = format!("--addr={}", addr_da);
 
-        let mut args = vec![
+        let args = vec![
             "test-update-account-calls",
             deployed_addr_arg.as_str(),
             "-D",
@@ -2705,7 +2705,14 @@ mod native_tests {
 
         assert!(status.success());
         // As sanity check, add example that should fail.
-        args[2] = PF_FAILURE;
+        let args = vec![
+            "verify-evm",
+            "--proof-path",
+            PF_FAILURE,
+            deployed_addr_verifier_arg.as_str(),
+            deployed_addr_da_arg.as_str(),
+            rpc_arg.as_str(),
+        ];
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(args)
             .status()

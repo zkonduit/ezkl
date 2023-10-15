@@ -917,7 +917,7 @@ pub(crate) fn create_evm_data_attestation(
     };
 
     let input_data = if let DataSource::OnChain(source) = data.input_data {
-        if visibility.output.is_private() {
+        if visibility.input.is_private() {
             todo!("we currently don't support private input data on chain")
         }
         let mut on_chain_input_data = vec![];
