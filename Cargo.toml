@@ -39,7 +39,7 @@ ethers = { version = "2.0.7", default_features = false, features = ["ethers-solc
 indicatif = {version = "0.17.5", features = ["rayon"]}
 gag =  { version = "1.0.0", default_features = false}
 instant = { version = "0.1" }
-reqwest = { version = "0.11.14", default-features = false, features = ["default-tls"] }
+reqwest = { version = "0.11.14", default-features = false, features = ["default-tls", "multipart", "stream"] }
 openssl = { version = "0.10.55", features = ["vendored"] }
 postgres = "0.19.5"
 pg_bigdecimal = "0.1.5"
@@ -48,6 +48,7 @@ colored_json =  { version = "3.0.1",  default_features = false, optional = true}
 plotters = { version = "0.3.0", default_features = false, optional = true }
 regex = { version = "1", default_features = false }
 tokio = { version = "1.26.0",  default_features = false, features = ["macros", "rt"] }
+tokio-util = { version = "0.7.9", features = ["codec"] }
 pyo3 = { version = "0.18.3", features = ["extension-module", "abi3-py37", "macros"],  default_features = false, optional = true }
 pyo3-asyncio = { version = "0.18.0",  features = ["attributes", "tokio-runtime"],  default_features = false, optional = true }
 pyo3-log = { version = "0.8.1", default_features = false, optional = true }

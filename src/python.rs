@@ -1087,6 +1087,35 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
     Ok(hex::encode(proof.proof))
 }
 
+/// deploys a model to the hub
+#[pyfunction(signature = (url, model, input))]
+pub async fn deploy_model(url: &str, model: PathBuf, input: PathBuf) -> Result<bool, PyErr> {
+    crate::execute::deploy_model(Some(url), &model, &input)
+        .await
+        .map_err(|e| {
+            let err_str = format!("Failed to deploy model to hub: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+    Ok(true)
+}
+
+/// Generate a proof on the hub.
+#[pyfunction(signature = (url, model, input))]
+pub async fn hub_prove(
+    url: Option<&str>,
+    id: &str,
+    input: &PathBuf,
+    transcript_type: Option<&str>,
+) -> Result<bool, PyErr> {
+    crate::execute::hub_prove(Some(url), id, input, transcript_type)
+        .await
+        .map_err(|e| {
+            let err_str = format!("Failed to deploy model to hub: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+    Ok(true)
+}
+
 // Python Module
 #[pymodule]
 fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
@@ -1130,6 +1159,8 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(print_proof_hex, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
+    m.add_function(wrap_pyfunction!(deploy_model, m)?)?;
+    m.add_function(wrap_pyfunction!(hub_prove, m)?)?;
 
     Ok(())
 }

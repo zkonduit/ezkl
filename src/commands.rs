@@ -625,4 +625,42 @@ pub enum Commands {
         #[arg(long)]
         proof_path: PathBuf,
     },
+
+    /// Create artifacts and deploys them on the hub
+    #[command(name = "create-hub-artifact", arg_required_else_help = true)]
+    CreateHubArtifact {
+        /// The path to the model file
+        #[arg(short = 'M', long)]
+        uncompiled_circuit: PathBuf,
+        /// The path to the input json file
+        #[arg(short = 'D', long)]
+        data: PathBuf,
+        #[arg(short = 'U', long)]
+        url: Option<String>,
+    },
+
+    /// Create artifacts and deploys them on the hub
+    #[command(name = "prove-hub", arg_required_else_help = true)]
+    ProveHub {
+        /// The path to the model file
+        #[arg(short = 'A', long)]
+        artifact_id: String,
+        /// The path to the input json file
+        #[arg(short = 'D', long)]
+        data: PathBuf,
+        #[arg(short = 'U', long)]
+        url: Option<String>,
+        #[arg(short = 'T', long)]
+        transcript_type: Option<String>,
+    },
+
+    /// Create artifacts and deploys them on the hub
+    #[command(name = "get-hub-proof", arg_required_else_help = true)]
+    GetHubProof {
+        /// The path to the model file
+        #[arg(short = 'A', long)]
+        artifact_id: String,
+        #[arg(short = 'U', long)]
+        url: Option<String>,
+    },
 }
