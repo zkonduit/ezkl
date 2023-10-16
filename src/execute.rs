@@ -49,6 +49,7 @@ use plotters::prelude::*;
 use rand::Rng;
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use serde_json::Value;
 #[cfg(not(target_arch = "wasm32"))]
 use std::collections::HashMap;
 use std::error::Error;
@@ -339,35 +340,40 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             addr_da,
         } => verify_evm(proof_path, addr_verifier, rpc_url, addr_da).await,
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::GetHubCredentials { username, url } => {
+            get_hub_credentials(url.as_deref(), &username)
+                .await
+                .map(|_| ())
+        }
 
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateHubArtifact {
             uncompiled_circuit,
             data,
+            organization_id,
             url,
-        } => deploy_model(url.as_deref(), &uncompiled_circuit, &data).await,
-
+        } => deploy_model(url.as_deref(), &uncompiled_circuit, &organization_id, &data)
+            .await
+            .map(|_| ()),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::GetHubProof { artifact_id, url } => {
-            get_hub_proof(url.as_deref(), &artifact_id).await
-        }
-        // deploy_model(url.as_deref(), &uncompiled_circuit, &data).await
+        Commands::GetHubProof { artifact_id, url } => get_hub_proof(url.as_deref(), &artifact_id)
+            .await
+            .map(|_| ()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::ProveHub {
             artifact_id,
             data,
             transcript_type,
             url,
-        } => {
-            hub_prove(
-                url.as_deref(),
-                &artifact_id,
-                &data,
-                transcript_type.as_deref(),
-            )
-            .await
-        } // unimplemented!();
-          // deploy_model(url.as_deref(), &uncompiled_circuit, &data).await
+        } => hub_prove(
+            url.as_deref(),
+            &artifact_id,
+            &data,
+            transcript_type.as_deref(),
+        )
+        .await
+        .map(|_| ()),
     }
 }
 
@@ -1664,12 +1670,44 @@ pub async fn get_access_token(
     Ok(access_token)
 }
 
+/// Retrieves the user's credentials from the hub
+pub(crate) async fn get_hub_credentials(
+    url: Option<&str>,
+    username: &str,
+) -> Result<serde_json::Value, Box<dyn Error>> {
+    let client = reqwest::Client::new();
+    let request_body = serde_json::json!({
+        "query": r#"
+            query GetOrganizationId($username: String!) {
+                organizations(name: $username) {
+                    id
+                    name
+                }
+            }
+        "#,
+        "variables": {
+            "username": username,
+        }
+    });
+    let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
+
+    let response = client.post(url).json(&request_body).send().await?;
+    let response_body = response.json::<serde_json::Value>().await?;
+    let response_json: Value = serde_json::from_value(response_body)?;
+    log::info!(
+        "Organization ID : {}",
+        response_json["data"]["organizations"][0]["id"]
+    );
+    Ok(response_json)
+}
+
 /// Deploy a model
 pub(crate) async fn deploy_model(
     url: Option<&str>,
     model: &PathBuf,
+    organization_id: &str,
     input: &PathBuf,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<serde_json::Value, Box<dyn Error>> {
     let model_file = tokio::fs::File::open(model.canonicalize()?).await?;
     // read file body stream
     let stream = FramedRead::new(model_file, BytesCodec::new());
@@ -1695,16 +1733,27 @@ pub(crate) async fn deploy_model(
             ]
         }"#;
 
-    // the graphql request operations
-    // TODO: Remove hard coded org id.
-    let operations = r#"{
-            "query": "mutation($uncompiledModel: Upload!, $input: Upload!, $organizationId: String! ) {\n generateArtifact(\n name: \"test tree\" \n description: \"test tree\" \n uncompiledModel: $uncompiledModel \n input: $input \n organizationId: $organizationId  ) { \n artifact { id } \n  }}",
-            "variables": {
-                "uncompiledModel": null,
-                "input": null,
-                "organizationId": "35337633-bce8-4a72-84e1-9b7cdf3edfc5"
-            }
-        }"#;
+    let operations = serde_json::json!({
+        "query": "mutation($uncompiledModel: Upload!, $input: Upload!, $organizationId: String!) {
+                generateArtifact(
+                    name: \"test tree\",
+                    description: \"test tree\",
+                    uncompiledModel: $uncompiledModel,
+                    input: $input,
+                    organizationId: $organizationId
+                ) {
+                    artifact {
+                        id
+                    }
+                }
+            }",
+        "variables": {
+            "uncompiledModel": null,
+            "input": null,
+            "organizationId": organization_id
+        }
+    })
+    .to_string();
 
     // now the form data
     let mut form = reqwest::multipart::Form::new();
@@ -1718,8 +1767,13 @@ pub(crate) async fn deploy_model(
     let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
     //send request
     let response = client.post(url).multipart(form).send().await?;
-    log::info!("{}: {}", response.status(), response.text().await?);
-    Ok(())
+    let response_body = response.json::<serde_json::Value>().await?;
+    let response_json: Value = serde_json::from_value(response_body)?;
+    log::info!(
+        "Artifact ID : {}",
+        response_json["data"]["generateArtifact"]["artifact"]["id"]
+    );
+    Ok(response_json)
 }
 
 /// Generates proofs on the hub
@@ -1728,7 +1782,7 @@ pub async fn hub_prove(
     id: &str,
     input: &PathBuf,
     transcript_type: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let input_file = tokio::fs::File::open(input.canonicalize()?).await?;
     let stream = FramedRead::new(input_file, BytesCodec::new());
     let input_file_body = reqwest::Body::wrap_stream(stream);
@@ -1765,26 +1819,31 @@ pub async fn hub_prove(
     let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
     let client = reqwest::Client::new();
     let response = client.post(url).multipart(form).send().await?;
-    println!("{}: {}", response.status(), response.text().await?);
-
-    Ok(())
+    let response_body = response.json::<serde_json::Value>().await?;
+    let response_json: Value = serde_json::from_value(response_body)?;
+    log::info!(
+        "Proof ID : {}",
+        response_json["data"]["initiateProof"]["id"]
+    );
+    Ok(response_json)
 }
 
 /// Fetches proofs from the hub
-pub(crate) async fn get_hub_proof(url: Option<&str>, id: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) async fn get_hub_proof(
+    url: Option<&str>,
+    id: &str,
+) -> Result<serde_json::Value, Box<dyn Error>> {
     let client = reqwest::Client::new();
     let request_body = serde_json::json!({
         "query": format!(r#"
             query {{
                 getProof(id: "{}") {{
                     id
-                    artifact_id
-                    created_at
-                    time_taken
+                    artifact {{ id name }}
                     status
                     proof
-                    _instances
-                    transcript_type
+                    instances
+                    transcriptType
                     strategy
                 }}
             }}
@@ -1793,9 +1852,10 @@ pub(crate) async fn get_hub_proof(url: Option<&str>, id: &str) -> Result<(), Box
     let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
 
     let response = client.post(url).json(&request_body).send().await?;
-
-    println!("{}: {}", response.status(), response.text().await?);
-    Ok(())
+    let response_body = response.json::<serde_json::Value>().await?;
+    let response_json: Value = serde_json::from_value(response_body)?;
+    log::info!("Proof : {}", response_json);
+    Ok(response_json)
 }
 
 /// helper function for load_params
