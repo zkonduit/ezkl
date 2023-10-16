@@ -88,17 +88,17 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow (wasi)
-        run: RUST_LOG=debug cargo wasi test --release lookup_ultra_overflow -- --include-ignored --nocapture
+        run: cargo wasi test --release lookup_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow (wasi)
-        run: RUST_LOG=debug cargo nextest run  --release lookup_ultra_overflow --no-capture -- --include-ignored
+        run: cargo nextest run  --release lookup_ultra_overflow --no-capture -- --include-ignored
       - name: Conv + relu overflow (wasi)
-        run: RUST_LOG=debug cargo wasi test --release conv_relu_col_ultra_overflow -- --include-ignored --nocapture
+        run: cargo wasi test --release conv_relu_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Matmul overflow
       #   run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture -- --include-ignored
       # - name: Conv overflow
       #   run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv + relu overflow
-        run: RUST_LOG=debug cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture -- --include-ignored
+        run:  cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture -- --include-ignored
 
   model-serialization:
     runs-on: ubuntu-latest-16-cores
@@ -257,6 +257,8 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_output_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs & outputs)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + on chain inputs & outputs hashes)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_hashed_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed inputs)
@@ -445,7 +447,7 @@ jobs:
         run: cargo nextest run neg_tests::neg_examples_
 
   python-tests:
-    runs-on: 256gb
+    runs-on: self-hosted
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -550,9 +552,11 @@ jobs:
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
       - name: Simple hub demo
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
+      - name: Hashed DA tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_24_expects
       - name: Little transformer tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects --no-capture
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects
       - name: Stacked Regression tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_23_expects
       - name: Linear Regression tutorial
@@ -595,7 +599,7 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
       - name: Hashed tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_3_expects
-      - name: Data attestation tutorial
+      - name: DA tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
       - name: Variance tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
