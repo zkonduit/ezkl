@@ -45,11 +45,18 @@ use log::debug;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
+// use pyo3::exceptions::{PyIOError, PyRuntimeError, PyTypeError};
+// use pyo3::prelude::*;
+// use pyo3::wrap_pyfunction;
+// use pyo3_log;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use serde_json::Value;
+#[cfg(not(target_arch = "wasm32"))]
+use serde::{Deserialize, Serialize};
+// use serde_json::Value;
+// use serde_json::Value;
 #[cfg(not(target_arch = "wasm32"))]
 use std::collections::HashMap;
 use std::error::Error;
@@ -104,6 +111,57 @@ fn check_solc_requirement() {
     });
 }
 
+/// Stores users organizations
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Organization {
+    /// The organization id
+    pub id: String,
+    /// The users username
+    pub name: String,
+}
+
+/// Stores Organization
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Organizations {
+    /// An Array of Organizations
+    pub organizations: Vec<Organization>,
+}
+
+/// Stores the Proof Response
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Proof {
+    /// stores the artifact
+    pub artifact: Option<Artifact>,
+    /// stores the Proof Id
+    pub id: String,
+    /// stores the instances
+    pub instances: Option<Vec<String>>,
+    /// stores the proofs
+    pub proof: Option<String>,
+    /// stores the status
+    pub status: Option<String>,
+    ///stores the strategy
+    pub strategy: Option<String>,
+    /// stores the transcript type
+    #[serde(rename = "transcriptType")]
+    pub transcript_type: Option<String>,
+}
+
+/// Stores the Artifacts
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Artifact {
+    ///stores the aritfact id
+    pub id: Option<String>,
+    /// stores the name of the artifact
+    pub name: Option<String>,
+}
+
+// /// Stores the Proof ID
+// #[derive(Debug, Deserialize)]
+// pub struct Proof {
+//     ///stores the proof id
+//     pub id: String,
+// }
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum ExecutionError {
@@ -1674,7 +1732,7 @@ pub async fn get_access_token(
 pub(crate) async fn get_hub_credentials(
     url: Option<&str>,
     username: &str,
-) -> Result<serde_json::Value, Box<dyn Error>> {
+) -> Result<Organizations, Box<dyn Error>> {
     let client = reqwest::Client::new();
     let request_body = serde_json::json!({
         "query": r#"
@@ -1693,12 +1751,14 @@ pub(crate) async fn get_hub_credentials(
 
     let response = client.post(url).json(&request_body).send().await?;
     let response_body = response.json::<serde_json::Value>().await?;
-    let response_json: Value = serde_json::from_value(response_body)?;
-    log::info!(
-        "Organization ID : {}",
-        response_json["data"]["organizations"][0]["id"]
-    );
-    Ok(response_json)
+    // let response_json: Value = serde_json::from_value(response_body)?;
+    // let organizations: Organizations = serde_json::from_value(response_json["data"].clone())?;
+    let organizations: Organizations = serde_json::from_value(response_body["data"].clone())?;
+    //     "Organization ID : {}",
+    //     response_json["data"]["organizations"][0]["id"]
+    // );
+    log::info!("Organization ID : {:?}", organizations);
+    Ok(organizations)
 }
 
 /// Deploy a model
@@ -1707,7 +1767,7 @@ pub(crate) async fn deploy_model(
     model: &PathBuf,
     organization_id: &str,
     input: &PathBuf,
-) -> Result<serde_json::Value, Box<dyn Error>> {
+) -> Result<Artifact, Box<dyn Error>> {
     let model_file = tokio::fs::File::open(model.canonicalize()?).await?;
     // read file body stream
     let stream = FramedRead::new(model_file, BytesCodec::new());
@@ -1768,12 +1828,12 @@ pub(crate) async fn deploy_model(
     //send request
     let response = client.post(url).multipart(form).send().await?;
     let response_body = response.json::<serde_json::Value>().await?;
-    let response_json: Value = serde_json::from_value(response_body)?;
-    log::info!(
-        "Artifact ID : {}",
-        response_json["data"]["generateArtifact"]["artifact"]["id"]
-    );
-    Ok(response_json)
+    // let response_json: Value = serde_json::from_value(response_body)?;
+
+    let artifact_id: Artifact =
+        serde_json::from_value(response_body["data"]["generateArtifact"]["artifact"].clone())?;
+    log::info!("Artifact ID : {:?}", artifact_id);
+    Ok(artifact_id)
 }
 
 /// Generates proofs on the hub
@@ -1782,7 +1842,7 @@ pub async fn hub_prove(
     id: &str,
     input: &PathBuf,
     transcript_type: Option<&str>,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+) -> Result<Proof, Box<dyn std::error::Error>> {
     let input_file = tokio::fs::File::open(input.canonicalize()?).await?;
     let stream = FramedRead::new(input_file, BytesCodec::new());
     let input_file_body = reqwest::Body::wrap_stream(stream);
@@ -1820,19 +1880,13 @@ pub async fn hub_prove(
     let client = reqwest::Client::new();
     let response = client.post(url).multipart(form).send().await?;
     let response_body = response.json::<serde_json::Value>().await?;
-    let response_json: Value = serde_json::from_value(response_body)?;
-    log::info!(
-        "Proof ID : {}",
-        response_json["data"]["initiateProof"]["id"]
-    );
-    Ok(response_json)
+    let proof_id: Proof = serde_json::from_value(response_body["data"]["initiateProof"].clone())?;
+    log::info!("Proof ID : {:?}", proof_id);
+    Ok(proof_id)
 }
 
 /// Fetches proofs from the hub
-pub(crate) async fn get_hub_proof(
-    url: Option<&str>,
-    id: &str,
-) -> Result<serde_json::Value, Box<dyn Error>> {
+pub(crate) async fn get_hub_proof(url: Option<&str>, id: &str) -> Result<Proof, Box<dyn Error>> {
     let client = reqwest::Client::new();
     let request_body = serde_json::json!({
         "query": format!(r#"
@@ -1853,9 +1907,10 @@ pub(crate) async fn get_hub_proof(
 
     let response = client.post(url).json(&request_body).send().await?;
     let response_body = response.json::<serde_json::Value>().await?;
-    let response_json: Value = serde_json::from_value(response_body)?;
-    log::info!("Proof : {}", response_json);
-    Ok(response_json)
+    // let response_json: Value = serde_json::from_value(response_body)?;
+    let proof: Proof = serde_json::from_value(response_body["data"]["getProof"].clone())?;
+    log::info!("Proof : {:?}", proof);
+    Ok(proof)
 }
 
 /// helper function for load_params
