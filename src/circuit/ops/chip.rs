@@ -367,11 +367,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
                     let not_expr = Expression::Constant(multiplier) - col_expr.clone();
 
-                    let (default_x, default_y) = if len > 1 {
-                        table.get_first_element(col_idx)
-                    } else {
-                        nl.default_pair()
-                    };
+                    let (default_x, default_y) = table.get_first_element(col_idx);
 
                     res.extend([
                         (
