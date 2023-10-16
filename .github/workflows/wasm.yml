@@ -56,7 +56,7 @@ jobs:
               "nodejs/ezkl.js",
               "nodejs/ezkl.d.ts",
               "nodejs/package.json",
-              "nodejs/utils.js"
+              "nodejs/utils.js",
               "web/ezkl_bg.wasm",
               "web/ezkl.js",
               "web/ezkl.d.ts",
