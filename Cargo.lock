@@ -2254,7 +2254,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/chunked-mv-lookup#9abbccca7a3c8fe8335395ce4d62d05e48a4f42d"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/chunked-mv-lookup#2d71fd0794114ddbccd3e6f2daf6a3522b56fbac"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2271,7 +2271,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/chunked-mv-lookup#9abbccca7a3c8fe8335395ce4d62d05e48a4f42d"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/chunked-mv-lookup#2d71fd0794114ddbccd3e6f2daf6a3522b56fbac"
 dependencies = [
  "blake2b_simd",
  "env_logger",
