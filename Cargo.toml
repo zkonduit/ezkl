@@ -137,6 +137,11 @@ harness = false
 name = "accum_matmul_relu"
 harness = false
 
+
+[[bench]]
+name = "accum_matmul_relu_overflow"
+harness = false
+
 [[bin]]
 name = "ezkl"
 test = false
