@@ -62,7 +62,7 @@ jobs:
               "web/ezkl.d.ts",
               "web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js",
               "web/package.json",
-              "web/utils.js"
+              "web/utils.js",
               "ezkl.d.ts"
             ],
             "main": "nodejs/ezkl.js",
