@@ -45,20 +45,10 @@ use log::debug;
 use log::{info, trace};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
-// use pyo3::exceptions::{PyIOError, PyRuntimeError, PyTypeError};
-// use pyo3::prelude::*;
-// use pyo3::wrap_pyfunction;
-// use pyo3_log;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-#[cfg(not(target_arch = "wasm32"))]
-use serde::{Deserialize, Serialize};
-// use serde_json::Value;
-// use serde_json::Value;
-#[cfg(not(target_arch = "wasm32"))]
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
@@ -111,57 +101,6 @@ fn check_solc_requirement() {
     });
 }
 
-/// Stores users organizations
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Organization {
-    /// The organization id
-    pub id: String,
-    /// The users username
-    pub name: String,
-}
-
-/// Stores Organization
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Organizations {
-    /// An Array of Organizations
-    pub organizations: Vec<Organization>,
-}
-
-/// Stores the Proof Response
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Proof {
-    /// stores the artifact
-    pub artifact: Option<Artifact>,
-    /// stores the Proof Id
-    pub id: String,
-    /// stores the instances
-    pub instances: Option<Vec<String>>,
-    /// stores the proofs
-    pub proof: Option<String>,
-    /// stores the status
-    pub status: Option<String>,
-    ///stores the strategy
-    pub strategy: Option<String>,
-    /// stores the transcript type
-    #[serde(rename = "transcriptType")]
-    pub transcript_type: Option<String>,
-}
-
-/// Stores the Artifacts
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Artifact {
-    ///stores the aritfact id
-    pub id: Option<String>,
-    /// stores the name of the artifact
-    pub name: Option<String>,
-}
-
-// /// Stores the Proof ID
-// #[derive(Debug, Deserialize)]
-// pub struct Proof {
-//     ///stores the proof id
-//     pub id: String,
-// }
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum ExecutionError {
@@ -410,10 +349,21 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             uncompiled_circuit,
             data,
             organization_id,
+            artifact_name,
             url,
-        } => deploy_model(url.as_deref(), &uncompiled_circuit, &organization_id, &data)
-            .await
-            .map(|_| ()),
+            args,
+            target,
+        } => deploy_model(
+            url.as_deref(),
+            &uncompiled_circuit,
+            &data,
+            &artifact_name,
+            &organization_id,
+            &args,
+            &target,
+        )
+        .await
+        .map(|_| ()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::GetHubProof { artifact_id, url } => get_hub_proof(url.as_deref(), &artifact_id)
             .await
@@ -424,7 +374,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             data,
             transcript_type,
             url,
-        } => hub_prove(
+        } => prove_hub(
             url.as_deref(),
             &artifact_id,
             &data,
@@ -1705,34 +1655,11 @@ pub(crate) fn verify_aggr(
     Ok(())
 }
 
-/// Retrieves the access token from the hub
-pub async fn get_access_token(
-    client_id: &str,
-    client_secret: &str,
-    token_url: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let mut map = HashMap::new();
-    map.insert("client_id", client_id);
-    map.insert("client_secret", client_secret);
-    map.insert("grant_type", "client_credentials");
-
-    let client = reqwest::Client::new();
-    let res = client.post(token_url).json(&map).send().await?;
-
-    let json: HashMap<String, String> = res.json().await?;
-    let access_token = json
-        .get("access_token")
-        .ok_or("access_token not found")?
-        .to_string();
-
-    Ok(access_token)
-}
-
 /// Retrieves the user's credentials from the hub
 pub(crate) async fn get_hub_credentials(
     url: Option<&str>,
     username: &str,
-) -> Result<Organizations, Box<dyn Error>> {
+) -> Result<crate::hub::Organizations, Box<dyn Error>> {
     let client = reqwest::Client::new();
     let request_body = serde_json::json!({
         "query": r#"
@@ -1751,13 +1678,14 @@ pub(crate) async fn get_hub_credentials(
 
     let response = client.post(url).json(&request_body).send().await?;
     let response_body = response.json::<serde_json::Value>().await?;
-    // let response_json: Value = serde_json::from_value(response_body)?;
-    // let organizations: Organizations = serde_json::from_value(response_json["data"].clone())?;
-    let organizations: Organizations = serde_json::from_value(response_body["data"].clone())?;
-    //     "Organization ID : {}",
-    //     response_json["data"]["organizations"][0]["id"]
-    // );
-    log::info!("Organization ID : {:?}", organizations);
+
+    let organizations: crate::hub::Organizations =
+        serde_json::from_value(response_body["data"].clone())?;
+
+    log::info!(
+        "Organization ID : {}",
+        organizations.as_json()?.to_colored_json_auto()?
+    );
     Ok(organizations)
 }
 
@@ -1765,9 +1693,12 @@ pub(crate) async fn get_hub_credentials(
 pub(crate) async fn deploy_model(
     url: Option<&str>,
     model: &PathBuf,
-    organization_id: &str,
     input: &PathBuf,
-) -> Result<Artifact, Box<dyn Error>> {
+    name: &str,
+    organization_id: &str,
+    args: &RunArgs,
+    target: &CalibrationTarget,
+) -> Result<crate::hub::Artifact, Box<dyn Error>> {
     let model_file = tokio::fs::File::open(model.canonicalize()?).await?;
     // read file body stream
     let stream = FramedRead::new(model_file, BytesCodec::new());
@@ -1794,13 +1725,18 @@ pub(crate) async fn deploy_model(
         }"#;
 
     let operations = serde_json::json!({
-        "query": "mutation($uncompiledModel: Upload!, $input: Upload!, $organizationId: String!) {
+        "query": "mutation($uncompiledModel: Upload!, $input: Upload!, $organizationId: String!, $name: String!, $calibrationTarget: String!, $tolerance: Float!, $inputVisibility: String!, $outputVisibility: String!, $paramVisibility: String!) {
                 generateArtifact(
-                    name: \"test tree\",
-                    description: \"test tree\",
+                    name: $name,
+                    description: $name,
                     uncompiledModel: $uncompiledModel,
                     input: $input,
-                    organizationId: $organizationId
+                    organizationId: $organizationId, 
+                    calibrationTarget: $calibrationTarget, 
+                    tolerance: $tolerance, 
+                    inputVisibility: $inputVisibility,
+                    outputVisibility: $outputVisibility,
+                    paramVisibility: $paramVisibility,
                 ) {
                     artifact {
                         id
@@ -1808,9 +1744,15 @@ pub(crate) async fn deploy_model(
                 }
             }",
         "variables": {
+            "name": name,
             "uncompiledModel": null,
             "input": null,
-            "organizationId": organization_id
+            "organizationId": organization_id,
+            "calibrationTarget": target.to_string(),
+            "tolerance": args.tolerance.val,
+            "inputVisibility": args.input_visibility.to_string(),
+            "outputVisibility": args.output_visibility.to_string(),
+            "paramVisibility": args.param_visibility.to_string(),
         }
     })
     .to_string();
@@ -1828,21 +1770,23 @@ pub(crate) async fn deploy_model(
     //send request
     let response = client.post(url).multipart(form).send().await?;
     let response_body = response.json::<serde_json::Value>().await?;
-    // let response_json: Value = serde_json::from_value(response_body)?;
-
-    let artifact_id: Artifact =
+    println!("{}", response_body.to_string());
+    let artifact_id: crate::hub::Artifact =
         serde_json::from_value(response_body["data"]["generateArtifact"]["artifact"].clone())?;
-    log::info!("Artifact ID : {:?}", artifact_id);
+    log::info!(
+        "Artifact ID : {}",
+        artifact_id.as_json()?.to_colored_json_auto()?
+    );
     Ok(artifact_id)
 }
 
 /// Generates proofs on the hub
-pub async fn hub_prove(
+pub async fn prove_hub(
     url: Option<&str>,
     id: &str,
     input: &PathBuf,
     transcript_type: Option<&str>,
-) -> Result<Proof, Box<dyn std::error::Error>> {
+) -> Result<crate::hub::Proof, Box<dyn std::error::Error>> {
     let input_file = tokio::fs::File::open(input.canonicalize()?).await?;
     let stream = FramedRead::new(input_file, BytesCodec::new());
     let input_file_body = reqwest::Body::wrap_stream(stream);
@@ -1880,13 +1824,17 @@ pub async fn hub_prove(
     let client = reqwest::Client::new();
     let response = client.post(url).multipart(form).send().await?;
     let response_body = response.json::<serde_json::Value>().await?;
-    let proof_id: Proof = serde_json::from_value(response_body["data"]["initiateProof"].clone())?;
-    log::info!("Proof ID : {:?}", proof_id);
+    let proof_id: crate::hub::Proof =
+        serde_json::from_value(response_body["data"]["initiateProof"].clone())?;
+    log::info!("Proof ID : {}", proof_id.as_json()?.to_colored_json_auto()?);
     Ok(proof_id)
 }
 
 /// Fetches proofs from the hub
-pub(crate) async fn get_hub_proof(url: Option<&str>, id: &str) -> Result<Proof, Box<dyn Error>> {
+pub(crate) async fn get_hub_proof(
+    url: Option<&str>,
+    id: &str,
+) -> Result<crate::hub::Proof, Box<dyn Error>> {
     let client = reqwest::Client::new();
     let request_body = serde_json::json!({
         "query": format!(r#"
@@ -1907,9 +1855,11 @@ pub(crate) async fn get_hub_proof(url: Option<&str>, id: &str) -> Result<Proof, 
 
     let response = client.post(url).json(&request_body).send().await?;
     let response_body = response.json::<serde_json::Value>().await?;
-    // let response_json: Value = serde_json::from_value(response_body)?;
-    let proof: Proof = serde_json::from_value(response_body["data"]["getProof"].clone())?;
-    log::info!("Proof : {:?}", proof);
+
+    let proof: crate::hub::Proof =
+        serde_json::from_value(response_body["data"]["getProof"].clone())?;
+
+    log::info!("Proof : {}", proof.as_json()?.to_colored_json_auto()?);
     Ok(proof)
 }
 

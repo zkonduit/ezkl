@@ -1077,22 +1077,35 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)
         .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
 
-    // let mut return_string: String = "";
-    // for instance in proof.instances {
-    //     return_string.push_str(instance + "\n");
-    // }
-    // return_string = hex::encode(proof.proof);
-
-    // return proof for now
     Ok(hex::encode(proof.proof))
 }
 
 /// deploys a model to the hub
-#[pyfunction(signature = (url, model, input))]
-pub fn deploy_model(url: Option<&str>, model: PathBuf, input: PathBuf) -> PyResult<PyObject> {
+#[pyfunction(signature = (model, input, name, organization_id, target=None, py_run_args=None, url=None))]
+fn deploy_model(
+    model: PathBuf,
+    input: PathBuf,
+    name: String,
+    organization_id: String,
+    target: Option<CalibrationTarget>,
+    py_run_args: Option<PyRunArgs>,
+    url: Option<&str>,
+) -> PyResult<PyObject> {
+    let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
+    let target = target.unwrap_or(CalibrationTarget::Resources {
+        col_overflow: false,
+    });
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::deploy_model(url, &model, &input))
+        .block_on(crate::execute::deploy_model(
+            url,
+            &model,
+            &input,
+            &name,
+            &organization_id,
+            &run_args,
+            &target,
+        ))
         .map_err(|e| {
             let err_str = format!("Failed to deploy model to hub: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -1101,16 +1114,16 @@ pub fn deploy_model(url: Option<&str>, model: PathBuf, input: PathBuf) -> PyResu
 }
 
 /// Generate a proof on the hub.
-#[pyfunction(signature = (url, id, input, transcript_type))]
-pub fn hub_prove(
-    url: Option<&str>,
+#[pyfunction(signature = (id, input, url=None, transcript_type=None))]
+fn prove_hub(
     id: &str,
     input: PathBuf,
+    url: Option<&str>,
     transcript_type: Option<&str>,
 ) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::hub_prove(url, id, &input, transcript_type))
+        .block_on(crate::execute::prove_hub(url, id, &input, transcript_type))
         .map_err(|e| {
             let err_str = format!("Failed to generate proof on hub: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -1119,13 +1132,26 @@ pub fn hub_prove(
 }
 
 /// Fetches proof from hub
-#[pyfunction(signature = (url, id))]
-fn get_hub_proof(url: Option<&str>, id: &str) -> PyResult<PyObject> {
+#[pyfunction(signature = (id, url=None))]
+fn get_hub_proof(id: &str, url: Option<&str>) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
         .block_on(crate::execute::get_hub_proof(url, id))
         .map_err(|e| {
             let err_str = format!("Failed to get proof from hub: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+    Python::with_gil(|py| Ok(output.to_object(py)))
+}
+
+/// Gets hub credentials
+#[pyfunction(signature = (username, url=None))]
+fn get_hub_credentials(username: &str, url: Option<&str>) -> PyResult<PyObject> {
+    let output = Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::get_hub_credentials(url, username))
+        .map_err(|e| {
+            let err_str = format!("Failed to get hub credentials: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
     Python::with_gil(|py| Ok(output.to_object(py)))
@@ -1175,8 +1201,9 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_model, m)?)?;
-    m.add_function(wrap_pyfunction!(hub_prove, m)?)?;
+    m.add_function(wrap_pyfunction!(prove_hub, m)?)?;
     m.add_function(wrap_pyfunction!(get_hub_proof, m)?)?;
+    m.add_function(wrap_pyfunction!(get_hub_credentials, m)?)?;
 
     Ok(())
 }

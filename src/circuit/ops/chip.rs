@@ -326,7 +326,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             {
                 cs.lookup("", |cs| {
                     let mut res = vec![];
-                    let sel = cs.query_selector(multi_col_selector.clone());
+                    let sel = cs.query_selector(multi_col_selector);
 
                     let synthetic_sel = match len {
                         1 => Expression::Constant(F::from(1)),
@@ -377,12 +377,12 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                         (
                             col_expr.clone() * input_query.clone()
                                 + not_expr.clone() * Expression::Constant(default_x),
-                            input_col.clone(),
+                            *input_col,
                         ),
                         (
                             col_expr.clone() * output_query.clone()
                                 + not_expr.clone() * Expression::Constant(default_y),
-                            output_col.clone(),
+                            *output_col,
                         ),
                     ]);
 

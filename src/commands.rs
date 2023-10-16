@@ -71,6 +71,20 @@ impl Default for CalibrationTarget {
     }
 }
 
+impl ToString for CalibrationTarget {
+    fn to_string(&self) -> String {
+        match self {
+            CalibrationTarget::Resources { col_overflow: true } => {
+                "resources/col-overflow".to_string()
+            }
+            CalibrationTarget::Resources {
+                col_overflow: false,
+            } => "resources".to_string(),
+            CalibrationTarget::Accuracy => "accuracy".to_string(),
+        }
+    }
+}
+
 impl From<&str> for CalibrationTarget {
     fn from(s: &str) -> Self {
         match s {
@@ -626,8 +640,9 @@ pub enum Commands {
         proof_path: PathBuf,
     },
 
-    /// Create artifacts and deploys them on the hub
+    /// Gets credentials from the hub
     #[command(name = "get-hub-credentials", arg_required_else_help = true)]
+    #[cfg(not(target_arch = "wasm32"))]
     GetHubCredentials {
         /// The path to the model file
         #[arg(short = 'N', long)]
@@ -639,6 +654,7 @@ pub enum Commands {
 
     /// Create artifacts and deploys them on the hub
     #[command(name = "create-hub-artifact", arg_required_else_help = true)]
+    #[cfg(not(target_arch = "wasm32"))]
     CreateHubArtifact {
         /// The path to the model file
         #[arg(short = 'M', long)]
@@ -649,13 +665,23 @@ pub enum Commands {
         /// the hub's url
         #[arg(short = 'O', long)]
         organization_id: String,
+        ///artifact name
+        #[arg(short = 'A', long)]
+        artifact_name: String,
         /// the hub's url
         #[arg(short = 'U', long)]
         url: Option<String>,
+        /// proving arguments
+        #[clap(flatten)]
+        args: RunArgs,
+        /// calibration target
+        #[arg(long, default_value = "resources")]
+        target: CalibrationTarget,
     },
 
     /// Create artifacts and deploys them on the hub
     #[command(name = "prove-hub", arg_required_else_help = true)]
+    #[cfg(not(target_arch = "wasm32"))]
     ProveHub {
         /// The path to the model file
         #[arg(short = 'A', long)]
@@ -671,6 +697,7 @@ pub enum Commands {
 
     /// Create artifacts and deploys them on the hub
     #[command(name = "get-hub-proof", arg_required_else_help = true)]
+    #[cfg(not(target_arch = "wasm32"))]
     GetHubProof {
         /// The path to the model file
         #[arg(short = 'A', long)]
