@@ -450,7 +450,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn new(values: Option<&[T]>, dims: &[usize]) -> Result<Self, TensorError> {
         let total_dims: usize = if !dims.is_empty() {
             dims.iter().product()
-        } else if let Some(_) = values {
+        } else if values.is_some() {
             1
         } else {
             0

@@ -551,6 +551,8 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: Simple hub demo
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
       - name: Hashed DA tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_24_expects
       - name: Little transformer tutorial
