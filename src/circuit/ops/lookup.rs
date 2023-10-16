@@ -108,15 +108,6 @@ pub enum LookupOp {
 }
 
 impl LookupOp {
-    /// a value which is always in the table
-    pub fn default_pair<F: PrimeField + TensorType + PartialOrd>(&self) -> (F, F) {
-        let x = vec![i128_to_felt(0_i128)].into_iter().into();
-        (
-            <F as TensorType>::zero().unwrap(),
-            Op::<F>::f(self, &[x]).unwrap().output[0],
-        )
-    }
-
     /// Returns the range of values that can be represented by the table
     pub fn bit_range(max_len: usize) -> (i128, i128) {
         let range = (max_len - 1) as f64 / 2_f64;

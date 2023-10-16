@@ -705,7 +705,7 @@ impl GraphCircuit {
         // quantize the supplied data using the provided scale + QuantizeData.sol
         let quantized_evm_inputs = evm_quantize(
             client,
-            scales.into_iter().map(scale_to_multiplier).collect(),
+            scales,
             &inputs,
         )
         .await?;
@@ -1004,7 +1004,7 @@ impl GraphCircuit {
             TestDataSource::OnChain
         ) {
             // if not public then fail
-            if !self.settings().run_args.input_visibility.is_public() {
+            if self.settings().run_args.input_visibility.is_private() {
                 return Err("Cannot use on-chain data source as private data".into());
             }
 
@@ -1016,11 +1016,11 @@ impl GraphCircuit {
                 ),
             };
             // Get the flatten length of input_data
-            let length = input_data.iter().map(|x| x.len()).sum();
-            let scales = vec![self.settings().run_args.input_scale; length];
+            // if the input source is a field then set scale to 0
+
             let datam: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 input_data,
-                scales,
+                self.model().graph.get_input_scales(),
                 self.model().graph.input_shapes(),
                 test_on_chain_data.rpc.as_deref(),
             )
@@ -1032,7 +1032,7 @@ impl GraphCircuit {
             TestDataSource::OnChain
         ) {
             // if not public then fail
-            if !self.settings().run_args.output_visibility.is_public() {
+            if self.settings().run_args.output_visibility.is_private() {
                 return Err("Cannot use on-chain data source as private data".into());
             }
 
