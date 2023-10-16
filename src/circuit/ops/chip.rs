@@ -362,12 +362,16 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
                     let multiplier = table.selector_constructor.get_selector_val_at_idx(col_idx);
 
-                    log::debug!("col expr at idx {:?}: {:?}", col_idx, col_expr,);
-                    log::debug!("col multiplier at idx {:?}: {:?}", col_idx, multiplier);
-
                     let not_expr = Expression::Constant(multiplier) - col_expr.clone();
 
                     let (default_x, default_y) = table.get_first_element(col_idx);
+
+                    log::debug!("---------------- col {:?} ------------------", col_idx,);
+                    log::debug!("expr: {:?}", col_expr,);
+                    log::debug!("multiplier: {:?}", multiplier);
+                    log::debug!("not_expr: {:?}", not_expr);
+                    log::debug!("default x: {:?}", default_x);
+                    log::debug!("default y: {:?}", default_y);
 
                     res.extend([
                         (
