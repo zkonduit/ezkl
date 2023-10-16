@@ -56,13 +56,14 @@ jobs:
               "nodejs/ezkl.js",
               "nodejs/ezkl.d.ts",
               "nodejs/package.json",
+              "nodejs/utils.js",
               "web/ezkl_bg.wasm",
               "web/ezkl.js",
               "web/ezkl.d.ts",
               "web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js",
               "web/package.json",
-              "ezkl.d.ts",
-              "utils.js"
+              "web/utils.js",
+              "ezkl.d.ts"
             ],
             "main": "nodejs/ezkl.js",
             "module": "web/ezkl.js",
@@ -76,7 +77,7 @@ jobs:
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
 
-      - name: Add serialize and deserialize methods
+      - name: Add serialize and deserialize methods to nodejs bundle
         run: |
           echo '
           const JSONBig = require("json-bigint");
@@ -106,15 +107,46 @@ jobs:
             deserialize,
             serialize
           };
-          ' > pkg/utils.js
-      - name: Add serialize and deserialize imports to nodejs target
+          ' > pkg/nodejs/utils.js
+      - name: Add serialize and deserialize methods to web bundle
         run: |
-          sed -i '53i// import serialize and deserialize from utils.js\nconst { serialize, deserialize } = require(`../utils.js`);\nmodule.exports.serialize = serialize;\nmodule.exports.deserialize = deserialize;' pkg/nodejs/ezkl.js
-      - name: Add serialize and deserialize imports to web target
+          echo '
+          import { parse, stringify } from "json-bigint";
+
+          function deserialize(buffer) { // buffer is a Uint8ClampedArray | Uint8Array // return a JSON object
+            if (buffer instanceof Uint8ClampedArray) {
+                buffer = new Uint8Array(buffer.buffer);
+            }
+            const string = new TextDecoder().decode(buffer);
+            const jsonObject = parse(string);
+            return jsonObject;
+          }
+          
+          function serialize(data) { // data is an object // return a Uint8ClampedArray
+            // Step 1: Stringify the Object with BigInt support
+            if (typeof data === "object") {
+                data = stringify(data);
+            }
+            // Step 2: Encode the JSON String
+            const uint8Array = new TextEncoder().encode(data);
+          
+            // Step 3: Convert to Uint8ClampedArray
+            return new Uint8ClampedArray(uint8Array.buffer);
+          }
+          
+          export default {
+            deserialize,
+            serialize
+          };
+          ' > pkg/web/utils.js
+      - name: Expose serialize and deserialize imports in nodejs target
+        run: |
+          sed -i '53i// import serialize and deserialize from utils.js\nconst { serialize, deserialize } = require(`./utils.js`);\nmodule.exports.serialize = serialize;\nmodule.exports.deserialize = deserialize;' pkg/nodejs/ezkl.js
+      - name: Expose serialize and deserialize imports in web target
         run: |
           sed -i '51i\
           // import serialize and deserialize from utils.js\
-          import { serialize, deserialize } from '\''../utils.js'\'';\
+          import { serialize, deserialize } from '\''./utils.js'\'';\
           export { serialize, deserialize };' pkg/web/ezkl.js
       - name: Add serialize and deserialize imports to nodejs ezkl.d.ts
         run: |
