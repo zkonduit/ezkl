@@ -1572,7 +1572,10 @@ mod native_tests {
         // now shrink the logrows by 1 to test for overflow
         let mut settings: GraphSettings =
             GraphSettings::load(&settings_path.clone().into()).unwrap();
-        settings.run_args.logrows -= 1;
+        // anything smaller and the circuit will not compile
+        if settings.run_args.logrows > 4 {
+            settings.run_args.logrows -= 1;
+        }
         settings.save(&settings_path.clone().into()).unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
