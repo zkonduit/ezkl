@@ -961,6 +961,7 @@ mod conv_relu_col_ultra_overflow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
+            config.layout_tables(&mut layouter).unwrap();
             layouter
                 .assign_region(
                     || "",

@@ -1541,15 +1541,15 @@ mod native_tests {
 
     // prove-serialize-verify, the usual full path
     fn kzg_aggr_mock_prove_and_verify(test_dir: &str, example_name: String) {
+        let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "gen-settings",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
+                "-O",
+                &settings_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -1562,14 +1562,21 @@ mod native_tests {
                 format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
+                "-O",
+                &settings_path,
             ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        // now shrink the logrows by 1 to test for overflow
+        let mut settings: GraphSettings =
+            GraphSettings::load(&settings_path.clone().into()).unwrap();
+        // anything smaller and the circuit will not compile
+        if settings.run_args.logrows > 4 {
+            settings.run_args.logrows -= 1;
+        }
+        settings.save(&settings_path.clone().into()).unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1578,10 +1585,8 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "--compiled-circuit",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
+                "-S",
+                &settings_path,
             ])
             .status()
             .expect("failed to execute process");
