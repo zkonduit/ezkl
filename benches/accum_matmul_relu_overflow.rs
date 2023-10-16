@@ -16,7 +16,7 @@ use halo2_proofs::{
 use halo2curves::bn256::{Bn256, Fr};
 use std::marker::PhantomData;
 
-const BITS: (i128, i128) = (-8192, 8192);
+const BITS: (i128, i128) = (-8180, 8180);
 static mut LEN: usize = 4;
 static mut K: usize = 16;
 
