@@ -1082,7 +1082,7 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
 
 /// deploys a model to the hub
 #[pyfunction(signature = (model, input, name, organization_id, target=None, py_run_args=None, url=None))]
-fn deploy_model(
+fn create_hub_artifact(
     model: PathBuf,
     input: PathBuf,
     name: String,
@@ -1200,7 +1200,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(print_proof_hex, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
-    m.add_function(wrap_pyfunction!(deploy_model, m)?)?;
+    m.add_function(wrap_pyfunction!(create_hub_artifact, m)?)?;
     m.add_function(wrap_pyfunction!(prove_hub, m)?)?;
     m.add_function(wrap_pyfunction!(get_hub_proof, m)?)?;
     m.add_function(wrap_pyfunction!(get_hub_credentials, m)?)?;
