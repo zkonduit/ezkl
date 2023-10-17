@@ -246,6 +246,9 @@ pub enum Commands {
         /// Optional scales to specifically try for calibration.
         #[arg(long, value_delimiter = ',')]
         scales: Option<Vec<u32>>,
+        /// max logrows to use for calibration, 26 is the max public SRS size
+        #[arg(long)]
+        max_logrows: Option<u32>,
     },
 
     /// Generates a dummy SRS

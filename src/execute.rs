@@ -147,7 +147,8 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             data,
             target,
             scales,
-        } => calibrate(model, data, settings_path, target, scales).await,
+            max_logrows,
+        } => calibrate(model, data, settings_path, target, scales, max_logrows).await,
         Commands::GenWitness {
             data,
             compiled_circuit,
@@ -561,6 +562,7 @@ pub(crate) async fn calibrate(
     settings_path: PathBuf,
     target: CalibrationTarget,
     scales: Option<Vec<u32>>,
+    max_logrows: Option<u32>,
 ) -> Result<(), Box<dyn Error>> {
     let data = GraphData::from_path(data)?;
     // load the pre-generated settings
@@ -669,7 +671,7 @@ pub(crate) async fn calibrate(
                         .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                     circuit
-                        .calibrate(&data)
+                        .calibrate(&data, max_logrows)
                         .map_err(|e| format!("failed to calibrate: {}", e))?;
 
                     let settings = circuit.settings().clone();

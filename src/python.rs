@@ -8,6 +8,7 @@ use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::CalibrationTarget;
 use crate::fieldutils::{felt_to_i128, i128_to_felt};
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
+use crate::graph::MAX_PUBLIC_SRS;
 use crate::graph::{
     quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
 };
@@ -624,6 +625,7 @@ fn gen_settings(
     settings,
     target,
     scales = None,
+    max_logrows = None,
 ))]
 fn calibrate_settings(
     py: Python,
@@ -632,10 +634,14 @@ fn calibrate_settings(
     settings: PathBuf,
     target: Option<CalibrationTarget>,
     scales: Option<Vec<u32>>,
+    max_logrows: Option<u32>,
 ) -> PyResult<&pyo3::PyAny> {
     let target = target.unwrap_or(CalibrationTarget::Resources {
         col_overflow: false,
     });
+
+    let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
+
     pyo3_asyncio::tokio::future_into_py(py, async move {
         crate::execute::calibrate(model, data, settings, target, scales)
             .await
