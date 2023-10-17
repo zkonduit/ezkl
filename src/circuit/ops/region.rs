@@ -13,7 +13,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use super::base::BaseOp;
+use super::{base::BaseOp, lookup::LookupOp};
 
 #[derive(Debug)]
 /// A context for a region
@@ -212,6 +212,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         values: &[ValTensor<F>],
         ommissions: &HashSet<&usize>,
         base_op: Option<BaseOp>,
+        lookup_op: Option<LookupOp>,
         config: &BaseConfig<F>,
     ) -> Result<Vec<ValTensor<F>>, Error> {
         if let Some(region) = &self.region {
@@ -241,11 +242,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         };
 
                         results[col].push(
-                            var.assign_with_omissions(region, self.offset + i, &val, &omit_flag)
-                                .unwrap()
-                                .get_inner_tensor()
-                                .unwrap()
-                                .get_flat_index(0),
+                            var.assign_with_omissions(
+                                region,
+                                self.offset + total_assigned,
+                                &val,
+                                &omit_flag,
+                            )
+                            .unwrap()
+                            .get_inner_tensor()
+                            .unwrap()
+                            .get_flat_index(0),
                         );
                     });
 
@@ -256,6 +262,13 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                             .output
                             .cartesian_coord(self.offset() + total_assigned);
                         let selector = config.selectors.get(&(base_op.clone(), x));
+                        selector.unwrap().enable(region, y).unwrap();
+                    }
+                    if let Some(lookup_op) = &lookup_op {
+                        let (x, y) = config
+                            .output
+                            .cartesian_coord(self.offset() + total_assigned);
+                        let selector = config.lookup_selectors.get(&(lookup_op.clone(), x));
                         selector.unwrap().enable(region, y).unwrap();
                     }
                 }

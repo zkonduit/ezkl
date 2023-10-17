@@ -1329,6 +1329,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         &[lhs, rhs, op_result.clone().into()],
         &removal_indices_ptr,
         Some(op.clone()),
+        None,
         config,
     )?;
 
@@ -2254,7 +2255,6 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
             })
         })?
         .into();
-
     let res = region.assign_multiple_with_selector_and_omissions(
         &[
             &config.lookup_input,
@@ -2263,7 +2263,8 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         ],
         &[x.clone(), output.into(), table_index],
         removal_indices_ptr,
-        Some(BaseOp::IsBoolean),
+        None,
+        Some(nl.clone()),
         config,
     )?;
 
