@@ -228,7 +228,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                 let omit_flag = if ommissions.contains(&i) {
                     HashSet::from([&0])
                 } else {
-                    total_assigned += 1;
                     HashSet::from([&1])
                 };
 
@@ -255,19 +254,20 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         );
                     });
 
+                if !ommissions.contains(&i) {
+                    total_assigned += 1;
+                }
+
                 // enable the selector
                 if !self.is_dummy() {
+                    let (x, y) = config
+                        .output
+                        .cartesian_coord(self.offset() + total_assigned);
                     if let Some(base_op) = &base_op {
-                        let (x, y) = config
-                            .output
-                            .cartesian_coord(self.offset() + total_assigned);
                         let selector = config.selectors.get(&(base_op.clone(), x));
                         selector.unwrap().enable(region, y).unwrap();
                     }
                     if let Some(lookup_op) = &lookup_op {
-                        let (x, y) = config
-                            .output
-                            .cartesian_coord(self.offset() + total_assigned);
                         let selector = config.lookup_selectors.get(&(lookup_op.clone(), x));
                         selector.unwrap().enable(region, y).unwrap();
                     }
