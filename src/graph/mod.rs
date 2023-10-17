@@ -23,7 +23,7 @@ use self::modules::{
 };
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::table::{Table, RANGE_MULTIPLIER, RESERVED_BLINDING_ROWS_PAD};
+use crate::circuit::table::{RANGE_MULTIPLIER, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
@@ -703,12 +703,7 @@ impl GraphCircuit {
         let (_, client) = setup_eth_backend(Some(&source.rpc), None).await?;
         let inputs = read_on_chain_inputs(client.clone(), client.address(), &source.calls).await?;
         // quantize the supplied data using the provided scale + QuantizeData.sol
-        let quantized_evm_inputs = evm_quantize(
-            client,
-            scales,
-            &inputs,
-        )
-        .await?;
+        let quantized_evm_inputs = evm_quantize(client, scales, &inputs).await?;
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<Fp>> = vec![];
         for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
@@ -783,18 +778,6 @@ impl GraphCircuit {
     fn calc_min_logrows(&mut self, res: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
         let reserved_blinding_rows = Self::reserved_blinding_rows();
         let safe_range = Self::calc_safe_range(res);
-
-        let max_col_size =
-            Table::<Fp>::cal_col_size(MAX_PUBLIC_SRS as usize, reserved_blinding_rows as usize);
-        let num_cols = Table::<Fp>::num_cols_required(safe_range, max_col_size);
-
-        if num_cols > 1 {
-            let err_string = format!(
-                "No possible lookup range can accomodate max value min and max value ({}, {})",
-                safe_range.0, safe_range.1
-            );
-            return Err(err_string.into());
-        }
 
         let min_bits = ((safe_range.1 - safe_range.0) as f64 + reserved_blinding_rows + 1.)
             .log2()
