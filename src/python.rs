@@ -8,7 +8,6 @@ use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::CalibrationTarget;
 use crate::fieldutils::{felt_to_i128, i128_to_felt};
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
-use crate::graph::MAX_PUBLIC_SRS;
 use crate::graph::{
     quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
 };
@@ -640,10 +639,8 @@ fn calibrate_settings(
         col_overflow: false,
     });
 
-    let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
-
     pyo3_asyncio::tokio::future_into_py(py, async move {
-        crate::execute::calibrate(model, data, settings, target, scales)
+        crate::execute::calibrate(model, data, settings, target, scales, max_logrows)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to calibrate settings: {}", e);
