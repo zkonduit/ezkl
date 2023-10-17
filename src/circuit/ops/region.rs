@@ -254,10 +254,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         );
                     });
 
-                if !ommissions.contains(&i) {
-                    total_assigned += 1;
-                }
-
                 // enable the selector
                 if !self.is_dummy() {
                     let (x, y) = config
@@ -271,6 +267,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         let selector = config.lookup_selectors.get(&(lookup_op.clone(), x));
                         selector.unwrap().enable(region, y).unwrap();
                     }
+                }
+                if !ommissions.contains(&i) {
+                    total_assigned += 1;
                 }
             });
             Ok(results
