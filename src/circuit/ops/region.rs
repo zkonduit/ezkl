@@ -1,4 +1,7 @@
-use crate::tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor};
+use crate::{
+    circuit::BaseConfig,
+    tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor},
+};
 use halo2_proofs::{
     circuit::Region,
     plonk::{Error, Selector},
@@ -9,6 +12,8 @@ use std::{
     collections::HashSet,
     sync::atomic::{AtomicUsize, Ordering},
 };
+
+use super::base::BaseOp;
 
 #[derive(Debug)]
 /// A context for a region
@@ -125,6 +130,74 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             Ok(value.into())
         }
     }
+
+    /// Assign a valtensor to a vartensor
+    pub fn assign_multiple_with_selector(
+        &mut self,
+        var: &[&VarTensor],
+        values: &[ValTensor<F>],
+        base_op: Option<BaseOp>,
+        config: &BaseConfig<F>,
+    ) -> Result<Vec<ValTensor<F>>, Error> {
+        if let Some(region) = &self.region {
+            // zip all values into pairs
+            assert!(var.len() == values.len());
+            // assert all values are of same len
+            assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
+            let values = values
+                .iter()
+                .map(|v| v.get_inner_tensor().unwrap())
+                .collect::<Vec<_>>();
+            let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
+            (0..values[0].len()).for_each(|i| {
+                let values = values
+                    .iter()
+                    .map(|v| v.get_flat_index(i))
+                    .collect::<Vec<_>>();
+
+                let region = &mut region.borrow_mut();
+
+                var.iter()
+                    .zip(values.iter())
+                    .enumerate()
+                    .for_each(|(i, (var, value))| {
+                        results[i].push(
+                            var.assign(
+                                region,
+                                self.offset + i,
+                                &Tensor::new(Some(&[value.clone()]), &[1]).unwrap().into(),
+                            )
+                            .unwrap()
+                            .get_inner_tensor()
+                            .unwrap()
+                            .get_flat_index(0),
+                        );
+                    });
+
+                // enable the selector
+                if !self.is_dummy() {
+                    if let Some(base_op) = &base_op {
+                        let (x, y) = config.inputs[1].cartesian_coord(self.offset() + i);
+                        let selector = config.selectors.get(&(base_op.clone(), x));
+                        selector.unwrap().enable(region, y).unwrap();
+                    }
+                }
+            });
+            Ok(results
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    let mut t = Tensor::from(r.clone().into_iter());
+                    t.reshape(values[i].dims());
+                    t.into()
+                })
+                .collect::<Vec<_>>())
+        } else {
+            self.total_constants += values.iter().map(|v| v.num_constants()).sum::<usize>();
+            Ok(values.to_vec())
+        }
+    }
+
     /// Assign a valtensor to a vartensor
     pub fn assign(
         &mut self,

@@ -1605,25 +1605,17 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let input = {
-        let res = region.assign(&config.inputs[1], &values[0])?;
+    let input = values[0].clone();
+    let neg = input.get_inner()?.map(|e| -e);
 
-        res.get_inner()?
-    };
+    let res = region.assign_multiple_with_selector(
+        &[&config.inputs[1], &config.output],
+        &[input, neg.into()],
+        Some(BaseOp::Neg),
+        config,
+    )?;
 
-    let neg = input.map(|e| -e);
-
-    let output = region.assign(&config.output, &neg.into())?;
-
-    // Enable the selectors
-    if !region.is_dummy() {
-        (0..values[0].len()).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::Neg, x));
-
-            region.enable(selector, y).unwrap();
-        });
-    }
+    let output = res.last().unwrap().clone();
 
     region.increment(output.len());
 
@@ -2166,19 +2158,16 @@ pub fn boolean_identity<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let output = region.assign(&config.inputs[1], &values[0])?;
-    // Enable the selectors
-    if !region.is_dummy() {
-        (0..output.len()).for_each(|j| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + j);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
+    let output = region.assign_multiple_with_selector(
+        &[&config.inputs[1]],
+        &[values[0].clone()],
+        Some(BaseOp::IsBoolean),
+        config,
+    )?;
 
-            region.enable(selector, y).unwrap();
-        });
-    }
-    region.increment(output.len());
+    region.increment(output[0].len());
 
-    Ok(output)
+    Ok(output[0].clone())
 }
 
 /// Downsample layout
@@ -2206,17 +2195,21 @@ pub fn enforce_equality<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assert of same len
     assert_eq!(values[0].len(), values[1].len());
-    // assigns the instance to the advice.
-    let input = region.assign(&config.inputs[1], &values[0])?;
-    let output = region.assign(&config.output, &values[1])?;
+
+    let res = region.assign_multiple_with_selector(
+        &[&config.inputs[1], &config.output],
+        &[values[0].clone(), values[1].clone()],
+        None,
+        config,
+    )?;
 
     if !region.is_dummy() {
-        region.constrain_equal(&input, &output)?;
+        region.constrain_equal(&res[0], &res[1])?;
     }
 
-    region.increment(output.len());
+    region.increment(res[1].len());
 
-    Ok(output)
+    Ok(res[1].clone())
 }
 
 /// layout for nonlinearity check.
