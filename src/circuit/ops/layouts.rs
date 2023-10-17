@@ -1309,21 +1309,10 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         ))));
     }
 
-    let mut inputs = vec![];
-    for (i, input) in [lhs.clone(), rhs.clone()].iter().enumerate() {
-        let inp = {
-            let res =
-                region.assign_with_omissions(&config.inputs[i], input, removal_indices_ptr)?;
-
-            res.get_inner()?
-        };
-
-        inputs.push(inp);
-    }
-
     // Now we can assign the dot product
     // time the calc
     let start = instant::Instant::now();
+    let inputs = vec![lhs.get_inner()?, rhs.get_inner()?];
     let op_result = match op {
         BaseOp::Add => add(&inputs),
         BaseOp::Sub => sub(&inputs),
@@ -1334,22 +1323,23 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         error!("{}", e);
         halo2_proofs::plonk::Error::Synthesis
     })?;
+
+    let res = region.assign_multiple_with_selector_and_omissions(
+        &[&config.inputs[0], &config.inputs[1], &config.output],
+        &[lhs, rhs, op_result.clone().into()],
+        &removal_indices_ptr,
+        Some(op.clone()),
+        config,
+    )?;
+
+    let mut output = res.last().unwrap().clone();
+
     let elapsed = start.elapsed();
 
     let assigned_len = inputs[0].len() - removal_indices.len();
-    let mut output =
-        region.assign_with_omissions(&config.output, &op_result.into(), removal_indices_ptr)?;
+
     trace!("pairwise {} calc took {:?}", op.as_str(), elapsed);
 
-    // Enable the selectors
-    if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y) = config.inputs[0].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(op.clone(), x));
-
-            region.enable(selector, y).unwrap();
-        });
-    }
     region.increment(assigned_len);
 
     let a_tensor = orig_lhs.get_inner_tensor()?;
@@ -2223,14 +2213,14 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     let timer = instant::Instant::now();
 
     let x = values[0].clone();
+    let dims = x.dims();
 
     let removal_indices = values[0].get_const_indices()?;
     let removal_indices: HashSet<&usize> = HashSet::from_iter(removal_indices.iter());
     let removal_indices_ptr = &removal_indices;
+    let assigned_len = x.len() - removal_indices.len();
 
-    let w = region.assign_with_omissions(&config.lookup_input, &x, removal_indices_ptr)?;
-
-    let output = w.get_inner_tensor()?.par_enum_map(|i, e| {
+    let output = x.get_inner_tensor()?.par_enum_map(|i, e| {
         Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
             if !removal_indices.contains(&i) {
                 Value::known(Op::<F>::f(nl, &[Tensor::from(vec![f].into_iter())])?.output[0]).into()
@@ -2242,13 +2232,9 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         })
     })?;
 
-    let assigned_len = x.len() - removal_indices.len();
-    let mut output =
-        region.assign_with_omissions(&config.lookup_output, &output.into(), removal_indices_ptr)?;
-
     let is_dummy = region.is_dummy();
 
-    let table_index: ValTensor<F> = w
+    let table_index: ValTensor<F> = x
         .get_inner_tensor()?
         .par_enum_map(|i, e| {
             Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
@@ -2269,19 +2255,23 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         })?
         .into();
 
-    region.assign_with_omissions(&config.lookup_index, &table_index, removal_indices_ptr)?;
+    let res = region.assign_multiple_with_selector_and_omissions(
+        &[
+            &config.lookup_input,
+            &config.lookup_output,
+            &config.lookup_index,
+        ],
+        &[x.clone(), output.into(), table_index],
+        removal_indices_ptr,
+        Some(BaseOp::IsBoolean),
+        config,
+    )?;
 
-    if !is_dummy {
-        (0..assigned_len).for_each(|i| {
-            let (x, y) = config.lookup_input.cartesian_coord(region.offset() + i);
-            let selector = config.lookup_selectors.get(&(nl.clone(), x));
-            region.enable(selector, y).unwrap();
-        });
-    }
+    let mut output = res[1].clone();
 
     region.increment(assigned_len);
 
-    output.reshape(x.dims())?;
+    output.reshape(dims)?;
 
     let elapsed = timer.elapsed();
     trace!(
