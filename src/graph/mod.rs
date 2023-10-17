@@ -793,7 +793,7 @@ impl GraphCircuit {
         let num_cols = Table::<Fp>::num_cols_required(safe_range, max_col_size);
 
         // empirically determined that this is when performance starts to degrade significantly
-        if num_cols > 7 {
+        if num_cols > 3 {
             let err_string = format!(
                 "No possible lookup range can accomodate max value min and max value ({}, {})",
                 safe_range.0, safe_range.1
