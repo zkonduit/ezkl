@@ -366,12 +366,12 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
                     let (default_x, default_y) = table.get_first_element(col_idx);
 
-                    log::debug!("---------------- col {:?} ------------------", col_idx,);
-                    log::debug!("expr: {:?}", col_expr,);
-                    log::debug!("multiplier: {:?}", multiplier);
-                    log::debug!("not_expr: {:?}", not_expr);
-                    log::debug!("default x: {:?}", default_x);
-                    log::debug!("default y: {:?}", default_y);
+                    log::trace!("---------------- col {:?} ------------------", col_idx,);
+                    log::trace!("expr: {:?}", col_expr,);
+                    log::trace!("multiplier: {:?}", multiplier);
+                    log::trace!("not_expr: {:?}", not_expr);
+                    log::trace!("default x: {:?}", default_x);
+                    log::trace!("default y: {:?}", default_y);
 
                     res.extend([
                         (

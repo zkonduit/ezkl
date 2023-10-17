@@ -92,7 +92,7 @@ impl Circuit<Fr> for MyCircuit {
 fn runmatmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("accum_matmul");
 
-    for &k in [8, 10, 12, 14].iter() {
+    for &k in [8, 10, 11, 12, 13, 14].iter() {
         let len = unsafe { LEN };
         unsafe {
             K = k;

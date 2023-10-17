@@ -624,6 +624,7 @@ fn gen_settings(
     settings,
     target,
     scales = None,
+    max_logrows = None,
 ))]
 fn calibrate_settings(
     py: Python,
@@ -632,12 +633,14 @@ fn calibrate_settings(
     settings: PathBuf,
     target: Option<CalibrationTarget>,
     scales: Option<Vec<u32>>,
+    max_logrows: Option<u32>,
 ) -> PyResult<&pyo3::PyAny> {
     let target = target.unwrap_or(CalibrationTarget::Resources {
         col_overflow: false,
     });
+
     pyo3_asyncio::tokio::future_into_py(py, async move {
-        crate::execute::calibrate(model, data, settings, target, scales)
+        crate::execute::calibrate(model, data, settings, target, scales, max_logrows)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to calibrate settings: {}", e);

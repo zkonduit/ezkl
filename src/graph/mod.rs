@@ -105,7 +105,7 @@ const ASSUMED_BLINDING_FACTORS: usize = 5;
 pub const MIN_LOGROWS: u32 = 4;
 
 /// 26
-const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
+pub const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
 
 use std::cell::RefCell;
 
@@ -703,12 +703,7 @@ impl GraphCircuit {
         let (_, client) = setup_eth_backend(Some(&source.rpc), None).await?;
         let inputs = read_on_chain_inputs(client.clone(), client.address(), &source.calls).await?;
         // quantize the supplied data using the provided scale + QuantizeData.sol
-        let quantized_evm_inputs = evm_quantize(
-            client,
-            scales,
-            &inputs,
-        )
-        .await?;
+        let quantized_evm_inputs = evm_quantize(client, scales, &inputs).await?;
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<Fp>> = vec![];
         for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
@@ -780,15 +775,25 @@ impl GraphCircuit {
         )
     }
 
-    fn calc_min_logrows(&mut self, res: &GraphWitness) -> Result<(), Box<dyn std::error::Error>> {
+    fn calc_min_logrows(
+        &mut self,
+        res: &GraphWitness,
+        max_logrows: Option<u32>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // load the max logrows
+        let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
+        let max_logrows = std::cmp::min(max_logrows, MAX_PUBLIC_SRS);
+        let max_logrows = std::cmp::max(max_logrows, MIN_LOGROWS);
+
         let reserved_blinding_rows = Self::reserved_blinding_rows();
         let safe_range = Self::calc_safe_range(res);
 
         let max_col_size =
-            Table::<Fp>::cal_col_size(MAX_PUBLIC_SRS as usize, reserved_blinding_rows as usize);
+            Table::<Fp>::cal_col_size(max_logrows as usize, reserved_blinding_rows as usize);
         let num_cols = Table::<Fp>::num_cols_required(safe_range, max_col_size);
 
-        if num_cols > 1 {
+        // empirically determined that this is when performance starts to degrade significantly
+        if num_cols > 3 {
             let err_string = format!(
                 "No possible lookup range can accomodate max value min and max value ({}, {})",
                 safe_range.0, safe_range.1
@@ -834,7 +839,7 @@ impl GraphCircuit {
 
         // ensure logrows is at least 4
         logrows = std::cmp::max(logrows, MIN_LOGROWS as usize);
-        logrows = std::cmp::min(logrows, MAX_PUBLIC_SRS as usize);
+        logrows = std::cmp::min(logrows, max_logrows as usize);
         let model = self.model().clone();
         let settings_mut = self.settings_mut();
         settings_mut.run_args.lookup_range = safe_range;
@@ -857,8 +862,7 @@ impl GraphCircuit {
         settings_mut.run_args.logrows =
             std::cmp::max(settings_mut.run_args.logrows, min_rows_from_constraints);
 
-        settings_mut.run_args.logrows =
-            std::cmp::min(MAX_PUBLIC_SRS, settings_mut.run_args.logrows);
+        settings_mut.run_args.logrows = std::cmp::min(max_logrows, settings_mut.run_args.logrows);
 
         info!(
             "setting lookup_range to: {:?}, setting logrows to: {}",
@@ -870,10 +874,14 @@ impl GraphCircuit {
     }
 
     /// Calibrate the circuit to the supplied data.
-    pub fn calibrate(&mut self, input: &[Tensor<Fp>]) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn calibrate(
+        &mut self,
+        input: &[Tensor<Fp>],
+        max_logrows: Option<u32>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec())?;
 
-        self.calc_min_logrows(&res)
+        self.calc_min_logrows(&res, max_logrows)
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
