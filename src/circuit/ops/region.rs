@@ -220,12 +220,14 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             // assert all values are of same len
             assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
             let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
+            let mut total_assigned = 0;
             (0..values[0].len()).for_each(|i| {
                 let region = &mut region.borrow_mut();
 
                 let omit_flag = if ommissions.contains(&i) {
                     HashSet::from([&0])
                 } else {
+                    total_assigned += 1;
                     HashSet::from([&1])
                 };
 
@@ -250,7 +252,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                 // enable the selector
                 if !self.is_dummy() {
                     if let Some(base_op) = &base_op {
-                        let (x, y) = config.output.cartesian_coord(self.offset() + i);
+                        let (x, y) = config
+                            .output
+                            .cartesian_coord(self.offset() + total_assigned);
                         let selector = config.selectors.get(&(base_op.clone(), x));
                         selector.unwrap().enable(region, y).unwrap();
                     }
