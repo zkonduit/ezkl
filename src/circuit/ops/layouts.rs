@@ -155,7 +155,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    inputs: &mut [ValTensor<F>],
+    inputs: &[ValTensor<F>],
     equation: &str,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let mut equation = equation.split("->");
@@ -1327,7 +1327,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     let res = region.assign_multiple_with_selector_and_omissions(
         &[&config.inputs[0], &config.inputs[1], &config.output],
         &[lhs, rhs, op_result.clone().into()],
-        &removal_indices_ptr,
+        removal_indices_ptr,
         Some(op.clone()),
         None,
         config,

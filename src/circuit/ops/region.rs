@@ -146,36 +146,48 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
 
             let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
-            (0..values[0].len()).for_each(|i| {
-                let region = &mut region.borrow_mut();
+            (0..values[0].len())
+                .map(|i| {
+                    let region = &mut region.borrow_mut();
 
-                var.iter()
-                    .zip(values.iter())
-                    .enumerate()
-                    .for_each(|(col, (var, value))| {
-                        let val = match value {
-                            ValTensor::Value { .. } => value.get_single_elem(i).unwrap(),
-                            ValTensor::Instance { .. } => value.clone(),
-                        };
+                    let _ = var
+                        .iter()
+                        .zip(values.iter())
+                        .enumerate()
+                        .map(|(col, (var, value))| {
+                            let val = match value {
+                                ValTensor::Value { .. } => {
+                                    value.get_single_elem(i).map_err(|e| {
+                                        log::error!("{}", e);
+                                        Error::Synthesis
+                                    })?
+                                }
+                                ValTensor::Instance { .. } => value.clone(),
+                            };
 
-                        results[col].push(
-                            var.assign(region, self.offset + i, &val)
-                                .unwrap()
-                                .get_inner_tensor()
-                                .unwrap()
-                                .get_flat_index(0),
-                        );
-                    });
+                            results[col].push(
+                                var.assign(region, self.offset + i, &val)?
+                                    .get_flat_index(0)
+                                    .map_err(|e| {
+                                        log::error!("{}", e);
+                                        Error::Synthesis
+                                    })?,
+                            );
+                            Ok::<(), Error>(())
+                        })
+                        .collect::<Result<Vec<()>, _>>()?;
 
-                // enable the selector
-                if !self.is_dummy() {
-                    if let Some(base_op) = &base_op {
-                        let (x, y) = config.output.cartesian_coord(self.offset() + i);
-                        let selector = config.selectors.get(&(base_op.clone(), x));
-                        selector.unwrap().enable(region, y).unwrap();
+                    // enable the selector
+                    if !self.is_dummy() {
+                        if let Some(base_op) = &base_op {
+                            let (x, y) = config.output.cartesian_coord(self.offset() + i);
+                            let selector = config.selectors.get(&(base_op.clone(), x));
+                            selector.unwrap().enable(region, y)?;
+                        }
                     }
-                }
-            });
+                    Ok::<(), Error>(())
+                })
+                .collect::<Result<Vec<()>, _>>()?;
             Ok(results
                 .iter()
                 .enumerate()
@@ -222,56 +234,68 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
             let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
             let mut total_assigned = 0;
-            (0..values[0].len()).for_each(|i| {
-                let region = &mut region.borrow_mut();
+            (0..values[0].len())
+                .map(|i| {
+                    let region = &mut region.borrow_mut();
 
-                let omit_flag = if ommissions.contains(&i) {
-                    HashSet::from([&0])
-                } else {
-                    HashSet::from([&1])
-                };
+                    var.iter()
+                        .zip(values.iter())
+                        .enumerate()
+                        .map(|(col, (var, value))| {
+                            let val = match value {
+                                ValTensor::Value { .. } => {
+                                    value.get_single_elem(i).map_err(|e| {
+                                        log::error!("{}", e);
+                                        Error::Synthesis
+                                    })?
+                                }
+                                ValTensor::Instance { .. } => panic!("not implemented"),
+                            };
 
-                var.iter()
-                    .zip(values.iter())
-                    .enumerate()
-                    .for_each(|(col, (var, value))| {
-                        let val = match value {
-                            ValTensor::Value { .. } => value.get_single_elem(i).unwrap(),
-                            ValTensor::Instance { .. } => value.clone(),
-                        };
+                            if ommissions.contains(&i) {
+                                results[col].push(val.get_flat_index(0).map_err(|e| {
+                                    log::error!("{}", e);
+                                    Error::Synthesis
+                                })?);
+                            } else {
+                                results[col].push(
+                                    var.assign(region, self.offset + total_assigned, &val)?
+                                        .get_flat_index(0)
+                                        .map_err(|e| {
+                                            log::error!("{}", e);
+                                            Error::Synthesis
+                                        })?,
+                                );
+                            };
 
-                        results[col].push(
-                            var.assign_with_omissions(
-                                region,
-                                self.offset + total_assigned,
-                                &val,
-                                &omit_flag,
-                            )
-                            .unwrap()
-                            .get_inner_tensor()
-                            .unwrap()
-                            .get_flat_index(0),
-                        );
-                    });
+                            Ok::<(), Error>(())
+                        })
+                        .collect::<Result<Vec<()>, _>>()?;
 
-                // enable the selector
-                if !self.is_dummy() {
-                    let (x, y) = config
-                        .output
-                        .cartesian_coord(self.offset() + total_assigned);
-                    if let Some(base_op) = &base_op {
-                        let selector = config.selectors.get(&(base_op.clone(), x));
-                        selector.unwrap().enable(region, y).unwrap();
+                    // enable the selector
+                    if !self.is_dummy() && !ommissions.contains(&i) {
+                        // get the x and y coordinates
+                        let (x, y) = config
+                            .output
+                            .cartesian_coord(self.offset() + total_assigned);
+
+                        if let Some(base_op) = &base_op {
+                            let selector = config.selectors.get(&(base_op.clone(), x));
+                            selector.unwrap().enable(region, y)?;
+                        }
+                        if let Some(lookup_op) = &lookup_op {
+                            let selector = config.lookup_selectors.get(&(lookup_op.clone(), x));
+                            selector.unwrap().enable(region, y)?;
+                        }
                     }
-                    if let Some(lookup_op) = &lookup_op {
-                        let selector = config.lookup_selectors.get(&(lookup_op.clone(), x));
-                        selector.unwrap().enable(region, y).unwrap();
+
+                    if !ommissions.contains(&i) {
+                        total_assigned += 1;
                     }
-                }
-                if !ommissions.contains(&i) {
-                    total_assigned += 1;
-                }
-            });
+
+                    Ok::<(), Error>(())
+                })
+                .collect::<Result<Vec<()>, _>>()?;
             Ok(results
                 .iter()
                 .enumerate()

@@ -466,6 +466,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(slice)
     }
 
+    /// Calls `get_flat_index` on the inner tensor.
+    pub fn get_flat_index(&self, index: usize) -> Result<ValType<F>, Box<dyn Error>> {
+        match self {
+            ValTensor::Value { inner: v, .. } => Ok(v.get_flat_index(index)),
+            _ => Err(Box::new(TensorError::WrongMethod)),
+        }
+    }
+
     /// Fetches the inner tensor as a `Tensor<ValType<F>`
     pub fn get_inner_tensor(&self) -> Result<&Tensor<ValType<F>>, TensorError> {
         Ok(match self {
@@ -743,7 +751,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             }
             ValTensor::Instance { dims, idx, .. } => {
                 let dims = dims[*idx].clone();
-                if !dims.is_empty() && (dims != &[0]) {
+                if !dims.is_empty() && (dims != [0]) {
                     dims.iter().product::<usize>()
                 } else {
                     0
