@@ -179,19 +179,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                                     return Err(halo2_proofs::plonk::Error::Synthesis);
                                 }
                             } else {
-                                match value {
-                                    ValTensor::Value { .. } => {
-                                        value.get_flat_index(current_flat_index).map_err(|e| {
-                                            log::error!("{}", e);
-                                            Error::Synthesis
-                                        })?
-                                    }
-                                    ValTensor::Instance { .. } => unimplemented!(),
-                                }
+                                // safe to unwrap because we checked that all values are of same len
+                                value.get_flat_index(current_flat_index).unwrap()
                             };
 
                             let cell = var.assign_value(region, val.clone(), x, y)?;
-
                             let val = Self::convert_assigned_cell_to_valtype(cell, val);
 
                             if !is_start {
@@ -280,26 +272,17 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             assert!(var.len() == values.len());
             // assert all values are of same len
             assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
-
             let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
+            let region = &mut region.borrow_mut();
             (0..values[0].len())
                 .map(|i| {
-                    let region = &mut region.borrow_mut();
-
                     let _ = var
                         .iter()
                         .zip(values.iter())
                         .enumerate()
                         .map(|(col, (var, value))| {
-                            let val = match value {
-                                ValTensor::Value { .. } => {
-                                    value.get_flat_index(i).map_err(|e| {
-                                        log::error!("{}", e);
-                                        Error::Synthesis
-                                    })?
-                                }
-                                ValTensor::Instance { .. } => unimplemented!(),
-                            };
+                            // safe to unwrap because we checked that all values are of same len
+                            let val = value.get_flat_index(i).unwrap();
 
                             let (x, y) = var.cartesian_coord(self.offset() + i);
                             let cell = var.assign_value(region, val.clone(), x, y)?;
@@ -364,24 +347,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
             let mut results: Vec<Vec<ValType<F>>> =
                 vec![Vec::with_capacity(values.len() - ommissions.len()); var.len()];
+            let region = &mut region.borrow_mut();
             let mut total_assigned = 0;
             (0..values[0].len())
                 .map(|i| {
-                    let region = &mut region.borrow_mut();
-
                     var.iter()
                         .zip(values.iter())
                         .enumerate()
                         .map(|(col, (var, value))| {
-                            let val = match value {
-                                ValTensor::Value { .. } => {
-                                    value.get_flat_index(i).map_err(|e| {
-                                        log::error!("{}", e);
-                                        Error::Synthesis
-                                    })?
-                                }
-                                ValTensor::Instance { .. } => panic!("not implemented"),
-                            };
+                            // safe to unwrap because we checked that all values are of same len
+                            let val = value.get_flat_index(i).unwrap();
 
                             if ommissions.contains(&i) {
                                 results[col].push(val.clone());
@@ -412,7 +387,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         } else {
                             panic!("no base op or lookup op provided");
                         }
-
                         total_assigned += 1;
                     }
 
