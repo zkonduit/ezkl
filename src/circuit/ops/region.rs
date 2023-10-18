@@ -162,7 +162,14 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                                         Error::Synthesis
                                     })?
                                 }
-                                ValTensor::Instance { .. } => value.clone(),
+                                ValTensor::Instance { .. } => {
+                                    let mut instance = value.clone();
+                                    instance.reshape(&[1]).map_err(|e| {
+                                        log::error!("{}", e);
+                                        Error::Synthesis
+                                    })?;
+                                    instance
+                                }
                             };
 
                             results[col].push(
