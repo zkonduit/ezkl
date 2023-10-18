@@ -157,10 +157,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
 
             (0..assigned_len)
                 .map(|i| {
-                    let region = &mut region.borrow_mut();
-
                     let (x, y) = var[0].cartesian_coord(self.offset() + i);
-
+                    let region = &mut region.borrow_mut();
                     let is_start = y == 0 && i > 0;
 
                     let _ = var
@@ -198,7 +196,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         .collect::<Result<Vec<()>, _>>()?;
 
                     // enable the selector
-                    let (x, y) = config.output.cartesian_coord(self.offset() + i);
                     if !is_start {
                     } else {
                         if i == 0 {
@@ -274,8 +271,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
             let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
             let region = &mut region.borrow_mut();
+
             (0..values[0].len())
                 .map(|i| {
+                    let (x, y) = var[0].cartesian_coord(self.offset() + i);
                     let _ = var
                         .iter()
                         .zip(values.iter())
@@ -284,7 +283,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                             // safe to unwrap because we checked that all values are of same len
                             let val = value.get_flat_index(i).unwrap();
 
-                            let (x, y) = var.cartesian_coord(self.offset() + i);
                             let cell = var.assign_value(region, val.clone(), x, y)?;
                             let val = Self::convert_assigned_cell_to_valtype(cell, val);
                             results[col].push(val);
@@ -294,7 +292,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         .collect::<Result<Vec<()>, _>>()?;
 
                     // enable the selector
-                    let (x, y) = config.output.cartesian_coord(self.offset() + i);
                     let selector = config.selectors.get(&(base_op.clone(), x));
                     selector.unwrap().enable(region, y)?;
 
@@ -351,6 +348,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             let mut total_assigned = 0;
             (0..values[0].len())
                 .map(|i| {
+                    // get the x and y coordinates
+                    let (x, y) = config
+                        .output
+                        .cartesian_coord(self.offset() + total_assigned);
+
                     var.iter()
                         .zip(values.iter())
                         .enumerate()
@@ -361,7 +363,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                             if ommissions.contains(&i) {
                                 results[col].push(val.clone());
                             } else {
-                                let (x, y) = var.cartesian_coord(self.offset() + total_assigned);
                                 let cell = var.assign_value(region, val.clone(), x, y)?;
                                 let val = Self::convert_assigned_cell_to_valtype(cell, val);
                                 results[col].push(val);
@@ -373,11 +374,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
 
                     // enable the selector
                     if !ommissions.contains(&i) {
-                        // get the x and y coordinates
-                        let (x, y) = config
-                            .output
-                            .cartesian_coord(self.offset() + total_assigned);
-
                         if let Some(base_op) = &base_op {
                             let selector = config.selectors.get(&(base_op.clone(), x));
                             selector.unwrap().enable(region, y)?;
