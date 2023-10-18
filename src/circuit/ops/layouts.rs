@@ -106,15 +106,11 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     let elapsed = start.elapsed();
     trace!("assigning took: {:?}", elapsed);
 
-    let start = instant::Instant::now();
     let last_elem = res[2]
         .get_single_elem(values[0].len() - 1)
         .expect("dot: failed to fetch last elem");
-    trace!("last elem took: {:?}", start.elapsed());
 
-    let start = instant::Instant::now();
     region.increment(assigned_len);
-    trace!("increment took: {:?}", start.elapsed());
     // last element is the result
 
     let elapsed = global_start.elapsed();

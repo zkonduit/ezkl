@@ -197,7 +197,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
 
                     // enable the selector
                     if !is_start {
-                    } else {
                         if i == 0 {
                             let selector = config.selectors.get(&(base_op_start.clone(), x));
                             selector.unwrap().enable(region, y)?;
@@ -207,7 +206,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         }
                         current_flat_index += 1;
                     }
-
                     Ok::<(), Error>(())
                 })
                 .collect::<Result<Vec<()>, _>>()?;
