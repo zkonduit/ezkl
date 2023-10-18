@@ -244,10 +244,12 @@ impl VarTensor {
         Ok(res)
     }
 
-    ///
+    /// Number of times it crosses into a new columns
     pub fn duplicated_len(&self, len: usize, offset: usize) -> usize {
         match self {
-            VarTensor::Advice { col_size, .. } => len + (offset + len) / (col_size + 1),
+            VarTensor::Advice { col_size, .. } => {
+                len + (offset + len) / col_size - offset / col_size
+            }
             _ => 0,
         }
     }
