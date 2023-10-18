@@ -1,7 +1,5 @@
 use log::{error, warn};
 
-use crate::circuit::CheckMode;
-
 use super::*;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
 /// Typically assign [ValTensor]s to [VarTensor]s when laying out a circuit.
@@ -174,11 +172,10 @@ impl VarTensor {
     pub fn assign_constant<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Region<F>,
-        offset: usize,
+        x: usize,
+        y: usize,
         constant: F,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
-        let (x, y) = self.cartesian_coord(offset);
-
         match &self {
             VarTensor::Advice { inner: advices, .. } => {
                 region.assign_advice_from_constant(|| "constant", advices[x], y, constant)
@@ -231,7 +228,7 @@ impl VarTensor {
             ValTensor::Value { inner: v, .. } => Ok(v
                 .enum_map(|coord, k| {
                     let (x, y) = self.cartesian_coord(offset + coord);
-                    let cell = self.assign_value(region, offset, k.clone(), x, y, coord)?;
+                    let cell = self.assign_value(region, k.clone(), x, y)?;
 
                     match k {
                         ValType::Constant(f) => Ok::<ValType<F>, halo2_proofs::plonk::Error>(
@@ -245,6 +242,14 @@ impl VarTensor {
         }?;
         res.set_scale(values.scale());
         Ok(res)
+    }
+
+    ///
+    pub fn duplicated_len(&self, len: usize, offset: usize) -> usize {
+        match self {
+            VarTensor::Advice { col_size, .. } => len + (offset + len) / (col_size + 1),
+            _ => 0,
+        }
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
@@ -272,90 +277,12 @@ impl VarTensor {
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
-    /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two.
-    pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
-        &self,
-        region: &mut Region<F>,
-        offset: usize,
-        values: &ValTensor<F>,
-        check_mode: &CheckMode,
-    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
-        let mut prev_cell = None;
-
-        match values {
-            ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
-            ValTensor::Value { inner: v, dims , ..} => {
-                // duplicates every nth element to adjust for column overflow
-                let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
-                let mut res: ValTensor<F> = {
-                    v.enum_map(|coord, k| {
-
-                    let (x, y) = self.cartesian_coord(offset + coord);
-                    if matches!(check_mode, CheckMode::SAFE) && coord > 0 && y == 0 {
-                        // assert that duplication occurred correctly
-                        assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
-                    };
-
-                    let cell = self.assign_value(region, offset, k.clone(), x, y, coord)?;
-
-                    if y == (self.col_size() - 1)   {
-                        // if we are at the end of the column, we need to copy the cell to the next column
-                        prev_cell = Some(cell.clone());
-                    } else if coord > 0 && y == 0 {
-                        if let Some(prev_cell) = prev_cell.as_ref() {
-                            region.constrain_equal(prev_cell.cell(),cell.cell())?;
-                        } else {
-                            error!("Error assigning copy-constraining previous value: {:?}", (x,y));
-                            return Err(halo2_proofs::plonk::Error::Synthesis);
-                        }
-                    }
-
-                    match k {
-                        ValType::Constant(f) => {
-                            Ok(ValType::AssignedConstant(cell, f))
-                        },
-                        ValType::AssignedConstant(_, f) => {
-                            Ok(ValType::AssignedConstant(cell, f))
-                        },
-                        _ => {
-                            Ok(ValType::PrevAssigned(cell))
-                        }
-                    }
-
-                })?.into()};
-                let total_used_len = res.len();
-                res.remove_every_n(self.col_size(), offset).unwrap();
-
-                res.reshape(dims).unwrap();
-                res.set_scale(values.scale());
-
-                if matches!(check_mode, CheckMode::SAFE) {
-                     // during key generation this will be 0 so we use this as a flag to check
-                     // TODO: this isn't very safe and would be better to get the phase directly
-                    let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner().unwrap())
-                    .iter()
-                    .all(|&x| x == 0);
-                    if is_assigned {
-                        assert_eq!(
-                            Into::<Tensor<i32>>::into(values.get_inner().unwrap()),
-                            Into::<Tensor<i32>>::into(res.get_inner().unwrap())
-                    )};
-                }
-
-                Ok((res, total_used_len))
-            }
-        }
-    }
-
-    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
     pub fn assign_value<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Region<F>,
-        offset: usize,
         k: ValType<F>,
         x: usize,
         y: usize,
-        coord: usize,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
         match k {
             ValType::Value(v) => match &self {
@@ -379,7 +306,7 @@ impl VarTensor {
                     .map(|a| a.evaluate()),
                 _ => unimplemented!(),
             },
-            ValType::Constant(v) => self.assign_constant(region, offset + coord, v),
+            ValType::Constant(v) => self.assign_constant(region, x, y, v),
         }
     }
 }

@@ -75,9 +75,6 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     values[0].remove_indices(&mut removal_indices, true)?;
     values[1].remove_indices(&mut removal_indices, true)?;
 
-    let elapsed = global_start.elapsed();
-    trace!("filtering const zero indices took: {:?}", elapsed);
-
     if values[0].len() != values[1].len() {
         return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
     }
@@ -86,63 +83,38 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     if values[0].is_empty() && values[1].is_empty() {
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
-
-    let start = instant::Instant::now();
-    let mut inputs = vec![];
-    let mut assigned_len = 0;
-    for (i, input) in values.iter().enumerate() {
-        let inp = {
-            let (res, len) =
-                region.assign_with_duplication(&config.inputs[i], input, &config.check_mode)?;
-            assigned_len = len;
-            res.get_inner()?
-        };
-        inputs.push(inp);
-    }
-    let elapsed = start.elapsed();
-    trace!("assigning inputs took: {:?}", elapsed);
+    trace!(
+        "filtering const zero indices took: {:?}",
+        global_start.elapsed()
+    );
 
     // Now we can assign the dot product
     // time this step
     let start = instant::Instant::now();
-    let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
+    let accumulated_dot = accumulated::dot(&[values[0].get_inner()?, values[1].get_inner()?])
         .expect("accum poly: dot op failed");
-    let elapsed = start.elapsed();
-    trace!("calculating accumulated dot took: {:?}", elapsed);
+    trace!("calculating accumulated dot took: {:?}", start.elapsed());
 
     let start = instant::Instant::now();
-    let (output, output_assigned_len) = region.assign_with_duplication(
-        &config.output,
-        &accumulated_dot.into(),
-        &config.check_mode,
+    let (res, assigned_len) = region.assign_multiple_with_selector_and_duplication(
+        &[&config.inputs[0], &config.inputs[1], &config.output],
+        &[values[0].clone(), values[1].clone(), accumulated_dot.into()],
+        BaseOp::Mult,
+        BaseOp::Dot,
+        config,
     )?;
     let elapsed = start.elapsed();
-    trace!("assigning output took: {:?}", elapsed);
+    trace!("assigning took: {:?}", elapsed);
 
-    assert_eq!(assigned_len, output_assigned_len);
-
-    // enable the selectors
-    if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
-            // hop over duplicates at start of column
-            if y == 0 && i > 0 {
-                return;
-            }
-            let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Mult, x))
-            } else {
-                config.selectors.get(&(BaseOp::Dot, x))
-            };
-            region.enable(selector, y).unwrap();
-        });
-    }
-
-    let last_elem = output
-        .get_slice(&[output.len() - 1..output.len()])
+    let start = instant::Instant::now();
+    let last_elem = res[2]
+        .get_single_elem(values[0].len() - 1)
         .expect("dot: failed to fetch last elem");
+    trace!("last elem took: {:?}", start.elapsed());
 
+    let start = instant::Instant::now();
     region.increment(assigned_len);
+    trace!("increment took: {:?}", start.elapsed());
     // last element is the result
 
     let elapsed = global_start.elapsed();
@@ -990,46 +962,26 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
 
-    let assigned_len: usize;
-    let input = {
-        let (res, len) =
-            region.assign_with_duplication(&config.inputs[1], &values[0], &config.check_mode)?;
-        assigned_len = len;
-        res.get_inner()?
-    };
-
     // Now we can assign the dot product
-    let accumulated_sum = accumulated::sum(&input).expect("accum poly: sum op failed");
+    let accumulated_sum =
+        accumulated::sum(&values[0].get_inner()?).expect("accum poly: sum op failed");
 
-    let (output, output_assigned_len) = region.assign_with_duplication(
-        &config.output,
-        &accumulated_sum.into(),
-        &config.check_mode,
+    let start = instant::Instant::now();
+    let (res, assigned_len) = region.assign_multiple_with_selector_and_duplication(
+        &[&config.inputs[1], &config.output],
+        &[values[0].clone(), accumulated_sum.into()],
+        BaseOp::Identity,
+        BaseOp::Sum,
+        config,
     )?;
+    let elapsed = start.elapsed();
+    trace!("assigning took: {:?}", elapsed);
 
-    assert_eq!(assigned_len, output_assigned_len);
-
-    // enable the selectors
-    if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
-            // skip over duplicates at start of column
-            if y == 0 && i > 0 {
-                return;
-            }
-            let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Identity, x))
-            } else {
-                config.selectors.get(&(BaseOp::Sum, x))
-            };
-
-            region.enable(selector, y).unwrap();
-        });
-    }
-
-    let last_elem = output
-        .get_slice(&[output.len() - 1..output.len()])
-        .expect("accum poly: failed to fetch last elem");
+    let start = instant::Instant::now();
+    let last_elem = res[1]
+        .get_single_elem(values[0].len() - 1)
+        .expect("dot: failed to fetch last elem");
+    trace!("last elem took: {:?}", start.elapsed());
 
     region.increment(assigned_len);
 
@@ -1056,46 +1008,25 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
 
-    let assigned_len: usize;
-    let input = {
-        let (res, len) =
-            region.assign_with_duplication(&config.inputs[1], &values[0], &config.check_mode)?;
-        assigned_len = len;
-        res.get_inner()?
-    };
+    let accumulated_prod =
+        accumulated::prod(&values[0].get_inner()?).expect("accum poly: prod op failed");
 
-    // Now we can assign the dot product
-    let accumulated_prod = accumulated::prod(&input).expect("accum poly: prod op failed");
-
-    let (output, output_assigned_len) = region.assign_with_duplication(
-        &config.output,
-        &accumulated_prod.into(),
-        &config.check_mode,
+    let start = instant::Instant::now();
+    let (res, assigned_len) = region.assign_multiple_with_selector_and_duplication(
+        &[&config.inputs[1], &config.output],
+        &[values[0].clone(), accumulated_prod.into()],
+        BaseOp::Identity,
+        BaseOp::CumProd,
+        config,
     )?;
+    let elapsed = start.elapsed();
+    trace!("assigning took: {:?}", elapsed);
 
-    assert_eq!(assigned_len, output_assigned_len);
-
-    // enable the selectors
-    if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
-            // skip over duplicates at start of column
-            if y == 0 && i > 0 {
-                return;
-            }
-            let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Identity, x))
-            } else {
-                config.selectors.get(&(BaseOp::CumProd, x))
-            };
-
-            region.enable(selector, y).unwrap();
-        });
-    }
-
-    let last_elem = output
-        .get_slice(&[output.len() - 1..output.len()])
-        .expect("accum poly: failed to fetch last elem");
+    let start = instant::Instant::now();
+    let last_elem = res[1]
+        .get_single_elem(values[0].len() - 1)
+        .expect("dot: failed to fetch last elem");
+    trace!("last elem took: {:?}", start.elapsed());
 
     region.increment(assigned_len);
 
@@ -1323,6 +1254,9 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         error!("{}", e);
         halo2_proofs::plonk::Error::Synthesis
     })?;
+    trace!("pairwise {} calc took {:?}", op.as_str(), start.elapsed());
+
+    let start = instant::Instant::now();
 
     let res = region.assign_multiple_with_selector_and_omissions(
         &[&config.inputs[0], &config.inputs[1], &config.output],
@@ -1333,19 +1267,18 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         config,
     )?;
 
+    trace!("assign took {:?}", start.elapsed());
+
     let mut output = res.last().unwrap().clone();
 
-    let elapsed = start.elapsed();
-
     let assigned_len = inputs[0].len() - removal_indices.len();
-
-    trace!("pairwise {} calc took {:?}", op.as_str(), elapsed);
 
     region.increment(assigned_len);
 
     let a_tensor = orig_lhs.get_inner_tensor()?;
     let b_tensor = orig_rhs.get_inner_tensor()?;
 
+    let start = instant::Instant::now();
     let first_zero_indices: HashSet<&usize> = HashSet::from_iter(first_zero_indices.iter());
     let second_zero_indices: HashSet<&usize> = HashSet::from_iter(second_zero_indices.iter());
 
@@ -2218,6 +2151,9 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     let removal_indices_ptr = &removal_indices;
     let assigned_len = x.len() - removal_indices.len();
 
+    trace!("filtering indices took {:?}", timer.elapsed());
+
+    let start = instant::Instant::now();
     let output = x.get_inner_tensor()?.par_enum_map(|i, e| {
         Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
             if !removal_indices.contains(&i) {
@@ -2229,9 +2165,15 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
             Value::<F>::unknown().into()
         })
     })?;
+    trace!(
+        "{} calc took {:?}",
+        <LookupOp as Op<F>>::as_string(nl),
+        start.elapsed()
+    );
 
     let is_dummy = region.is_dummy();
 
+    let start = instant::Instant::now();
     let table_index: ValTensor<F> = x
         .get_inner_tensor()?
         .par_enum_map(|i, e| {
@@ -2252,6 +2194,10 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
             })
         })?
         .into();
+
+    trace!("table index calc took {:?}", start.elapsed());
+
+    let start = instant::Instant::now();
     let res = region.assign_multiple_with_selector_and_omissions(
         &[
             &config.lookup_input,
@@ -2264,6 +2210,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         Some(nl.clone()),
         config,
     )?;
+    trace!("assigning took {:?}", start.elapsed());
 
     let mut output = res[1].clone();
 

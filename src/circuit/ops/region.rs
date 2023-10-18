@@ -1,9 +1,9 @@
 use crate::{
-    circuit::{BaseConfig, CheckMode},
+    circuit::BaseConfig,
     tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor},
 };
 use halo2_proofs::{
-    circuit::Region,
+    circuit::{AssignedCell, Region},
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
@@ -124,7 +124,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     pub fn assign_constant(&mut self, var: &VarTensor, value: F) -> Result<ValType<F>, Error> {
         self.total_constants += 1;
         if let Some(region) = &self.region {
-            let cell = var.assign_constant(&mut region.borrow_mut(), self.offset, value)?;
+            let (x, y) = var.cartesian_coord(self.offset);
+            let cell = var.assign_constant(&mut region.borrow_mut(), x, y, value)?;
             Ok(cell.into())
         } else {
             Ok(value.into())
@@ -136,57 +137,40 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         &mut self,
         var: &[&VarTensor],
         values: &[ValTensor<F>],
-        base_op_start: Option<BaseOp>,
-        base_op_end: Option<BaseOp>,
+        base_op_start: BaseOp,
+        base_op_end: BaseOp,
         config: &BaseConfig<F>,
-        check_mode: &crate::circuit::CheckMode,
-    ) -> Result<Vec<ValTensor<F>>, Error> {
+    ) -> Result<(Vec<ValTensor<F>>, usize), Error> {
         if let Some(region) = &self.region {
             // zip all values into pairs
             assert!(var.len() == values.len());
             // assert all values are of same len
             assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
 
-            let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
-            let mut previous_cells = vec![None; var.len()];
+            let mut previous_cells: Vec<Option<ValType<F>>> = vec![None; var.len()];
 
-            let mut values = values.to_vec();
+            let assigned_len = var[0].duplicated_len(values[0].len(), self.offset());
+            let mut current_flat_index = 0;
 
-            values.iter_mut().for_each(|v| {
-                v.duplicate_every_n(var[0].col_size(), self.offset())
-                    .unwrap()
-            });
+            let mut results: Vec<Vec<ValType<F>>> =
+                vec![Vec::with_capacity(values[0].len()); var.len()];
 
-            (0..values[0].len())
+            (0..assigned_len)
                 .map(|i| {
                     let region = &mut region.borrow_mut();
+
+                    let (x, y) = var[0].cartesian_coord(self.offset() + i);
+
+                    let is_start = y == 0 && i > 0;
 
                     let _ = var
                         .iter()
                         .zip(values.iter())
                         .enumerate()
                         .map(|(col, (var, value))| {
-                            let (x, y) = var.cartesian_coord(self.offset() + i);
-
-                            let val = match value {
-                                ValTensor::Value { .. } => {
-                                    value.get_flat_index(i).map_err(|e| {
-                                        log::error!("{}", e);
-                                        Error::Synthesis
-                                    })?
-                                }
-                                ValTensor::Instance { .. } => unimplemented!(),
-                            };
-
-                            let cell =
-                                var.assign_value(region, self.offset(), val.clone(), x, y, i)?;
-
-                            if y == (var.col_size() - 1) {
-                                // if we are at the end of the column, we need to copy the cell to the next column
-                                previous_cells[col] = Some(cell.clone());
-                            } else if i > 0 && y == 0 {
+                            let val = if i > 0 && y == 0 {
                                 if let Some(prev_cell) = previous_cells[col].as_ref() {
-                                    region.constrain_equal(prev_cell.cell(), cell.cell())?;
+                                    prev_cell.clone()
                                 } else {
                                     log::error!(
                                         "Error assigning copy-constraining previous value: {:?}",
@@ -194,38 +178,47 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                                     );
                                     return Err(halo2_proofs::plonk::Error::Synthesis);
                                 }
-                            }
-
-                            let val = match val {
-                                ValType::Constant(f) => ValType::AssignedConstant(cell, f),
-                                ValType::AssignedConstant(_, f) => {
-                                    ValType::AssignedConstant(cell, f)
+                            } else {
+                                match value {
+                                    ValTensor::Value { .. } => {
+                                        value.get_flat_index(current_flat_index).map_err(|e| {
+                                            log::error!("{}", e);
+                                            Error::Synthesis
+                                        })?
+                                    }
+                                    ValTensor::Instance { .. } => unimplemented!(),
                                 }
-                                _ => ValType::PrevAssigned(cell),
                             };
 
-                            results[col].push(val.clone());
+                            let cell = var.assign_value(region, val.clone(), x, y)?;
+
+                            let val = Self::convert_assigned_cell_to_valtype(cell, val);
+
+                            if !is_start {
+                                results[col].push(val.clone());
+                                if y == (var.col_size() - 1) {
+                                    previous_cells[col] = Some(val.clone());
+                                }
+                            }
 
                             Ok::<(), Error>(())
                         })
                         .collect::<Result<Vec<()>, _>>()?;
 
                     // enable the selector
-                    if !self.is_dummy() {
-                        let (x, y) = config.output.cartesian_coord(self.offset() + i);
-                        if y == 0 && i > 0 {
-                        } else if i == 0 {
-                            if let Some(base_op) = &base_op_start {
-                                let selector = config.selectors.get(&(base_op.clone(), x));
-                                selector.unwrap().enable(region, y)?;
-                            }
+                    let (x, y) = config.output.cartesian_coord(self.offset() + i);
+                    if !is_start {
+                    } else {
+                        if i == 0 {
+                            let selector = config.selectors.get(&(base_op_start.clone(), x));
+                            selector.unwrap().enable(region, y)?;
                         } else {
-                            if let Some(base_op) = &base_op_end {
-                                let selector = config.selectors.get(&(base_op.clone(), x));
-                                selector.unwrap().enable(region, y)?;
-                            }
+                            let selector = config.selectors.get(&(base_op_end.clone(), x));
+                            selector.unwrap().enable(region, y)?;
                         }
+                        current_flat_index += 1;
                     }
+
                     Ok::<(), Error>(())
                 })
                 .collect::<Result<Vec<()>, _>>()?;
@@ -241,23 +234,36 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                 .collect::<Vec<_>>();
 
             results.iter_mut().enumerate().for_each(|(i, v)| {
-                v.remove_every_n(var[i].col_size(), self.offset()).unwrap();
                 v.set_scale(values[i].scale());
-
-                if matches!(check_mode, CheckMode::SAFE) {
-                    if !v.any_unknowns() {
-                        assert_eq!(
-                            Into::<Tensor<i32>>::into(values[i].get_inner().unwrap()),
-                            Into::<Tensor<i32>>::into(v.get_inner().unwrap())
-                        )
-                    };
-                }
             });
 
-            Ok(results)
+            Ok((results, assigned_len))
         } else {
-            self.total_constants += values.iter().map(|v| v.num_constants()).sum::<usize>();
-            Ok(values.to_vec())
+            let mut assigned_len = 0;
+            self.total_constants += var
+                .iter()
+                .zip(values)
+                .map(|(var, value)| {
+                    let dummy = var
+                        .dummy_assign_with_duplication(self.offset, value)
+                        .unwrap();
+                    assigned_len += dummy.1;
+                    dummy.2
+                })
+                .sum::<usize>();
+            Ok((values.to_vec(), assigned_len))
+        }
+    }
+
+    ///
+    pub fn convert_assigned_cell_to_valtype(
+        cell: AssignedCell<F, F>,
+        prev_type: ValType<F>,
+    ) -> ValType<F> {
+        match prev_type {
+            ValType::Constant(f) => ValType::AssignedConstant(cell, f),
+            ValType::AssignedConstant(_, f) => ValType::AssignedConstant(cell, f),
+            _ => ValType::PrevAssigned(cell),
         }
     }
 
@@ -287,7 +293,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         .map(|(col, (var, value))| {
                             let val = match value {
                                 ValTensor::Value { .. } => {
-                                    value.get_single_elem(i).map_err(|e| {
+                                    value.get_flat_index(i).map_err(|e| {
                                         log::error!("{}", e);
                                         Error::Synthesis
                                     })?
@@ -295,24 +301,20 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                                 ValTensor::Instance { .. } => unimplemented!(),
                             };
 
-                            results[col].push(
-                                var.assign(region, self.offset + i, &val)?
-                                    .get_flat_index(0)
-                                    .map_err(|e| {
-                                        log::error!("{}", e);
-                                        Error::Synthesis
-                                    })?,
-                            );
+                            let (x, y) = var.cartesian_coord(self.offset() + i);
+                            let cell = var.assign_value(region, val.clone(), x, y)?;
+                            let val = Self::convert_assigned_cell_to_valtype(cell, val);
+                            results[col].push(val);
+
                             Ok::<(), Error>(())
                         })
                         .collect::<Result<Vec<()>, _>>()?;
 
                     // enable the selector
-                    if !self.is_dummy() {
-                        let (x, y) = config.output.cartesian_coord(self.offset() + i);
-                        let selector = config.selectors.get(&(base_op.clone(), x));
-                        selector.unwrap().enable(region, y)?;
-                    }
+                    let (x, y) = config.output.cartesian_coord(self.offset() + i);
+                    let selector = config.selectors.get(&(base_op.clone(), x));
+                    selector.unwrap().enable(region, y)?;
+
                     Ok::<(), Error>(())
                 })
                 .collect::<Result<Vec<()>, _>>()?;
@@ -360,7 +362,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             assert!(var.len() == values.len());
             // assert all values are of same len
             assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
-            let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
+            let mut results: Vec<Vec<ValType<F>>> =
+                vec![Vec::with_capacity(values.len() - ommissions.len()); var.len()];
             let mut total_assigned = 0;
             (0..values[0].len())
                 .map(|i| {
@@ -372,7 +375,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         .map(|(col, (var, value))| {
                             let val = match value {
                                 ValTensor::Value { .. } => {
-                                    value.get_single_elem(i).map_err(|e| {
+                                    value.get_flat_index(i).map_err(|e| {
                                         log::error!("{}", e);
                                         Error::Synthesis
                                     })?
@@ -381,19 +384,12 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                             };
 
                             if ommissions.contains(&i) {
-                                results[col].push(val.get_flat_index(0).map_err(|e| {
-                                    log::error!("{}", e);
-                                    Error::Synthesis
-                                })?);
+                                results[col].push(val.clone());
                             } else {
-                                results[col].push(
-                                    var.assign(region, self.offset + total_assigned, &val)?
-                                        .get_flat_index(0)
-                                        .map_err(|e| {
-                                            log::error!("{}", e);
-                                            Error::Synthesis
-                                        })?,
-                                );
+                                let (x, y) = var.cartesian_coord(self.offset() + total_assigned);
+                                let cell = var.assign_value(region, val.clone(), x, y)?;
+                                let val = Self::convert_assigned_cell_to_valtype(cell, val);
+                                results[col].push(val);
                             };
 
                             Ok::<(), Error>(())
@@ -401,7 +397,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         .collect::<Result<Vec<()>, _>>()?;
 
                     // enable the selector
-                    if !self.is_dummy() && !ommissions.contains(&i) {
+                    if !ommissions.contains(&i) {
                         // get the x and y coordinates
                         let (x, y) = config
                             .output
@@ -416,9 +412,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                         } else {
                             panic!("no base op or lookup op provided");
                         }
-                    }
 
-                    if !ommissions.contains(&i) {
                         total_assigned += 1;
                     }
 
@@ -447,24 +441,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                     .sum::<usize>();
             }
             Ok(values.to_vec())
-        }
-    }
-
-    /// Assign a valtensor to a vartensor with duplication
-    pub fn assign_with_duplication(
-        &mut self,
-        var: &VarTensor,
-        values: &ValTensor<F>,
-        check_mode: &crate::circuit::CheckMode,
-    ) -> Result<(ValTensor<F>, usize), Error> {
-        if let Some(region) = &self.region {
-            // duplicates every nth element to adjust for column overflow
-            var.assign_with_duplication(&mut region.borrow_mut(), self.offset, values, check_mode)
-        } else {
-            let (_, len, total_assigned_constants) =
-                var.dummy_assign_with_duplication(self.offset, values)?;
-            self.total_constants += total_assigned_constants;
-            Ok((values.clone(), len))
         }
     }
 

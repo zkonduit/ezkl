@@ -2732,11 +2732,14 @@ pub mod nonlinearities {
     pub fn kronecker_delta<T: TensorType + std::cmp::PartialEq + Send + Sync>(
         a: &Tensor<T>,
     ) -> Tensor<T> {
+        let zero_value = T::zero().unwrap();
+        let one_value = T::one().unwrap();
+
         a.par_enum_map(|_, a_i| {
-            if a_i == T::zero().unwrap() {
-                Ok::<_, TensorError>(T::one().unwrap())
+            if a_i == zero_value {
+                Ok::<_, TensorError>(one_value.clone())
             } else {
-                Ok::<_, TensorError>(T::zero().unwrap())
+                Ok::<_, TensorError>(zero_value.clone())
             }
         })
         .unwrap()
