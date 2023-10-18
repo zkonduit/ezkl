@@ -152,8 +152,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             let assigned_len = var[0].duplicated_len(values[0].len(), self.offset());
             let mut current_flat_index = 0;
 
-            let mut results: Vec<Vec<ValType<F>>> =
-                vec![Vec::with_capacity(values[0].len()); var.len()];
+            let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
 
             (0..assigned_len)
                 .map(|i| {
@@ -340,8 +339,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             assert!(var.len() == values.len());
             // assert all values are of same len
             assert!(values.iter().map(|v| v.len()).collect::<HashSet<_>>().len() == 1);
-            let mut results: Vec<Vec<ValType<F>>> =
-                vec![Vec::with_capacity(values.len() - ommissions.len()); var.len()];
+            let mut results: Vec<Vec<ValType<F>>> = vec![vec![]; var.len()];
             let region = &mut region.borrow_mut();
             let mut total_assigned = 0;
             (0..values[0].len())
