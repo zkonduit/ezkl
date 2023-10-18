@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use log::{error, warn};
 
 use crate::circuit::CheckMode;
@@ -190,45 +188,6 @@ impl VarTensor {
     }
 
     /// Assigns [ValTensor] to the columns of the inner tensor.
-    pub fn assign_with_omissions<F: PrimeField + TensorType + PartialOrd>(
-        &self,
-        region: &mut Region<F>,
-        offset: usize,
-        values: &ValTensor<F>,
-        omissions: &HashSet<&usize>,
-    ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
-        let mut assigned_coord = 0;
-        let mut res: ValTensor<F> = match values {
-            ValTensor::Instance { .. } => {
-                unimplemented!("cannot assign instance to advice columns with omissions")
-            }
-            ValTensor::Value { inner: v, .. } => Ok::<_, halo2_proofs::plonk::Error>(
-                v.enum_map(|coord, k| {
-                    if omissions.contains(&coord) {
-                        return Ok(k);
-                    }
-                    let (x, y) = self.cartesian_coord(offset + assigned_coord);
-                    let cell =
-                        self.assign_value(region, offset, k.clone(), x, y, assigned_coord)?;
-
-                    assigned_coord += 1;
-
-                    match k {
-                        ValType::Constant(f) => Ok::<ValType<F>, halo2_proofs::plonk::Error>(
-                            ValType::AssignedConstant(cell, f),
-                        ),
-                        ValType::AssignedConstant(_, f) => Ok(ValType::AssignedConstant(cell, f)),
-                        _ => Ok(ValType::PrevAssigned(cell)),
-                    }
-                })?
-                .into(),
-            ),
-        }?;
-        res.set_scale(values.scale());
-        Ok(res)
-    }
-
-    /// Assigns [ValTensor] to the columns of the inner tensor.
     pub fn assign<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Region<F>,
@@ -388,7 +347,8 @@ impl VarTensor {
         }
     }
 
-    fn assign_value<F: PrimeField + TensorType + PartialOrd>(
+    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
+    pub fn assign_value<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Region<F>,
         offset: usize,

@@ -1602,7 +1602,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
     let res = region.assign_multiple_with_selector(
         &[&config.inputs[1], &config.output],
         &[input, neg.into()],
-        Some(BaseOp::Neg),
+        BaseOp::Neg,
         config,
     )?;
 
@@ -2152,7 +2152,7 @@ pub fn boolean_identity<F: PrimeField + TensorType + PartialOrd>(
     let output = region.assign_multiple_with_selector(
         &[&config.inputs[1]],
         &[values[0].clone()],
-        Some(BaseOp::IsBoolean),
+        BaseOp::IsBoolean,
         config,
     )?;
 
@@ -2187,20 +2187,17 @@ pub fn enforce_equality<F: PrimeField + TensorType + PartialOrd>(
     // assert of same len
     assert_eq!(values[0].len(), values[1].len());
 
-    let res = region.assign_multiple_with_selector(
-        &[&config.inputs[1], &config.output],
-        &[values[0].clone(), values[1].clone()],
-        None,
-        config,
-    )?;
+    // assigns the instance to the advice.
+    let input = region.assign(&config.inputs[1], &values[0])?;
+    let output = region.assign(&config.output, &values[1])?;
 
     if !region.is_dummy() {
-        region.constrain_equal(&res[0], &res[1])?;
+        region.constrain_equal(&input, &output)?;
     }
 
-    region.increment(res[1].len());
+    region.increment(input.len());
 
-    Ok(res[1].clone())
+    Ok(output.clone())
 }
 
 /// layout for nonlinearity check.
