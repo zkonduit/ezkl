@@ -74,7 +74,7 @@ Build the auto-generated rust documentation and open the docs in your browser lo
 You can install the library from source
 
 ```bash
-cargo install --path .
+cargo install --locked --path .
 ```
 
 You will need a functioning installation of `solc` in order to run `ezkl` properly.
