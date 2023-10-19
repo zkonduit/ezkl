@@ -257,7 +257,7 @@ pub fn genWitness(
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let witness = circuit
-        .forward(&mut input)
+        .forward(&mut input, None, None)
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     serde_json::to_vec(&witness).map_err(|e| JsError::new(&format!("{}", e)))

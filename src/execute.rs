@@ -153,7 +153,9 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             data,
             compiled_circuit,
             output,
-        } => gen_witness(compiled_circuit, data, Some(output))
+            vk_path,
+            srs_path,
+        } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path)
             .await
             .map(|_| ()),
         Commands::Mock { model, witness } => mock(model, witness).await,
@@ -468,11 +470,29 @@ pub(crate) async fn gen_witness(
     compiled_circuit_path: PathBuf,
     data: PathBuf,
     output: Option<PathBuf>,
+    vk_path: Option<PathBuf>,
+    srs_path: Option<PathBuf>,
 ) -> Result<GraphWitness, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
 
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
     let data = GraphData::from_path(data)?;
+    let settings = circuit.settings().clone();
+
+    let vk = if let Some(vk) = vk_path {
+        Some(load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
+            vk,
+            settings.clone(),
+        )?)
+    } else {
+        None
+    };
+
+    let srs = if let Some(srs) = srs_path {
+        Some(load_params_cmd(srs, settings.run_args.logrows)?)
+    } else {
+        None
+    };
 
     #[cfg(not(target_arch = "wasm32"))]
     let mut input = circuit.load_graph_input(&data).await?;
@@ -481,7 +501,7 @@ pub(crate) async fn gen_witness(
 
     let start_time = Instant::now();
 
-    let witness = circuit.forward(&mut input)?;
+    let witness = circuit.forward(&mut input, vk.as_ref(), srs.as_ref())?;
 
     // print each variable tuple (symbol, value) as symbol=value
     trace!(

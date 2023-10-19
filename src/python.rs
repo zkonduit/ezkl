@@ -655,11 +655,13 @@ fn calibrate_settings(
     data,
     model,
     output,
+    vk_path=None, 
+    srs_path=None,
 ))]
-fn gen_witness(data: PathBuf, model: PathBuf, output: Option<PathBuf>) -> PyResult<PyObject> {
+fn gen_witness(data: PathBuf, model: PathBuf, output: Option<PathBuf>, vk_path: Option<PathBuf>, srs_path: Option<PathBuf>) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::gen_witness(model, data, output))
+        .block_on(crate::execute::gen_witness(model, data, output, vk_path, srs_path))
         .map_err(|e| {
             let err_str = format!("Failed to run generate witness: {}", e);
             PyRuntimeError::new_err(err_str)
