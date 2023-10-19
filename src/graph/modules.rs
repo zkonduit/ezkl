@@ -1,4 +1,5 @@
 use crate::circuit::modules::elgamal::{ElGamalConfig, ElGamalGadget, ElGamalVariables};
+use crate::circuit::modules::kzg::{KZGChip, KZGConfig};
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::Module;
@@ -29,6 +30,8 @@ pub type ModulePoseidonConfig = PoseidonConfig<POSEIDON_WIDTH, POSEIDON_RATE>;
 ///
 #[derive(Clone, Debug, Default)]
 pub struct ModuleConfigs {
+    /// KZG
+    kzg: Vec<KZGConfig>,
     /// Poseidon
     poseidon: Option<ModulePoseidonConfig>,
     /// ElGamal
@@ -43,15 +46,20 @@ impl ModuleConfigs {
         cs: &mut ConstraintSystem<Fp>,
         visibility: VarVisibility,
         module_size: ModuleSizes,
+        logrows: usize,
     ) -> Self {
         let mut config = Self::default();
+
+        for size in module_size.kzg {
+            config.kzg.push(KZGChip::configure(cs, (logrows, size)));
+        }
 
         if (visibility.input.is_encrypted()
             || visibility.output.is_encrypted()
             || visibility.params.is_encrypted())
             && module_size.elgamal.1[0] > 0
         {
-            let elgamal = ElGamalGadget::configure(cs);
+            let elgamal = ElGamalGadget::configure(cs, ());
             config.instance = Some(elgamal.instance);
             config.elgamal = Some(elgamal);
         };
@@ -71,7 +79,7 @@ impl ModuleConfigs {
                         Some(inst),
                     ));
                 } else {
-                    let poseidon = ModulePoseidon::configure(cs);
+                    let poseidon = ModulePoseidon::configure(cs, ());
                     config.instance = poseidon.instance;
                     config.poseidon = Some(poseidon);
                 }
@@ -199,6 +207,7 @@ impl ModuleForwardResult {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 ///
 pub struct ModuleSizes {
+    kzg: Vec<usize>,
     poseidon: (usize, Vec<usize>),
     elgamal: (usize, Vec<usize>),
 }
@@ -207,6 +216,7 @@ impl ModuleSizes {
     /// Create new module sizes
     pub fn new() -> Self {
         ModuleSizes {
+            kzg: vec![],
             poseidon: (
                 0,
                 vec![0; crate::circuit::modules::poseidon::NUM_INSTANCE_COLUMNS],
@@ -236,7 +246,20 @@ impl ModuleSizes {
 
 /// Graph modules that can process inputs, params and outputs beyond the basic operations
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct GraphModules;
+pub struct GraphModules {
+    kzg_idx: usize,
+}
+impl GraphModules {
+    ///
+    pub fn new() -> GraphModules {
+        GraphModules { kzg_idx: 0 }
+    }
+
+    ///
+    pub fn reset_index(&mut self) {
+        self.kzg_idx = 0;
+    }
+}
 
 impl GraphModules {
     fn num_constraint_given_shapes(
@@ -247,7 +270,10 @@ impl GraphModules {
         for shape in shapes {
             let total_len = shape.iter().product::<usize>();
             if total_len > 0 {
-                if visibility.is_hashed() {
+                if visibility.is_kzgcommit() {
+                    // 1 constraint for each kzg commitment
+                    sizes.kzg.push(total_len);
+                } else if visibility.is_hashed() {
                     sizes.poseidon.0 += ModulePoseidon::num_rows(total_len);
                     // 1 constraints for hash
                     sizes.poseidon.1[0] += 1;
@@ -299,6 +325,7 @@ impl GraphModules {
 
     /// Layout the module
     pub fn layout(
+        &mut self,
         layouter: &mut impl Layouter<Fp>,
         configs: &mut ModuleConfigs,
         values: &mut [ValTensor<Fp>],
@@ -306,6 +333,30 @@ impl GraphModules {
         instance_offset: &mut usize,
         module_settings: &ModuleVarSettings,
     ) -> Result<(), Error> {
+        if element_visibility.is_kzgcommit() && !values.is_empty() {
+            // concat values and sk to get the inputs
+            let mut inputs = values.iter_mut().map(|x| vec![x.clone()]).collect_vec();
+
+            // layout the module
+            inputs.iter_mut().for_each(|x| {
+                // create the module
+                let chip = KZGChip::new(configs.kzg[self.kzg_idx].clone());
+                // reserve module 2 onwards for kzg modules
+                let module_offset = 3 + self.kzg_idx;
+                layouter
+                    .assign_region(|| format!("_enter_module_{}", module_offset), |_| Ok(()))
+                    .unwrap();
+                Self::layout_module(&chip, layouter, x, instance_offset).unwrap();
+                // increment the current index
+                self.kzg_idx += 1;
+            });
+
+            // replace the inputs with the outputs
+            values.iter_mut().enumerate().for_each(|(i, x)| {
+                x.clone_from(&inputs[i][0]);
+            });
+        }
+
         // If the module is hashed, then we need to hash the inputs
         if element_visibility.is_hashed() && !values.is_empty() {
             if let Some(config) = &mut configs.poseidon {

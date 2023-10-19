@@ -294,7 +294,7 @@ impl OnChainSource {
             }
         }
 
-        let calls_to_accounts = test_on_chain_data(client.clone(), &data).await?;
+        let calls_to_accounts = test_on_chain_data(client.clone(), data).await?;
         debug!("Calls to accounts: {:?}", calls_to_accounts);
         let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
         debug!("Inputs: {:?}", inputs);

@@ -5,6 +5,9 @@ pub mod poseidon;
 pub mod elgamal;
 
 ///
+pub mod kzg;
+
+///
 pub mod planner;
 use halo2_proofs::{
     circuit::Layouter,
@@ -23,11 +26,13 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
     type InputAssignments;
     /// The inputs used in the run function
     type RunInputs;
+    /// The params used in configure
+    type Params;
 
     /// construct new module from config
     fn new(config: Self::Config) -> Self;
     /// Configure
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config;
+    fn configure(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config;
     /// Name
     fn name(&self) -> &'static str;
     /// Run the operation the module represents

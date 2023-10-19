@@ -180,11 +180,9 @@ pub async fn deploy_da_verifier_via_solidity(
     let mut contract_instance_offset = 0;
 
     if let DataSource::OnChain(source) = input.input_data {
-        if settings.run_args.input_visibility.is_hashed_public() {
-            // set scales 1.0
-            scales.extend(vec![0; instance_shapes[instance_idx]]);
-            instance_idx += 1;
-        } else if settings.run_args.input_visibility.is_encrypted() {
+        if settings.run_args.input_visibility.is_hashed_public()
+            | settings.run_args.input_visibility.is_encrypted()
+        {
             // set scales 1.0
             scales.extend(vec![0; instance_shapes[instance_idx]]);
             instance_idx += 1;
@@ -209,10 +207,9 @@ pub async fn deploy_da_verifier_via_solidity(
     }
 
     if let Some(DataSource::OnChain(source)) = input.output_data {
-        if settings.run_args.output_visibility.is_hashed_public() {
-            // set scales 1.0
-            scales.extend(vec![0; instance_shapes[instance_idx]]);
-        } else if settings.run_args.output_visibility.is_encrypted() {
+        if settings.run_args.output_visibility.is_hashed_public()
+            | settings.run_args.output_visibility.is_encrypted()
+        {
             // set scales 1.0
             scales.extend(vec![0; instance_shapes[instance_idx]]);
         } else {

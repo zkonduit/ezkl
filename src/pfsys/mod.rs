@@ -581,14 +581,18 @@ pub fn create_proof_circuit_kzg<
 >(
     circuit: C,
     params: &'params ParamsKZG<Bn256>,
-    public_inputs: Vec<Fr>,
+    public_inputs: Option<Vec<Fr>>,
     pk: &ProvingKey<G1Affine>,
     transcript: TranscriptType,
     strategy: Strategy,
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
-    let public_inputs = if !public_inputs.is_empty() {
-        vec![public_inputs]
+    let public_inputs = if let Some(public_inputs) = public_inputs {
+        if !public_inputs.is_empty() {
+            vec![public_inputs]
+        } else {
+            vec![vec![]]
+        }
     } else {
         vec![]
     };

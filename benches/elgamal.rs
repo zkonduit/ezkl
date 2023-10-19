@@ -1,8 +1,6 @@
 use ark_std::test_rng;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::modules::elgamal::{
-    ElGamalConfig, ElGamalGadget, ElGamalVariables,
-};
+use ezkl::circuit::modules::elgamal::{ElGamalConfig, ElGamalGadget, ElGamalVariables};
 use ezkl::circuit::modules::Module;
 use ezkl::circuit::*;
 use ezkl::pfsys::create_keys;
@@ -37,7 +35,7 @@ impl Circuit<Fr> for EncryptytionCircuit {
     }
 
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
-        ElGamalGadget::configure(cs)
+        ElGamalGadget::configure(cs, ())
     }
 
     fn synthesize(
@@ -99,7 +97,7 @@ fn runelgamal(c: &mut Criterion) {
                 let prover = create_proof_circuit_kzg(
                     circuit.clone(),
                     &params,
-                    public_inputs[0].clone(),
+                    Some(public_inputs[0].clone()),
                     &pk,
                     TranscriptType::EVM,
                     SingleStrategy::new(&params),

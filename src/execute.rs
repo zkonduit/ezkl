@@ -55,7 +55,7 @@ use std::fs::File;
 use std::io::ErrorKind::NotFound;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
@@ -1271,7 +1271,7 @@ pub(crate) async fn prove(
             create_proof_circuit_kzg(
                 circuit,
                 &params,
-                public_inputs,
+                Some(public_inputs),
                 &pk,
                 transcript,
                 strategy,
@@ -1283,7 +1283,7 @@ pub(crate) async fn prove(
             create_proof_circuit_kzg(
                 circuit,
                 &params,
-                public_inputs,
+                Some(public_inputs),
                 &pk,
                 transcript,
                 strategy,
@@ -1344,7 +1344,7 @@ pub(crate) async fn fuzz(
         let bad_proof = create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            public_inputs.clone(),
+            Some(public_inputs.clone()),
             &bad_pk,
             transcript,
             strategy.clone(),
@@ -1371,7 +1371,7 @@ pub(crate) async fn fuzz(
         let bad_proof = create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            bad_inputs.clone(),
+            Some(bad_inputs.clone()),
             &pk,
             transcript,
             strategy.clone(),
@@ -1395,7 +1395,7 @@ pub(crate) async fn fuzz(
     let proof = create_proof_circuit_kzg(
         circuit.clone(),
         &params,
-        public_inputs.clone(),
+        Some(public_inputs.clone()),
         &pk,
         transcript,
         strategy.clone(),
@@ -1598,7 +1598,7 @@ pub(crate) fn aggregate(
         let snark = create_proof_circuit_kzg(
             agg_circuit.clone(),
             &params,
-            agg_circuit.instances(),
+            Some(agg_circuit.instances()),
             &agg_pk,
             transcript,
             AccumulatorStrategy::new(&params),
@@ -1706,8 +1706,8 @@ pub(crate) async fn get_hub_credentials(
 /// Deploy a model
 pub(crate) async fn deploy_model(
     url: Option<&str>,
-    model: &PathBuf,
-    input: &PathBuf,
+    model: &Path,
+    input: &Path,
     name: &str,
     organization_id: &str,
     args: &RunArgs,
@@ -1798,7 +1798,7 @@ pub(crate) async fn deploy_model(
 pub async fn prove_hub(
     url: Option<&str>,
     id: &str,
-    input: &PathBuf,
+    input: &Path,
     transcript_type: Option<&str>,
 ) -> Result<crate::hub::Proof, Box<dyn std::error::Error>> {
     let input_file = tokio::fs::File::open(input.canonicalize()?).await?;

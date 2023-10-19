@@ -199,7 +199,7 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
                 if let Some(vis) = &t.visibility {
                     match vis {
                         Visibility::Fixed => x.into(),
-                        Visibility::Public | Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted => {
+                        Visibility::Public | Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted | Visibility::KZGCommit => {
                             Value::known(x).into()
                         }
                     }
@@ -743,7 +743,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             }
             ValTensor::Instance { dims, idx, .. } => {
                 let dims = dims[*idx].clone();
-                if !dims.is_empty() && (dims != &[0]) {
+                if !dims.is_empty() && (dims != [0]) {
                     dims.iter().product::<usize>()
                 } else {
                     0

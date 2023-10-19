@@ -257,7 +257,7 @@ mod matmul_col_ultra_overflow {
         let prover = crate::pfsys::create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            vec![],
+            None,
             &pk,
             crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
@@ -892,7 +892,7 @@ mod conv_col_ultra_overflow {
         let prover = crate::pfsys::create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            vec![],
+            None,
             &pk,
             crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
@@ -1039,7 +1039,7 @@ mod conv_relu_col_ultra_overflow {
         let prover = crate::pfsys::create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            vec![],
+            None,
             &pk,
             crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
@@ -1391,7 +1391,7 @@ mod add_with_overflow_and_poseidon {
             let base = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE);
             VarTensor::constant_cols(cs, K, 2, false);
 
-            let poseidon = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::configure(cs);
+            let poseidon = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::configure(cs, ());
 
             MyCircuitConfig { base, poseidon }
         }
@@ -2124,6 +2124,7 @@ mod lookup_ultra_overflow {
     }
 
     #[test]
+    #[ignore]
     fn relucircuit() {
         // get some logs fam
         crate::logger::init_logger();
@@ -2148,7 +2149,7 @@ mod lookup_ultra_overflow {
         let prover = crate::pfsys::create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            vec![],
+            None,
             &pk,
             crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),

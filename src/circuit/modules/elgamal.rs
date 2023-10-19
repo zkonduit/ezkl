@@ -414,7 +414,7 @@ impl ElGamalGadget {
         let s = variables.pk.mul(variables.r).to_affine();
         let c1 = g.mul(variables.r).to_affine();
 
-        let (s, c1) = layouter.assign_region(
+        layouter.assign_region(
             || "obtain_s",
             |region| {
                 let offset = 0;
@@ -432,10 +432,9 @@ impl ElGamalGadget {
 
                 chip.ecc.assert_equal(ctx, &s, &s_from_sk)?;
 
-                Ok((s, c1))
+                Ok([s, c1])
             },
-        )?;
-        Ok([s, c1])
+        )
     }
 
     pub(crate) fn verify_encryption(
@@ -484,6 +483,7 @@ impl Module<Fr> for ElGamalGadget {
     type Config = ElGamalConfig;
     type InputAssignments = (Vec<AssignedCell<Fr, Fr>>, AssignedCell<Fr, Fr>);
     type RunInputs = (Vec<Fr>, ElGamalVariables);
+    type Params = ();
 
     fn new(config: Self::Config) -> Self {
         Self {
@@ -492,7 +492,7 @@ impl Module<Fr> for ElGamalGadget {
         }
     }
 
-    fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
+    fn configure(meta: &mut ConstraintSystem<Fr>, _: Self::Params) -> Self::Config {
         ElGamalChip::configure(meta)
     }
 
@@ -747,7 +747,7 @@ mod tests {
         }
 
         fn configure(meta: &mut ConstraintSystem<Fr>) -> ElGamalConfig {
-            ElGamalGadget::configure(meta)
+            ElGamalGadget::configure(meta, ())
         }
 
         fn synthesize(

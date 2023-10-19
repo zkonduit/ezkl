@@ -1131,8 +1131,12 @@ impl Circuit<Fp> for GraphCircuit {
             params.uses_modules(),
         );
 
-        let module_configs =
-            ModuleConfigs::from_visibility(cs, visibility, params.module_sizes.clone());
+        let module_configs = ModuleConfigs::from_visibility(
+            cs,
+            visibility,
+            params.module_sizes.clone(),
+            params.run_args.logrows as usize,
+        );
 
         vars.instantiate_instance(
             cs,
@@ -1186,6 +1190,7 @@ impl Circuit<Fp> for GraphCircuit {
         trace!("Setting input in synthesize");
         let input_vis = &self.settings().run_args.input_visibility;
         let output_vis = &self.settings().run_args.output_visibility;
+        let mut graph_modules = GraphModules::new();
 
         let mut config = config.clone();
 
@@ -1220,7 +1225,7 @@ impl Circuit<Fp> for GraphCircuit {
             for outlet in &outlets {
                 input_outlets.push(inputs[*outlet].clone());
             }
-            GraphModules::layout(
+            graph_modules.layout(
                 &mut layouter,
                 &mut config.module_configs,
                 &mut input_outlets,
@@ -1233,7 +1238,7 @@ impl Circuit<Fp> for GraphCircuit {
                 inputs[*outlet] = input_outlets[i].clone();
             }
         } else {
-            GraphModules::layout(
+            graph_modules.layout(
                 &mut layouter,
                 &mut config.module_configs,
                 &mut inputs,
@@ -1267,7 +1272,7 @@ impl Circuit<Fp> for GraphCircuit {
             };
 
             // now do stuff to the model params
-            GraphModules::layout(
+            graph_modules.layout(
                 &mut layouter,
                 &mut config.module_configs,
                 &mut flattened_params,
@@ -1288,7 +1293,7 @@ impl Circuit<Fp> for GraphCircuit {
         }
 
         // create a new module for the model (space 2)
-        layouter.assign_region(|| "_new_module", |_| Ok(()))?;
+        layouter.assign_region(|| "_enter_module_2", |_| Ok(()))?;
         trace!("laying out model");
 
         let mut vars = config.model_config.vars.clone();
@@ -1320,7 +1325,7 @@ impl Circuit<Fp> for GraphCircuit {
                 output_outlets.push(outputs[*outlet].clone());
             }
             // this will re-enter module 0
-            GraphModules::layout(
+            graph_modules.layout(
                 &mut layouter,
                 &mut config.module_configs,
                 &mut output_outlets,
@@ -1334,8 +1339,7 @@ impl Circuit<Fp> for GraphCircuit {
                 outputs[*outlet] = output_outlets[i].clone();
             }
         } else {
-            // this will re-enter module 0
-            GraphModules::layout(
+            graph_modules.layout(
                 &mut layouter,
                 &mut config.module_configs,
                 &mut outputs,

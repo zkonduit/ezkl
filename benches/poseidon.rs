@@ -36,7 +36,7 @@ impl Circuit<Fr> for MyCircuit {
     }
 
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
-        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, 10>::configure(cs)
+        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, 10>::configure(cs, ())
     }
 
     fn synthesize(
@@ -90,7 +90,7 @@ fn runposeidon(c: &mut Criterion) {
                 let prover = create_proof_circuit_kzg(
                     circuit.clone(),
                     &params,
-                    output[0].clone(),
+                    Some(output[0].clone()),
                     &pk,
                     TranscriptType::EVM,
                     SingleStrategy::new(&params),

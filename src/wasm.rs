@@ -12,9 +12,9 @@ use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
+use halo2_solidity_verifier::encode_calldata;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
-use halo2_solidity_verifier::encode_calldata;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
@@ -45,16 +45,20 @@ use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 /// Wrapper around the halo2 encode call data method
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn encodeVerifierCalldata(proof: wasm_bindgen::Clamped<Vec<u8>>, vk_address: Option<Vec<u8>>) -> Result<Vec<u8>, JsError> {
+pub fn encodeVerifierCalldata(
+    proof: wasm_bindgen::Clamped<Vec<u8>>,
+    vk_address: Option<Vec<u8>>,
+) -> Result<Vec<u8>, JsError> {
     let snark: crate::pfsys::Snark<Fr, G1Affine> =
         serde_json::from_slice(&proof[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let vk_address: Option<[u8; 20]> = if let Some(vk_address) = vk_address {
-        let array: [u8; 20] = serde_json::from_slice(&vk_address[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
+        let array: [u8; 20] =
+            serde_json::from_slice(&vk_address[..]).map_err(|e| JsError::new(&format!("{}", e)))?;
         Some(array)
     } else {
         None
-    }; 
+    };
 
     let flattened_instances = snark.instances.into_iter().flatten();
 
@@ -66,7 +70,6 @@ pub fn encodeVerifierCalldata(proof: wasm_bindgen::Clamped<Vec<u8>>, vk_address:
 
     Ok(encoded)
 }
-
 
 /// Converts 4 u64s to a field element
 #[wasm_bindgen]
@@ -344,7 +347,7 @@ pub fn prove(
     let proof = create_proof_circuit_kzg(
         circuit,
         &params,
-        public_inputs,
+        Some(public_inputs),
         &pk,
         crate::pfsys::TranscriptType::EVM,
         strategy,
