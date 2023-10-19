@@ -386,7 +386,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
                 existing_instance,
             ))
         } else {
-            Some(ValTensor::new_instance(cs, instance_dims, instance_scale))
+            if instance_dims.is_empty() {
+                None
+            } else {
+                Some(ValTensor::new_instance(cs, instance_dims, instance_scale))
+            }
         };
     }
 
