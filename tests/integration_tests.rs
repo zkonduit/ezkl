@@ -685,7 +685,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                mock(path, test.to_string(), "encrypter", "kzgcommit", "hashed", 1, "resources", None);
+                mock(path, test.to_string(), "encrypted", "kzgcommit", "hashed", 1, "resources", None);
                 test_dir.close().unwrap();
             }
 
