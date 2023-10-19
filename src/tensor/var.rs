@@ -33,6 +33,42 @@ impl VarTensor {
         base.pow(logrows as u32) as usize - cs.blinding_factors() - 1
     }
 
+    /// Create a new VarTensor::Advice that is unblinded
+    /// Arguments
+    /// * `cs` - The constraint system
+    /// * `logrows` - log2 number of rows in the matrix, including any system and blinding rows.
+    /// * `capacity` - The number of advice cells to allocate
+    pub fn new_unblinded_advice<F: PrimeField>(
+        cs: &mut ConstraintSystem<F>,
+        logrows: usize,
+        capacity: usize,
+    ) -> Self {
+        let max_rows = Self::max_rows(cs, logrows);
+
+        let mut modulo = (capacity / max_rows) + 1;
+        // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
+        modulo = ((capacity + modulo) / max_rows) + 1;
+        let mut advices = vec![];
+
+        if modulo > 1 {
+            warn!(
+                "will be using column duplication for {} advice columns",
+                modulo - 1
+            );
+        }
+
+        for _ in 0..modulo {
+            let col = cs.unblinded_advice_column();
+            cs.enable_equality(col);
+            advices.push(col);
+        }
+
+        VarTensor::Advice {
+            inner: advices,
+            col_size: max_rows,
+        }
+    }
+
     /// Create a new VarTensor::Advice
     /// Arguments
     /// * `cs` - The constraint system

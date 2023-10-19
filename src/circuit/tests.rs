@@ -1391,7 +1391,7 @@ mod add_with_overflow_and_poseidon {
             let base = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE);
             VarTensor::constant_cols(cs, K, 2, false);
 
-            let poseidon = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::configure(cs);
+            let poseidon = PoseidonChip::<PoseidonSpec, WIDTH, RATE, WIDTH>::configure(cs, ());
 
             MyCircuitConfig { base, poseidon }
         }

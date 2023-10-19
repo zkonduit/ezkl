@@ -199,7 +199,7 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
                 if let Some(vis) = &t.visibility {
                     match vis {
                         Visibility::Fixed => x.into(),
-                        Visibility::Public | Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted => {
+                        Visibility::Public | Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted | Visibility::KZGCommit => {
                             Value::known(x).into()
                         }
                     }

@@ -34,6 +34,8 @@ pub enum Visibility {
         ///
         outlets: Vec<usize>,
     },
+    /// Mark an item as publicly committed to (KZG commitment sent in the proof submitted for verification)
+    KZGCommit,
     /// Mark an item as encrypted (public key and encrypted message sent in the proof submitted for verificatio)
     Encrypted,
     /// assigned as a constant in the circuit
@@ -59,6 +61,7 @@ impl<'a> From<&'a str> for Visibility {
         match s {
             "private" => Visibility::Private,
             "public" => Visibility::Public,
+            "kzgcommit" => Visibility::KZGCommit,
             "fixed" => Visibility::Fixed,
             "hashed" | "hashed/public" => Visibility::Hashed {
                 hash_is_public: true,
@@ -78,6 +81,7 @@ impl IntoPy<PyObject> for Visibility {
             Visibility::Private => "private".to_object(py),
             Visibility::Public => "public".to_object(py),
             Visibility::Fixed => "fixed".to_object(py),
+            Visibility::KZGCommit => "kzgcommit".to_object(py),
             Visibility::Hashed {
                 hash_is_public,
                 outlets,
@@ -125,6 +129,7 @@ impl<'source> FromPyObject<'source> for Visibility {
         match strval.to_lowercase().as_str() {
             "private" => Ok(Visibility::Private),
             "public" => Ok(Visibility::Public),
+            "kzgcommit" => Ok(Visibility::KZGCommit),
             "hashed" => Ok(Visibility::Hashed {
                 hash_is_public: true,
                 outlets: vec![],
@@ -159,6 +164,11 @@ impl Visibility {
         matches!(&self, Visibility::Hashed { .. })
     }
     #[allow(missing_docs)]
+    pub fn is_kzgcommit(&self) -> bool {
+        matches!(&self, Visibility::KZGCommit)
+    }
+
+    #[allow(missing_docs)]
     pub fn is_hashed_public(&self) -> bool {
         if let Visibility::Hashed {
             hash_is_public: true,
@@ -186,7 +196,9 @@ impl Visibility {
     }
     #[allow(missing_docs)]
     pub fn requires_processing(&self) -> bool {
-        matches!(&self, Visibility::Encrypted) | matches!(&self, Visibility::Hashed { .. })
+        matches!(&self, Visibility::Encrypted)
+            | matches!(&self, Visibility::Hashed { .. })
+            | matches!(&self, Visibility::KZGCommit)
     }
     #[allow(missing_docs)]
     pub fn overwrites_inputs(&self) -> Vec<usize> {
@@ -199,6 +211,7 @@ impl Visibility {
 impl std::fmt::Display for Visibility {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            Visibility::KZGCommit => write!(f, "kzgcommit"),
             Visibility::Private => write!(f, "private"),
             Visibility::Public => write!(f, "public"),
             Visibility::Fixed => write!(f, "fixed"),
@@ -281,6 +294,9 @@ impl VarVisibility {
             & !output_vis.is_encrypted()
             & !params_vis.is_encrypted()
             & !input_vis.is_encrypted()
+            & !output_vis.is_kzgcommit()
+            & !params_vis.is_kzgcommit()
+            & !input_vis.is_kzgcommit()
         {
             return Err(Box::new(GraphError::Visibility));
         }

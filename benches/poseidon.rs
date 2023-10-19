@@ -36,7 +36,7 @@ impl Circuit<Fr> for MyCircuit {
     }
 
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
-        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, 10>::configure(cs)
+        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, 10>::configure(cs, ())
     }
 
     fn synthesize(

@@ -15,7 +15,7 @@ use halo2_proofs::{
         Instance, Selector, TableColumn,
     },
 };
-use log::trace;
+use log::{trace, warn};
 
 /// A simple [`FloorPlanner`] that performs minimal optimizations.
 #[derive(Debug)]
@@ -72,7 +72,7 @@ impl<'a, F: Field, CS: Assignment<F>> ModuleLayouter<'a, F, CS> {
         let ret = ModuleLayouter {
             cs,
             constants,
-            regions: HashMap::from([(0, HashMap::default()), (1, HashMap::default())]),
+            regions: HashMap::default(),
             columns: HashMap::default(),
             region_idx: HashMap::default(),
             table_columns: vec![],
@@ -105,16 +105,16 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
         NR: Into<String>,
     {
         // if the name contains the required substring we increment the current module idx
-        if Into::<String>::into(name()).contains("_new_module") {
-            self.current_module = self.regions.keys().max().unwrap_or(&0) + 1;
-        } else if Into::<String>::into(name()).contains("_enter_module_") {
+        if Into::<String>::into(name()).contains("_enter_module_") {
             let index = Into::<String>::into(name())
                 .split("_enter_module_")
                 .last()
                 .unwrap_or_else(|| panic!("Invalid module name"))
                 .parse::<usize>()
                 .unwrap_or_else(|_| panic!("Invalid module name"));
-            assert!(self.regions.contains_key(&index), "module does not exist");
+            if !self.regions.contains_key(&index) {
+                warn!("spawning module {}", index)
+            };
             self.current_module = index;
         }
 

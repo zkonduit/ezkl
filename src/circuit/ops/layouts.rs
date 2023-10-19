@@ -2206,6 +2206,7 @@ pub fn enforce_equality<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assert of same len
     assert_eq!(values[0].len(), values[1].len());
+
     // assigns the instance to the advice.
     let input = region.assign(&config.inputs[1], &values[0])?;
     let output = region.assign(&config.output, &values[1])?;

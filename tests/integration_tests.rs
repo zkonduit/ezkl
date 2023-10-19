@@ -606,6 +606,15 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn mock_kzg_input_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "kzgcommit", "private", "public", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn mock_encrypted_input_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
@@ -620,6 +629,16 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                 mock(path, test.to_string(), "private", "hashed", "public", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_kzg_params_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "private", "kzgcommit", "public", 1, "resources", None);
                 test_dir.close().unwrap();
             }
 
@@ -641,12 +660,32 @@ mod native_tests {
                 test_dir.close().unwrap();
             }
 
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_kzg_output_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "public", "private", "kzg", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
             #(#[test_case(TESTS[N])])*
             fn mock_hashed_output_fixed_params_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                 mock(path, test.to_string(), "public", "fixed", "hashed", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_output_kzg_params_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "encrypter", "kzgcommit", "hashed", 1, "resources", None);
                 test_dir.close().unwrap();
             }
 
@@ -674,6 +713,16 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                 mock(path, test.to_string(), "encrypted", "encrypted", "encrypted", 1, "resources", None);
+                test_dir.close().unwrap();
+            }
+
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_kzg_all_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                mock(path, test.to_string(), "kzgcommit", "kzgcommit", "kzgcommit", 1, "resources", None);
                 test_dir.close().unwrap();
             }
 
@@ -750,6 +799,15 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
                kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed", None, false);
+               test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_kzg_output(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "kzgcommit", None, false);
                test_dir.close().unwrap();
             }
 
@@ -972,6 +1030,18 @@ mod native_tests {
                     test_dir.close().unwrap();
                 }
 
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_kzg_input_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let mut _anvil_child = crate::native_tests::start_anvil(false);
+                    kzg_evm_prove_and_verify(path, test.to_string(), "kzgcommit", "private", "private");
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    test_dir.close().unwrap();
+                }
+
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_hashed_params_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
@@ -994,6 +1064,31 @@ mod native_tests {
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
                 }
+
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_kzg_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    kzg_evm_prove_and_verify(path, test.to_string(), "private", "kzgcommit", "public");
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    test_dir.close().unwrap();
+                }
+
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_kzg_output_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "kzgcommit");
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    test_dir.close().unwrap();
+                }
+
 
 
                 #(#[test_case(TESTS_EVM[N])])*

@@ -484,6 +484,7 @@ impl Module<Fr> for ElGamalGadget {
     type Config = ElGamalConfig;
     type InputAssignments = (Vec<AssignedCell<Fr, Fr>>, AssignedCell<Fr, Fr>);
     type RunInputs = (Vec<Fr>, ElGamalVariables);
+    type Params = ();
 
     fn new(config: Self::Config) -> Self {
         Self {
@@ -492,7 +493,7 @@ impl Module<Fr> for ElGamalGadget {
         }
     }
 
-    fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
+    fn configure(meta: &mut ConstraintSystem<Fr>, _: Self::Params) -> Self::Config {
         ElGamalChip::configure(meta)
     }
 
@@ -747,7 +748,7 @@ mod tests {
         }
 
         fn configure(meta: &mut ConstraintSystem<Fr>) -> ElGamalConfig {
-            ElGamalGadget::configure(meta)
+            ElGamalGadget::configure(meta, ())
         }
 
         fn synthesize(

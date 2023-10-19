@@ -120,6 +120,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     type Config = PoseidonConfig<WIDTH, RATE>;
     type InputAssignments = InputAssignments;
     type RunInputs = Vec<Fp>;
+    type Params = ();
 
     fn name(&self) -> &'static str {
         "Poseidon"
@@ -138,7 +139,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     }
 
     /// Configuration of the PoseidonChip
-    fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
+    fn configure(meta: &mut ConstraintSystem<Fp>, _: Self::Params) -> Self::Config {
         //  instantiate the required columns
         let hash_inputs = (0..WIDTH).map(|_| meta.advice_column()).collect::<Vec<_>>();
         for input in &hash_inputs {
@@ -454,7 +455,7 @@ mod tests {
         }
 
         fn configure(meta: &mut ConstraintSystem<Fp>) -> PoseidonConfig<WIDTH, RATE> {
-            PoseidonChip::<PoseidonSpec, WIDTH, RATE, L>::configure(meta)
+            PoseidonChip::<PoseidonSpec, WIDTH, RATE, L>::configure(meta, ())
         }
 
         fn synthesize(

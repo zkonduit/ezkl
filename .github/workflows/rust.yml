@@ -168,6 +168,16 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: kzg inputs
+        run: cargo nextest run --release --verbose tests::mock_kzg_input_::t  --test-threads 32
+      - name: kzg params
+        run: cargo nextest run --release --verbose tests::mock_kzg_params_::t  --test-threads 32
+      - name: kzg outputs
+        run: cargo nextest run --release --verbose tests::mock_kzg_output_::t  --test-threads 32
+      - name: kzg inputs + params + outputs
+        run: cargo nextest run --release --verbose tests::mock_kzg_all_::t  --test-threads 32
+      - name: encrypted inputs + kzg params + hashed output
+        run: cargo nextest run --release --verbose tests::mock_hashed_output_kzg_params_::t  --test-threads 32
       - name: Mock fixed inputs
         run: cargo nextest run --release --verbose tests::mock_fixed_inputs_ --test-threads 32
       - name: Mock fixed outputs
@@ -247,6 +257,12 @@ jobs:
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
+      - name: KZG prove and verify tests (EVM + kzg inputs)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_kzg_input_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + kzg params)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_kzg_params_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + kzg outputs)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_kzg_output_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain outputs)
@@ -309,22 +325,24 @@ jobs:
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+      - name: KZG prove and verify tests (kzg outputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output 
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w --test-threads 8
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w 
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (public outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --test-threads 8
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t 
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --test-threads 8
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t 
       - name: KZG prove and verify tests (public inputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input --test-threads 8
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input 
       - name: KZG prove and verify tests (fixed params)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params --test-threads 8
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params 
       - name: KZG prove and verify tests (hashed outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --test-threads 8
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed 
       - name: KZG prove and verify tests (encrypted outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted --test-threads 8
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted 
 
   fuzz-tests:
     runs-on: ubuntu-latest-32-cores
@@ -364,7 +382,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Mock aggr tests
-        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_ --test-threads 8
+        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_ 
 
   prove-and-verify-aggr-tests:
     runs-on: large-self-hosted
@@ -381,7 +399,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: KZG )tests
-        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_ --test-threads 8 -- --include-ignored
+        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_  -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:
     runs-on: large-self-hosted
