@@ -1271,7 +1271,7 @@ pub(crate) async fn prove(
             create_proof_circuit_kzg(
                 circuit,
                 &params,
-                public_inputs,
+                Some(public_inputs),
                 &pk,
                 transcript,
                 strategy,
@@ -1283,7 +1283,7 @@ pub(crate) async fn prove(
             create_proof_circuit_kzg(
                 circuit,
                 &params,
-                public_inputs,
+                Some(public_inputs),
                 &pk,
                 transcript,
                 strategy,
@@ -1344,7 +1344,7 @@ pub(crate) async fn fuzz(
         let bad_proof = create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            public_inputs.clone(),
+            Some(public_inputs.clone()),
             &bad_pk,
             transcript,
             strategy.clone(),
@@ -1371,7 +1371,7 @@ pub(crate) async fn fuzz(
         let bad_proof = create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            bad_inputs.clone(),
+            Some(bad_inputs.clone()),
             &pk,
             transcript,
             strategy.clone(),
@@ -1395,7 +1395,7 @@ pub(crate) async fn fuzz(
     let proof = create_proof_circuit_kzg(
         circuit.clone(),
         &params,
-        public_inputs.clone(),
+        Some(public_inputs.clone()),
         &pk,
         transcript,
         strategy.clone(),
@@ -1598,7 +1598,7 @@ pub(crate) fn aggregate(
         let snark = create_proof_circuit_kzg(
             agg_circuit.clone(),
             &params,
-            agg_circuit.instances(),
+            Some(agg_circuit.instances()),
             &agg_pk,
             transcript,
             AccumulatorStrategy::new(&params),

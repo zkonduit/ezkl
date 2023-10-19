@@ -52,7 +52,7 @@ impl VarTensor {
 
         if modulo > 1 {
             warn!(
-                "will be using column duplication for {} advice columns",
+                "will be using column duplication for {} unblinded advice columns",
                 modulo - 1
             );
         }

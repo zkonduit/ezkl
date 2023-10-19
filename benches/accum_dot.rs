@@ -104,7 +104,7 @@ fn rundot(c: &mut Criterion) {
                 let prover = create_proof_circuit_kzg(
                     circuit.clone(),
                     &params,
-                    vec![],
+                    None,
                     &pk,
                     TranscriptType::EVM,
                     SingleStrategy::new(&params),

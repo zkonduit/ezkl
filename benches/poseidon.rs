@@ -90,7 +90,7 @@ fn runposeidon(c: &mut Criterion) {
                 let prover = create_proof_circuit_kzg(
                     circuit.clone(),
                     &params,
-                    output[0].clone(),
+                    Some(output[0].clone()),
                     &pk,
                     TranscriptType::EVM,
                     SingleStrategy::new(&params),

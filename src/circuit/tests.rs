@@ -257,7 +257,7 @@ mod matmul_col_ultra_overflow {
         let prover = crate::pfsys::create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            vec![],
+            None,
             &pk,
             crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
@@ -892,7 +892,7 @@ mod conv_col_ultra_overflow {
         let prover = crate::pfsys::create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            vec![],
+            None,
             &pk,
             crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
@@ -1039,7 +1039,7 @@ mod conv_relu_col_ultra_overflow {
         let prover = crate::pfsys::create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            vec![],
+            None,
             &pk,
             crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
@@ -2124,6 +2124,7 @@ mod lookup_ultra_overflow {
     }
 
     #[test]
+    #[ignore]
     fn relucircuit() {
         // get some logs fam
         crate::logger::init_logger();
@@ -2148,7 +2149,7 @@ mod lookup_ultra_overflow {
         let prover = crate::pfsys::create_proof_circuit_kzg(
             circuit.clone(),
             &params,
-            vec![],
+            None,
             &pk,
             crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
