@@ -852,13 +852,18 @@ pub(crate) async fn mock(
     circuit.load_graph_witness(&data)?;
 
     let public_inputs = circuit.prepare_public_inputs(&data)?;
+    let public_inputs = if public_inputs.is_empty() {
+        vec![]
+    } else {
+        vec![public_inputs]
+    };
 
     info!("Mock proof");
 
     let prover = halo2_proofs::dev::MockProver::run(
         circuit.settings().run_args.logrows,
         &circuit,
-        vec![public_inputs],
+        public_inputs,
     )
     .map_err(Box::<dyn Error>::from)?;
     prover
