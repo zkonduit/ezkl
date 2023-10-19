@@ -1347,6 +1347,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut instance_offset,
                 &self.module_settings.output,
             )?;
+            println!("instance offset: {}", instance_offset);
         }
 
         Ok(())

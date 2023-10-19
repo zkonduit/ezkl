@@ -254,6 +254,11 @@ impl GraphModules {
     pub fn new() -> GraphModules {
         GraphModules { kzg_idx: 0 }
     }
+
+    ///
+    pub fn reset_index(&mut self) {
+        self.kzg_idx = 0;
+    }
 }
 
 impl GraphModules {
@@ -329,22 +334,26 @@ impl GraphModules {
         module_settings: &ModuleVarSettings,
     ) -> Result<(), Error> {
         if element_visibility.is_kzgcommit() && !values.is_empty() {
-            // create the module
-            let chip = KZGChip::new(configs.kzg[self.kzg_idx].clone());
-
             // concat values and sk to get the inputs
             let mut inputs = values.iter_mut().map(|x| vec![x.clone()]).collect_vec();
 
             // layout the module
             inputs.iter_mut().for_each(|x| {
-                let module_offset = 3 + self.kzg_idx;
+                // create the module
+                let chip = KZGChip::new(configs.kzg[self.kzg_idx].clone());
                 // reserve module 2 onwards for kzg modules
+                let module_offset = 3 + self.kzg_idx;
                 layouter
                     .assign_region(|| format!("_enter_module_{}", module_offset), |_| Ok(()))
                     .unwrap();
-                Self::layout_module(&chip, layouter, x, &mut 0).unwrap();
+                Self::layout_module(&chip, layouter, x, instance_offset).unwrap();
                 // increment the current index
                 self.kzg_idx += 1;
+            });
+
+            // replace the inputs with the outputs
+            values.iter_mut().enumerate().for_each(|(i, x)| {
+                x.clone_from(&inputs[i][0]);
             });
         }
 

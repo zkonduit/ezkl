@@ -43,7 +43,7 @@ impl Module<Fp> for KZGChip {
     }
 
     fn instance_increment_input(&self) -> Vec<usize> {
-        vec![1]
+        vec![0]
     }
 
     /// Constructs a new PoseidonChip

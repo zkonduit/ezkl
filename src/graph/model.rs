@@ -1060,6 +1060,8 @@ impl Model {
 
         config.base.layout_tables(layouter)?;
 
+        let mut num_rows = 0;
+
         let outputs = layouter.assign_region(
             || "model",
             |region| {
@@ -1102,10 +1104,13 @@ impl Model {
                         })
                         .collect_vec();
                 }
-                info!("model has {} assigned rows", thread_safe_region.offset());
+                num_rows = thread_safe_region.offset();
+
                 Ok(outputs)
             },
         )?;
+
+        info!("model has {} assigned rows", num_rows);
 
         let duration = start_time.elapsed();
         trace!("model layout took: {:?}", duration);
