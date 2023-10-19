@@ -342,14 +342,17 @@ impl<'r, 'a, F: Field, CS: Assignment<F> + 'a> ModuleLayouterRegion<'r, 'a, F, C
     }
 }
 
-impl<'r, 'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> SyncDeps
-    for ModuleLayouterRegion<'r, 'a, F, CS>
-{
-}
-
 impl<'r, 'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> RegionLayouter<F>
     for ModuleLayouterRegion<'r, 'a, F, CS>
 {
+    fn instance_value(
+        &mut self,
+        instance: Column<Instance>,
+        row: usize,
+    ) -> Result<Value<F>, Error> {
+        self.layouter.cs.query_instance(instance, row)
+    }
+
     fn enable_selector<'v>(
         &'v mut self,
         annotation: &'v (dyn Fn() -> String + 'v),
