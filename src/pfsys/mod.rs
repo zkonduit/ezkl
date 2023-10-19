@@ -590,7 +590,7 @@ pub fn create_proof_circuit_kzg<
     let public_inputs = if !public_inputs.is_empty() {
         vec![public_inputs]
     } else {
-        vec![]
+        vec![vec![]]
     };
 
     match transcript {
