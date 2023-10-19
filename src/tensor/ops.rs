@@ -2466,7 +2466,7 @@ pub fn pad<T: TensorType>(
         image.dims()[3],
     );
 
-    let (padding_before, padding_after) = (padding[0], padding[1]);
+    let (padding_before, padding_after) = padding.into();
 
     let padded_height = height + padding_before.0 + padding_after.0;
     let padded_width = width + padding_before.1 + padding_after.1;

@@ -127,10 +127,7 @@ pub enum InputType {
 impl InputType {
     ///
     pub fn is_integer(&self) -> bool {
-        match self {
-            InputType::Bool | InputType::Int | InputType::TDim => true,
-            _ => false,
-        }
+        matches!(self, InputType::Int | InputType::TDim | InputType::Bool)
     }
 
     ///

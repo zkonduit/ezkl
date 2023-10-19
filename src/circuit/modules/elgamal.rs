@@ -414,7 +414,7 @@ impl ElGamalGadget {
         let s = variables.pk.mul(variables.r).to_affine();
         let c1 = g.mul(variables.r).to_affine();
 
-        let (s, c1) = layouter.assign_region(
+        layouter.assign_region(
             || "obtain_s",
             |region| {
                 let offset = 0;
@@ -432,10 +432,9 @@ impl ElGamalGadget {
 
                 chip.ecc.assert_equal(ctx, &s, &s_from_sk)?;
 
-                Ok((s, c1))
+                Ok([s, c1])
             },
-        )?;
-        Ok([s, c1])
+        )
     }
 
     pub(crate) fn verify_encryption(

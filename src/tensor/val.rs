@@ -743,7 +743,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             }
             ValTensor::Instance { dims, idx, .. } => {
                 let dims = dims[*idx].clone();
-                if !dims.is_empty() && (dims != &[0]) {
+                if !dims.is_empty() && (dims != [0]) {
                     dims.iter().product::<usize>()
                 } else {
                     0
