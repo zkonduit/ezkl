@@ -211,6 +211,11 @@ pub enum Commands {
         /// Path to the witness (public and private inputs) .json file
         #[arg(short = 'O', long, default_value = "witness.json")]
         output: PathBuf,
+        /// Path to the witness (public and private inputs) .json file
+        #[arg(short = 'V', long)]
+        vk_path: Option<PathBuf>,
+        #[arg(short = 'P', long)]
+        srs_path: Option<PathBuf>,
     },
 
     /// Produces the proving hyperparameters, from run-args

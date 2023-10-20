@@ -6,7 +6,13 @@ Thanks to https://github.com/summa-dev/summa-solvency/blob/master/src/chips/pose
 
 // This chip adds a set of advice columns to the gadget Chip to store the inputs of the hash
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
+use halo2_proofs::poly::commitment::{Blind, Params};
+use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2_proofs::{circuit::*, plonk::*};
+use halo2curves::bn256::{Bn256, G1Affine};
+use halo2curves::group::prime::PrimeCurveAffine;
+use halo2curves::group::Curve;
+use halo2curves::CurveAffine;
 
 use crate::tensor::{Tensor, ValTensor, ValType, VarTensor};
 
@@ -27,9 +33,50 @@ pub struct KZGConfig {
 type InputAssignments = ();
 
 /// PoseidonChip is a wrapper around the Pow5Chip that adds a set of advice columns to the gadget Chip to store the inputs of the hash
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct KZGChip {
     config: KZGConfig,
+}
+
+impl KZGChip {
+    /// Returns the number of inputs to the hash function
+    pub fn commit(
+        message: Vec<Fp>,
+        degree: u32,
+        num_unusable_rows: u32,
+        params: &ParamsKZG<Bn256>,
+    ) -> Vec<G1Affine> {
+        let k = params.k();
+        let domain = halo2_proofs::poly::EvaluationDomain::new(degree, k);
+        let n = 2_u64.pow(k) - num_unusable_rows as u64;
+        let num_poly = (message.len() / n as usize) + 1;
+        let mut poly = vec![domain.empty_lagrange(); num_poly];
+
+        (0..num_unusable_rows).for_each(|i| {
+            for p in &mut poly {
+                p[(n + i as u64) as usize] = Blind::default().0;
+            }
+        });
+
+        for (i, m) in message.iter().enumerate() {
+            let x = i / (n as usize);
+            let y = i % (n as usize);
+            poly[x][y] = *m;
+        }
+
+        let mut advice_commitments_projective = vec![];
+        for a in poly {
+            advice_commitments_projective.push(params.commit_lagrange(&a, Blind::default()))
+        }
+
+        let mut advice_commitments =
+            vec![G1Affine::identity(); advice_commitments_projective.len()];
+        <G1Affine as CurveAffine>::CurveExt::batch_normalize(
+            &advice_commitments_projective,
+            &mut advice_commitments,
+        );
+        advice_commitments
+    }
 }
 
 impl Module<Fp> for KZGChip {

@@ -5,8 +5,9 @@ use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::Module;
 use crate::tensor::{Tensor, ValTensor, ValType};
 use halo2_proofs::circuit::{Layouter, Value};
-use halo2_proofs::plonk::{Column, ConstraintSystem, Error, Instance};
-use halo2curves::bn256::Fr as Fp;
+use halo2_proofs::plonk::{Column, ConstraintSystem, Error, Instance, VerifyingKey};
+use halo2_proofs::poly::kzg::commitment::ParamsKZG;
+use halo2curves::bn256::{Bn256, Fr as Fp, G1Affine};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
@@ -173,6 +174,8 @@ pub struct ModuleForwardResult {
     pub poseidon_hash: Option<Vec<Fp>>,
     /// The outputs of the forward pass for ElGamal
     pub elgamal: Option<ElGamalResult>,
+    /// The outputs of the forward pass for KZG
+    pub kzg_commit: Option<Vec<Vec<G1Affine>>>,
 }
 
 impl ModuleForwardResult {
@@ -418,10 +421,13 @@ impl GraphModules {
     pub fn forward(
         inputs: &[Tensor<Fp>],
         element_visibility: Visibility,
+        vk: Option<&VerifyingKey<G1Affine>>,
+        srs: Option<&ParamsKZG<Bn256>>,
     ) -> Result<ModuleForwardResult, Box<dyn std::error::Error>> {
         let mut rng = &mut rand::thread_rng();
         let mut poseidon_hash = None;
         let mut elgamal = None;
+        let mut kzg_commit = None;
 
         if element_visibility.is_hashed() {
             let field_elements = inputs.iter().fold(vec![], |mut acc, x| {
@@ -430,6 +436,28 @@ impl GraphModules {
                 acc
             });
             poseidon_hash = Some(field_elements);
+        }
+
+        if element_visibility.is_kzgcommit() {
+            if let Some(vk) = vk {
+                if let Some(srs) = srs {
+                    let commitments = inputs.iter().fold(vec![], |mut acc, x| {
+                        let res = KZGChip::commit(
+                            x.to_vec(),
+                            vk.cs().degree() as u32,
+                            (vk.cs().blinding_factors() + 1) as u32,
+                            &srs,
+                        );
+                        acc.push(res);
+                        acc
+                    });
+                    kzg_commit = Some(commitments);
+                } else {
+                    log::warn!("no srs provided for kzgcommit. processed value will be none");
+                }
+            } else {
+                log::warn!("no verifying key provided for kzgcommit. processed value will be none");
+            }
         }
 
         if element_visibility.is_encrypted() {
@@ -456,6 +484,7 @@ impl GraphModules {
         Ok(ModuleForwardResult {
             poseidon_hash,
             elgamal,
+            kzg_commit,
         })
     }
 }
