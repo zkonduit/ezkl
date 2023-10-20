@@ -143,7 +143,7 @@ mod py_tests {
         "stacked_regression.ipynb",
         "data_attest_hashed.ipynb",
         "simple_hub_demo.ipynb",
-        "kzg_vis.ipnyb",
+        "kzg_vis.ipynb",
     ];
 
     macro_rules! test_func {
