@@ -94,7 +94,7 @@ jobs:
       - name: Conv overflow
         run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv + relu overflow
-        run:  cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture -- --include-ignored
+        run: cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture -- --include-ignored
 
   model-serialization:
     runs-on: ubuntu-latest-16-cores
@@ -324,23 +324,23 @@ jobs:
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - name: KZG prove and verify tests (kzg outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output 
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w 
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (public outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t 
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t 
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t
       - name: KZG prove and verify tests (public inputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input 
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input
       - name: KZG prove and verify tests (fixed params)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params 
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params
       - name: KZG prove and verify tests (hashed outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed 
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed
       - name: KZG prove and verify tests (encrypted outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted 
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted
 
   fuzz-tests:
     runs-on: ubuntu-latest-32-cores
@@ -563,6 +563,8 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: KZG Vis demo
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_26_expects
       - name: Simple hub demo
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
       - name: Hashed DA tutorial
