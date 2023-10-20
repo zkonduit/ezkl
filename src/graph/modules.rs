@@ -45,7 +45,6 @@ impl ModuleConfigs {
     /// Create new module configs from visibility of each variable
     pub fn from_visibility(
         cs: &mut ConstraintSystem<Fp>,
-        visibility: VarVisibility,
         module_size: ModuleSizes,
         logrows: usize,
     ) -> Self {
@@ -55,14 +54,24 @@ impl ModuleConfigs {
             config.kzg.push(KZGChip::configure(cs, (logrows, size)));
         }
 
+        config
+    }
+
+    /// Configure the modules
+    pub fn configure_complex_modules(
+        &mut self,
+        cs: &mut ConstraintSystem<Fp>,
+        visibility: VarVisibility,
+        module_size: ModuleSizes,
+    ) {
         if (visibility.input.is_encrypted()
             || visibility.output.is_encrypted()
             || visibility.params.is_encrypted())
             && module_size.elgamal.1[0] > 0
         {
             let elgamal = ElGamalGadget::configure(cs, ());
-            config.instance = Some(elgamal.instance);
-            config.elgamal = Some(elgamal);
+            self.instance = Some(elgamal.instance);
+            self.elgamal = Some(elgamal);
         };
 
         if (visibility.input.is_hashed()
@@ -74,25 +83,23 @@ impl ModuleConfigs {
                 || visibility.output.is_hashed_public()
                 || visibility.params.is_hashed_public()
             {
-                if let Some(inst) = config.instance {
-                    config.poseidon = Some(ModulePoseidon::configure_with_optional_instance(
+                if let Some(inst) = self.instance {
+                    self.poseidon = Some(ModulePoseidon::configure_with_optional_instance(
                         cs,
                         Some(inst),
                     ));
                 } else {
                     let poseidon = ModulePoseidon::configure(cs, ());
-                    config.instance = poseidon.instance;
-                    config.poseidon = Some(poseidon);
+                    self.instance = poseidon.instance;
+                    self.poseidon = Some(poseidon);
                 }
             } else if visibility.input.is_hashed_private()
                 || visibility.output.is_hashed_private()
                 || visibility.params.is_hashed_private()
             {
-                config.poseidon = Some(ModulePoseidon::configure_with_optional_instance(cs, None));
+                self.poseidon = Some(ModulePoseidon::configure_with_optional_instance(cs, None));
             }
         };
-
-        config
     }
 }
 
@@ -446,7 +453,7 @@ impl GraphModules {
                             x.to_vec(),
                             vk.cs().degree() as u32,
                             (vk.cs().blinding_factors() + 1) as u32,
-                            &srs,
+                            srs,
                         );
                         acc.push(res);
                         acc

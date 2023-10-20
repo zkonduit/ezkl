@@ -155,7 +155,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    inputs: &mut [ValTensor<F>],
+    inputs: &[ValTensor<F>],
     equation: &str,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let mut equation = equation.split("->");

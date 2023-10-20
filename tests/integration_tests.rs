@@ -2233,6 +2233,19 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "swap-proof-commitments",
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+                "--witness-path",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "verify",

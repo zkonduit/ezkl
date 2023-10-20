@@ -14,7 +14,8 @@ use crate::pfsys::evm::aggregation::AggregationCircuit;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::evm::{single::gen_evm_verifier, YulCode};
 use crate::pfsys::{
-    create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
+    create_keys, load_pk, load_vk, save_params, save_pk, swap_proof_commitments_kzg, Snark,
+    StrategyType, TranscriptType,
 };
 use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::pfsys::{save_vk, srs::*};
@@ -234,6 +235,11 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             data,
             rpc_url,
         } => test_update_account_calls(addr, data, rpc_url).await,
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::SwapProofCommitments {
+            proof_path,
+            witness_path,
+        } => swap_proof_commitments(proof_path, witness_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             witness,
@@ -1528,6 +1534,28 @@ pub(crate) fn run_fuzz_fn(
         num_failures.load(Ordering::Relaxed),
         num_runs
     );
+}
+
+pub(crate) fn swap_proof_commitments(
+    proof_path: PathBuf,
+    witness: PathBuf,
+) -> Result<(), Box<dyn Error>> {
+    let snark = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path).unwrap();
+    let witness = GraphWitness::from_path(witness)?;
+    let commitments = witness.get_kzg_commitments();
+
+    if commitments.is_empty() {
+        log::warn!("no commitments found in witness");
+    }
+
+    let snark_new = swap_proof_commitments_kzg(&snark, &commitments)?;
+
+    if snark_new.proof != *snark.proof {
+        log::warn!("swap proof has created a different proof");
+    }
+
+    snark_new.save(&proof_path).unwrap();
+    Ok(())
 }
 
 pub(crate) fn mock_aggregate(

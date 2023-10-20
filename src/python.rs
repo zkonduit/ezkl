@@ -13,7 +13,7 @@ use crate::graph::{
 };
 use crate::pfsys::evm::aggregation::AggregationCircuit;
 use crate::pfsys::{
-    load_pk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, ProofType, Snark, TranscriptType,
+    load_pk, save_params, load_vk, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs, ProofType, Snark, TranscriptType,
 };
 use crate::RunArgs;
 use ethers::types::H160;
@@ -29,6 +29,7 @@ use snark_verifier::util::arithmetic::PrimeField;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
+use crate::circuit::modules::kzg::KZGChip;
 
 type PyFelt = [u64; 4];
 
@@ -442,6 +443,53 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
     Ok(hash)
 }
 
+
+/// Generate a kzg commitment.
+#[pyfunction(signature = (
+    message,
+    srs_path, 
+    vk_path, 
+    settings_path
+    ))]
+fn kzg_commit(message: Vec<PyFelt>, srs_path: PathBuf, vk_path: PathBuf, settings_path: PathBuf) -> PyResult<Vec<PyG1Affine>> {
+    let message: Vec<Fr> = message
+        .iter()
+        .map(|x| crate::pfsys::vecu64_to_field_montgomery::<Fr>(&x))
+        .collect::<Vec<_>>();
+
+    let srs = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)
+        .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
+
+    let settings = GraphSettings::load(&settings_path)
+        .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
+
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings)
+        .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
+
+    let output = KZGChip::commit(message, vk.cs().degree() as u32, (vk.cs().blinding_factors() + 1) as u32, &srs);
+
+  
+    Ok(output
+        .iter()
+        .map(|x| (*x).into())
+        .collect::<Vec<_>>())
+}
+
+/// Swap the commitments in a proof
+#[pyfunction(signature = (
+    proof_path,
+    witness_path, 
+    ))]
+fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResult<()> {
+
+    crate::execute::swap_proof_commitments(proof_path, witness_path)
+        .map_err(|_| PyIOError::new_err("Failed to swap commitments"))?;
+    
+    Ok(())
+}
+
+
+
 /// Encrypt using elgamal
 #[pyfunction(signature = (
     pk, message, r
@@ -451,10 +499,7 @@ pub fn elgamal_encrypt(
     message: Vec<PyFelt>,
     r: PyFelt,
 ) -> PyResult<PyElGamalCipher> {
-    let pk = G1Affine {
-        x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&pk.x),
-        y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&pk.y),
-    };
+    let pk: G1Affine = pk.into();
     let message = message
         .iter()
         .map(|x| crate::pfsys::vecu64_to_field_montgomery::<Fr>(&x))
@@ -1175,6 +1220,8 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(vecu64_to_felt, m)?)?;
     m.add_function(wrap_pyfunction!(vecu64_to_int, m)?)?;
     m.add_function(wrap_pyfunction!(vecu64_to_float, m)?)?;
+    m.add_function(wrap_pyfunction!(kzg_commit, m)?)?;
+    m.add_function(wrap_pyfunction!(swap_proof_commitments, m)?)?;
     m.add_function(wrap_pyfunction!(poseidon_hash, m)?)?;
     m.add_function(wrap_pyfunction!(elgamal_encrypt, m)?)?;
     m.add_function(wrap_pyfunction!(elgamal_decrypt, m)?)?;

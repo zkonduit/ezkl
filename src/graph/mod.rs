@@ -149,6 +149,28 @@ impl GraphWitness {
             min_lookup_inputs: 0,
         }
     }
+
+    ///
+    pub fn get_kzg_commitments(&self) -> Vec<G1Affine> {
+        let mut commitments = vec![];
+        if let Some(processed_inputs) = &self.processed_inputs {
+            if let Some(commits) = &processed_inputs.kzg_commit {
+                commitments.extend(commits.iter().flatten());
+            }
+        }
+        if let Some(processed_params) = &self.processed_params {
+            if let Some(commits) = &processed_params.kzg_commit {
+                commitments.extend(commits.iter().flatten());
+            }
+        }
+        if let Some(processed_outputs) = &self.processed_outputs {
+            if let Some(commits) = &processed_outputs.kzg_commit {
+                commitments.extend(commits.iter().flatten());
+            }
+        }
+        commitments
+    }
+
     /// Export the ezkl witness as json
     pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
         let serialized = match serde_json::to_string(&self) {
@@ -227,6 +249,9 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal);
             }
+            if let Some(processed_inputs_kzg_commit) = &processed_inputs.kzg_commit {
+                insert_kzg_commit_pydict(&dict_inputs, &processed_inputs_kzg_commit);
+            }
 
             dict.set_item("processed_inputs", dict_inputs).unwrap();
         }
@@ -238,6 +263,9 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_params_elgamal) = &processed_params.elgamal {
                 insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal);
             }
+            if let Some(processed_params_kzg_commit) = &processed_params.kzg_commit {
+                insert_kzg_commit_pydict(&dict_inputs, &processed_params_kzg_commit);
+            }
 
             dict.set_item("processed_params", dict_params).unwrap();
         }
@@ -248,6 +276,9 @@ impl ToPyObject for GraphWitness {
             }
             if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal);
+            }
+            if let Some(processed_outputs_kzg_commit) = &processed_outputs.kzg_commit {
+                insert_kzg_commit_pydict(&dict_inputs, &processed_outputs_kzg_commit);
             }
 
             dict.set_item("processed_outputs", dict_outputs).unwrap();
@@ -264,6 +295,16 @@ fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
         .map(field_to_vecu64_montgomery)
         .collect();
     pydict.set_item("poseidon_hash", poseidon_hash).unwrap();
+}
+
+#[cfg(feature = "python-bindings")]
+fn insert_kzg_commit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) {
+    use crate::python::PyG1Affine;
+    let poseidon_hash: Vec<Vec<PyG1Affine>> = commits
+        .iter()
+        .map(|c| c.iter().map(|x| PyG1Affine::from(*x)).collect())
+        .collect();
+    pydict.set_item("kzg_commit", poseidon_hash).unwrap();
 }
 
 #[cfg(feature = "python-bindings")]
@@ -1131,6 +1172,12 @@ impl Circuit<Fp> for GraphCircuit {
         });
         let visibility = VarVisibility::from_args(&params.run_args).unwrap();
 
+        let mut module_configs = ModuleConfigs::from_visibility(
+            cs,
+            params.module_sizes.clone(),
+            params.run_args.logrows as usize,
+        );
+
         let mut vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
@@ -1139,12 +1186,7 @@ impl Circuit<Fp> for GraphCircuit {
             params.uses_modules(),
         );
 
-        let module_configs = ModuleConfigs::from_visibility(
-            cs,
-            visibility,
-            params.module_sizes.clone(),
-            params.run_args.logrows as usize,
-        );
+        module_configs.configure_complex_modules(cs, visibility, params.module_sizes.clone());
 
         vars.instantiate_instance(
             cs,
