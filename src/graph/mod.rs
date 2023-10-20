@@ -12,6 +12,8 @@ pub mod utilities;
 pub mod vars;
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
+use halo2_proofs::plonk::VerifyingKey;
+use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 pub use input::DataSource;
 use itertools::Itertools;
 
@@ -31,7 +33,7 @@ use halo2_proofs::{
     circuit::Layouter,
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
-use halo2curves::bn256::{self, Fr as Fp};
+use halo2curves::bn256::{self, Bn256, Fr as Fp, G1Affine};
 use halo2curves::ff::PrimeField;
 use log::{debug, error, info, trace};
 pub use model::*;
@@ -879,8 +881,7 @@ impl GraphCircuit {
         input: &[Tensor<Fp>],
         max_logrows: Option<u32>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let res = self.forward(&mut input.to_vec())?;
-
+        let res = self.forward(&mut input.to_vec(), None, None)?;
         self.calc_min_logrows(&res, max_logrows)
     }
 
@@ -888,6 +889,8 @@ impl GraphCircuit {
     pub fn forward(
         &self,
         inputs: &mut [Tensor<Fp>],
+        vk: Option<&VerifyingKey<G1Affine>>,
+        srs: Option<&ParamsKZG<Bn256>>,
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let original_inputs = inputs.to_vec();
 
@@ -903,7 +906,7 @@ impl GraphCircuit {
                 for outlet in &module_outlets {
                     module_inputs.push(inputs[*outlet].clone());
                 }
-                let res = GraphModules::forward(&module_inputs, visibility.input.clone())?;
+                let res = GraphModules::forward(&module_inputs, visibility.input.clone(), vk, srs)?;
                 processed_inputs = Some(res.clone());
                 let module_results = res.get_result(visibility.input.clone());
 
@@ -911,7 +914,7 @@ impl GraphCircuit {
                     inputs[*outlet] = Tensor::from(module_results[i].clone().into_iter());
                 }
             } else {
-                processed_inputs = Some(GraphModules::forward(inputs, visibility.input)?);
+                processed_inputs = Some(GraphModules::forward(inputs, visibility.input, vk, srs)?);
             }
         }
 
@@ -922,6 +925,8 @@ impl GraphCircuit {
                 processed_params = Some(GraphModules::forward(
                     &[flattened_params],
                     visibility.params,
+                    vk,
+                    srs,
                 )?);
             }
         }
@@ -935,7 +940,8 @@ impl GraphCircuit {
                 for outlet in &module_outlets {
                     module_inputs.push(model_results.outputs[*outlet].clone());
                 }
-                let res = GraphModules::forward(&module_inputs, visibility.output.clone())?;
+                let res =
+                    GraphModules::forward(&module_inputs, visibility.output.clone(), vk, srs)?;
                 processed_outputs = Some(res.clone());
                 let module_results = res.get_result(visibility.output.clone());
 
@@ -947,6 +953,8 @@ impl GraphCircuit {
                 processed_outputs = Some(GraphModules::forward(
                     &model_results.outputs,
                     visibility.output,
+                    vk,
+                    srs,
                 )?);
             }
         }

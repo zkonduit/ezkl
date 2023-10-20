@@ -1079,6 +1079,18 @@ mod native_tests {
                 }
 
 
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_kzg_output_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "kzgcommit");
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    test_dir.close().unwrap();
+                }
+
+
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_fuzz_(test: &str) {
@@ -1397,15 +1409,6 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-
-        // let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
-        // // bump bits by 1 to test for overflow
-        // let mut settings = GraphSettings::load(&settings_path.clone().into()).unwrap();
-
-        // let rows = 2u32.pow(settings.run_args.logrows - 1) - 2 * RESERVED_BLINDING_ROWS_PAD as u32;
-
-        // settings.run_args.lookup_range = (-(rows as i128), rows as i128);
-        // settings.save(&settings_path.into()).unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -2183,20 +2186,6 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
-                "-D",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
-                "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "-O",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
                 "setup",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
@@ -2209,6 +2198,24 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-witness",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "--vk-path",
+                &format!("{}/{}/key.vk", test_dir, example_name),
+                &srs_path,
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "prove",
@@ -2374,13 +2381,14 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "gen-witness",
-                "-D",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "setup",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "-O",
-                format!("{}/{}/input.json", test_dir, example_name).as_str(),
+                "--pk-path",
+                &format!("{}/{}/key.pk", test_dir, example_name),
+                "--vk-path",
+                &format!("{}/{}/key.vk", test_dir, example_name),
+                &srs_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -2388,11 +2396,13 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
-                "setup",
+                "gen-witness",
+                "-D",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                "--pk-path",
-                &format!("{}/{}/key.pk", test_dir, example_name),
+                "-O",
+                format!("{}/{}/input.json", test_dir, example_name).as_str(),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
                 &srs_path,
