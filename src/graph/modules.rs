@@ -453,7 +453,7 @@ impl GraphModules {
                             x.to_vec(),
                             vk.cs().degree() as u32,
                             (vk.cs().blinding_factors() + 1) as u32,
-                            &srs,
+                            srs,
                         );
                         acc.push(res);
                         acc

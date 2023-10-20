@@ -495,13 +495,13 @@ pub fn swap_proof_commitments_kzg(
             KZGCommitmentScheme<Bn256>,
             _,
             EvmTranscript<G1Affine, _, _, _>,
-        >(&snark, &commitments)?,
+        >(snark, commitments)?,
         TranscriptType::Poseidon => swap_proof_commitments::<
             Fr,
             KZGCommitmentScheme<Bn256>,
             _,
             PoseidonTranscript<NativeLoader, _>,
-        >(&snark, &commitments)?,
+        >(snark, commitments)?,
     };
     Ok(proof)
 }
