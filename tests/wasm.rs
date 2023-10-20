@@ -10,7 +10,9 @@ mod wasm32 {
     use ezkl::graph::GraphWitness;
     use ezkl::wasm::{
         bufferToVecOfVecU64, elgamalDecrypt, elgamalEncrypt, elgamalGenRandom, genWitness,
-        poseidonHash, u8_array_to_u128_le, vecU64ToFelt, vecU64ToFloat, vecU64ToInt, encodeVerifierCalldata
+        poseidonHash, u8_array_to_u128_le, vecU64ToFelt, vecU64ToFloat, vecU64ToInt, encodeVerifierCalldata,
+        witnessValidation, compiledCircuitValidation, proofValidation, vkValidation, pkValidation,
+        settingsValidation, srsValidation, inputValidation
     };
     use halo2curves::bn256::{Fr, G1Affine};
     use halo2_solidity_verifier::encode_calldata;
@@ -25,10 +27,14 @@ mod wasm32 {
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/test.witness.json");
-    pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/test_network.compiled");
+    pub const NETWORK_COMPILED: &[u8] = include_bytes!("../tests/wasm/test_network.compiled");
+    pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/network.onnx");
     pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
     pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
-
+    pub const SETTINGS: &[u8] = include_bytes!("../tests/wasm/settings.json");
+    pub const PK: &[u8] = include_bytes!("../tests/wasm/test.provekey");
+    pub const VK: &[u8] = include_bytes!("../tests/wasm/test.key");
+    pub const SRS: &[u8] = include_bytes!("../tests/wasm/kzg");
     #[wasm_bindgen_test]
     async fn verify_encode_verifier_calldata() {
 
@@ -225,7 +231,7 @@ mod wasm32 {
     #[wasm_bindgen_test]
     async fn verify_gen_witness() {
         let witness = genWitness(
-            wasm_bindgen::Clamped(NETWORK.to_vec()),
+            wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()),
             wasm_bindgen::Clamped(INPUT.to_vec()),
         )
         .map_err(|_| "failed")
@@ -236,5 +242,94 @@ mod wasm32 {
         let reference_witness: GraphWitness = serde_json::from_slice(&WITNESS).unwrap();
         // should not fail
         assert_eq!(witness, reference_witness);
+    }
+
+    #[wasm_bindgen_test]
+    async fn verify_validations() {
+        // Run witness validation on network (should fail)
+        let witness = witnessValidation(
+            wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec())
+        );
+        assert!(witness.is_err());
+        // Run witness validation on witness (should pass)
+        let witness = witnessValidation(
+            wasm_bindgen::Clamped(WITNESS.to_vec())
+        );
+        assert!(witness.is_ok());
+        // Run compiled circuit validation on onnx network (should fail)
+        let circuit = compiledCircuitValidation(
+            wasm_bindgen::Clamped(NETWORK.to_vec())
+        );
+        assert!(circuit.is_err());
+        // Run compiled circuit validation on comiled network (should pass)
+        let circuit = compiledCircuitValidation(
+            wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec())
+        );
+        assert!(circuit.is_ok());
+        // Run input validation on witness (should fail)
+        let input = inputValidation(
+            wasm_bindgen::Clamped(WITNESS.to_vec())
+        );
+        assert!(input.is_err());
+        // Run input validation on input (should pass)
+        let input = inputValidation(
+            wasm_bindgen::Clamped(INPUT.to_vec())
+        );
+        assert!(input.is_ok());
+        // Run proof validation on witness (should fail)
+        let proof = proofValidation(
+            wasm_bindgen::Clamped(WITNESS.to_vec())
+        );
+        assert!(proof.is_err());
+        // Run proof validation on proof (should pass)
+        let proof = proofValidation(
+            wasm_bindgen::Clamped(PROOF.to_vec())
+        );
+        assert!(proof.is_ok());
+        // // Run vk validation on SRS (should fail)
+        // let vk = vkValidation(
+        //     wasm_bindgen::Clamped(SRS.to_vec()),
+        //     wasm_bindgen::Clamped(SETTINGS.to_vec())
+        // );
+        // assert!(vk.is_err());
+
+        // Run vk validation on vk (should pass)
+        let vk = vkValidation(
+            wasm_bindgen::Clamped(VK.to_vec()),
+            wasm_bindgen::Clamped(SETTINGS.to_vec())
+        );
+        assert!(vk.is_ok());
+        // // Run pk validation on vk (should fail)
+        // let pk = pkValidation(
+        //     wasm_bindgen::Clamped(VK.to_vec()),
+        //     wasm_bindgen::Clamped(SETTINGS.to_vec())
+        // );
+        // assert!(pk.is_err());
+        // Run pk validation on pk (should pass)
+        let pk = pkValidation(
+            wasm_bindgen::Clamped(PK.to_vec()),
+            wasm_bindgen::Clamped(SETTINGS.to_vec())
+        );
+        assert!(pk.is_ok());
+        // Run settings validation on proof (should fail)
+        let settings = settingsValidation(
+            wasm_bindgen::Clamped(PROOF.to_vec())
+        );
+        assert!(settings.is_err());
+        // Run settings validation on settings (should pass)
+        let settings = settingsValidation(
+            wasm_bindgen::Clamped(SETTINGS.to_vec())
+        );
+        assert!(settings.is_ok());
+        // // Run srs validation on vk (should fail)
+        // let srs = srsValidation(
+        //     wasm_bindgen::Clamped(VK.to_vec())
+        // );
+        // assert!(srs.is_err());
+        // Run srs validation on srs (should pass)
+        let srs = srsValidation(
+            wasm_bindgen::Clamped(SRS.to_vec())
+        );
+        assert!(srs.is_ok());
     }
 }
