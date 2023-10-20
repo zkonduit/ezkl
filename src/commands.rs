@@ -446,6 +446,17 @@ pub enum Commands {
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
     },
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Swaps the positions in the transcript that correspond to commitments
+    #[command(arg_required_else_help = true)]
+    SwapProofCommitments {
+        /// The path to the proof file
+        #[arg(short = 'P', long)]
+        proof_path: PathBuf,
+        /// The path to the witness file
+        #[arg(short = 'W', long)]
+        witness_path: PathBuf,
+    },
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Loads model, data, and creates proof

@@ -445,6 +445,67 @@ where
     Ok(checkable_pf)
 }
 
+/// Swaps the proof commitments to a new set in the proof
+pub fn swap_proof_commitments<
+    'params,
+    F: PrimeField,
+    Scheme: CommitmentScheme,
+    E: EncodedChallenge<Scheme::Curve>,
+    TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
+>(
+    snark: &Snark<Scheme::Scalar, Scheme::Curve>,
+    commitments: &[Scheme::Curve],
+) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
+where
+    Scheme::Scalar: SerdeObject
+        + PrimeField
+        + FromUniformBytes<64>
+        + WithSmallOrderMulGroup<3>
+        + Ord
+        + Serialize
+        + DeserializeOwned,
+    Scheme::Curve: Serialize + DeserializeOwned,
+{
+    let mut transcript_new: TW = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
+
+    // kzg commitments are the first set of points in the proof, this we'll always be the first set of advice
+    for commit in commitments {
+        transcript_new
+            .write_point(*commit)
+            .map_err(|_| "failed to write point")?;
+    }
+
+    let proof_first_bytes = transcript_new.finalize();
+
+    let mut snark_new = snark.clone();
+    // swap the proof bytes for the new ones
+    snark_new.proof[..proof_first_bytes.len()].copy_from_slice(&proof_first_bytes);
+
+    Ok(snark_new)
+}
+
+/// Swap the proof commitments to a new set in the proof for KZG
+pub fn swap_proof_commitments_kzg(
+    snark: &Snark<Fr, G1Affine>,
+    commitments: &[G1Affine],
+) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
+    let proof = match snark.transcript_type {
+        TranscriptType::EVM => swap_proof_commitments::<
+            Fr,
+            KZGCommitmentScheme<Bn256>,
+            _,
+            EvmTranscript<G1Affine, _, _, _>,
+        >(&snark, &commitments)?,
+        TranscriptType::Poseidon => swap_proof_commitments::<
+            Fr,
+            KZGCommitmentScheme<Bn256>,
+            _,
+            PoseidonTranscript<NativeLoader, _>,
+        >(&snark, &commitments)?,
+    };
+    Ok(proof)
+}
+
 /// A wrapper around halo2's verify_proof
 pub fn verify_proof_circuit<
     'params,
