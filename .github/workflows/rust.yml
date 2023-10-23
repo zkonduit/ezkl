@@ -227,8 +227,8 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       # annoying but see https://github.com/actions/checkout/issues/270
-      - name: Install GIT-LFTs
-        run: git lfs install
+      - name: Install GIT-LFS
+        run: apt-get install git-lfs
       - uses: actions/checkout@v4
         with:
           lfs: "true"
