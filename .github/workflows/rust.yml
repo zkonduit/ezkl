@@ -159,6 +159,11 @@ jobs:
     # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: "true"
+      - name: checkoutLFS
+        uses: actions/checkout@v2
+      - run: git lfs pull
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2023-08-24
@@ -168,6 +173,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: The Worm Mock
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_5_expects -- --include-ignored
       - name: kzg inputs
         run: cargo nextest run --release --verbose tests::mock_kzg_input_::t  --test-threads 32
       - name: kzg params
