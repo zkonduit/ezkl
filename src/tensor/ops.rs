@@ -1762,15 +1762,28 @@ pub fn conv<
     stride: (usize, usize),
 ) -> Result<Tensor<T>, TensorError> {
     let has_bias = inputs.len() == 3;
-    let (image, kernel) = (&mut inputs[0].clone(), &inputs[1]);
-    let og_dims = image.dims().to_vec();
+    let (image, kernel) = (&mut inputs[0].clone(), &mut inputs[1].clone());
+
+    let og_image_dims = image.dims().to_vec();
 
     // ensure inputs are 4D tensors
-    if og_dims.len() == 3 {
-        // adds a dummy batch dimension
-        let mut new_dims = vec![1];
-        new_dims.extend_from_slice(image.dims());
+    if og_image_dims.len() == 3 {
+        // adds a dummy image_channels dimension
+        let mut new_dims = image.dims().to_vec();
+        // insert 1 at the input_channels pos
+        new_dims.insert(1, 1);
         image.reshape(&new_dims);
+    }
+
+    let og_kernel_dims = kernel.dims().to_vec();
+
+    // ensure kernel is 4D tensor
+    if og_kernel_dims.len() == 3 && og_image_dims.len() == 3 {
+        // adds a dummy image_channels dimension
+        let mut new_dims = kernel.dims().to_vec();
+        // insert 1 at the input_channels pos
+        new_dims.insert(1, 1);
+        kernel.reshape(&new_dims);
     }
 
     if (image.dims().len() != 4)
@@ -1873,8 +1886,8 @@ pub fn conv<
     });
 
     // remove dummy batch dimension if we added one
-    if og_dims.len() == 3 {
-        output.reshape(&[output_channels, vert_slides, horz_slides]);
+    if og_image_dims.len() == 3 && vert_slides == 1 {
+        output.reshape(&[batch_size, output_channels, horz_slides]);
     } else {
         output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
     }
