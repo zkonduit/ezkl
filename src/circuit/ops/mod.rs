@@ -29,7 +29,7 @@ pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd> {
     pub(crate) intermediate_lookups: Vec<Tensor<i128>>,
 }
 
-/// An enum representing operations that can be represented as constraints in a circuit.
+/// A trait representing operations that can be represented as constraints in a circuit.
 pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError>;
