@@ -1192,7 +1192,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd>(
     axes_wise_op(config, region, values, axes, sum)
 }
 
-/// Argmin layout
+/// argmax layout
 pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -1246,7 +1246,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd>(
                        region: &mut RegionCtx<F>,
                        values: &[ValTensor<F>; 1]|
           -> Result<ValTensor<F>, Box<dyn Error>> {
-        argmax(config, region, values, indices.clone())
+        argmin(config, region, values, indices.clone())
     };
 
     axes_wise_op(config, region, values, &[dim], argmin)
@@ -1871,14 +1871,26 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         region.increment(*assigned_len.iter().max().unwrap());
     }
 
-    let og_dims = image.dims().to_vec();
+    let og_image_dims = image.dims().to_vec();
 
     // ensure inputs are 4D tensors
-    if og_dims.len() == 3 {
-        // adds a dummy batch dimension
-        let mut new_dims = vec![1];
-        new_dims.extend_from_slice(image.dims());
+    if og_image_dims.len() == 3 {
+        // adds a dummy image_channels dimension
+        let mut new_dims = image.dims().to_vec();
+        // insert 1 at the input_channels pos
+        new_dims.insert(1, 1);
         image.reshape(&new_dims)?;
+    }
+
+    let og_kernel_dims = kernel.dims().to_vec();
+
+    // ensure kernel is 4D tensor
+    if og_kernel_dims.len() == 3 && og_image_dims.len() == 3 {
+        // adds a dummy image_channels dimension
+        let mut new_dims = kernel.dims().to_vec();
+        // insert 1 at the input_channels pos
+        new_dims.insert(1, 1);
+        kernel.reshape(&new_dims)?;
     }
 
     // if not 4D then error
@@ -1936,15 +1948,6 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    let reshape_output = |output: &mut Tensor<ValType<F>>| {
-        // remove dummy batch dimension if we added one
-        if og_dims.len() == 3 {
-            output.reshape(&[output_channels, vert_slides, horz_slides]);
-        } else {
-            output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
-        }
-    };
-
     let inner_loop_function = |idx: usize, region: &mut RegionCtx<F>| -> ValType<F> {
         let cartesian_coord_per_group = &cartesian_coord[idx];
         let (batch, group, i, j, k) = (
@@ -1997,6 +2000,15 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     } else {
         region.dummy_loop(&mut output, inner_loop_function)?;
     }
+
+    let reshape_output = |output: &mut Tensor<ValType<F>>| {
+        // remove dummy batch dimension if we added one
+        if og_image_dims.len() == 3 && vert_slides == 1 {
+            output.reshape(&[batch_size, output_channels, horz_slides]);
+        } else {
+            output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
+        }
+    };
 
     // remove dummy batch dimension if we added one
     reshape_output(&mut output);

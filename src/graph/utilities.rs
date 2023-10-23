@@ -893,15 +893,34 @@ pub fn new_op_from_onnx(
             }
 
             let stride = match conv_node.pool_spec.strides.clone() {
-                Some(s) => (s[0], s[1]),
+                Some(s) => {
+                    if s.len() == 1 {
+                        (s[0], s[0])
+                    } else if s.len() == 2 {
+                        (s[0], s[1])
+                    } else {
+                        return Err(Box::new(GraphError::MissingParams("strides".to_string())));
+                    }
+                }
                 None => {
                     return Err(Box::new(GraphError::MissingParams("strides".to_string())));
                 }
             };
 
             let padding = match &conv_node.pool_spec.padding {
-                PaddingSpec::Explicit(b, a) => [(b[0], b[1]), (a[0], a[1])],
-                PaddingSpec::ExplicitOnnxPool(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
+                PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
+                    if b.len() == 2 && a.len() == 2 {
+                        [(b[0], b[1]), (a[0], a[1])]
+                    } else if b.len() == 1 && a.len() == 1 {
+                        [(b[0], b[0]), (a[0], a[0])]
+                    } else if b.len() == 1 && a.len() == 2 {
+                        [(b[0], b[0]), (a[0], a[1])]
+                    } else if b.len() == 2 && a.len() == 1 {
+                        [(b[0], b[1]), (a[0], a[0])]
+                    } else {
+                        return Err(Box::new(GraphError::MissingParams("padding".to_string())));
+                    }
+                }
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
@@ -1032,22 +1051,43 @@ pub fn new_op_from_onnx(
             {
                 unimplemented!("Only nearest neighbor interpolation is supported")
             }
-            let boxed_op = inputs[2].opkind();
-            let scale_factor = if let Some(c) = extract_const_raw_values(boxed_op) {
-                c.map(|x| x as usize).into_iter().collect::<Vec<usize>>()
-            } else {
+            // check if optional scale factor is present
+            if inputs.len() != 2 && inputs.len() != 3 {
                 return Err(Box::new(GraphError::OpMismatch(idx, "Resize".to_string())));
+            }
+
+            let scale_factor_node =  // find optional_scales_input in the string and extract the value inside the Some
+            if resize_node.contains("optional_scales_input: None") {
+                 None
+            } else {
+                Some(resize_node
+                .split("optional_scales_input: ")
+                .collect::<Vec<_>>()[1]
+                .split("Some(")
+                .collect::<Vec<_>>()[1]
+                .split(")")
+                .collect::<Vec<_>>()[0]
+                .parse::<usize>()?)
             };
 
-            // remove the resize node from the inputs
-            if let Some(node) = inputs.last_mut() {
-                node.decrement_const();
-                deleted_indices.push(inputs.len() - 1);
-            }
-            // remove the scale factor node from the inputs
-            if let Some(node) = inputs.get_mut(inputs.len() - 2) {
-                node.decrement_const();
-                deleted_indices.push(inputs.len() - 2);
+            let scale_factor = if let Some(scale_factor_node) = scale_factor_node {
+                let boxed_op = inputs[scale_factor_node].opkind();
+                if let Some(c) = extract_const_raw_values(boxed_op) {
+                    c.map(|x| x as usize).into_iter().collect::<Vec<usize>>()
+                } else {
+                    return Err(Box::new(GraphError::OpMismatch(idx, "Resize".to_string())));
+                }
+            } else {
+                // default
+                vec![1]
+            };
+
+            for i in 1..inputs.len() {
+                // remove the resize node from the inputs
+                if let Some(node) = inputs.get_mut(i) {
+                    node.decrement_const();
+                    deleted_indices.push(i);
+                }
             }
 
             SupportedOp::Linear(PolyOp::Resize { scale_factor })
