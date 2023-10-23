@@ -267,7 +267,14 @@ pub fn new_op_from_onnx(
         "Topk" => {
             let op = load_op::<Topk>(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
-            let k = op.k;
+            // if param_visibility.is_public() {
+            let k = if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_const();
+                deleted_indices.push(inputs.len() - 1);
+                c.raw_values.map(|x| x as usize)[0]
+            } else {
+                op.fallback_k.to_i64()? as usize
+            };
 
             SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK { dim: axis, k })
         }
