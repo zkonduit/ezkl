@@ -1070,21 +1070,6 @@ pub fn new_op_from_onnx(
                 .parse::<usize>()?)
             };
 
-            let size_input = if resize_node.contains("optional_sizes_input: None") {
-                None
-            } else {
-                Some(
-                    resize_node
-                        .split("optional_sizes_input: ")
-                        .collect::<Vec<_>>()[1]
-                        .split("Some(")
-                        .collect::<Vec<_>>()[1]
-                        .split(")")
-                        .collect::<Vec<_>>()[0]
-                        .parse::<usize>()?,
-                )
-            };
-
             let scale_factor = if let Some(scale_factor_node) = scale_factor_node {
                 let boxed_op = inputs[scale_factor_node].opkind();
                 // remove the scale node from the inputs
@@ -1102,11 +1087,11 @@ pub fn new_op_from_onnx(
                 vec![1]
             };
 
-            if let Some(size_input) = size_input {
+            for i in 1..inputs.len() {
                 // remove the resize node from the inputs
-                if let Some(node) = inputs.get_mut(size_input) {
+                if let Some(node) = inputs.get_mut(i) {
                     node.decrement_const();
-                    deleted_indices.push(size_input);
+                    deleted_indices.push(i);
                 }
             }
 
