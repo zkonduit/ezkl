@@ -226,7 +226,13 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
+      # annoying but see https://github.com/actions/checkout/issues/270
       - uses: actions/checkout@v4
+        with:
+          lfs: "true"
+      - name: checkoutLFS
+        uses: actions/checkout@v2
+      - run: git lfs pull
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-02-06
