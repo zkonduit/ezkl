@@ -113,7 +113,7 @@ jobs:
           echo '
           import { parse, stringify } from "json-bigint";
 
-          function deserialize(buffer) { // buffer is a Uint8ClampedArray | Uint8Array // return a JSON object
+          export function deserialize(buffer) { // buffer is a Uint8ClampedArray | Uint8Array // return a JSON object
             if (buffer instanceof Uint8ClampedArray) {
                 buffer = new Uint8Array(buffer.buffer);
             }
@@ -122,7 +122,7 @@ jobs:
             return jsonObject;
           }
           
-          function serialize(data) { // data is an object // return a Uint8ClampedArray
+          export function serialize(data) { // data is an object // return a Uint8ClampedArray
             // Step 1: Stringify the Object with BigInt support
             if (typeof data === "object") {
                 data = stringify(data);
@@ -133,11 +133,6 @@ jobs:
             // Step 3: Convert to Uint8ClampedArray
             return new Uint8ClampedArray(uint8Array.buffer);
           }
-          
-          export default {
-            deserialize,
-            serialize
-          };
           ' > pkg/web/utils.js
       - name: Expose serialize and deserialize imports in nodejs target
         run: |
