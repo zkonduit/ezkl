@@ -1072,11 +1072,6 @@ pub fn new_op_from_onnx(
 
             let scale_factor = if let Some(scale_factor_node) = scale_factor_node {
                 let boxed_op = inputs[scale_factor_node].opkind();
-                // remove the scale node from the inputs
-                if let Some(node) = inputs.get_mut(scale_factor_node) {
-                    node.decrement_const();
-                    deleted_indices.push(scale_factor_node);
-                }
                 if let Some(c) = extract_const_raw_values(boxed_op) {
                     c.map(|x| x as usize).into_iter().collect::<Vec<usize>>()
                 } else {
