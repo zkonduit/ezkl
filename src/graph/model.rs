@@ -685,34 +685,17 @@ impl Model {
             GraphError::ModelLoad
         })?;
 
-        let variables: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::from_iter(run_args.variables.clone());
-
         for (i, id) in model.clone().inputs.iter().enumerate() {
-            let input = model.node(id.node);
+            let mut fact = model.node(id.node).outputs[0].fact.clone();
 
-            let mut dims = vec![];
-            let extracted_dims: Vec<usize> = input.outputs[0]
-                .fact
-                .shape
-                .dims()
-                .filter_map(tract_onnx::tract_hir::internal::Factoid::concretize)
-                .map(|x| match x.to_i64() {
-                    Ok(x) => x as usize,
-                    Err(_e) => *variables.get(&x.to_string()).unwrap_or_else(|| {
-                        panic!(
-                            "Unknown dimension {}: {:?} in model inputs",
-                            x.to_string(),
-                            x
-                        )
-                    }),
-                })
-                .collect();
-
-            dims.extend(extracted_dims);
-
-            let fact = model.node(id.node).outputs[0].fact.clone();
-            let fact = fact.with_shape(dims);
+            // use as default type if not specified
+            if matches!(
+                fact.datum_type,
+                tract_onnx::tract_hir::internal::TypeFactoid::Any
+            ) {
+                log::warn!("unspecified datum type for input {}, using f32", i);
+                fact = fact.with_datum_type(tract_onnx::prelude::DatumType::F32);
+            }
 
             model.set_input_fact(i, fact)?;
         }
