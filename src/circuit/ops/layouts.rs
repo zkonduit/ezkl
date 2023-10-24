@@ -701,17 +701,20 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
     dim: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (mut input, mut index) = (values[0].clone(), values[1].clone());
-    index.flatten();
+    let (mut input, mut index_clone) = (values[0].clone(), values[1].clone());
+    index_clone.flatten();
+    if index_clone.is_singleton() {
+        index_clone.reshape(&[1])?;
+    }
 
     let mut assigned_len = vec![];
     if !input.all_prev_assigned() {
         input = region.assign(&config.inputs[0], &input)?;
         assigned_len.push(input.len());
     }
-    if !index.all_prev_assigned() {
-        index = region.assign(&config.inputs[1], &index)?;
-        assigned_len.push(index.len());
+    if !index_clone.all_prev_assigned() {
+        index_clone = region.assign(&config.inputs[1], &index_clone)?;
+        assigned_len.push(index_clone.len());
     }
 
     if !assigned_len.is_empty() {
@@ -721,14 +724,8 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the output tensor size
     let input_dims = input.dims();
     let mut output_size = input_dims.to_vec();
-    if index.is_singleton() {
-        assert_eq!(input_dims[dim], 1);
-        output_size.remove(dim);
-        input.reshape(&output_size)?;
-        return Ok(input);
-    }
 
-    output_size[dim] = index.dims()[0];
+    output_size[dim] = index_clone.dims()[0];
 
     // these will be assigned as constants
     let mut indices = Tensor::from((0..input.dims()[dim] as u64).map(|x| F::from(x)));
@@ -747,7 +744,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
 
     let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> ValType<F> {
         let coord = cartesian_coord[i].clone();
-        let index_val = index.get_single_elem(coord[dim]).unwrap();
+        let index_val = index_clone.get_single_elem(coord[dim]).unwrap();
 
         let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
         slice[dim] = 0..input_dims[dim];
@@ -775,6 +772,12 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     } else {
         region.dummy_loop(&mut output, inner_loop_function)?;
     };
+
+    // Reshape the output tensor
+    if index_clone.is_singleton() {
+        output_size.remove(dim);
+    }
+    output.reshape(&output_size);
 
     Ok(output.into())
 }
