@@ -211,9 +211,10 @@ pub enum Commands {
         /// Path to the witness (public and private inputs) .json file
         #[arg(short = 'O', long, default_value = "witness.json")]
         output: PathBuf,
-        /// Path to the witness (public and private inputs) .json file
+        /// Path to the witness (public and private inputs) .json file (optional - solely used to generate kzg commits)
         #[arg(short = 'V', long)]
         vk_path: Option<PathBuf>,
+        /// Path to the srs file (optional - solely used to generate kzg commits)
         #[arg(short = 'P', long)]
         srs_path: Option<PathBuf>,
     },
@@ -383,7 +384,7 @@ pub enum Commands {
         /// The path to output the proving key file
         #[arg(long, default_value = "pk.key")]
         pk_path: PathBuf,
-        /// The graph witness (optional)
+        /// The graph witness (optional - used to override fixed values in the circuit)
         #[arg(short = 'W', long)]
         witness: Option<PathBuf>,
     },
@@ -433,7 +434,6 @@ pub enum Commands {
         #[arg(long, default_value = "on-chain")]
         output_source: TestDataSource,
     },
-
     #[cfg(not(target_arch = "wasm32"))]
     TestUpdateAccountCalls {
         /// The path to verfier contract's address
