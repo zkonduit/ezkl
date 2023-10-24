@@ -438,16 +438,23 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     LookupOp::KroneckerDelta,
                 ]
             }
-            HybridOp::Gather { .. }
+            HybridOp::Gather {
+                constant_idx: None, ..
+            }
             | HybridOp::OneHot { .. }
-            | HybridOp::GatherElements { .. }
-            | HybridOp::ScatterElements { .. }
+            | HybridOp::GatherElements {
+                constant_idx: None, ..
+            }
+            | HybridOp::ScatterElements {
+                constant_idx: None, ..
+            }
             | HybridOp::Equals { .. } => {
                 vec![LookupOp::KroneckerDelta]
             }
             HybridOp::ReduceArgMax { .. } | HybridOp::ReduceArgMin { .. } => {
                 vec![LookupOp::ReLU, LookupOp::KroneckerDelta]
             }
+            _ => vec![],
         }
     }
 

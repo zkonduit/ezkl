@@ -1147,21 +1147,15 @@ pub fn gather<T: TensorType + Send + Sync>(
     index: &Tensor<usize>,
     dim: usize,
 ) -> Result<Tensor<T>, TensorError> {
-    let mut index = index.clone();
-    index.flatten();
+    let mut index_clone = index.clone();
+    index_clone.flatten();
+    if index_clone.is_singleton() {
+        index_clone.reshape(&[1]);
+    }
 
     // Calculate the output tensor size
     let mut output_size = input.dims().to_vec();
-    // Reshape the output tensor
-    if index.is_singleton() {
-        assert_eq!(output_size[dim], 1);
-        output_size.remove(dim);
-        let mut input = input.clone();
-        input.reshape(&output_size);
-        return Ok(input);
-    }
-
-    output_size[dim] = index.dims()[0];
+    output_size[dim] = index_clone.dims()[0];
 
     // Allocate memory for the output tensor
     let mut output = Tensor::new(None, &output_size)?;
@@ -1173,7 +1167,7 @@ pub fn gather<T: TensorType + Send + Sync>(
 
     output = output.par_enum_map(|i, _: T| {
         let coord = cartesian_coord[i].clone();
-        let index_val = index.get(&[coord[dim]]);
+        let index_val = index_clone.get(&[coord[dim]]);
         let new_coord = coord
             .iter()
             .enumerate()
@@ -1182,6 +1176,11 @@ pub fn gather<T: TensorType + Send + Sync>(
 
         Ok(input.get(&new_coord))
     })?;
+
+    // Reshape the output tensor
+    if index.is_singleton() {
+        output_size.remove(dim);
+    }
 
     output.reshape(&output_size);
 

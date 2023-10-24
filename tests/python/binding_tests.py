@@ -138,7 +138,7 @@ def test_table_1l_average():
         "├─────┼────────────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
         "│ 2   │ SUMPOOL        │ 7         │ [(1, 0)] │ [1, 3, 3, 3] │ []               │\n"
         "├─────┼────────────────┼───────────┼──────────┼──────────────┼──────────────────┤\n"
-        "│ 4   │ GATHER (dim=0) │ 7         │ [(2, 0)] │ [3, 3, 3]    │ [\"K_DELTA\"]      │\n"
+        "│ 4   │ GATHER (dim=0) │ 7         │ [(2, 0)] │ [3, 3, 3]    │ []               │\n"
         "└─────┴────────────────┴───────────┴──────────┴──────────────┴──────────────────┘"
     )
     assert ezkl.table(path) == expected_table
@@ -511,7 +511,7 @@ def test_deploy_evm_with_private_key():
     # sol_code_path = os.path.join(folder_path, 'test.sol')
 
     anvil_default_private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-    
+
     res = ezkl.deploy_evm(
         addr_path,
         sol_code_path,
@@ -523,7 +523,7 @@ def test_deploy_evm_with_private_key():
 
     custom_zero_balance_private_key = "ff9dfe0b6d31e93ba13460a4d6f63b5e31dd9532b1304f1cbccea7092a042aa4"
 
-    with pytest.raises(RuntimeError, match = "Failed to run deploy_evm"):
+    with pytest.raises(RuntimeError, match="Failed to run deploy_evm"):
         res = ezkl.deploy_evm(
             addr_path,
             sol_code_path,

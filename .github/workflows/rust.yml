@@ -563,6 +563,8 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: Solvency demo
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_28_expects
       - name: KMeans
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_27_expects
       - name: KZG Vis demo
