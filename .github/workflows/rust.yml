@@ -565,6 +565,10 @@ jobs:
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
       - name: Proof Splitting
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_29_expects
+      - name: Gan Proof Splitting (MNIST)
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_30_expects
+      - name: Gan tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
       - name: Solvency demo
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_28_expects
       - name: KMeans
@@ -623,7 +627,5 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
       - name: Variance tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
-      - name: Gan tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
       - name: GCN tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_21_expects
