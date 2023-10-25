@@ -1213,7 +1213,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/min-deg-lookup#7774e470a89ecda9464c5f8c236e6efcb894f382"
 dependencies = [
  "integer",
  "num-bigint",
@@ -1694,7 +1694,7 @@ dependencies = [
  "gag",
  "getrandom",
  "halo2_gadgets",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup)",
  "halo2_solidity_verifier",
  "halo2curves 0.1.0",
  "hex",
@@ -2086,13 +2086,13 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice#db9315e8543d6717039c151a9cbfc55b57d90fff"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup#a40d0569c64d87862bf33af8be6942801ad843f4"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
  "ff",
  "group",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup)",
  "halo2curves 0.1.0",
  "lazy_static",
  "rand 0.8.5",
@@ -2103,7 +2103,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice#db9315e8543d6717039c151a9cbfc55b57d90fff"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup#a40d0569c64d87862bf33af8be6942801ad843f4"
 dependencies = [
  "blake2b_simd",
  "env_logger",
@@ -2121,13 +2121,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "halo2_proofs"
+version = "0.2.0"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice#db9315e8543d6717039c151a9cbfc55b57d90fff"
+dependencies = [
+ "blake2b_simd",
+ "env_logger",
+ "ff",
+ "group",
+ "halo2curves 0.1.0",
+ "log",
+ "maybe-rayon",
+ "rand_chacha",
+ "rand_core 0.6.4",
+ "sha3 0.9.1",
+ "tracing",
+]
+
+[[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
 source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/chunked-lookup-verifier#8cf26f3164ce7e21b4323adf754833e684efdba1"
 dependencies = [
  "askama",
  "blake2b_simd",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice)",
  "hex",
  "itertools 0.11.0",
  "ruint",
@@ -2177,9 +2195,9 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/min-deg-lookup#7774e470a89ecda9464c5f8c236e6efcb894f382"
 dependencies = [
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup)",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -2485,7 +2503,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/min-deg-lookup#7774e470a89ecda9464c5f8c236e6efcb894f382"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2721,7 +2739,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/min-deg-lookup#7774e470a89ecda9464c5f8c236e6efcb894f382"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -4511,10 +4529,10 @@ dependencies = [
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#8e2e99279469c654d7084116f2eefe5db7caea27"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/min-deg-lookup#8666aca71b2fcb8ae15ef462413cdbdcb4c226cb"
 dependencies = [
  "ecc",
- "halo2_proofs",
+ "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup)",
  "halo2curves 0.1.0",
  "hex",
  "itertools 0.10.5",
