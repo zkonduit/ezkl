@@ -101,6 +101,9 @@ pub struct RunArgs {
     /// Flags whether params are public, private, hashed
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
+    /// allow identity quotients in proof (set to false if the proof will need to be aggregated)
+    #[arg(long, default_value = "true", action = clap::ArgAction::Set)]
+    pub allow_identity_quotients: bool,
 }
 
 impl RunArgs {

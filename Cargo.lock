@@ -2086,7 +2086,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup#a40d0569c64d87862bf33af8be6942801ad843f4"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup#1f05c551488f325e9e8e0f3ecd1c66f7962c083e"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2103,7 +2103,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup#a40d0569c64d87862bf33af8be6942801ad843f4"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup#1f05c551488f325e9e8e0f3ecd1c66f7962c083e"
 dependencies = [
  "blake2b_simd",
  "env_logger",

@@ -1637,6 +1637,7 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "-O",
                 &settings_path,
+                "--allow-identity-quotients=false",
             ])
             .status()
             .expect("failed to execute process");
@@ -1746,6 +1747,7 @@ mod native_tests {
                 "gen-settings",
                 "-M",
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
+                "--allow-identity-quotients=false",
                 &format!(
                     "--settings-path={}/{}/settings.json",
                     test_dir, example_name
@@ -1903,6 +1905,7 @@ mod native_tests {
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
+                "--allow-identity-quotients=false",
             ])
             .status()
             .expect("failed to execute process");

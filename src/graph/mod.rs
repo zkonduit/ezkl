@@ -1167,6 +1167,8 @@ impl Circuit<Fp> for GraphCircuit {
     fn configure_with_params(cs: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
         let mut params = params.clone();
         params.set_num_blinding_factors(cs.blinding_factors());
+        cs.set_allow_identity_chunks(params.run_args.allow_identity_quotients);
+
         GLOBAL_SETTINGS.with(|settings| {
             *settings.borrow_mut() = Some(params.clone());
         });

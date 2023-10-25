@@ -259,6 +259,8 @@ struct PyRunArgs {
     pub param_visibility: Visibility,
     #[pyo3(get, set)]
     pub variables: Vec<(String, usize)>,
+    #[pyo3(get, set)]
+    pub allow_identity_quotients: bool,
 }
 
 /// default instantiation of PyRunArgs
@@ -277,6 +279,7 @@ impl PyRunArgs {
             output_visibility: Visibility::Public,
             param_visibility: Visibility::Private,
             variables: vec![("batch_size".to_string(), 1)],
+            allow_identity_quotients: true,
         }
     }
 }
@@ -295,6 +298,7 @@ impl From<PyRunArgs> for RunArgs {
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
             variables: py_run_args.variables,
+            allow_identity_quotients: py_run_args.allow_identity_quotients
         }
     }
 }
@@ -312,6 +316,7 @@ impl Into<PyRunArgs> for RunArgs {
             output_visibility: self.output_visibility,
             param_visibility: self.param_visibility,
             variables: self.variables,
+            allow_identity_quotients: self.allow_identity_quotients
         }
     }
 }
