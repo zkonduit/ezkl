@@ -1694,7 +1694,7 @@ dependencies = [
  "gag",
  "getrandom",
  "halo2_gadgets",
- "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup)",
+ "halo2_proofs",
  "halo2_solidity_verifier",
  "halo2curves 0.1.0",
  "hex",
@@ -2092,7 +2092,7 @@ dependencies = [
  "bitvec 1.0.1",
  "ff",
  "group",
- "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup)",
+ "halo2_proofs",
  "halo2curves 0.1.0",
  "lazy_static",
  "rand 0.8.5",
@@ -2121,31 +2121,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "halo2_proofs"
-version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice#db9315e8543d6717039c151a9cbfc55b57d90fff"
-dependencies = [
- "blake2b_simd",
- "env_logger",
- "ff",
- "group",
- "halo2curves 0.1.0",
- "log",
- "maybe-rayon",
- "rand_chacha",
- "rand_core 0.6.4",
- "sha3 0.9.1",
- "tracing",
-]
-
-[[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/chunked-lookup-verifier#8cf26f3164ce7e21b4323adf754833e684efdba1"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/min-deg-lookup#8c2664a4c543ffd216778e914e51339387d4864a"
 dependencies = [
  "askama",
  "blake2b_simd",
- "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice)",
+ "halo2_proofs",
  "hex",
  "itertools 0.11.0",
  "ruint",
@@ -2197,7 +2179,7 @@ name = "halo2wrong"
 version = "0.1.0"
 source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/min-deg-lookup#7774e470a89ecda9464c5f8c236e6efcb894f382"
 dependencies = [
- "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup)",
+ "halo2_proofs",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -4532,7 +4514,7 @@ version = "0.1.0"
 source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/min-deg-lookup#8666aca71b2fcb8ae15ef462413cdbdcb4c226cb"
 dependencies = [
  "ecc",
- "halo2_proofs 0.2.0 (git+https://github.com/zkonduit/halo2?branch=ac/min-deg-lookup)",
+ "halo2_proofs",
  "halo2curves 0.1.0",
  "hex",
  "itertools 0.10.5",
