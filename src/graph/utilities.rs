@@ -1065,7 +1065,7 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>()[1]
                 .split("Some(")
                 .collect::<Vec<_>>()[1]
-                .split(")")
+                .split(')')
                 .collect::<Vec<_>>()[0]
                 .parse::<usize>()?)
             };
