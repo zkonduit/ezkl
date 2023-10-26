@@ -244,7 +244,15 @@ mod wasm32 {
 
     #[wasm_bindgen_test]
     async fn gen_pk_test() {
+        let vk = genVk(
+            wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()),
+            wasm_bindgen::Clamped(SRS.to_vec()),
+        )
+        .map_err(|_| "failed")
+        .unwrap();
+
         let pk = genPk(
+            wasm_bindgen::Clamped(vk),
             wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()),
             wasm_bindgen::Clamped(SRS.to_vec()),
         )
@@ -256,16 +264,9 @@ mod wasm32 {
 
     #[wasm_bindgen_test]
     async fn gen_vk_test() {
-        let pk = genPk(
+        let vk = genVk(
             wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()),
             wasm_bindgen::Clamped(SRS.to_vec()),
-        )
-        .map_err(|_| "failed")
-        .unwrap();
-
-        let vk = genVk(
-            wasm_bindgen::Clamped(pk),
-            wasm_bindgen::Clamped(SETTINGS.to_vec()),
         )
         .map_err(|_| "failed")
         .unwrap();
@@ -275,14 +276,20 @@ mod wasm32 {
 
     #[wasm_bindgen_test]
     async fn pk_is_valid_test() {
-        let pk = genPk(
+        let vk = genVk(
             wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()),
             wasm_bindgen::Clamped(SRS.to_vec()),
         )
         .map_err(|_| "failed")
         .unwrap();
 
-        assert!(pk.len() > 0);
+        let pk = genPk(
+            wasm_bindgen::Clamped(vk.clone()),
+            wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()),
+            wasm_bindgen::Clamped(SRS.to_vec()),
+        )
+        .map_err(|_| "failed")
+        .unwrap();
 
         // prove
         let proof = prove(
@@ -295,13 +302,6 @@ mod wasm32 {
         .unwrap();
 
         assert!(proof.len() > 0);
-
-        let vk = genVk(
-            wasm_bindgen::Clamped(pk.clone()),
-            wasm_bindgen::Clamped(SETTINGS.to_vec()),
-        )
-        .map_err(|_| "failed")
-        .unwrap();
 
         let value = verify(
             wasm_bindgen::Clamped(proof.to_vec()),

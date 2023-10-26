@@ -272,10 +272,10 @@ pub fn genWitness(
         .map_err(|e| JsError::new(&format!("Failed to serialize witness: {}", e)))
 }
 
-/// Generate proving key in browser
+/// Generate verifying key in browser
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn genPk(
+pub fn genVk(
     compiled_circuit: wasm_bindgen::Clamped<Vec<u8>>,
     params_ser: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
@@ -288,8 +288,45 @@ pub fn genPk(
     let circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
         .map_err(|e| JsError::new(&format!("Failed to deserialize compiled model: {}", e)))?;
 
+    // Create verifying key
+    let vk = create_vk_wasm::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
+        .map_err(Box::<dyn std::error::Error>::from)
+        .map_err(|e| JsError::new(&format!("Failed to create verifying key: {}", e)))?;
+
+    let mut serialized_vk = Vec::new();
+    vk.write(&mut serialized_vk, halo2_proofs::SerdeFormat::RawBytes)
+        .map_err(|e| JsError::new(&format!("Failed to serialize vk: {}", e)))?;
+
+    Ok(serialized_vk)
+}
+
+/// Generate proving key in browser
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn genPk(
+    vk: wasm_bindgen::Clamped<Vec<u8>>,
+    compiled_circuit: wasm_bindgen::Clamped<Vec<u8>>,
+    params_ser: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Result<Vec<u8>, JsError> {
+    // Read in kzg params
+    let mut reader = std::io::BufReader::new(&params_ser[..]);
+    let params: ParamsKZG<Bn256> =
+        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
+            .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
+    // Read in compiled circuit
+    let circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
+        .map_err(|e| JsError::new(&format!("Failed to deserialize compiled model: {}", e)))?;
+
+    // Read in verifying key
+    let mut reader = std::io::BufReader::new(&vk[..]);
+    let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
+        &mut reader,
+        halo2_proofs::SerdeFormat::RawBytes,
+        circuit.settings().clone(),
+    )
+    .map_err(|e| JsError::new(&format!("Failed to deserialize verifying key: {}", e)))?;
     // Create proving key
-    let pk = create_keys_wasm::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
+    let pk = create_pk_wasm::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk, &circuit, &params)
         .map_err(Box::<dyn std::error::Error>::from)
         .map_err(|e| JsError::new(&format!("Failed to create proving key: {}", e)))?;
 
@@ -298,35 +335,6 @@ pub fn genPk(
         .map_err(|e| JsError::new(&format!("Failed to serialize pk: {}", e)))?;
 
     Ok(serialized_pk)
-}
-
-/// Generate verifying key in browser
-#[wasm_bindgen]
-#[allow(non_snake_case)]
-pub fn genVk(
-    pk: wasm_bindgen::Clamped<Vec<u8>>,
-    circuit_settings_ser: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Result<Vec<u8>, JsError> {
-    // Read in circuit params
-    let circuit_settings: GraphSettings = serde_json::from_slice(&circuit_settings_ser[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize settings: {}", e)))?;
-
-    // Read in proving key
-    let mut reader = std::io::BufReader::new(&pk[..]);
-    let pk = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
-        circuit_settings.clone(),
-    )
-    .map_err(|e| JsError::new(&format!("Failed to deserialize proving key: {}", e)))?;
-
-    let vk = pk.get_vk();
-
-    let mut serialized_vk = Vec::new();
-    vk.write(&mut serialized_vk, halo2_proofs::SerdeFormat::RawBytes)
-        .map_err(|e| JsError::new(&format!("Failed to serialize vk: {}", e)))?;
-
-    Ok(serialized_vk)
 }
 
 /// Verify proof in browser using wasm
@@ -527,9 +535,27 @@ pub fn srsValidation(srs: wasm_bindgen::Clamped<Vec<u8>>) -> Result<bool, JsErro
 
 // HELPER FUNCTIONS
 
-/// Creates a [VerifyingKey] and [ProvingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
+/// Creates a [ProvingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
 #[cfg(target_arch = "wasm32")]
-pub fn create_keys_wasm<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
+pub fn create_vk_wasm<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
+    circuit: &C,
+    params: &'_ Scheme::ParamsProver,
+) -> Result<VerifyingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
+where
+    C: Circuit<Scheme::Scalar>,
+    <Scheme as CommitmentScheme>::Scalar: FromUniformBytes<64>,
+{
+    //	Real proof
+    let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
+
+    // Initialize the verifying key
+    let vk = keygen_vk(params, &empty_circuit)?;
+    Ok(vk)
+}
+/// Creates a [ProvingKey] from a [VerifyingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
+#[cfg(target_arch = "wasm32")]
+pub fn create_pk_wasm<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
+    vk: VerifyingKey<Scheme::Curve>,
     circuit: &C,
     params: &'_ Scheme::ParamsProver,
 ) -> Result<ProvingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
@@ -541,7 +567,6 @@ where
     let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
 
     // Initialize the proving key
-    let vk = keygen_vk(params, &empty_circuit)?;
     let pk = keygen_pk(params, vk, &empty_circuit)?;
     Ok(pk)
 }
