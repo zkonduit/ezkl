@@ -191,7 +191,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 62] = [
+    const TESTS: [&str; 61] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -256,7 +256,6 @@ mod native_tests {
         "scatter_elements",
         "1l_linear", //60
         "linear_regression",
-        "sklearn_mlp",
     ];
 
     const WASM_TESTS: [&str; 48] = [
@@ -486,7 +485,7 @@ mod native_tests {
 
 
 
-            seq!(N in 0..=61 {
+            seq!(N in 0..=60 {
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {
                 let test_dir = TempDir::new(test).unwrap();

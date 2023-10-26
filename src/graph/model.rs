@@ -685,34 +685,8 @@ impl Model {
             GraphError::ModelLoad
         })?;
 
-        let variables: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::from_iter(run_args.variables.clone());
-
         for (i, id) in model.clone().inputs.iter().enumerate() {
-            let input = model.node(id.node);
-
-            let mut dims = vec![];
-            let extracted_dims: Vec<usize> = input.outputs[0]
-                .fact
-                .shape
-                .dims()
-                .filter_map(tract_onnx::tract_hir::internal::Factoid::concretize)
-                .map(|x| match x.to_i64() {
-                    Ok(x) => x as usize,
-                    Err(_e) => *variables.get(&x.to_string()).unwrap_or_else(|| {
-                        panic!(
-                            "Unknown dimension {}: {:?} in model inputs",
-                            x.to_string(),
-                            x
-                        )
-                    }),
-                })
-                .collect();
-
-            dims.extend(extracted_dims);
-
             let mut fact = model.node(id.node).outputs[0].fact.clone();
-            fact = fact.with_shape(dims);
 
             // use as default type if not specified
             if matches!(
