@@ -170,6 +170,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: public outputs + batch size == 10
+        run: cargo nextest run --release --verbose tests::mock_large_batch_public_outputs_ --test-threads 32
       - name: kzg inputs
         run: cargo nextest run --release --verbose tests::mock_kzg_input_::t  --test-threads 32
       - name: kzg params
@@ -218,8 +220,6 @@ jobs:
         run: cargo nextest run --release --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
       - name: public outputs
         run: cargo nextest run --release --verbose tests::mock_public_outputs_ --test-threads 32
-      - name: public outputs + batch size == 10
-        run: cargo nextest run --release --verbose tests::mock_large_batch_public_outputs_ --test-threads 32
       - name: public inputs
         run: cargo nextest run --release --verbose tests::mock_public_inputs_ --test-threads 32
       - name: fixed params

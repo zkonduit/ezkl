@@ -2700,6 +2700,107 @@ pub fn slice<T: TensorType + Send + Sync>(
 pub mod nonlinearities {
     use super::*;
 
+    /// Ceiling operator.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    ///
+    /// use ezkl::tensor::ops::nonlinearities::ceil;
+    /// let x = Tensor::<i128>::new(
+    ///    Some(&[1, 2, 3, 4, 5, 6]),
+    ///  &[3, 2],
+    /// ).unwrap();
+    /// let result = ceil(&x, 2.0);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3]), &[3, 2]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn ceil(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale;
+            let rounded = kix.ceil();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
+    }
+
+    /// Floor operator.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::floor;
+    /// let x = Tensor::<i128>::new(
+    ///   Some(&[1, 2, 3, 4, 5, 6]),
+    ///  &[3, 2],
+    /// ).unwrap();
+    /// let result = floor(&x, 2.0);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 1, 2, 2, 3]), &[3, 2]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn floor(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale;
+            let rounded = kix.floor();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
+    }
+
+    /// Round operator.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::round;
+    /// let x = Tensor::<i128>::new(
+    ///   Some(&[1, 2, 3, 4, 5, 6]),
+    /// &[3, 2],
+    /// ).unwrap();
+    /// let result = round(&x, 2.0);
+    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3]), &[3, 2]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn round(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale;
+            let rounded = kix.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
+    }
+
+    /// Round half to even operator.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::round_half_to_even;
+    /// let x = Tensor::<i128>::new(
+    ///   Some(&[1, 2, 3, 4, 5, 6]),
+    /// &[3, 2],
+    /// ).unwrap();
+    /// let result = round_half_to_even(&x, 2.0);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 2, 2, 2, 3]), &[3, 2]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn round_half_to_even(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale;
+            let rounded = kix.round_ties_even();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
+    }
+
     /// Raises to a floating point power.
     /// # Arguments
     /// * `a` - Tensor

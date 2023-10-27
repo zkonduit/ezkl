@@ -5,6 +5,7 @@ use std::error::Error;
 use crate::{
     circuit::{layouts, utils},
     fieldutils::{felt_to_i128, i128_to_felt},
+    graph::multiplier_to_scale,
     tensor::{self, Tensor, TensorError, TensorType},
 };
 
@@ -26,6 +27,18 @@ pub enum LookupOp {
     Min {
         scales: (usize, usize),
         a: utils::F32,
+    },
+    Ceil {
+        scale: utils::F32,
+    },
+    Floor {
+        scale: utils::F32,
+    },
+    Round {
+        scale: utils::F32,
+    },
+    RoundHalfToEven {
+        scale: utils::F32,
     },
     Sqrt {
         scale: utils::F32,
@@ -125,6 +138,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
+            LookupOp::Ceil { scale } => Ok(tensor::ops::nonlinearities::ceil(&x, scale.into())),
+            LookupOp::Floor { scale } => Ok(tensor::ops::nonlinearities::floor(&x, scale.into())),
+            LookupOp::Round { scale } => Ok(tensor::ops::nonlinearities::round(&x, scale.into())),
+            LookupOp::RoundHalfToEven { scale } => Ok(
+                tensor::ops::nonlinearities::round_half_to_even(&x, scale.into()),
+            ),
             LookupOp::Pow { scale, a } => Ok(tensor::ops::nonlinearities::pow(
                 &x,
                 scale.0.into(),
@@ -202,6 +221,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         match self {
+            LookupOp::Ceil { scale } => format!("CEIL(scale={})", scale),
+            LookupOp::Floor { scale } => format!("FLOOR(scale={})", scale),
+            LookupOp::Round { scale } => format!("ROUND(scale={})", scale),
+            LookupOp::RoundHalfToEven { scale } => format!("ROUND_HALF_TO_EVEN(scale={})", scale),
             LookupOp::Pow { a, scale } => format!("POW(scale={}, exponent={})", scale, a),
             LookupOp::KroneckerDelta => "K_DELTA".into(),
             LookupOp::Max { scales, a } => format!("MAX(scales={:?}, a={})", scales, a),
@@ -253,7 +276,23 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the scale of the output of the operation.
     fn out_scale(&self, inputs_scale: Vec<u32>) -> u32 {
         match self {
-            LookupOp::Sign | LookupOp::GreaterThan { .. } | LookupOp::LessThan { .. } => 0,
+            LookupOp::Div { denom } => {
+                let mut scale = inputs_scale[0];
+                if scale == 0 {
+                    scale += multiplier_to_scale(1. / denom.0 as f64);
+                }
+                scale
+            }
+            LookupOp::Sign
+            | LookupOp::GreaterThan { .. }
+            | LookupOp::LessThan { .. }
+            | LookupOp::GreaterThanEqual { .. }
+            | LookupOp::LessThanEqual { .. }
+            | LookupOp::KroneckerDelta
+            | LookupOp::Round { .. }
+            | LookupOp::RoundHalfToEven { .. }
+            | LookupOp::Ceil { .. }
+            | LookupOp::Floor { .. } => 0,
             _ => inputs_scale[0],
         }
     }

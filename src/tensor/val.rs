@@ -288,6 +288,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     ///
+    pub fn is_instance(&self) -> bool {
+        match self {
+            ValTensor::Instance { .. } => true,
+            _ => false,
+        }
+    }
+
+    ///
     pub fn set_initial_instance_offset(&mut self, offset: usize) {
         if let ValTensor::Instance { initial_offset, .. } = self {
             *initial_offset = offset;

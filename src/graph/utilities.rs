@@ -74,7 +74,7 @@ pub fn scale_to_multiplier_neg(scale: i32) -> f64 {
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
-pub fn mult_to_scale(mult: f64) -> u32 {
+pub fn multiplier_to_scale(mult: f64) -> u32 {
     mult.log2().round() as u32
 }
 
@@ -91,10 +91,12 @@ pub fn node_output_shapes(
     }
     Ok(shapes)
 }
-
+#[cfg(not(target_arch = "wasm32"))]
+use tract_onnx::prelude::SymbolValues;
 #[cfg(not(target_arch = "wasm32"))]
 fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
+    symbol_values: &SymbolValues,
 ) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
     use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
@@ -179,11 +181,19 @@ fn extract_tensor_value(
         DatumType::TDim => {
             // Generally a shape or hyperparam
             let vec = input.as_slice::<tract_onnx::prelude::TDim>()?.to_vec();
-            let cast: Vec<f32> = vec
+
+            let cast: Result<Vec<f32>, &str> = vec
                 .par_iter()
-                .map(|x| x.to_i64().map_or_else(|_| 1, |e| e) as f32)
+                .map(|x| match x.to_i64() {
+                    Ok(v) => Ok(v as f32),
+                    Err(_) => match x.eval(symbol_values).to_i64() {
+                        Ok(v) => Ok(v as f32),
+                        Err(_) => Err("could not evaluate tdim"),
+                    },
+                })
                 .collect();
-            const_value = Tensor::<f32>::new(Some(&cast), &dims)?;
+
+            const_value = Tensor::<f32>::new(Some(&cast?), &dims)?;
         }
         _ => todo!("unsupported type"),
     }
@@ -223,6 +233,7 @@ pub fn new_op_from_onnx(
     param_visibility: &Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut [super::NodeType],
+    symbol_values: &SymbolValues,
 ) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
     use crate::circuit::InputType;
 
@@ -243,7 +254,7 @@ pub fn new_op_from_onnx(
 
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
-                inputs[1].decrement_const();
+                inputs[1].decrement_use();
                 deleted_indices.push(inputs.len() - 1);
                 op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
                     dim: axis,
@@ -269,7 +280,7 @@ pub fn new_op_from_onnx(
             let axis = op.axis;
             // if param_visibility.is_public() {
             let k = if let Some(c) = inputs[1].opkind().get_mutable_constant() {
-                inputs[1].decrement_const();
+                inputs[1].decrement_use();
                 deleted_indices.push(inputs.len() - 1);
                 c.raw_values.map(|x| x as usize)[0]
             } else {
@@ -306,7 +317,7 @@ pub fn new_op_from_onnx(
 
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
-                inputs[1].decrement_const();
+                inputs[1].decrement_use();
                 deleted_indices.push(1);
                 op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::ScatterElements {
                     dim: axis,
@@ -345,7 +356,7 @@ pub fn new_op_from_onnx(
 
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
-                inputs[1].decrement_const();
+                inputs[1].decrement_use();
                 deleted_indices.push(inputs.len() - 1);
                 op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::GatherElements {
                     dim: axis,
@@ -398,7 +409,7 @@ pub fn new_op_from_onnx(
             let op: Const = load_op::<Const>(node.op(), idx, node.op().name().to_string())?;
             let dt = op.0.datum_type();
             // Raw values are always f32
-            let raw_value = extract_tensor_value(op.0)?;
+            let raw_value = extract_tensor_value(op.0, symbol_values)?;
             // If bool or a tensor dimension then don't scale
             let constant_scale = match dt {
                 DatumType::Bool
@@ -417,14 +428,7 @@ pub fn new_op_from_onnx(
             // Quantize the raw value
             let quantized_value =
                 quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
-
-            let mut c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
-
-            c.num_uses += node
-                .outputs
-                .iter()
-                .map(|outlet| outlet.successors.len())
-                .sum::<usize>();
+            let c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
             // Create a constant op
             SupportedOp::Constant(c)
         }
@@ -521,7 +525,7 @@ pub fn new_op_from_onnx(
 
             if inputs.len() == 2 {
                 if let Some(node) = inputs.get_mut(const_idx) {
-                    node.decrement_const();
+                    node.decrement_use();
                     deleted_indices.push(const_idx);
                 }
                 if unit == 0. {
@@ -565,7 +569,7 @@ pub fn new_op_from_onnx(
 
             if inputs.len() == 2 {
                 if let Some(node) = inputs.get_mut(const_idx) {
-                    node.decrement_const();
+                    node.decrement_use();
                     deleted_indices.push(const_idx);
                 }
                 SupportedOp::Nonlinear(LookupOp::Min {
@@ -689,6 +693,22 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>();
             assert_eq!(input_scales.len(), 1);
 
+            let mut constant = inputs[0].opkind();
+            let constant = constant.get_mutable_constant();
+
+            let replace_const = |scale: u32,
+                                 default_op: SupportedOp|
+             -> Result<SupportedOp, Box<dyn std::error::Error>> {
+                if let Some(c) = constant {
+                    inputs[0].bump_scale(scale);
+                    c.rebase_scale(scale)?;
+                    inputs[0].replace_opkind(SupportedOp::Constant(c.clone()));
+                    Ok(SupportedOp::Linear(PolyOp::Identity))
+                } else {
+                    Ok(default_op)
+                }
+            };
+
             match dt {
                 DatumType::Bool
                 | DatumType::TDim
@@ -701,17 +721,32 @@ pub fn new_op_from_onnx(
                 | DatumType::U32
                 | DatumType::U64 => {
                     if input_scales[0] != 0 {
-                        SupportedOp::Nonlinear(LookupOp::Div {
-                            denom: crate::circuit::utils::F32(
-                                scale_to_multiplier(input_scales[0]) as f32
-                            ),
-                        })
+                        replace_const(
+                            0,
+                            SupportedOp::Nonlinear(LookupOp::Div {
+                                denom: crate::circuit::utils::F32(scale_to_multiplier(
+                                    input_scales[0],
+                                )
+                                    as f32),
+                            }),
+                        )?
                     } else {
                         SupportedOp::Linear(PolyOp::Identity)
                     }
                 }
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => {
-                    SupportedOp::Linear(PolyOp::Identity)
+                    if input_scales[0] == 0 {
+                        replace_const(
+                            scales.input,
+                            SupportedOp::Nonlinear(LookupOp::Div {
+                                denom: crate::circuit::utils::F32(
+                                    1. / (scale_to_multiplier(scales.input) as f32),
+                                ),
+                            }),
+                        )?
+                    } else {
+                        SupportedOp::Linear(PolyOp::Identity)
+                    }
                 }
                 _ => todo!("unsupported type"),
             }
@@ -734,7 +769,7 @@ pub fn new_op_from_onnx(
                 let const_idx = const_idx[0];
                 if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
                     if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
-                        inputs[const_idx].decrement_const();
+                        inputs[const_idx].decrement_use();
                         deleted_indices.push(const_idx);
                         op = SupportedOp::Nonlinear(LookupOp::Div {
                             // we invert the constant for division
@@ -842,17 +877,25 @@ pub fn new_op_from_onnx(
                 pool_dims: (kernel_height, kernel_width),
             })
         }
-        "Ceil" | "Floor" | "Round" | "RoundHalfToEven" => {
-            warn!("using a round op in the circuit which does not make sense in Field arithmetic");
-            SupportedOp::Linear(PolyOp::Identity)
-        }
+        "Ceil" => SupportedOp::Nonlinear(LookupOp::Ceil {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Floor" => SupportedOp::Nonlinear(LookupOp::Floor {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "Round" => SupportedOp::Nonlinear(LookupOp::Round {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
+        "RoundHalfToEven" => SupportedOp::Nonlinear(LookupOp::RoundHalfToEven {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
         "Sign" => SupportedOp::Nonlinear(LookupOp::Sign),
         "Pow" => {
             // Extract the slope layer hyperparams from a const
 
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
-                inputs[1].decrement_const();
+                inputs[1].decrement_use();
                 deleted_indices.push(inputs.len() - 1);
                 if c.raw_values.len() > 1 {
                     unimplemented!("only support scalar pow")
@@ -926,12 +969,12 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            let kernel = extract_tensor_value(conv_node.kernel.clone())?;
+            let kernel = extract_tensor_value(conv_node.kernel.clone(), symbol_values)?;
             let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match conv_node.bias.clone() {
                 Some(b) => {
-                    let const_value = extract_tensor_value(b)?;
+                    let const_value = extract_tensor_value(b, symbol_values)?;
 
                     let val = quantize_tensor(
                         const_value,
@@ -993,12 +1036,12 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
+            let kernel = extract_tensor_value(deconv_node.kernel.clone(), symbol_values)?;
             let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match deconv_node.bias.clone() {
                 Some(b) => {
-                    let const_value = extract_tensor_value(b)?;
+                    let const_value = extract_tensor_value(b, symbol_values)?;
 
                     let val = quantize_tensor(
                         const_value,
@@ -1065,7 +1108,7 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>()[1]
                 .split("Some(")
                 .collect::<Vec<_>>()[1]
-                .split(")")
+                .split(')')
                 .collect::<Vec<_>>()[0]
                 .parse::<usize>()?)
             };
@@ -1085,7 +1128,7 @@ pub fn new_op_from_onnx(
             for i in 1..inputs.len() {
                 // remove the resize node from the inputs
                 if let Some(node) = inputs.get_mut(i) {
-                    node.decrement_const();
+                    node.decrement_use();
                     deleted_indices.push(i);
                 }
             }
