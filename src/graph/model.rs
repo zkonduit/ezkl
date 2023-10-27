@@ -1187,7 +1187,7 @@ impl Model {
                         let mut node = n.clone();
                         let c = node.opkind.get_mutable_constant().unwrap();
                         Some(c.quantized_values.clone().into())
-                    } else if node.is_input() && node.num_uses() == 1 {
+                    } else if node.is_input() && node.num_uses() == 1 && !values[0].is_instance() {
                         log::warn!("input with 1 use");
                         Some(values[0].clone())
                     } else {
