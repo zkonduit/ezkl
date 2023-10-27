@@ -135,6 +135,8 @@ jobs:
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
       - name: Run wasm verifier tests
+        # on mac:
+        #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
 
   tutorial:
