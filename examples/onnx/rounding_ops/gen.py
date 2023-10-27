@@ -34,10 +34,16 @@ def main():
                       export_params=True,        # store the trained parameter weights inside the model file
                       opset_version=16,          # the ONNX version to export the model to
                       do_constant_folding=True,  # whether to execute constant folding for optimization
-                      input_names=['input'],   # the model's input names
-                      output_names=['output'],  # the model's output names
-                      dynamic_axes={'input': {0: 'batch_size'},    # variable length axes
-                                    'output': {0: 'batch_size'}})
+                      input_names=['w', 'x', 'y'],   # the model's input names
+                      # the model's output names
+                      output_names=['output_w', 'output_x', 'output_y'],
+                      dynamic_axes={'x': {0: 'batch_size'},    # variable length axes
+                                    'y': {0: 'batch_size'},
+                                    'w': {0: 'batch_size'},
+                                    'output_w': {0: 'batch_size'},
+                                    'output_x': {0: 'batch_size'},
+                                    'output_y': {0: 'batch_size'}
+                                    })
 
     dw = ((w).detach().numpy()).reshape([-1]).tolist()
     dx = ((x).detach().numpy()).reshape([-1]).tolist()

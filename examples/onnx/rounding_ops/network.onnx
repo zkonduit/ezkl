@@ -1,45 +1,49 @@
-pytorch2.0.1:Ð
-
-inputoutput/Round"Round
-!
-onnx::Floor_14/Floor"Floor
-
-onnx::Ceil_25/Ceil"Ceil	torch_jitZ)
-input 
+pytorch2.0.1:â
+
+woutput_w/Round"Round
+
+xoutput_x/Floor"Floor
+
+youtput_y/Ceil"Ceil	torch_jitZ%
+w 
 
 
 batch_size
 
 
-Z'
-onnx::Floor_1
-
-
-
-
-Z&
-onnx::Ceil_2
-
-
-
-
-b*
-output 
+Z%
+x 
 
 
 batch_size
 
 
-b
-4
-
-
+Z%
+y 
+
+
+batch_size
 
 
-b
-5
-
-
+b,
+output_w 
+
+
+batch_size
+
+
+b,
+output_x 
+
+
+batch_size
+
+
+b,
+output_y 
+
+
+batch_size
 
 
 B
