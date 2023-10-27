@@ -2,7 +2,10 @@ use std::{any::Any, error::Error};
 
 use serde::{Deserialize, Serialize};
 
-use crate::tensor::{self, Tensor, TensorError, TensorType, ValTensor};
+use crate::{
+    graph::quantize_tensor,
+    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
+};
 use halo2curves::ff::PrimeField;
 
 use self::{lookup::LookupOp, region::RegionCtx};
@@ -267,8 +270,6 @@ pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     ///
     #[serde(skip)]
     pub pre_assigned_val: Option<ValTensor<F>>,
-    ///
-    pub num_uses: usize,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
@@ -278,18 +279,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
             quantized_values,
             raw_values,
             pre_assigned_val: None,
-            num_uses: 0,
         }
+    }
+    /// Rebase the scale of the constant
+    pub fn rebase_scale(&mut self, new_scale: u32) -> Result<(), Box<dyn Error>> {
+        let visibility = self.quantized_values.visibility().unwrap();
+        self.quantized_values = quantize_tensor(self.raw_values.clone(), new_scale, &visibility)?;
+        Ok(())
     }
 
     /// Empty raw value
     pub fn empty_raw_value(&mut self) {
         self.raw_values = Tensor::new(None, &[0]).unwrap();
-    }
-
-    /// Returns true if the constant is only used once.
-    pub fn is_single_use(&self) -> bool {
-        self.num_uses == 1
     }
 
     ///
@@ -324,9 +325,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
         if let Some(value) = &self.pre_assigned_val {
             Ok(Some(value.clone()))
-        } else if self.is_single_use() {
-            // we can just assign it within the op
-            Ok(Some(self.quantized_values.clone().into()))
         } else {
             // we gotta constrain it once if its used multiple times
             Ok(Some(layouts::identity(

@@ -198,6 +198,14 @@ pub enum NodeType {
 }
 
 impl NodeType {
+    ///
+    pub fn num_uses(&self) -> usize {
+        match self {
+            NodeType::Node(n) => n.num_uses,
+            NodeType::SubGraph { .. } => 0,
+        }
+    }
+
     /// Returns the indices of the node's inputs.
     pub fn inputs(&self) -> Vec<Outlet> {
         match self {
@@ -268,17 +276,9 @@ impl NodeType {
     }
 
     /// decrement const num times used
-    pub fn decrement_const(&mut self) {
+    pub fn decrement_use(&mut self) {
         match self {
-            NodeType::Node(n) => match &n.opkind {
-                SupportedOp::Constant(c) => {
-                    n.opkind = SupportedOp::Constant(crate::circuit::Constant {
-                        num_uses: c.num_uses - 1,
-                        ..c.clone()
-                    })
-                }
-                _ => log::warn!("Cannot decrement const of non-const node"),
-            },
+            NodeType::Node(n) => n.num_uses -= 1,
             NodeType::SubGraph { .. } => log::warn!("Cannot decrement const of subgraph"),
         }
     }
@@ -729,14 +729,24 @@ impl Model {
         }
         // Note: do not optimize the model, as the layout will depend on underlying hardware
         let mut model = model.into_typed()?.into_decluttered()?;
+        let mut symbol_values = SymbolValues::default();
         for (symbol, value) in run_args.variables.iter() {
             let symbol = model.symbol_table.sym(symbol);
-            model = model.concretize_dims(&SymbolValues::default().with(&symbol, *value as i64))?;
+            symbol_values = symbol_values.with(&symbol, *value as i64);
             info!("set {} to {}", symbol, value);
         }
+        model = model.concretize_dims(&symbol_values)?;
 
         let scales = VarScales::from_args(run_args)?;
-        let nodes = Self::nodes_from_graph(&model, run_args, &scales, visibility, None, None)?;
+        let nodes = Self::nodes_from_graph(
+            &model,
+            run_args,
+            &scales,
+            visibility,
+            &symbol_values,
+            None,
+            None,
+        )?;
 
         debug!("\n {}", model);
 
@@ -801,6 +811,7 @@ impl Model {
         run_args: &RunArgs,
         scales: &VarScales,
         visibility: &VarVisibility,
+        symbol_values: &SymbolValues,
         override_input_scales: Option<Vec<u32>>,
         override_output_scales: Option<HashMap<usize, u32>>,
     ) -> Result<BTreeMap<usize, NodeType>, Box<dyn Error>> {
@@ -881,6 +892,7 @@ impl Model {
                         run_args,
                         scales,
                         visibility,
+                        symbol_values,
                         Some(input_scales.clone()),
                         Some(output_scale_override),
                     )?;
@@ -930,8 +942,14 @@ impl Model {
                     );
                 }
                 None => {
-                    let mut n =
-                        Node::new(n.clone(), &mut nodes, scales, &run_args.param_visibility, i)?;
+                    let mut n = Node::new(
+                        n.clone(),
+                        &mut nodes,
+                        scales,
+                        &run_args.param_visibility,
+                        i,
+                        symbol_values,
+                    )?;
                     if override_input_scales.is_some() {
                         if let Some(inp) = n.opkind.get_input() {
                             let scale = override_input_scales.as_ref().unwrap()[input_idx];
@@ -958,25 +976,25 @@ impl Model {
                 }
             }
         }
-        Self::empty_raw_const_value(&mut nodes);
+        Self::remove_unused_nodes(&mut nodes);
 
         Ok(nodes)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Removes all nodes that are consts with 0 uses
-    fn empty_raw_const_value(nodes: &mut BTreeMap<usize, NodeType>) {
+    fn remove_unused_nodes(nodes: &mut BTreeMap<usize, NodeType>) {
         // remove all nodes that are consts with 0 uses now
         nodes.retain(|_, n| match n {
             NodeType::Node(n) => match &mut n.opkind {
                 SupportedOp::Constant(c) => {
                     c.empty_raw_value();
-                    c.num_uses > 0
+                    n.num_uses > 0
                 }
-                _ => true,
+                _ => n.num_uses > 0,
             },
             NodeType::SubGraph { model, .. } => {
-                Self::empty_raw_const_value(&mut model.graph.nodes);
+                Self::remove_unused_nodes(&mut model.graph.nodes);
                 true
             }
         });
@@ -1164,13 +1182,17 @@ impl Model {
 
             match node {
                 NodeType::Node(n) => {
-                    let res = config
-                        .base
-                        .layout(region, &values, n.opkind.clone_dyn())
-                        .map_err(|e| {
-                            error!("{}", e);
-                            halo2_proofs::plonk::Error::Synthesis
-                        })?;
+                    let res = if (node.is_constant() || node.is_input()) && node.num_uses() > 1 {
+                        Some(values[0].clone())
+                    } else {
+                        config
+                            .base
+                            .layout(region, &values, n.opkind.clone_dyn())
+                            .map_err(|e| {
+                                error!("{}", e);
+                                halo2_proofs::plonk::Error::Synthesis
+                            })?
+                    };
 
                     if let Some(vt) = res {
                         // we get the max as for fused nodes this corresponds to the node output

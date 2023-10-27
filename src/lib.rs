@@ -22,6 +22,7 @@
     missing_debug_implementations,
     unsafe_code
 )]
+#![feature(round_ties_even)]
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!

@@ -36,7 +36,7 @@ use tabled::Tabled;
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::{
     self,
-    prelude::{Node as OnnxNode, TypedFact, TypedOp},
+    prelude::{Node as OnnxNode, SymbolValues, TypedFact, TypedOp},
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -89,7 +89,7 @@ impl Op<Fp> for Rescaled {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
-            .map(|(a, b)| a + crate::graph::mult_to_scale(b.1 as f64))
+            .map(|(a, b)| a + crate::graph::multiplier_to_scale(b.1 as f64))
             .collect();
 
         Op::<Fp>::out_scale(&*self.inner, in_scales)
@@ -493,6 +493,8 @@ pub struct Node {
     pub out_dims: Vec<usize>,
     /// The node's unique identifier.
     pub idx: usize,
+    /// The node's num of uses
+    pub num_uses: usize,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -557,9 +559,19 @@ impl Node {
         scales: &VarScales,
         param_visibility: &Visibility,
         idx: usize,
+        symbol_values: &SymbolValues,
     ) -> Result<Self, Box<dyn Error>> {
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
+
+        let num_uses = std::cmp::max(
+            node.outputs
+                .iter()
+                .map(|outlet| outlet.successors.len())
+                .sum::<usize>(),
+            // cmp to 1 for outputs
+            1,
+        );
 
         // load the node inputs
         let mut inputs = vec![];
@@ -575,8 +587,14 @@ impl Node {
             inputs.push(other_nodes.get(i).ok_or("input not found").unwrap().clone())
         });
 
-        let (mut opkind, deleted_indices) =
-            new_op_from_onnx(idx, scales, param_visibility, node.clone(), &mut inputs)?; // parses the op name
+        let (mut opkind, deleted_indices) = new_op_from_onnx(
+            idx,
+            scales,
+            param_visibility,
+            node.clone(),
+            &mut inputs,
+            symbol_values,
+        )?; // parses the op name
 
         // we can only take the inputs as mutable once -- so we need to collect them first
         other_nodes.extend(
@@ -614,7 +632,12 @@ impl Node {
             let input_node = other_nodes.get_mut(&inputs[input].idx()).unwrap();
             let input_opkind = &mut input_node.opkind();
             if let Some(constant) = input_opkind.get_mutable_constant() {
-                rescale_const_with_single_use(constant, in_scales.clone(), param_visibility)?;
+                rescale_const_with_single_use(
+                    constant,
+                    in_scales.clone(),
+                    param_visibility,
+                    input_node.num_uses(),
+                )?;
                 input_node.replace_opkind(constant.clone_dyn().into());
                 let out_scale = input_opkind.out_scale(vec![]);
                 input_node.bump_scale(out_scale);
@@ -656,6 +679,7 @@ impl Node {
             inputs: input_ids,
             out_dims,
             out_scale,
+            num_uses,
         })
     }
 }
@@ -665,8 +689,9 @@ fn rescale_const_with_single_use(
     constant: &mut Constant<Fp>,
     in_scales: Vec<u32>,
     param_visibility: &Visibility,
+    num_uses: usize,
 ) -> Result<(), Box<dyn Error>> {
-    if constant.is_single_use() {
+    if num_uses == 1 {
         let current_scale = constant.out_scale(vec![]);
         let scale_max = in_scales.iter().max().unwrap();
         if scale_max > &current_scale {
