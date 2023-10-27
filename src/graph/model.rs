@@ -1180,9 +1180,15 @@ impl Model {
                 values.iter().map(|v| v.dims()).collect_vec()
             );
 
-            match node {
+            match &node {
                 NodeType::Node(n) => {
-                    let res = if (node.is_constant() || node.is_input()) && node.num_uses() > 1 {
+                    let res = if node.is_constant() && node.num_uses() == 1 {
+                        log::warn!("constant node with 1 use");
+                        let mut node = n.clone();
+                        let c = node.opkind.get_mutable_constant().unwrap();
+                        Some(c.quantized_values.clone().into())
+                    } else if node.is_input() && node.num_uses() == 1 {
+                        log::warn!("input with 1 use");
                         Some(values[0].clone())
                     } else {
                         config

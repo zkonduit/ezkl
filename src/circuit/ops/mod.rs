@@ -323,16 +323,13 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         region: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        if let Some(value) = &self.pre_assigned_val {
-            Ok(Some(value.clone()))
+        let value = if let Some(value) = &self.pre_assigned_val {
+            value.clone()
         } else {
-            // we gotta constrain it once if its used multiple times
-            Ok(Some(layouts::identity(
-                config,
-                region,
-                &[self.quantized_values.clone().into()],
-            )?))
-        }
+            self.quantized_values.clone().into()
+        };
+        // we gotta constrain it once if its used multiple times
+        Ok(Some(layouts::identity(config, region, &[value])?))
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
