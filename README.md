@@ -37,7 +37,9 @@ The generated proofs can then be used on-chain to verify computation, only the E
 
 - If you have any questions, we'd love for you to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions). Alternatively, you can join the ✨[EZKL Community Telegram Group](https://t.me/+QRzaRvTPIthlYWMx)💫.
 
-- To see what you can build with ezkl, check out [cryptoidol.tech](https://cryptoidol.tech/) where ezkl is used to create an AI that judges your singing ... forever. 
+- For more technical writeups and details check out our [blog](https://blog.ezkl.xyz/).
+
+- To see what you can build with ezkl, check out [cryptoidol.tech](https://cryptoidol.tech/) where ezkl is used to create an AI that judges your singing ... forever.
 
 ----------------------
 
@@ -101,7 +103,7 @@ The EZKL project has several libraries and repos.
 | Repo | Description |
 | --- | --- |
 | [@zkonduit/ezkl](https://github.com/zkonduit/ezkl) | the main ezkl repo in rust with wasm and python bindings |
-| [@zkonduit/ezkljs](https://github.com/zkonduit/ezkljs) | typescript and javascript tooling to help integrate ezkl into web apps | 
+| [@zkonduit/ezkljs](https://github.com/zkonduit/ezkljs) | typescript and javascript tooling to help integrate ezkl into web apps |
 
 ----------------------
 
