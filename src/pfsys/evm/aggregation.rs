@@ -134,7 +134,9 @@ pub fn aggregate<'a>(
         if split_proofs {
             let previous_proof = proofs.last();
             if let Some(previous_proof) = previous_proof {
+                // output
                 let output = &previous_proof.witnesses[1];
+                // input
                 let input = &proof.witnesses[0];
                 loader
                     .ec_point_assert_eq("assert commits match", output, input)

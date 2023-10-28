@@ -565,12 +565,12 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
-      - name: Sklearn MLP
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_31_expects
       - name: Proof Splitting
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_29_expects
       - name: Gan Proof Splitting (MNIST)
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_30_expects
+      - name: Sklearn MLP
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_31_expects
       - name: Gan tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
       - name: Solvency demo
