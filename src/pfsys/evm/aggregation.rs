@@ -134,10 +134,12 @@ pub fn aggregate<'a>(
         if split_proofs {
             let previous_proof = proofs.last();
             if let Some(previous_proof) = previous_proof {
-                // output
+                // output of previous proof
                 let output = &previous_proof.witnesses[1];
-                // input
+                // input of current proof
                 let input = &proof.witnesses[0];
+                // these points were already assigned previously when loading the transcript so this is safe
+                // and equivalent to a copy constraint and an equality constraint
                 loader
                     .ec_point_assert_eq("assert commits match", output, input)
                     .map_err(|e| {
