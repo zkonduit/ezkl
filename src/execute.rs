@@ -263,14 +263,23 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         Commands::MockAggregate {
             aggregation_snarks,
             logrows,
-        } => mock_aggregate(aggregation_snarks, logrows),
+            split_proofs,
+        } => mock_aggregate(aggregation_snarks, logrows, split_proofs),
         Commands::SetupAggregate {
             sample_snarks,
             vk_path,
             pk_path,
             srs_path,
             logrows,
-        } => setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows),
+            split_proofs,
+        } => setup_aggregate(
+            sample_snarks,
+            vk_path,
+            pk_path,
+            srs_path,
+            logrows,
+            split_proofs,
+        ),
         Commands::Aggregate {
             proof_path,
             aggregation_snarks,
@@ -279,6 +288,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             logrows,
             check_mode,
+            split_proofs,
         } => aggregate(
             proof_path,
             aggregation_snarks,
@@ -287,6 +297,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             transcript,
             logrows,
             check_mode,
+            split_proofs,
         ),
         Commands::Verify {
             proof_path,
@@ -1561,6 +1572,7 @@ pub(crate) fn swap_proof_commitments(
 pub(crate) fn mock_aggregate(
     aggregation_snarks: Vec<PathBuf>,
     logrows: u32,
+    split_proofs: bool,
 ) -> Result<(), Box<dyn Error>> {
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
@@ -1574,7 +1586,7 @@ pub(crate) fn mock_aggregate(
         pb
     };
 
-    let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks)?;
+    let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks, split_proofs)?;
 
     let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, vec![circuit.instances()])
         .map_err(Box::<dyn Error>::from)?;
@@ -1592,6 +1604,7 @@ pub(crate) fn setup_aggregate(
     pk_path: PathBuf,
     srs_path: PathBuf,
     logrows: u32,
+    split_proofs: bool,
 ) -> Result<(), Box<dyn Error>> {
     // the K used for the aggregation circuit
     let params = load_params_cmd(srs_path, logrows)?;
@@ -1601,7 +1614,7 @@ pub(crate) fn setup_aggregate(
         snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
     }
 
-    let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks)?;
+    let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks, split_proofs)?;
     let agg_pk =
         create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(&agg_circuit, &params)?;
 
@@ -1621,6 +1634,7 @@ pub(crate) fn aggregate(
     transcript: TranscriptType,
     logrows: u32,
     check_mode: CheckMode,
+    split_proofs: bool,
 ) -> Result<(), Box<dyn Error>> {
     // the K used for the aggregation circuit
     let params = load_params_cmd(srs_path, logrows)?;
@@ -1640,7 +1654,7 @@ pub(crate) fn aggregate(
     };
 
     {
-        let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks)?;
+        let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks, split_proofs)?;
 
         let now = Instant::now();
         let snark = create_proof_circuit_kzg(

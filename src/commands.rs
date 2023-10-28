@@ -305,6 +305,9 @@ pub enum Commands {
         /// logrows used for aggregation circuit
         #[arg(long)]
         logrows: u32,
+        /// whether the accumulated are segments of a larger proof
+        #[arg(long, default_value = "false")]
+        split_proofs: bool,
     },
 
     /// setup aggregation circuit :)
@@ -325,6 +328,9 @@ pub enum Commands {
         /// logrows used for aggregation circuit
         #[arg(long)]
         logrows: u32,
+        /// whether the accumulated are segments of a larger proof
+        #[arg(long, default_value = "false")]
+        split_proofs: bool,
     },
     /// Aggregates proofs :)
     #[command(arg_required_else_help = true)]
@@ -355,6 +361,9 @@ pub enum Commands {
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
         check_mode: CheckMode,
+        /// whether the accumulated are segments of a larger proof
+        #[arg(long, default_value = "false")]
+        split_proofs: bool,
     },
     /// Compiles a circuit from onnx to a simplified graph (einsum + other ops) and parameters as sets of field elements
     #[command(arg_required_else_help = true)]
