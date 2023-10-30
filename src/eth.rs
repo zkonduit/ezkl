@@ -722,7 +722,7 @@ pub fn fix_da_sol(
     let mut accounts_len = 0;
     let mut contract = ATTESTDATA_SOL.to_string();
     let load_instances = LOADINSTANCES_SOL.to_string();
-    // replace the import statment with the load_instances contract, not including the
+    // replace the import statement with the load_instances contract, not including the
     // `SPDX-License-Identifier: MIT pragma solidity ^0.8.20;` at the top of the file
     contract = contract.replace(
         "import './LoadInstances.sol';",
