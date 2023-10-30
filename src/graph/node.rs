@@ -279,6 +279,8 @@ impl SupportedOp {
     pub fn is_lookup(&self) -> bool {
         match self {
             SupportedOp::Nonlinear(_) => true,
+            SupportedOp::RebaseScale(op) => op.inner.is_lookup(),
+            SupportedOp::Rescaled(op) => op.inner.is_lookup(),
             _ => false,
         }
     }
@@ -294,6 +296,14 @@ impl SupportedOp {
     pub fn get_rebased(&self) -> Option<&RebaseScale> {
         match self {
             SupportedOp::RebaseScale(op) => Some(op),
+            _ => None,
+        }
+    }
+
+    ///
+    pub fn get_lookup(&self) -> Option<&LookupOp> {
+        match self {
+            SupportedOp::Nonlinear(op) => Some(op),
             _ => None,
         }
     }
