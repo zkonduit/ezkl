@@ -416,6 +416,7 @@ pub fn prove(
     let public_inputs = circuit
         .prepare_public_inputs(&data)
         .map_err(|e| JsError::new(&format!("{}", e)))?;
+    let proof_split_commits: Option<crate::pfsys::ProofSplitCommit> = data.into();
 
     let strategy = KZGSingleStrategy::new(&params);
     let proof = create_proof_circuit_kzg(
@@ -426,6 +427,7 @@ pub fn prove(
         crate::pfsys::TranscriptType::EVM,
         strategy,
         crate::circuit::CheckMode::UNSAFE,
+        proof_split_commits,
     )
     .map_err(|e| JsError::new(&format!("{}", e)))?;
 
