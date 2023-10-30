@@ -5,6 +5,7 @@ pub mod evm;
 pub mod srs;
 
 use crate::circuit::CheckMode;
+use crate::graph::GraphWitness;
 use crate::pfsys::evm::aggregation::PoseidonTranscript;
 use crate::tensor::TensorType;
 use clap::ValueEnum;
@@ -210,6 +211,8 @@ where
     pub proof: Vec<u8>,
     /// transcript type
     pub transcript_type: TranscriptType,
+    /// the split proof
+    pub split: Option<ProofSplitCommit>,
 }
 
 #[cfg(feature = "python-bindings")]
@@ -250,12 +253,14 @@ where
         instances: Vec<Vec<F>>,
         proof: Vec<u8>,
         transcript_type: TranscriptType,
+        split: Option<ProofSplitCommit>,
     ) -> Self {
         Self {
             protocol: Some(protocol),
             instances,
             proof,
             transcript_type,
+            split,
         }
     }
 
@@ -280,12 +285,62 @@ where
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A proof split commit
+pub struct ProofSplitCommit {
+    /// The start index of the output in the witness
+    start: usize,
+    /// The end index of the output in the witness
+    end: usize,
+}
+
+impl From<GraphWitness> for Option<ProofSplitCommit> {
+    fn from(witness: GraphWitness) -> Self {
+        let mut elem_offset = 0;
+
+        if let Some(input) = witness.processed_inputs {
+            if let Some(kzg) = input.kzg_commit {
+                // flatten and count number of elements
+                let num_elements = kzg.iter().map(|kzg| kzg.len()).sum::<usize>();
+
+                elem_offset += num_elements;
+            }
+        }
+
+        if let Some(params) = witness.processed_params {
+            if let Some(kzg) = params.kzg_commit {
+                // flatten and count number of elements
+                let num_elements = kzg.iter().map(|kzg| kzg.len()).sum::<usize>();
+
+                elem_offset += num_elements;
+            }
+        }
+
+        if let Some(output) = witness.processed_outputs {
+            if let Some(kzg) = output.kzg_commit {
+                // flatten and count number of elements
+                let num_elements = kzg.iter().map(|kzg| kzg.len()).sum::<usize>();
+
+                Some(ProofSplitCommit {
+                    start: elem_offset,
+                    end: elem_offset + num_elements,
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
 /// An application snark with proof and instance variables ready for aggregation (wrapped field element)
 #[derive(Clone, Debug)]
 pub struct SnarkWitness<F: PrimeField, C: CurveAffine> {
     protocol: Option<PlonkProtocol<C>>,
     instances: Vec<Vec<Value<F>>>,
     proof: Value<Vec<u8>>,
+    split: Option<ProofSplitCommit>,
 }
 
 impl<F: PrimeField, C: CurveAffine> SnarkWitness<F, C> {
@@ -298,6 +353,7 @@ impl<F: PrimeField, C: CurveAffine> SnarkWitness<F, C> {
                 .map(|instances| vec![Value::unknown(); instances.len()])
                 .collect(),
             proof: Value::unknown(),
+            split: self.split.clone(),
         }
     }
 
@@ -320,6 +376,7 @@ where
                 .map(|instances| instances.into_iter().map(Value::known).collect())
                 .collect(),
             proof: Value::known(snark.proof),
+            split: snark.split,
         }
     }
 }
@@ -371,6 +428,7 @@ pub fn create_proof_circuit<
     strategy: Strategy,
     check_mode: CheckMode,
     transcript_type: TranscriptType,
+    split: Option<ProofSplitCommit>,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
@@ -422,7 +480,7 @@ where
     )?;
     let proof = transcript.finalize();
 
-    let checkable_pf = Snark::new(protocol, instances, proof, transcript_type);
+    let checkable_pf = Snark::new(protocol, instances, proof, transcript_type, split);
 
     // sanity check that the generated proof is valid
     if check_mode == CheckMode::SAFE {
@@ -647,6 +705,7 @@ pub fn create_proof_circuit_kzg<
     transcript: TranscriptType,
     strategy: Strategy,
     check_mode: CheckMode,
+    split: Option<ProofSplitCommit>,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let public_inputs = if let Some(public_inputs) = public_inputs {
         if !public_inputs.is_empty() {
@@ -677,6 +736,7 @@ pub fn create_proof_circuit_kzg<
             strategy,
             check_mode,
             transcript,
+            split,
         )
         .map_err(Box::<dyn Error>::from),
         TranscriptType::Poseidon => create_proof_circuit::<
@@ -697,6 +757,7 @@ pub fn create_proof_circuit_kzg<
             strategy,
             check_mode,
             transcript,
+            split,
         )
         .map_err(Box::<dyn Error>::from),
     }
@@ -787,6 +848,7 @@ mod tests {
             instances: vec![vec![Fr::from(1)], vec![Fr::from(2)]],
             transcript_type: TranscriptType::EVM,
             protocol: None,
+            split: None,
         };
 
         snark

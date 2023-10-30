@@ -19,6 +19,7 @@ use itertools::Itertools;
 use log::trace;
 use rand::rngs::OsRng;
 use snark_verifier::loader::native::NativeLoader;
+use snark_verifier::loader::EcPointLoader;
 use snark_verifier::{
     loader,
     pcs::{
@@ -77,6 +78,7 @@ pub fn aggregate<'a>(
     loader: &Rc<Halo2Loader<'a>>,
     snarks: &[SnarkWitness<Fr, G1Affine>],
     as_proof: Value<&'_ [u8]>,
+    split_proofs: bool,
 ) -> Result<
     (
         KzgAccumulator<G1Affine, Rc<Halo2Loader<'a>>>,
@@ -98,6 +100,19 @@ pub fn aggregate<'a>(
 
     let mut accumulators = vec![];
     let mut snark_instances = vec![];
+    let mut proofs: Vec<
+        verifier::plonk::PlonkProof<
+            G1Affine,
+            Rc<
+                loader::halo2::Halo2Loader<
+                    '_,
+                    G1Affine,
+                    halo2_wrong_ecc::BaseFieldEccChip<G1Affine, 4, 68>,
+                >,
+            >,
+            KzgAs<Bn256, Bdfg21>,
+        >,
+    > = vec![];
 
     for snark in snarks.iter() {
         let protocol = snark.protocol.as_ref().unwrap().loaded(loader);
@@ -115,6 +130,33 @@ pub fn aggregate<'a>(
         let mut transcript = PoseidonTranscript::<Rc<Halo2Loader>, _>::new(loader, snark.proof());
         let proof = PlonkSuccinctVerifier::read_proof(svk, &protocol, &instances, &mut transcript)
             .map_err(|_| plonk::Error::Synthesis)?;
+
+        if split_proofs {
+            let previous_proof = proofs.last();
+            let split_commit = snark.clone().split.expect("No split commit found");
+            if let Some(previous_proof) = previous_proof {
+                // output of previous proof
+                let output = &previous_proof.witnesses[split_commit.start..split_commit.end];
+                // input of current proof
+                let split_commit_len = split_commit.end - split_commit.start;
+                let input = &proof.witnesses[..split_commit_len];
+                // these points were already assigned previously when loading the transcript so this is safe
+                // and equivalent to a copy constraint and an equality constraint
+                for (output, input) in output.iter().zip(input.iter()) {
+                    loader
+                        .ec_point_assert_eq("assert commits match", output, input)
+                        .map_err(|e| {
+                            log::error!(
+                                "Failed to match KZG commits for sequential proofs: {:?}",
+                                e
+                            );
+                            plonk::Error::Synthesis
+                        })?;
+                }
+            }
+            proofs.push(proof.clone());
+        }
+
         let mut accum = PlonkSuccinctVerifier::verify(svk, &protocol, &instances, &proof)
             .map_err(|_| plonk::Error::Synthesis)?;
         accumulators.append(&mut accum);
@@ -176,6 +218,7 @@ pub struct AggregationCircuit {
     snarks: Vec<SnarkWitness<Fr, G1Affine>>,
     instances: Vec<Fr>,
     as_proof: Value<Vec<u8>>,
+    split_proof: bool,
 }
 
 impl AggregationCircuit {
@@ -183,6 +226,7 @@ impl AggregationCircuit {
     pub fn new(
         svk: &KzgSuccinctVerifyingKey<G1Affine>,
         snarks: impl IntoIterator<Item = Snark<Fr, G1Affine>>,
+        split_proof: bool,
     ) -> Result<Self, AggregationError> {
         let snarks = snarks.into_iter().collect_vec();
 
@@ -231,6 +275,7 @@ impl AggregationCircuit {
             snarks: snarks.into_iter().map_into().collect(),
             instances,
             as_proof: Value::known(as_proof),
+            split_proof,
         })
     }
 
@@ -298,6 +343,7 @@ impl Circuit<Fr> for AggregationCircuit {
                 .collect(),
             instances: Vec::new(),
             as_proof: Value::unknown(),
+            split_proof: self.split_proof,
         }
     }
 
@@ -326,8 +372,13 @@ impl Circuit<Fr> for AggregationCircuit {
 
                 let ecc_chip = config.ecc_chip();
                 let loader = Halo2Loader::new(ecc_chip, ctx);
-                let (accumulator, snark_instances) =
-                    aggregate(&self.svk, &loader, &self.snarks, self.as_proof())?;
+                let (accumulator, snark_instances) = aggregate(
+                    &self.svk,
+                    &loader,
+                    &self.snarks,
+                    self.as_proof(),
+                    self.split_proof,
+                )?;
 
                 let accumulator_limbs = [accumulator.lhs, accumulator.rhs]
                     .iter()

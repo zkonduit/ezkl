@@ -735,9 +735,10 @@ fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
 #[pyfunction(signature = (
     aggregation_snarks,
     logrows,
+    split_proofs = false,
 ))]
-fn mock_aggregate(aggregation_snarks: Vec<PathBuf>, logrows: u32) -> PyResult<bool> {
-    crate::execute::mock_aggregate(aggregation_snarks, logrows).map_err(|e| {
+fn mock_aggregate(aggregation_snarks: Vec<PathBuf>, logrows: u32, split_proofs: bool) -> PyResult<bool> {
+    crate::execute::mock_aggregate(aggregation_snarks, logrows, split_proofs).map_err(|e| {
         let err_str = format!("Failed to run mock: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
@@ -831,6 +832,7 @@ fn verify(
     pk_path,
     srs_path,
     logrows,
+    split_proofs = false,
 ))]
 fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
@@ -838,8 +840,9 @@ fn setup_aggregate(
     pk_path: PathBuf,
     srs_path: PathBuf,
     logrows: u32,
+    split_proofs: bool,
 ) -> Result<bool, PyErr> {
-    crate::execute::setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows).map_err(
+    crate::execute::setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows, split_proofs).map_err(
         |e| {
             let err_str = format!("Failed to setup aggregate: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -876,6 +879,7 @@ fn compile_circuit(
     transcript,
     logrows,
     check_mode,
+    split_proofs = false,
 ))]
 fn aggregate(
     proof_path: PathBuf,
@@ -885,6 +889,7 @@ fn aggregate(
     transcript: TranscriptType,
     logrows: u32,
     check_mode: CheckMode,
+    split_proofs: bool,
 ) -> Result<bool, PyErr> {
     // the K used for the aggregation circuit
     crate::execute::aggregate(
@@ -895,6 +900,7 @@ fn aggregate(
         transcript,
         logrows,
         check_mode,
+        split_proofs,
     )
     .map_err(|e| {
         let err_str = format!("Failed to run aggregate: {}", e);
