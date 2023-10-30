@@ -2334,23 +2334,6 @@ pub fn mean<F: PrimeField + TensorType + PartialOrd>(
     nonlinearity(config, region, &[sum_x], &nl)
 }
 
-/// abs layout
-pub fn abs<F: PrimeField + TensorType + PartialOrd>(
-    config: &BaseConfig<F>,
-    region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let x = &values[0];
-    // Negate the product
-    let neg_x = neg(config, region, &[x.clone()])?;
-    let relu_x = nonlinearity(config, region, &[x.clone()], &LookupOp::ReLU)?;
-    let relu_neg_x = nonlinearity(config, region, &[neg_x], &LookupOp::ReLU)?;
-    // abs(x) = relu(x) + relu(-x)
-    let abs = pairwise(config, region, &[relu_x, relu_neg_x], BaseOp::Add)?;
-
-    Ok(abs)
-}
-
 /// Argmax
 pub fn argmax<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,

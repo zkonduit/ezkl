@@ -276,6 +276,13 @@ pub enum SupportedOp {
 
 impl SupportedOp {
     ///
+    pub fn is_lookup(&self) -> bool {
+        match self {
+            SupportedOp::Nonlinear(_) => true,
+            _ => false,
+        }
+    }
+    ///
     pub fn get_input(&self) -> Option<Input> {
         match self {
             SupportedOp::Input(op) => Some(op.clone()),

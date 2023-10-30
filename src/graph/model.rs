@@ -199,6 +199,13 @@ pub enum NodeType {
 
 impl NodeType {
     ///
+    pub fn is_lookup(&self) -> bool {
+        match self {
+            NodeType::Node(n) => n.opkind.is_lookup(),
+            NodeType::SubGraph { .. } => false,
+        }
+    }
+    ///
     pub fn num_uses(&self) -> usize {
         match self {
             NodeType::Node(n) => n.num_uses,
@@ -520,7 +527,7 @@ impl Model {
                 inputs.iter().map(|x| x.dims()).collect::<Vec<_>>()
             );
 
-            if !n.required_lookups().is_empty() {
+            if n.is_lookup() {
                 let (mut min, mut max) = (0, 0);
                 for i in &inputs {
                     max = max.max(i.iter().map(|x| felt_to_i128(*x)).max().unwrap());
@@ -528,6 +535,8 @@ impl Model {
                 }
                 max_lookup_inputs = max_lookup_inputs.max(max);
                 min_lookup_inputs = min_lookup_inputs.min(min);
+                debug!("max lookup inputs: {}", max);
+                debug!("min lookup inputs: {}", min);
             }
 
             match n {
@@ -546,6 +555,8 @@ impl Model {
                         }
                         max_lookup_inputs = max_lookup_inputs.max(max);
                         min_lookup_inputs = min_lookup_inputs.min(min);
+                        debug!("intermediate max lookup inputs: {}", max);
+                        debug!("intermediate min lookup inputs: {}", min);
                     }
                     debug!(
                         "------------ output node int {}: {} \n ------------ float: {}",
