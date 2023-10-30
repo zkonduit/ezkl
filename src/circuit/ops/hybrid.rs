@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 /// An enum representing the operations that consist of both lookups and arithmetic operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HybridOp {
-    Abs,
     ReduceMax {
         axes: Vec<usize>,
     },
@@ -82,7 +81,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         let x = inputs[0].clone().map(|x| felt_to_i128(x));
 
         let (res, intermediate_lookups) = match &self {
-            HybridOp::Abs => (tensor::ops::abs(&x)?, vec![]),
             HybridOp::ReduceMax { axes, .. } => {
                 let res = tensor::ops::max_axes(&x, axes)?;
                 let max_minus_one =
@@ -260,7 +258,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn as_string(&self) -> String {
         match self {
-            HybridOp::Abs => "ABS".into(),
             HybridOp::ReduceMax { axes } => format!("REDUCEMAX (axes={:?})", axes),
             HybridOp::ReduceArgMax { dim } => format!("REDUCEARGMAX (dim={})", dim),
             HybridOp::MaxPool2d {
@@ -299,7 +296,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
         Ok(Some(match self {
-            HybridOp::Abs => layouts::abs(config, region, values[..].try_into()?)?,
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
                     tensor::ops::gather(values[0].get_inner_tensor()?, idx, *dim)?.into()
@@ -395,8 +391,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         match self {
             HybridOp::ReduceMax { .. }
             | HybridOp::ReduceMin { .. }
-            | HybridOp::MaxPool2d { .. }
-            | HybridOp::Abs => Op::<F>::required_lookups(&LookupOp::ReLU),
+            | HybridOp::MaxPool2d { .. } => Op::<F>::required_lookups(&LookupOp::ReLU),
             HybridOp::Softmax { scale, .. } => {
                 vec![
                     LookupOp::Exp { scale: *scale },

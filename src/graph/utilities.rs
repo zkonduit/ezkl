@@ -609,7 +609,7 @@ pub fn new_op_from_onnx(
             panic!("should never reach here")
         }
         "QuantizeLinearU8" | "DequantizeLinearF32" => SupportedOp::Linear(PolyOp::Identity),
-        "Abs" => SupportedOp::Hybrid(HybridOp::Abs),
+        "Abs" => SupportedOp::Nonlinear(LookupOp::Abs),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
         "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),

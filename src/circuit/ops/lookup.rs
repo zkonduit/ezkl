@@ -16,6 +16,7 @@ use halo2curves::ff::PrimeField;
 /// An enum representing the operations that can be used to express more complex operations via accumulation
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum LookupOp {
+    Abs,
     Div {
         denom: utils::F32,
     },
@@ -138,6 +139,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
+            LookupOp::Abs => Ok(tensor::ops::abs(&x)?),
             LookupOp::Ceil { scale } => Ok(tensor::ops::nonlinearities::ceil(&x, scale.into())),
             LookupOp::Floor { scale } => Ok(tensor::ops::nonlinearities::floor(&x, scale.into())),
             LookupOp::Round { scale } => Ok(tensor::ops::nonlinearities::round(&x, scale.into())),
@@ -221,6 +223,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         match self {
+            LookupOp::Abs => "ABS".into(),
             LookupOp::Ceil { scale } => format!("CEIL(scale={})", scale),
             LookupOp::Floor { scale } => format!("FLOOR(scale={})", scale),
             LookupOp::Round { scale } => format!("ROUND(scale={})", scale),
