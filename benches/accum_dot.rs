@@ -109,6 +109,7 @@ fn rundot(c: &mut Criterion) {
                     TranscriptType::EVM,
                     SingleStrategy::new(&params),
                     CheckMode::UNSAFE,
+                    None,
                 );
                 prover.unwrap();
             });

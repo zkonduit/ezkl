@@ -1282,6 +1282,8 @@ pub(crate) async fn prove(
     proof_type: ProofType,
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
+    use crate::pfsys::ProofSplitCommit;
+
     let data = GraphWitness::from_path(data_path)?;
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
@@ -1300,6 +1302,7 @@ pub(crate) async fn prove(
 
     let strategy: StrategyType = proof_type.into();
     let transcript: TranscriptType = proof_type.into();
+    let proof_split_commits: Option<ProofSplitCommit> = data.into();
 
     // creates and verifies the proof
     let snark = match strategy {
@@ -1313,6 +1316,7 @@ pub(crate) async fn prove(
                 transcript,
                 strategy,
                 check_mode,
+                proof_split_commits,
             )?
         }
         StrategyType::Accum => {
@@ -1325,6 +1329,7 @@ pub(crate) async fn prove(
                 transcript,
                 strategy,
                 check_mode,
+                proof_split_commits,
             )?
         }
     };
@@ -1386,6 +1391,7 @@ pub(crate) async fn fuzz(
             transcript,
             strategy.clone(),
             CheckMode::UNSAFE,
+            None,
         )
         .unwrap();
 
@@ -1413,6 +1419,7 @@ pub(crate) async fn fuzz(
             transcript,
             strategy.clone(),
             CheckMode::UNSAFE,
+            None,
         )
         .unwrap();
 
@@ -1437,6 +1444,7 @@ pub(crate) async fn fuzz(
         transcript,
         strategy.clone(),
         CheckMode::SAFE,
+        None,
     )?;
 
     let fuzz_vk = || {
@@ -1473,6 +1481,7 @@ pub(crate) async fn fuzz(
             proof: bad_proof_bytes,
             protocol: proof.protocol.clone(),
             transcript_type: transcript,
+            split: None,
         };
 
         verify_proof_circuit_kzg(
@@ -1499,6 +1508,7 @@ pub(crate) async fn fuzz(
             proof: proof.proof.clone(),
             protocol: proof.protocol.clone(),
             transcript_type: transcript,
+            split: None,
         };
 
         verify_proof_circuit_kzg(
@@ -1665,6 +1675,7 @@ pub(crate) fn aggregate(
             transcript,
             AccumulatorStrategy::new(&params),
             check_mode,
+            None,
         )?;
 
         let elapsed = now.elapsed();

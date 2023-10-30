@@ -263,6 +263,7 @@ mod matmul_col_ultra_overflow {
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            None,
         );
 
         assert!(prover.is_ok());
@@ -898,6 +899,7 @@ mod conv_col_ultra_overflow {
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            None,
         );
 
         assert!(prover.is_ok());
@@ -1045,6 +1047,7 @@ mod conv_relu_col_ultra_overflow {
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            None,
         );
 
         assert!(prover.is_ok());
@@ -2155,6 +2158,7 @@ mod lookup_ultra_overflow {
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            None,
         );
 
         assert!(prover.is_ok());

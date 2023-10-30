@@ -103,6 +103,7 @@ fn runadd(c: &mut Criterion) {
                     TranscriptType::EVM,
                     SingleStrategy::new(&params),
                     CheckMode::SAFE,
+                    None,
                 );
                 prover.unwrap();
             });

@@ -133,19 +133,26 @@ pub fn aggregate<'a>(
 
         if split_proofs {
             let previous_proof = proofs.last();
+            let split_commit = snark.clone().split.expect("No split commit found");
             if let Some(previous_proof) = previous_proof {
                 // output of previous proof
-                let output = &previous_proof.witnesses[1];
+                let output = &previous_proof.witnesses[split_commit.start..split_commit.end];
                 // input of current proof
-                let input = &proof.witnesses[0];
+                let split_commit_len = split_commit.end - split_commit.start;
+                let input = &proof.witnesses[..split_commit_len];
                 // these points were already assigned previously when loading the transcript so this is safe
                 // and equivalent to a copy constraint and an equality constraint
-                loader
-                    .ec_point_assert_eq("assert commits match", output, input)
-                    .map_err(|e| {
-                        log::error!("Failed to match KZG commits for sequential proofs: {:?}", e);
-                        plonk::Error::Synthesis
-                    })?;
+                for (output, input) in output.iter().zip(input.iter()) {
+                    loader
+                        .ec_point_assert_eq("assert commits match", output, input)
+                        .map_err(|e| {
+                            log::error!(
+                                "Failed to match KZG commits for sequential proofs: {:?}",
+                                e
+                            );
+                            plonk::Error::Synthesis
+                        })?;
+                }
             }
             proofs.push(proof.clone());
         }
@@ -211,7 +218,7 @@ pub struct AggregationCircuit {
     snarks: Vec<SnarkWitness<Fr, G1Affine>>,
     instances: Vec<Fr>,
     as_proof: Value<Vec<u8>>,
-    split_proofs: bool,
+    split_proof: bool,
 }
 
 impl AggregationCircuit {
@@ -219,7 +226,7 @@ impl AggregationCircuit {
     pub fn new(
         svk: &KzgSuccinctVerifyingKey<G1Affine>,
         snarks: impl IntoIterator<Item = Snark<Fr, G1Affine>>,
-        split_proofs: bool,
+        split_proof: bool,
     ) -> Result<Self, AggregationError> {
         let snarks = snarks.into_iter().collect_vec();
 
@@ -268,7 +275,7 @@ impl AggregationCircuit {
             snarks: snarks.into_iter().map_into().collect(),
             instances,
             as_proof: Value::known(as_proof),
-            split_proofs,
+            split_proof,
         })
     }
 
@@ -336,7 +343,7 @@ impl Circuit<Fr> for AggregationCircuit {
                 .collect(),
             instances: Vec::new(),
             as_proof: Value::unknown(),
-            split_proofs: self.split_proofs,
+            split_proof: self.split_proof,
         }
     }
 
@@ -370,7 +377,7 @@ impl Circuit<Fr> for AggregationCircuit {
                     &loader,
                     &self.snarks,
                     self.as_proof(),
-                    self.split_proofs,
+                    self.split_proof,
                 )?;
 
                 let accumulator_limbs = [accumulator.lhs, accumulator.rhs]
