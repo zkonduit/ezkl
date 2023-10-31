@@ -1825,9 +1825,8 @@ pub(crate) async fn deploy_model(
                     outputVisibility: $outputVisibility,
                     paramVisibility: $paramVisibility,
                 ) {
-                    artifact {
-                        id
-                    }
+                    id
+                    name
                 }
             }",
         "variables": {
@@ -1859,7 +1858,7 @@ pub(crate) async fn deploy_model(
     let response_body = response.json::<serde_json::Value>().await?;
     println!("{}", response_body.to_string());
     let artifact_id: crate::hub::Artifact =
-        serde_json::from_value(response_body["data"]["generateArtifact"]["artifact"].clone())?;
+        serde_json::from_value(response_body["data"]["generateArtifact"].clone())?;
     log::info!(
         "Artifact ID : {}",
         artifact_id.as_json()?.to_colored_json_auto()?
