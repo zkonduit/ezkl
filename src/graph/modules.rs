@@ -463,7 +463,9 @@ impl GraphModules {
                     log::warn!("no srs provided for kzgcommit. processed value will be none");
                 }
             } else {
-                log::warn!("no verifying key provided for kzgcommit. processed value will be none");
+                log::debug!(
+                    "no verifying key provided for kzgcommit. processed value will be none"
+                );
             }
         }
 
