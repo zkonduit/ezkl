@@ -1194,7 +1194,7 @@ impl Model {
             match &node {
                 NodeType::Node(n) => {
                     let res = if node.is_constant() && node.num_uses() == 1 {
-                        log::warn!("constant node with 1 use");
+                        log::debug!("node {} is a constant with 1 use", n.idx);
                         let mut node = n.clone();
                         let c = node.opkind.get_mutable_constant().unwrap();
                         Some(c.quantized_values.clone().into())
