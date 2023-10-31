@@ -106,6 +106,12 @@ export ENABLE_ICICLE_GPU=true
 
 GPU acceleration is provided by [Icicle](https://github.com/ingonyama-zk/icicle)
 
+To go back to running with CPU, the previous environment variable must be **unset** instead of being switch to a value of false:
+
+```sh
+unset ENABLE_ICICLE_GPU
+```
+
 ### repos
 
 The EZKL project has several libraries and repos. 
