@@ -316,7 +316,7 @@ pub enum Commands {
         /// The path to samples of snarks that will be aggregated over
         #[arg(long)]
         sample_snarks: Vec<PathBuf>,
-        /// The path to save the desired verfication key file
+        /// The path to save the desired verification key file
         #[arg(long, default_value = "vk_aggr.key")]
         vk_path: PathBuf,
         /// The path to save the desired proving key file
@@ -387,7 +387,7 @@ pub enum Commands {
         /// The srs path
         #[arg(long)]
         srs_path: PathBuf,
-        /// The path to output the verfication key file
+        /// The path to output the verification key file
         #[arg(long, default_value = "vk.key")]
         vk_path: PathBuf,
         /// The path to output the proving key file
@@ -508,7 +508,7 @@ pub enum Commands {
         /// The path to load circuit settings from
         #[arg(short = 'S', long)]
         settings_path: PathBuf,
-        /// The path to load the desired verfication key file
+        /// The path to load the desired verification key file
         #[arg(long)]
         vk_path: PathBuf,
         /// The path to output the Solidity code
@@ -528,7 +528,7 @@ pub enum Commands {
         /// The path to load circuit settings from
         #[arg(short = 'S', long)]
         settings_path: PathBuf,
-        /// The path to load the desired verfication key file
+        /// The path to load the desired verification key file
         #[arg(long)]
         vk_path: PathBuf,
         /// The path to output the Solidity code
@@ -554,7 +554,7 @@ pub enum Commands {
         /// The path to load the desired srs file from
         #[arg(long)]
         srs_path: PathBuf,
-        /// The path to output to load the desired verfication key file
+        /// The path to output to load the desired verification key file
         #[arg(long)]
         vk_path: PathBuf,
         /// The path to the Solidity code
@@ -576,7 +576,7 @@ pub enum Commands {
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The path to output the desired verfication key file (optional)
+        /// The path to output the desired verification key file (optional)
         #[arg(long)]
         vk_path: PathBuf,
         /// The kzg srs path
@@ -589,7 +589,7 @@ pub enum Commands {
         /// The path to the proof file
         #[arg(long)]
         proof_path: PathBuf,
-        /// The path to output the desired verfication key file (optional)
+        /// The path to output the desired verification key file (optional)
         #[arg(long)]
         vk_path: PathBuf,
         /// The srs path
