@@ -21,7 +21,6 @@ env:
 jobs:
   build:
     runs-on: GPU
-
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -46,6 +45,8 @@ jobs:
 
   library-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -65,6 +66,8 @@ jobs:
 
   ultra-overflow-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -142,6 +145,8 @@ jobs:
   tutorial:
     runs-on: GPU
     needs: [build, library-tests, docs]
+    env:
+      ENABLE_ICICLE_GPU: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -158,6 +163,8 @@ jobs:
 
   mock-proving-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -227,6 +234,8 @@ jobs:
 
   prove-and-verify-evm-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -282,6 +291,8 @@ jobs:
 
   prove-and-verify-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -346,6 +357,8 @@ jobs:
 
   fuzz-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -369,6 +382,8 @@ jobs:
 
   prove-and-verify-mock-aggr-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     needs: [build, library-tests]
     steps:
       - uses: actions/checkout@v4
@@ -386,6 +401,8 @@ jobs:
 
   prove-and-verify-aggr-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -403,6 +420,8 @@ jobs:
 
   prove-and-verify-aggr-evm-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -426,6 +445,8 @@ jobs:
 
   examples:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -445,6 +466,8 @@ jobs:
 
   neg-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -462,6 +485,8 @@ jobs:
 
   python-tests:
     runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -513,8 +538,9 @@ jobs:
         run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_ --no-capture
 
   python-integration-tests:
-    runs-on:
-      GPU
+    runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
       # Service containers to run with `container-job`
     services:
       # Label used to access the service container
@@ -556,15 +582,15 @@ jobs:
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl
         run: source .env/bin/activate; maturin develop --features python-bindings --release
-      # - name: authenticate-kaggle-cli
-      #   shell: bash
-      #   env:
-      #     KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
-      #   run: |
-      #     mkdir /home/ubuntu/.kaggle
-      #     # now dump the contents of the file into a file called kaggle.json
-      #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
-      #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: authenticate-kaggle-cli
+        shell: bash
+        env:
+          KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
+        run: |
+          mkdir /home/ubuntu/.kaggle
+          # now dump the contents of the file into a file called kaggle.json
+          echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
+          chmod 600 /home/ubuntu/.kaggle/kaggle.json
       - name: Proof Splitting
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_29_expects
       - name: Gan Proof Splitting (MNIST)
