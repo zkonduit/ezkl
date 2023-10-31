@@ -20,7 +20,7 @@ env:
 
 jobs:
   build:
-    runs-on: GPU45
+    runs-on: GPU
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
         run: cargo build --verbose
 
   docs:
-    runs-on: GPU45
+    runs-on: GPU
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -45,7 +45,7 @@ jobs:
         run: cargo doc --verbose
 
   library-tests:
-    runs-on: GPU45
+    runs-on: GPU
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -64,7 +64,7 @@ jobs:
         run: cargo nextest run --lib --verbose
 
   ultra-overflow-tests:
-    runs-on: GPU45
+    runs-on: GPU
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -97,7 +97,7 @@ jobs:
         run: cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture -- --include-ignored
 
   model-serialization:
-    runs-on: GPU45
+    runs-on: GPU
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -115,7 +115,7 @@ jobs:
         run: cargo nextest run native_tests::tests::model_serialization_different_binaries_  --test-threads 1
 
   wasm32-tests:
-    runs-on: GPU45
+    runs-on: GPU
     # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -140,7 +140,7 @@ jobs:
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
 
   tutorial:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -157,7 +157,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::tutorial_
 
   mock-proving-tests:
-    runs-on: GPU45
+    runs-on: GPU
     # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -226,7 +226,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_fixed_params_ --test-threads 32
 
   prove-and-verify-evm-tests:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -281,7 +281,7 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify --test-threads 1
 
   prove-and-verify-tests:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -345,7 +345,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted
 
   fuzz-tests:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -368,7 +368,7 @@ jobs:
       #   run: cargo nextest run --release --verbose tests::kzg_fuzz_ --test-threads 6
 
   prove-and-verify-mock-aggr-tests:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests]
     steps:
       - uses: actions/checkout@v4
@@ -385,7 +385,7 @@ jobs:
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_  --test-threads 8
 
   prove-and-verify-aggr-tests:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -402,7 +402,7 @@ jobs:
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_  --test-threads 8 -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests, python-tests]
     steps:
       - uses: actions/checkout@v4
@@ -425,7 +425,7 @@ jobs:
         run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_encrypted --test-threads 4 -- --include-ignored
 
   examples:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -444,7 +444,7 @@ jobs:
         run: cargo nextest run --release tests_examples
 
   neg-tests:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -461,7 +461,7 @@ jobs:
         run: cargo nextest run neg_tests::neg_examples_
 
   python-tests:
-    runs-on: GPU45
+    runs-on: GPU
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -485,7 +485,7 @@ jobs:
         run: source .env/bin/activate; pytest -v
 
   accuracy-measurement-tests:
-    runs-on: GPU45
+    runs-on: GPU
     # needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -514,7 +514,7 @@ jobs:
 
   python-integration-tests:
     runs-on:
-      GPU45
+      GPU
       # Service containers to run with `container-job`
     services:
       # Label used to access the service container
