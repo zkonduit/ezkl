@@ -96,6 +96,16 @@ maturin develop --release --features python-bindings
 pip install torch pandas numpy seaborn jupyter onnx kaggle py-solc-x web3 librosa tensorflow keras tf2onnx
 ```
 
+### GPU Acceleration
+
+if you have access to NVIDIA GPUs, you can enable acceleration by setting the following environment variable:
+
+```sh
+export ENABLE_ICICLE_GPU=true
+```
+
+GPU acceleration is provided by [Icicle](https://github.com/ingonyama-zk/icicle)
+
 ### repos
 
 The EZKL project has several libraries and repos. 

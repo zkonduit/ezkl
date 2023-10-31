@@ -164,6 +164,54 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
+name = "ark-bls12-377"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc41c02c0d18a226947ee9ee023b1d957bdb6a68fc22ac296722935a9fef423c"
+dependencies = [
+ "ark-ec",
+ "ark-ff 0.3.0",
+ "ark-std 0.3.0",
+]
+
+[[package]]
+name = "ark-bls12-381"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "65be532f9dd1e98ad0150b037276cde464c6f371059e6dd02c0222395761f6aa"
+dependencies = [
+ "ark-ec",
+ "ark-ff 0.3.0",
+ "ark-std 0.3.0",
+]
+
+[[package]]
+name = "ark-bn254"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea691771ebbb28aea556c044e2e5c5227398d840cee0c34d4d20fa8eb2689e8c"
+dependencies = [
+ "ark-ec",
+ "ark-ff 0.3.0",
+ "ark-std 0.3.0",
+]
+
+[[package]]
+name = "ark-ec"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dea978406c4b1ca13c2db2373b05cc55429c3575b8b21f1b9ee859aa5b03dd42"
+dependencies = [
+ "ark-ff 0.3.0",
+ "ark-serialize 0.3.0",
+ "ark-std 0.3.0",
+ "derivative",
+ "num-traits",
+ "rayon",
+ "zeroize",
+]
+
+[[package]]
 name = "ark-ff"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -247,11 +295,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-poly"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b0f78f47537c2f15706db7e98fe64cc1711dbf9def81218194e17239e53e5aa"
+dependencies = [
+ "ark-ff 0.3.0",
+ "ark-serialize 0.3.0",
+ "ark-std 0.3.0",
+ "derivative",
+ "hashbrown 0.11.2",
+]
+
+[[package]]
 name = "ark-serialize"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d6c2b318ee6e10f8c2853e73a83adc0ccb88995aa978d8a3408d492ab2ee671"
 dependencies = [
+ "ark-serialize-derive",
  "ark-std 0.3.0",
  "digest 0.9.0",
 ]
@@ -268,6 +330,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-serialize-derive"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dd4e5f0bf8285d5ed538d27fab7411f3e297908fd93c62195de8bee3f199e82"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "ark-std"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -275,6 +348,7 @@ checksum = "1df2c09229cbc5a028b1d70e00fdb2acee28b1055dfb5ca73eea49c5a25c4e7c"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
+ "rayon",
 ]
 
 [[package]]
@@ -635,6 +709,9 @@ name = "cc"
 version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
+dependencies = [
+ "jobserver",
+]
 
 [[package]]
 name = "cfg-if"
@@ -1013,6 +1090,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cuda-config"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ee74643f7430213a1a78320f88649de309b20b80818325575e393f848f79f5d"
+dependencies = [
+ "glob",
+]
+
+[[package]]
+name = "cuda-driver-sys"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d4c552cc0de854877d80bcd1f11db75d42be32962d72a6799b88dcca88fffbd"
+dependencies = [
+ "cuda-config",
+]
+
+[[package]]
 name = "darling"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1213,7 +1308,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/ingonyama-zk/halo2wrong?branch=icicle-integration#5870f3e2ea407181d8128248de15a0b2e141e0d8"
 dependencies = [
  "integer",
  "num-bigint",
@@ -2086,7 +2181,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice#db9315e8543d6717039c151a9cbfc55b57d90fff"
+source = "git+https://github.com/ingonyama-zk/halo2#054d1057f98d1ea84a9125dd9eeed72e532c47b2"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2103,18 +2198,20 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice#db9315e8543d6717039c151a9cbfc55b57d90fff"
+source = "git+https://github.com/ingonyama-zk/halo2#054d1057f98d1ea84a9125dd9eeed72e532c47b2"
 dependencies = [
  "blake2b_simd",
  "env_logger",
  "ff",
  "group",
  "halo2curves 0.1.0",
+ "icicle",
  "log",
  "maybe-rayon",
  "plotters",
  "rand_chacha",
  "rand_core 0.6.4",
+ "rustacuda",
  "sha3 0.9.1",
  "tabbycat",
  "tracing",
@@ -2123,7 +2220,7 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/chunked-lookup-verifier#8cf26f3164ce7e21b4323adf754833e684efdba1"
+source = "git+https://github.com/ingonyama-zk/halo2-solidity-verifier?branch=icicle-integration#d597e66d29c1f8bd9c83cc182fee550f35f55523"
 dependencies = [
  "askama",
  "blake2b_simd",
@@ -2177,7 +2274,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/ingonyama-zk/halo2wrong?branch=icicle-integration#5870f3e2ea407181d8128248de15a0b2e141e0d8"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2362,6 +2459,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "icicle"
+version = "0.1.0"
+source = "git+https://github.com/ingonyama-zk/icicle.git?branch=rust/large-bucket-factor-msm#2820f43746263fbae7b30a29e08099ea19383c64"
+dependencies = [
+ "ark-bls12-377",
+ "ark-bls12-381",
+ "ark-bn254",
+ "ark-ec",
+ "ark-ff 0.3.0",
+ "ark-poly",
+ "ark-std 0.3.0",
+ "cc",
+ "hex",
+ "rand 0.8.5",
+ "rustacuda",
+ "rustacuda_core",
+ "rustacuda_derive",
+ "serde",
+ "serde_cbor",
+ "serde_derive",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2485,7 +2605,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/ingonyama-zk/halo2wrong?branch=icicle-integration#5870f3e2ea407181d8128248de15a0b2e141e0d8"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2547,6 +2667,15 @@ name = "itoa"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "453ad9f582a441959e5f0d088b02ce04cfe8d51a8eaf077f12ac6d3e94164ca6"
+
+[[package]]
+name = "jobserver"
+version = "0.1.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c37f63953c4c63420ed5fd3d6d398c719489b9f872b9fa683262f8edd363c7d"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "js-sys"
@@ -2721,7 +2850,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/ingonyama-zk/halo2wrong?branch=icicle-integration#5870f3e2ea407181d8128248de15a0b2e141e0d8"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -4083,6 +4212,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e666a5496a0b2186dbcd0ff6106e29e093c15591bde62c20d3842007c6978a09"
 
 [[package]]
+name = "rustacuda"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47208516ab5338b592d63560e90eaef405d0ec880347eaf7742d893b0a31e228"
+dependencies = [
+ "bitflags 1.3.2",
+ "cuda-driver-sys",
+ "rustacuda_core",
+ "rustacuda_derive",
+]
+
+[[package]]
+name = "rustacuda_core"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3858b08976dc2f860c5efbbb48cdcb0d4fafca92a6ac0898465af16c0dbe848"
+
+[[package]]
+name = "rustacuda_derive"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43ce8670a1a1d0fc2514a3b846dacdb65646f9bd494b6674cfacbb4ce430bd7e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "rustc-hex"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4511,7 +4669,7 @@ dependencies = [
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#8e2e99279469c654d7084116f2eefe5db7caea27"
+source = "git+https://github.com/ingonyama-zk/snark-verifier?branch=icicle-integration#547b3704093e4744ebf22fe8981f587f03215c64"
 dependencies = [
  "ecc",
  "halo2_proofs",
