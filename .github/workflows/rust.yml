@@ -393,11 +393,6 @@ jobs:
           toolchain: nightly-2023-08-24
           override: true
           components: rustfmt, clippy
-      - uses: jetli/wasm-pack-action@v0.4.0
-      - name: Add wasm32-unknown-unknown target
-        run: rustup target add wasm32-unknown-unknown
-      - name: Install wasm-server-runner
-        run: cargo install wasm-server-runner
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
       - uses: actions/checkout@v3
