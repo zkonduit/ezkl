@@ -98,7 +98,7 @@ pip install torch pandas numpy seaborn jupyter onnx kaggle py-solc-x web3 libros
 
 ### GPU Acceleration
 
-if you have access to NVIDIA GPUs, you can enable acceleration by setting the following environment variable:
+If you have access to NVIDIA GPUs, you can enable acceleration by building with the feature `icicle` and setting the following environment variable:
 
 ```sh
 export ENABLE_ICICLE_GPU=true

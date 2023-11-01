@@ -17,6 +17,7 @@ use rand::prelude::SliceRandom;
 #[cfg(not(target_arch = "wasm32"))]
 use std::error::Error;
 #[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "icicle")]
 use std::env;
 
 #[tokio::main(flavor = "current_thread")]
@@ -25,6 +26,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::parse();
     init_logger();
     banner();
+    #[cfg(feature = "icicle")]
     if env::var("ENABLE_ICICLE_GPU").is_ok() {
         info!("Running with ICICLE GPU");
     } else {
