@@ -396,7 +396,11 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - name: Add wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
-
+      - name: Set up Clang
+        uses: egor-tensin/setup-clang@v1
+        with:
+          version: latest
+          platform: x64
       - name: Install wasm-server-runner
         run: cargo install wasm-server-runner
 
