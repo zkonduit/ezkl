@@ -693,7 +693,7 @@ impl GraphCircuit {
         &mut self,
         data: &DataSource,
         shapes: Vec<Vec<usize>>,
-        scales: Vec<u32>,
+        scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         match &data {
