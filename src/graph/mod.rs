@@ -357,9 +357,9 @@ pub struct GraphSettings {
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
-    pub model_output_scales: Vec<u32>,
+    pub model_output_scales: Vec<crate::Scale>,
     /// model input scales
-    pub model_input_scales: Vec<u32>,
+    pub model_input_scales: Vec<crate::Scale>,
     /// the of instance cells used by modules
     pub module_sizes: ModuleSizes,
     /// required_lookups
@@ -712,7 +712,7 @@ impl GraphCircuit {
         &mut self,
         data: &DataSource,
         shapes: Vec<Vec<usize>>,
-        scales: Vec<u32>,
+        scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         match &data {
@@ -740,7 +740,7 @@ impl GraphCircuit {
         &mut self,
         source: OnChainSource,
         shapes: &Vec<Vec<usize>>,
-        scales: Vec<u32>,
+        scales: Vec<crate::Scale>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
         let (_, client) = setup_eth_backend(Some(&source.rpc), None).await?;
@@ -763,7 +763,7 @@ impl GraphCircuit {
         &mut self,
         file_data: &FileSource,
         shapes: &Vec<Vec<usize>>,
-        scales: Vec<u32>,
+        scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.

@@ -598,7 +598,7 @@ pub(crate) async fn calibrate(
     data: PathBuf,
     settings_path: PathBuf,
     target: CalibrationTarget,
-    scales: Option<Vec<u32>>,
+    scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
 ) -> Result<(), Box<dyn Error>> {
     let data = GraphData::from_path(data)?;
@@ -615,8 +615,8 @@ pub(crate) async fn calibrate(
         scales
     } else {
         match target {
-            CalibrationTarget::Resources { .. } => (2..8).collect::<Vec<u32>>(),
-            CalibrationTarget::Accuracy => (8..14).collect::<Vec<u32>>(),
+            CalibrationTarget::Resources { .. } => (2..8).collect::<Vec<crate::Scale>>(),
+            CalibrationTarget::Accuracy => (8..14).collect::<Vec<crate::Scale>>(),
         }
     };
 
@@ -633,13 +633,13 @@ pub(crate) async fn calibrate(
         .iter()
         .cartesian_product(range.iter())
         .map(|(a, b)| (*a, *b))
-        .collect::<Vec<(u32, u32)>>();
+        .collect::<Vec<(crate::Scale, crate::Scale)>>();
 
     // remove all entries where input_scale > param_scale
     let mut range_grid = range_grid
         .into_iter()
         .filter(|(a, b)| a <= b)
-        .collect::<Vec<(u32, u32)>>();
+        .collect::<Vec<(crate::Scale, crate::Scale)>>();
 
     // if all integers
     let all_scale_0 = model.graph.get_input_types().iter().all(|t| t.is_integer());
@@ -650,14 +650,14 @@ pub(crate) async fn calibrate(
             .map(|(_, b)| (0, *b))
             .sorted()
             .dedup()
-            .collect::<Vec<(u32, u32)>>();
+            .collect::<Vec<(crate::Scale, crate::Scale)>>();
     }
 
     let range_grid = range_grid
         .iter()
         .cartesian_product(scale_rebase_multiplier.iter())
         .map(|(a, b)| (*a, *b))
-        .collect::<Vec<((u32, u32), u32)>>();
+        .collect::<Vec<((crate::Scale, crate::Scale), u32)>>();
 
     let pb = init_bar(range_grid.len() as u64);
     pb.set_message("calibrating...");

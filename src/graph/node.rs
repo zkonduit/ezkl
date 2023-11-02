@@ -1,5 +1,4 @@
 use super::scale_to_multiplier;
-use super::scale_to_multiplier_neg;
 #[cfg(not(target_arch = "wasm32"))]
 use super::utilities::node_output_shapes;
 #[cfg(not(target_arch = "wasm32"))]
@@ -85,7 +84,7 @@ impl Op<Fp> for Rescaled {
         format!("RESCALED INPUT ({})", self.inner.as_string())
     }
 
-    fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> crate::Scale {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
@@ -130,25 +129,25 @@ pub struct RebaseScale {
     /// the multiplier applied to the node output
     pub multiplier: f64,
     /// scale being rebased to
-    pub target_scale: u32,
+    pub target_scale: i32,
     /// The original scale of the operation's inputs.
-    pub original_scale: u32,
+    pub original_scale: i32,
 }
 
 impl RebaseScale {
     ///
     pub fn rebase(
         inner: SupportedOp,
-        global_scale: u32,
-        op_out_scale: u32,
+        global_scale: crate::Scale,
+        op_out_scale: crate::Scale,
         scale_rebase_multiplier: u32,
     ) -> SupportedOp {
-        if (op_out_scale > (global_scale * scale_rebase_multiplier))
+        if (op_out_scale > (global_scale * scale_rebase_multiplier as i32))
             && !inner.is_constant()
             && !inner.is_input()
         {
             let multiplier =
-                scale_to_multiplier(op_out_scale - global_scale * scale_rebase_multiplier);
+                scale_to_multiplier(op_out_scale - global_scale * scale_rebase_multiplier as i32);
             if let Some(op) = inner.get_rebased() {
                 SupportedOp::RebaseScale(RebaseScale {
                     inner: op.inner.clone(),
@@ -159,7 +158,7 @@ impl RebaseScale {
             } else {
                 SupportedOp::RebaseScale(RebaseScale {
                     inner: Box::new(inner),
-                    target_scale: global_scale * scale_rebase_multiplier,
+                    target_scale: global_scale * scale_rebase_multiplier as i32,
                     multiplier,
                     original_scale: op_out_scale,
                 })
@@ -170,9 +169,13 @@ impl RebaseScale {
     }
 
     ///
-    pub fn rebase_up(inner: SupportedOp, target_scale: u32, op_out_scale: u32) -> SupportedOp {
+    pub fn rebase_up(
+        inner: SupportedOp,
+        target_scale: crate::Scale,
+        op_out_scale: crate::Scale,
+    ) -> SupportedOp {
         if (op_out_scale < (target_scale)) && !inner.is_constant() && !inner.is_input() {
-            let multiplier = scale_to_multiplier_neg(op_out_scale as i32 - target_scale as i32);
+            let multiplier = scale_to_multiplier(op_out_scale - target_scale);
             if let Some(op) = inner.get_rebased() {
                 SupportedOp::RebaseScale(RebaseScale {
                     inner: op.inner.clone(),
@@ -218,7 +221,7 @@ impl Op<Fp> for RebaseScale {
         )
     }
 
-    fn out_scale(&self, _: Vec<u32>) -> u32 {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale {
         self.target_scale
     }
 
@@ -316,7 +319,7 @@ impl SupportedOp {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn homogenous_rescale(&self, in_scales: Vec<u32>) -> Box<dyn Op<Fp>> {
+    fn homogenous_rescale(&self, in_scales: Vec<crate::Scale>) -> Box<dyn Op<Fp>> {
         let inputs_to_scale = self.requires_homogenous_input_scales();
         // creates a rescaled op if the inputs are not homogenous
         let op = self.clone_dyn();
@@ -477,7 +480,7 @@ impl Op<Fp> for SupportedOp {
         }
     }
 
-    fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> crate::Scale {
         match self {
             SupportedOp::Linear(op) => Op::<Fp>::out_scale(op, in_scales),
             SupportedOp::Nonlinear(op) => Op::<Fp>::out_scale(op, in_scales),
@@ -500,7 +503,7 @@ pub struct Node {
     /// [Op] i.e what operation this node represents.
     pub opkind: SupportedOp,
     /// The denominator in the fixed point representation for the node's output. Tensors of differing scales should not be combined.
-    pub out_scale: u32,
+    pub out_scale: i32,
     // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
     // but in_dim is [in], out_dim is [out]
     /// The indices of the node's inputs.
@@ -631,7 +634,7 @@ impl Node {
         input_ids.retain(|(idx, _)| *idx != usize::MAX);
 
         // rescale the inputs if necessary to get consistent fixed points
-        let mut in_scales: Vec<u32> = input_ids
+        let mut in_scales: Vec<crate::Scale> = input_ids
             .iter()
             .map(|(idx, outlet)| {
                 let idx = inputs.iter().position(|x| *idx == x.idx()).unwrap();
@@ -703,7 +706,7 @@ impl Node {
 #[cfg(not(target_arch = "wasm32"))]
 fn rescale_const_with_single_use(
     constant: &mut Constant<Fp>,
-    in_scales: Vec<u32>,
+    in_scales: Vec<crate::Scale>,
     param_visibility: &Visibility,
     num_uses: usize,
 ) -> Result<(), Box<dyn Error>> {

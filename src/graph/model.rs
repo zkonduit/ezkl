@@ -193,7 +193,7 @@ pub enum NodeType {
         ///
         out_dims: Vec<Vec<usize>>,
         ///
-        out_scales: Vec<u32>,
+        out_scales: Vec<crate::Scale>,
     },
 }
 
@@ -236,7 +236,7 @@ impl NodeType {
         }
     }
     /// Returns the scales of the node's output.
-    pub fn out_scales(&self) -> Vec<u32> {
+    pub fn out_scales(&self) -> Vec<crate::Scale> {
         match self {
             NodeType::Node(n) => vec![n.out_scale],
             NodeType::SubGraph { out_scales, .. } => out_scales.clone(),
@@ -291,7 +291,7 @@ impl NodeType {
     }
 
     /// bunp scale of node
-    pub fn bump_scale(&mut self, scale: u32) {
+    pub fn bump_scale(&mut self, scale: crate::Scale) {
         match self {
             NodeType::Node(n) => n.out_scale = scale,
             NodeType::SubGraph { .. } => log::warn!("Cannot bump scale of subgraph"),
@@ -365,7 +365,7 @@ impl ParsedNodes {
     }
 
     /// Returns the fixed point scale of the computational graph's inputs
-    pub fn get_input_scales(&self) -> Vec<u32> {
+    pub fn get_input_scales(&self) -> Vec<crate::Scale> {
         let input_nodes = self.inputs.iter();
         input_nodes
             .flat_map(|o| self.nodes.get(o).unwrap().out_scales())
@@ -373,7 +373,7 @@ impl ParsedNodes {
     }
 
     /// Returns the fixed point scale of the computational graph's outputs
-    pub fn get_output_scales(&self) -> Vec<u32> {
+    pub fn get_output_scales(&self) -> Vec<crate::Scale> {
         let output_nodes = self.outputs.iter();
         output_nodes
             .map(|(idx, outlet)| self.nodes.get(idx).unwrap().out_scales()[*outlet])
@@ -823,8 +823,8 @@ impl Model {
         scales: &VarScales,
         visibility: &VarVisibility,
         symbol_values: &SymbolValues,
-        override_input_scales: Option<Vec<u32>>,
-        override_output_scales: Option<HashMap<usize, u32>>,
+        override_input_scales: Option<Vec<crate::Scale>>,
+        override_output_scales: Option<HashMap<usize, crate::Scale>>,
     ) -> Result<BTreeMap<usize, NodeType>, Box<dyn Error>> {
         use crate::graph::node_output_shapes;
 
@@ -974,7 +974,7 @@ impl Model {
                     }
                     if let Some(ref scales) = override_output_scales {
                         if scales.contains_key(&i) {
-                            let scale_diff = n.out_scale as i32 - scales[&i] as i32;
+                            let scale_diff = n.out_scale - scales[&i];
                             n.opkind = if scale_diff > 0 {
                                 RebaseScale::rebase(n.opkind, scales[&i], n.out_scale, 1)
                             } else {

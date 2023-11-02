@@ -274,7 +274,7 @@ impl TensorType for halo2curves::bn256::Fr {
 pub struct Tensor<T: TensorType> {
     inner: Vec<T>,
     dims: Vec<usize>,
-    scale: Option<u32>,
+    scale: Option<crate::Scale>,
     visibility: Option<Visibility>,
 }
 
@@ -477,7 +477,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 
     /// set the tensor's (optional) scale parameter
-    pub fn set_scale(&mut self, scale: u32) {
+    pub fn set_scale(&mut self, scale: crate::Scale) {
         self.scale = Some(scale)
     }
 
@@ -487,7 +487,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 
     /// getter for scale
-    pub fn scale(&self) -> Option<u32> {
+    pub fn scale(&self) -> Option<crate::Scale> {
         self.scale
     }
 

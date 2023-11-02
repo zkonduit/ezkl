@@ -338,7 +338,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> crate::Scale {
         match self {
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,
             PolyOp::Neg => in_scales[0],
@@ -353,7 +353,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 }
                 scale
             }
-            PolyOp::Prod { len_prod, .. } => in_scales[0] * (*len_prod as u32),
+            PolyOp::Prod { len_prod, .. } => in_scales[0] * (*len_prod as crate::Scale),
             PolyOp::Sum { .. } => in_scales[0],
             PolyOp::Conv { kernel, bias, .. } => {
                 let kernel_scale = match kernel.scale() {
@@ -402,7 +402,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Identity => in_scales[0],
             PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
             PolyOp::Pad(_) => in_scales[0],
-            PolyOp::Pow(pow) => in_scales[0] * (*pow),
+            PolyOp::Pow(pow) => in_scales[0] * (*pow as crate::Scale),
             PolyOp::Pack(_, _) => in_scales[0],
             PolyOp::GlobalSumPool => in_scales[0],
             PolyOp::Concat { axis: _ } => in_scales[0],

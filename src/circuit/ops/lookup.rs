@@ -277,7 +277,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     }
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, inputs_scale: Vec<u32>) -> u32 {
+    fn out_scale(&self, inputs_scale: Vec<crate::Scale>) -> crate::Scale {
         match self {
             LookupOp::Div { denom } => {
                 let mut scale = inputs_scale[0];
@@ -289,7 +289,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::Recip { scale } => {
                 let mut out_scale = inputs_scale[0];
                 out_scale +=
-                    multiplier_to_scale(scale.0 as f64 - scale_to_multiplier(out_scale).powf(2.0));
+                    multiplier_to_scale(scale.0 as f64 / scale_to_multiplier(out_scale).powf(2.0));
                 out_scale
             }
             LookupOp::Sign

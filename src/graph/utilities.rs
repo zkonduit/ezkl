@@ -49,7 +49,7 @@ use tract_onnx::tract_hir::{
 /// * `dims` - the dimensionality of the resulting [Tensor].
 /// * `shift` - offset used in the fixed point representation.
 /// * `scale` - `2^scale` used in the fixed point representation.
-pub fn quantize_float(elem: &f64, shift: f64, scale: u32) -> Result<i128, TensorError> {
+pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i128, TensorError> {
     let mult = scale_to_multiplier(scale);
     let max_value = ((i128::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
@@ -64,18 +64,13 @@ pub fn quantize_float(elem: &f64, shift: f64, scale: u32) -> Result<i128, Tensor
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
-pub fn scale_to_multiplier(scale: u32) -> f64 {
+pub fn scale_to_multiplier(scale: crate::Scale) -> f64 {
     f64::powf(2., scale as f64)
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
-pub fn scale_to_multiplier_neg(scale: i32) -> f64 {
-    f64::powf(2., scale as f64)
-}
-
-/// Converts a scale (log base 2) to a fixed point multiplier.
-pub fn multiplier_to_scale(mult: f64) -> u32 {
-    mult.log2().round() as u32
+pub fn multiplier_to_scale(mult: f64) -> crate::Scale {
+    mult.log2().round() as crate::Scale
 }
 
 /// Gets the shape of a onnx node's outlets.
@@ -590,6 +585,7 @@ pub fn new_op_from_onnx(
             } else {
                 1.0
             };
+
             SupportedOp::Nonlinear(LookupOp::Recip {
                 scale: (scale_to_multiplier(in_scale).powf(2.0) * additional_scale).into(),
             })
@@ -704,7 +700,7 @@ pub fn new_op_from_onnx(
             let mut constant = inputs[0].opkind();
             let constant = constant.get_mutable_constant();
 
-            let replace_const = |scale: u32,
+            let replace_const = |scale: crate::Scale,
                                  default_op: SupportedOp|
              -> Result<SupportedOp, Box<dyn std::error::Error>> {
                 if let Some(c) = constant {
@@ -1274,7 +1270,7 @@ pub fn extract_conv_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> [Option
 /// Converts a tensor to a [ValTensor] with a given scale.
 pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     const_value: Tensor<f32>,
-    scale: u32,
+    scale: crate::Scale,
     visibility: &Visibility,
 ) -> Result<Tensor<F>, Box<dyn std::error::Error>> {
     let mut value: Tensor<F> = const_value.par_enum_map(|_, x| {
@@ -1311,7 +1307,7 @@ pub(crate) fn split_valtensor(
 ///
 pub fn homogenize_input_scales(
     op: Box<dyn Op<Fp>>,
-    input_scales: Vec<u32>,
+    input_scales: Vec<crate::Scale>,
     inputs_to_scale: Vec<usize>,
 ) -> Result<Box<dyn Op<Fp>>, Box<dyn Error>> {
     let relevant_input_scales = input_scales

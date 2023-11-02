@@ -605,7 +605,7 @@ pub async fn read_on_chain_inputs<M: 'static + Middleware>(
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn evm_quantize<M: 'static + Middleware>(
     client: Arc<M>,
-    scales: Vec<u32>,
+    scales: Vec<crate::Scale>,
     data: &(Vec<ethers::types::Bytes>, Vec<u8>),
 ) -> Result<Vec<Fr>, Box<dyn Error>> {
     // save the sol to a tmp file

@@ -373,7 +373,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<u32>) -> u32 {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> crate::Scale {
         match self {
             HybridOp::Greater { .. }
             | HybridOp::GreaterEqual { .. }
