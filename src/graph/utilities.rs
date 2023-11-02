@@ -425,6 +425,7 @@ pub fn new_op_from_onnx(
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => scales.params,
                 _ => todo!("unsupported type"),
             };
+
             // Quantize the raw value
             let quantized_value =
                 quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
@@ -582,8 +583,15 @@ pub fn new_op_from_onnx(
         }
         "Recip" => {
             // Extract the slope layer hyperparams
+            let in_scale = inputs[0].out_scales()[0];
+            let scale_diff = std::cmp::max(scales.input, scales.params) - inputs[0].out_scales()[0];
+            let additional_scale = if scale_diff > 0 {
+                scale_to_multiplier(scale_diff)
+            } else {
+                1.0
+            };
             SupportedOp::Nonlinear(LookupOp::Recip {
-                scale: (scale_to_multiplier(inputs[0].out_scales()[0]).powf(2.0)).into(),
+                scale: (scale_to_multiplier(in_scale).powf(2.0) * additional_scale).into(),
             })
         }
 
@@ -735,18 +743,7 @@ pub fn new_op_from_onnx(
                     }
                 }
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => {
-                    if input_scales[0] == 0 {
-                        replace_const(
-                            scales.input,
-                            SupportedOp::Nonlinear(LookupOp::Div {
-                                denom: crate::circuit::utils::F32(
-                                    1. / (scale_to_multiplier(scales.input) as f32),
-                                ),
-                            }),
-                        )?
-                    } else {
-                        SupportedOp::Linear(PolyOp::Identity)
-                    }
+                    SupportedOp::Linear(PolyOp::Identity)
                 }
                 _ => todo!("unsupported type"),
             }
