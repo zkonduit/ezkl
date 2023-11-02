@@ -137,7 +137,7 @@ pub async fn deploy_da_verifier_via_solidity(
 
     let settings = GraphSettings::load(&settings_path)?;
 
-    let mut scales = vec![];
+    let mut scales: Vec<u32> = vec![];
     // The data that will be stored in the test contracts that will eventually be read from.
     let mut calls_to_accounts = vec![];
 
@@ -190,7 +190,7 @@ pub async fn deploy_da_verifier_via_solidity(
             let input_scales = settings.model_input_scales;
             // give each input a scale
             for scale in input_scales {
-                scales.extend(vec![scale; instance_shapes[instance_idx]]);
+                scales.extend(vec![scale as u32; instance_shapes[instance_idx]]);
                 instance_idx += 1;
             }
         }
@@ -216,7 +216,7 @@ pub async fn deploy_da_verifier_via_solidity(
             let input_scales = settings.model_output_scales;
             // give each output a scale
             for scale in input_scales {
-                scales.extend(vec![scale; instance_shapes[instance_idx]]);
+                scales.extend(vec![scale as u32; instance_shapes[instance_idx]]);
                 instance_idx += 1;
             }
         }
