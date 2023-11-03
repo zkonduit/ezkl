@@ -242,9 +242,9 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub tolerance: f32,
     #[pyo3(get, set)]
-    pub input_scale: u32,
+    pub input_scale: crate::Scale,
     #[pyo3(get, set)]
-    pub param_scale: u32,
+    pub param_scale: crate::Scale,
     #[pyo3(get, set)]
     pub scale_rebase_multiplier: u32,
     #[pyo3(get, set)]
@@ -342,7 +342,7 @@ fn vecu64_to_int(array: PyFelt) -> PyResult<i128> {
     array,
     scale
 ))]
-fn vecu64_to_float(array: PyFelt, scale: u32) -> PyResult<f64> {
+fn vecu64_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
     let felt = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
@@ -355,7 +355,7 @@ fn vecu64_to_float(array: PyFelt, scale: u32) -> PyResult<f64> {
 input,
 scale
 ))]
-fn float_to_vecu64(input: f64, scale: u32) -> PyResult<PyFelt> {
+fn float_to_vecu64(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = i128_to_felt(int_rep);
@@ -677,7 +677,7 @@ fn calibrate_settings(
     model: PathBuf,
     settings: PathBuf,
     target: Option<CalibrationTarget>,
-    scales: Option<Vec<u32>>,
+    scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
 ) -> PyResult<&pyo3::PyAny> {
     let target = target.unwrap_or(CalibrationTarget::Resources {

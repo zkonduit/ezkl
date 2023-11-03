@@ -5,7 +5,7 @@ use std::error::Error;
 use crate::{
     circuit::{layouts, utils},
     fieldutils::{felt_to_i128, i128_to_felt},
-    graph::multiplier_to_scale,
+    graph::{multiplier_to_scale, scale_to_multiplier},
     tensor::{self, Tensor, TensorError, TensorType},
 };
 
@@ -277,7 +277,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     }
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, inputs_scale: Vec<u32>) -> u32 {
+    fn out_scale(&self, inputs_scale: Vec<crate::Scale>) -> crate::Scale {
         match self {
             LookupOp::Div { denom } => {
                 let mut scale = inputs_scale[0];
@@ -285,6 +285,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                     scale += multiplier_to_scale(1. / denom.0 as f64);
                 }
                 scale
+            }
+            LookupOp::Recip { scale } => {
+                let mut out_scale = inputs_scale[0];
+                out_scale +=
+                    multiplier_to_scale(scale.0 as f64 / scale_to_multiplier(out_scale).powf(2.0));
+                out_scale
             }
             LookupOp::Sign
             | LookupOp::GreaterThan { .. }

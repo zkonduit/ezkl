@@ -120,7 +120,7 @@ impl FileSourceInner {
     }
 
     /// Convert to a field element
-    pub fn to_field(&self, scale: u32) -> Fp {
+    pub fn to_field(&self, scale: crate::Scale) -> Fp {
         match self {
             FileSourceInner::Float(f) => i128_to_felt(quantize_float(f, 0.0, scale).unwrap()),
             FileSourceInner::Bool(f) => {
@@ -273,7 +273,7 @@ impl OnChainSource {
     /// Create dummy local on-chain data to test the OnChain data source
     pub async fn test_from_file_data(
         data: &FileSource,
-        scales: Vec<u32>,
+        scales: Vec<crate::Scale>,
         mut shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
     ) -> Result<(Vec<Tensor<Fp>>, Self), Box<dyn std::error::Error>> {
@@ -285,7 +285,7 @@ impl OnChainSource {
 
         let address = client.address();
 
-        let mut scales: Vec<u32> = scales;
+        let mut scales = scales;
         // set scales to 1 where data is a field element
         for (idx, i) in data.iter().enumerate() {
             if i.iter().all(|e| e.is_field()) {

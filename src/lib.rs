@@ -69,6 +69,9 @@ pub mod tensor;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 pub mod wasm;
 
+/// The denominator in the fixed point representation used when quantizing inputs
+pub type Scale = i32;
+
 /// Parameters specific to a proving run
 #[derive(Debug, Args, Deserialize, Serialize, Clone, Default, PartialEq, PartialOrd)]
 pub struct RunArgs {
@@ -77,10 +80,10 @@ pub struct RunArgs {
     pub tolerance: Tolerance,
     /// The denominator in the fixed point representation used when quantizing inputs
     #[arg(short = 'S', long, default_value = "7")]
-    pub input_scale: u32,
+    pub input_scale: Scale,
     /// The denominator in the fixed point representation used when quantizing parameters
     #[arg(long, default_value = "7")]
-    pub param_scale: u32,
+    pub param_scale: Scale,
     /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
     #[arg(long, default_value = "1")]
     pub scale_rebase_multiplier: u32,

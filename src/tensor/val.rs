@@ -155,7 +155,7 @@ pub enum ValTensor<F: PrimeField + TensorType + PartialOrd> {
         /// Vector of dimensions of the tensor.
         dims: Vec<usize>,
         ///
-        scale: u32,
+        scale: crate::Scale,
     },
     /// A tensor backed by an [Instance] column
     Instance {
@@ -168,7 +168,7 @@ pub enum ValTensor<F: PrimeField + TensorType + PartialOrd> {
         ///
         initial_offset: usize,
         ///
-        scale: u32,
+        scale: crate::Scale,
     },
 }
 
@@ -246,7 +246,11 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 
 impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<Vec<usize>>, scale: u32) -> Self {
+    pub fn new_instance(
+        cs: &mut ConstraintSystem<F>,
+        dims: Vec<Vec<usize>>,
+        scale: crate::Scale,
+    ) -> Self {
         let col = cs.instance_column();
         cs.enable_equality(col);
 
@@ -260,7 +264,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance_from_col(dims: Vec<Vec<usize>>, scale: u32, col: Column<Instance>) -> Self {
+    pub fn new_instance_from_col(
+        dims: Vec<Vec<usize>>,
+        scale: crate::Scale,
+        col: Column<Instance>,
+    ) -> Self {
         ValTensor::Instance {
             inner: col,
             dims,
@@ -345,7 +353,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Set the [ValTensor]'s scale.
-    pub fn set_scale(&mut self, scale: u32) {
+    pub fn set_scale(&mut self, scale: crate::Scale) {
         match self {
             ValTensor::Value { scale: s, .. } => *s = scale,
             ValTensor::Instance { scale: s, .. } => *s = scale,
@@ -353,7 +361,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Returns the [ValTensor]'s scale.
-    pub fn scale(&self) -> u32 {
+    pub fn scale(&self) -> crate::Scale {
         match self {
             ValTensor::Value { scale, .. } => *scale,
             ValTensor::Instance { scale, .. } => *scale,
