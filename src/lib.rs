@@ -79,10 +79,10 @@ pub struct RunArgs {
     #[arg(short = 'T', long, default_value = "0")]
     pub tolerance: Tolerance,
     /// The denominator in the fixed point representation used when quantizing inputs
-    #[arg(short = 'S', long, default_value = "7")]
+    #[arg(short = 'S', long, default_value = "7", allow_hyphen_values = true)]
     pub input_scale: Scale,
     /// The denominator in the fixed point representation used when quantizing parameters
-    #[arg(long, default_value = "7")]
+    #[arg(long, default_value = "7", allow_hyphen_values = true)]
     pub param_scale: Scale,
     /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
     #[arg(long, default_value = "1")]

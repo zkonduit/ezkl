@@ -250,7 +250,7 @@ pub enum Commands {
         /// Target for calibration.
         target: CalibrationTarget,
         /// Optional scales to specifically try for calibration.
-        #[arg(long, value_delimiter = ',')]
+        #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
         scales: Option<Vec<crate::Scale>>,
         /// max logrows to use for calibration, 26 is the max public SRS size
         #[arg(long)]
