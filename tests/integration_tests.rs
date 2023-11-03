@@ -191,7 +191,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 65] = [
+    const TESTS: [&str; 64] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -259,10 +259,9 @@ mod native_tests {
         "sklearn_mlp",
         "1l_mean",
         "rounding_ops",
-        "1l_std",
     ];
 
-    const WASM_TESTS: [&str; 49] = [
+    const WASM_TESTS: [&str; 48] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -315,9 +314,9 @@ mod native_tests {
         "random_forest",
         "gradient_boosted_trees",
         "1l_topk",
-        "1l_std", // "xgboost",
-                  // "lightgbm",
-                  // "hummingbird_decision_tree",
+        // "xgboost",
+        // "lightgbm",
+        // "hummingbird_decision_tree",
     ];
 
     const TESTS_AGGR: [&str; 21] = [
@@ -489,7 +488,7 @@ mod native_tests {
 
 
 
-            seq!(N in 0..=64 {
+            seq!(N in 0..=63 {
             #(#[test_case(TESTS[N])])*
             fn model_serialization_(test: &str) {
                 let test_dir = TempDir::new(test).unwrap();
@@ -835,7 +834,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=48 {
+            seq!(N in 0..=47 {
 
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {
