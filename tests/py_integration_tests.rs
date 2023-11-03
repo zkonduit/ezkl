@@ -80,6 +80,7 @@ mod py_tests {
                     "xgboost==1.7.6",
                     "hummingbird-ml==0.4.9",
                     "lightgbm==4.0.0",
+                    "ultralytics==8.0.205"
                 ])
                 .status()
                 .expect("failed to execute process");
@@ -115,7 +116,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 33] = [
+    const TESTS: [&str; 34] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -150,6 +151,7 @@ mod py_tests {
         "mnist_gan_proof_splitting.ipynb",
         "sklearn_mlp.ipynb",
         "generalized_inverse.ipynb",
+        "yolov8.ipynb",
     ];
 
     macro_rules! test_func {
