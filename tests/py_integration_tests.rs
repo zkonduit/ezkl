@@ -73,6 +73,7 @@ mod py_tests {
                     "librosa==0.10.0.post2",
                     "keras==2.12.0",
                     "tensorflow==2.12.0",
+                    "tensorflow-datasets==4.9.3",
                     "tf2onnx==1.14.0",
                     "pytorch-lightning==2.0.6",
                     "sk2torch==1.2.0",
@@ -115,7 +116,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 33] = [
+    const TESTS: [&str; 34] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -150,6 +151,7 @@ mod py_tests {
         "mnist_gan_proof_splitting.ipynb",
         "sklearn_mlp.ipynb",
         "generalized_inverse.ipynb",
+        "mnist_classifier.ipynb",
     ];
 
     macro_rules! test_func {
@@ -162,7 +164,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=32 {
+            seq!(N in 0..=33 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
