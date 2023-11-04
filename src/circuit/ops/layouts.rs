@@ -1875,17 +1875,19 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     }
 
     let og_image_dims = image.dims().to_vec();
-
+    let og_kernel_dims = kernel.dims().to_vec();
     // ensure inputs are 4D tensors
     if og_image_dims.len() == 3 {
         // adds a dummy image_channels dimension
         let mut new_dims = image.dims().to_vec();
         // insert 1 at the input_channels pos
-        new_dims.insert(1, 1);
+        if og_kernel_dims.len() == 3 {
+            new_dims.insert(1, 1);
+        } else {
+            new_dims.insert(0, 1);
+        }
         image.reshape(&new_dims)?;
     }
-
-    let og_kernel_dims = kernel.dims().to_vec();
 
     // ensure kernel is 4D tensor
     if og_kernel_dims.len() == 3 && og_image_dims.len() == 3 {
@@ -2008,6 +2010,8 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         // remove dummy batch dimension if we added one
         if og_image_dims.len() == 3 && vert_slides == 1 {
             output.reshape(&[batch_size, output_channels, horz_slides]);
+        } else if og_image_dims.len() == 3 {
+            output.reshape(&[output_channels, vert_slides, horz_slides]);
         } else {
             output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
         }
