@@ -121,7 +121,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("1");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
 
                     let x = config
@@ -134,7 +134,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("2");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
                     let mut x = config
                         .layer_config
@@ -142,7 +142,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("3");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
                     x.reshape(&[x.dims()[0], 1]).unwrap();
                     let x = config
@@ -157,7 +157,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("4");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
 
                     let x = config
@@ -170,14 +170,14 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("5");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
                     let x = config
                         .layer_config
                         .layout(&mut region, &[x], Box::new(LookupOp::ReLU))
                         .unwrap();
                     println!("6");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     Ok(config
                         .layer_config
                         .layout(

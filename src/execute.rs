@@ -727,7 +727,8 @@ pub(crate) async fn calibrate(
                         required_lookups: settings.required_lookups,
                         model_output_scales: settings.model_output_scales,
                         model_input_scales: settings.model_input_scales,
-                        num_constraints: settings.num_constraints,
+                        num_rows: settings.num_rows,
+                        total_assignments: settings.total_assignments,
                         total_const_size: settings.total_const_size,
                         ..original_settings.clone()
                     };

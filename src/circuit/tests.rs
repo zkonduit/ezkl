@@ -150,6 +150,7 @@ mod matmul_col_overflow {
     }
 
     #[test]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     fn matmulcircuit() {
         // get some logs fam
         crate::logger::init_logger();
