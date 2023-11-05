@@ -406,8 +406,9 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
             .collect_vec();
 
         debug!(
-            "model uses {} advice columns",
-            advices.iter().map(|v| v.num_blocks()).sum::<usize>()
+            "model uses {} advice blocks (size={})",
+            advices.iter().map(|v| v.num_blocks()).sum::<usize>(),
+            num_inner_cols
         );
 
         let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);

@@ -65,7 +65,7 @@ impl VarTensor {
         for _ in 0..modulo {
             let mut inner = vec![];
             for _ in 0..num_inner_cols {
-                let col = cs.advice_column();
+                let col = cs.unblinded_advice_column();
                 cs.enable_equality(col);
                 inner.push(col);
             }
