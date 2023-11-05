@@ -44,9 +44,9 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len);
-        let b = VarTensor::new_advice(cs, K, len);
-        let output = VarTensor::new_advice(cs, K, len);
+        let a = VarTensor::new_advice(cs, K, 1, len);
+        let b = VarTensor::new_advice(cs, K, 1, len);
+        let output = VarTensor::new_advice(cs, K, 1, len);
 
         let mut base_config =
             BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::UNSAFE);
@@ -71,7 +71,7 @@ impl Circuit<Fr> for MyCircuit {
                 let op = PolyOp::Einsum {
                     equation: "ij,jk->ik".to_string(),
                 };
-                let mut region = region::RegionCtx::new(region, 0);
+                let mut region = region::RegionCtx::new(region, 0, 1);
                 let output = config
                     .base_config
                     .layout(&mut region, &self.inputs, Box::new(op))

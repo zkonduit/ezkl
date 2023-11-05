@@ -11,13 +11,17 @@ use super::*;
 pub enum VarTensor {
     /// A VarTensor for holding Advice values, which are assigned at proving time.
     Advice {
-        /// Vec of Advice columns
-        inner: Vec<Column<Advice>>,
+        /// Vec of Advice columns, we have [[xx][xx][xx]...] where each inner vec is xx columns
+        inner: Vec<Vec<Column<Advice>>>,
+        ///
+        num_inner_cols: usize,
         /// Number of rows available to be used in each column of the storage
         col_size: usize,
     },
     /// Dummy var
     Dummy {
+        ///
+        num_inner_cols: usize,
         /// Number of rows available to be used in each column of the storage
         col_size: usize,
     },
@@ -41,9 +45,10 @@ impl VarTensor {
     pub fn new_unblinded_advice<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
+        num_inner_cols: usize,
         capacity: usize,
     ) -> Self {
-        let max_rows = Self::max_rows(cs, logrows);
+        let max_rows = Self::max_rows(cs, logrows) * num_inner_cols;
 
         let mut modulo = (capacity / max_rows) + 1;
         // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
@@ -58,13 +63,18 @@ impl VarTensor {
         }
 
         for _ in 0..modulo {
-            let col = cs.unblinded_advice_column();
-            cs.enable_equality(col);
-            advices.push(col);
+            let mut inner = vec![];
+            for _ in 0..num_inner_cols {
+                let col = cs.advice_column();
+                cs.enable_equality(col);
+                inner.push(col);
+            }
+            advices.push(inner);
         }
 
         VarTensor::Advice {
             inner: advices,
+            num_inner_cols,
             col_size: max_rows,
         }
     }
@@ -77,9 +87,10 @@ impl VarTensor {
     pub fn new_advice<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
+        num_inner_cols: usize,
         capacity: usize,
     ) -> Self {
-        let max_rows = Self::max_rows(cs, logrows);
+        let max_rows = Self::max_rows(cs, logrows) * num_inner_cols;
 
         let mut modulo = (capacity / max_rows) + 1;
         // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
@@ -94,13 +105,18 @@ impl VarTensor {
         }
 
         for _ in 0..modulo {
-            let col = cs.advice_column();
-            cs.enable_equality(col);
-            advices.push(col);
+            let mut inner = vec![];
+            for _ in 0..num_inner_cols {
+                let col = cs.advice_column();
+                cs.enable_equality(col);
+                inner.push(col);
+            }
+            advices.push(inner);
         }
 
         VarTensor::Advice {
             inner: advices,
+            num_inner_cols,
             col_size: max_rows,
         }
     }
@@ -145,16 +161,35 @@ impl VarTensor {
     }
 
     /// Create a new VarTensor::Dummy
-    pub fn dummy(logrows: usize) -> Self {
+    pub fn dummy(logrows: usize, num_inner_cols: usize) -> Self {
         let base = 2u32;
         let max_rows = base.pow(logrows as u32) as usize - 6;
-        VarTensor::Dummy { col_size: max_rows }
+        VarTensor::Dummy {
+            col_size: max_rows,
+            num_inner_cols,
+        }
     }
 
     /// Gets the dims of the object the VarTensor represents
-    pub fn num_cols(&self) -> usize {
+    pub fn num_blocks(&self) -> usize {
         match self {
             VarTensor::Advice { inner, .. } => inner.len(),
+            _ => 0,
+        }
+    }
+
+    /// Num inner cols
+    pub fn num_inner_cols(&self) -> usize {
+        match self {
+            VarTensor::Advice { num_inner_cols, .. } => *num_inner_cols,
+            _ => 0,
+        }
+    }
+
+    /// Total number of columns
+    pub fn num_cols(&self) -> usize {
+        match self {
+            VarTensor::Advice { inner, .. } => inner[0].len() * inner.len(),
             _ => 0,
         }
     }
@@ -162,20 +197,46 @@ impl VarTensor {
     /// Gets the size of each column
     pub fn col_size(&self) -> usize {
         match self {
-            VarTensor::Advice { col_size, .. } | VarTensor::Dummy { col_size } => *col_size,
+            VarTensor::Advice { col_size, .. } | VarTensor::Dummy { col_size, .. } => *col_size,
+            _ => 0,
+        }
+    }
+
+    /// Gets the size of each column
+    pub fn block_size(&self) -> usize {
+        match self {
+            VarTensor::Advice {
+                num_inner_cols,
+                col_size,
+                ..
+            }
+            | VarTensor::Dummy {
+                col_size,
+                num_inner_cols,
+                ..
+            } => *col_size * num_inner_cols,
             _ => 0,
         }
     }
 
     /// Take a linear coordinate and output the (column, row) position in the storage block.
-    pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize) {
+    pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize, usize) {
         match self {
-            VarTensor::Advice { col_size, .. } => {
-                let x = linear_coord / col_size;
-                let y = linear_coord % col_size;
-                (x, y)
+            VarTensor::Advice {
+                col_size,
+                num_inner_cols,
+                ..
+            } => {
+                let block_size = col_size * num_inner_cols;
+                // x indexes over blocks of size num_inner_cols
+                let x = linear_coord / block_size;
+                // y indexes over the cols inside a block
+                let y = linear_coord % num_inner_cols;
+                // z indexes over the rows inside a col
+                let z = (linear_coord - x * block_size) / num_inner_cols;
+                (x, y, z)
             }
-            _ => (0, 0),
+            _ => (0, 0, 0),
         }
     }
 }
@@ -185,8 +246,9 @@ impl VarTensor {
     pub fn query_rng<F: PrimeField>(
         &self,
         meta: &mut VirtualCells<'_, F>,
-        rotation_offset: i32,
-        idx_offset: usize,
+        x: usize,
+        y: usize,
+        z: i32,
         rng: usize,
     ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
         match &self {
@@ -194,10 +256,7 @@ impl VarTensor {
             VarTensor::Advice { inner: advices, .. } => {
                 let c = Tensor::from(
                     // this should fail if dims is empty, should be impossible
-                    (0..rng).map(|i| {
-                        let (x, y) = self.cartesian_coord(idx_offset + i);
-                        meta.query_advice(advices[x], Rotation(rotation_offset + y as i32))
-                    }),
+                    (0..rng).map(|i| meta.query_advice(advices[x][y], Rotation(z + i as i32))),
                 );
                 Ok(c)
             }
@@ -215,11 +274,11 @@ impl VarTensor {
         offset: usize,
         constant: F,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
-        let (x, y) = self.cartesian_coord(offset);
+        let (x, y, z) = self.cartesian_coord(offset);
 
         match &self {
             VarTensor::Advice { inner: advices, .. } => {
-                region.assign_advice_from_constant(|| "constant", advices[x], y, constant)
+                region.assign_advice_from_constant(|| "constant", advices[x][y], z, constant)
             }
             _ => panic!(),
         }
@@ -243,9 +302,9 @@ impl VarTensor {
                     if omissions.contains(&coord) {
                         return Ok(k);
                     }
-                    let (x, y) = self.cartesian_coord(offset + assigned_coord);
+                    let (x, y, z) = self.cartesian_coord(offset + assigned_coord);
                     let cell =
-                        self.assign_value(region, offset, k.clone(), x, y, assigned_coord)?;
+                        self.assign_value(region, offset, k.clone(), x, y, z, assigned_coord)?;
 
                     assigned_coord += 1;
 
@@ -289,13 +348,13 @@ impl VarTensor {
                     // this should never ever fail
                     let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
                     Ok(t.enum_map(|coord, _| {
-                        let (x, y) = self.cartesian_coord(offset + coord);
+                        let (x, y, z) = self.cartesian_coord(offset + coord);
                         region.assign_advice_from_instance(
                             || "pub input anchor",
                             *instance,
                             coord + total_offset,
-                            v[x],
-                            y,
+                            v[x][y],
+                            z,
                         )
                     })?
                     .into())
@@ -307,8 +366,8 @@ impl VarTensor {
             },
             ValTensor::Value { inner: v, .. } => Ok(v
                 .enum_map(|coord, k| {
-                    let (x, y) = self.cartesian_coord(offset + coord);
-                    let cell = self.assign_value(region, offset, k.clone(), x, y, coord)?;
+                    let (x, y, z) = self.cartesian_coord(offset + coord);
+                    let cell = self.assign_value(region, offset, k.clone(), x, y, z, coord)?;
 
                     match k {
                         ValType::Constant(f) => Ok::<ValType<F>, halo2_proofs::plonk::Error>(
@@ -335,10 +394,10 @@ impl VarTensor {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims , ..} => {
                 // duplicates every nth element to adjust for column overflow
-                let mut res: ValTensor<F> = v.duplicate_every_n(self.col_size(), offset).unwrap().into();
+                let mut res: ValTensor<F> = v.duplicate_every_n(self.block_size(), offset).unwrap().into();
                 let total_used_len = res.len();
                 let total_constants = res.num_constants();
-                res.remove_every_n(self.col_size(), offset).unwrap();
+                res.remove_every_n(self.block_size(), offset).unwrap();
 
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());
@@ -363,26 +422,25 @@ impl VarTensor {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims , ..} => {
                 // duplicates every nth element to adjust for column overflow
-                let v = v.duplicate_every_n(self.col_size(), offset).unwrap();
+                let v = v.duplicate_every_n(self.block_size(), offset).unwrap();
                 let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
-
-                    let (x, y) = self.cartesian_coord(offset + coord);
-                    if matches!(check_mode, CheckMode::SAFE) && coord > 0 && y == 0 {
+                    let (x, y, z) = self.cartesian_coord(offset + coord);
+                    if matches!(check_mode, CheckMode::SAFE) && coord > 0 && z == 0 {
                         // assert that duplication occurred correctly
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
 
-                    let cell = self.assign_value(region, offset, k.clone(), x, y, coord)?;
+                    let cell = self.assign_value(region, offset, k.clone(), x, y, z, coord)?;
 
-                    if y == (self.col_size() - 1)   {
+                    if z == (self.col_size() - 1) && y == (self.num_inner_cols() - 1)  {
                         // if we are at the end of the column, we need to copy the cell to the next column
                         prev_cell = Some(cell.clone());
-                    } else if coord > 0 && y == 0 {
+                    } else if coord > 0 && z == 0 && y == 0 {
                         if let Some(prev_cell) = prev_cell.as_ref() {
                             region.constrain_equal(prev_cell.cell(),cell.cell())?;
                         } else {
-                            error!("Error assigning copy-constraining previous value: {:?}", (x,y));
+                            error!("Error copy-constraining previous value: {:?}", (x,y));
                             return Err(halo2_proofs::plonk::Error::Synthesis);
                         }
                     }
@@ -401,7 +459,7 @@ impl VarTensor {
 
                 })?.into()};
                 let total_used_len = res.len();
-                res.remove_every_n(self.col_size(), offset).unwrap();
+                res.remove_every_n(self.block_size(), offset).unwrap();
 
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());
@@ -431,18 +489,19 @@ impl VarTensor {
         k: ValType<F>,
         x: usize,
         y: usize,
+        z: usize,
         coord: usize,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
         match k {
             ValType::Value(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
-                    region.assign_advice(|| "k", advices[x], y, || v)
+                    region.assign_advice(|| "k", advices[x][y], z, || v)
                 }
                 _ => unimplemented!(),
             },
             ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
-                    v.copy_advice(|| "k", region, advices[x], y)
+                    v.copy_advice(|| "k", region, advices[x][y], z)
                 }
                 _ => {
                     error!("PrevAssigned is only supported for advice columns");
@@ -451,7 +510,7 @@ impl VarTensor {
             },
             ValType::AssignedValue(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => region
-                    .assign_advice(|| "k", advices[x], y, || v)
+                    .assign_advice(|| "k", advices[x][y], z, || v)
                     .map(|a| a.evaluate()),
                 _ => unimplemented!(),
             },

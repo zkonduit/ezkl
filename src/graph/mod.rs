@@ -1182,6 +1182,7 @@ impl Circuit<Fp> for GraphCircuit {
             cs,
             params.run_args.logrows as usize,
             params.num_constraints,
+            params.run_args.num_inner_cols,
             params.total_const_size,
             params.uses_modules(),
         );

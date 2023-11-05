@@ -15,16 +15,20 @@ use std::{
 pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
     region: Option<RefCell<Region<'a, F>>>,
     offset: usize,
+    col_accumulator_idx: usize,
+    num_inner_cols: usize,
     total_constants: usize,
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     /// Create a new region context
-    pub fn new(region: Region<'a, F>, offset: usize) -> RegionCtx<'a, F> {
+    pub fn new(region: Region<'a, F>, offset: usize, num_inner_cols: usize) -> RegionCtx<'a, F> {
         let region = Some(RefCell::new(region));
 
         RegionCtx {
             region,
+            num_inner_cols,
+            col_accumulator_idx: 0,
             offset,
             total_constants: 0,
         }
@@ -33,30 +37,41 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     pub fn from_wrapped_region(
         region: Option<RefCell<Region<'a, F>>>,
         offset: usize,
+        num_inner_cols: usize,
     ) -> RegionCtx<'a, F> {
         RegionCtx {
             region,
+            num_inner_cols,
+            col_accumulator_idx: 0,
             offset,
             total_constants: 0,
         }
     }
 
     /// Create a new region context
-    pub fn new_dummy(offset: usize) -> RegionCtx<'a, F> {
+    pub fn new_dummy(offset: usize, num_inner_cols: usize) -> RegionCtx<'a, F> {
         let region = None;
 
         RegionCtx {
             region,
+            num_inner_cols,
+            col_accumulator_idx: 0,
             offset,
             total_constants: 0,
         }
     }
 
     /// Create a new region context
-    pub fn new_dummy_with_constants(offset: usize, constants: usize) -> RegionCtx<'a, F> {
+    pub fn new_dummy_with_constants(
+        offset: usize,
+        constants: usize,
+        num_inner_cols: usize,
+    ) -> RegionCtx<'a, F> {
         let region = None;
         RegionCtx {
             region,
+            num_inner_cols,
+            col_accumulator_idx: 0,
             offset,
             total_constants: constants,
         }
@@ -76,7 +91,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             let starting_offset = offset.fetch_add(0, Ordering::Relaxed);
             let starting_constants = constants.fetch_add(0, Ordering::Relaxed);
             // we need to make sure that the region is not shared between threads
-            let mut local_reg = Self::new_dummy_with_constants(starting_offset, starting_constants);
+            let mut local_reg = Self::new_dummy_with_constants(
+                starting_offset,
+                starting_constants,
+                self.num_inner_cols,
+            );
             let res = inner_loop_function(idx, &mut local_reg);
             // we update the offset and constants
             offset.fetch_add(local_reg.offset() - starting_offset, Ordering::Relaxed);
@@ -100,6 +119,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     pub fn duplicate_dummy(&self) -> Self {
         Self {
             region: None,
+            col_accumulator_idx: self.col_accumulator_idx,
+            num_inner_cols: self.num_inner_cols,
             offset: self.offset,
             total_constants: self.total_constants,
         }
@@ -209,12 +230,18 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
 
     /// Increment the offset by 1
     pub fn next(&mut self) {
-        self.offset += 1
+        self.col_accumulator_idx += 1;
+        if self.col_accumulator_idx == self.num_inner_cols {
+            self.col_accumulator_idx = 0;
+            self.offset += 1;
+        }
     }
 
     /// Increment the offset
     pub fn increment(&mut self, n: usize) {
-        self.offset += n
+        for _ in 0..n {
+            self.next()
+        }
     }
 
     /// increment constants

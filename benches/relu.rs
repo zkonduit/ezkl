@@ -35,7 +35,7 @@ impl Circuit<Fr> for NLCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         unsafe {
             let advices = (0..3)
-                .map(|_| VarTensor::new_advice(cs, K, LEN))
+                .map(|_| VarTensor::new_advice(cs, K, 1, LEN))
                 .collect::<Vec<_>>();
 
             let nl = LookupOp::ReLU;
@@ -59,7 +59,7 @@ impl Circuit<Fr> for NLCircuit {
         layouter.assign_region(
             || "",
             |region| {
-                let mut region = RegionCtx::new(region, 0);
+                let mut region = RegionCtx::new(region, 0, 1);
                 config
                     .layout(&mut region, &[self.input.clone()], Box::new(LookupOp::ReLU))
                     .unwrap();

@@ -124,17 +124,17 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     // enable the selectors
     if !region.is_dummy() {
         (0..assigned_len).for_each(|i| {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
+            let (x, y, z) = config.output.cartesian_coord(region.offset() + i);
             // hop over duplicates at start of column
-            if y == 0 && i > 0 {
+            if y == 0 && z == 0 && i > 0 {
                 return;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Mult, x))
+                config.selectors.get(&(BaseOp::Mult, x, y))
             } else {
-                config.selectors.get(&(BaseOp::Dot, x))
+                config.selectors.get(&(BaseOp::Dot, x, y))
             };
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -606,9 +606,9 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
     let assigned_output = region.assign(&config.inputs[1], &output)?;
     if !region.is_dummy() {
         for i in 0..assigned_output.len() {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
-            region.enable(selector, y)?;
+            let (x, y, z) = config.output.cartesian_coord(region.offset() + i);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+            region.enable(selector, z)?;
         }
     }
     region.increment(std::cmp::max(assigned_output.len(), assigned_input.len()));
@@ -1014,20 +1014,20 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
 
     // enable the selectors
     if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
+        for i in 0..assigned_len {
+            let (x, y, z) = config.output.cartesian_coord(region.offset() + i);
             // skip over duplicates at start of column
-            if y == 0 && i > 0 {
-                return;
+            if z == 0 && y == 0 && i > 0 {
+                continue;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Identity, x))
+                config.selectors.get(&(BaseOp::Identity, x, y))
             } else {
-                config.selectors.get(&(BaseOp::Sum, x))
+                config.selectors.get(&(BaseOp::Sum, x, y))
             };
 
-            region.enable(selector, y).unwrap();
-        });
+            region.enable(selector, z)?;
+        }
     }
 
     let last_elem = output
@@ -1081,18 +1081,18 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
     // enable the selectors
     if !region.is_dummy() {
         (0..assigned_len).for_each(|i| {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
+            let (x, y, z) = config.output.cartesian_coord(region.offset() + i);
             // skip over duplicates at start of column
-            if y == 0 && i > 0 {
+            if z == 0 && y == 0 && i > 0 {
                 return;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Identity, x))
+                config.selectors.get(&(BaseOp::Identity, x, y))
             } else {
-                config.selectors.get(&(BaseOp::CumProd, x))
+                config.selectors.get(&(BaseOp::CumProd, x, y))
             };
 
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -1347,10 +1347,10 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     // Enable the selectors
     if !region.is_dummy() {
         (0..assigned_len).for_each(|i| {
-            let (x, y) = config.inputs[0].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(op.clone(), x));
+            let (x, y, z) = config.inputs[0].cartesian_coord(region.offset() + i);
+            let selector = config.selectors.get(&(op.clone(), x, y));
 
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
     region.increment(assigned_len);
@@ -1582,10 +1582,9 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     // Enable the selectors
     if !region.is_dummy() {
         (0..assigned_mask.len()).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
-
-            region.enable(selector, y).unwrap();
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.offset() + i);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -1621,10 +1620,10 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
     // Enable the selectors
     if !region.is_dummy() {
         (0..values[0].len()).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::Neg, x));
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.offset() + i);
+            let selector = config.selectors.get(&(BaseOp::Neg, x, y));
 
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -2189,10 +2188,10 @@ pub fn boolean_identity<F: PrimeField + TensorType + PartialOrd>(
     // Enable the selectors
     if !region.is_dummy() {
         (0..output.len()).for_each(|j| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + j);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.offset() + j);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
 
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
     region.increment(output.len());
@@ -2300,9 +2299,9 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     if !is_dummy {
         (0..assigned_len).for_each(|i| {
-            let (x, y) = config.lookup_input.cartesian_coord(region.offset() + i);
-            let selector = config.lookup_selectors.get(&(nl.clone(), x));
-            region.enable(selector, y).unwrap();
+            let (x, y, z) = config.lookup_input.cartesian_coord(region.offset() + i);
+            let selector = config.lookup_selectors.get(&(nl.clone(), x, y));
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -2458,9 +2457,9 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
 
     if !region.is_dummy() {
         (0..len).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
-            region.enable(selector, y).unwrap();
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.offset() + i);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -2477,9 +2476,9 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     // constraining 1 - sum(relu(x - max(x - 1))) = 0
     region.assign(&config.inputs[1], &relu_one_minus_sum_relu)?;
 
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::IsZero, x));
-    region.enable(selector, y)?;
+    let (x, y, z) = config.output.cartesian_coord(region.offset());
+    let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
+    region.enable(selector, z)?;
 
     region.increment(relu_one_minus_sum_relu.len());
 
@@ -2533,9 +2532,9 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
     if !region.is_dummy() {
         (0..len).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
-            region.enable(selector, y).unwrap();
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.offset() + i);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -2553,9 +2552,9 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     region.assign(&config.inputs[1], &relu_one_minus_sum_relu)?;
 
     // constraining product to 0
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::IsZero, x));
-    region.enable(selector, y)?;
+    let (x, y, z) = config.output.cartesian_coord(region.offset());
+    let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
+    region.enable(selector, z)?;
 
     region.increment(relu_one_minus_sum_relu.len());
 
@@ -2786,9 +2785,9 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     region.assign(&config.inputs[1], &sum)?;
 
     // Constrain the sum to be all zeros
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::IsZero, x));
-    region.enable(selector, y)?;
+    let (x, y, z) = config.output.cartesian_coord(region.offset());
+    let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
+    region.enable(selector, z)?;
 
     region.increment(sum.len());
 

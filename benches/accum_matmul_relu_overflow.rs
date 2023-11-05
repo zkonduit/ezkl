@@ -45,9 +45,9 @@ impl Circuit<Fr> for MyCircuit {
         let len = unsafe { LEN };
         let k = unsafe { K };
 
-        let a = VarTensor::new_advice(cs, k, len);
-        let b = VarTensor::new_advice(cs, k, len);
-        let output = VarTensor::new_advice(cs, k, len);
+        let a = VarTensor::new_advice(cs, k, 1, len);
+        let b = VarTensor::new_advice(cs, k, 1, len);
+        let output = VarTensor::new_advice(cs, k, 1, len);
 
         let mut base_config =
             BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::UNSAFE);
@@ -72,7 +72,7 @@ impl Circuit<Fr> for MyCircuit {
                 let op = PolyOp::Einsum {
                     equation: "ij,jk->ik".to_string(),
                 };
-                let mut region = region::RegionCtx::new(region, 0);
+                let mut region = region::RegionCtx::new(region, 0, 1);
                 let output = config
                     .base_config
                     .layout(&mut region, &self.inputs, Box::new(op))

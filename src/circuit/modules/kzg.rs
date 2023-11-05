@@ -100,7 +100,7 @@ impl Module<Fp> for KZGChip {
 
     /// Configuration of the PoseidonChip
     fn configure(meta: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
-        let hash_inputs = VarTensor::new_unblinded_advice(meta, params.0, params.1);
+        let hash_inputs = VarTensor::new_unblinded_advice(meta, params.0, 1, params.1);
         Self::Config { hash_inputs }
     }
 

@@ -41,9 +41,9 @@ mod matmul {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, LEN * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -56,7 +56,7 @@ mod matmul {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -117,9 +117,9 @@ mod matmul_col_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -132,7 +132,7 @@ mod matmul_col_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -151,6 +151,8 @@ mod matmul_col_overflow {
 
     #[test]
     fn matmulcircuit() {
+        // get some logs fam
+        crate::logger::init_logger();
         // parameters
         let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         a.reshape(&[LEN, LEN]);
@@ -194,9 +196,9 @@ mod matmul_col_ultra_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -209,7 +211,7 @@ mod matmul_col_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -307,9 +309,9 @@ mod dot {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -323,7 +325,7 @@ mod dot {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -380,9 +382,9 @@ mod dot_col_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -396,7 +398,7 @@ mod dot_col_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -453,9 +455,9 @@ mod sum {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -469,7 +471,7 @@ mod sum {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -522,9 +524,9 @@ mod sum_col_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -538,7 +540,7 @@ mod sum_col_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -592,9 +594,9 @@ mod composition {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -609,7 +611,7 @@ mod composition {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         let _ = config
                             .layout(
                                 &mut region,
@@ -685,9 +687,9 @@ mod conv {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
-            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -700,7 +702,7 @@ mod conv {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -813,9 +815,9 @@ mod conv_col_ultra_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -828,7 +830,7 @@ mod conv_col_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -946,9 +948,9 @@ mod conv_relu_col_ultra_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, LEN * LEN * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
             let mut base_config =
                 Self::Config::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // sets up a new relu table
@@ -968,7 +970,7 @@ mod conv_relu_col_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         let output = config
                             .layout(
                                 &mut region,
@@ -1090,9 +1092,9 @@ mod sumpool {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
-            let b = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
-            let output = VarTensor::new_advice(cs, K, (LEN + 1) * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
             VarTensor::constant_cols(cs, K, 2, false);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1106,7 +1108,7 @@ mod sumpool {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -1169,9 +1171,9 @@ mod add_w_shape_casting {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1185,7 +1187,7 @@ mod add_w_shape_casting {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
@@ -1236,9 +1238,9 @@ mod add {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1252,7 +1254,7 @@ mod add {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
@@ -1303,9 +1305,9 @@ mod add_with_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1319,7 +1321,7 @@ mod add_with_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
@@ -1387,9 +1389,9 @@ mod add_with_overflow_and_poseidon {
         }
 
         fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             let base = BaseConfig::configure(cs, &[a, b], &output, CheckMode::SAFE);
             VarTensor::constant_cols(cs, K, 2, false);
@@ -1417,7 +1419,7 @@ mod add_with_overflow_and_poseidon {
             layouter.assign_region(
                 || "model",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0);
+                    let mut region = RegionCtx::new(region, 0, 1);
                     config
                         .base
                         .layout(&mut region, &inputs, Box::new(PolyOp::Add))
@@ -1507,9 +1509,9 @@ mod sub {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1523,7 +1525,7 @@ mod sub {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Sub))
                             .map_err(|_| Error::Synthesis)
@@ -1574,9 +1576,9 @@ mod mult {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1590,7 +1592,7 @@ mod mult {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Mult))
                             .map_err(|_| Error::Synthesis)
@@ -1641,9 +1643,9 @@ mod pow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1657,7 +1659,7 @@ mod pow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Pow(5)))
                             .map_err(|_| Error::Synthesis)
@@ -1706,9 +1708,9 @@ mod pack {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
@@ -1722,7 +1724,7 @@ mod pack {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -1782,9 +1784,9 @@ mod matmul_relu {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
 
             let mut base_config =
                 BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
@@ -1805,7 +1807,7 @@ mod matmul_relu {
             layouter.assign_region(
                 || "",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0);
+                    let mut region = RegionCtx::new(region, 0, 1);
                     let op = PolyOp::Einsum {
                         equation: "ij,jk->ik".to_string(),
                     };
@@ -1880,9 +1882,9 @@ mod rangecheckpercent {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let scale = utils::F32(SCALE.pow(2) as f32);
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
             let mut config =
                 Self::Config::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // set up a new GreaterThan and Recip tables
@@ -1916,7 +1918,7 @@ mod rangecheckpercent {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(
                                 &mut region,
@@ -2008,7 +2010,7 @@ mod relu {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..3)
-                .map(|_| VarTensor::new_advice(cs, 4, 3))
+                .map(|_| VarTensor::new_advice(cs, 4, 1, 3))
                 .collect::<Vec<_>>();
 
             let nl = LookupOp::ReLU;
@@ -2031,7 +2033,7 @@ mod relu {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(&mut region, &[self.input.clone()], Box::new(LookupOp::ReLU))
                             .map_err(|_| Error::Synthesis)
@@ -2083,7 +2085,7 @@ mod lookup_ultra_overflow {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..3)
-                .map(|_| VarTensor::new_advice(cs, 4, 3))
+                .map(|_| VarTensor::new_advice(cs, 4, 1, 3))
                 .collect::<Vec<_>>();
 
             let nl = LookupOp::ReLU;
@@ -2114,7 +2116,7 @@ mod lookup_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         config
                             .layout(&mut region, &[self.input.clone()], Box::new(LookupOp::ReLU))
                             .map_err(|_| Error::Synthesis)
@@ -2206,12 +2208,12 @@ mod softmax {
             self.clone()
         }
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, LEN);
-            let b = VarTensor::new_advice(cs, K, LEN);
-            let output = VarTensor::new_advice(cs, K, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN);
             let mut config = Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE);
             let advices = (0..3)
-                .map(|_| VarTensor::new_advice(cs, K, LEN))
+                .map(|_| VarTensor::new_advice(cs, K, 1, LEN))
                 .collect::<Vec<_>>();
 
             config
@@ -2253,7 +2255,7 @@ mod softmax {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0);
+                        let mut region = RegionCtx::new(region, 0, 1);
                         let _output = config
                             .layout(
                                 &mut region,

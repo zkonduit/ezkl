@@ -395,18 +395,19 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         var_len: usize,
+        num_inner_cols: usize,
         num_constants: usize,
         uses_modules: bool,
     ) -> Self {
         info!("number of blinding factors: {}", cs.blinding_factors());
 
         let advices = (0..3)
-            .map(|_| VarTensor::new_advice(cs, logrows, var_len))
+            .map(|_| VarTensor::new_advice(cs, logrows, num_inner_cols, var_len))
             .collect_vec();
 
         debug!(
             "model uses {} advice columns",
-            advices.iter().map(|v| v.num_cols()).sum::<usize>()
+            advices.iter().map(|v| v.num_blocks()).sum::<usize>()
         );
 
         let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);

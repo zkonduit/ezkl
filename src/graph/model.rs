@@ -451,9 +451,9 @@ impl Model {
         #[cfg(not(target_arch = "wasm32"))]
         info!(
             "{} {} {}",
-            "model generates".blue(),
+            "model uses".blue(),
             num_constraints.to_string().blue(),
-            "constraints (excluding modules)".blue()
+            "rows (excluding modules)".blue()
         );
 
         // extract the requisite lookup ops from the model
@@ -1101,7 +1101,7 @@ impl Model {
         let outputs = layouter.assign_region(
             || "model",
             |region| {
-                let mut thread_safe_region = RegionCtx::new(region, 0);
+                let mut thread_safe_region = RegionCtx::new(region, 0, run_args.num_inner_cols);
                 // we need to do this as this loop is called multiple times
                 vars.set_instance_idx(instance_idx);
 
@@ -1351,13 +1351,14 @@ impl Model {
             results.insert(*input_idx, vec![inputs[i].clone()]);
         }
 
-        let mut dummy_config = PolyConfig::dummy(run_args.logrows as usize);
+        let mut dummy_config =
+            PolyConfig::dummy(run_args.logrows as usize, run_args.num_inner_cols);
         let mut model_config = ModelConfig {
             base: dummy_config.clone(),
             vars: ModelVars::new_dummy(),
         };
 
-        let mut region = RegionCtx::new_dummy(0);
+        let mut region = RegionCtx::new_dummy(0, run_args.num_inner_cols);
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
