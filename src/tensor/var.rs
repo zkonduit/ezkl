@@ -426,7 +426,7 @@ impl VarTensor {
                 let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
                     let (x, y, z) = self.cartesian_coord(offset + coord);
-                    if matches!(check_mode, CheckMode::SAFE) && coord > 0 && z == 0 {
+                    if matches!(check_mode, CheckMode::SAFE) && coord > 0 && z == 0 && y == 0 {
                         // assert that duplication occurred correctly
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };

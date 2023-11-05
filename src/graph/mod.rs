@@ -1181,7 +1181,7 @@ impl Circuit<Fp> for GraphCircuit {
         let mut vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
-            params.num_rows,
+            params.total_assignments,
             params.run_args.num_inner_cols,
             params.total_const_size,
             params.uses_modules(),
