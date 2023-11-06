@@ -3893,7 +3893,7 @@ pub mod accumulated {
     ///     Some(&[25, 35]),
     ///     &[2],
     /// ).unwrap();
-    /// assert_eq!(dot(&[x, y]).unwrap(), expected);
+    /// assert_eq!(dot(&[x, y], 1).unwrap(), expected);
     /// ```
     pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         inputs: &[Tensor<T>; 2],
@@ -3933,7 +3933,7 @@ pub mod accumulated {
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = sum(&x).unwrap();
+    /// let result = sum(&x, 1).unwrap();
     /// let expected = Tensor::<i128>::new(
     ///     Some(&[2, 17, 19, 20, 21, 21]),
     ///     &[6],
@@ -3970,7 +3970,7 @@ pub mod accumulated {
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = prod(&x).unwrap();
+    /// let result = prod(&x, 1).unwrap();
     /// let expected = Tensor::<i128>::new(
     ///     Some(&[2, 30, 60, 60, 60, 0]),
     ///     &[6],
