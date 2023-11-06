@@ -206,27 +206,34 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         check_mode: CheckMode,
     ) -> Self {
         // setup a selector per base op
-        let mut selectors = BTreeMap::new();
+        let mut nonaccum_selectors = BTreeMap::new();
+        let mut accum_selectors = BTreeMap::new();
 
         assert!(inputs[0].num_cols() == inputs[1].num_cols());
         assert!(inputs[0].num_cols() == output.num_cols());
 
         for i in 0..output.num_blocks() {
             for j in 0..output.num_inner_cols() {
-                selectors.insert((BaseOp::Add, i, j), meta.selector());
-                selectors.insert((BaseOp::Sub, i, j), meta.selector());
-                selectors.insert((BaseOp::Dot, i, j), meta.selector());
-                selectors.insert((BaseOp::CumProd, i, j), meta.selector());
-                selectors.insert((BaseOp::Sum, i, j), meta.selector());
-                selectors.insert((BaseOp::Neg, i, j), meta.selector());
-                selectors.insert((BaseOp::Mult, i, j), meta.selector());
-                selectors.insert((BaseOp::IsZero, i, j), meta.selector());
-                selectors.insert((BaseOp::Identity, i, j), meta.selector());
-                selectors.insert((BaseOp::IsBoolean, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::Add, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::Sub, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::Neg, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::Mult, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::IsZero, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::Identity, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::IsBoolean, i, j), meta.selector());
             }
         }
 
-        for ((base_op, block_idx, inner_col_idx), selector) in selectors.iter() {
+        for i in 0..output.num_blocks() {
+            accum_selectors.insert((BaseOp::DotInit, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::Dot, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::CumProd, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::CumProdInit, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::Sum, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::SumInit, i, 0), meta.selector());
+        }
+
+        for ((base_op, block_idx, inner_col_idx), selector) in nonaccum_selectors.iter() {
             meta.create_gate(base_op.as_str(), |meta| {
                 let selector = meta.query_selector(*selector);
                 let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
@@ -238,7 +245,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                 {
                     *q_i = inputs[i]
                         .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
-                        .expect("accum: input query failed")[0]
+                        .expect("non accum: input query failed")[0]
                         .clone()
                 }
 
@@ -253,10 +260,9 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                     _ => {
                         let expected_output: Tensor<Expression<F>> = output
                             .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
-                            .expect("poly: output query failed");
+                            .expect("non accum: output query failed");
 
-                        let res =
-                            base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
+                        let res = base_op.nonaccum_f((qis[0].clone(), qis[1].clone()));
                         vec![expected_output[base_op.constraint_idx()].clone() - res]
                     }
                 };
@@ -264,6 +270,44 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                 Constraints::with_selector(selector, constraints)
             });
         }
+
+        for ((base_op, block_idx, _), selector) in accum_selectors.iter() {
+            meta.create_gate(base_op.as_str(), |meta| {
+                let selector = meta.query_selector(*selector);
+                let mut qis = vec![vec![]; 2];
+                for (i, q_i) in qis
+                    .iter_mut()
+                    .enumerate()
+                    .take(2)
+                    .skip(2 - base_op.num_inputs())
+                {
+                    *q_i = inputs[i]
+                        .query_whole_block(meta, *block_idx, 0, 1)
+                        .expect("accum: input query failed")
+                        .into_iter()
+                        .collect()
+                }
+
+                // Get output expressions for each input channel
+                let (rotation_offset, rng) = base_op.query_offset_rng();
+
+                let expected_output: Tensor<Expression<F>> = output
+                    .query_rng(meta, *block_idx, 0, rotation_offset, rng)
+                    .expect("accum: output query failed");
+
+                let res =
+                    base_op.accum_f(expected_output[0].clone(), qis[0].clone(), qis[1].clone());
+                let constraints = vec![expected_output[base_op.constraint_idx()].clone() - res];
+
+                Constraints::with_selector(selector, constraints)
+            });
+        }
+
+        // selectors is the merger of nonaccum and accum selectors
+        let selectors = nonaccum_selectors
+            .into_iter()
+            .chain(accum_selectors.into_iter())
+            .collect();
 
         Self {
             selectors,

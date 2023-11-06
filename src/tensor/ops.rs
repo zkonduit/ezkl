@@ -3897,6 +3897,7 @@ pub mod accumulated {
     /// ```
     pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         inputs: &[Tensor<T>; 2],
+        chunk_size: usize,
     ) -> Result<Tensor<T>, TensorError> {
         if inputs[0].clone().len() != inputs[1].clone().len() {
             return Err(TensorError::DimMismatch("dot".to_string()));
@@ -3906,8 +3907,13 @@ pub mod accumulated {
         let transcript: Tensor<T> = a
             .iter()
             .zip(b)
-            .scan(T::zero().unwrap(), |acc, (k, i)| {
-                *acc = acc.clone() + k.clone() * i;
+            .chunks(chunk_size)
+            .into_iter()
+            .scan(T::zero().unwrap(), |acc, chunk| {
+                let k = chunk.fold(T::zero().unwrap(), |acc, (a_i, b_i)| {
+                    acc.clone() + a_i.clone() * b_i.clone()
+                });
+                *acc = acc.clone() + k.clone();
                 Some(acc.clone())
             })
             .collect();
@@ -3936,10 +3942,14 @@ pub mod accumulated {
     /// ```
     pub fn sum<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         a: &Tensor<T>,
+        chunk_size: usize,
     ) -> Result<Tensor<T>, TensorError> {
         let transcript: Tensor<T> = a
             .iter()
-            .scan(T::zero().unwrap(), |acc, k| {
+            .chunks(chunk_size)
+            .into_iter()
+            .scan(T::zero().unwrap(), |acc, chunk| {
+                let k = chunk.fold(T::zero().unwrap(), |acc, a_i| acc.clone() + a_i.clone());
                 *acc = acc.clone() + k.clone();
                 Some(acc.clone())
             })
@@ -3969,10 +3979,14 @@ pub mod accumulated {
     /// ```
     pub fn prod<T: TensorType + Mul<Output = T> + Add<Output = T>>(
         a: &Tensor<T>,
+        chunk_size: usize,
     ) -> Result<Tensor<T>, TensorError> {
         let transcript: Tensor<T> = a
             .iter()
-            .scan(T::one().unwrap(), |acc, k| {
+            .chunks(chunk_size)
+            .into_iter()
+            .scan(T::one().unwrap(), |acc, chunk| {
+                let k = chunk.fold(T::one().unwrap(), |acc, a_i| acc.clone() * a_i.clone());
                 *acc = acc.clone() * k.clone();
                 Some(acc.clone())
             })

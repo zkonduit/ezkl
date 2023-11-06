@@ -59,11 +59,11 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.flush();
     // time this entire function run
     let global_start = instant::Instant::now();
 
     let mut values = values.clone();
-
     // this section has been optimized to death, don't mess with it
     let mut removal_indices = values[0].get_const_zero_indices()?;
     let second_zero_indices = values[1].get_const_zero_indices()?;
@@ -89,11 +89,18 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     let start = instant::Instant::now();
     let mut inputs = vec![];
+    let block_width = config.output.num_inner_cols();
+
     let mut assigned_len = 0;
-    for (i, input) in values.iter().enumerate() {
+    for (i, input) in values.iter_mut().enumerate() {
+        input.pad_to_zero_rem(block_width)?;
         let inp = {
-            let (res, len) =
-                region.assign_with_duplication(&config.inputs[i], input, &config.check_mode)?;
+            let (res, len) = region.assign_with_duplication(
+                &config.inputs[i],
+                input,
+                &config.check_mode,
+                false,
+            )?;
             assigned_len = len;
             res.get_inner()?
         };
@@ -105,7 +112,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     // Now we can assign the dot product
     // time this step
     let start = instant::Instant::now();
-    let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
+    let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()], block_width)
         .expect("accum poly: dot op failed");
     let elapsed = start.elapsed();
     trace!("calculating accumulated dot took: {:?}", elapsed);
@@ -115,24 +122,25 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         &config.output,
         &accumulated_dot.into(),
         &config.check_mode,
+        true,
     )?;
     let elapsed = start.elapsed();
     trace!("assigning output took: {:?}", elapsed);
 
-    assert_eq!(assigned_len, output_assigned_len);
-
     // enable the selectors
     if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y, z) = config.output.cartesian_coord(region.linear_coord() + i);
+        (0..output_assigned_len).for_each(|i| {
+            let (x, _, z) = config
+                .output
+                .cartesian_coord(region.linear_coord() + i * block_width);
             // hop over duplicates at start of column
-            if y == 0 && z == 0 && i > 0 {
+            if z == 0 && i > 0 {
                 return;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Mult, x, y))
+                config.selectors.get(&(BaseOp::DotInit, x, 0))
             } else {
-                config.selectors.get(&(BaseOp::Dot, x, y))
+                config.selectors.get(&(BaseOp::Dot, x, 0))
             };
             region.enable(selector, z).unwrap();
         });
@@ -972,6 +980,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.flush();
     // time this entire function run
     let global_start = instant::Instant::now();
 
@@ -993,37 +1002,42 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
 
+    let block_width = config.output.num_inner_cols();
+
     let assigned_len: usize;
     let input = {
+        let mut input = values[0].clone();
+        input.pad_to_zero_rem(block_width)?;
         let (res, len) =
-            region.assign_with_duplication(&config.inputs[1], &values[0], &config.check_mode)?;
+            region.assign_with_duplication(&config.inputs[1], &input, &config.check_mode, false)?;
         assigned_len = len;
         res.get_inner()?
     };
 
     // Now we can assign the dot product
-    let accumulated_sum = accumulated::sum(&input).expect("accum poly: sum op failed");
+    let accumulated_sum = accumulated::sum(&input, block_width).expect("accum poly: sum op failed");
 
     let (output, output_assigned_len) = region.assign_with_duplication(
         &config.output,
         &accumulated_sum.into(),
         &config.check_mode,
+        true,
     )?;
-
-    assert_eq!(assigned_len, output_assigned_len);
 
     // enable the selectors
     if !region.is_dummy() {
-        for i in 0..assigned_len {
-            let (x, y, z) = config.output.cartesian_coord(region.linear_coord() + i);
+        for i in 0..output_assigned_len {
+            let (x, _, z) = config
+                .output
+                .cartesian_coord(region.linear_coord() + i * block_width);
             // skip over duplicates at start of column
-            if z == 0 && y == 0 && i > 0 {
+            if z == 0 && i > 0 {
                 continue;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Identity, x, y))
+                config.selectors.get(&(BaseOp::SumInit, x, 0))
             } else {
-                config.selectors.get(&(BaseOp::Sum, x, y))
+                config.selectors.get(&(BaseOp::Sum, x, 0))
             };
 
             region.enable(selector, z)?;
@@ -1046,6 +1060,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.flush();
     // time this entire function run
     let global_start = instant::Instant::now();
 
@@ -1059,37 +1074,42 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
 
+    let block_width = config.output.num_inner_cols();
     let assigned_len: usize;
     let input = {
+        let mut input = values[0].clone();
+        input.pad_to_zero_rem(block_width)?;
         let (res, len) =
-            region.assign_with_duplication(&config.inputs[1], &values[0], &config.check_mode)?;
+            region.assign_with_duplication(&config.inputs[1], &input, &config.check_mode, false)?;
         assigned_len = len;
         res.get_inner()?
     };
 
     // Now we can assign the dot product
-    let accumulated_prod = accumulated::prod(&input).expect("accum poly: prod op failed");
+    let accumulated_prod =
+        accumulated::prod(&input, block_width).expect("accum poly: prod op failed");
 
     let (output, output_assigned_len) = region.assign_with_duplication(
         &config.output,
         &accumulated_prod.into(),
         &config.check_mode,
+        true,
     )?;
-
-    assert_eq!(assigned_len, output_assigned_len);
 
     // enable the selectors
     if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y, z) = config.output.cartesian_coord(region.linear_coord() + i);
+        (0..output_assigned_len).for_each(|i| {
+            let (x, _, z) = config
+                .output
+                .cartesian_coord(region.linear_coord() + i * block_width);
             // skip over duplicates at start of column
-            if z == 0 && y == 0 && i > 0 {
+            if z == 0 && i > 0 {
                 return;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Identity, x, y))
+                config.selectors.get(&(BaseOp::CumProdInit, x, 0))
             } else {
-                config.selectors.get(&(BaseOp::CumProd, x, y))
+                config.selectors.get(&(BaseOp::CumProd, x, 0))
             };
 
             region.enable(selector, z).unwrap();

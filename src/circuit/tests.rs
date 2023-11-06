@@ -95,6 +95,84 @@ mod matmul {
 }
 
 #[cfg(test)]
+mod matmul_col_overflow_double_col {
+    use super::*;
+
+    const K: usize = 5;
+    const LEN: usize = 6;
+    const NUM_INNER_COLS: usize = 2;
+
+    #[derive(Clone)]
+    struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for MatmulCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "ij,jk->ik".to_string(),
+                                }),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    fn matmulcircuit() {
+        // get some logs fam
+        crate::logger::init_logger();
+        // parameters
+        let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        a.reshape(&[LEN, LEN]);
+
+        let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN, 1]);
+
+        let circuit = MatmulCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(w)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied_par();
+    }
+}
+
+#[cfg(test)]
 mod matmul_col_overflow {
     use super::*;
 
@@ -168,6 +246,121 @@ mod matmul_col_overflow {
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
         prover.assert_satisfied_par();
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+mod matmul_col_ultra_overflow_double_col {
+    use halo2_proofs::poly::commitment::ParamsProver;
+
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 20;
+    const NUM_INNER_COLS: usize = 2;
+
+    #[derive(Clone)]
+    struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for MatmulCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN * LEN * LEN);
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "ij,jk->ik".to_string(),
+                                }),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn matmulcircuit() {
+        // get some logs fam
+        crate::logger::init_logger();
+        // parameters
+        let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        a.reshape(&[LEN, LEN]);
+
+        let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
+        w.reshape(&[LEN, 1]);
+
+        let circuit = MatmulCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(w)],
+            _marker: PhantomData,
+        };
+
+        let params = crate::pfsys::srs::gen_srs::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<_>,
+        >(K as u32);
+
+        let pk = crate::pfsys::create_keys::<
+            halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
+            F,
+            MatmulCircuit<F>,
+        >(&circuit, &params)
+        .unwrap();
+
+        let prover = crate::pfsys::create_proof_circuit_kzg(
+            circuit.clone(),
+            &params,
+            None,
+            &pk,
+            crate::pfsys::TranscriptType::EVM,
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
+            // use safe mode to verify that the proof is correct
+            CheckMode::SAFE,
+            None,
+        );
+
+        assert!(prover.is_ok());
+
+        let proof = prover.unwrap();
+
+        let strategy =
+            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
+        let vk = pk.get_vk();
+        let result =
+            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
+
+        assert!(result.is_ok());
+
+        println!("done.");
     }
 }
 
@@ -345,6 +538,84 @@ mod dot {
 
     #[test]
     fn dotcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let b = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a), ValTensor::from(b)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied_par();
+    }
+}
+
+#[cfg(test)]
+mod dot_col_overflow_triple_col {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 50;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
+        inputs: [ValTensor<F>; 2],
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            // used for constants in the padding
+            let _fixed = cs.fixed_column();
+            cs.enable_constant(_fixed);
+
+            let a = VarTensor::new_advice(cs, K, 3, LEN);
+            let b = VarTensor::new_advice(cs, K, 3, LEN);
+            let output = VarTensor::new_advice(cs, K, 3, LEN);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0, 3);
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                Box::new(PolyOp::Einsum {
+                                    equation: "i,i->".to_string(),
+                                }),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn dotcircuit() {
+        crate::logger::init_logger();
         // parameters
         let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
 

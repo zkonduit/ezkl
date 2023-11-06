@@ -562,6 +562,25 @@ impl<T: Clone + TensorType> Tensor<T> {
         &mut self[index]
     }
 
+    /// Pad to a length that is divisible by n
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1,2,3,4,5,6]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0]), &[8]).unwrap();
+    /// assert_eq!(a.pad_to_zero_rem(4).unwrap(), expected);
+    ///
+    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0, 0]), &[9]).unwrap();
+    /// assert_eq!(a.pad_to_zero_rem(9).unwrap(), expected);
+    /// ```
+    pub fn pad_to_zero_rem(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+        let mut inner = self.inner.clone();
+        let remainder = self.len() % n;
+        if remainder != 0 {
+            inner.resize(self.len() + n - remainder, T::zero().unwrap());
+        }
+        Tensor::new(Some(&inner), &[inner.len()])
+    }
+
     /// Get a single value from the Tensor.
     ///
     /// ```
@@ -667,24 +686,25 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// use ezkl::tensor::Tensor;
     /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
     /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 5, 6]), &[8]).unwrap();
-    /// assert_eq!(a.duplicate_every_n(3, 0).unwrap(), expected);
-    /// assert_eq!(a.duplicate_every_n(7, 0).unwrap(), a);
+    /// assert_eq!(a.duplicate_every_n(3, 1, 0).unwrap(), expected);
+    /// assert_eq!(a.duplicate_every_n(7, 1, 0).unwrap(), a);
     ///
     /// let expected = Tensor::<i32>::new(Some(&[1, 1, 2, 3, 3, 4, 5, 5, 6]), &[9]).unwrap();
-    /// assert_eq!(a.duplicate_every_n(3, 2).unwrap(), expected);
+    /// assert_eq!(a.duplicate_every_n(3, 1, 2).unwrap(), expected);
     ///
     /// ```
     pub fn duplicate_every_n(
         &self,
         n: usize,
+        num_repeats: usize,
         initial_offset: usize,
     ) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
         let mut offset = initial_offset;
         for (i, elem) in self.inner.clone().into_iter().enumerate() {
             if (i + offset + 1) % n == 0 {
-                inner.extend(vec![elem; 2]);
-                offset += 1;
+                inner.extend(vec![elem; 1 + num_repeats]);
+                offset += num_repeats;
             } else {
                 inner.push(elem.clone());
             }
@@ -698,23 +718,32 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// use ezkl::tensor::Tensor;
     /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6, 6]), &[8]).unwrap();
     /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
-    /// assert_eq!(a.remove_every_n(4, 0).unwrap(), expected);
+    /// assert_eq!(a.remove_every_n(4, 1, 0).unwrap(), expected);
     ///
     /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6]), &[7]).unwrap();
-    /// assert_eq!(a.remove_every_n(4, 0).unwrap(), expected);
-    /// assert_eq!(a.remove_every_n(9, 0).unwrap(), a);
+    /// assert_eq!(a.remove_every_n(4, 1, 0).unwrap(), expected);
+    /// assert_eq!(a.remove_every_n(9, 1, 0).unwrap(), a);
     ///
     /// let a = Tensor::<i32>::new(Some(&[1, 1, 2, 3, 3, 4, 5, 5, 6]), &[9]).unwrap();
-    /// assert_eq!(a.remove_every_n(3, 2).unwrap(), expected);
+    /// assert_eq!(a.remove_every_n(3, 1, 2).unwrap(), expected);
     ///
     pub fn remove_every_n(
         &self,
         n: usize,
+        num_repeats: usize,
         initial_offset: usize,
     ) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
         for (i, elem) in self.inner.clone().into_iter().enumerate() {
-            if (i + initial_offset + 1) % n == 0 {
+            let offset = initial_offset + i;
+            let is_in_repeat_window = (0..num_repeats).any(|x| {
+                if x > offset {
+                    false
+                } else {
+                    (offset - x + 1) % n == 0
+                }
+            });
+            if is_in_repeat_window {
             } else {
                 inner.push(elem.clone());
             }
