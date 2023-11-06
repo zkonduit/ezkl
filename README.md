@@ -112,6 +112,8 @@ To go back to running with CPU, the previous environment variable must be **unse
 unset ENABLE_ICICLE_GPU
 ```
 
+**NOTE:** Even with the above environment variable set, icicle is disabled for circuits where k <= 8. To change the value of `k` where icicle is enabled, you can set the environment variable `ICICLE_SMALL_K`.
+
 ### repos
 
 The EZKL project has several libraries and repos. 
