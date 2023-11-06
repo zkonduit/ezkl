@@ -252,6 +252,8 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub logrows: u32,
     #[pyo3(get, set)]
+    pub num_inner_cols: usize,
+    #[pyo3(get, set)]
     pub input_visibility: Visibility,
     #[pyo3(get, set)]
     pub output_visibility: Visibility,
@@ -271,6 +273,7 @@ impl PyRunArgs {
             input_scale: 7,
             param_scale: 7,
             scale_rebase_multiplier: 1,
+            num_inner_cols: 1,
             lookup_range: (-32768, 32768),
             logrows: 17,
             input_visibility: Visibility::Private,
@@ -288,6 +291,7 @@ impl From<PyRunArgs> for RunArgs {
             tolerance: Tolerance::from(py_run_args.tolerance),
             input_scale: py_run_args.input_scale,
             param_scale: py_run_args.param_scale,
+            num_inner_cols: py_run_args.num_inner_cols,
             scale_rebase_multiplier: py_run_args.scale_rebase_multiplier,
             lookup_range: py_run_args.lookup_range,
             logrows: py_run_args.logrows,
@@ -305,6 +309,7 @@ impl Into<PyRunArgs> for RunArgs {
             tolerance: self.tolerance.val.into(),
             input_scale: self.input_scale,
             param_scale: self.param_scale,
+            num_inner_cols: self.num_inner_cols,
             scale_rebase_multiplier: self.scale_rebase_multiplier,
             lookup_range: self.lookup_range,
             logrows: self.logrows,

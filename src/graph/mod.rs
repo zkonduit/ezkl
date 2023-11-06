@@ -350,8 +350,10 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
 pub struct GraphSettings {
     /// run args
     pub run_args: RunArgs,
-    /// the potential number of constraints in the circuit
-    pub num_constraints: usize,
+    /// the potential number of rows used by the circuit
+    pub num_rows: usize,
+    /// total linear coordinate of assignments
+    pub total_assignments: usize,
     /// total const size
     pub total_const_size: usize,
     /// the shape of public inputs to the model (in order of appearance)
@@ -574,7 +576,7 @@ impl GraphCircuit {
         settings.module_sizes = sizes.clone();
 
         // as they occupy independent rows
-        settings.num_constraints = std::cmp::max(settings.num_constraints, sizes.max_constraints());
+        settings.num_rows = std::cmp::max(settings.num_rows, sizes.max_constraints());
 
         let core = CoreCircuit {
             model,
@@ -848,8 +850,7 @@ impl GraphCircuit {
             .log2()
             .ceil() as usize;
 
-        let min_rows_from_constraints = (self.settings().num_constraints as f64
-            + reserved_blinding_rows)
+        let min_rows_from_constraints = (self.settings().num_rows as f64 + reserved_blinding_rows)
             .log2()
             .ceil() as usize;
 
@@ -898,8 +899,7 @@ impl GraphCircuit {
         settings_mut.run_args.logrows =
             std::cmp::max(settings_mut.run_args.logrows, const_len_logrows);
         // recalculate the total number of constraints given the new logrows
-        let min_rows_from_constraints = (settings_mut.num_constraints as f64
-            + reserved_blinding_rows)
+        let min_rows_from_constraints = (settings_mut.num_rows as f64 + reserved_blinding_rows)
             .log2()
             .ceil() as u32;
         settings_mut.run_args.logrows =
@@ -1181,7 +1181,8 @@ impl Circuit<Fp> for GraphCircuit {
         let mut vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
-            params.num_constraints,
+            params.total_assignments,
+            params.run_args.num_inner_cols,
             params.total_const_size,
             params.uses_modules(),
         );
