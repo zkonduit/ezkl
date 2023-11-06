@@ -151,10 +151,7 @@ mod matmul_col_overflow_double_col {
     }
 
     #[test]
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     fn matmulcircuit() {
-        // get some logs fam
-        crate::logger::init_logger();
         // parameters
         let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         a.reshape(&[LEN, LEN]);
@@ -228,10 +225,7 @@ mod matmul_col_overflow {
     }
 
     #[test]
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     fn matmulcircuit() {
-        // get some logs fam
-        crate::logger::init_logger();
         // parameters
         let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
         a.reshape(&[LEN, LEN]);
