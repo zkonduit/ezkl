@@ -67,11 +67,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     /// Create a new region context
     pub fn new_dummy_with_constants(
         row: usize,
+        linear_coord: usize,
         constants: usize,
         num_inner_cols: usize,
     ) -> RegionCtx<'a, F> {
         let region = None;
-        let linear_coord = row * num_inner_cols;
         RegionCtx {
             region,
             num_inner_cols,
@@ -99,6 +99,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             // we need to make sure that the region is not shared between threads
             let mut local_reg = Self::new_dummy_with_constants(
                 starting_offset,
+                starting_linear_coord,
                 starting_constants,
                 self.num_inner_cols,
             );
