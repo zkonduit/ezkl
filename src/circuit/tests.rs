@@ -615,7 +615,6 @@ mod dot_col_overflow_triple_col {
 
     #[test]
     fn dotcircuit() {
-        crate::logger::init_logger();
         // parameters
         let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
 
