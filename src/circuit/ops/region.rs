@@ -93,9 +93,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         let constants = AtomicUsize::new(self.total_constants());
         *output = output.par_enum_map(|idx, _| {
             // we kick off the loop with the current offset
-            let starting_offset = row.fetch_add(0, Ordering::Relaxed);
-            let starting_linear_coord = linear_coord.fetch_add(0, Ordering::Relaxed);
-            let starting_constants = constants.fetch_add(0, Ordering::Relaxed);
+            let starting_offset = row.load(Ordering::Relaxed);
+            let starting_linear_coord = linear_coord.load(Ordering::Relaxed);
+            let starting_constants = constants.load(Ordering::Relaxed);
             // we need to make sure that the region is not shared between threads
             let mut local_reg = Self::new_dummy_with_constants(
                 starting_offset,
@@ -266,7 +266,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     pub fn next(&mut self) {
         self.linear_coord += 1;
         if self.linear_coord % self.num_inner_cols == 0 {
-            println!("self row {}", self.row);
             self.row += 1;
         }
     }
@@ -283,9 +282,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         // increment by the difference between the current linear coord and the next row
         let remainder = self.linear_coord % self.num_inner_cols;
         if remainder != 0 {
-            let diff = self.num_inner_cols - self.linear_coord % self.num_inner_cols;
+            let diff = self.num_inner_cols - remainder;
             self.increment(diff);
         }
+        assert!(self.linear_coord % self.num_inner_cols == 0);
     }
 
     /// increment constants

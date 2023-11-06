@@ -774,6 +774,76 @@ mod sum {
 }
 
 #[cfg(test)]
+mod sum_col_overflow_double_col {
+    use super::*;
+
+    const K: usize = 4;
+    const LEN: usize = 20;
+    const NUM_INNER_COLS: usize = 2;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
+        inputs: [ValTensor<F>; 1],
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN);
+            let b = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN);
+            let output = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN);
+
+            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
+        }
+
+        fn synthesize(
+            &self,
+            mut config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                        config
+                            .layout(
+                                &mut region,
+                                &self.inputs.clone(),
+                                Box::new(PolyOp::Sum { axes: vec![0] }),
+                            )
+                            .map_err(|_| Error::Synthesis)
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn sumcircuit() {
+        // parameters
+        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
+
+        let circuit = MyCircuit::<F> {
+            inputs: [ValTensor::from(a)],
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied_par();
+    }
+}
+
+#[cfg(test)]
 mod sum_col_overflow {
     use super::*;
 

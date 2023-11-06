@@ -151,6 +151,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         .expect("dot: failed to fetch last elem");
 
     region.increment(assigned_len);
+
     // last element is the result
 
     let elapsed = global_start.elapsed();
@@ -2013,10 +2014,12 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
             let bias = values[2].get_single_elem(start_kernel_index).unwrap();
             res = pairwise(config, region, &[res, bias], BaseOp::Add).unwrap()
         }
+        region.flush();
 
         res.get_inner_tensor().unwrap()[0].clone()
     };
 
+    region.flush();
     if !region.is_dummy() {
         output.iter_mut().enumerate().for_each(|(idx, o)| {
             *o = inner_loop_function(idx, region);
