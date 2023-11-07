@@ -48,9 +48,9 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let input = VarTensor::new_advice(cs, K, LEN);
-        let params = VarTensor::new_advice(cs, K, LEN * LEN);
-        let output = VarTensor::new_advice(cs, K, LEN);
+        let input = VarTensor::new_advice(cs, K, 1, LEN);
+        let params = VarTensor::new_advice(cs, K, 1, LEN * LEN);
+        let output = VarTensor::new_advice(cs, K, 1, LEN);
         // tells the config layer to add an affine op to the circuit gate
 
         let mut layer_config = PolyConfig::<F>::configure(
@@ -108,7 +108,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
             .assign_region(
                 || "mlp_4d",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0);
+                    let mut region = RegionCtx::new(region, 0, 1);
                     let x = config
                         .layer_config
                         .layout(
@@ -121,7 +121,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("1");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
 
                     let x = config
@@ -134,7 +134,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("2");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
                     let mut x = config
                         .layer_config
@@ -142,7 +142,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("3");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
                     x.reshape(&[x.dims()[0], 1]).unwrap();
                     let x = config
@@ -157,7 +157,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("4");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
 
                     let x = config
@@ -170,14 +170,14 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .unwrap()
                         .unwrap();
                     println!("5");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     println!("x shape: {:?}", x.dims());
                     let x = config
                         .layer_config
                         .layout(&mut region, &[x], Box::new(LookupOp::ReLU))
                         .unwrap();
                     println!("6");
-                    println!("offset: {}", region.offset());
+                    println!("offset: {}", region.row());
                     Ok(config
                         .layer_config
                         .layout(

@@ -59,11 +59,11 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.flush();
     // time this entire function run
     let global_start = instant::Instant::now();
 
     let mut values = values.clone();
-
     // this section has been optimized to death, don't mess with it
     let mut removal_indices = values[0].get_const_zero_indices()?;
     let second_zero_indices = values[1].get_const_zero_indices()?;
@@ -89,11 +89,18 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     let start = instant::Instant::now();
     let mut inputs = vec![];
+    let block_width = config.output.num_inner_cols();
+
     let mut assigned_len = 0;
-    for (i, input) in values.iter().enumerate() {
+    for (i, input) in values.iter_mut().enumerate() {
+        input.pad_to_zero_rem(block_width)?;
         let inp = {
-            let (res, len) =
-                region.assign_with_duplication(&config.inputs[i], input, &config.check_mode)?;
+            let (res, len) = region.assign_with_duplication(
+                &config.inputs[i],
+                input,
+                &config.check_mode,
+                false,
+            )?;
             assigned_len = len;
             res.get_inner()?
         };
@@ -105,7 +112,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     // Now we can assign the dot product
     // time this step
     let start = instant::Instant::now();
-    let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()])
+    let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()], block_width)
         .expect("accum poly: dot op failed");
     let elapsed = start.elapsed();
     trace!("calculating accumulated dot took: {:?}", elapsed);
@@ -115,26 +122,27 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         &config.output,
         &accumulated_dot.into(),
         &config.check_mode,
+        true,
     )?;
     let elapsed = start.elapsed();
     trace!("assigning output took: {:?}", elapsed);
 
-    assert_eq!(assigned_len, output_assigned_len);
-
     // enable the selectors
     if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
+        (0..output_assigned_len).for_each(|i| {
+            let (x, _, z) = config
+                .output
+                .cartesian_coord(region.linear_coord() + i * block_width);
             // hop over duplicates at start of column
-            if y == 0 && i > 0 {
+            if z == 0 && i > 0 {
                 return;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Mult, x))
+                config.selectors.get(&(BaseOp::DotInit, x, 0))
             } else {
-                config.selectors.get(&(BaseOp::Dot, x))
+                config.selectors.get(&(BaseOp::Dot, x, 0))
             };
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -143,10 +151,11 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         .expect("dot: failed to fetch last elem");
 
     region.increment(assigned_len);
+
     // last element is the result
 
     let elapsed = global_start.elapsed();
-    trace!("dot layout took: {:?}, offset {}", elapsed, region.offset());
+    trace!("dot layout took: {:?}, row {}", elapsed, region.row());
     trace!("----------------------------");
     Ok(last_elem)
 }
@@ -338,6 +347,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         }
     };
 
+    region.flush();
     if !region.is_dummy() {
         output.iter_mut().enumerate().for_each(|(i, o)| {
             *o = inner_loop_function(i, region);
@@ -606,9 +616,9 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
     let assigned_output = region.assign(&config.inputs[1], &output)?;
     if !region.is_dummy() {
         for i in 0..assigned_output.len() {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
-            region.enable(selector, y)?;
+            let (x, y, z) = config.output.cartesian_coord(region.linear_coord() + i);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+            region.enable(selector, z)?;
         }
     }
     region.increment(std::cmp::max(assigned_output.len(), assigned_input.len()));
@@ -972,6 +982,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.flush();
     // time this entire function run
     let global_start = instant::Instant::now();
 
@@ -993,41 +1004,46 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
 
+    let block_width = config.output.num_inner_cols();
+
     let assigned_len: usize;
     let input = {
+        let mut input = values[0].clone();
+        input.pad_to_zero_rem(block_width)?;
         let (res, len) =
-            region.assign_with_duplication(&config.inputs[1], &values[0], &config.check_mode)?;
+            region.assign_with_duplication(&config.inputs[1], &input, &config.check_mode, false)?;
         assigned_len = len;
         res.get_inner()?
     };
 
     // Now we can assign the dot product
-    let accumulated_sum = accumulated::sum(&input).expect("accum poly: sum op failed");
+    let accumulated_sum = accumulated::sum(&input, block_width).expect("accum poly: sum op failed");
 
     let (output, output_assigned_len) = region.assign_with_duplication(
         &config.output,
         &accumulated_sum.into(),
         &config.check_mode,
+        true,
     )?;
-
-    assert_eq!(assigned_len, output_assigned_len);
 
     // enable the selectors
     if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
+        for i in 0..output_assigned_len {
+            let (x, _, z) = config
+                .output
+                .cartesian_coord(region.linear_coord() + i * block_width);
             // skip over duplicates at start of column
-            if y == 0 && i > 0 {
-                return;
+            if z == 0 && i > 0 {
+                continue;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Identity, x))
+                config.selectors.get(&(BaseOp::SumInit, x, 0))
             } else {
-                config.selectors.get(&(BaseOp::Sum, x))
+                config.selectors.get(&(BaseOp::Sum, x, 0))
             };
 
-            region.enable(selector, y).unwrap();
-        });
+            region.enable(selector, z)?;
+        }
     }
 
     let last_elem = output
@@ -1046,6 +1062,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.flush();
     // time this entire function run
     let global_start = instant::Instant::now();
 
@@ -1059,40 +1076,45 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
         return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
     }
 
+    let block_width = config.output.num_inner_cols();
     let assigned_len: usize;
     let input = {
+        let mut input = values[0].clone();
+        input.pad_to_zero_rem(block_width)?;
         let (res, len) =
-            region.assign_with_duplication(&config.inputs[1], &values[0], &config.check_mode)?;
+            region.assign_with_duplication(&config.inputs[1], &input, &config.check_mode, false)?;
         assigned_len = len;
         res.get_inner()?
     };
 
     // Now we can assign the dot product
-    let accumulated_prod = accumulated::prod(&input).expect("accum poly: prod op failed");
+    let accumulated_prod =
+        accumulated::prod(&input, block_width).expect("accum poly: prod op failed");
 
     let (output, output_assigned_len) = region.assign_with_duplication(
         &config.output,
         &accumulated_prod.into(),
         &config.check_mode,
+        true,
     )?;
-
-    assert_eq!(assigned_len, output_assigned_len);
 
     // enable the selectors
     if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y) = config.output.cartesian_coord(region.offset() + i);
+        (0..output_assigned_len).for_each(|i| {
+            let (x, _, z) = config
+                .output
+                .cartesian_coord(region.linear_coord() + i * block_width);
             // skip over duplicates at start of column
-            if y == 0 && i > 0 {
+            if z == 0 && i > 0 {
                 return;
             }
             let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::Identity, x))
+                config.selectors.get(&(BaseOp::CumProdInit, x, 0))
             } else {
-                config.selectors.get(&(BaseOp::CumProd, x))
+                config.selectors.get(&(BaseOp::CumProd, x, 0))
             };
 
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -1347,10 +1369,10 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     // Enable the selectors
     if !region.is_dummy() {
         (0..assigned_len).for_each(|i| {
-            let (x, y) = config.inputs[0].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(op.clone(), x));
+            let (x, y, z) = config.inputs[0].cartesian_coord(region.linear_coord() + i);
+            let selector = config.selectors.get(&(op.clone(), x, y));
 
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
     region.increment(assigned_len);
@@ -1401,10 +1423,10 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     let end = global_start.elapsed();
     trace!(
-        "pairwise {} layout took {:?}, offset: {}",
+        "pairwise {} layout took {:?}, row: {}",
         op.as_str(),
         end,
-        region.offset()
+        region.row()
     );
 
     Ok(output)
@@ -1582,10 +1604,9 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
     // Enable the selectors
     if !region.is_dummy() {
         (0..assigned_mask.len()).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
-
-            region.enable(selector, y).unwrap();
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -1621,10 +1642,10 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
     // Enable the selectors
     if !region.is_dummy() {
         (0..values[0].len()).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::Neg, x));
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
+            let selector = config.selectors.get(&(BaseOp::Neg, x, y));
 
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -1875,17 +1896,19 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     }
 
     let og_image_dims = image.dims().to_vec();
-
+    let og_kernel_dims = kernel.dims().to_vec();
     // ensure inputs are 4D tensors
     if og_image_dims.len() == 3 {
         // adds a dummy image_channels dimension
         let mut new_dims = image.dims().to_vec();
         // insert 1 at the input_channels pos
-        new_dims.insert(1, 1);
+        if og_kernel_dims.len() == 3 {
+            new_dims.insert(1, 1);
+        } else {
+            new_dims.insert(0, 1);
+        }
         image.reshape(&new_dims)?;
     }
-
-    let og_kernel_dims = kernel.dims().to_vec();
 
     // ensure kernel is 4D tensor
     if og_kernel_dims.len() == 3 && og_image_dims.len() == 3 {
@@ -1992,10 +2015,12 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
             let bias = values[2].get_single_elem(start_kernel_index).unwrap();
             res = pairwise(config, region, &[res, bias], BaseOp::Add).unwrap()
         }
+        region.flush();
 
         res.get_inner_tensor().unwrap()[0].clone()
     };
 
+    region.flush();
     if !region.is_dummy() {
         output.iter_mut().enumerate().for_each(|(idx, o)| {
             *o = inner_loop_function(idx, region);
@@ -2008,6 +2033,8 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         // remove dummy batch dimension if we added one
         if og_image_dims.len() == 3 && vert_slides == 1 {
             output.reshape(&[batch_size, output_channels, horz_slides]);
+        } else if og_image_dims.len() == 3 {
+            output.reshape(&[output_channels, vert_slides, horz_slides]);
         } else {
             output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
         }
@@ -2185,10 +2212,10 @@ pub fn boolean_identity<F: PrimeField + TensorType + PartialOrd>(
     // Enable the selectors
     if !region.is_dummy() {
         (0..output.len()).for_each(|j| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + j);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + j);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
 
-            region.enable(selector, y).unwrap();
+            region.enable(selector, z).unwrap();
         });
     }
     region.increment(output.len());
@@ -2296,9 +2323,11 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     if !is_dummy {
         (0..assigned_len).for_each(|i| {
-            let (x, y) = config.lookup_input.cartesian_coord(region.offset() + i);
-            let selector = config.lookup_selectors.get(&(nl.clone(), x));
-            region.enable(selector, y).unwrap();
+            let (x, y, z) = config
+                .lookup_input
+                .cartesian_coord(region.linear_coord() + i);
+            let selector = config.lookup_selectors.get(&(nl.clone(), x, y));
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -2308,10 +2337,10 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     let elapsed = timer.elapsed();
     trace!(
-        "nonlinearity {} layout took {:?}, offset: {:?}",
+        "nonlinearity {} layout took {:?}, row: {:?}",
         <LookupOp as Op<F>>::as_string(nl),
         elapsed,
-        region.offset()
+        region.row()
     );
 
     // constrain the calculated output to a column
@@ -2454,9 +2483,9 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
 
     if !region.is_dummy() {
         (0..len).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
-            region.enable(selector, y).unwrap();
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -2473,9 +2502,9 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     // constraining 1 - sum(relu(x - max(x - 1))) = 0
     region.assign(&config.inputs[1], &relu_one_minus_sum_relu)?;
 
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::IsZero, x));
-    region.enable(selector, y)?;
+    let (x, y, z) = config.output.cartesian_coord(region.linear_coord());
+    let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
+    region.enable(selector, z)?;
 
     region.increment(relu_one_minus_sum_relu.len());
 
@@ -2529,9 +2558,9 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
     if !region.is_dummy() {
         (0..len).for_each(|i| {
-            let (x, y) = config.inputs[1].cartesian_coord(region.offset() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x));
-            region.enable(selector, y).unwrap();
+            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
+            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+            region.enable(selector, z).unwrap();
         });
     }
 
@@ -2549,9 +2578,9 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     region.assign(&config.inputs[1], &relu_one_minus_sum_relu)?;
 
     // constraining product to 0
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::IsZero, x));
-    region.enable(selector, y)?;
+    let (x, y, z) = config.output.cartesian_coord(region.linear_coord());
+    let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
+    region.enable(selector, z)?;
 
     region.increment(relu_one_minus_sum_relu.len());
 
@@ -2782,9 +2811,9 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     region.assign(&config.inputs[1], &sum)?;
 
     // Constrain the sum to be all zeros
-    let (x, y) = config.output.cartesian_coord(region.offset());
-    let selector = config.selectors.get(&(BaseOp::IsZero, x));
-    region.enable(selector, y)?;
+    let (x, y, z) = config.output.cartesian_coord(region.linear_coord());
+    let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
+    region.enable(selector, z)?;
 
     region.increment(sum.len());
 

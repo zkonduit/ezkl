@@ -69,6 +69,9 @@ pub mod tensor;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 pub mod wasm;
 
+/// The denominator in the fixed point representation used when quantizing inputs
+pub type Scale = i32;
+
 /// Parameters specific to a proving run
 #[derive(Debug, Args, Deserialize, Serialize, Clone, Default, PartialEq, PartialOrd)]
 pub struct RunArgs {
@@ -76,11 +79,11 @@ pub struct RunArgs {
     #[arg(short = 'T', long, default_value = "0")]
     pub tolerance: Tolerance,
     /// The denominator in the fixed point representation used when quantizing inputs
-    #[arg(short = 'S', long, default_value = "7")]
-    pub input_scale: u32,
+    #[arg(short = 'S', long, default_value = "7", allow_hyphen_values = true)]
+    pub input_scale: Scale,
     /// The denominator in the fixed point representation used when quantizing parameters
-    #[arg(long, default_value = "7")]
-    pub param_scale: u32,
+    #[arg(long, default_value = "7", allow_hyphen_values = true)]
+    pub param_scale: Scale,
     /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
     #[arg(long, default_value = "1")]
     pub scale_rebase_multiplier: u32,
@@ -90,6 +93,9 @@ pub struct RunArgs {
     /// The log_2 number of rows
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
+    /// The log_2 number of rows
+    #[arg(short = 'N', long, default_value = "1")]
+    pub num_inner_cols: usize,
     /// Hand-written parser for graph variables, eg. batch_size=1
     #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size=1", value_delimiter = ',')]
     pub variables: Vec<(String, usize)>,

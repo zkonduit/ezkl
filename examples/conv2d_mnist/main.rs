@@ -35,6 +35,7 @@ use std::marker::PhantomData;
 mod params;
 
 const K: usize = 20;
+const NUM_INNER_COLS: usize = 1;
 
 #[derive(Clone)]
 struct Config<
@@ -141,9 +142,9 @@ where
     // Here we wire together the layers by using the output advice in each layer as input advice in the next (not with copying / equality).
     // This can be automated but we will sometimes want skip connections, etc. so we need the flexibility.
     fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-        let input = VarTensor::new_advice(cs, K, LEN);
-        let params = VarTensor::new_advice(cs, K, LEN);
-        let output = VarTensor::new_advice(cs, K, LEN);
+        let input = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN);
+        let params = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN);
+        let output = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN);
 
         println!("INPUT COL {:#?}", input);
 
@@ -198,7 +199,7 @@ where
             .assign_region(
                 || "mlp_4d",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0);
+                    let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
 
                     let op = PolyOp::Conv {
                         kernel: self.l0_params[0].clone(),

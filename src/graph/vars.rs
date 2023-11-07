@@ -225,9 +225,9 @@ impl std::fmt::Display for Visibility {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, PartialOrd)]
 pub struct VarScales {
     ///
-    pub input: u32,
+    pub input: crate::Scale,
     ///
-    pub params: u32,
+    pub params: crate::Scale,
     ///
     pub rebase_multiplier: u32,
 }
@@ -240,7 +240,7 @@ impl std::fmt::Display for VarScales {
 
 impl VarScales {
     ///
-    pub fn get_max(&self) -> u32 {
+    pub fn get_max(&self) -> crate::Scale {
         std::cmp::max(self.input, self.params)
     }
 
@@ -374,7 +374,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         &mut self,
         cs: &mut ConstraintSystem<F>,
         instance_dims: Vec<Vec<usize>>,
-        instance_scale: u32,
+        instance_scale: crate::Scale,
         existing_instance: Option<Column<Instance>>,
     ) {
         debug!("model uses {:?} instance dims", instance_dims);
@@ -395,18 +395,20 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         var_len: usize,
+        num_inner_cols: usize,
         num_constants: usize,
         uses_modules: bool,
     ) -> Self {
         info!("number of blinding factors: {}", cs.blinding_factors());
 
         let advices = (0..3)
-            .map(|_| VarTensor::new_advice(cs, logrows, var_len))
+            .map(|_| VarTensor::new_advice(cs, logrows, num_inner_cols, var_len))
             .collect_vec();
 
         debug!(
-            "model uses {} advice columns",
-            advices.iter().map(|v| v.num_cols()).sum::<usize>()
+            "model uses {} advice blocks (size={})",
+            advices.iter().map(|v| v.num_blocks()).sum::<usize>(),
+            num_inner_cols
         );
 
         let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);

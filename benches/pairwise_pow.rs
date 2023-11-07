@@ -38,9 +38,9 @@ impl Circuit<Fr> for MyCircuit {
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
 
-        let a = VarTensor::new_advice(cs, K, len);
-        let b = VarTensor::new_advice(cs, K, len);
-        let output = VarTensor::new_advice(cs, K, len);
+        let a = VarTensor::new_advice(cs, K, 1, len);
+        let b = VarTensor::new_advice(cs, K, 1, len);
+        let output = VarTensor::new_advice(cs, K, 1, len);
 
         Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
     }
@@ -53,7 +53,7 @@ impl Circuit<Fr> for MyCircuit {
         layouter.assign_region(
             || "",
             |region| {
-                let mut region = RegionCtx::new(region, 0);
+                let mut region = RegionCtx::new(region, 0, 1);
                 config
                     .layout(&mut region, &self.inputs, Box::new(PolyOp::Pow(4)))
                     .unwrap();

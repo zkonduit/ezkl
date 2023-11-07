@@ -242,15 +242,17 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub tolerance: f32,
     #[pyo3(get, set)]
-    pub input_scale: u32,
+    pub input_scale: crate::Scale,
     #[pyo3(get, set)]
-    pub param_scale: u32,
+    pub param_scale: crate::Scale,
     #[pyo3(get, set)]
     pub scale_rebase_multiplier: u32,
     #[pyo3(get, set)]
     pub lookup_range: (i128, i128),
     #[pyo3(get, set)]
     pub logrows: u32,
+    #[pyo3(get, set)]
+    pub num_inner_cols: usize,
     #[pyo3(get, set)]
     pub input_visibility: Visibility,
     #[pyo3(get, set)]
@@ -271,6 +273,7 @@ impl PyRunArgs {
             input_scale: 7,
             param_scale: 7,
             scale_rebase_multiplier: 1,
+            num_inner_cols: 1,
             lookup_range: (-32768, 32768),
             logrows: 17,
             input_visibility: Visibility::Private,
@@ -288,6 +291,7 @@ impl From<PyRunArgs> for RunArgs {
             tolerance: Tolerance::from(py_run_args.tolerance),
             input_scale: py_run_args.input_scale,
             param_scale: py_run_args.param_scale,
+            num_inner_cols: py_run_args.num_inner_cols,
             scale_rebase_multiplier: py_run_args.scale_rebase_multiplier,
             lookup_range: py_run_args.lookup_range,
             logrows: py_run_args.logrows,
@@ -305,6 +309,7 @@ impl Into<PyRunArgs> for RunArgs {
             tolerance: self.tolerance.val.into(),
             input_scale: self.input_scale,
             param_scale: self.param_scale,
+            num_inner_cols: self.num_inner_cols,
             scale_rebase_multiplier: self.scale_rebase_multiplier,
             lookup_range: self.lookup_range,
             logrows: self.logrows,
@@ -342,7 +347,7 @@ fn vecu64_to_int(array: PyFelt) -> PyResult<i128> {
     array,
     scale
 ))]
-fn vecu64_to_float(array: PyFelt, scale: u32) -> PyResult<f64> {
+fn vecu64_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
     let felt = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
@@ -355,7 +360,7 @@ fn vecu64_to_float(array: PyFelt, scale: u32) -> PyResult<f64> {
 input,
 scale
 ))]
-fn float_to_vecu64(input: f64, scale: u32) -> PyResult<PyFelt> {
+fn float_to_vecu64(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = i128_to_felt(int_rep);
@@ -677,7 +682,7 @@ fn calibrate_settings(
     model: PathBuf,
     settings: PathBuf,
     target: Option<CalibrationTarget>,
-    scales: Option<Vec<u32>>,
+    scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
 ) -> PyResult<&pyo3::PyAny> {
     let target = target.unwrap_or(CalibrationTarget::Resources {

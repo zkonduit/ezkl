@@ -48,7 +48,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, _: Vec<u32>) -> u32;
+    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale;
 
     /// Do any of the inputs to this op require homogenous input scales?
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
@@ -166,13 +166,13 @@ impl InputType {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Input {
     ///
-    pub scale: u32,
+    pub scale: crate::Scale,
     ///
     pub datum_type: InputType,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
-    fn out_scale(&self, _: Vec<u32>) -> u32 {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale {
         self.scale
     }
 
@@ -233,7 +233,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
 pub struct Unknown;
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
-    fn out_scale(&self, _: Vec<u32>) -> u32 {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale {
         0
     }
     fn as_any(&self) -> &dyn Any {
@@ -282,7 +282,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
         }
     }
     /// Rebase the scale of the constant
-    pub fn rebase_scale(&mut self, new_scale: u32) -> Result<(), Box<dyn Error>> {
+    pub fn rebase_scale(&mut self, new_scale: crate::Scale) -> Result<(), Box<dyn Error>> {
         let visibility = self.quantized_values.visibility().unwrap();
         self.quantized_values = quantize_tensor(self.raw_values.clone(), new_scale, &visibility)?;
         Ok(())
@@ -336,7 +336,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         Box::new(self.clone()) // Forward to the derive(Clone) impl
     }
 
-    fn out_scale(&self, _: Vec<u32>) -> u32 {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale {
         self.quantized_values.scale().unwrap()
     }
 

@@ -164,9 +164,9 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     ///
     pub lookup_index: VarTensor,
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure [BaseOp].
-    pub selectors: BTreeMap<(BaseOp, usize), Selector>,
+    pub selectors: BTreeMap<(BaseOp, usize, usize), Selector>,
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
-    pub lookup_selectors: BTreeMap<(LookupOp, usize), Selector>,
+    pub lookup_selectors: BTreeMap<(LookupOp, usize, usize), Selector>,
     ///
     pub tables: BTreeMap<LookupOp, Table<F>>,
     /// Activate sanity checks
@@ -176,13 +176,15 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
 
 impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// Returns a new [BaseConfig] with no inputs, no selectors, and no tables.
-    pub fn dummy(col_size: usize) -> Self {
+    pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
+        let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
+
         Self {
-            inputs: vec![VarTensor::dummy(col_size), VarTensor::dummy(col_size)],
-            lookup_input: VarTensor::dummy(col_size),
-            output: VarTensor::dummy(col_size),
-            lookup_output: VarTensor::dummy(col_size),
-            lookup_index: VarTensor::dummy(col_size),
+            inputs: vec![dummy_var.clone(), dummy_var.clone()],
+            lookup_input: dummy_var.clone(),
+            output: dummy_var.clone(),
+            lookup_output: dummy_var.clone(),
+            lookup_index: dummy_var,
             selectors: BTreeMap::new(),
             lookup_selectors: BTreeMap::new(),
             tables: BTreeMap::new(),
@@ -204,28 +206,36 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         check_mode: CheckMode,
     ) -> Self {
         // setup a selector per base op
-        let mut selectors = BTreeMap::new();
+        let mut nonaccum_selectors = BTreeMap::new();
+        let mut accum_selectors = BTreeMap::new();
 
         assert!(inputs[0].num_cols() == inputs[1].num_cols());
         assert!(inputs[0].num_cols() == output.num_cols());
 
-        for i in 0..output.num_cols() {
-            selectors.insert((BaseOp::Add, i), meta.selector());
-            selectors.insert((BaseOp::Sub, i), meta.selector());
-            selectors.insert((BaseOp::Dot, i), meta.selector());
-            selectors.insert((BaseOp::CumProd, i), meta.selector());
-            selectors.insert((BaseOp::Sum, i), meta.selector());
-            selectors.insert((BaseOp::Neg, i), meta.selector());
-            selectors.insert((BaseOp::Mult, i), meta.selector());
-            selectors.insert((BaseOp::IsZero, i), meta.selector());
-            selectors.insert((BaseOp::Identity, i), meta.selector());
-            selectors.insert((BaseOp::IsBoolean, i), meta.selector());
+        for i in 0..output.num_blocks() {
+            for j in 0..output.num_inner_cols() {
+                nonaccum_selectors.insert((BaseOp::Add, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::Sub, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::Neg, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::Mult, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::IsZero, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::Identity, i, j), meta.selector());
+                nonaccum_selectors.insert((BaseOp::IsBoolean, i, j), meta.selector());
+            }
         }
 
-        for ((base_op, col_idx), selector) in selectors.iter() {
+        for i in 0..output.num_blocks() {
+            accum_selectors.insert((BaseOp::DotInit, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::Dot, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::CumProd, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::CumProdInit, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::Sum, i, 0), meta.selector());
+            accum_selectors.insert((BaseOp::SumInit, i, 0), meta.selector());
+        }
+
+        for ((base_op, block_idx, inner_col_idx), selector) in nonaccum_selectors.iter() {
             meta.create_gate(base_op.as_str(), |meta| {
                 let selector = meta.query_selector(*selector);
-                let idx_offset = col_idx * output.col_size();
                 let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
                 for (i, q_i) in qis
                     .iter_mut()
@@ -234,8 +244,8 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                     .skip(2 - base_op.num_inputs())
                 {
                     *q_i = inputs[i]
-                        .query_rng(meta, 0, idx_offset, 1)
-                        .expect("accum: input query failed")[0]
+                        .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
+                        .expect("non accum: input query failed")[0]
                         .clone()
                 }
 
@@ -249,11 +259,10 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                     BaseOp::IsZero => vec![qis[1].clone()],
                     _ => {
                         let expected_output: Tensor<Expression<F>> = output
-                            .query_rng(meta, rotation_offset, idx_offset, rng)
-                            .expect("poly: output query failed");
+                            .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
+                            .expect("non accum: output query failed");
 
-                        let res =
-                            base_op.f((qis[0].clone(), qis[1].clone(), expected_output[0].clone()));
+                        let res = base_op.nonaccum_f((qis[0].clone(), qis[1].clone()));
                         vec![expected_output[base_op.constraint_idx()].clone() - res]
                     }
                 };
@@ -261,6 +270,44 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                 Constraints::with_selector(selector, constraints)
             });
         }
+
+        for ((base_op, block_idx, _), selector) in accum_selectors.iter() {
+            meta.create_gate(base_op.as_str(), |meta| {
+                let selector = meta.query_selector(*selector);
+                let mut qis = vec![vec![]; 2];
+                for (i, q_i) in qis
+                    .iter_mut()
+                    .enumerate()
+                    .take(2)
+                    .skip(2 - base_op.num_inputs())
+                {
+                    *q_i = inputs[i]
+                        .query_whole_block(meta, *block_idx, 0, 1)
+                        .expect("accum: input query failed")
+                        .into_iter()
+                        .collect()
+                }
+
+                // Get output expressions for each input channel
+                let (rotation_offset, rng) = base_op.query_offset_rng();
+
+                let expected_output: Tensor<Expression<F>> = output
+                    .query_rng(meta, *block_idx, 0, rotation_offset, rng)
+                    .expect("accum: output query failed");
+
+                let res =
+                    base_op.accum_f(expected_output[0].clone(), qis[0].clone(), qis[1].clone());
+                let constraints = vec![expected_output[base_op.constraint_idx()].clone() - res];
+
+                Constraints::with_selector(selector, constraints)
+            });
+        }
+
+        // selectors is the merger of nonaccum and accum selectors
+        let selectors = nonaccum_selectors
+            .into_iter()
+            .chain(accum_selectors.into_iter())
+            .collect();
 
         Self {
             selectors,
@@ -313,83 +360,86 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             return Ok(());
         };
 
-        for x in 0..input.num_cols() {
-            let len = table.selector_constructor.degree;
+        for x in 0..input.num_blocks() {
+            for y in 0..input.num_inner_cols() {
+                let len = table.selector_constructor.degree;
 
-            let multi_col_selector = cs.complex_selector();
+                let multi_col_selector = cs.complex_selector();
 
-            for ((col_idx, input_col), output_col) in table
-                .table_inputs
-                .iter()
-                .enumerate()
-                .zip(table.table_outputs.iter())
-            {
-                cs.lookup("", |cs| {
-                    let mut res = vec![];
-                    let sel = cs.query_selector(multi_col_selector);
+                for ((col_idx, input_col), output_col) in table
+                    .table_inputs
+                    .iter()
+                    .enumerate()
+                    .zip(table.table_outputs.iter())
+                {
+                    cs.lookup("", |cs| {
+                        let mut res = vec![];
+                        let sel = cs.query_selector(multi_col_selector);
 
-                    let synthetic_sel = match len {
-                        1 => Expression::Constant(F::from(1)),
-                        _ => match index {
+                        let synthetic_sel = match len {
+                            1 => Expression::Constant(F::from(1)),
+                            _ => match index {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    cs.query_advice(advices[x][y], Rotation(0))
+                                }
+                                _ => panic!("wrong input type"),
+                            },
+                        };
+
+                        let input_query = match &input {
                             VarTensor::Advice { inner: advices, .. } => {
-                                cs.query_advice(advices[x], Rotation(0))
+                                cs.query_advice(advices[x][y], Rotation(0))
                             }
                             _ => panic!("wrong input type"),
-                        },
-                    };
+                        };
 
-                    let input_query = match &input {
-                        VarTensor::Advice { inner: advices, .. } => {
-                            cs.query_advice(advices[x], Rotation(0))
-                        }
-                        _ => panic!("wrong input type"),
-                    };
+                        let output_query = match &output {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                cs.query_advice(advices[x][y], Rotation(0))
+                            }
+                            _ => panic!("wrong input type"),
+                        };
 
-                    let output_query = match &output {
-                        VarTensor::Advice { inner: advices, .. } => {
-                            cs.query_advice(advices[x], Rotation(0))
-                        }
-                        _ => panic!("wrong input type"),
-                    };
+                        // we index from 1 to avoid the zero element creating soundness issues
+                        // this is 0 if the index is the same as the column index (starting from 1)
 
-                    // we index from 1 to avoid the zero element creating soundness issues
-                    // this is 0 if the index is the same as the column index (starting from 1)
+                        let col_expr = sel.clone()
+                            * table
+                                .selector_constructor
+                                .get_expr_at_idx(col_idx, synthetic_sel);
 
-                    let col_expr = sel.clone()
-                        * table
-                            .selector_constructor
-                            .get_expr_at_idx(col_idx, synthetic_sel);
+                        let multiplier =
+                            table.selector_constructor.get_selector_val_at_idx(col_idx);
 
-                    let multiplier = table.selector_constructor.get_selector_val_at_idx(col_idx);
+                        let not_expr = Expression::Constant(multiplier) - col_expr.clone();
 
-                    let not_expr = Expression::Constant(multiplier) - col_expr.clone();
+                        let (default_x, default_y) = table.get_first_element(col_idx);
 
-                    let (default_x, default_y) = table.get_first_element(col_idx);
+                        log::trace!("---------------- col {:?} ------------------", col_idx,);
+                        log::trace!("expr: {:?}", col_expr,);
+                        log::trace!("multiplier: {:?}", multiplier);
+                        log::trace!("not_expr: {:?}", not_expr);
+                        log::trace!("default x: {:?}", default_x);
+                        log::trace!("default y: {:?}", default_y);
 
-                    log::trace!("---------------- col {:?} ------------------", col_idx,);
-                    log::trace!("expr: {:?}", col_expr,);
-                    log::trace!("multiplier: {:?}", multiplier);
-                    log::trace!("not_expr: {:?}", not_expr);
-                    log::trace!("default x: {:?}", default_x);
-                    log::trace!("default y: {:?}", default_y);
+                        res.extend([
+                            (
+                                col_expr.clone() * input_query.clone()
+                                    + not_expr.clone() * Expression::Constant(default_x),
+                                *input_col,
+                            ),
+                            (
+                                col_expr.clone() * output_query.clone()
+                                    + not_expr.clone() * Expression::Constant(default_y),
+                                *output_col,
+                            ),
+                        ]);
 
-                    res.extend([
-                        (
-                            col_expr.clone() * input_query.clone()
-                                + not_expr.clone() * Expression::Constant(default_x),
-                            *input_col,
-                        ),
-                        (
-                            col_expr.clone() * output_query.clone()
-                                + not_expr.clone() * Expression::Constant(default_y),
-                            *output_col,
-                        ),
-                    ]);
-
-                    res
-                });
+                        res
+                    });
+                }
+                selectors.insert((nl.clone(), x, y), multi_col_selector);
             }
-            selectors.insert((nl.clone(), x), multi_col_selector);
         }
         self.lookup_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now

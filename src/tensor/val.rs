@@ -155,7 +155,7 @@ pub enum ValTensor<F: PrimeField + TensorType + PartialOrd> {
         /// Vector of dimensions of the tensor.
         dims: Vec<usize>,
         ///
-        scale: u32,
+        scale: crate::Scale,
     },
     /// A tensor backed by an [Instance] column
     Instance {
@@ -168,7 +168,7 @@ pub enum ValTensor<F: PrimeField + TensorType + PartialOrd> {
         ///
         initial_offset: usize,
         ///
-        scale: u32,
+        scale: crate::Scale,
     },
 }
 
@@ -246,7 +246,11 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 
 impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance(cs: &mut ConstraintSystem<F>, dims: Vec<Vec<usize>>, scale: u32) -> Self {
+    pub fn new_instance(
+        cs: &mut ConstraintSystem<F>,
+        dims: Vec<Vec<usize>>,
+        scale: crate::Scale,
+    ) -> Self {
         let col = cs.instance_column();
         cs.enable_equality(col);
 
@@ -260,7 +264,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
-    pub fn new_instance_from_col(dims: Vec<Vec<usize>>, scale: u32, col: Column<Instance>) -> Self {
+    pub fn new_instance_from_col(
+        dims: Vec<Vec<usize>>,
+        scale: crate::Scale,
+        col: Column<Instance>,
+    ) -> Self {
         ValTensor::Instance {
             inner: col,
             dims,
@@ -345,7 +353,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Set the [ValTensor]'s scale.
-    pub fn set_scale(&mut self, scale: u32) {
+    pub fn set_scale(&mut self, scale: crate::Scale) {
         match self {
             ValTensor::Value { scale: s, .. } => *s = scale,
             ValTensor::Instance { scale: s, .. } => *s = scale,
@@ -353,7 +361,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Returns the [ValTensor]'s scale.
-    pub fn scale(&self) -> u32 {
+    pub fn scale(&self) -> crate::Scale {
         match self {
             ValTensor::Value { scale, .. } => *scale,
             ValTensor::Instance { scale, .. } => *scale,
@@ -428,6 +436,22 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             _ => return Err(Box::new(TensorError::WrongMethod)),
         };
         Ok(integer_evals.into_iter().into())
+    }
+
+    /// Calls `pad_to_zero_rem` on the inner tensor.
+    pub fn pad_to_zero_rem(&mut self, n: usize) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = v.pad_to_zero_rem(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(())
     }
 
     /// Calls `get_slice` on the inner tensor.
@@ -595,13 +619,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     pub fn duplicate_every_n(
         &mut self,
         n: usize,
+        num_repeats: usize,
         initial_offset: usize,
     ) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = v.duplicate_every_n(n, initial_offset)?;
+                *v = v.duplicate_every_n(n, num_repeats, initial_offset)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
@@ -673,12 +698,17 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Calls `duplicate_every_n` on the inner [Tensor].
-    pub fn remove_every_n(&mut self, n: usize, initial_offset: usize) -> Result<(), TensorError> {
+    pub fn remove_every_n(
+        &mut self,
+        n: usize,
+        num_repeats: usize,
+        initial_offset: usize,
+    ) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = v.remove_every_n(n, initial_offset)?;
+                *v = v.remove_every_n(n, num_repeats, initial_offset)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

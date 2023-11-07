@@ -98,7 +98,10 @@ pub fn vecU64ToInt(
 /// Converts 4 u64s representing a field element directly to a (rescaled from fixed point scaling) floating point
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn vecU64ToFloat(array: wasm_bindgen::Clamped<Vec<u8>>, scale: u32) -> Result<f64, JsError> {
+pub fn vecU64ToFloat(
+    array: wasm_bindgen::Clamped<Vec<u8>>,
+    scale: crate::Scale,
+) -> Result<f64, JsError> {
     let felt: Fr = serde_json::from_slice(&array[..])
         .map_err(|e| JsError::new(&format!("Failed to deserialize field element: {}", e)))?;
     let int_rep = felt_to_i128(felt);
@@ -109,7 +112,10 @@ pub fn vecU64ToFloat(array: wasm_bindgen::Clamped<Vec<u8>>, scale: u32) -> Resul
 /// Converts a floating point element to 4 u64s representing a fixed point field element
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn floatToVecU64(input: f64, scale: u32) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
+pub fn floatToVecU64(
+    input: f64,
+    scale: crate::Scale,
+) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
     let int_rep =
         quantize_float(&input, 0.0, scale).map_err(|e| JsError::new(&format!("{}", e)))?;
     let felt = i128_to_felt(int_rep);

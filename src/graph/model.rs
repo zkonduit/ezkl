@@ -193,7 +193,7 @@ pub enum NodeType {
         ///
         out_dims: Vec<Vec<usize>>,
         ///
-        out_scales: Vec<u32>,
+        out_scales: Vec<crate::Scale>,
     },
 }
 
@@ -236,7 +236,7 @@ impl NodeType {
         }
     }
     /// Returns the scales of the node's output.
-    pub fn out_scales(&self) -> Vec<u32> {
+    pub fn out_scales(&self) -> Vec<crate::Scale> {
         match self {
             NodeType::Node(n) => vec![n.out_scale],
             NodeType::SubGraph { out_scales, .. } => out_scales.clone(),
@@ -291,7 +291,7 @@ impl NodeType {
     }
 
     /// bunp scale of node
-    pub fn bump_scale(&mut self, scale: u32) {
+    pub fn bump_scale(&mut self, scale: crate::Scale) {
         match self {
             NodeType::Node(n) => n.out_scale = scale,
             NodeType::SubGraph { .. } => log::warn!("Cannot bump scale of subgraph"),
@@ -365,7 +365,7 @@ impl ParsedNodes {
     }
 
     /// Returns the fixed point scale of the computational graph's inputs
-    pub fn get_input_scales(&self) -> Vec<u32> {
+    pub fn get_input_scales(&self) -> Vec<crate::Scale> {
         let input_nodes = self.inputs.iter();
         input_nodes
             .flat_map(|o| self.nodes.get(o).unwrap().out_scales())
@@ -373,7 +373,7 @@ impl ParsedNodes {
     }
 
     /// Returns the fixed point scale of the computational graph's outputs
-    pub fn get_output_scales(&self) -> Vec<u32> {
+    pub fn get_output_scales(&self) -> Vec<crate::Scale> {
         let output_nodes = self.outputs.iter();
         output_nodes
             .map(|(idx, outlet)| self.nodes.get(idx).unwrap().out_scales()[*outlet])
@@ -443,17 +443,18 @@ impl Model {
         );
         // this is the total number of variables we will need to allocate
         // for the circuit
-        let (num_constraints, total_const_size) = self
+        let (num_rows, linear_coord, total_const_size) = self
             .dummy_layout(run_args, &self.graph.input_shapes())
             .unwrap();
 
         // Then number of columns in the circuits
         #[cfg(not(target_arch = "wasm32"))]
         info!(
-            "{} {} {}",
-            "model generates".blue(),
-            num_constraints.to_string().blue(),
-            "constraints (excluding modules)".blue()
+            "{} {} {} (coord={})",
+            "model uses".blue(),
+            num_rows.to_string().blue(),
+            "rows (excluding modules)".blue(),
+            linear_coord.to_string().yellow(),
         );
 
         // extract the requisite lookup ops from the model
@@ -477,7 +478,8 @@ impl Model {
             run_args: run_args.clone(),
             model_instance_shapes: instance_shapes,
             module_sizes: crate::graph::modules::ModuleSizes::default(),
-            num_constraints,
+            num_rows,
+            total_assignments: linear_coord,
             required_lookups: lookup_ops,
             model_output_scales: self.graph.get_output_scales(),
             model_input_scales: self.graph.get_input_scales(),
@@ -823,8 +825,8 @@ impl Model {
         scales: &VarScales,
         visibility: &VarVisibility,
         symbol_values: &SymbolValues,
-        override_input_scales: Option<Vec<u32>>,
-        override_output_scales: Option<HashMap<usize, u32>>,
+        override_input_scales: Option<Vec<crate::Scale>>,
+        override_output_scales: Option<HashMap<usize, crate::Scale>>,
     ) -> Result<BTreeMap<usize, NodeType>, Box<dyn Error>> {
         use crate::graph::node_output_shapes;
 
@@ -974,7 +976,7 @@ impl Model {
                     }
                     if let Some(ref scales) = override_output_scales {
                         if scales.contains_key(&i) {
-                            let scale_diff = n.out_scale as i32 - scales[&i] as i32;
+                            let scale_diff = n.out_scale - scales[&i];
                             n.opkind = if scale_diff > 0 {
                                 RebaseScale::rebase(n.opkind, scales[&i], n.out_scale, 1)
                             } else {
@@ -1097,11 +1099,12 @@ impl Model {
         config.base.layout_tables(layouter)?;
 
         let mut num_rows = 0;
+        let mut linear_coord = 0;
 
         let outputs = layouter.assign_region(
             || "model",
             |region| {
-                let mut thread_safe_region = RegionCtx::new(region, 0);
+                let mut thread_safe_region = RegionCtx::new(region, 0, run_args.num_inner_cols);
                 // we need to do this as this loop is called multiple times
                 vars.set_instance_idx(instance_idx);
 
@@ -1140,13 +1143,17 @@ impl Model {
                         })
                         .collect_vec();
                 }
-                num_rows = thread_safe_region.offset();
+                num_rows = thread_safe_region.row();
+                linear_coord = thread_safe_region.linear_coord();
 
                 Ok(outputs)
             },
         )?;
 
-        info!("model has {} assigned rows", num_rows);
+        info!(
+            "model has {} assigned rows (coord={})",
+            num_rows, linear_coord
+        );
 
         let duration = start_time.elapsed();
         trace!("model layout took: {:?}", duration);
@@ -1179,10 +1186,11 @@ impl Model {
             };
 
             debug!(
-                "laying out {}: {}, offset:{}, total_constants: {}",
+                "laying out {}: {}, row:{}, coord:{}, total_constants: {}",
                 idx,
                 node.as_str(),
-                region.offset(),
+                region.row(),
+                region.linear_coord(),
                 region.total_constants()
             );
             debug!("dims: {:?}", node.out_dims());
@@ -1330,7 +1338,7 @@ impl Model {
         &self,
         run_args: &RunArgs,
         input_shapes: &[Vec<usize>],
-    ) -> Result<(usize, usize), Box<dyn Error>> {
+    ) -> Result<(usize, usize, usize), Box<dyn Error>> {
         info!("calculating num of constraints using dummy model layout...");
 
         let start_time = instant::Instant::now();
@@ -1351,13 +1359,14 @@ impl Model {
             results.insert(*input_idx, vec![inputs[i].clone()]);
         }
 
-        let mut dummy_config = PolyConfig::dummy(run_args.logrows as usize);
+        let mut dummy_config =
+            PolyConfig::dummy(run_args.logrows as usize, run_args.num_inner_cols);
         let mut model_config = ModelConfig {
             base: dummy_config.clone(),
             vars: ModelVars::new_dummy(),
         };
 
-        let mut region = RegionCtx::new_dummy(0);
+        let mut region = RegionCtx::new_dummy(0, run_args.num_inner_cols);
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
@@ -1381,7 +1390,11 @@ impl Model {
         let duration = start_time.elapsed();
         trace!("dummy model layout took: {:?}", duration);
 
-        Ok((region.offset(), region.total_constants()))
+        Ok((
+            region.row(),
+            region.linear_coord(),
+            region.total_constants(),
+        ))
     }
 
     /// Retrieves all constants from the model.

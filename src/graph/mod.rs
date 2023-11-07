@@ -104,7 +104,7 @@ pub enum GraphError {
 
 const ASSUMED_BLINDING_FACTORS: usize = 5;
 /// The minimum number of rows in the grid
-pub const MIN_LOGROWS: u32 = 4;
+pub const MIN_LOGROWS: u32 = 6;
 
 /// 26
 pub const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
@@ -350,16 +350,18 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
 pub struct GraphSettings {
     /// run args
     pub run_args: RunArgs,
-    /// the potential number of constraints in the circuit
-    pub num_constraints: usize,
+    /// the potential number of rows used by the circuit
+    pub num_rows: usize,
+    /// total linear coordinate of assignments
+    pub total_assignments: usize,
     /// total const size
     pub total_const_size: usize,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
-    pub model_output_scales: Vec<u32>,
+    pub model_output_scales: Vec<crate::Scale>,
     /// model input scales
-    pub model_input_scales: Vec<u32>,
+    pub model_input_scales: Vec<crate::Scale>,
     /// the of instance cells used by modules
     pub module_sizes: ModuleSizes,
     /// required_lookups
@@ -574,7 +576,7 @@ impl GraphCircuit {
         settings.module_sizes = sizes.clone();
 
         // as they occupy independent rows
-        settings.num_constraints = std::cmp::max(settings.num_constraints, sizes.max_constraints());
+        settings.num_rows = std::cmp::max(settings.num_rows, sizes.max_constraints());
 
         let core = CoreCircuit {
             model,
@@ -693,7 +695,7 @@ impl GraphCircuit {
         &mut self,
         data: &DataSource,
         shapes: Vec<Vec<usize>>,
-        scales: Vec<u32>,
+        scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         match &data {
@@ -712,7 +714,7 @@ impl GraphCircuit {
         &mut self,
         data: &DataSource,
         shapes: Vec<Vec<usize>>,
-        scales: Vec<u32>,
+        scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         match &data {
@@ -740,7 +742,7 @@ impl GraphCircuit {
         &mut self,
         source: OnChainSource,
         shapes: &Vec<Vec<usize>>,
-        scales: Vec<u32>,
+        scales: Vec<crate::Scale>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
         let (_, client) = setup_eth_backend(Some(&source.rpc), None).await?;
@@ -763,7 +765,7 @@ impl GraphCircuit {
         &mut self,
         file_data: &FileSource,
         shapes: &Vec<Vec<usize>>,
-        scales: Vec<u32>,
+        scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         // quantize the supplied data using the provided scale.
@@ -836,7 +838,7 @@ impl GraphCircuit {
         let num_cols = Table::<Fp>::num_cols_required(safe_range, max_col_size);
 
         // empirically determined that this is when performance starts to degrade significantly
-        if num_cols > 3 {
+        if num_cols > 4 {
             let err_string = format!(
                 "No possible lookup range can accomodate max value min and max value ({}, {})",
                 safe_range.0, safe_range.1
@@ -848,8 +850,7 @@ impl GraphCircuit {
             .log2()
             .ceil() as usize;
 
-        let min_rows_from_constraints = (self.settings().num_constraints as f64
-            + reserved_blinding_rows)
+        let min_rows_from_constraints = (self.settings().num_rows as f64 + reserved_blinding_rows)
             .log2()
             .ceil() as usize;
 
@@ -898,8 +899,7 @@ impl GraphCircuit {
         settings_mut.run_args.logrows =
             std::cmp::max(settings_mut.run_args.logrows, const_len_logrows);
         // recalculate the total number of constraints given the new logrows
-        let min_rows_from_constraints = (settings_mut.num_constraints as f64
-            + reserved_blinding_rows)
+        let min_rows_from_constraints = (settings_mut.num_rows as f64 + reserved_blinding_rows)
             .log2()
             .ceil() as u32;
         settings_mut.run_args.logrows =
@@ -1181,7 +1181,8 @@ impl Circuit<Fp> for GraphCircuit {
         let mut vars = ModelVars::new(
             cs,
             params.run_args.logrows as usize,
-            params.num_constraints,
+            params.total_assignments,
+            params.run_args.num_inner_cols,
             params.total_const_size,
             params.uses_modules(),
         );

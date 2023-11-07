@@ -20,6 +20,8 @@ use super::Module;
 
 /// The number of instance columns used by the KZG hash function
 pub const NUM_INSTANCE_COLUMNS: usize = 0;
+/// The number of advice columns used by the KZG hash function
+pub const NUM_INNER_COLS: usize = 1;
 
 #[derive(Debug, Clone)]
 /// WIDTH, RATE and L are const generics for the struct, which represent the width, rate, and number of inputs for the Poseidon hash function, respectively.
@@ -100,7 +102,7 @@ impl Module<Fp> for KZGChip {
 
     /// Configuration of the PoseidonChip
     fn configure(meta: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
-        let hash_inputs = VarTensor::new_unblinded_advice(meta, params.0, params.1);
+        let hash_inputs = VarTensor::new_unblinded_advice(meta, params.0, NUM_INNER_COLS, params.1);
         Self::Config { hash_inputs }
     }
 
