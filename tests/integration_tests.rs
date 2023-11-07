@@ -797,6 +797,15 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_octuple_col(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 8, None, false);
+               test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();

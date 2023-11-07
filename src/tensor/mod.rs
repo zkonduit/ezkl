@@ -734,20 +734,22 @@ impl<T: Clone + TensorType> Tensor<T> {
         initial_offset: usize,
     ) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
-        for (i, elem) in self.inner.clone().into_iter().enumerate() {
-            let offset = initial_offset + i;
-            let is_in_repeat_window = (0..num_repeats).any(|x| {
-                if x > offset {
-                    false
-                } else {
-                    (offset - x + 1) % n == 0
+        let mut indices_to_remove = std::collections::HashSet::new();
+        for i in 0..self.inner.len() {
+            if (i + initial_offset + 1) % n == 0 {
+                for j in 1..(1 + num_repeats) {
+                    indices_to_remove.insert(i + j);
                 }
-            });
-            if is_in_repeat_window {
-            } else {
+            }
+        }
+
+        let old_inner = self.inner.clone();
+        for (i, elem) in old_inner.into_iter().enumerate() {
+            if !indices_to_remove.contains(&i) {
                 inner.push(elem.clone());
             }
         }
+
         Tensor::new(Some(&inner), &[inner.len()])
     }
 
@@ -807,7 +809,13 @@ impl<T: Clone + TensorType> Tensor<T> {
             } else {
                 0
             };
-            assert!(self.len() == product);
+            if self.len() != product {
+                panic!(
+                    "Cannot reshape tensor of size {} to {:?}",
+                    self.len(),
+                    new_dims
+                );
+            }
             self.dims = Vec::from(new_dims);
         }
     }

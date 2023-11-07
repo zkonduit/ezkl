@@ -347,6 +347,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         }
     };
 
+    region.flush();
     if !region.is_dummy() {
         output.iter_mut().enumerate().for_each(|(i, o)| {
             *o = inner_loop_function(i, region);
