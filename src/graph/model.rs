@@ -691,51 +691,12 @@ impl Model {
         run_args: &RunArgs,
         visibility: &VarVisibility,
     ) -> Result<ParsedNodes, Box<dyn Error>> {
-        use tract_onnx::tract_hir::internal::GenericFactoid;
-
         let start_time = instant::Instant::now();
 
         let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
             GraphError::ModelLoad
         })?;
-
-        let variables: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::from_iter(run_args.variables.clone());
-
-        for (i, id) in model.clone().inputs.iter().enumerate() {
-            let input = model.node_mut(id.node);
-            input.outputs[0]
-                .clone()
-                .fact
-                .shape
-                .dims()
-                .enumerate()
-                .for_each(|(i, x)| {
-                    if matches!(x, GenericFactoid::Any) {
-                        let batch_size = variables.get("batch_size").unwrap_or_else(|| {
-                            panic!("Unknown dimension batch_size in model inputs, set batch_size in variables")
-                        });
-                        input.outputs[0]
-                            .fact
-                            .shape
-                            .set_dim(i, tract_onnx::prelude::TDim::Val(*batch_size as i64));
-                    }
-                });
-
-            let mut fact = model.node(id.node).outputs[0].fact.clone();
-
-            // use as default type if not specified
-            if matches!(
-                fact.datum_type,
-                tract_onnx::tract_hir::internal::TypeFactoid::Any
-            ) {
-                log::warn!("unspecified datum type for input {}, using f32", i);
-                fact = fact.with_datum_type(tract_onnx::prelude::DatumType::F32);
-            }
-
-            model.set_input_fact(i, fact)?;
-        }
 
         for (i, _) in model.clone().outputs.iter().enumerate() {
             model.set_output_fact(i, InferenceFact::default()).unwrap();
