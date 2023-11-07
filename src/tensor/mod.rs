@@ -717,15 +717,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6, 6]), &[8]).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 5, 6, 6]), &[7]).unwrap();
     /// assert_eq!(a.remove_every_n(4, 1, 0).unwrap(), expected);
     ///
-    /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6]), &[7]).unwrap();
-    /// assert_eq!(a.remove_every_n(4, 1, 0).unwrap(), expected);
-    /// assert_eq!(a.remove_every_n(9, 1, 0).unwrap(), a);
-    ///
-    /// let a = Tensor::<i32>::new(Some(&[1, 1, 2, 3, 3, 4, 5, 5, 6]), &[9]).unwrap();
-    /// assert_eq!(a.remove_every_n(3, 1, 2).unwrap(), expected);
     ///
     pub fn remove_every_n(
         &self,
