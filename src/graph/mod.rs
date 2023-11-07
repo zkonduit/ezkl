@@ -104,7 +104,7 @@ pub enum GraphError {
 
 const ASSUMED_BLINDING_FACTORS: usize = 5;
 /// The minimum number of rows in the grid
-pub const MIN_LOGROWS: u32 = 4;
+pub const MIN_LOGROWS: u32 = 6;
 
 /// 26
 pub const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;

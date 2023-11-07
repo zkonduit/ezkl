@@ -438,6 +438,22 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         Ok(integer_evals.into_iter().into())
     }
 
+    /// Calls `pad_to_zero_rem` on the inner tensor.
+    pub fn pad_to_zero_rem(&mut self, n: usize) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = v.pad_to_zero_rem(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(())
+    }
+
     /// Calls `get_slice` on the inner tensor.
     pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<ValTensor<F>, Box<dyn Error>> {
         if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims() {
@@ -603,13 +619,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     pub fn duplicate_every_n(
         &mut self,
         n: usize,
+        num_repeats: usize,
         initial_offset: usize,
     ) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = v.duplicate_every_n(n, initial_offset)?;
+                *v = v.duplicate_every_n(n, num_repeats, initial_offset)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
@@ -681,12 +698,17 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Calls `duplicate_every_n` on the inner [Tensor].
-    pub fn remove_every_n(&mut self, n: usize, initial_offset: usize) -> Result<(), TensorError> {
+    pub fn remove_every_n(
+        &mut self,
+        n: usize,
+        num_repeats: usize,
+        initial_offset: usize,
+    ) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = v.remove_every_n(n, initial_offset)?;
+                *v = v.remove_every_n(n, num_repeats, initial_offset)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

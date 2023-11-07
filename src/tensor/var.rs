@@ -90,11 +90,12 @@ impl VarTensor {
         num_inner_cols: usize,
         capacity: usize,
     ) -> Self {
-        let max_rows = Self::max_rows(cs, logrows) * num_inner_cols;
+        let max_rows = Self::max_rows(cs, logrows);
+        let max_assignments = Self::max_rows(cs, logrows) * num_inner_cols;
 
-        let mut modulo = (capacity / max_rows) + 1;
+        let mut modulo = (capacity / max_assignments) + 1;
         // we add a buffer for duplicated rows (we get at most 1 duplicated row per column)
-        modulo = ((capacity + modulo) / max_rows) + 1;
+        modulo = ((capacity + modulo) / max_assignments) + 1;
         let mut advices = vec![];
 
         if modulo > 1 {
@@ -181,7 +182,9 @@ impl VarTensor {
     /// Num inner cols
     pub fn num_inner_cols(&self) -> usize {
         match self {
-            VarTensor::Advice { num_inner_cols, .. } => *num_inner_cols,
+            VarTensor::Advice { num_inner_cols, .. } | VarTensor::Dummy { num_inner_cols, .. } => {
+                *num_inner_cols
+            }
             _ => 0,
         }
     }
@@ -221,23 +224,13 @@ impl VarTensor {
 
     /// Take a linear coordinate and output the (column, row) position in the storage block.
     pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize, usize) {
-        match self {
-            VarTensor::Advice {
-                col_size,
-                num_inner_cols,
-                ..
-            } => {
-                let block_size = col_size * num_inner_cols;
-                // x indexes over blocks of size num_inner_cols
-                let x = linear_coord / block_size;
-                // y indexes over the cols inside a block
-                let y = linear_coord % num_inner_cols;
-                // z indexes over the rows inside a col
-                let z = (linear_coord - x * block_size) / num_inner_cols;
-                (x, y, z)
-            }
-            _ => (0, 0, 0),
-        }
+        // x indexes over blocks of size num_inner_cols
+        let x = linear_coord / self.block_size();
+        // y indexes over the cols inside a block
+        let y = linear_coord % self.num_inner_cols();
+        // z indexes over the rows inside a col
+        let z = (linear_coord - x * self.block_size()) / self.num_inner_cols();
+        (x, y, z)
     }
 }
 
@@ -258,6 +251,31 @@ impl VarTensor {
                     // this should fail if dims is empty, should be impossible
                     (0..rng).map(|i| meta.query_advice(advices[x][y], Rotation(z + i as i32))),
                 );
+                Ok(c)
+            }
+            _ => {
+                error!("VarTensor was not initialized");
+                Err(halo2_proofs::plonk::Error::Synthesis)
+            }
+        }
+    }
+
+    /// Retrieve the value of a specific block at an offset in the tensor.
+    pub fn query_whole_block<F: PrimeField>(
+        &self,
+        meta: &mut VirtualCells<'_, F>,
+        x: usize,
+        z: i32,
+        rng: usize,
+    ) -> Result<Tensor<Expression<F>>, halo2_proofs::plonk::Error> {
+        match &self {
+            // when advice we have 1 col per row
+            VarTensor::Advice { inner: advices, .. } => {
+                let c = Tensor::from({
+                    // this should fail if dims is empty, should be impossible
+                    let cartesian = (0..rng).cartesian_product(0..self.num_inner_cols());
+                    cartesian.map(|(i, y)| meta.query_advice(advices[x][y], Rotation(z + i as i32)))
+                });
                 Ok(c)
             }
             _ => {
@@ -387,17 +405,38 @@ impl VarTensor {
     /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two.
     pub fn dummy_assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
         &self,
+        row: usize,
         offset: usize,
         values: &ValTensor<F>,
+        single_inner_col: bool,
     ) -> Result<(ValTensor<F>, usize, usize), halo2_proofs::plonk::Error> {
         match values {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims , ..} => {
+                let duplication_freq = if single_inner_col {
+                    self.col_size()
+                } else {
+                    self.block_size()
+                };
+
+                let num_repeats = if single_inner_col {
+                    1
+                } else {
+                    self.num_inner_cols()
+                };
+
+                let duplication_offset = if single_inner_col {
+                    row
+                } else {
+                    offset
+                };
+
+
                 // duplicates every nth element to adjust for column overflow
-                let mut res: ValTensor<F> = v.duplicate_every_n(self.block_size(), offset).unwrap().into();
+                let mut res: ValTensor<F> = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap().into();
                 let total_used_len = res.len();
                 let total_constants = res.num_constants();
-                res.remove_every_n(self.block_size(), offset).unwrap();
+                res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
 
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());
@@ -412,38 +451,67 @@ impl VarTensor {
     pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Region<F>,
+        row: usize,
         offset: usize,
         values: &ValTensor<F>,
         check_mode: &CheckMode,
+        single_inner_col: bool,
     ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
         let mut prev_cell = None;
 
         match values {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims , ..} => {
+
+                let duplication_freq = if single_inner_col {
+                    self.col_size()
+                } else {
+                    self.block_size()
+                };
+
+                let num_repeats = if single_inner_col {
+                    1
+                } else {
+                    self.num_inner_cols()
+                };
+
+                let duplication_offset = if single_inner_col {
+                    row
+                } else {
+                    offset
+                };
+
                 // duplicates every nth element to adjust for column overflow
-                let v = v.duplicate_every_n(self.block_size(), offset).unwrap();
+                let v = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
                 let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
-                    let (x, y, z) = self.cartesian_coord(offset + coord);
+
+                    let step = if !single_inner_col {
+                        1
+                    } else {
+                        self.num_inner_cols()
+                    };
+
+                    let (x, y, z) = self.cartesian_coord(offset + coord * step);
                     if matches!(check_mode, CheckMode::SAFE) && coord > 0 && z == 0 && y == 0 {
                         // assert that duplication occurred correctly
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
 
-                    let cell = self.assign_value(region, offset, k.clone(), x, y, z, coord)?;
+                    let cell = self.assign_value(region, offset, k.clone(), x, y, z, coord * step)?;
 
-                    if z == (self.col_size() - 1) && y == (self.num_inner_cols() - 1)  {
+                    if single_inner_col {
+                    if z == 0 {
                         // if we are at the end of the column, we need to copy the cell to the next column
                         prev_cell = Some(cell.clone());
-                    } else if coord > 0 && z == 0 && y == 0 {
+                    } else if coord > 0 && z == 0 && single_inner_col {
                         if let Some(prev_cell) = prev_cell.as_ref() {
                             region.constrain_equal(prev_cell.cell(),cell.cell())?;
                         } else {
                             error!("Error copy-constraining previous value: {:?}", (x,y));
                             return Err(halo2_proofs::plonk::Error::Synthesis);
                         }
-                    }
+                    }}
 
                     match k {
                         ValType::Constant(f) => {
@@ -459,7 +527,7 @@ impl VarTensor {
 
                 })?.into()};
                 let total_used_len = res.len();
-                res.remove_every_n(self.block_size(), offset).unwrap();
+                res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
 
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());

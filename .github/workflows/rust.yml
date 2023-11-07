@@ -325,6 +325,14 @@ jobs:
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+      - name: KZG prove and verify tests double inner col
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_double_col
+      - name: KZG prove and verify tests triple inner col
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_triple_col
+      - name: KZG prove and verify tests quadruple inner col
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_quadruple_col
+      - name: KZG prove and verify tests octuple inner col
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_octuple_col
       - name: KZG prove and verify tests (kzg outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output
       - name: KZG prove and verify tests (public outputs + column overflow)

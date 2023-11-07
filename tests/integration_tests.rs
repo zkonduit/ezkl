@@ -770,11 +770,47 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_double_col(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 2, None, false);
+               test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_triple_col(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 3, None, false);
+               test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_quadruple_col(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 4, None, false);
+               test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn kzg_prove_and_verify_octuple_col(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 8, None, false);
+               test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn kzg_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", None, false);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false);
                test_dir.close().unwrap();
             }
 
@@ -783,7 +819,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "public", "private", "public", None, false);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "public", "private", "public", 1, None, false);
                test_dir.close().unwrap();
             }
 
@@ -792,7 +828,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", None, false);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, false);
                test_dir.close().unwrap();
             }
 
@@ -801,7 +837,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed", None, false);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "hashed", 1, None, false);
                test_dir.close().unwrap();
             }
 
@@ -810,7 +846,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "kzgcommit", None, false);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "kzgcommit", 1, None, false);
                test_dir.close().unwrap();
             }
 
@@ -819,7 +855,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "encrypted", None, false);
+               kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "encrypted", 1, None, false);
                test_dir.close().unwrap();
             }
 
@@ -843,7 +879,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", Some(vec![0,1]), true);
+                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, Some(vec![0,1]), true);
                     run_js_tests(path, test.to_string(), "testWasm");
                     test_dir.close().unwrap();
                 }
@@ -855,7 +891,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     env_logger::init();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", Some(vec![0,1]), true);
+                    kzg_prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, Some(vec![0,1]), true);
                     run_js_tests(path, test.to_string(), "testWasm");
                     test_dir.close().unwrap();
                 }
@@ -870,7 +906,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
-                kzg_prove_and_verify(path, test.to_string(), "unsafe", "private", "fixed", "public", Some(vec![0,6]), false);
+                kzg_prove_and_verify(path, test.to_string(), "unsafe", "private", "fixed", "public", 1, Some(vec![0,6]), false);
                 test_dir.close().unwrap();
             }
 
@@ -2114,6 +2150,7 @@ mod native_tests {
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
+        num_inner_columns: usize,
         scales_to_use: Option<Vec<u32>>,
         overflow: bool,
     ) {
@@ -2128,6 +2165,7 @@ mod native_tests {
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
+                &format!("--num-inner-cols={}", num_inner_columns),
             ])
             .status()
             .expect("failed to execute process");

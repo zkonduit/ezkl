@@ -93,9 +93,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         let constants = AtomicUsize::new(self.total_constants());
         *output = output.par_enum_map(|idx, _| {
             // we kick off the loop with the current offset
-            let starting_offset = row.fetch_add(0, Ordering::Relaxed);
-            let starting_linear_coord = linear_coord.fetch_add(0, Ordering::Relaxed);
-            let starting_constants = constants.fetch_add(0, Ordering::Relaxed);
+            let starting_offset = row.load(Ordering::Relaxed);
+            let starting_linear_coord = linear_coord.load(Ordering::Relaxed);
+            let starting_constants = constants.load(Ordering::Relaxed);
             // we need to make sure that the region is not shared between threads
             let mut local_reg = Self::new_dummy_with_constants(
                 starting_offset,
@@ -207,27 +207,34 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         var: &VarTensor,
         values: &ValTensor<F>,
         check_mode: &crate::circuit::CheckMode,
+        single_inner_col: bool,
     ) -> Result<(ValTensor<F>, usize), Error> {
         if let Some(region) = &self.region {
             // duplicates every nth element to adjust for column overflow
             var.assign_with_duplication(
                 &mut region.borrow_mut(),
+                self.row,
                 self.linear_coord,
                 values,
                 check_mode,
+                single_inner_col,
             )
         } else {
-            let (_, len, total_assigned_constants) =
-                var.dummy_assign_with_duplication(self.linear_coord, values)?;
+            let (_, len, total_assigned_constants) = var.dummy_assign_with_duplication(
+                self.row,
+                self.linear_coord,
+                values,
+                single_inner_col,
+            )?;
             self.total_constants += total_assigned_constants;
             Ok((values.clone(), len))
         }
     }
 
     /// Enable a selector
-    pub fn enable(&mut self, selector: Option<&Selector>, y: usize) -> Result<(), Error> {
+    pub fn enable(&mut self, selector: Option<&Selector>, offset: usize) -> Result<(), Error> {
         match &self.region {
-            Some(region) => selector.unwrap().enable(&mut region.borrow_mut(), y),
+            Some(region) => selector.unwrap().enable(&mut region.borrow_mut(), offset),
             None => Ok(()),
         }
     }
@@ -268,6 +275,17 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         for _ in 0..n {
             self.next()
         }
+    }
+
+    /// flush row to the next row
+    pub fn flush(&mut self) {
+        // increment by the difference between the current linear coord and the next row
+        let remainder = self.linear_coord % self.num_inner_cols;
+        if remainder != 0 {
+            let diff = self.num_inner_cols - remainder;
+            self.increment(diff);
+        }
+        assert!(self.linear_coord % self.num_inner_cols == 0);
     }
 
     /// increment constants
