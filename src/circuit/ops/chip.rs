@@ -306,7 +306,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         // selectors is the merger of nonaccum and accum selectors
         let selectors = nonaccum_selectors
             .into_iter()
-            .chain(accum_selectors.into_iter())
+            .chain(accum_selectors)
             .collect();
 
         Self {

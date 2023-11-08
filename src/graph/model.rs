@@ -10,6 +10,7 @@ use crate::circuit::Input;
 use crate::circuit::InputType;
 use crate::circuit::Unknown;
 use crate::fieldutils::felt_to_i128;
+use crate::tensor::ValType;
 use crate::{
     circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
     tensor::{Tensor, ValTensor},
@@ -23,6 +24,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::ConstraintSystem,
 };
+use halo2curves::ff::Field;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
@@ -1098,9 +1100,7 @@ impl Model {
                         halo2_proofs::plonk::Error::Synthesis
                     })?;
 
-                if run_args.output_visibility == Visibility::Public
-                    || run_args.output_visibility == Visibility::Fixed
-                {
+                if run_args.output_visibility.is_public() || run_args.output_visibility.is_fixed() {
                     let output_scales = self.graph.get_output_scales();
                     let _ = outputs
                         .iter()
@@ -1156,6 +1156,8 @@ impl Model {
             .into_iter()
             .filter(|(idx, _)| self.graph.inputs.contains(idx))
             .collect();
+
+        println!("orig_inputs: {:?}", orig_inputs);
 
         for (idx, node) in self.graph.nodes.iter() {
             let mut values: Vec<ValTensor<Fp>> = if !node.is_input() {
@@ -1327,14 +1329,19 @@ impl Model {
         let start_time = instant::Instant::now();
 
         let mut results = BTreeMap::<usize, Vec<ValTensor<Fp>>>::new();
+        let default_value = if !self.visibility.input.is_fixed() {
+            ValType::Value(Value::<Fp>::unknown())
+        } else {
+            ValType::Constant(Fp::ZERO)
+        };
 
         let inputs: Vec<ValTensor<Fp>> = input_shapes
             .iter()
             .map(|shape| {
-                let mut t: Tensor<Value<Fp>> =
-                    Tensor::from(vec![Value::<Fp>::unknown(); shape.iter().product()].into_iter());
-                t.reshape(shape);
-                t.into()
+                let mut t: ValTensor<Fp> =
+                    vec![default_value.clone(); shape.iter().product()].into();
+                t.reshape(shape).unwrap();
+                t
             })
             .collect_vec();
 
@@ -1353,16 +1360,25 @@ impl Model {
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
-        if run_args.output_visibility == Visibility::Public
-            || run_args.output_visibility == Visibility::Fixed
-        {
+        if run_args.output_visibility.is_public() || run_args.output_visibility.is_fixed() {
+            let comparator = outputs
+                .iter()
+                .map(|x| {
+                    let mut v: ValTensor<Fp> =
+                        vec![default_value.clone(); x.dims().iter().product::<usize>()].into();
+                    v.reshape(x.dims()).unwrap();
+                    v
+                })
+                .collect_vec();
+
             let _ = outputs
                 .into_iter()
-                .map(|output| {
+                .zip(comparator)
+                .map(|(o, c)| {
                     dummy_config
                         .layout(
                             &mut region,
-                            &[output.clone(), output],
+                            &[o, c],
                             Box::new(HybridOp::RangeCheck(run_args.tolerance)),
                         )
                         .unwrap()
