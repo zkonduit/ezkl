@@ -705,33 +705,16 @@ impl Model {
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node_mut(id.node);
-            input.outputs[0]
-                .clone()
-                .fact
-                .shape
-                .dims()
-                .enumerate()
-                .for_each(|(i, x)| {
-                    if matches!(x, GenericFactoid::Any) {
-                        let batch_size = variables.get("batch_size").unwrap_or_else(|| {
+            let mut fact: InferenceFact = input.outputs[0].fact.clone();
+
+            for (i, x) in fact.clone().shape.dims().enumerate() {
+                if matches!(x, GenericFactoid::Any) {
+                    let batch_size = variables.get("batch_size").unwrap_or_else(|| {
                             panic!("Unknown dimension batch_size in model inputs, set batch_size in variables")
                         });
-                        input.outputs[0]
-                            .fact
-                            .shape
-                            .set_dim(i, tract_onnx::prelude::TDim::Val(*batch_size as i64));
-                    }
-                });
-
-            let mut fact = model.node(id.node).outputs[0].fact.clone();
-
-            // use as default type if not specified
-            if matches!(
-                fact.datum_type,
-                tract_onnx::tract_hir::internal::TypeFactoid::Any
-            ) {
-                log::warn!("unspecified datum type for input {}, using f32", i);
-                fact = fact.with_datum_type(tract_onnx::prelude::DatumType::F32);
+                    fact.shape
+                        .set_dim(i, tract_onnx::prelude::TDim::Val(*batch_size as i64));
+                }
             }
 
             model.set_input_fact(i, fact)?;
