@@ -449,16 +449,6 @@ impl Model {
             .dummy_layout(run_args, &self.graph.input_shapes())
             .unwrap();
 
-        // Then number of columns in the circuits
-        #[cfg(not(target_arch = "wasm32"))]
-        info!(
-            "{} {} {} (coord={})",
-            "model uses".blue(),
-            num_rows.to_string().blue(),
-            "rows (excluding modules)".blue(),
-            linear_coord.to_string().yellow(),
-        );
-
         // extract the requisite lookup ops from the model
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
 
@@ -1085,6 +1075,7 @@ impl Model {
 
         let mut num_rows = 0;
         let mut linear_coord = 0;
+        let mut total_const_size = 0;
 
         let outputs = layouter.assign_region(
             || "model",
@@ -1128,14 +1119,21 @@ impl Model {
                 }
                 num_rows = thread_safe_region.row();
                 linear_coord = thread_safe_region.linear_coord();
+                total_const_size = thread_safe_region.total_constants();
 
                 Ok(outputs)
             },
         )?;
 
+        // Then number of columns in the circuits
+        #[cfg(not(target_arch = "wasm32"))]
         info!(
-            "model has {} assigned rows (coord={})",
-            num_rows, linear_coord
+            "{} {} {} (coord={}, constants={})",
+            "model uses".blue(),
+            num_rows.to_string().blue(),
+            "rows".blue(),
+            linear_coord.to_string().yellow(),
+            total_const_size.to_string().red()
         );
 
         let duration = start_time.elapsed();
@@ -1156,8 +1154,6 @@ impl Model {
             .into_iter()
             .filter(|(idx, _)| self.graph.inputs.contains(idx))
             .collect();
-
-        println!("orig_inputs: {:?}", orig_inputs);
 
         for (idx, node) in self.graph.nodes.iter() {
             let mut values: Vec<ValTensor<Fp>> = if !node.is_input() {
@@ -1332,7 +1328,7 @@ impl Model {
         let default_value = if !self.visibility.input.is_fixed() {
             ValType::Value(Value::<Fp>::unknown())
         } else {
-            ValType::Constant(Fp::ZERO)
+            ValType::Constant(Fp::ONE)
         };
 
         let inputs: Vec<ValTensor<Fp>> = input_shapes
@@ -1388,6 +1384,17 @@ impl Model {
 
         let duration = start_time.elapsed();
         trace!("dummy model layout took: {:?}", duration);
+
+        // Then number of columns in the circuits
+        #[cfg(not(target_arch = "wasm32"))]
+        info!(
+            "{} {} {} (coord={}, constants={})",
+            "model uses".blue(),
+            region.row().to_string().blue(),
+            "rows".blue(),
+            region.linear_coord().to_string().yellow(),
+            region.total_constants().to_string().red()
+        );
 
         Ok((
             region.row(),

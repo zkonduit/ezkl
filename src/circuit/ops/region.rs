@@ -169,10 +169,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         var: &VarTensor,
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, Error> {
+        self.total_constants += values.num_constants();
         if let Some(region) = &self.region {
             var.assign(&mut region.borrow_mut(), self.linear_coord, values)
         } else {
-            self.total_constants += values.num_constants();
             Ok(values.clone())
         }
     }
