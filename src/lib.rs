@@ -94,7 +94,7 @@ pub struct RunArgs {
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
     /// The log_2 number of rows
-    #[arg(short = 'N', long, default_value = "2")]
+    #[arg(short = 'N', long, default_value = "3")]
     pub num_inner_cols: usize,
     /// Hand-written parser for graph variables, eg. batch_size=1
     #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size=1", value_delimiter = ',')]
