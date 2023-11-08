@@ -1356,7 +1356,13 @@ impl Model {
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
-        if run_args.output_visibility.is_public() || run_args.output_visibility.is_fixed() {
+        if self.visibility.output.is_public() || self.visibility.output.is_fixed() {
+            let default_value = if !self.visibility.output.is_fixed() {
+                ValType::Value(Value::<Fp>::unknown())
+            } else {
+                ValType::Constant(Fp::ONE)
+            };
+
             let comparator = outputs
                 .iter()
                 .map(|x| {
