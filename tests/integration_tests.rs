@@ -2591,6 +2591,7 @@ mod native_tests {
                 "--param-visibility=private",
                 "--lookup-range=(-32768,32768)",
                 "-K=17",
+                "--num-inner-cols=1"
             ])
             .status()
             .expect("failed to execute process");
