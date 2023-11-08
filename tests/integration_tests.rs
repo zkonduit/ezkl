@@ -2399,7 +2399,6 @@ mod native_tests {
                 &format!("--input-visibility={}", input_visibility),
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
-                &format!("--num-inner-cols={}", 1),
             ])
             .status()
             .expect("failed to execute process");
@@ -2592,6 +2591,7 @@ mod native_tests {
                 "--param-visibility=private",
                 "--lookup-range=(-32768,32768)",
                 "-K=17",
+                "--num-inner-cols=1"
             ])
             .status()
             .expect("failed to execute process");
