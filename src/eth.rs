@@ -256,9 +256,11 @@ pub async fn deploy_da_verifier_via_solidity(
     Ok(contract.address())
 }
 
+type ParsedCallsToAccount = (Vec<H160>, Vec<Vec<Bytes>>, Vec<Vec<U256>>);
+
 fn parse_calls_to_accounts(
     calls_to_accounts: Vec<CallsToAccount>,
-) -> Result<(Vec<H160>, Vec<Vec<Bytes>>, Vec<Vec<U256>>), Box<dyn Error>> {
+) -> Result<ParsedCallsToAccount, Box<dyn Error>> {
     let mut contract_addresses = vec![];
     let mut call_data = vec![];
     let mut decimals: Vec<Vec<U256>> = vec![];

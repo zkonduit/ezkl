@@ -72,6 +72,25 @@ pub enum AggregationError {
     ProofCreate,
 }
 
+type AggregationResult<'a> = (
+    // accumulator
+    KzgAccumulator<G1Affine, Rc<Halo2Loader<'a>>>,
+    // the set of assigned cells
+    Vec<Vec<AssignedCell<Fr, Fr>>>,
+);
+
+type LoadedProof<'a> = verifier::plonk::PlonkProof<
+    G1Affine,
+    Rc<
+        loader::halo2::Halo2Loader<
+            'a,
+            G1Affine,
+            halo2_wrong_ecc::BaseFieldEccChip<G1Affine, 4, 68>,
+        >,
+    >,
+    KzgAs<Bn256, Bdfg21>,
+>;
+
 /// Aggregate one or more application snarks of the same shape into a KzgAccumulator
 pub fn aggregate<'a>(
     svk: &Svk,
@@ -79,13 +98,7 @@ pub fn aggregate<'a>(
     snarks: &[SnarkWitness<Fr, G1Affine>],
     as_proof: Value<&'_ [u8]>,
     split_proofs: bool,
-) -> Result<
-    (
-        KzgAccumulator<G1Affine, Rc<Halo2Loader<'a>>>,
-        Vec<Vec<AssignedCell<Fr, Fr>>>,
-    ),
-    plonk::Error,
-> {
+) -> Result<AggregationResult<'a>, plonk::Error> {
     let assign_instances = |instances: &[Vec<Value<Fr>>]| {
         instances
             .iter()
@@ -100,19 +113,7 @@ pub fn aggregate<'a>(
 
     let mut accumulators = vec![];
     let mut snark_instances = vec![];
-    let mut proofs: Vec<
-        verifier::plonk::PlonkProof<
-            G1Affine,
-            Rc<
-                loader::halo2::Halo2Loader<
-                    '_,
-                    G1Affine,
-                    halo2_wrong_ecc::BaseFieldEccChip<G1Affine, 4, 68>,
-                >,
-            >,
-            KzgAs<Bn256, Bdfg21>,
-        >,
-    > = vec![];
+    let mut proofs: Vec<LoadedProof<'_>> = vec![];
 
     for snark in snarks.iter() {
         let protocol = snark.protocol.as_ref().unwrap().loaded(loader);
