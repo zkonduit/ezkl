@@ -59,12 +59,12 @@ impl BaseOp {
         match &self {
             BaseOp::DotInit => a
                 .into_iter()
-                .zip(b.into_iter())
+                .zip(b)
                 .fold(T::zero().unwrap(), |acc, (a, b)| acc + a * b),
             BaseOp::Dot => {
                 prev_output
                     + a.into_iter()
-                        .zip(b.into_iter())
+                        .zip(b)
                         .fold(T::zero().unwrap(), |acc, (a, b)| acc + a * b)
             }
             BaseOp::CumProdInit => b.into_iter().fold(T::one().unwrap(), |acc, b| acc * b),
