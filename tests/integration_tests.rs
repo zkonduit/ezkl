@@ -1605,7 +1605,7 @@ mod native_tests {
 
         let deployed_addr_arg = format!("--addr-verifier={}", addr);
 
-        let pf_arg = format!("{}/{}/evm_aggr.pf", test_dir, example_name);
+        let pf_arg = format!("{}/{}/aggr.pf", test_dir, example_name);
 
         let mut base_args = vec![
             "verify-evm",
