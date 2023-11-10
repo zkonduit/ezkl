@@ -1213,7 +1213,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#662abfc029ec236dfbcb6cd47feeccd9d5bfa51d"
 dependencies = [
  "integer",
  "num-bigint",
@@ -2086,7 +2086,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice#db9315e8543d6717039c151a9cbfc55b57d90fff"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/more-informative-errors#ea8f3e1e002ebc840b64a7d57ca6b6c79ae6ce3f"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2103,7 +2103,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-unblinded-advice#db9315e8543d6717039c151a9cbfc55b57d90fff"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/more-informative-errors#ea8f3e1e002ebc840b64a7d57ca6b6c79ae6ce3f"
 dependencies = [
  "blake2b_simd",
  "env_logger",
@@ -2123,7 +2123,7 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/chunked-lookup-verifier#8cf26f3164ce7e21b4323adf754833e684efdba1"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/chunked-lookup-verifier#3b1ef2fa0443ce6caa42a4c2465b86a1e95b0ae3"
 dependencies = [
  "askama",
  "blake2b_simd",
@@ -2177,7 +2177,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#662abfc029ec236dfbcb6cd47feeccd9d5bfa51d"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2485,7 +2485,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#662abfc029ec236dfbcb6cd47feeccd9d5bfa51d"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2721,7 +2721,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#be37b4e1d21b1839e42fcca4414584e56295604f"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#662abfc029ec236dfbcb6cd47feeccd9d5bfa51d"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -4511,7 +4511,7 @@ dependencies = [
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#8e2e99279469c654d7084116f2eefe5db7caea27"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#8b866a77560a3a660eba2236153b98e1d442cd67"
 dependencies = [
  "ecc",
  "halo2_proofs",

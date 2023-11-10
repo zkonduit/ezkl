@@ -1732,9 +1732,9 @@ mod native_tests {
         gen_circuit_settings_and_witness(
             test_dir,
             example_name.clone(),
-            "public",
-            "public",
             "private",
+            "public",
+            "public",
             1,
             "resources",
             None,
