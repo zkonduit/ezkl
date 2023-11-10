@@ -87,7 +87,7 @@ mod native_tests {
         if !std::path::Path::new(&srs_path).exists() {
             let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
                 .args([
-                    "gen-srs",
+                    "get-srs",
                     "--logrows",
                     &format!("{}", logrows),
                     "--srs-path",
