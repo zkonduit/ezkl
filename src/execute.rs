@@ -402,6 +402,19 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         )
         .await
         .map(|_| ()),
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::CreateHubUser {
+            username,
+            url ,
+
+        } => prove_hub(
+            url.as_deref(),
+            &artifact_id,
+            &data,
+            transcript_type.as_deref(),
+        )
+        .await
+        .map(|_| ()),
     }
 }
 
@@ -1949,6 +1962,8 @@ pub(crate) async fn get_hub_proof(
     log::info!("Proof : {}", proof.as_json()?.to_colored_json_auto()?);
     Ok(proof)
 }
+
+pub(crate) async create_hub_user (username: &str, url: Option<&str>) 
 
 /// helper function for load_params
 pub(crate) fn load_params_cmd(

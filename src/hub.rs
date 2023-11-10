@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+
+/// Stores users organizations
+#[derive(Serialize, Deserialize, Debug)]
+pub struct User {
+    /// The org
+    /// The users username
+    pub name: String,
+}
+
+
 /// Stores users organizations
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Organization {
