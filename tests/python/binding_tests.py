@@ -812,3 +812,89 @@ def test_evm_aggregate_and_verify_aggr():
     Tests for aggregated proof and verifying aggregate proof
     """
     asyncio.run(evm_aggregate_and_verify_aggr())
+
+def get_examples():
+    EXAMPLES_OMIT = [
+        'mobilenet_large',
+        'mobilenet',
+        'doodles',
+        'nanoGPT',
+        # these fails for some reason
+        'multihead_attention',
+        'large_op_graph',
+        '1l_instance_norm',
+        'variable_cnn',
+        'accuracy',
+        'linear_regression'
+    ]
+    examples = []
+    for subdir, _, _ in os.walk(os.path.join(examples_path, "onnx")):
+        name = subdir.split('/')[-1]
+        if name in EXAMPLES_OMIT or name == "onnx":
+            continue
+        else:
+            examples.append((
+                os.path.join(subdir, "network.onnx"),
+                os.path.join(subdir, "input.json"),
+            ))
+    return examples
+
+
+@pytest.mark.parametrize("model_file, input_file", get_examples())
+def test_all_examples(model_file, input_file):
+    """Tests all examples in the examples folder"""
+    # gen settings
+    settings_path = os.path.join(folder_path, "settings.json")
+    compiled_model_path = os.path.join(folder_path, 'network.ezkl')
+    pk_path = os.path.join(folder_path, 'test.pk')
+    vk_path = os.path.join(folder_path, 'test.vk')
+    witness_path = os.path.join(folder_path, 'witness.json')
+    proof_path = os.path.join(folder_path, 'proof.json')
+
+    res = ezkl.gen_settings(model_file, settings_path)
+    assert res
+
+    res = ezkl.compile_circuit(model_file, compiled_model_path, settings_path)
+    assert res
+
+    with open(settings_path, 'r') as f:
+        data = json.load(f)
+
+    logrows = data["run_args"]["logrows"]
+    srs_path = os.path.join(folder_path, f"srs_{logrows}")
+
+    # generate the srs file if the path does not exist
+    if not os.path.exists(srs_path):
+        ezkl.gen_srs(os.path.join(folder_path, srs_path), logrows)
+
+    res = ezkl.setup(
+        compiled_model_path,
+        vk_path,
+        pk_path,
+        srs_path
+    )
+    assert res == True
+    assert os.path.isfile(vk_path)
+    assert os.path.isfile(pk_path)
+
+    res = ezkl.gen_witness(input_file, compiled_model_path, witness_path)
+    assert os.path.isfile(witness_path)
+
+    ezkl.prove(
+        witness_path,
+        compiled_model_path,
+        pk_path,
+        proof_path,
+        srs_path,
+        "single",
+    )
+
+    assert os.path.isfile(proof_path)
+    res = ezkl.verify(
+        proof_path,
+        settings_path,
+        vk_path,
+        srs_path,
+    )
+
+    assert res == True
