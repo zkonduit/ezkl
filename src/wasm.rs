@@ -442,6 +442,14 @@ pub fn prove(
         .into_bytes())
 }
 
+/// print hex representation of a proof
+#[wasm_bindgen]
+pub fn printProofHex(proof_path: PathBuf) -> Result<String, JsError> {
+    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)
+        .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
+
+    Ok(hex::encode(proof.proof))
+}
 // VALIDATION FUNCTIONS
 
 /// Witness file validation
