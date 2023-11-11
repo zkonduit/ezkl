@@ -319,6 +319,7 @@ mod native_tests {
         // "hummingbird_decision_tree",
     ];
 
+    #[cfg(not(feature = "icicle"))]
     const TESTS_AGGR: [&str; 21] = [
         "1l_mlp",
         "1l_flatten",
@@ -342,6 +343,9 @@ mod native_tests {
         "max",
         "1l_max_pool",
     ];
+
+    #[cfg(feature = "icicle")]
+    const TESTS_AGGR: [&str; 3] = ["1l_mlp", "1l_flatten", "1l_average"];
 
     const NEG_TESTS: [(&str, &str); 2] = [
         ("2l_relu_sigmoid_small", "2l_relu_small"),
@@ -406,6 +410,7 @@ mod native_tests {
             use crate::native_tests::kzg_aggr_mock_prove_and_verify;
             use tempdir::TempDir;
 
+            #[cfg(not(feature="icicle"))]
             seq!(N in 0..=20 {
 
             #(#[test_case(TESTS_AGGR[N])])*
@@ -427,6 +432,18 @@ mod native_tests {
                 test_dir.close().unwrap();
             }
 
+            });
+
+            #[cfg(feature="icicle")]
+            seq!(N in 0..=3 {
+            #(#[test_case(TESTS_AGGR[N])])*
+            fn kzg_aggr_prove_and_verify_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
+                kzg_aggr_prove_and_verify(path, test.to_string());
+                test_dir.close().unwrap();
+            }
             });
     }
     };

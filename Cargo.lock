@@ -1308,7 +1308,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/halo2wrong?branch=icicle-integration#5870f3e2ea407181d8128248de15a0b2e141e0d8"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#6fa78143319266767e124e242eded0c6905011f4"
 dependencies = [
  "integer",
  "num-bigint",
@@ -2181,7 +2181,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/ingonyama-zk/halo2#7ac156c14ab1f6fd3cfa2e6ac1af402bf10a9b72"
+source = "git+https://github.com/zkonduit/halo2#3d7b5e61b3052680ccb279e05bdcc21dd8a8fedf"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2198,7 +2198,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/ingonyama-zk/halo2#7ac156c14ab1f6fd3cfa2e6ac1af402bf10a9b72"
+source = "git+https://github.com/zkonduit/halo2#3d7b5e61b3052680ccb279e05bdcc21dd8a8fedf"
 dependencies = [
  "blake2b_simd",
  "env_logger",
@@ -2220,7 +2220,7 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/halo2-solidity-verifier?branch=icicle-integration#d597e66d29c1f8bd9c83cc182fee550f35f55523"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/chunked-lookup-verifier#b5885027bae560391334f8b63a14c5d377ce6e0e"
 dependencies = [
  "askama",
  "blake2b_simd",
@@ -2274,7 +2274,7 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/halo2wrong?branch=icicle-integration#5870f3e2ea407181d8128248de15a0b2e141e0d8"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#6fa78143319266767e124e242eded0c6905011f4"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2605,7 +2605,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/halo2wrong?branch=icicle-integration#5870f3e2ea407181d8128248de15a0b2e141e0d8"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#6fa78143319266767e124e242eded0c6905011f4"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2850,7 +2850,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/halo2wrong?branch=icicle-integration#5870f3e2ea407181d8128248de15a0b2e141e0d8"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#6fa78143319266767e124e242eded0c6905011f4"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -4669,7 +4669,7 @@ dependencies = [
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/snark-verifier?branch=icicle-integration#547b3704093e4744ebf22fe8981f587f03215c64"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#355a35eca27b68a2b70d699e743fc90e402b4012"
 dependencies = [
  "ecc",
  "halo2_proofs",
