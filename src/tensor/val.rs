@@ -192,6 +192,16 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<ValType<F>>> for ValTe
     }
 }
 
+impl<F: PrimeField + TensorType + PartialOrd> From<Vec<ValType<F>>> for ValTensor<F> {
+    fn from(t: Vec<ValType<F>>) -> ValTensor<F> {
+        ValTensor::Value {
+            inner: t.clone().into_iter().into(),
+            dims: vec![t.len()],
+            scale: 1,
+        }
+    }
+}
+
 impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
     fn from(t: Tensor<F>) -> ValTensor<F> {
         ValTensor::Value {
@@ -297,10 +307,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
 
     ///
     pub fn is_instance(&self) -> bool {
-        match self {
-            ValTensor::Instance { .. } => true,
-            _ => false,
-        }
+        matches!(self, ValTensor::Instance { .. })
     }
 
     ///

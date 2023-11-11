@@ -32,9 +32,9 @@ describe('Generate witness, prove and verify', () => {
 
     it('prove', async () => {
         let result
-        let witness = await readEzklArtifactsFile(path, example, 'input.json');
+        let witness = await readEzklArtifactsFile(path, example, 'witness.json');
         let pk = await readEzklArtifactsFile(path, example, 'key.pk');
-        let circuit_ser = await readEzklArtifactsFile(path, example, 'network.onnx');
+        let circuit_ser = await readEzklArtifactsFile(path, example, 'network.compiled');
         circuit_settings_ser = await readEzklArtifactsFile(path, example, 'settings.json');
         params_ser = await readEzklSrsFile(path, example);
         const startTimeProve = Date.now();

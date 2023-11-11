@@ -409,6 +409,7 @@ where
 }
 
 /// a wrapper around halo2's create_proof
+#[allow(clippy::too_many_arguments)]
 pub fn create_proof_circuit<
     'params,
     Scheme: CommitmentScheme,
@@ -505,7 +506,6 @@ where
 
 /// Swaps the proof commitments to a new set in the proof
 pub fn swap_proof_commitments<
-    'params,
     F: PrimeField,
     Scheme: CommitmentScheme,
     E: EncodedChallenge<Scheme::Curve>,
@@ -693,6 +693,7 @@ pub fn save_params<Scheme: CommitmentScheme>(
 }
 
 /// helper function
+#[allow(clippy::too_many_arguments)]
 pub fn create_proof_circuit_kzg<
     'params,
     C: Circuit<Fr>,

@@ -22,6 +22,8 @@
     missing_debug_implementations,
     unsafe_code
 )]
+// we allow this for our dynamic range based indexing scheme
+#![allow(clippy::single_range_in_vec_init)]
 #![feature(round_ties_even)]
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
@@ -94,7 +96,7 @@ pub struct RunArgs {
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
     /// The log_2 number of rows
-    #[arg(short = 'N', long, default_value = "1")]
+    #[arg(short = 'N', long, default_value = "2")]
     pub num_inner_cols: usize,
     /// Hand-written parser for graph variables, eg. batch_size=1
     #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size=1", value_delimiter = ',')]

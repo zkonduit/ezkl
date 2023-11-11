@@ -2009,7 +2009,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         local_kernel.flatten();
 
         // this is dot product notation in einsum format
-        let mut res = einsum(config, region, &mut [local_image, local_kernel], "i,i->").unwrap();
+        let mut res = einsum(config, region, &[local_image, local_kernel], "i,i->").unwrap();
 
         if has_bias {
             let bias = values[2].get_single_elem(start_kernel_index).unwrap();

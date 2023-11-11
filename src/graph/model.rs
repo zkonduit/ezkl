@@ -10,6 +10,7 @@ use crate::circuit::Input;
 use crate::circuit::InputType;
 use crate::circuit::Unknown;
 use crate::fieldutils::felt_to_i128;
+use crate::tensor::ValType;
 use crate::{
     circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
     tensor::{Tensor, ValTensor},
@@ -23,6 +24,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::ConstraintSystem,
 };
+use halo2curves::ff::Field;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
@@ -447,16 +449,6 @@ impl Model {
             .dummy_layout(run_args, &self.graph.input_shapes())
             .unwrap();
 
-        // Then number of columns in the circuits
-        #[cfg(not(target_arch = "wasm32"))]
-        info!(
-            "{} {} {} (coord={})",
-            "model uses".blue(),
-            num_rows.to_string().blue(),
-            "rows (excluding modules)".blue(),
-            linear_coord.to_string().yellow(),
-        );
-
         // extract the requisite lookup ops from the model
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
 
@@ -705,33 +697,16 @@ impl Model {
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node_mut(id.node);
-            input.outputs[0]
-                .clone()
-                .fact
-                .shape
-                .dims()
-                .enumerate()
-                .for_each(|(i, x)| {
-                    if matches!(x, GenericFactoid::Any) {
-                        let batch_size = variables.get("batch_size").unwrap_or_else(|| {
+            let mut fact: InferenceFact = input.outputs[0].fact.clone();
+
+            for (i, x) in fact.clone().shape.dims().enumerate() {
+                if matches!(x, GenericFactoid::Any) {
+                    let batch_size = variables.get("batch_size").unwrap_or_else(|| {
                             panic!("Unknown dimension batch_size in model inputs, set batch_size in variables")
                         });
-                        input.outputs[0]
-                            .fact
-                            .shape
-                            .set_dim(i, tract_onnx::prelude::TDim::Val(*batch_size as i64));
-                    }
-                });
-
-            let mut fact = model.node(id.node).outputs[0].fact.clone();
-
-            // use as default type if not specified
-            if matches!(
-                fact.datum_type,
-                tract_onnx::tract_hir::internal::TypeFactoid::Any
-            ) {
-                log::warn!("unspecified datum type for input {}, using f32", i);
-                fact = fact.with_datum_type(tract_onnx::prelude::DatumType::F32);
+                    fact.shape
+                        .set_dim(i, tract_onnx::prelude::TDim::Val(*batch_size as i64));
+                }
             }
 
             model.set_input_fact(i, fact)?;
@@ -1100,6 +1075,7 @@ impl Model {
 
         let mut num_rows = 0;
         let mut linear_coord = 0;
+        let mut total_const_size = 0;
 
         let outputs = layouter.assign_region(
             || "model",
@@ -1115,9 +1091,7 @@ impl Model {
                         halo2_proofs::plonk::Error::Synthesis
                     })?;
 
-                if run_args.output_visibility == Visibility::Public
-                    || run_args.output_visibility == Visibility::Fixed
-                {
+                if run_args.output_visibility.is_public() || run_args.output_visibility.is_fixed() {
                     let output_scales = self.graph.get_output_scales();
                     let _ = outputs
                         .iter()
@@ -1145,14 +1119,21 @@ impl Model {
                 }
                 num_rows = thread_safe_region.row();
                 linear_coord = thread_safe_region.linear_coord();
+                total_const_size = thread_safe_region.total_constants();
 
                 Ok(outputs)
             },
         )?;
 
+        // Then number of columns in the circuits
+        #[cfg(not(target_arch = "wasm32"))]
         info!(
-            "model has {} assigned rows (coord={})",
-            num_rows, linear_coord
+            "{} {} {} (coord={}, constants={})",
+            "model uses".blue(),
+            num_rows.to_string().blue(),
+            "rows".blue(),
+            linear_coord.to_string().yellow(),
+            total_const_size.to_string().red()
         );
 
         let duration = start_time.elapsed();
@@ -1344,14 +1325,19 @@ impl Model {
         let start_time = instant::Instant::now();
 
         let mut results = BTreeMap::<usize, Vec<ValTensor<Fp>>>::new();
+        let default_value = if !self.visibility.input.is_fixed() {
+            ValType::Value(Value::<Fp>::unknown())
+        } else {
+            ValType::Constant(Fp::ONE)
+        };
 
         let inputs: Vec<ValTensor<Fp>> = input_shapes
             .iter()
             .map(|shape| {
-                let mut t: Tensor<Value<Fp>> =
-                    Tensor::from(vec![Value::<Fp>::unknown(); shape.iter().product()].into_iter());
-                t.reshape(shape);
-                t.into()
+                let mut t: ValTensor<Fp> =
+                    vec![default_value.clone(); shape.iter().product()].into();
+                t.reshape(shape).unwrap();
+                t
             })
             .collect_vec();
 
@@ -1370,16 +1356,31 @@ impl Model {
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
-        if run_args.output_visibility == Visibility::Public
-            || run_args.output_visibility == Visibility::Fixed
-        {
+        if self.visibility.output.is_public() || self.visibility.output.is_fixed() {
+            let default_value = if !self.visibility.output.is_fixed() {
+                ValType::Value(Value::<Fp>::unknown())
+            } else {
+                ValType::Constant(Fp::ONE)
+            };
+
+            let comparator = outputs
+                .iter()
+                .map(|x| {
+                    let mut v: ValTensor<Fp> =
+                        vec![default_value.clone(); x.dims().iter().product::<usize>()].into();
+                    v.reshape(x.dims()).unwrap();
+                    v
+                })
+                .collect_vec();
+
             let _ = outputs
                 .into_iter()
-                .map(|output| {
+                .zip(comparator)
+                .map(|(o, c)| {
                     dummy_config
                         .layout(
                             &mut region,
-                            &[output.clone(), output],
+                            &[o, c],
                             Box::new(HybridOp::RangeCheck(run_args.tolerance)),
                         )
                         .unwrap()
@@ -1389,6 +1390,17 @@ impl Model {
 
         let duration = start_time.elapsed();
         trace!("dummy model layout took: {:?}", duration);
+
+        // Then number of columns in the circuits
+        #[cfg(not(target_arch = "wasm32"))]
+        info!(
+            "{} {} {} (coord={}, constants={})",
+            "model uses".blue(),
+            region.row().to_string().blue(),
+            "rows".blue(),
+            region.linear_coord().to_string().yellow(),
+            region.total_constants().to_string().red()
+        );
 
         Ok((
             region.row(),
