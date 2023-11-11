@@ -1733,7 +1733,7 @@ mod native_tests {
             test_dir,
             example_name.clone(),
             "private",
-            "public",
+            "fixed",
             "public",
             1,
             "resources",
