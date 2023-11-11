@@ -282,6 +282,12 @@ impl VarVisibility {
         let params_vis = &args.param_visibility;
         let output_vis = &args.output_visibility;
 
+        if params_vis.is_public() {
+            return Err(
+                "public visibility for params is deprecated, please use `fixed` instead".into(),
+            );
+        }
+
         if !output_vis.is_public()
             & !params_vis.is_public()
             & !input_vis.is_public()
