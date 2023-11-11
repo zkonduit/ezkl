@@ -458,7 +458,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "public", "public", 1, "accuracy", None);
+                mock(path, test.to_string(), "public", "fixed", "public", 1, "accuracy", None);
                 test_dir.close().unwrap();
             }
         });
