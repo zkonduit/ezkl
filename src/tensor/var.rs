@@ -293,7 +293,6 @@ impl VarTensor {
         constant: F,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
         let (x, y, z) = self.cartesian_coord(offset);
-
         match &self {
             VarTensor::Advice { inner: advices, .. } => {
                 region.assign_advice_from_constant(|| "constant", advices[x][y], z, constant)
@@ -320,10 +319,7 @@ impl VarTensor {
                     if omissions.contains(&coord) {
                         return Ok(k);
                     }
-                    let (x, y, z) = self.cartesian_coord(offset + assigned_coord);
-                    let cell =
-                        self.assign_value(region, offset, k.clone(), x, y, z, assigned_coord)?;
-
+                    let cell = self.assign_value(region, offset, k.clone(), assigned_coord)?;
                     assigned_coord += 1;
 
                     match k {
@@ -384,9 +380,7 @@ impl VarTensor {
             },
             ValTensor::Value { inner: v, .. } => Ok(v
                 .enum_map(|coord, k| {
-                    let (x, y, z) = self.cartesian_coord(offset + coord);
-                    let cell = self.assign_value(region, offset, k.clone(), x, y, z, coord)?;
-
+                    let cell = self.assign_value(region, offset, k.clone(), coord)?;
                     match k {
                         ValType::Constant(f) => Ok::<ValType<F>, halo2_proofs::plonk::Error>(
                             ValType::AssignedConstant(cell, f),
@@ -498,7 +492,7 @@ impl VarTensor {
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
 
-                    let cell = self.assign_value(region, offset, k.clone(), x, y, z, coord * step)?;
+                    let cell = self.assign_value(region, offset, k.clone(), coord * step)?;
 
                     if single_inner_col {
                     if z == 0 {
@@ -555,11 +549,9 @@ impl VarTensor {
         region: &mut Region<F>,
         offset: usize,
         k: ValType<F>,
-        x: usize,
-        y: usize,
-        z: usize,
         coord: usize,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
+        let (x, y, z) = self.cartesian_coord(offset + coord);
         match k {
             ValType::Value(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {

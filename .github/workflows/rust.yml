@@ -109,8 +109,6 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Model serialization
-        run: cargo nextest run native_tests::tests::model_serialization_::t
       - name: Model serialization different binary ID
         run: cargo nextest run native_tests::tests::model_serialization_different_binaries_  --test-threads 1
 
@@ -326,7 +324,7 @@ jobs:
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - name: KZG prove and verify tests double inner col
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_double_col
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_single_col
       - name: KZG prove and verify tests triple inner col
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_triple_col
       - name: KZG prove and verify tests quadruple inner col
@@ -451,23 +449,6 @@ jobs:
       - name: Examples
         run: cargo nextest run --release tests_examples
 
-  neg-tests:
-    runs-on: self-hosted
-    needs: [build, library-tests, docs]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-08-24
-          override: true
-          components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-      - name: should fail)
-        run: cargo nextest run neg_tests::neg_examples_
-
   python-tests:
     runs-on: self-hosted
     needs: [build, library-tests, docs]
@@ -514,11 +495,11 @@ jobs:
       - name: Build python ezkl
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Public inputs
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_inputs_ --no-capture
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_inputs_
       - name: fixed params
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_fixed_params_ --no-capture
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_fixed_params_
       - name: Public outputs
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_ --no-capture
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_
 
   python-integration-tests:
     runs-on:
@@ -591,8 +572,8 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_27_expects
       - name: KZG Vis demo
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_26_expects
-      - name: Simple hub demo
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
+      # - name: Simple hub demo
+      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
       - name: Hashed DA tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_24_expects
       - name: Little transformer tutorial

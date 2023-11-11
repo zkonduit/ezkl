@@ -324,6 +324,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     }
 
     /// Configures and creates lookup selectors
+    #[allow(clippy::too_many_arguments)]
     pub fn configure_lookup(
         &mut self,
         cs: &mut ConstraintSystem<F>,
