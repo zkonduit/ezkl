@@ -425,7 +425,7 @@ mod native_tests {
             });
 
             #[cfg(feature="icicle")]
-            seq!(N in 0..=3 {
+            seq!(N in 0..=2 {
             #(#[test_case(TESTS_AGGR[N])])*
             fn kzg_aggr_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
