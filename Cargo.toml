@@ -13,8 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "ac/more-informative-errors" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/more-informative-errors" }
+halo2_gadgets = { git = "https://github.com/zkonduit/halo2", ref= "3d7b5e61b3052680ccb279e05bdcc21dd8a8fedf" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", ref= "3d7b5e61b3052680ccb279e05bdcc21dd8a8fedf"  }
 halo2curves = { version = "0.1.0" }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
@@ -157,3 +157,4 @@ onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
 ezkl = ["onnx", "serde", "serde_json", "log", "colored", "env_logger", "tabled/color", "colored_json", "halo2_proofs/circuit-params"]
 det-prove = []
+icicle = ["halo2_proofs/icicle_gpu"]
