@@ -680,21 +680,20 @@ pub enum Commands {
     //     url: Option<String>,
     // },
 
-    /// Creates an API key in the hub
-    #[command(name = "get-hub-keys", arg_required_else_help = true)]
-    #[cfg(not(target_arch = "wasm32"))]
-    CreateHubAPIKey {
-        /// The user's name
-        #[arg(short = 'N', long)]
-        name: String,
-        /// The description of the api key
-        #[arg(short = 'D', long)]
-        description: Option<String>,
-        /// Whether or not it returns a json object
-        #[arg(short = 'J', long)]
-        return_json: Option<bool>,
-    },
-
+    // /// Creates an API key in the hub
+    // #[command(name = "get-hub-keys", arg_required_else_help = true)]
+    // #[cfg(not(target_arch = "wasm32"))]
+    // CreateHubAPIKey {
+    //     /// The user's name
+    //     #[arg(short = 'N', long)]
+    //     name: String,
+    //     /// The description of the api key
+    //     #[arg(short = 'D', long)]
+    //     description: Option<String>,
+    //     /// Whether or not it returns a json object
+    //     #[arg(short = 'J', long)]
+    //     return_json: Option<bool>,
+    // },
     /// Gets credentials from the hub
     #[command(name = "get-hub-credentials", arg_required_else_help = true)]
     #[cfg(not(target_arch = "wasm32"))]
@@ -711,6 +710,9 @@ pub enum Commands {
     #[command(name = "create-hub-artifact", arg_required_else_help = true)]
     #[cfg(not(target_arch = "wasm32"))]
     CreateHubArtifact {
+        /// The user's api key
+        #[arg(short = 'K', long)]
+        api_key: Option<String>,
         /// The path to the model file
         #[arg(short = 'M', long)]
         uncompiled_circuit: PathBuf,
@@ -738,6 +740,9 @@ pub enum Commands {
     #[command(name = "prove-hub", arg_required_else_help = true)]
     #[cfg(not(target_arch = "wasm32"))]
     ProveHub {
+        /// The user's api key
+        #[arg(short = 'K', long)]
+        api_key: Option<String>,
         /// The path to the model file
         #[arg(short = 'A', long)]
         artifact_id: String,
@@ -754,6 +759,9 @@ pub enum Commands {
     #[command(name = "get-hub-proof", arg_required_else_help = true)]
     #[cfg(not(target_arch = "wasm32"))]
     GetHubProof {
+        /// The user's api key
+        #[arg(short = 'K', long)]
+        api_key: Option<String>,
         /// The path to the model file
         #[arg(short = 'A', long)]
         artifact_id: String,

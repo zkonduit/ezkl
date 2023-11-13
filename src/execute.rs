@@ -366,6 +366,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateHubArtifact {
+            api_key,
             uncompiled_circuit,
             data,
             organization_id,
@@ -374,6 +375,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             args,
             target,
         } => deploy_model(
+            api_key.as_deref(),
             url.as_deref(),
             &uncompiled_circuit,
             &data,
@@ -385,16 +387,22 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         .await
         .map(|_| ()),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::GetHubProof { artifact_id, url } => get_hub_proof(url.as_deref(), &artifact_id)
+        Commands::GetHubProof {
+            api_key,
+            artifact_id,
+            url,
+        } => get_hub_proof(api_key.as_deref(), url.as_deref(), &artifact_id)
             .await
             .map(|_| ()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::ProveHub {
+            api_key,
             artifact_id,
             data,
             transcript_type,
             url,
         } => prove_hub(
+            api_key.as_deref(),
             url.as_deref(),
             &artifact_id,
             &data,
@@ -402,19 +410,15 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         )
         .await
         .map(|_| ()),
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::CreateHubUser {
-            username,
-            url ,
-
-        } => prove_hub(
-            url.as_deref(),
-            &artifact_id,
-            &data,
-            transcript_type.as_deref(),
-        )
-        .await
-        .map(|_| ()),
+        // #[cfg(not(target_arch = "wasm32"))]
+        // Commands::CreateHubUser { username, url } => prove_hub(
+        //     url.as_deref(),
+        //     &artifact_id,
+        //     &data,
+        //     transcript_type.as_deref(),
+        // )
+        // .await
+        // .map(|_| ()),
     }
 }
 
@@ -1792,6 +1796,7 @@ pub(crate) async fn get_hub_credentials(
 
 /// Deploy a model
 pub(crate) async fn deploy_model(
+    api_key: Option<&str>,
     url: Option<&str>,
     model: &Path,
     input: &Path,
@@ -1867,8 +1872,14 @@ pub(crate) async fn deploy_model(
 
     let client = reqwest::Client::new();
     let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
+    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
     //send request
-    let response = client.post(url).multipart(form).send().await?;
+    let response = client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .multipart(form)
+        .send()
+        .await?;
     let response_body = response.json::<serde_json::Value>().await?;
     println!("{}", response_body.to_string());
     let artifact_id: crate::hub::Artifact =
@@ -1882,6 +1893,7 @@ pub(crate) async fn deploy_model(
 
 /// Generates proofs on the hub
 pub async fn prove_hub(
+    api_key: Option<&str>,
     url: Option<&str>,
     id: &str,
     input: &Path,
@@ -1921,8 +1933,15 @@ pub async fn prove_hub(
         .text("map", map)
         .part("input", input_file);
     let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
+    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
     let client = reqwest::Client::new();
-    let response = client.post(url).multipart(form).send().await?;
+    // let response = client.post(url).multipart(form).send().await?;
+    let response = client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .multipart(form)
+        .send()
+        .await?;
     let response_body = response.json::<serde_json::Value>().await?;
     let proof_id: crate::hub::Proof =
         serde_json::from_value(response_body["data"]["initiateProof"].clone())?;
@@ -1932,6 +1951,7 @@ pub async fn prove_hub(
 
 /// Fetches proofs from the hub
 pub(crate) async fn get_hub_proof(
+    api_key: Option<&str>,
     url: Option<&str>,
     id: &str,
 ) -> Result<crate::hub::Proof, Box<dyn Error>> {
@@ -1952,8 +1972,14 @@ pub(crate) async fn get_hub_proof(
         "#, id),
     });
     let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
+    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
 
-    let response = client.post(url).json(&request_body).send().await?;
+    let response = client
+        .post(url)
+        .header("Authorization", format!("Bearer {:?}", api_key))
+        .json(&request_body)
+        .send()
+        .await?;
     let response_body = response.json::<serde_json::Value>().await?;
 
     let proof: crate::hub::Proof =
@@ -1963,7 +1989,7 @@ pub(crate) async fn get_hub_proof(
     Ok(proof)
 }
 
-pub(crate) async create_hub_api_key (username: &str, url: Option<&str>) 
+// pub(crate) async create_hub_api_key (username: &str, url: Option<&str>)
 
 /// helper function for load_params
 pub(crate) fn load_params_cmd(

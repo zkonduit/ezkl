@@ -1144,6 +1144,7 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
 /// deploys a model to the hub
 #[pyfunction(signature = (model, input, name, organization_id, target=None, py_run_args=None, url=None))]
 fn create_hub_artifact(
+    api_key: Option<&str>,
     model: PathBuf,
     input: PathBuf,
     name: String,
@@ -1159,6 +1160,7 @@ fn create_hub_artifact(
     let output = Runtime::new()
         .unwrap()
         .block_on(crate::execute::deploy_model(
+            api_key,
             url,
             &model,
             &input,
@@ -1177,6 +1179,7 @@ fn create_hub_artifact(
 /// Generate a proof on the hub.
 #[pyfunction(signature = (id, input, url=None, transcript_type=None))]
 fn prove_hub(
+    api_key: Option<&str>,
     id: &str,
     input: PathBuf,
     url: Option<&str>,
@@ -1184,7 +1187,7 @@ fn prove_hub(
 ) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::prove_hub(url, id, &input, transcript_type))
+        .block_on(crate::execute::prove_hub(api_key, url, id, &input, transcript_type))
         .map_err(|e| {
             let err_str = format!("Failed to generate proof on hub: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -1207,10 +1210,10 @@ fn get_hub_proof(id: &str, url: Option<&str>) -> PyResult<PyObject> {
 
 /// Gets hub credentials
 #[pyfunction(signature = (username, url=None))]
-fn get_hub_credentials(username: &str, url: Option<&str>) -> PyResult<PyObject> {
+fn get_hub_credentials( api_key: Option<&str>,username: &str, url: Option<&str>) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::get_hub_credentials(url, username))
+        .block_on(crate::execute::get_hub_credentials(api_key,url, username))
         .map_err(|e| {
             let err_str = format!("Failed to get hub credentials: {}", e);
             PyRuntimeError::new_err(err_str)
