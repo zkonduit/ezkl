@@ -3,10 +3,10 @@ use serde::{Deserialize, Serialize};
 
 /// Stores users organizations
 #[derive(Serialize, Deserialize, Debug)]
-pub struct User {
-    /// The org
-    /// The users username
+pub struct APIKey {
+    /// The keys name
     pub name: String,
+    
 }
 
 

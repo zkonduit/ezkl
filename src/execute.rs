@@ -1963,7 +1963,7 @@ pub(crate) async fn get_hub_proof(
     Ok(proof)
 }
 
-pub(crate) async create_hub_user (username: &str, url: Option<&str>) 
+pub(crate) async create_hub_api_key (username: &str, url: Option<&str>) 
 
 /// helper function for load_params
 pub(crate) fn load_params_cmd(
