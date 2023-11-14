@@ -529,6 +529,10 @@ impl Module<Fr> for ElGamalGadget {
     ) -> Result<Self::InputAssignments, Error> {
         assert_eq!(inputs.len(), 2);
         let message = inputs[0].clone();
+        let message_offset = message
+            .get_inner_tensor()
+            .map_err(|_| Error::Synthesis)?
+            .len();
         let sk = inputs[1].clone();
 
         let start_time = instant::Instant::now();
@@ -589,7 +593,7 @@ impl Module<Fr> for ElGamalGadget {
                 let sk_var = region.assign_advice(
                     || "sk",
                     self.config.plaintext_col,
-                    message.len(),
+                    message_offset,
                     || sk,
                 )?;
 
