@@ -29,6 +29,12 @@ jobs:
           python-version: 3.7
           architecture: x64
 
+      - name: Set pyproject.toml version to match github tag
+        shell: bash
+        run: |
+            mv pyproject.toml pyproject.toml.orig
+            sed "s/ezkl/ezkl-gpu/" pyproject.toml.orig >pyproject.toml
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2023-06-27
