@@ -1109,8 +1109,6 @@ impl Model {
                                 if witnessed_outputs.len() <= i {
                                     return Err("you provided insufficient witness values to generate a fixed output".into());
                                 }
-
-                                assert_eq!(witnessed_outputs[i].len(), output.len());
                                 witnessed_outputs[i].clone()
                             };
 
