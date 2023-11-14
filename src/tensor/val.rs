@@ -307,10 +307,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
 
     ///
     pub fn is_instance(&self) -> bool {
-        match self {
-            ValTensor::Instance { .. } => true,
-            _ => false,
-        }
+        matches!(self, ValTensor::Instance { .. })
     }
 
     ///

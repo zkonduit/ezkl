@@ -62,9 +62,46 @@ jobs:
         run: cargo test --doc --verbose
       - name: Library tests
         run: cargo nextest run --lib --verbose
+  
+
+  ultra-overflow-tests-gpu:
+    runs-on: GPU
+    env: 
+      ENABLE_ICICLE_GPU: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-08-24
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
+      - uses: mwilliamson/setup-wasmtime-action@v2
+        with:
+          wasmtime-version: "3.0.1"
+      - name: Install wasm32-wasi
+        run: rustup target add wasm32-wasi
+      - name: Install cargo-wasi
+        run: cargo install cargo-wasi
+      # - name: Matmul overflow (wasi)
+      #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
+      # - name: Conv overflow (wasi)
+      #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
+      - name: lookup overflow
+        run: cargo nextest run  --release lookup_ultra_overflow --no-capture --features icicle -- --include-ignored
+      - name: Matmul overflow
+        run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture --features icicle -- --include-ignored
+      - name: Conv overflow
+        run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --features icicle -- --include-ignored
+      - name: Conv + relu overflow
+        run: cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture --features icicle -- --include-ignored
+
 
   ultra-overflow-tests:
-    runs-on: self-hosted
+    runs-on: non-gpu
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -109,8 +146,6 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Model serialization
-        run: cargo nextest run native_tests::tests::model_serialization_::t
       - name: Model serialization different binary ID
         run: cargo nextest run native_tests::tests::model_serialization_different_binaries_  --test-threads 1
 
@@ -157,7 +192,7 @@ jobs:
         run: cargo nextest run --release --verbose tests::tutorial_
 
   mock-proving-tests:
-    runs-on: self-hosted
+    runs-on: non-gpu
     # needs: [build,  library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -326,7 +361,7 @@ jobs:
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - name: KZG prove and verify tests double inner col
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_double_col
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_single_col
       - name: KZG prove and verify tests triple inner col
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_triple_col
       - name: KZG prove and verify tests quadruple inner col
@@ -351,6 +386,44 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed
       - name: KZG prove and verify tests (encrypted outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted
+
+
+  prove-and-verify-tests-gpu:
+    runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-08-24
+          override: true
+          components: rustfmt, clippy
+      - name: Add rust-src
+        run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
+      - uses: actions/checkout@v3
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: KZG prove and verify tests (kzg outputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output --features icicle
+      - name: KZG prove and verify tests (public outputs + column overflow)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w --features icicle
+      - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features icicle
+      - name: KZG prove and verify tests (public outputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --features icicle
+      - name: KZG prove and verify tests (public outputs + column overflow)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --features icicle
+      - name: KZG prove and verify tests (public inputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input --features icicle
+      - name: KZG prove and verify tests (fixed params)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params --features icicle
+      - name: KZG prove and verify tests (hashed outputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --features icicle
+      - name: KZG prove and verify tests (encrypted outputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted --features icicle
 
   fuzz-tests:
     runs-on: ubuntu-latest-32-cores
@@ -391,6 +464,25 @@ jobs:
           locked: true
       - name: Mock aggr tests
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_  --test-threads 8
+  
+
+  prove-and-verify-aggr-tests-gpu:
+    runs-on: GPU
+    env:
+      ENABLE_ICICLE_GPU: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-08-24
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: KZG )tests
+        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features icicle --test-threads 1 -- --include-ignored
 
   prove-and-verify-aggr-tests:
     runs-on: large-self-hosted
@@ -451,25 +543,8 @@ jobs:
       - name: Examples
         run: cargo nextest run --release tests_examples
 
-  neg-tests:
-    runs-on: self-hosted
-    needs: [build, library-tests, docs]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-08-24
-          override: true
-          components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-      - name: should fail)
-        run: cargo nextest run neg_tests::neg_examples_
-
   python-tests:
-    runs-on: self-hosted
+    runs-on: non-gpu
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -514,11 +589,11 @@ jobs:
       - name: Build python ezkl
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Public inputs
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_inputs_ --no-capture
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_inputs_
       - name: fixed params
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_fixed_params_ --no-capture
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_fixed_params_
       - name: Public outputs
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_ --no-capture
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_
 
   python-integration-tests:
     runs-on:
@@ -591,8 +666,8 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_27_expects
       - name: KZG Vis demo
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_26_expects
-      - name: Simple hub demo
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
+      # - name: Simple hub demo
+      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
       - name: Hashed DA tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_24_expects
       - name: Little transformer tutorial

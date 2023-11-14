@@ -1,4 +1,5 @@
 use crate::circuit::modules::elgamal::{ElGamalCipher, ElGamalVariables};
+use crate::circuit::modules::kzg::KZGChip;
 use crate::circuit::modules::poseidon::{
     spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
     PoseidonChip,
@@ -13,7 +14,8 @@ use crate::graph::{
 };
 use crate::pfsys::evm::aggregation::AggregationCircuit;
 use crate::pfsys::{
-    load_pk, save_params, load_vk, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs, ProofType, Snark, TranscriptType,
+    load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs, ProofType,
+    Snark, TranscriptType,
 };
 use crate::RunArgs;
 use ethers::types::H160;
@@ -29,7 +31,6 @@ use snark_verifier::util::arithmetic::PrimeField;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
-use crate::circuit::modules::kzg::KZGChip;
 
 type PyFelt = [u64; 4];
 
@@ -448,15 +449,19 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
     Ok(hash)
 }
 
-
 /// Generate a kzg commitment.
 #[pyfunction(signature = (
     message,
-    srs_path, 
-    vk_path, 
+    srs_path,
+    vk_path,
     settings_path
     ))]
-fn kzg_commit(message: Vec<PyFelt>, srs_path: PathBuf, vk_path: PathBuf, settings_path: PathBuf) -> PyResult<Vec<PyG1Affine>> {
+fn kzg_commit(
+    message: Vec<PyFelt>,
+    srs_path: PathBuf,
+    vk_path: PathBuf,
+    settings_path: PathBuf,
+) -> PyResult<Vec<PyG1Affine>> {
     let message: Vec<Fr> = message
         .iter()
         .map(|x| crate::pfsys::vecu64_to_field_montgomery::<Fr>(&x))
@@ -471,29 +476,27 @@ fn kzg_commit(message: Vec<PyFelt>, srs_path: PathBuf, vk_path: PathBuf, setting
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings)
         .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
 
-    let output = KZGChip::commit(message, vk.cs().degree() as u32, (vk.cs().blinding_factors() + 1) as u32, &srs);
+    let output = KZGChip::commit(
+        message,
+        vk.cs().degree() as u32,
+        (vk.cs().blinding_factors() + 1) as u32,
+        &srs,
+    );
 
-  
-    Ok(output
-        .iter()
-        .map(|x| (*x).into())
-        .collect::<Vec<_>>())
+    Ok(output.iter().map(|x| (*x).into()).collect::<Vec<_>>())
 }
 
 /// Swap the commitments in a proof
 #[pyfunction(signature = (
     proof_path,
-    witness_path, 
+    witness_path,
     ))]
 fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResult<()> {
-
     crate::execute::swap_proof_commitments(proof_path, witness_path)
         .map_err(|_| PyIOError::new_err("Failed to swap commitments"))?;
-    
+
     Ok(())
 }
-
-
 
 /// Encrypt using elgamal
 #[pyfunction(signature = (
@@ -705,13 +708,21 @@ fn calibrate_settings(
     data,
     model,
     output,
-    vk_path=None, 
+    vk_path=None,
     srs_path=None,
 ))]
-fn gen_witness(data: PathBuf, model: PathBuf, output: Option<PathBuf>, vk_path: Option<PathBuf>, srs_path: Option<PathBuf>) -> PyResult<PyObject> {
+fn gen_witness(
+    data: PathBuf,
+    model: PathBuf,
+    output: Option<PathBuf>,
+    vk_path: Option<PathBuf>,
+    srs_path: Option<PathBuf>,
+) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::gen_witness(model, data, output, vk_path, srs_path))
+        .block_on(crate::execute::gen_witness(
+            model, data, output, vk_path, srs_path,
+        ))
         .map_err(|e| {
             let err_str = format!("Failed to run generate witness: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -742,7 +753,11 @@ fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     logrows,
     split_proofs = false,
 ))]
-fn mock_aggregate(aggregation_snarks: Vec<PathBuf>, logrows: u32, split_proofs: bool) -> PyResult<bool> {
+fn mock_aggregate(
+    aggregation_snarks: Vec<PathBuf>,
+    logrows: u32,
+    split_proofs: bool,
+) -> PyResult<bool> {
     crate::execute::mock_aggregate(aggregation_snarks, logrows, split_proofs).map_err(|e| {
         let err_str = format!("Failed to run mock: {}", e);
         PyRuntimeError::new_err(err_str)
@@ -847,12 +862,18 @@ fn setup_aggregate(
     logrows: u32,
     split_proofs: bool,
 ) -> Result<bool, PyErr> {
-    crate::execute::setup_aggregate(sample_snarks, vk_path, pk_path, srs_path, logrows, split_proofs).map_err(
-        |e| {
-            let err_str = format!("Failed to setup aggregate: {}", e);
-            PyRuntimeError::new_err(err_str)
-        },
-    )?;
+    crate::execute::setup_aggregate(
+        sample_snarks,
+        vk_path,
+        pk_path,
+        srs_path,
+        logrows,
+        split_proofs,
+    )
+    .map_err(|e| {
+        let err_str = format!("Failed to setup aggregate: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }

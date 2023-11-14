@@ -1093,7 +1093,7 @@ impl Model {
 
                 if run_args.output_visibility.is_public() || run_args.output_visibility.is_fixed() {
                     let output_scales = self.graph.get_output_scales();
-                    let _ = outputs
+                    let res = outputs
                         .iter()
                         .enumerate()
                         .map(|(i, output)| {
@@ -1105,6 +1105,11 @@ impl Model {
                                 vars.increment_instance_idx();
                                 res
                             } else {
+                                // if witnessed_outputs is of len less than i  error
+                                if witnessed_outputs.len() <= i {
+                                    return Err("you provided insufficient witness values to generate a fixed output".into());
+                                }
+
                                 assert_eq!(witnessed_outputs[i].len(), output.len());
                                 witnessed_outputs[i].clone()
                             };
@@ -1115,7 +1120,11 @@ impl Model {
                                 Box::new(HybridOp::RangeCheck(tolerance)),
                             )
                         })
-                        .collect_vec();
+                        .collect::<Result<Vec<_>,_>>();
+                    res.map_err(|e| {
+                        error!("{}", e);
+                        halo2_proofs::plonk::Error::Synthesis
+                    })?;
                 }
                 num_rows = thread_safe_region.row();
                 linear_coord = thread_safe_region.linear_coord();

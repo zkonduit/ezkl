@@ -1429,7 +1429,9 @@ pub(crate) async fn fuzz(
     info!("fuzzing public inputs");
 
     let fuzz_public_inputs = || {
-        let bad_inputs = vec![Fr::random(rand::rngs::OsRng); public_inputs.len()];
+        let bad_inputs: Vec<Fr> = (0..public_inputs.len())
+            .map(|_| Fr::random(rand::rngs::OsRng))
+            .collect();
 
         let bad_proof = create_proof_circuit_kzg(
             circuit.clone(),
@@ -1441,7 +1443,7 @@ pub(crate) async fn fuzz(
             CheckMode::UNSAFE,
             None,
         )
-        .unwrap();
+        .map_err(|_| ())?;
 
         verify_proof_circuit_kzg(
             params.verifier_params(),
@@ -1518,9 +1520,14 @@ pub(crate) async fn fuzz(
     info!("fuzzing proof instances");
 
     let fuzz_proof_instances = || {
-        let mut bad_inputs = vec![];
+        let mut bad_inputs = vec![vec![]];
+
         for l in &proof.instances {
-            bad_inputs.push(vec![Fr::random(rand::rngs::OsRng); l.len()]);
+            bad_inputs.push(
+                (0..l.len())
+                    .map(|_| Fr::random(rand::rngs::OsRng))
+                    .collect(),
+            );
         }
 
         let bad_proof = Snark::<_, _> {
@@ -1656,6 +1663,7 @@ pub(crate) fn setup_aggregate(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
