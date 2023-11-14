@@ -163,6 +163,7 @@ jobs:
 
   macos:
     runs-on: macos-latest
+    needs: ["build-release"]
     strategy:
       matrix:
         target: [x86_64, universal2-apple-darwin]
@@ -212,6 +213,7 @@ jobs:
   
   windows:
     runs-on: windows-latest
+    needs: ["build-release"]
     strategy:
       matrix:
         target: [x64, x86]
@@ -260,6 +262,7 @@ jobs:
 
   linux:
     runs-on: ubuntu-latest
+    needs: ["build-release"]
     strategy:
       matrix:
         target: [x86_64, i686]
@@ -310,6 +313,7 @@ jobs:
 
   musllinux:
     runs-on: ubuntu-latest
+    needs: ["build-release"]
     strategy:
       matrix:
         target:
@@ -367,6 +371,7 @@ jobs:
 
   musllinux-cross:
     runs-on: ubuntu-latest
+    needs: ["build-release"]
     strategy:
       matrix:
         platform:
