@@ -529,10 +529,6 @@ impl Module<Fr> for ElGamalGadget {
     ) -> Result<Self::InputAssignments, Error> {
         assert_eq!(inputs.len(), 2);
         let message = inputs[0].clone();
-        let message_offset = message
-            .get_inner_tensor()
-            .map_err(|_| Error::Synthesis)?
-            .len();
         let sk = inputs[1].clone();
 
         let start_time = instant::Instant::now();
@@ -590,14 +586,16 @@ impl Module<Fr> for ElGamalGadget {
                     _ => panic!("wrong input type"),
                 };
 
+                let msg_var = msg_var?;
+
                 let sk_var = region.assign_advice(
                     || "sk",
                     self.config.plaintext_col,
-                    message_offset,
+                    msg_var.len(),
                     || sk,
                 )?;
 
-                Ok((msg_var?, sk_var))
+                Ok((msg_var, sk_var))
             },
         )?;
         let duration = start_time.elapsed();
