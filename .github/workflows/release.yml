@@ -65,13 +65,6 @@ jobs:
             mv Cargo.lock Cargo.lock.orig
             sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.lock.orig >Cargo.lock
 
-     
-
-      - name: Set Target Dir
-        shell: bash
-        run: |
-          cargo install cross -Z sparse-registry
-          echo "TARGET_DIR=./target/linux-gpu" >> $GITHUB_ENV
 
       - name: Install dependencies
         shell: bash
@@ -85,7 +78,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build-artifacts
-          tar czvf build-artifacts/ezkl-linux-gpu.tar.gz -C "target/linux-gpu/release" ezkl
+          tar czvf build-artifacts/ezkl-linux-gpu.tar.gz -C "target/release" ezkl
           echo "ASSET=build-artifacts/ezkl-linux-gpu.tar.gz" >> $GITHUB_ENV
 
       - name: Upload release archive
