@@ -172,11 +172,15 @@ jobs:
         with:
           python-version: 3.7
           architecture: x64
+
+      - name: Get release version from tag
+        shell: bash
+        run: |
+          echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "version is: ${{ env.EZKL_VERSION }}"
   
       - name: Set Cargo.toml version to match github tag
         shell: bash
-        env:
-          EZKL_VERSION: ${{ env.EZKL_VERSION }}
         run: |
           mv Cargo.toml Cargo.toml.orig
           sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.toml.orig >Cargo.toml
@@ -217,11 +221,15 @@ jobs:
         with:
           python-version: 3.7
           architecture: ${{ matrix.target }}
+
+      - name: Get release version from tag
+        shell: bash
+        run: |
+          echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "version is: ${{ env.EZKL_VERSION }}"
   
       - name: Set Cargo.toml version to match github tag
         shell: bash
-        env:
-          EZKL_VERSION: ${{ env.EZKL_VERSION }}
         run: |
           mv Cargo.toml Cargo.toml.orig
           sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.toml.orig >Cargo.toml
@@ -261,11 +269,15 @@ jobs:
         with:
           python-version: 3.7
           architecture: x64
+
+      - name: Get release version from tag
+        shell: bash
+        run: |
+          echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "version is: ${{ env.EZKL_VERSION }}"
   
       - name: Set Cargo.toml version to match github tag
         shell: bash
-        env:
-          EZKL_VERSION: ${{ env.EZKL_VERSION }}
         run: |
           mv Cargo.toml Cargo.toml.orig
           sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.toml.orig >Cargo.toml
@@ -308,11 +320,15 @@ jobs:
         with:
           python-version: 3.7
           architecture: x64
+
+      - name: Get release version from tag
+        shell: bash
+        run: |
+          echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "version is: ${{ env.EZKL_VERSION }}"
   
       - name: Set Cargo.toml version to match github tag
         shell: bash
-        env:
-          EZKL_VERSION: ${{ env.EZKL_VERSION }}
         run: |
           mv Cargo.toml Cargo.toml.orig
           sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.toml.orig >Cargo.toml
@@ -363,11 +379,15 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: 3.7
+
+      - name: Get release version from tag
+        shell: bash
+        run: |
+          echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "version is: ${{ env.EZKL_VERSION }}"
   
       - name: Set Cargo.toml version to match github tag
         shell: bash
-        env:
-          EZKL_VERSION: ${{ env.EZKL_VERSION }}
         run: |
           mv Cargo.toml Cargo.toml.orig
           sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.toml.orig >Cargo.toml
