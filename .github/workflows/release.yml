@@ -32,6 +32,68 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: ${{ env.EZKL_VERSION }}
 
+  build-release-gpu: 
+    name: build-release-gpu
+    needs: ["create-release"]
+    runs-on: GPU
+    env:
+      CARGO: cargo
+      TARGET_FLAGS: ""
+      TARGET_DIR: ./target
+      RUST_BACKTRACE: 1
+      PCRE2_SYS_STATIC: 1
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Get release version from tag
+        shell: bash
+        run: |
+          echo "EZKL_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "version is: ${{ env.EZKL_VERSION }}"
+
+      - name: Set Cargo.toml version to match github tag
+        shell: bash
+        run: |
+            mv Cargo.toml Cargo.toml.orig
+            sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.toml.orig >Cargo.toml
+            mv Cargo.lock Cargo.lock.orig
+            sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.lock.orig >Cargo.lock
+
+      - name: Use Cross
+        shell: bash
+        run: |
+          cargo install cross -Z sparse-registry
+          echo "TARGET_DIR=./target/linux-gpu" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+            if [[ "${{ runner.os }}" == "Linux" ]]; then
+              sudo apt-get update && sudo apt-get install -y musl-tools
+            fi
+
+      - name: Build release binary
+        run: cargo build --release -Z sparse-registry --features icicle
+
+      - name: Build archive
+        shell: bash
+        run: |
+          mkdir -p build-artifacts
+          tar czvf build-artifacts/ezkl-linux-gpu.tar.gz -C "target/linux-gpu/release" ezkl
+          echo "ASSET=build-artifacts/ezkl-linux-gpu.tar.gz" >> $GITHUB_ENV
+
+      - name: Upload release archive
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ env.ASSET }}
+          asset_name: ${{ env.ASSET }}
+          asset_content_type: application/octet-stream
+
+
   build-release:
     name: build-release
     needs: ["create-release"]
