@@ -1,4 +1,4 @@
-name: Build and Publish Python Bindings
+name: Build and Publish Python GPU Bindings (linux only)
 
 on:
   # Requires someone to trigger this build script via github workflows
