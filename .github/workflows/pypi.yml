@@ -1,10 +1,14 @@
 name: Build and Publish Python Bindings
 
 on:
-  # Requires someone to trigger this build script via github workflows
-  # It is required that the codebase is audited by contributors
-  # before triggering to reduce the likelihood of supply chain attacks
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag to release"
+        required: true
+  push:
+    tags:
+      - "*"
 
 defaults:
   run:
@@ -13,6 +17,7 @@ defaults:
 jobs:
   macos:
     runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/')
     strategy:
       matrix:
         target: [x86_64, universal2-apple-darwin]
@@ -57,6 +62,7 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/')
     strategy:
       matrix:
         target: [x64, x86]
@@ -101,6 +107,7 @@ jobs:
 
   linux:
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     strategy:
       matrix:
         target: [x86_64, i686]
@@ -198,6 +205,7 @@ jobs:
 
   musllinux:
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     strategy:
       matrix:
         target:
@@ -251,6 +259,7 @@ jobs:
 
   musllinux-cross:
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
     strategy:
       matrix:
         platform:
