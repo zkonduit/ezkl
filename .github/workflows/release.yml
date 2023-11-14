@@ -43,6 +43,11 @@ jobs:
       RUST_BACKTRACE: 1
       PCRE2_SYS_STATIC: 1
     steps:
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-08-24
+          override: true
+          components: rustfmt, clippy
       - name: Checkout repo
         uses: actions/checkout@v4
 
@@ -60,7 +65,9 @@ jobs:
             mv Cargo.lock Cargo.lock.orig
             sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.lock.orig >Cargo.lock
 
-      - name: Use Cross
+     
+
+      - name: Set Target Dir
         shell: bash
         run: |
           cargo install cross -Z sparse-registry

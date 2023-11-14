@@ -24,6 +24,12 @@ jobs:
           python-version: 3.7
           architecture: x64
 
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-06-27
+          override: true
+          components: rustfmt, clippy
+
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
