@@ -1142,13 +1142,13 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
 }
 
 /// deploys a model to the hub
-#[pyfunction(signature = (model, input, name, organization_id, target=None, py_run_args=None, url=None))]
+#[pyfunction(signature = (model, input, name, organization_id, api_key=None,target=None, py_run_args=None, url=None))]
 fn create_hub_artifact(
-    api_key: Option<&str>,
     model: PathBuf,
     input: PathBuf,
     name: String,
     organization_id: String,
+    api_key: Option<&str>,
     target: Option<CalibrationTarget>,
     py_run_args: Option<PyRunArgs>,
     url: Option<&str>,
@@ -1177,11 +1177,11 @@ fn create_hub_artifact(
 }
 
 /// Generate a proof on the hub.
-#[pyfunction(signature = (id, input, url=None, transcript_type=None))]
+#[pyfunction(signature = ( id, input,api_key=None, url=None, transcript_type=None))]
 fn prove_hub(
-    api_key: Option<&str>,
     id: &str,
     input: PathBuf,
+    api_key: Option<&str>,
     url: Option<&str>,
     transcript_type: Option<&str>,
 ) -> PyResult<PyObject> {
@@ -1195,12 +1195,13 @@ fn prove_hub(
     Python::with_gil(|py| Ok(output.to_object(py)))
 }
 
+
 /// Fetches proof from hub
-#[pyfunction(signature = (id, url=None))]
-fn get_hub_proof(id: &str, url: Option<&str>) -> PyResult<PyObject> {
+#[pyfunction(signature = ( id, api_key=None,url=None))]
+fn get_hub_proof( id: &str,api_key: Option<&str>, url: Option<&str>) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::get_hub_proof(url, id))
+        .block_on(crate::execute::get_hub_proof(api_key, url, id))
         .map_err(|e| {
             let err_str = format!("Failed to get proof from hub: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -1209,8 +1210,8 @@ fn get_hub_proof(id: &str, url: Option<&str>) -> PyResult<PyObject> {
 }
 
 /// Gets hub credentials
-#[pyfunction(signature = (username, url=None))]
-fn get_hub_credentials( api_key: Option<&str>,username: &str, url: Option<&str>) -> PyResult<PyObject> {
+#[pyfunction(signature = (username,api_key=None, url=None))]
+fn get_hub_credentials( username: &str, api_key: Option<&str>,url: Option<&str>) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
         .block_on(crate::execute::get_hub_credentials(api_key,url, username))

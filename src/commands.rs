@@ -698,6 +698,9 @@ pub enum Commands {
     #[command(name = "get-hub-credentials", arg_required_else_help = true)]
     #[cfg(not(target_arch = "wasm32"))]
     GetHubCredentials {
+        /// The user's api key
+        #[arg(short = 'K', long)]
+        api_key: Option<String>,
         /// The path to the model file
         #[arg(short = 'N', long)]
         username: String,

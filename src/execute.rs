@@ -358,11 +358,13 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => verify_evm(proof_path, addr_verifier, rpc_url, addr_da).await,
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::GetHubCredentials { username, url } => {
-            get_hub_credentials(url.as_deref(), &username)
-                .await
-                .map(|_| ())
-        }
+        Commands::GetHubCredentials {
+            api_key,
+            username,
+            url,
+        } => get_hub_credentials(api_key.as_deref(), url.as_deref(), &username)
+            .await
+            .map(|_| ()),
 
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateHubArtifact {
@@ -1762,6 +1764,7 @@ pub(crate) fn verify_aggr(
 
 /// Retrieves the user's credentials from the hub
 pub(crate) async fn get_hub_credentials(
+    api_key: Option<&str>,
     url: Option<&str>,
     username: &str,
 ) -> Result<crate::hub::Organizations, Box<dyn Error>> {
@@ -1780,8 +1783,15 @@ pub(crate) async fn get_hub_credentials(
         }
     });
     let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
+    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
 
-    let response = client.post(url).json(&request_body).send().await?;
+    let response = client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .json(&request_body)
+        .send()
+        .await?;
+
     let response_body = response.json::<serde_json::Value>().await?;
 
     let organizations: crate::hub::Organizations =
