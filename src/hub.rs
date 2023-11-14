@@ -1,15 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
-/// Stores users organizations
-#[derive(Serialize, Deserialize, Debug)]
-pub struct APIKey {
-    /// The keys name
-    pub name: String,
-    
-}
-
-
 /// Stores users organizations
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Organization {

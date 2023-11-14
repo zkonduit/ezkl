@@ -668,32 +668,6 @@ pub enum Commands {
         proof_path: PathBuf,
     },
 
-    // /// Creates a User in the Hub
-    // #[command(name = "create-hub-user", arg_required_else_help = true)]
-    // #[cfg(not(target_arch = "wasm32"))]
-    // CreateHubUser {
-    //     /// The path to the model file
-    //     #[arg(short = 'N', long)]
-    //     username: String,
-    //     /// The path to the input json file
-    //     #[arg(short = 'U', long)]
-    //     url: Option<String>,
-    // },
-
-    // /// Creates an API key in the hub
-    // #[command(name = "get-hub-keys", arg_required_else_help = true)]
-    // #[cfg(not(target_arch = "wasm32"))]
-    // CreateHubAPIKey {
-    //     /// The user's name
-    //     #[arg(short = 'N', long)]
-    //     name: String,
-    //     /// The description of the api key
-    //     #[arg(short = 'D', long)]
-    //     description: Option<String>,
-    //     /// Whether or not it returns a json object
-    //     #[arg(short = 'J', long)]
-    //     return_json: Option<bool>,
-    // },
     /// Gets credentials from the hub
     #[command(name = "get-hub-credentials", arg_required_else_help = true)]
     #[cfg(not(target_arch = "wasm32"))]

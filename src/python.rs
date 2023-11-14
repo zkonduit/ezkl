@@ -1208,7 +1208,13 @@ fn prove_hub(
 ) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::prove_hub(api_key, url, id, &input, transcript_type))
+        .block_on(crate::execute::prove_hub(
+            api_key,
+            url,
+            id,
+            &input,
+            transcript_type,
+        ))
         .map_err(|e| {
             let err_str = format!("Failed to generate proof on hub: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -1216,10 +1222,9 @@ fn prove_hub(
     Python::with_gil(|py| Ok(output.to_object(py)))
 }
 
-
 /// Fetches proof from hub
 #[pyfunction(signature = ( id, api_key=None,url=None))]
-fn get_hub_proof( id: &str,api_key: Option<&str>, url: Option<&str>) -> PyResult<PyObject> {
+fn get_hub_proof(id: &str, api_key: Option<&str>, url: Option<&str>) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
         .block_on(crate::execute::get_hub_proof(api_key, url, id))
@@ -1232,10 +1237,14 @@ fn get_hub_proof( id: &str,api_key: Option<&str>, url: Option<&str>) -> PyResult
 
 /// Gets hub credentials
 #[pyfunction(signature = (username,api_key=None, url=None))]
-fn get_hub_credentials( username: &str, api_key: Option<&str>,url: Option<&str>) -> PyResult<PyObject> {
+fn get_hub_credentials(
+    username: &str,
+    api_key: Option<&str>,
+    url: Option<&str>,
+) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::get_hub_credentials(api_key,url, username))
+        .block_on(crate::execute::get_hub_credentials(api_key, url, username))
         .map_err(|e| {
             let err_str = format!("Failed to get hub credentials: {}", e);
             PyRuntimeError::new_err(err_str)
