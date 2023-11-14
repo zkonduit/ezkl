@@ -1,7 +1,14 @@
 name: Build and Publish WASM<>JS Bindings
 
 on:
-  release:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag to release"
+        required: true
+  push:
+    tags:
+      - "*"
 
 defaults:
   run:
