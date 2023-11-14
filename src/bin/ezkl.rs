@@ -15,10 +15,10 @@ use log::{error, info};
 #[cfg(not(target_arch = "wasm32"))]
 use rand::prelude::SliceRandom;
 #[cfg(not(target_arch = "wasm32"))]
-use std::error::Error;
-#[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "icicle")]
 use std::env;
+#[cfg(not(target_arch = "wasm32"))]
+use std::error::Error;
 
 #[tokio::main(flavor = "current_thread")]
 #[cfg(not(target_arch = "wasm32"))]
