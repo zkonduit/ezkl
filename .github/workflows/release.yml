@@ -69,9 +69,7 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
-            if [[ "${{ runner.os }}" == "Linux" ]]; then
-              sudo apt-get update && sudo apt-get install -y musl-tools
-            fi
+            sudo apt-get update
 
       - name: Build release binary
         run: cargo build --release -Z sparse-registry --features icicle
