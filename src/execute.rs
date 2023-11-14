@@ -1944,7 +1944,6 @@ pub async fn prove_hub(
     let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
     let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
     let client = reqwest::Client::new();
-    // let response = client.post(url).multipart(form).send().await?;
     let response = client
         .post(url)
         .header("Authorization", format!("Bearer {}", api_key))
