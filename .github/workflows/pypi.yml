@@ -1,10 +1,7 @@
 name: Build and Publish Python Bindings
 
 on:
-  # Requires someone to trigger this build script via github workflows
-  # It is required that the codebase is audited by contributors
-  # before triggering to reduce the likelihood of supply chain attacks
-  workflow_dispatch:
+  release:
 
 defaults:
   run:
