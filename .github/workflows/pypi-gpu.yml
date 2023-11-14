@@ -50,6 +50,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: auto
+          container: off
           args: --release --out dist --features python-bindings,icicle
 
       - name: Install built wheel
