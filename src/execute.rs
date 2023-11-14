@@ -412,15 +412,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         )
         .await
         .map(|_| ()),
-        // #[cfg(not(target_arch = "wasm32"))]
-        // Commands::CreateHubUser { username, url } => prove_hub(
-        //     url.as_deref(),
-        //     &artifact_id,
-        //     &data,
-        //     transcript_type.as_deref(),
-        // )
-        // .await
-        // .map(|_| ()),
     }
 }
 
