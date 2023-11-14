@@ -586,14 +586,16 @@ impl Module<Fr> for ElGamalGadget {
                     _ => panic!("wrong input type"),
                 };
 
+                let msg_var = msg_var?;
+
                 let sk_var = region.assign_advice(
                     || "sk",
                     self.config.plaintext_col,
-                    message.len(),
+                    msg_var.len(),
                     || sk,
                 )?;
 
-                Ok((msg_var?, sk_var))
+                Ok((msg_var, sk_var))
             },
         )?;
         let duration = start_time.elapsed();

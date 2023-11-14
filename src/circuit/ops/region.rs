@@ -244,6 +244,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         if let Some(region) = &self.region {
             let a = a.get_inner_tensor().unwrap();
             let b = b.get_inner_tensor().unwrap();
+            assert_eq!(a.len(), b.len());
             a.iter().zip(b.iter()).try_for_each(|(a, b)| {
                 let a = a.get_prev_assigned();
                 let b = b.get_prev_assigned();
