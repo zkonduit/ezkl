@@ -1,10 +1,15 @@
 name: Build and Publish Python GPU Bindings (linux only)
 
+
 on:
-  # Requires someone to trigger this build script via github workflows
-  # It is required that the codebase is audited by contributors
-  # before triggering to reduce the likelihood of supply chain attacks
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag to release"
+        required: true
+  push:
+    tags:
+      - "*"
 
 defaults:
   run:
@@ -16,13 +21,19 @@ jobs:
     runs-on: GPU
     strategy:
       matrix:
-        target: [x86_64, i686]
+        target: [x86_64]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
           python-version: 3.7
           architecture: x64
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-06-27
+          override: true
+          components: rustfmt, clippy
 
       - name: Set Cargo.toml version to match github tag
         shell: bash
@@ -44,6 +55,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: auto
+          container: off
           args: --release --out dist --features python-bindings,icicle
 
       - name: Install built wheel

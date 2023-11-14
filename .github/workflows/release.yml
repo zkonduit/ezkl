@@ -43,6 +43,11 @@ jobs:
       RUST_BACKTRACE: 1
       PCRE2_SYS_STATIC: 1
     steps:
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-08-24
+          override: true
+          components: rustfmt, clippy
       - name: Checkout repo
         uses: actions/checkout@v4
 
@@ -60,11 +65,6 @@ jobs:
             mv Cargo.lock Cargo.lock.orig
             sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.lock.orig >Cargo.lock
 
-      - name: Use Cross
-        shell: bash
-        run: |
-          cargo install cross -Z sparse-registry
-          echo "TARGET_DIR=./target/linux-gpu" >> $GITHUB_ENV
 
       - name: Install dependencies
         shell: bash
@@ -78,7 +78,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build-artifacts
-          tar czvf build-artifacts/ezkl-linux-gpu.tar.gz -C "target/linux-gpu/release" ezkl
+          tar czvf build-artifacts/ezkl-linux-gpu.tar.gz -C "target/release" ezkl
           echo "ASSET=build-artifacts/ezkl-linux-gpu.tar.gz" >> $GITHUB_ENV
 
       - name: Upload release archive
