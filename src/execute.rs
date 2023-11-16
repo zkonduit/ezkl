@@ -258,7 +258,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             proof_type,
             check_mode,
         )
-        .await
         .map(|_| ()),
         Commands::MockAggregate {
             aggregation_snarks,
@@ -1277,7 +1276,7 @@ pub(crate) async fn test_update_account_calls(
 
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn prove(
+pub(crate) fn prove(
     data_path: PathBuf,
     compiled_circuit_path: PathBuf,
     pk_path: PathBuf,

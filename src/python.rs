@@ -690,7 +690,6 @@ fn calibrate_settings(
     let target = target.unwrap_or(CalibrationTarget::Resources {
         col_overflow: false,
     });
-
     crate::execute::calibrate(model, data, settings, target, scales, max_logrows).map_err(|e| {
         let err_str = format!("Failed to calibrate settings: {}", e);
         PyRuntimeError::new_err(err_str)
@@ -798,21 +797,19 @@ fn prove(
     srs_path: PathBuf,
     proof_type: ProofType,
 ) -> PyResult<PyObject> {
-    let snark = Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::prove(
-            witness,
-            model,
-            pk_path,
-            proof_path,
-            srs_path,
-            proof_type,
-            CheckMode::UNSAFE,
-        ))
-        .map_err(|e| {
-            let err_str = format!("Failed to run prove: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+    let snark = crate::execute::prove(
+        witness,
+        model,
+        pk_path,
+        proof_path,
+        srs_path,
+        proof_type,
+        CheckMode::UNSAFE,
+    )
+    .map_err(|e| {
+        let err_str = format!("Failed to run prove: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Python::with_gil(|py| Ok(snark.to_object(py)))
 }
