@@ -687,7 +687,7 @@ fn calibrate_settings(
     target: Option<CalibrationTarget>,
     scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
-) -> PyResult<&pyo3::PyAny> {
+) -> Result<bool, PyErr> {
     let target = target.unwrap_or(CalibrationTarget::Resources {
         col_overflow: false,
     });
