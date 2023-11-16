@@ -66,7 +66,6 @@ use std::sync::OnceLock;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use thiserror::Error;
-use tokio::runtime::Runtime;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_util::codec::{BytesCodec, FramedRead};
 
@@ -712,9 +711,8 @@ pub(crate) fn calibrate(
                     }
                 };
 
-                let data = Runtime::new()
-                    .unwrap()
-                    .block_on(circuit.load_graph_input(&chunk))
+                let data = circuit
+                    .load_graph_from_file_exclusively(&chunk)
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                 circuit
