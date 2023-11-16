@@ -680,7 +680,6 @@ fn gen_settings(
     max_logrows = None,
 ))]
 fn calibrate_settings(
-    py: Python,
     data: PathBuf,
     model: PathBuf,
     settings: PathBuf,
