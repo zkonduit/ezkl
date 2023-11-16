@@ -2,7 +2,6 @@ import ezkl
 import os
 import pytest
 import json
-import asyncio
 import subprocess
 import time
 
@@ -156,7 +155,7 @@ def test_gen_srs():
     assert os.path.isfile(params_k20_path)
 
 
-async def calibrate_over_user_range():
+def test_calibrate_over_user_range():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -189,14 +188,8 @@ async def calibrate_over_user_range():
     assert os.path.isfile(output_path)
 
 
-def test_calibrate_calibrate_over_user_range():
-    """
-    Test for calibrate
-    """
-    asyncio.run(calibrate_over_user_range())
 
-
-async def calibrate():
+def test_calibrate():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -227,13 +220,6 @@ async def calibrate():
         data_path, model_path, output_path, "resources")
     assert res == True
     assert os.path.isfile(output_path)
-
-
-def test_calibrate():
-    """
-    Test for calibrate
-    """
-    asyncio.run(calibrate())
 
 
 def test_model_compile():
@@ -559,7 +545,7 @@ def test_verify_evm():
     assert res == True
 
 
-async def aggregate_and_verify_aggr():
+def test_aggregate_and_verify_aggr():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -665,14 +651,7 @@ async def aggregate_and_verify_aggr():
     assert res == True
 
 
-def test_aggregate_and_verify_aggr():
-    """
-    Tests for aggregated proof and verifying aggregate proof
-    """
-    asyncio.run(aggregate_and_verify_aggr())
-
-
-async def evm_aggregate_and_verify_aggr():
+def test_evm_aggregate_and_verify_aggr():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -806,12 +785,6 @@ async def evm_aggregate_and_verify_aggr():
 
     # assert res == True
 
-
-def test_evm_aggregate_and_verify_aggr():
-    """
-    Tests for aggregated proof and verifying aggregate proof
-    """
-    asyncio.run(evm_aggregate_and_verify_aggr())
 
 def get_examples():
     EXAMPLES_OMIT = [

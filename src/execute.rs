@@ -120,7 +120,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             compiled_circuit,
             transcript,
             num_runs,
-        } => fuzz(compiled_circuit, witness, transcript, num_runs).await,
+        } => fuzz(compiled_circuit, witness, transcript, num_runs),
 
         Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
         #[cfg(not(target_arch = "wasm32"))]
@@ -150,7 +150,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             target,
             scales,
             max_logrows,
-        } => calibrate(model, data, settings_path, target, scales, max_logrows).await,
+        } => calibrate(model, data, settings_path, target, scales, max_logrows),
         Commands::GenWitness {
             data,
             compiled_circuit,
@@ -160,7 +160,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path)
             .await
             .map(|_| ()),
-        Commands::Mock { model, witness } => mock(model, witness).await,
+        Commands::Mock { model, witness } => mock(model, witness),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             vk_path,
@@ -604,7 +604,7 @@ use colored_json::ToColoredJson;
 /// Calibrate the circuit parameters to a given a dataset
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(trivial_casts)]
-pub(crate) async fn calibrate(
+pub(crate) fn calibrate(
     model_path: PathBuf,
     data: PathBuf,
     settings_path: PathBuf,
@@ -887,7 +887,7 @@ pub(crate) async fn calibrate(
     Ok(())
 }
 
-pub(crate) async fn mock(
+pub(crate) fn mock(
     compiled_circuit_path: PathBuf,
     data_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
@@ -1352,7 +1352,7 @@ pub(crate) async fn prove(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) async fn fuzz(
+pub(crate) fn fuzz(
     compiled_circuit_path: PathBuf,
     data_path: PathBuf,
     transcript: TranscriptType,
