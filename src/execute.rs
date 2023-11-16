@@ -66,6 +66,7 @@ use std::sync::OnceLock;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
 use thiserror::Error;
+use tokio::runtime::Runtime;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_util::codec::{BytesCodec, FramedRead};
 
@@ -611,6 +612,8 @@ pub(crate) async fn calibrate(
     scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
 ) -> Result<(), Box<dyn Error>> {
+    use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator};
+
     let data = GraphData::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
@@ -686,7 +689,7 @@ pub(crate) async fn calibrate(
         let _q = Gag::stderr().unwrap();
 
         let tasks = chunks
-            .iter()
+            .par_iter()
             .zip(run_args_iterable)
             .map(|(chunk, run_args)| {
                 // we need to create a new run args for each chunk
@@ -704,53 +707,49 @@ pub(crate) async fn calibrate(
                 let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
                     Ok(c) => c,
                     Err(_) => {
-                        return tokio::task::spawn(async move {
-                            Err(format!("failed to create circuit from run args"))
-                                as Result<GraphSettings, String>
-                        })
+                        return Err(format!("failed to create circuit from run args"))
+                            as Result<GraphSettings, String>
                     }
                 };
 
-                tokio::task::spawn(async move {
-                    let data = circuit
-                        .load_graph_input(&chunk)
-                        .await
-                        .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
+                let data = Runtime::new()
+                    .unwrap()
+                    .block_on(circuit.load_graph_input(&chunk))
+                    .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
-                    circuit
-                        .calibrate(&data, max_logrows)
-                        .map_err(|e| format!("failed to calibrate: {}", e))?;
+                circuit
+                    .calibrate(&data, max_logrows)
+                    .map_err(|e| format!("failed to calibrate: {}", e))?;
 
-                    let settings = circuit.settings().clone();
+                let settings = circuit.settings().clone();
 
-                    let found_run_args = RunArgs {
-                        input_scale: settings.run_args.input_scale,
-                        param_scale: settings.run_args.param_scale,
-                        lookup_range: settings.run_args.lookup_range,
-                        logrows: settings.run_args.logrows,
-                        scale_rebase_multiplier: settings.run_args.scale_rebase_multiplier,
-                        ..run_args.clone()
-                    };
+                let found_run_args = RunArgs {
+                    input_scale: settings.run_args.input_scale,
+                    param_scale: settings.run_args.param_scale,
+                    lookup_range: settings.run_args.lookup_range,
+                    logrows: settings.run_args.logrows,
+                    scale_rebase_multiplier: settings.run_args.scale_rebase_multiplier,
+                    ..run_args.clone()
+                };
 
-                    let found_settings = GraphSettings {
-                        run_args: found_run_args,
-                        required_lookups: settings.required_lookups,
-                        model_output_scales: settings.model_output_scales,
-                        model_input_scales: settings.model_input_scales,
-                        num_rows: settings.num_rows,
-                        total_assignments: settings.total_assignments,
-                        total_const_size: settings.total_const_size,
-                        ..original_settings.clone()
-                    };
+                let found_settings = GraphSettings {
+                    run_args: found_run_args,
+                    required_lookups: settings.required_lookups,
+                    model_output_scales: settings.model_output_scales,
+                    model_input_scales: settings.model_input_scales,
+                    num_rows: settings.num_rows,
+                    total_assignments: settings.total_assignments,
+                    total_const_size: settings.total_const_size,
+                    ..original_settings.clone()
+                };
 
-                    Ok(found_settings) as Result<GraphSettings, String>
-                })
+                Ok(found_settings) as Result<GraphSettings, String>
             })
-            .collect::<Vec<tokio::task::JoinHandle<std::result::Result<GraphSettings, String>>>>();
+            .collect::<Vec<Result<GraphSettings, String>>>();
 
         let mut res: Vec<GraphSettings> = vec![];
         for task in tasks {
-            if let Ok(task) = task.await? {
+            if let Ok(task) = task {
                 res.push(task);
             }
         }
