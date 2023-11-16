@@ -153,7 +153,6 @@ def test_gen_srs():
 
 
 
-
 def test_calibrate_over_user_range():
     data_path = os.path.join(
         examples_path,
@@ -791,6 +790,7 @@ def get_examples():
         'mobilenet',
         'doodles',
         'nanoGPT',
+        "self_attention",
         # these fails for some reason
         'multihead_attention',
         'large_op_graph',
