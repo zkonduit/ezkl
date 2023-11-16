@@ -183,7 +183,7 @@ async def calibrate_over_user_range():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources", [0, 1, 2])
     assert res == True
     assert os.path.isfile(output_path)
@@ -223,7 +223,7 @@ async def calibrate():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources")
     assert res == True
     assert os.path.isfile(output_path)
@@ -588,7 +588,7 @@ async def aggregate_and_verify_aggr():
     res = ezkl.gen_settings(model_path, settings_path)
     assert res == True
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         data_path, model_path, settings_path, "resources")
     assert res == True
     assert os.path.isfile(settings_path)
@@ -697,7 +697,7 @@ async def evm_aggregate_and_verify_aggr():
         settings_path,
     )
 
-    await ezkl.calibrate_settings(
+    ezkl.calibrate_settings(
         data_path,
         model_path,
         settings_path,

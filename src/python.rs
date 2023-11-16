@@ -692,15 +692,22 @@ fn calibrate_settings(
         col_overflow: false,
     });
 
-    pyo3_asyncio::tokio::future_into_py(py, async move {
-        crate::execute::calibrate(model, data, settings, target, scales, max_logrows)
-            .await
-            .map_err(|e| {
-                let err_str = format!("Failed to calibrate settings: {}", e);
-                PyRuntimeError::new_err(err_str)
-            })?;
-        Ok(true)
-    })
+    Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::calibrate(
+            model,
+            data,
+            settings,
+            target,
+            scales,
+            max_logrows,
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to calibrate settings: {}", e);
+            PyRuntimeError::new_err(err_str)
+        });
+
+    Ok(true)
 }
 
 /// runs the forward pass operation
