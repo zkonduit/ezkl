@@ -739,9 +739,14 @@ pub(crate) fn calibrate(
 
                 Ok(found_settings) as Result<GraphSettings, String>
             })
-            .collect::<Result<Vec<GraphSettings>, String>>();
+            .collect::<Vec<Result<GraphSettings, String>>>();
 
-        let res: Vec<GraphSettings> = tasks?;
+        let mut res: Vec<GraphSettings> = vec![];
+        for task in tasks {
+            if let Ok(task) = task {
+                res.push(task);
+            }
+        }
 
         // drop the gag
         std::mem::drop(_r);
