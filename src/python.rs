@@ -705,7 +705,7 @@ fn calibrate_settings(
         .map_err(|e| {
             let err_str = format!("Failed to calibrate settings: {}", e);
             PyRuntimeError::new_err(err_str)
-        });
+        })?;
 
     Ok(true)
 }
