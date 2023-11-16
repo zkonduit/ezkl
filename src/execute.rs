@@ -611,8 +611,6 @@ pub(crate) fn calibrate(
     scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
 ) -> Result<(), Box<dyn Error>> {
-    use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator};
-
     let data = GraphData::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
@@ -679,8 +677,6 @@ pub(crate) fn calibrate(
             "input scale: {}, param scale: {}, scale rebase multiplier: {}",
             input_scale, param_scale, scale_rebase_multiplier
         ));
-        std::thread::sleep(Duration::from_millis(100));
-
         // vec of settings copied chunks.len() times
         let run_args_iterable = vec![settings.run_args.clone(); chunks.len()];
 
@@ -688,7 +684,7 @@ pub(crate) fn calibrate(
         let _q = Gag::stderr().unwrap();
 
         let tasks = chunks
-            .par_iter()
+            .iter()
             .zip(run_args_iterable)
             .map(|(chunk, run_args)| {
                 // we need to create a new run args for each chunk
@@ -743,14 +739,9 @@ pub(crate) fn calibrate(
 
                 Ok(found_settings) as Result<GraphSettings, String>
             })
-            .collect::<Vec<Result<GraphSettings, String>>>();
+            .collect::<Result<Vec<GraphSettings>, String>>();
 
-        let mut res: Vec<GraphSettings> = vec![];
-        for task in tasks {
-            if let Ok(task) = task {
-                res.push(task);
-            }
-        }
+        let res: Vec<GraphSettings> = tasks?;
 
         // drop the gag
         std::mem::drop(_r);
