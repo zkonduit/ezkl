@@ -490,7 +490,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-pub(crate) fn gen_witness(
+pub(crate) async fn gen_witness(
     compiled_circuit_path: PathBuf,
     data: PathBuf,
     output: Option<PathBuf>,
@@ -519,9 +519,7 @@ pub(crate) fn gen_witness(
     };
 
     #[cfg(not(target_arch = "wasm32"))]
-    let mut input = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(circuit.load_graph_input(&data))?;
+    let mut input = circuit.load_graph_input(&data).await?;
     #[cfg(target_arch = "wasm32")]
     let mut input = circuit.load_graph_input(&data)?;
 
