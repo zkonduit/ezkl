@@ -648,6 +648,8 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: World Rotation
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_34_expects
       - name: MNIST Classifier
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_33_expects
       - name: Generalized Inverse
