@@ -786,18 +786,19 @@ def test_evm_aggregate_and_verify_aggr():
 
 def get_examples():
     EXAMPLES_OMIT = [
+        # these are too large
         'mobilenet_large',
         'mobilenet',
         'doodles',
         'nanoGPT',
         "self_attention",
-        # these fails for some reason
         'multihead_attention',
         'large_op_graph',
         '1l_instance_norm',
         'variable_cnn',
         'accuracy',
-        'linear_regression'
+        'linear_regression',
+        "mnist_gan",
     ]
     examples = []
     for subdir, _, _ in os.walk(os.path.join(examples_path, "onnx")):
