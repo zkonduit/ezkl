@@ -116,7 +116,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 34] = [
+    const TESTS: [&str; 35] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
