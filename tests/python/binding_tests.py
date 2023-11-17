@@ -151,6 +151,9 @@ def test_gen_srs():
     ezkl.gen_srs(params_k17_path, 17)
     assert os.path.isfile(params_k17_path)
 
+    ezkl.gen_srs(params_k20_path, 20)
+    assert os.path.isfile(params_k20_path)
+
 
 
 def test_calibrate_over_user_range():
