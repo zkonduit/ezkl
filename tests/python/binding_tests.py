@@ -823,9 +823,15 @@ def test_all_examples(model_file, input_file):
     witness_path = os.path.join(folder_path, 'witness.json')
     proof_path = os.path.join(folder_path, 'proof.json')
 
+    print("Testing example: ", model_file)
     res = ezkl.gen_settings(model_file, settings_path)
     assert res
 
+    res = ezkl.calibrate_settings(
+        input_file, model_file, settings_path, "resources")
+    assert res
+
+    print("Compiling example: ", model_file)
     res = ezkl.compile_circuit(model_file, compiled_model_path, settings_path)
     assert res
 
@@ -837,8 +843,10 @@ def test_all_examples(model_file, input_file):
 
     # generate the srs file if the path does not exist
     if not os.path.exists(srs_path):
+        print("Generating srs file: ", srs_path)
         ezkl.gen_srs(os.path.join(folder_path, srs_path), logrows)
 
+    print("Setting up example: ", model_file)
     res = ezkl.setup(
         compiled_model_path,
         vk_path,
@@ -849,9 +857,11 @@ def test_all_examples(model_file, input_file):
     assert os.path.isfile(vk_path)
     assert os.path.isfile(pk_path)
 
+    print("Generating witness for example: ", model_file)
     res = ezkl.gen_witness(input_file, compiled_model_path, witness_path)
     assert os.path.isfile(witness_path)
 
+    print("Proving example: ", model_file)
     ezkl.prove(
         witness_path,
         compiled_model_path,
@@ -862,6 +872,8 @@ def test_all_examples(model_file, input_file):
     )
 
     assert os.path.isfile(proof_path)
+
+    print("Verifying example: ", model_file)
     res = ezkl.verify(
         proof_path,
         settings_path,
