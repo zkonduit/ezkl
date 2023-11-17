@@ -156,9 +156,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             output,
             vk_path,
             srs_path,
-        } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path)
-            .await
-            .map(|_| ()),
+        } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path).map(|_| ()),
         Commands::Mock { model, witness } => mock(model, witness),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
@@ -492,7 +490,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-pub(crate) async fn gen_witness(
+pub(crate) fn gen_witness(
     compiled_circuit_path: PathBuf,
     data: PathBuf,
     output: Option<PathBuf>,
@@ -521,7 +519,9 @@ pub(crate) async fn gen_witness(
     };
 
     #[cfg(not(target_arch = "wasm32"))]
-    let mut input = circuit.load_graph_input(&data).await?;
+    let mut input = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(circuit.load_graph_input(&data))?;
     #[cfg(target_arch = "wasm32")]
     let mut input = circuit.load_graph_input(&data)?;
 
