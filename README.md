@@ -51,6 +51,12 @@ Install the python bindings by calling.
 ```bash
 pip install ezkl
 ```
+Or for the GPU:
+
+```bash
+pip install ezkl-gpu
+```
+
 Google Colab Example to learn how you can train a neural net and deploy an inference verifier onchain for use in other smart contracts. [![Notebook](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/zkonduit/ezkl/blob/main/examples/notebooks/ezkl_demo.ipynb) 
 
 

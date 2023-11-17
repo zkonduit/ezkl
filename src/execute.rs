@@ -119,7 +119,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             compiled_circuit,
             transcript,
             num_runs,
-        } => fuzz(compiled_circuit, witness, transcript, num_runs).await,
+        } => fuzz(compiled_circuit, witness, transcript, num_runs),
 
         Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
         #[cfg(not(target_arch = "wasm32"))]
@@ -149,7 +149,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             target,
             scales,
             max_logrows,
-        } => calibrate(model, data, settings_path, target, scales, max_logrows).await,
+        } => calibrate(model, data, settings_path, target, scales, max_logrows),
         Commands::GenWitness {
             data,
             compiled_circuit,
@@ -159,7 +159,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
         } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path)
             .await
             .map(|_| ()),
-        Commands::Mock { model, witness } => mock(model, witness).await,
+        Commands::Mock { model, witness } => mock(model, witness),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
             vk_path,
@@ -258,7 +258,6 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             proof_type,
             check_mode,
         )
-        .await
         .map(|_| ()),
         Commands::MockAggregate {
             aggregation_snarks,
@@ -603,7 +602,7 @@ use colored_json::ToColoredJson;
 /// Calibrate the circuit parameters to a given a dataset
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(trivial_casts)]
-pub(crate) async fn calibrate(
+pub(crate) fn calibrate(
     model_path: PathBuf,
     data: PathBuf,
     settings_path: PathBuf,
@@ -677,8 +676,6 @@ pub(crate) async fn calibrate(
             "input scale: {}, param scale: {}, scale rebase multiplier: {}",
             input_scale, param_scale, scale_rebase_multiplier
         ));
-        std::thread::sleep(Duration::from_millis(100));
-
         // vec of settings copied chunks.len() times
         let run_args_iterable = vec![settings.run_args.clone(); chunks.len()];
 
@@ -704,53 +701,48 @@ pub(crate) async fn calibrate(
                 let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
                     Ok(c) => c,
                     Err(_) => {
-                        return tokio::task::spawn(async move {
-                            Err(format!("failed to create circuit from run args"))
-                                as Result<GraphSettings, String>
-                        })
+                        return Err(format!("failed to create circuit from run args"))
+                            as Result<GraphSettings, String>
                     }
                 };
 
-                tokio::task::spawn(async move {
-                    let data = circuit
-                        .load_graph_input(&chunk)
-                        .await
-                        .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
+                let data = circuit
+                    .load_graph_from_file_exclusively(&chunk)
+                    .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
-                    circuit
-                        .calibrate(&data, max_logrows)
-                        .map_err(|e| format!("failed to calibrate: {}", e))?;
+                circuit
+                    .calibrate(&data, max_logrows)
+                    .map_err(|e| format!("failed to calibrate: {}", e))?;
 
-                    let settings = circuit.settings().clone();
+                let settings = circuit.settings().clone();
 
-                    let found_run_args = RunArgs {
-                        input_scale: settings.run_args.input_scale,
-                        param_scale: settings.run_args.param_scale,
-                        lookup_range: settings.run_args.lookup_range,
-                        logrows: settings.run_args.logrows,
-                        scale_rebase_multiplier: settings.run_args.scale_rebase_multiplier,
-                        ..run_args.clone()
-                    };
+                let found_run_args = RunArgs {
+                    input_scale: settings.run_args.input_scale,
+                    param_scale: settings.run_args.param_scale,
+                    lookup_range: settings.run_args.lookup_range,
+                    logrows: settings.run_args.logrows,
+                    scale_rebase_multiplier: settings.run_args.scale_rebase_multiplier,
+                    ..run_args.clone()
+                };
 
-                    let found_settings = GraphSettings {
-                        run_args: found_run_args,
-                        required_lookups: settings.required_lookups,
-                        model_output_scales: settings.model_output_scales,
-                        model_input_scales: settings.model_input_scales,
-                        num_rows: settings.num_rows,
-                        total_assignments: settings.total_assignments,
-                        total_const_size: settings.total_const_size,
-                        ..original_settings.clone()
-                    };
+                let found_settings = GraphSettings {
+                    run_args: found_run_args,
+                    required_lookups: settings.required_lookups,
+                    model_output_scales: settings.model_output_scales,
+                    model_input_scales: settings.model_input_scales,
+                    num_rows: settings.num_rows,
+                    total_assignments: settings.total_assignments,
+                    total_const_size: settings.total_const_size,
+                    ..original_settings.clone()
+                };
 
-                    Ok(found_settings) as Result<GraphSettings, String>
-                })
+                Ok(found_settings) as Result<GraphSettings, String>
             })
-            .collect::<Vec<tokio::task::JoinHandle<std::result::Result<GraphSettings, String>>>>();
+            .collect::<Vec<Result<GraphSettings, String>>>();
 
         let mut res: Vec<GraphSettings> = vec![];
         for task in tasks {
-            if let Ok(task) = task.await? {
+            if let Ok(task) = task {
                 res.push(task);
             }
         }
@@ -888,7 +880,7 @@ pub(crate) async fn calibrate(
     Ok(())
 }
 
-pub(crate) async fn mock(
+pub(crate) fn mock(
     compiled_circuit_path: PathBuf,
     data_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
@@ -1284,7 +1276,7 @@ pub(crate) async fn test_update_account_calls(
 
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn prove(
+pub(crate) fn prove(
     data_path: PathBuf,
     compiled_circuit_path: PathBuf,
     pk_path: PathBuf,
@@ -1353,7 +1345,7 @@ pub(crate) async fn prove(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) async fn fuzz(
+pub(crate) fn fuzz(
     compiled_circuit_path: PathBuf,
     data_path: PathBuf,
     transcript: TranscriptType,

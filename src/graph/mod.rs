@@ -675,6 +675,26 @@ impl GraphCircuit {
     }
 
     ///
+    pub fn load_graph_from_file_exclusively(
+        &mut self,
+        data: &GraphData,
+    ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+        let shapes = self.model().graph.input_shapes();
+        let scales = self.model().graph.get_input_scales();
+        let input_types = self.model().graph.get_input_types();
+        info!("input scales: {:?}", scales);
+
+        match &data.input_data {
+            DataSource::File(file_data) => {
+                self.load_file_data(file_data, &shapes, scales, input_types)
+            }
+            _ => {
+                panic!("Cannot use non-file data source as input for this method.")
+            }
+        }
+    }
+
+    ///
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn load_graph_input(
         &mut self,

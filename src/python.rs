@@ -680,27 +680,22 @@ fn gen_settings(
     max_logrows = None,
 ))]
 fn calibrate_settings(
-    py: Python,
     data: PathBuf,
     model: PathBuf,
     settings: PathBuf,
     target: Option<CalibrationTarget>,
     scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
-) -> PyResult<&pyo3::PyAny> {
+) -> Result<bool, PyErr> {
     let target = target.unwrap_or(CalibrationTarget::Resources {
         col_overflow: false,
     });
+    crate::execute::calibrate(model, data, settings, target, scales, max_logrows).map_err(|e| {
+        let err_str = format!("Failed to calibrate settings: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
-    pyo3_asyncio::tokio::future_into_py(py, async move {
-        crate::execute::calibrate(model, data, settings, target, scales, max_logrows)
-            .await
-            .map_err(|e| {
-                let err_str = format!("Failed to calibrate settings: {}", e);
-                PyRuntimeError::new_err(err_str)
-            })?;
-        Ok(true)
-    })
+    Ok(true)
 }
 
 /// runs the forward pass operation
@@ -736,14 +731,10 @@ fn gen_witness(
     model,
 ))]
 fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::mock(model, witness))
-        .map_err(|e| {
-            let err_str = format!("Failed to run mock: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
-
+    crate::execute::mock(model, witness).map_err(|e| {
+        let err_str = format!("Failed to run mock: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
     Ok(true)
 }
 
@@ -806,21 +797,19 @@ fn prove(
     srs_path: PathBuf,
     proof_type: ProofType,
 ) -> PyResult<PyObject> {
-    let snark = Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::prove(
-            witness,
-            model,
-            pk_path,
-            proof_path,
-            srs_path,
-            proof_type,
-            CheckMode::UNSAFE,
-        ))
-        .map_err(|e| {
-            let err_str = format!("Failed to run prove: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+    let snark = crate::execute::prove(
+        witness,
+        model,
+        pk_path,
+        proof_path,
+        srs_path,
+        proof_type,
+        CheckMode::UNSAFE,
+    )
+    .map_err(|e| {
+        let err_str = format!("Failed to run prove: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Python::with_gil(|py| Ok(snark.to_object(py)))
 }
