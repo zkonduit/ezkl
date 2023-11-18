@@ -851,6 +851,14 @@ impl GraphCircuit {
         let max_logrows = std::cmp::max(max_logrows, MIN_LOGROWS);
 
         let reserved_blinding_rows = Self::reserved_blinding_rows();
+        // check if has overflowed i128 max
+        if res.max_lookup_inputs > i128::MAX / RANGE_MULTIPLIER
+            || res.min_lookup_inputs < i128::MIN / RANGE_MULTIPLIER
+        {
+            let err_string = format!("max lookup input ({}) is too large", res.max_lookup_inputs);
+            return Err(err_string.into());
+        }
+
         let safe_range = Self::calc_safe_range(res);
 
         let max_col_size =
@@ -1063,6 +1071,7 @@ impl GraphCircuit {
         model_path: &std::path::Path,
         check_mode: CheckMode,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        params.run_args.validate()?;
         let model = Model::from_run_args(&params.run_args, model_path)?;
         Self::new_from_settings(model, params.clone(), check_mode)
     }

@@ -113,6 +113,23 @@ pub struct RunArgs {
 }
 
 impl RunArgs {
+    ///
+    pub fn validate(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.scale_rebase_multiplier < 1 {
+            return Err("scale_rebase_multiplier must be >= 1".into());
+        }
+        if self.lookup_range.0 > self.lookup_range.1 {
+            return Err("lookup_range min is greater than max".into());
+        }
+        if self.logrows < 1 {
+            return Err("logrows must be >= 1".into());
+        }
+        if self.num_inner_cols < 1 {
+            return Err("num_inner_cols must be >= 1".into());
+        }
+        Ok(())
+    }
+
     /// Export the ezkl configuration as json
     pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
         let serialized = match serde_json::to_string(&self) {
