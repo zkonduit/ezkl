@@ -57,7 +57,7 @@ impl VarTensor {
 
         if modulo > 1 {
             warn!(
-                "will be using column duplication for {} unblinded advice columns",
+                "using column duplication for {} unblinded advice blocks",
                 modulo - 1
             );
         }
@@ -99,10 +99,7 @@ impl VarTensor {
         let mut advices = vec![];
 
         if modulo > 1 {
-            warn!(
-                "will be using column duplication for {} advice columns",
-                modulo - 1
-            );
+            warn!("using column duplication for {} advice blocks", modulo - 1);
         }
 
         for _ in 0..modulo {
@@ -148,10 +145,7 @@ impl VarTensor {
         modulo = (num_constants + modulo) / max_rows + 1;
 
         if modulo > 1 {
-            warn!(
-                "will be using column duplication for {} fixed columns",
-                modulo - 1
-            );
+            warn!("using column duplication for {} fixed columns", modulo - 1);
         }
 
         for _ in 0..modulo {
