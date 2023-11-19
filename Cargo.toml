@@ -26,7 +26,7 @@ thiserror = { version = "1.0.38", default_features = false }
 hex = { version = "0.4.3", default_features = false }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/chunked-mv-lookup", package = "ecc" }
 snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup", features=["derive_serde"]}
-halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", branch= "ac/chunked-lookup-verifier" }
+halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", ref = "de1326d837ac2fd97363793e30d0639a95bdc0e9" }
 rayon = { version = "1.7.0",  default_features = false }
 bincode = { version = "1.3.3", default_features = false }
 ark-std = { version = "^0.3.0", default-features = false }

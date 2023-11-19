@@ -1119,6 +1119,18 @@ mod native_tests {
                     test_dir.close().unwrap();
                 }
 
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_kzg_all_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    kzg_evm_prove_and_verify(path, test.to_string(), "kzgcommit", "kzgcommit", "kzgcommit");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    test_dir.close().unwrap();
+                }
+
 
 
                 #(#[test_case(TESTS_EVM[N])])*

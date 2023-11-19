@@ -2220,7 +2220,7 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/chunked-lookup-verifier#b5885027bae560391334f8b63a14c5d377ce6e0e"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier#de1326d837ac2fd97363793e30d0639a95bdc0e9"
 dependencies = [
  "askama",
  "blake2b_simd",
