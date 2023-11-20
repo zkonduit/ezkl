@@ -960,12 +960,16 @@ mod native_tests {
             ];
 
             seq!(N in 0..=16 {
-                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
-                fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
+                #(#[test_case((TESTS_ON_CHAIN_INPUT[N],Hardfork::Latest))])*
+                #(#[test_case((TESTS_ON_CHAIN_INPUT[N],Hardfork::Paris))])*
+                #(#[test_case((TESTS_ON_CHAIN_INPUT[N],Hardfork::London))])*
+                #(#[test_case((TESTS_ON_CHAIN_INPUT[N],Hardfork::Shanghai))])*
+                fn kzg_evm_on_chain_input_prove_and_verify_(test: (&str,Hardfork)) {
+                    let (test,hardfork) = test;
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(true,Hardfork::Latest);
+                    let _anvil_child = crate::native_tests::start_anvil(true,hardfork);
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private");
                     // test_dir.close().unwrap();
                 }
@@ -1075,6 +1079,7 @@ mod native_tests {
                 #(#[test_case((TESTS_EVM[N], Hardfork::Latest))])*
                 #(#[test_case((TESTS_EVM[N], Hardfork::Paris))])*
                 #(#[test_case((TESTS_EVM[N], Hardfork::London))])*
+                #(#[test_case((TESTS_EVM[N], Hardfork::Shanghai))])*
                 fn kzg_evm_kzg_input_prove_and_verify_(test: (&str, Hardfork)) {
                     let (test,hardfork) = test;
                     crate::native_tests::init_binary();
