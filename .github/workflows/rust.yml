@@ -650,6 +650,10 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: TicTacToe (Binary Classification)
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_35_expects
+      - name: TicTacToe (Anomaly Detection)
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_36_expects
       - name: World Rotation
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_34_expects
       - name: MNIST Classifier

@@ -116,7 +116,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 35] = [
+    const TESTS: [&str; 37] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -153,6 +153,8 @@ mod py_tests {
         "generalized_inverse.ipynb",
         "mnist_classifier.ipynb",
         "world_rotation.ipynb",
+        "tictactoe_binary_classification.ipynb",
+        "tictactoe_autoencoder.ipynb",
     ];
 
     macro_rules! test_func {
