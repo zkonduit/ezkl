@@ -113,6 +113,7 @@ pub enum ExecutionError {
 /// Run an ezkl command with given args
 pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
     match command {
+        Commands::Empty => Ok(()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Fuzz {
             witness,

@@ -51,7 +51,7 @@ impl<'source> FromPyObject<'source> for TranscriptType {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 /// Determines what the calibration pass should optimize for
 pub enum CalibrationTarget {
     /// Optimizes for reducing cpu and memory usage
@@ -173,6 +173,7 @@ impl Cli {
 #[allow(missing_docs)]
 #[derive(Debug, Subcommand, Clone, Deserialize, Serialize, PartialEq, PartialOrd)]
 pub enum Commands {
+    Empty,
     /// Loads model and prints model table
     #[command(arg_required_else_help = true)]
     Table {
