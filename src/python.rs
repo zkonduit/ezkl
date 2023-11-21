@@ -713,8 +713,12 @@ fn gen_witness(
     vk_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
 ) -> PyResult<PyObject> {
-    let output =
-        crate::execute::gen_witness(model, data, output, vk_path, srs_path).map_err(|e| {
+    let output = Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::gen_witness(
+            model, data, output, vk_path, srs_path,
+        ))
+        .map_err(|e| {
             let err_str = format!("Failed to run generate witness: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
