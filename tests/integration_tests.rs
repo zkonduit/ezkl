@@ -18,7 +18,15 @@ mod native_tests {
     static ENV_SETUP: Once = Once::new();
 
     //Sure to run this once
-
+    #[derive(Debug)]
+    enum Hardfork {
+        London,
+        ArrowGlacier,
+        GrayGlacier,
+        Paris,
+        Shanghai,
+        Latest,
+    }
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =
             var("CARGO_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
@@ -28,7 +36,7 @@ mod native_tests {
             "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
     }
 
-    fn start_anvil(limitless: bool) -> Child {
+    fn start_anvil(limitless: bool, hardfork: Hardfork) -> Child {
         let mut args = vec!["-p"];
         if limitless {
             args.push("8545");
@@ -37,12 +45,20 @@ mod native_tests {
         } else {
             args.push("3030");
         }
+        match hardfork {
+            Hardfork::Paris => args.push("--hardfork=paris"),
+            Hardfork::London => args.push("--hardfork=london"),
+            Hardfork::Latest => {}
+            Hardfork::Shanghai => args.push("--hardfork=shanghai"),
+            Hardfork::ArrowGlacier => args.push("--hardfork=arrowGlacier"),
+            Hardfork::GrayGlacier => args.push("--hardfork=grayGlacier"),
+        }
+        // panic!("{}", args.join(" "));
         let child = Command::new("anvil")
             .args(args)
-            // .stdout(Stdio::piped())
+            // .stdout(std::process::Stdio::piped())
             .spawn()
             .expect("failed to start anvil process");
-
         std::thread::sleep(std::time::Duration::from_secs(3));
         child
     }
@@ -920,6 +936,7 @@ mod native_tests {
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
             use tempdir::TempDir;
+            use crate::native_tests::Hardfork;
 
             /// Currently only on chain inputs that return a non-negative value are supported.
             const TESTS_ON_CHAIN_INPUT: [&str; 17] = [
@@ -943,12 +960,16 @@ mod native_tests {
             ];
 
             seq!(N in 0..=16 {
-                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
-                fn kzg_evm_on_chain_input_prove_and_verify_(test: &str) {
+                #(#[test_case((TESTS_ON_CHAIN_INPUT[N],Hardfork::Latest))])*
+                #(#[test_case((TESTS_ON_CHAIN_INPUT[N],Hardfork::Paris))])*
+                #(#[test_case((TESTS_ON_CHAIN_INPUT[N],Hardfork::London))])*
+                #(#[test_case((TESTS_ON_CHAIN_INPUT[N],Hardfork::Shanghai))])*
+                fn kzg_evm_on_chain_input_prove_and_verify_(test: (&str,Hardfork)) {
+                    let (test,hardfork) = test;
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(true);
+                    let _anvil_child = crate::native_tests::start_anvil(true,hardfork);
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private");
                     // test_dir.close().unwrap();
                 }
@@ -958,7 +979,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(true);
+                    let _anvil_child = crate::native_tests::start_anvil(true,Hardfork::Latest);
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public");
                     // test_dir.close().unwrap();
                 }
@@ -968,7 +989,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(true);
+                    let _anvil_child = crate::native_tests::start_anvil(true,Hardfork::Latest);
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "public", "public");
                     test_dir.close().unwrap();
                 }
@@ -978,7 +999,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(true);
+                    let _anvil_child = crate::native_tests::start_anvil(true,Hardfork::Latest);
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed");
                     test_dir.close().unwrap();
                 }
@@ -993,7 +1014,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    let _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_evm_aggr_prove_and_verify(path, test.to_string(), "private", "private", "public");
                     test_dir.close().unwrap();
                 }
@@ -1006,7 +1027,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    let _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_evm_aggr_prove_and_verify(path, test.to_string(), "encrypted", "private", "public");
                     test_dir.close().unwrap();
                 }
@@ -1020,7 +1041,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    let _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "public");
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
@@ -1035,7 +1056,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    let _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_evm_prove_and_verify(path, test.to_string(), "encrypted", "private", "public");
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
@@ -1047,7 +1068,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let mut _anvil_child = crate::native_tests::start_anvil(false);
+                    let mut _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_evm_prove_and_verify(path, test.to_string(), "hashed", "private", "private");
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
@@ -1055,12 +1076,16 @@ mod native_tests {
                 }
 
 
-                #(#[test_case(TESTS_EVM[N])])*
-                fn kzg_evm_kzg_input_prove_and_verify_(test: &str) {
+                #(#[test_case((TESTS_EVM[N], Hardfork::Latest))])*
+                #(#[test_case((TESTS_EVM[N], Hardfork::Paris))])*
+                #(#[test_case((TESTS_EVM[N], Hardfork::London))])*
+                #(#[test_case((TESTS_EVM[N], Hardfork::Shanghai))])*
+                fn kzg_evm_kzg_input_prove_and_verify_(test: (&str, Hardfork)) {
+                    let (test,hardfork) = test;
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let mut _anvil_child = crate::native_tests::start_anvil(false);
+                    let mut _anvil_child = crate::native_tests::start_anvil(false,hardfork);
                     kzg_evm_prove_and_verify(path, test.to_string(), "kzgcommit", "private", "public");
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
@@ -1073,7 +1098,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    let _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "hashed", "public");
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
@@ -1086,7 +1111,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    let _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "hashed");
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
@@ -1099,7 +1124,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    let _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "kzgcommit", "public");
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
@@ -1112,7 +1137,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    let _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_evm_prove_and_verify(path, test.to_string(), "private", "private", "kzgcommit");
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
@@ -1138,7 +1163,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false);
+                    let _anvil_child = crate::native_tests::start_anvil(false,Hardfork::Latest);
                     kzg_fuzz(path, test.to_string(), "evm");
                     test_dir.close().unwrap();
 
