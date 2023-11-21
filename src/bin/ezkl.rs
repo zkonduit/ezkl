@@ -33,7 +33,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         info!("Running with CPU");
     }
     info!("command: \n {}", &args.as_json()?.to_colored_json_auto()?);
-    let res = run(args).await;
+    let res = run(args.command).await;
     match &res {
         Ok(_) => info!("succeeded"),
         Err(e) => error!("failed: {}", e),

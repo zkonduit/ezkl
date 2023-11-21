@@ -1,7 +1,7 @@
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::CalibrationTarget;
-use crate::commands::{Cli, Commands};
+use crate::commands::Commands;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
@@ -111,8 +111,8 @@ pub enum ExecutionError {
 }
 
 /// Run an ezkl command with given args
-pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
-    match cli.command {
+pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
+    match command {
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Fuzz {
             witness,
@@ -156,9 +156,7 @@ pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
             output,
             vk_path,
             srs_path,
-        } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path)
-            .await
-            .map(|_| ()),
+        } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path).map(|_| ()),
         Commands::Mock { model, witness } => mock(model, witness),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
@@ -492,7 +490,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-pub(crate) async fn gen_witness(
+pub(crate) fn gen_witness(
     compiled_circuit_path: PathBuf,
     data: PathBuf,
     output: Option<PathBuf>,
@@ -521,7 +519,9 @@ pub(crate) async fn gen_witness(
     };
 
     #[cfg(not(target_arch = "wasm32"))]
-    let mut input = circuit.load_graph_input(&data).await?;
+    let mut input = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(circuit.load_graph_input(&data))?;
     #[cfg(target_arch = "wasm32")]
     let mut input = circuit.load_graph_input(&data)?;
 
@@ -615,7 +615,13 @@ pub(crate) fn calibrate(
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
     // we load the model to get the input and output shapes
-    let _r = Gag::stdout().unwrap();
+    // check if gag already exists
+
+    let _r = match Gag::stdout() {
+        Ok(r) => Some(r),
+        Err(_) => None,
+    };
+
     let model = Model::from_run_args(&settings.run_args, &model_path).unwrap();
     // drop the gag
     std::mem::drop(_r);
@@ -679,8 +685,14 @@ pub(crate) fn calibrate(
         // vec of settings copied chunks.len() times
         let run_args_iterable = vec![settings.run_args.clone(); chunks.len()];
 
-        let _r = Gag::stdout().unwrap();
-        let _q = Gag::stderr().unwrap();
+        let _r = match Gag::stdout() {
+            Ok(r) => Some(r),
+            Err(_) => None,
+        };
+        let _q = match Gag::stderr() {
+            Ok(r) => Some(r),
+            Err(_) => None,
+        };
 
         let tasks = chunks
             .iter()

@@ -501,7 +501,7 @@ impl GraphCircuit {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, PartialOrd)]
 /// The data source for a test
 pub enum TestDataSource {
     /// The data is loaded from a file

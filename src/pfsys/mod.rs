@@ -43,7 +43,7 @@ use thiserror::Error as thisError;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
 #[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
 pub enum ProofType {
     Single,
     ForAggr,
@@ -142,7 +142,7 @@ pub enum PfSysError {
 }
 
 #[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
 pub enum TranscriptType {
     Poseidon,
     EVM,
