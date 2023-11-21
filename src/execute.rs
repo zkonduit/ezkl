@@ -1,7 +1,7 @@
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::CalibrationTarget;
-use crate::commands::{Cli, Commands};
+use crate::commands::Commands;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
@@ -111,8 +111,9 @@ pub enum ExecutionError {
 }
 
 /// Run an ezkl command with given args
-pub async fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
-    match cli.command {
+pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
+    match command {
+        Commands::Empty => Ok(()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Fuzz {
             witness,
@@ -615,7 +616,13 @@ pub(crate) fn calibrate(
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
     // we load the model to get the input and output shapes
-    let _r = Gag::stdout().unwrap();
+    // check if gag already exists
+
+    let _r = match Gag::stdout() {
+        Ok(r) => Some(r),
+        Err(_) => None,
+    };
+
     let model = Model::from_run_args(&settings.run_args, &model_path).unwrap();
     // drop the gag
     std::mem::drop(_r);
@@ -679,8 +686,14 @@ pub(crate) fn calibrate(
         // vec of settings copied chunks.len() times
         let run_args_iterable = vec![settings.run_args.clone(); chunks.len()];
 
-        let _r = Gag::stdout().unwrap();
-        let _q = Gag::stderr().unwrap();
+        let _r = match Gag::stdout() {
+            Ok(r) => Some(r),
+            Err(_) => None,
+        };
+        let _q = match Gag::stderr() {
+            Ok(r) => Some(r),
+            Err(_) => None,
+        };
 
         let tasks = chunks
             .iter()
