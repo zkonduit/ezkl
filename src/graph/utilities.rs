@@ -235,6 +235,39 @@ pub fn new_op_from_onnx(
     debug!("Loading node: {:?}", node);
     let mut deleted_indices = vec![];
     let node = match node.op().name().as_ref() {
+        "Range" => {
+            let mut input_ops = vec![];
+
+            for (i, input) in inputs.iter_mut().enumerate() {
+                if !input.opkind().is_constant() {
+                    panic!("Range only supports constant inputs in a zk circuit");
+                } else {
+                    input.decrement_use();
+                    deleted_indices.push(i);
+                    input_ops.push(input.opkind().clone());
+                }
+            }
+
+            assert_eq!(input_ops.len(), 3, "Range requires 3 inputs");
+            let input_ops = input_ops
+                .iter()
+                .map(|x| x.get_constant().unwrap())
+                .collect::<Vec<_>>();
+
+            let start = input_ops[0].raw_values.map(|x| x as usize)[0];
+            let end = input_ops[1].raw_values.map(|x| x as usize)[0];
+            let delta = input_ops[2].raw_values.map(|x| x as usize)[0];
+
+            let range = (start..end).step_by(delta).collect::<Vec<_>>();
+            let raw_value = range.iter().map(|x| *x as f32).collect::<Tensor<_>>();
+            // Quantize the raw value (integers)
+            let quantized_value = quantize_tensor(raw_value.clone(), 0, &Visibility::Fixed)?;
+
+            let c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
+            // Create a constant op
+            SupportedOp::Constant(c)
+        }
+
         "Gather" => {
             if inputs.len() != 2 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "gather".to_string())));
