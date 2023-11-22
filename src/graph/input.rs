@@ -488,9 +488,10 @@ impl GraphData {
             } => data.fetch_and_format_as_file()?,
         };
 
-        for (i, input) in iterable.iter().enumerate() {
+        for (i, shape) in input_shapes.iter().enumerate() {
             // ensure the input is evenly divisible by batch_size
-            let input_size = input_shapes[i].clone().iter().product::<usize>();
+            let input_size = shape.clone().iter().product::<usize>();
+            let input = &iterable[i];
             if input.len() % input_size != 0 {
                 return Err(Box::new(GraphError::InvalidDims(
                     0,
@@ -498,19 +499,24 @@ impl GraphData {
                         .to_string(),
                 )));
             }
-            let input_size = input_shapes[i].clone().iter().product::<usize>();
             let mut batches = vec![];
             for batch in input.chunks(input_size) {
                 batches.push(batch.to_vec());
             }
             batched_inputs.push(batches);
         }
+
         // now merge all the batches for each input into a vector of batches
         // first assert each input has the same number of batches
-        let num_batches = batched_inputs[0].len();
-        for input in batched_inputs.iter() {
-            assert_eq!(input.len(), num_batches);
-        }
+        let num_batches = if batched_inputs.is_empty() {
+            0
+        } else {
+            let num_batches = batched_inputs[0].len();
+            for input in batched_inputs.iter() {
+                assert_eq!(input.len(), num_batches);
+            }
+            num_batches
+        };
         // now merge the batches
         let mut input_batches = vec![];
         for i in 0..num_batches {
@@ -519,6 +525,10 @@ impl GraphData {
                 batch.push(input[i].clone());
             }
             input_batches.push(DataSource::File(batch));
+        }
+
+        if input_batches.is_empty() {
+            input_batches.push(DataSource::File(vec![vec![]]));
         }
 
         // create a new GraphWitness for each batch
