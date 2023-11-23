@@ -25,7 +25,7 @@ def get_onnx_output(model_file, input_file):
     with open(input_file) as f:
         inputs = json.load(f)
     # reshape the input to the model
-    num_inputs = len(inputs['input_data'])
+    num_inputs = len(onnx_model.graph.input)
 
     onnx_input = dict()
     for i in range(num_inputs):

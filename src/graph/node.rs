@@ -311,6 +311,14 @@ impl SupportedOp {
     }
 
     ///
+    pub fn get_constant(&self) -> Option<&Constant<Fp>> {
+        match self {
+            SupportedOp::Constant(op) => Some(op),
+            _ => None,
+        }
+    }
+
+    ///
     pub fn get_mutable_constant(&mut self) -> Option<&mut Constant<Fp>> {
         match self {
             SupportedOp::Constant(op) => Some(op),
