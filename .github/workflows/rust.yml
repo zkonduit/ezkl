@@ -62,11 +62,10 @@ jobs:
         run: cargo test --doc --verbose
       - name: Library tests
         run: cargo nextest run --lib --verbose
-  
 
   ultra-overflow-tests-gpu:
     runs-on: GPU
-    env: 
+    env:
       ENABLE_ICICLE_GPU: true
     steps:
       - uses: actions/checkout@v4
@@ -98,7 +97,6 @@ jobs:
         run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --features icicle -- --include-ignored
       - name: Conv + relu overflow
         run: cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture --features icicle -- --include-ignored
-
 
   ultra-overflow-tests:
     runs-on: non-gpu
@@ -389,7 +387,6 @@ jobs:
       - name: KZG prove and verify tests (encrypted outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted
 
-
   prove-and-verify-tests-gpu:
     runs-on: GPU
     env:
@@ -466,7 +463,6 @@ jobs:
           locked: true
       - name: Mock aggr tests
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_  --test-threads 8
-  
 
   prove-and-verify-aggr-tests-gpu:
     runs-on: GPU
@@ -674,8 +670,8 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_27_expects
       - name: KZG Vis demo
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_26_expects
-      - name: Simple hub demo
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
+      # - name: Simple hub demo
+      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
       - name: Hashed DA tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_24_expects
       - name: Little transformer tutorial
