@@ -55,8 +55,6 @@ pub struct Proof {
     pub proof: Option<String>,
     /// stores the status
     pub status: Option<String>,
-    ///stores the strategy
-    pub strategy: Option<String>,
     /// stores the transcript type
     #[serde(rename = "transcriptType")]
     pub transcript_type: Option<String>,

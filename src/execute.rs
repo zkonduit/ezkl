@@ -1979,7 +1979,6 @@ pub(crate) async fn get_hub_proof(
                     proof
                     instances
                     transcriptType
-                    strategy
                 }}
             }}
         "#, id),
