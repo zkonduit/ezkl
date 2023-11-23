@@ -1187,23 +1187,16 @@ fn create_hub_artifact(
 }
 
 /// Generate a proof on the hub.
-#[pyfunction(signature = ( id, input,api_key=None, url=None, transcript_type=None))]
+#[pyfunction(signature = ( id, input,api_key=None, url=None))]
 fn prove_hub(
     id: &str,
     input: PathBuf,
     api_key: Option<&str>,
     url: Option<&str>,
-    transcript_type: Option<&str>,
 ) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::prove_hub(
-            api_key,
-            url,
-            id,
-            &input,
-            transcript_type,
-        ))
+        .block_on(crate::execute::prove_hub(api_key, url, id, &input))
         .map_err(|e| {
             let err_str = format!("Failed to generate proof on hub: {}", e);
             PyRuntimeError::new_err(err_str)

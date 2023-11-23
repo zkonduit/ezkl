@@ -714,7 +714,7 @@ pub enum Commands {
         target: CalibrationTarget,
     },
 
-    /// Create artifacts and deploys them on the hub
+    /// Prove data on the hub
     #[command(name = "prove-hub", arg_required_else_help = true)]
     #[cfg(not(target_arch = "wasm32"))]
     ProveHub {
@@ -729,8 +729,6 @@ pub enum Commands {
         data: PathBuf,
         #[arg(short = 'U', long)]
         url: Option<String>,
-        #[arg(short = 'T', long)]
-        transcript_type: Option<String>,
     },
 
     /// Create artifacts and deploys them on the hub
@@ -740,9 +738,9 @@ pub enum Commands {
         /// The user's api key
         #[arg(short = 'K', long)]
         api_key: Option<String>,
-        /// The path to the model file
-        #[arg(short = 'A', long)]
-        artifact_id: String,
+        /// The proof id
+        #[arg(short = 'P', long)]
+        proof_id: String,
         #[arg(short = 'U', long)]
         url: Option<String>,
     },
