@@ -114,7 +114,6 @@ impl pyo3::ToPyObject for Proof {
         dict.set_item("instances", &self.instances).unwrap();
         dict.set_item("proof", &self.proof).unwrap();
         dict.set_item("status", &self.status).unwrap();
-        dict.set_item("strategy", &self.strategy).unwrap();
         dict.set_item("transcript_type", &self.transcript_type)
             .unwrap();
         dict.into()
