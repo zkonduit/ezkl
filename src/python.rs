@@ -274,7 +274,7 @@ impl PyRunArgs {
             input_scale: 7,
             param_scale: 7,
             scale_rebase_multiplier: 1,
-            num_inner_cols: 1,
+            num_inner_cols: 2,
             lookup_range: (-32768, 32768),
             logrows: 17,
             input_visibility: Visibility::Private,
