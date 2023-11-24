@@ -93,9 +93,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         let constants = AtomicUsize::new(self.total_constants());
         *output = output.par_enum_map(|idx, _| {
             // we kick off the loop with the current offset
-            let starting_offset = row.load(Ordering::Relaxed);
-            let starting_linear_coord = linear_coord.load(Ordering::Relaxed);
-            let starting_constants = constants.load(Ordering::Relaxed);
+            let starting_offset = row.load(Ordering::SeqCst);
+            let starting_linear_coord = linear_coord.load(Ordering::SeqCst);
+            let starting_constants = constants.load(Ordering::SeqCst);
             // we need to make sure that the region is not shared between threads
             let mut local_reg = Self::new_dummy_with_constants(
                 starting_offset,
@@ -105,14 +105,14 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             );
             let res = inner_loop_function(idx, &mut local_reg);
             // we update the offset and constants
-            row.fetch_add(local_reg.row() - starting_offset, Ordering::Relaxed);
+            row.fetch_add(local_reg.row() - starting_offset, Ordering::SeqCst);
             linear_coord.fetch_add(
                 local_reg.linear_coord() - starting_linear_coord,
-                Ordering::Relaxed,
+                Ordering::SeqCst,
             );
             constants.fetch_add(
                 local_reg.total_constants() - starting_constants,
-                Ordering::Relaxed,
+                Ordering::SeqCst,
             );
             Ok::<_, Error>(res)
         })?;
