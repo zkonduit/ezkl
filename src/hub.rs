@@ -76,10 +76,14 @@ impl Proof {
 /// Stores the Artifacts
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Artifact {
-    ///stores the aritfact id
+    /// stores the aritfact id
     pub id: Option<String>,
     /// stores the name of the artifact
     pub name: Option<String>,
+    /// stores the status of the artifact
+    pub status: Option<String>,
+    /// stores errors while producing the artifact
+    pub errors: Option<String>,
 }
 
 impl Artifact {
@@ -101,6 +105,8 @@ impl pyo3::ToPyObject for Artifact {
         let dict = pyo3::types::PyDict::new(py);
         dict.set_item("id", &self.id).unwrap();
         dict.set_item("name", &self.name).unwrap();
+        dict.set_item("status", &self.status).unwrap();
+        dict.set_item("errors", &self.errors).unwrap();
         dict.into()
     }
 }

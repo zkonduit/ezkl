@@ -714,6 +714,20 @@ pub enum Commands {
         target: CalibrationTarget,
     },
 
+    #[command(name = "get-hub-artifact", arg_required_else_help = true)]
+    #[cfg(not(target_arch = "wasm32"))]
+    GetHubArtifact {
+        /// The user's api key
+        #[arg(short = 'K', long)]
+        api_key: Option<String>,
+        /// The artifact id
+        #[arg(short = 'A', long)]
+        artifact_id: String,
+        /// The url to send requests to
+        #[arg(short = 'U', long)]
+        url: Option<String>,
+    },
+
     /// Prove data on the hub
     #[command(name = "prove-hub", arg_required_else_help = true)]
     #[cfg(not(target_arch = "wasm32"))]
@@ -727,6 +741,7 @@ pub enum Commands {
         /// The path to the input json file
         #[arg(short = 'D', long)]
         data: PathBuf,
+        /// The url to send requests to
         #[arg(short = 'U', long)]
         url: Option<String>,
     },
@@ -741,6 +756,7 @@ pub enum Commands {
         /// The proof id
         #[arg(short = 'P', long)]
         proof_id: String,
+        /// The url to send requests to
         #[arg(short = 'U', long)]
         url: Option<String>,
     },

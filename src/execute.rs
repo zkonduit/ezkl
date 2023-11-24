@@ -389,6 +389,14 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
         .await
         .map(|_| ()),
         #[cfg(not(target_arch = "wasm32"))]
+        Commands::GetHubArtifact {
+            api_key,
+            artifact_id,
+            url,
+        } => get_deployed_model(api_key.as_deref(), url.as_deref(), &artifact_id)
+            .await
+            .map(|_| ()),
+        #[cfg(not(target_arch = "wasm32"))]
         Commands::GetHubProof {
             api_key,
             proof_id,
@@ -1899,6 +1907,8 @@ pub(crate) async fn deploy_model(
                 ) {
                     id
                     name
+                    status
+                    errors
                 }
             }",
         "variables": {
@@ -1934,14 +1944,52 @@ pub(crate) async fn deploy_model(
         .send()
         .await?;
     let response_body = parse_response(response).await?;
-    println!("{}", response_body.to_string());
-    let artifact_id: crate::hub::Artifact =
+    let artifact_data: crate::hub::Artifact =
         serde_json::from_value(response_body["data"]["generateArtifact"].clone())?;
     log::info!(
-        "Artifact ID : {}",
-        artifact_id.as_json()?.to_colored_json_auto()?
+        "Artifact Data : {}",
+        artifact_data.as_json()?.to_colored_json_auto()?
     );
-    Ok(artifact_id)
+    Ok(artifact_data)
+}
+
+/// Get the artifact from the hub
+pub(crate) async fn get_deployed_model(
+    api_key: Option<&str>,
+    url: Option<&str>,
+    id: &str,
+) -> Result<crate::hub::Artifact, Box<dyn Error>> {
+    let query = serde_json::json!({
+        "query": "query getArtifact($id: String!){
+            artifact(id: $id) {
+                id
+                name
+                status
+                errors
+            }
+        }",
+        "variables": {
+            "id": id,
+        }
+    });
+    let client = reqwest::Client::new();
+    let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
+    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
+    //send request
+    let response = client
+        .post(url)
+        .header("API-Key", format!("{}", api_key))
+        .json(&query)
+        .send()
+        .await?;
+    let response_body = parse_response(response).await?;
+    let artifact_data: crate::hub::Artifact =
+        serde_json::from_value(response_body["data"]["artifact"].clone())?;
+    log::info!(
+        "Artifact Data : {}",
+        artifact_data.as_json()?.to_colored_json_auto()?
+    );
+    Ok(artifact_data)
 }
 
 /// Generates proofs on the hub
