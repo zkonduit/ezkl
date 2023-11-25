@@ -60,7 +60,11 @@ impl From<String> for CheckMode {
         match value.to_lowercase().as_str() {
             "safe" => CheckMode::SAFE,
             "unsafe" => CheckMode::UNSAFE,
-            _ => panic!("not a valid checkmode"),
+            _ => {
+                log::error!("Invalid value for CheckMode");
+                log::warn!("defaulting to SAFE");
+                CheckMode::SAFE
+            }
         }
     }
 }
@@ -383,6 +387,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 VarTensor::Advice { inner: advices, .. } => {
                                     cs.query_advice(advices[x][y], Rotation(0))
                                 }
+                                // unfortunately halo2 doesn't handle errors in lookup closures
                                 _ => panic!("wrong input type"),
                             },
                         };
@@ -391,6 +396,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                             VarTensor::Advice { inner: advices, .. } => {
                                 cs.query_advice(advices[x][y], Rotation(0))
                             }
+                            // unfortunately halo2 doesn't handle errors in lookup closures
                             _ => panic!("wrong input type"),
                         };
 
@@ -398,6 +404,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                             VarTensor::Advice { inner: advices, .. } => {
                                 cs.query_advice(advices[x][y], Rotation(0))
                             }
+                            // unfortunately halo2 doesn't handle errors in lookup closures
                             _ => panic!("wrong input type"),
                         };
 

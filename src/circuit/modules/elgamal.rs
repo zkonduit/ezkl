@@ -352,15 +352,16 @@ impl ElGamalGadget {
             )?
         };
 
-        let encrypted_msg_hash = match &encrypted_msg_hash
+        match &encrypted_msg_hash
             .get_inner_tensor()
             .map_err(|_| plonk::Error::Synthesis)?[0]
         {
-            ValType::PrevAssigned(v) => v.clone(),
-            _ => panic!("poseidon hash should be an assigned value"),
-        };
-
-        Ok(encrypted_msg_hash)
+            ValType::PrevAssigned(v) => Ok(v.clone()),
+            _ => {
+                log::error!("poseidon hash should be an assigned value");
+                Err(plonk::Error::Synthesis)
+            }
+        }
     }
 
     /// Hash the secret key to be used as a public input.
@@ -389,7 +390,10 @@ impl ElGamalGadget {
             .map_err(|_| plonk::Error::Synthesis)?[0]
         {
             ValType::PrevAssigned(v) => v.clone(),
-            _ => panic!("poseidon hash should be an assigned value"),
+            _ => {
+                log::error!("poseidon hash should be an assigned value");
+                return Err(plonk::Error::Synthesis);
+            }
         };
 
         Ok(sk_hash)
@@ -407,7 +411,10 @@ impl ElGamalGadget {
 
         let variables = match self.variables {
             Some(ref variables) => variables,
-            None => panic!("variables not loaded"),
+            None => {
+                log::error!("variables not loaded");
+                return Err(plonk::Error::Synthesis);
+            }
         };
 
         // compute s = randomness*pk
@@ -465,7 +472,10 @@ impl ElGamalGadget {
 
         let dh = match &dh.get_inner_tensor().map_err(|_| plonk::Error::Synthesis)?[0] {
             ValType::PrevAssigned(v) => v.clone(),
-            _ => panic!("poseidon hash should be an assigned value"),
+            _ => {
+                log::error!("poseidon hash should be an assigned value");
+                return Err(plonk::Error::Synthesis);
+            }
         };
 
         // compute c2 = poseidon_hash(nk, rho) + psi.
@@ -555,7 +565,10 @@ impl Module<Fr> for ElGamalGadget {
                                 i,
                                 *f,
                             ),
-                            e => panic!("wrong input type {:?}, must be previously assigned", e),
+                            e => {
+                                log::error!("wrong input type: {:?}", e);
+                                Err(Error::Synthesis)
+                            }
                         })
                         .collect(),
                     ValTensor::Instance {
@@ -583,7 +596,10 @@ impl Module<Fr> for ElGamalGadget {
 
                 let sk = match sk.get_inner_tensor().unwrap()[0] {
                     ValType::Value(v) => v,
-                    _ => panic!("wrong input type"),
+                    _ => {
+                        log::error!("wrong input type");
+                        return Err(Error::Synthesis);
+                    }
                 };
 
                 let msg_var = msg_var?;
@@ -674,7 +690,10 @@ impl Module<Fr> for ElGamalGadget {
         let mut assigned_input: Tensor<ValType<Fr>> =
             msg_var.iter().map(|e| ValType::from(e.clone())).into();
 
-        assigned_input.reshape(inputs[0].dims());
+        assigned_input.reshape(inputs[0].dims()).map_err(|e| {
+            log::error!("reshape failed: {:?}", e);
+            Error::Synthesis
+        })?;
 
         log::trace!(
             "layout (N={:?}) took: {:?}",

@@ -277,8 +277,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     }
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, inputs_scale: Vec<crate::Scale>) -> crate::Scale {
-        match self {
+    fn out_scale(&self, inputs_scale: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+        let scale = match self {
             LookupOp::Div { denom } => {
                 let mut scale = inputs_scale[0];
                 if scale == 0 {
@@ -303,7 +303,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             | LookupOp::Ceil { .. }
             | LookupOp::Floor { .. } => 0,
             _ => inputs_scale[0],
-        }
+        };
+        Ok(scale)
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {

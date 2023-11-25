@@ -134,7 +134,13 @@ pub fn aggregate<'a>(
 
         if split_proofs {
             let previous_proof = proofs.last();
-            let split_commit = snark.clone().split.expect("No split commit found");
+            let split_commit = match snark.clone().split {
+                Some(split) => split,
+                None => {
+                    log::error!("Failed to split KZG commit for sequential proofs");
+                    return Err(plonk::Error::Synthesis);
+                }
+            };
             if let Some(previous_proof) = previous_proof {
                 // output of previous proof
                 let output = &previous_proof.witnesses[split_commit.start..split_commit.end];

@@ -79,10 +79,10 @@ mod matmul {
         // parameters
         let mut a =
             Tensor::from((0..(LEN + 1) * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        a.reshape(&[LEN, LEN + 1]);
+        a.reshape(&[LEN, LEN + 1]).unwrap();
 
         let mut w = Tensor::from((0..LEN + 1).map(|i| Value::known(F::from((i + 1) as u64))));
-        w.reshape(&[LEN + 1, 1]);
+        w.reshape(&[LEN + 1, 1]).unwrap();
 
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
@@ -154,10 +154,10 @@ mod matmul_col_overflow_double_col {
     fn matmulcircuit() {
         // parameters
         let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        a.reshape(&[LEN, LEN]);
+        a.reshape(&[LEN, LEN]).unwrap();
 
         let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        w.reshape(&[LEN, 1]);
+        w.reshape(&[LEN, 1]).unwrap();
 
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
@@ -228,10 +228,10 @@ mod matmul_col_overflow {
     fn matmulcircuit() {
         // parameters
         let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        a.reshape(&[LEN, LEN]);
+        a.reshape(&[LEN, LEN]).unwrap();
 
         let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        w.reshape(&[LEN, 1]);
+        w.reshape(&[LEN, 1]).unwrap();
 
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
@@ -309,10 +309,10 @@ mod matmul_col_ultra_overflow_double_col {
         crate::logger::init_logger();
         // parameters
         let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        a.reshape(&[LEN, LEN]);
+        a.reshape(&[LEN, LEN]).unwrap();
 
         let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        w.reshape(&[LEN, 1]);
+        w.reshape(&[LEN, 1]).unwrap();
 
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
@@ -423,10 +423,10 @@ mod matmul_col_ultra_overflow {
         crate::logger::init_logger();
         // parameters
         let mut a = Tensor::from((0..LEN * LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        a.reshape(&[LEN, LEN]);
+        a.reshape(&[LEN, LEN]).unwrap();
 
         let mut w = Tensor::from((0..LEN).map(|i| Value::known(F::from((i + 1) as u64))));
-        w.reshape(&[LEN, 1]);
+        w.reshape(&[LEN, 1]).unwrap();
 
         let circuit = MatmulCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(w)],
@@ -1069,14 +1069,18 @@ mod conv {
 
         let mut image =
             Tensor::from((0..in_channels * image_height * image_width).map(|_| F::random(OsRng)));
-        image.reshape(&[1, in_channels, image_height, image_width]);
+        image
+            .reshape(&[1, in_channels, image_height, image_width])
+            .unwrap();
         image.set_visibility(&crate::graph::Visibility::Private);
 
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width })
                 .map(|_| F::random(OsRng)),
         );
-        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+        kernels
+            .reshape(&[out_channels, in_channels, kernel_height, kernel_width])
+            .unwrap();
         kernels.set_visibility(&crate::graph::Visibility::Private);
 
         let mut bias = Tensor::from((0..{ out_channels }).map(|_| F::random(OsRng)));
@@ -1103,14 +1107,18 @@ mod conv {
 
         let mut image =
             Tensor::from((0..in_channels * image_height * image_width).map(|i| F::from(i as u64)));
-        image.reshape(&[1, in_channels, image_height, image_width]);
+        image
+            .reshape(&[1, in_channels, image_height, image_width])
+            .unwrap();
         image.set_visibility(&crate::graph::Visibility::Private);
 
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width })
                 .map(|i| F::from(i as u64)),
         );
-        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+        kernels
+            .reshape(&[out_channels, in_channels, kernel_height, kernel_width])
+            .unwrap();
         kernels.set_visibility(&crate::graph::Visibility::Private);
 
         let circuit = ConvCircuit::<F> {
@@ -1200,14 +1208,18 @@ mod conv_col_ultra_overflow {
         crate::logger::init_logger();
         let mut image =
             Tensor::from((0..in_channels * image_height * image_width).map(|i| F::from(i as u64)));
-        image.reshape(&[1, in_channels, image_height, image_width]);
+        image
+            .reshape(&[1, in_channels, image_height, image_width])
+            .unwrap();
         image.set_visibility(&crate::graph::Visibility::Private);
 
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width })
                 .map(|i| F::from(i as u64)),
         );
-        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+        kernels
+            .reshape(&[out_channels, in_channels, kernel_height, kernel_width])
+            .unwrap();
         kernels.set_visibility(&crate::graph::Visibility::Private);
 
         let circuit = ConvCircuit::<F> {
@@ -1349,13 +1361,17 @@ mod conv_relu_col_ultra_overflow {
         crate::logger::init_logger();
         let mut image =
             Tensor::from((0..in_channels * image_height * image_width).map(|_| F::from(0)));
-        image.reshape(&[1, in_channels, image_height, image_width]);
+        image
+            .reshape(&[1, in_channels, image_height, image_width])
+            .unwrap();
         image.set_visibility(&crate::graph::Visibility::Private);
 
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width }).map(|_| F::from(0)),
         );
-        kernels.reshape(&[out_channels, in_channels, kernel_height, kernel_width]);
+        kernels
+            .reshape(&[out_channels, in_channels, kernel_height, kernel_width])
+            .unwrap();
         kernels.set_visibility(&crate::graph::Visibility::Private);
 
         let circuit = ConvCircuit::<F> {
@@ -1471,7 +1487,9 @@ mod sumpool {
         let mut image = Tensor::from(
             (0..in_channels * image_height * image_width).map(|_| Value::known(F::random(OsRng))),
         );
-        image.reshape(&[1, in_channels, image_height, image_width]);
+        image
+            .reshape(&[1, in_channels, image_height, image_width])
+            .unwrap();
 
         let circuit = ConvCircuit::<F> {
             inputs: [ValTensor::from(image)].to_vec(),
@@ -2166,11 +2184,11 @@ mod matmul_relu {
     fn matmulrelucircuit() {
         // parameters
         let mut a = Tensor::from((0..LEN * LEN).map(|_| Value::known(F::from(1))));
-        a.reshape(&[LEN, LEN]);
+        a.reshape(&[LEN, LEN]).unwrap();
 
         // parameters
         let mut b = Tensor::from((0..LEN).map(|_| Value::known(F::from(1))));
-        b.reshape(&[LEN, 1]);
+        b.reshape(&[LEN, 1]).unwrap();
 
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],

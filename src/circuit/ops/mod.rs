@@ -48,7 +48,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale;
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>>;
 
     /// Do any of the inputs to this op require homogenous input scales?
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
@@ -86,7 +86,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
             .iter()
             .map(|v| {
                 let mut evals = v.get_felt_evals().map_err(|_| TensorError::FeltError)?;
-                evals.reshape(v.dims());
+                evals.reshape(v.dims())?;
                 Ok(evals)
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -96,7 +96,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
         let mut output = claimed_output
             .get_felt_evals()
             .map_err(|_| TensorError::FeltError)?;
-        output.reshape(claimed_output.dims());
+        output.reshape(claimed_output.dims())?;
 
         assert_eq!(output, ref_op);
 
@@ -172,8 +172,8 @@ pub struct Input {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
-    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale {
-        self.scale
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+        Ok(self.scale)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -233,8 +233,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
 pub struct Unknown;
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
-    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale {
-        0
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+        Ok(0)
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -336,8 +336,8 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         Box::new(self.clone()) // Forward to the derive(Clone) impl
     }
 
-    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale {
-        self.quantized_values.scale().unwrap()
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+        Ok(self.quantized_values.scale().unwrap())
     }
 
     fn is_constant(&self) -> bool {

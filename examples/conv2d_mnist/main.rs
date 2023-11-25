@@ -308,10 +308,10 @@ pub fn runconv() {
         .finalize();
 
     let mut train_data = Tensor::from(trn_img.iter().map(|x| i32_to_felt::<F>(*x as i32 / 16)));
-    train_data.reshape(&[50_000, 28, 28]);
+    train_data.reshape(&[50_000, 28, 28]).unwrap();
 
     let mut train_labels = Tensor::from(trn_lbl.iter().map(|x| *x as f32));
-    train_labels.reshape(&[50_000, 1]);
+    train_labels.reshape(&[50_000, 1]).unwrap();
 
     println!("The first digit is a {:?}", train_labels[0]);
 
@@ -340,7 +340,9 @@ pub fn runconv() {
             }),
     );
 
-    l0_kernels.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+    l0_kernels
+        .reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH])
+        .unwrap();
     l0_kernels.set_visibility(&ezkl::graph::Visibility::Private);
 
     let mut l0_bias = Tensor::<F>::from((0..OUT_CHANNELS).map(|_| fieldutils::i32_to_felt(0)));
@@ -353,7 +355,7 @@ pub fn runconv() {
         fieldutils::i32_to_felt(integral)
     }));
     l2_biases.set_visibility(&ezkl::graph::Visibility::Private);
-    l2_biases.reshape(&[l2_biases.len(), 1]);
+    l2_biases.reshape(&[l2_biases.len(), 1]).unwrap();
 
     let mut l2_weights = Tensor::<F>::from(myparams.weights.into_iter().flatten().map(|fl| {
         let dx = fl * 32_f32;
@@ -362,7 +364,7 @@ pub fn runconv() {
         fieldutils::i32_to_felt(integral)
     }));
     l2_weights.set_visibility(&ezkl::graph::Visibility::Private);
-    l2_weights.reshape(&[CLASSES, LEN]);
+    l2_weights.reshape(&[CLASSES, LEN]).unwrap();
 
     let circuit = MyCircuit::<
         LEN,

@@ -84,7 +84,7 @@ impl Op<Fp> for Rescaled {
         format!("RESCALED INPUT ({})", self.inner.as_string())
     }
 
-    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> crate::Scale {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
@@ -221,8 +221,8 @@ impl Op<Fp> for RebaseScale {
         )
     }
 
-    fn out_scale(&self, _: Vec<crate::Scale>) -> crate::Scale {
-        self.target_scale
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+        Ok(self.target_scale)
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
@@ -488,7 +488,7 @@ impl Op<Fp> for SupportedOp {
         }
     }
 
-    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> crate::Scale {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         match self {
             SupportedOp::Linear(op) => Op::<Fp>::out_scale(op, in_scales),
             SupportedOp::Nonlinear(op) => Op::<Fp>::out_scale(op, in_scales),
@@ -666,19 +666,19 @@ impl Node {
                     input_node.num_uses(),
                 )?;
                 input_node.replace_opkind(constant.clone_dyn().into());
-                let out_scale = input_opkind.out_scale(vec![]);
+                let out_scale = input_opkind.out_scale(vec![])?;
                 input_node.bump_scale(out_scale);
                 in_scales[input] = out_scale;
             }
         }
 
         opkind = opkind.homogenous_rescale(in_scales.clone()).into();
-        let mut out_scale = opkind.out_scale(in_scales.clone());
+        let mut out_scale = opkind.out_scale(in_scales.clone())?;
         // rescale the inputs if necessary to get consistent fixed points, we select the largest scale (highest precision)
         let global_scale = scales.get_max();
         opkind = RebaseScale::rebase(opkind, global_scale, out_scale, scales.rebase_multiplier);
 
-        out_scale = opkind.out_scale(in_scales);
+        out_scale = opkind.out_scale(in_scales)?;
 
         // get the output shape
         let mut out_dims = {
@@ -692,7 +692,7 @@ impl Node {
             } else if let Some([Some(v), Some(_)]) = output_shapes.as_deref() {
                 v.to_vec()
             } else {
-                panic!("Could not get output shape for node {:?}", node);
+                return Err("could not get output shape for node".into());
             }
         };
 
@@ -719,7 +719,7 @@ fn rescale_const_with_single_use(
     num_uses: usize,
 ) -> Result<(), Box<dyn Error>> {
     if num_uses == 1 {
-        let current_scale = constant.out_scale(vec![]);
+        let current_scale = constant.out_scale(vec![])?;
         let scale_max = in_scales.iter().max().unwrap();
         if scale_max > &current_scale {
             let raw_values = constant.raw_values.clone();

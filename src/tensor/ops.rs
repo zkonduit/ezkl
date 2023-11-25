@@ -806,7 +806,7 @@ pub fn einsum<
         .collect();
 
     let mut output: Tensor<T> = output.into_iter().into();
-    output.reshape(&output_shape);
+    output.reshape(&output_shape)?;
 
     Ok(output)
 }
@@ -1150,7 +1150,7 @@ pub fn gather<T: TensorType + Send + Sync>(
     let mut index_clone = index.clone();
     index_clone.flatten();
     if index_clone.is_singleton() {
-        index_clone.reshape(&[1]);
+        index_clone.reshape(&[1])?;
     }
 
     // Calculate the output tensor size
@@ -1182,7 +1182,7 @@ pub fn gather<T: TensorType + Send + Sync>(
         output_size.remove(dim);
     }
 
-    output.reshape(&output_size);
+    output.reshape(&output_size)?;
 
     Ok(output)
 }
@@ -1300,7 +1300,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
     })?;
 
     // Reshape the output tensor
-    output.reshape(&output_size);
+    output.reshape(&output_size)?;
 
     Ok(output)
 }
@@ -1775,7 +1775,7 @@ pub fn conv<
         } else {
             new_dims.insert(0, 1);
         }
-        image.reshape(&new_dims);
+        image.reshape(&new_dims)?;
     }
 
     // ensure kernel is 4D tensor
@@ -1784,7 +1784,7 @@ pub fn conv<
         let mut new_dims = kernel.dims().to_vec();
         // insert 1 at the input_channels pos
         new_dims.insert(1, 1);
-        kernel.reshape(&new_dims);
+        kernel.reshape(&new_dims)?;
     }
 
     if (image.dims().len() != 4)
@@ -1888,11 +1888,11 @@ pub fn conv<
 
     // remove dummy batch dimension if we added one
     if og_image_dims.len() == 3 && vert_slides == 1 {
-        output.reshape(&[batch_size, output_channels, horz_slides]);
+        output.reshape(&[batch_size, output_channels, horz_slides])?;
     } else if og_image_dims.len() == 3 {
-        output.reshape(&[output_channels, vert_slides, horz_slides]);
+        output.reshape(&[output_channels, vert_slides, horz_slides])?;
     } else {
-        output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
+        output.reshape(&[batch_size, output_channels, vert_slides, horz_slides])?;
     }
 
     Ok(output)
@@ -1981,27 +1981,32 @@ pub fn one_hot(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    output.iter_mut().enumerate().for_each(|(i, o)| {
-        let coord = &cartesian_coord[i];
-        let coord_axis = coord[axis];
+    output
+        .iter_mut()
+        .enumerate()
+        .map(|(i, o)| {
+            let coord = &cartesian_coord[i];
+            let coord_axis = coord[axis];
 
-        let mut coord_without_axis = coord.clone();
-        coord_without_axis.remove(axis);
+            let mut coord_without_axis = coord.clone();
+            coord_without_axis.remove(axis);
 
-        let elem = tensor.get(&coord_without_axis) as usize;
-        if elem > num_classes {
-            panic!(
-                "Element {} is greater than num_classes {}",
-                elem, num_classes
-            );
-        };
+            let elem = tensor.get(&coord_without_axis) as usize;
+            if elem > num_classes {
+                return Err(TensorError::DimMismatch(format!(
+                    "Expected element to be less than num_classes, but got {}",
+                    elem
+                )));
+            };
 
-        if coord_axis == elem {
-            *o = 1;
-        } else {
-            *o = 0;
-        }
-    });
+            if coord_axis == elem {
+                *o = 1;
+            } else {
+                *o = 0;
+            }
+            Ok(())
+        })
+        .collect::<Result<Vec<()>, TensorError>>()?;
 
     Ok(output)
 }
@@ -2193,13 +2198,13 @@ pub fn deconv<
     for (i, j) in channel_coord {
         let mut channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
         channel = Tensor::from(channel.clone().into_iter().rev());
-        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
+        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]])?;
         inverted_kernels.push(channel);
     }
 
     let mut deconv_kernel =
         Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
-    deconv_kernel.reshape(kernel.dims());
+    deconv_kernel.reshape(kernel.dims())?;
 
     // tensorflow formatting patch
     if kernel.dims()[0] == sliced_expanded_image.dims()[1] {
@@ -2208,7 +2213,7 @@ pub fn deconv<
             kernel.dims()[0],
             kernel.dims()[2],
             kernel.dims()[3],
-        ]);
+        ])?;
     }
 
     let input = if has_bias {
@@ -2503,7 +2508,7 @@ pub fn pad<T: TensorType>(
         }
     }
 
-    output.reshape(&[batch_size, channels, padded_height, padded_width]);
+    output.reshape(&[batch_size, channels, padded_height, padded_width])?;
     Ok(output)
 }
 
@@ -2647,7 +2652,7 @@ pub fn concat<T: TensorType + Send + Sync>(
     })?;
 
     // Reshape the output tensor
-    output.reshape(&output_size);
+    output.reshape(&output_size)?;
 
     Ok(output)
 }
@@ -3047,8 +3052,7 @@ pub mod nonlinearities {
             .unwrap()
             .combine()
             .unwrap();
-        res.reshape(dims);
-
+        res.reshape(dims).unwrap();
         (res, intermediate_values)
     }
 

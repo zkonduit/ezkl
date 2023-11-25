@@ -251,9 +251,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                 // if they're both assigned, we can constrain them
                 if let (Some(a), Some(b)) = (&a, &b) {
                     region.borrow_mut().constrain_equal(a.cell(), b.cell())
-                // if one is Some and the other is None -- panic
                 } else if a.is_some() || b.is_some() {
-                    panic!("constrain_equal: one of the tensors is assigned and the other is not")
+                    log::error!(
+                        "constrain_equal: one of the tensors is assigned and the other is not"
+                    );
+                    return Err(Error::Synthesis);
                 } else {
                     Ok(())
                 }

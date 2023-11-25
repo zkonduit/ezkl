@@ -1,4 +1,3 @@
-use core::panic;
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
@@ -112,8 +111,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     // Now we can assign the dot product
     // time this step
     let start = instant::Instant::now();
-    let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()], block_width)
-        .expect("accum poly: dot op failed");
+    let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()], block_width)?;
     let elapsed = start.elapsed();
     trace!("calculating accumulated dot took: {:?}", elapsed);
 
@@ -146,9 +144,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         });
     }
 
-    let last_elem = output
-        .get_slice(&[output.len() - 1..output.len()])
-        .expect("dot: failed to fetch last elem");
+    let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
 
     region.increment(assigned_len);
 
@@ -787,7 +783,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     if index_clone.is_singleton() {
         output_size.remove(dim);
     }
-    output.reshape(&output_size);
+    output.reshape(&output_size)?;
 
     Ok(output.into())
 }
@@ -1017,7 +1013,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
     };
 
     // Now we can assign the dot product
-    let accumulated_sum = accumulated::sum(&input, block_width).expect("accum poly: sum op failed");
+    let accumulated_sum = accumulated::sum(&input, block_width)?;
 
     let (output, output_assigned_len) = region.assign_with_duplication(
         &config.output,
@@ -1046,9 +1042,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
         }
     }
 
-    let last_elem = output
-        .get_slice(&[output.len() - 1..output.len()])
-        .expect("accum poly: failed to fetch last elem");
+    let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
 
     region.increment(assigned_len);
 
@@ -1088,8 +1082,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
     };
 
     // Now we can assign the dot product
-    let accumulated_prod =
-        accumulated::prod(&input, block_width).expect("accum poly: prod op failed");
+    let accumulated_prod = accumulated::prod(&input, block_width)?;
 
     let (output, output_assigned_len) = region.assign_with_duplication(
         &config.output,
@@ -1118,9 +1111,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
         });
     }
 
-    let last_elem = output
-        .get_slice(&[output.len() - 1..output.len()])
-        .expect("accum poly: failed to fetch last elem");
+    let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
 
     region.increment(assigned_len);
 
@@ -1320,7 +1311,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
             removal_indices
         }
         BaseOp::Sub => second_zero_indices.clone(),
-        _ => panic!(),
+        _ => return Err(Box::new(CircuitError::UnsupportedOp)),
     };
     removal_indices.dedup();
 
@@ -1353,7 +1344,7 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Add => add(&inputs),
         BaseOp::Sub => sub(&inputs),
         BaseOp::Mult => mult(&inputs),
-        _ => panic!(),
+        _ => return Err(Box::new(CircuitError::UnsupportedOp)),
     }
     .map_err(|e| {
         error!("{}", e);
@@ -1413,7 +1404,8 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
                         }
                     }
                     BaseOp::Mult => ValType::Constant(F::ZERO),
-                    _ => panic!(),
+                    // can safely panic as the prior check ensures this is not called
+                    _ => unreachable!(),
                 };
                 Ok::<_, TensorError>(val)
             })?;
@@ -1670,7 +1662,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     region.next();
 
     let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit.clone());
-    kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1]);
+    kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1])?;
 
     let cartesian_coord = [(0..batch_size), (0..image_channels)]
         .iter()
@@ -1833,13 +1825,13 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
     for (i, j) in channel_coord {
         let channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
         let mut channel = Tensor::from(channel.get_inner_tensor()?.clone().into_iter().rev());
-        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]]);
+        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]])?;
         inverted_kernels.push(channel);
     }
 
     let mut deconv_kernel =
         Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
-    deconv_kernel.reshape(kernel.dims());
+    deconv_kernel.reshape(kernel.dims())?;
 
     // tensorflow formatting patch
     if kernel.dims()[0] == sliced_expanded_image.dims()[1] {
@@ -1848,7 +1840,7 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
             kernel.dims()[0],
             kernel.dims()[2],
             kernel.dims()[3],
-        ]);
+        ])?;
     }
 
     let conv_input = if has_bias {
@@ -2029,19 +2021,20 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         region.dummy_loop(&mut output, inner_loop_function)?;
     }
 
-    let reshape_output = |output: &mut Tensor<ValType<F>>| {
+    let reshape_output = |output: &mut Tensor<ValType<F>>| -> Result<(), TensorError> {
         // remove dummy batch dimension if we added one
         if og_image_dims.len() == 3 && vert_slides == 1 {
-            output.reshape(&[batch_size, output_channels, horz_slides]);
+            output.reshape(&[batch_size, output_channels, horz_slides])?;
         } else if og_image_dims.len() == 3 {
-            output.reshape(&[output_channels, vert_slides, horz_slides]);
+            output.reshape(&[output_channels, vert_slides, horz_slides])?;
         } else {
-            output.reshape(&[batch_size, output_channels, vert_slides, horz_slides]);
+            output.reshape(&[batch_size, output_channels, vert_slides, horz_slides])?;
         }
+        Ok(())
     };
 
     // remove dummy batch dimension if we added one
-    reshape_output(&mut output);
+    reshape_output(&mut output)?;
 
     let output: ValTensor<_> = output.into();
 

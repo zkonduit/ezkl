@@ -35,7 +35,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{self, Bn256, Fr as Fp, G1Affine};
 use halo2curves::ff::PrimeField;
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
@@ -76,6 +76,9 @@ pub enum GraphError {
     /// This operation is unsupported
     #[error("unsupported operation in graph")]
     UnsupportedOp,
+    /// This operation is unsupported
+    #[error("unsupported datatype in graph")]
+    UnsupportedDataType,
     /// A node has missing parameters
     #[error("a node is missing required params: {0}")]
     MissingParams(String),
@@ -491,11 +494,10 @@ impl GraphCircuit {
     ///
     pub fn load(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         // read bytes from file
-        let mut f = std::fs::File::open(&path)
-            .unwrap_or_else(|_| panic!("failed to load model at {}", path.display()));
-        let metadata = std::fs::metadata(&path).expect("unable to read metadata");
+        let mut f = std::fs::File::open(&path)?;
+        let metadata = std::fs::metadata(&path)?;
         let mut buffer = vec![0; metadata.len() as usize];
-        f.read_exact(&mut buffer).expect("buffer overflow");
+        f.read_exact(&mut buffer)?;
         let result = bincode::deserialize(&buffer)?;
         Ok(result)
     }
@@ -516,7 +518,11 @@ impl From<String> for TestDataSource {
         match value.to_lowercase().as_str() {
             "file" => TestDataSource::File,
             "on-chain" => TestDataSource::OnChain,
-            _ => panic!("not a valid test data source"),
+            _ => {
+                error!("invalid data source: {}", value);
+                warn!("using default data source: on-chain");
+                TestDataSource::default()
+            }
         }
     }
 }
@@ -688,9 +694,7 @@ impl GraphCircuit {
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
-            _ => {
-                panic!("Cannot use non-file data source as input for this method.")
-            }
+            _ => Err("Cannot use non-file data source as input for this method.".into()),
         }
     }
 
@@ -723,7 +727,7 @@ impl GraphCircuit {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
             DataSource::OnChain(_) => {
-                panic!("Cannot use non-file data source as input for wasm rn.")
+                Err("Cannot use on-chain data source as input for this method.".into())
             }
         }
     }
@@ -773,7 +777,7 @@ impl GraphCircuit {
         let mut inputs: Vec<Tensor<Fp>> = vec![];
         for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
             let mut t: Tensor<Fp> = input.iter().cloned().collect();
-            t.reshape(shape);
+            t.reshape(shape)?;
             inputs.push(t);
         }
 
@@ -806,7 +810,7 @@ impl GraphCircuit {
                 .collect();
 
             let mut t: Tensor<Fp> = t.into_iter().into();
-            t.reshape(shape);
+            t.reshape(shape)?;
 
             data.push(t);
         }
@@ -823,7 +827,7 @@ impl GraphCircuit {
         let mut data: Vec<Tensor<Fp>> = vec![];
         for (d, shape) in file_data.iter().zip(shapes) {
             let mut t: Tensor<Fp> = d.clone().into_iter().into();
-            t.reshape(shape);
+            t.reshape(shape)?;
             data.push(t);
         }
         Ok(data)
@@ -1096,10 +1100,11 @@ impl GraphCircuit {
 
             let input_data = match &data.input_data {
                 DataSource::File(input_data) => input_data,
-                _ => panic!(
-                    "Cannot use non file source as input for on-chain test.
+                _ => {
+                    return Err("Cannot use non file source as input for on-chain test.
                     Manually populate on-chain data from file source instead"
-                ),
+                        .into())
+                }
             };
             // Get the flatten length of input_data
             // if the input source is a field then set scale to 0
@@ -1124,11 +1129,14 @@ impl GraphCircuit {
 
             let output_data = match &data.output_data {
                 Some(DataSource::File(output_data)) => output_data,
-                Some(DataSource::OnChain(_)) => panic!(
-                    "Cannot use on-chain data source as output for on-chain test. 
+                Some(DataSource::OnChain(_)) => {
+                    return Err(
+                        "Cannot use on-chain data source as output for on-chain test. 
                     Will manually populate on-chain data from file source instead"
-                ),
-                _ => panic!("No output data to populate"),
+                            .into(),
+                    )
+                }
+                _ => return Err("No output data found".into()),
             };
             let datum: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 output_data,

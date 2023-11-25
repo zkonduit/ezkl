@@ -68,7 +68,11 @@ impl<'a> From<&'a str> for Visibility {
                 outlets: vec![],
             },
             "encrypted" => Visibility::Encrypted,
-            _ => panic!("Invalid visibility string"),
+            _ => {
+                log::error!("Invalid value for Visibility: {}", s);
+                log::warn!("Defaulting to private");
+                Visibility::Private
+            }
         }
     }
 }

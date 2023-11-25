@@ -401,7 +401,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         };
 
         let mut res: Tensor<F> = felt_evals.into_iter().into();
-        res.reshape(self.dims());
+        res.reshape(self.dims())?;
         Ok(res)
     }
 
@@ -573,7 +573,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                v.reshape(new_dims);
+                v.reshape(new_dims)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { dims: d, idx, .. } => {

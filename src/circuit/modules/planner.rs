@@ -1,7 +1,7 @@
+use std::cmp;
 use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
-use std::{cmp, panic};
 
 use halo2curves::ff::Field;
 
@@ -106,12 +106,18 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
     {
         // if the name contains the required substring we increment the current module idx
         if Into::<String>::into(name()).contains("_enter_module_") {
-            let index = Into::<String>::into(name())
-                .split("_enter_module_")
-                .last()
-                .unwrap_or_else(|| panic!("Invalid module name"))
-                .parse::<usize>()
-                .unwrap_or_else(|_| panic!("Invalid module name"));
+            let name = Into::<String>::into(name());
+            let index = match name.split("_enter_module_").last() {
+                Some(v) => v,
+                None => {
+                    log::error!("Invalid module name");
+                    return Err(Error::Synthesis);
+                }
+            };
+            let index = index.parse::<usize>().map_err(|_| {
+                log::error!("Invalid module name");
+                return Error::Synthesis;
+            })?;
             if !self.regions.contains_key(&index) {
                 warn!("spawning module {}", index)
             };
@@ -182,7 +188,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
                 let (constant_column, y) = crate::graph::GLOBAL_SETTINGS.with(|settings| {
                     match settings.borrow().as_ref() {
                         Some(settings) => {
-                            let col_size = settings.available_col_size();
+                            let col_size = settings.available_col_size()?;
                             let (x, y) = self
                                 .get_constant_col_cartesian_coord(self.total_constants, col_size);
                             (self.constants[x], y)

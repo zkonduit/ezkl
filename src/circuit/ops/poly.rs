@@ -138,7 +138,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Identity => Ok(inputs[0].clone()),
             PolyOp::Reshape(new_dims) => {
                 let mut t = inputs[0].clone();
-                t.reshape(new_dims);
+                t.reshape(new_dims)?;
                 Ok(t)
             }
             PolyOp::MoveAxis {
@@ -147,7 +147,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             } => inputs[0].move_axis(*source, *destination),
             PolyOp::Flatten(new_dims) => {
                 let mut t = inputs[0].clone();
-                t.reshape(new_dims);
+                t.reshape(new_dims)?;
                 Ok(t)
             }
             PolyOp::Pad(p) => {
@@ -338,8 +338,8 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> crate::Scale {
-        match self {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+        let scale = match self {
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,
             PolyOp::Neg => in_scales[0],
             PolyOp::MoveAxis { .. } => in_scales[0],
@@ -358,13 +358,13 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Conv { kernel, bias, .. } => {
                 let kernel_scale = match kernel.scale() {
                     Some(s) => s,
-                    None => panic!("scale must be set for conv kernel"),
+                    None => return Err("scale must be set for conv kernel".into()),
                 };
                 let output_scale = in_scales[0] + kernel_scale;
                 if let Some(b) = bias {
                     let bias_scale = match b.scale() {
                         Some(s) => s,
-                        None => panic!("scale must be set for conv bias"),
+                        None => return Err("scale must be set for conv bias".into()),
                     };
                     assert_eq!(output_scale, bias_scale);
                 }
@@ -373,13 +373,13 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::DeConv { kernel, bias, .. } => {
                 let kernel_scale = match kernel.scale() {
                     Some(s) => s,
-                    None => panic!("scale must be set for deconv kernel"),
+                    None => return Err("scale must be set for deconv kernel".into()),
                 };
                 let output_scale = in_scales[0] + kernel_scale;
                 if let Some(b) = bias {
                     let bias_scale = match b.scale() {
                         Some(s) => s,
-                        None => panic!("scale must be set for deconv bias"),
+                        None => return Err("scale must be set for deconv bias".into()),
                     };
                     assert_eq!(output_scale, bias_scale);
                 }
@@ -407,7 +407,8 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::GlobalSumPool => in_scales[0],
             PolyOp::Concat { axis: _ } => in_scales[0],
             PolyOp::Slice { .. } => in_scales[0],
-        }
+        };
+        Ok(scale)
     }
 
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {

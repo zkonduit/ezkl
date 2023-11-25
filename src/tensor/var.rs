@@ -291,7 +291,10 @@ impl VarTensor {
             VarTensor::Advice { inner: advices, .. } => {
                 region.assign_advice_from_constant(|| "constant", advices[x][y], z, constant)
             }
-            _ => panic!(),
+            _ => {
+                error!("VarTensor was not initialized");
+                Err(halo2_proofs::plonk::Error::Synthesis)
+            }
         }
     }
 

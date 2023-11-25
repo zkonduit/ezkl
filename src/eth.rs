@@ -82,11 +82,10 @@ pub async fn setup_eth_backend(
         let private_key_format_error =
             "Private key must be in hex format, 64 chars, without 0x prefix";
         if private_key.len() != 64 {
-            panic!("{}", private_key_format_error);
+            return Err(private_key_format_error.into());
         }
-        let private_key_buffer = hex::decode(private_key).expect(private_key_format_error);
-        let signing_key =
-            SigningKey::from_slice(&private_key_buffer).expect(private_key_format_error);
+        let private_key_buffer = hex::decode(private_key)?;
+        let signing_key = SigningKey::from_slice(&private_key_buffer)?;
         wallet = LocalWallet::from(signing_key);
     } else {
         wallet = anvil.keys()[0].clone().into();
@@ -159,7 +158,7 @@ pub async fn deploy_da_verifier_via_solidity(
     if settings.run_args.param_visibility.is_hashed()
         || settings.run_args.param_visibility.is_encrypted()
     {
-        todo!()
+        return Err(Box::new(EvmVerificationError::InvalidVisibility));
     }
 
     if settings.run_args.output_visibility.is_hashed() {
@@ -228,7 +227,7 @@ pub async fn deploy_da_verifier_via_solidity(
     let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
         parse_calls_to_accounts(calls_to_accounts)?
     } else {
-        panic!("Data source for either input_data or output_data must be OnChain")
+        return Err("Data source for either input_data or output_data must be OnChain".into());
     };
 
     let (abi, bytecode, runtime_bytecode) =
@@ -304,7 +303,7 @@ pub async fn update_account_calls(
     let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
         parse_calls_to_accounts(calls_to_accounts)?
     } else {
-        panic!("Data source for either input_data or output_data must be OnChain")
+        return Err("Data source for either input_data or output_data must be OnChain".into());
     };
 
     let (anvil, client) = setup_eth_backend(rpc_url, None).await?;
@@ -338,7 +337,7 @@ pub async fn update_account_calls(
     {
         info!("update_account_calls failed as expected");
     } else {
-        panic!("update_account_calls should have failed for non admin account call");
+        return Err("update_account_calls should have failed".into());
     }
 
     Ok(())
@@ -709,10 +708,12 @@ pub fn get_contract_artifacts(
     };
     let compiled = Solc::default().compile(&input).unwrap();
 
-    let (abi, bytecode, runtime_bytecode) = compiled
-        .find(contract_name)
-        .expect("could not find contract")
-        .into_parts_or_default();
+    let (abi, bytecode, runtime_bytecode) = match compiled.find(contract_name) {
+        Some(c) => c.into_parts_or_default(),
+        None => {
+            return Err("could not find contract".into());
+        }
+    };
     Ok((abi, bytecode, runtime_bytecode))
 }
 
