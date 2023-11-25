@@ -188,7 +188,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
                 let (constant_column, y) = crate::graph::GLOBAL_SETTINGS.with(|settings| {
                     match settings.borrow().as_ref() {
                         Some(settings) => {
-                            let col_size = settings.available_col_size()?;
+                            let col_size = settings.available_col_size();
                             let (x, y) = self
                                 .get_constant_col_cartesian_coord(self.total_constants, col_size);
                             (self.constants[x], y)
