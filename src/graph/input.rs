@@ -14,6 +14,7 @@ use pyo3::ToPyObject;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::Read;
+use std::panic::UnwindSafe;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
 #[cfg(not(target_arch = "wasm32"))]
@@ -440,6 +441,8 @@ pub struct GraphData {
     /// Outputs of the model / computational graph (can be empty vectors if outputs are coming from on-chain).
     pub output_data: Option<DataSource>,
 }
+
+impl UnwindSafe for GraphData {}
 
 impl GraphData {
     ///
