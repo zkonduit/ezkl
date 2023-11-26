@@ -367,7 +367,9 @@ impl From<Box<dyn Op<Fp>>> for SupportedOp {
             return SupportedOp::RebaseScale(op.clone());
         };
 
-        panic!("Unsupported op type")
+        log::error!("Unsupported op type");
+        log::warn!("defaulting to Unknown");
+        SupportedOp::Unknown(Unknown {})
     }
 }
 

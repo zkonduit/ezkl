@@ -388,7 +388,7 @@ fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
 
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
     unit.set_visibility(&crate::graph::Visibility::Fixed);
-    let unit = region.assign(&config.output, &unit.into())?;
+    let unit = region.assign(&config.output, &unit.try_into()?)?;
 
     region.increment(assigned_sort.len());
 
@@ -460,7 +460,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
 
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
     unit.set_visibility(&crate::graph::Visibility::Fixed);
-    let unit = region.assign(&config.inputs[1], &unit.into())?;
+    let unit = region.assign(&config.inputs[1], &unit.try_into()?)?;
 
     region.increment(assigned_sort.len());
 
@@ -623,7 +623,7 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
     // assert sum is 1
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
     unit.set_visibility(&crate::graph::Visibility::Fixed);
-    let unit: ValTensor<F> = unit.into();
+    let unit: ValTensor<F> = unit.try_into()?;
 
     enforce_equality(config, region, &[unit.clone(), sum])?;
 
@@ -736,7 +736,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     // these will be assigned as constants
     let mut indices = Tensor::from((0..input.dims()[dim] as u64).map(|x| F::from(x)));
     indices.set_visibility(&crate::graph::Visibility::Fixed);
-    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    let indices = region.assign(&config.inputs[1], &indices.try_into()?)?;
     region.increment(indices.len());
 
     // Allocate memory for the output tensor
@@ -815,7 +815,7 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
     // these will be assigned as constants
     let mut indices = Tensor::from((0..input_dim as u64).map(|x| F::from(x)));
     indices.set_visibility(&crate::graph::Visibility::Fixed);
-    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    let indices = region.assign(&config.inputs[1], &indices.try_into()?)?;
     region.increment(indices.len());
 
     // Allocate memory for the output tensor
@@ -900,7 +900,7 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
     // these will be assigned as constants
     let mut indices = Tensor::from((0..input_dim as u64).map(|x| F::from(x)));
     indices.set_visibility(&crate::graph::Visibility::Fixed);
-    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    let indices = region.assign(&config.inputs[1], &indices.try_into()?)?;
     region.increment(indices.len());
 
     // Allocate memory for the output tensor
@@ -912,7 +912,7 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
 
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
     unit.set_visibility(&crate::graph::Visibility::Fixed);
-    let unit: ValTensor<F> = unit.into();
+    let unit: ValTensor<F> = unit.try_into()?;
     region.assign(&config.inputs[1], &unit).unwrap();
     region.increment(1);
 
@@ -1218,7 +1218,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd>(
     // these will be assigned as constants
     let mut indices = Tensor::from((0..values[0].dims()[dim] as u64).map(|x| F::from(x)));
     indices.set_visibility(&crate::graph::Visibility::Fixed);
-    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    let indices = region.assign(&config.inputs[1], &indices.try_into()?)?;
     region.increment(indices.len());
 
     let argmax = move |config: &BaseConfig<F>,
@@ -1255,7 +1255,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd>(
     // these will be assigned as constants
     let mut indices = Tensor::from((0..values[0].dims()[dim] as u64).map(|x| F::from(x)));
     indices.set_visibility(&crate::graph::Visibility::Fixed);
-    let indices = region.assign(&config.inputs[1], &indices.into())?;
+    let indices = region.assign(&config.inputs[1], &indices.try_into()?)?;
     region.increment(indices.len());
 
     let argmin = move |config: &BaseConfig<F>,

@@ -202,25 +202,33 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Vec<ValType<F>>> for ValTenso
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<F>> for ValTensor<F> {
-    fn from(t: Tensor<F>) -> ValTensor<F> {
-        ValTensor::Value {
-            inner: t.map(|x|
-                if let Some(vis) = &t.visibility {
-                    match vis {
-                        Visibility::Fixed => x.into(),
-                        Visibility::Public | Visibility::Private | Visibility::Hashed {..} | Visibility::Encrypted | Visibility::KZGCommit => {
-                            Value::known(x).into()
-                        }
+impl<F: PrimeField + TensorType + PartialOrd> TryFrom<Tensor<F>> for ValTensor<F> {
+    type Error = Box<dyn Error>;
+    fn try_from(t: Tensor<F>) -> Result<ValTensor<F>, Box<dyn Error>> {
+        let visibility = t.visibility.clone();
+        let dims = t.dims().to_vec();
+        let inner = t.into_iter().map(|x| {
+            if let Some(vis) = &visibility {
+                match vis {
+                    Visibility::Fixed => Ok(ValType::Constant(x)),
+                    _ => {
+                        Ok(Value::known(x).into())
                     }
                 }
-                else {
-                    panic!("visibility should be set to convert a tensor of field elements to a ValTensor.")
-                }
-            ),
-            dims: t.dims().to_vec(),
+            }
+            else {
+                Err("visibility should be set to convert a tensor of field elements to a ValTensor.".into())
+            }
+        }).collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+
+        let mut inner: Tensor<ValType<F>> = inner.into_iter().into();
+        inner.reshape(&dims)?;
+
+        Ok(ValTensor::Value {
+            inner,
+            dims,
             scale: 1,
-        }
+        })
     }
 }
 

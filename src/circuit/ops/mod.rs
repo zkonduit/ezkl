@@ -326,7 +326,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         let value = if let Some(value) = &self.pre_assigned_val {
             value.clone()
         } else {
-            self.quantized_values.clone().into()
+            self.quantized_values.clone().try_into()?
         };
         // we gotta constrain it once if its used multiple times
         Ok(Some(layouts::identity(config, region, &[value])?))

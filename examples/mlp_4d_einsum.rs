@@ -113,7 +113,10 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .layer_config
                         .layout(
                             &mut region,
-                            &[self.l0_params[0].clone().into(), self.input.clone()],
+                            &[
+                                self.l0_params[0].clone().try_into().unwrap(),
+                                self.input.clone(),
+                            ],
                             Box::new(PolyOp::Einsum {
                                 equation: "ab,bc->ac".to_string(),
                             }),
@@ -128,7 +131,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x, self.l0_params[1].clone().into()],
+                            &[x, self.l0_params[1].clone().try_into().unwrap()],
                             Box::new(PolyOp::Add),
                         )
                         .unwrap()
@@ -149,7 +152,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .layer_config
                         .layout(
                             &mut region,
-                            &[self.l2_params[0].clone().into(), x],
+                            &[self.l2_params[0].clone().try_into().unwrap(), x],
                             Box::new(PolyOp::Einsum {
                                 equation: "ab,bc->ac".to_string(),
                             }),
@@ -164,7 +167,7 @@ impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x, self.l2_params[1].clone().into()],
+                            &[x, self.l2_params[1].clone().try_into().unwrap()],
                             Box::new(PolyOp::Add),
                         )
                         .unwrap()

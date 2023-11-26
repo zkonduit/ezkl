@@ -273,9 +273,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 padding,
                 stride,
             } => {
-                values.push(kernel.clone().into());
+                values.push(kernel.clone().try_into()?);
                 if let Some(bias) = bias {
-                    values.push(bias.clone().into());
+                    values.push(bias.clone().try_into()?);
                 }
                 layouts::conv(config, region, values[..].try_into()?, *padding, *stride)?
             }
@@ -286,9 +286,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 output_padding,
                 stride,
             } => {
-                values.push(kernel.clone().into());
+                values.push(kernel.clone().try_into()?);
                 if let Some(bias) = bias {
-                    values.push(bias.clone().into());
+                    values.push(bias.clone().try_into()?);
                 }
                 layouts::deconv(
                     config,

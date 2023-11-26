@@ -1421,7 +1421,7 @@ pub mod tests {
 
         tensor.set_visibility(&Visibility::Public);
 
-        let flattened: ValTensor<Fp> = tensor.into();
+        let flattened: ValTensor<Fp> = tensor.try_into().unwrap();
 
         assert_eq!(flattened.len(), 30);
 

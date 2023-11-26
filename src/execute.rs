@@ -650,7 +650,11 @@ pub(crate) fn calibrate(
         .collect::<Vec<(crate::Scale, crate::Scale)>>();
 
     // if all integers
-    let all_scale_0 = model.graph.get_input_types().iter().all(|t| t.is_integer());
+    let all_scale_0 = model
+        .graph
+        .get_input_types()?
+        .iter()
+        .all(|t| t.is_integer());
     if all_scale_0 {
         // set all a values to 0 then dedup
         range_grid = range_grid

@@ -1041,7 +1041,7 @@ mod conv {
                         config
                             .layout(
                                 &mut region,
-                                &[self.inputs[0].clone().into()],
+                                &[self.inputs[0].clone().try_into().unwrap()],
                                 Box::new(PolyOp::Conv {
                                     kernel: self.inputs[1].clone(),
                                     bias: None,
@@ -1223,7 +1223,7 @@ mod conv_col_ultra_overflow {
         kernels.set_visibility(&crate::graph::Visibility::Private);
 
         let circuit = ConvCircuit::<F> {
-            image: ValTensor::from(image),
+            image: ValTensor::try_from(image).unwrap(),
             kernel: kernels,
             _marker: PhantomData,
         };
@@ -1375,7 +1375,7 @@ mod conv_relu_col_ultra_overflow {
         kernels.set_visibility(&crate::graph::Visibility::Private);
 
         let circuit = ConvCircuit::<F> {
-            image: ValTensor::from(image),
+            image: ValTensor::try_from(image).unwrap(),
             kernel: kernels,
             _marker: PhantomData,
         };

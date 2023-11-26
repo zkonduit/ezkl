@@ -233,7 +233,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[self.l2_params[0].clone().into(), x],
+                            &[self.l2_params[0].clone().try_into().unwrap(), x],
                             Box::new(PolyOp::Einsum {
                                 equation: "ij,j->ik".to_string(),
                             }),
@@ -245,7 +245,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x, self.l2_params[1].clone().into()],
+                            &[x, self.l2_params[1].clone().try_into().unwrap()],
                             Box::new(PolyOp::Add),
                         )
                         .unwrap()

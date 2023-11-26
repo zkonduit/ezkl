@@ -334,14 +334,14 @@ impl ParsedNodes {
     }
 
     /// Input types
-    pub fn get_input_types(&self) -> Vec<InputType> {
+    pub fn get_input_types(&self) -> Result<Vec<InputType>, GraphError> {
         self.inputs
             .iter()
             .map(|o| match self.nodes.get(o).unwrap().opkind() {
-                SupportedOp::Input(Input { datum_type, .. }) => datum_type.clone(),
-                _ => panic!("Expected input type"),
+                SupportedOp::Input(Input { datum_type, .. }) => Ok(datum_type.clone()),
+                _ => Err(GraphError::InvalidInputTypes),
             })
-            .collect_vec()
+            .collect::<Result<Vec<_>, _>>()
     }
 
     ///  Returns shapes of the computational graph's inputs
@@ -1193,7 +1193,7 @@ impl Model {
                         log::debug!("node {} is a constant with 1 use", n.idx);
                         let mut node = n.clone();
                         let c = node.opkind.get_mutable_constant().unwrap();
-                        Some(c.quantized_values.clone().into())
+                        Some(c.quantized_values.clone().try_into()?)
                     } else {
                         config
                             .base

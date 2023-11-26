@@ -103,6 +103,9 @@ pub enum GraphError {
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
     PackingExponent,
+    /// Invalid Input Types
+    #[error("invalid input types")]
+    InvalidInputTypes,
 }
 
 const ASSUMED_BLINDING_FACTORS: usize = 5;
@@ -429,11 +432,13 @@ impl GraphSettings {
 
     ///
     pub fn available_col_size(&self) -> usize {
+        let base = 2u32;
         if let Some(num_blinding_factors) = self.num_blinding_factors {
-            let base = 2u32;
             base.pow(self.run_args.logrows) as usize - num_blinding_factors - 1
         } else {
-            panic!("num_blinding_factors not set")
+            log::error!("num_blinding_factors not set");
+            log::warn!("using default available_col_size");
+            base.pow(self.run_args.logrows) as usize - ASSUMED_BLINDING_FACTORS - 1
         }
     }
 
@@ -676,7 +681,7 @@ impl GraphCircuit {
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model().graph.input_shapes();
         let scales = self.model().graph.get_input_scales();
-        let input_types = self.model().graph.get_input_types();
+        let input_types = self.model().graph.get_input_types()?;
         self.process_data_source(&data.input_data, shapes, scales, input_types)
     }
 
@@ -687,7 +692,7 @@ impl GraphCircuit {
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model().graph.input_shapes();
         let scales = self.model().graph.get_input_scales();
-        let input_types = self.model().graph.get_input_types();
+        let input_types = self.model().graph.get_input_types()?;
         info!("input scales: {:?}", scales);
 
         match &data.input_data {
@@ -706,7 +711,7 @@ impl GraphCircuit {
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model().graph.input_shapes();
         let scales = self.model().graph.get_input_scales();
-        let input_types = self.model().graph.get_input_types();
+        let input_types = self.model().graph.get_input_types()?;
         info!("input scales: {:?}", scales);
 
         self.process_data_source(&data.input_data, shapes, scales, input_types)
@@ -1288,9 +1293,12 @@ impl Circuit<Fp> for GraphCircuit {
             .iter_mut()
             .map(|i| {
                 i.set_visibility(input_vis);
-                ValTensor::from(i.clone())
+                ValTensor::try_from(i.clone()).map_err(|e| {
+                    log::error!("failed to convert input to valtensor: {:?}", e);
+                    PlonkError::Synthesis
+                })
             })
-            .collect::<Vec<ValTensor<Fp>>>();
+            .collect::<Result<Vec<ValTensor<Fp>>, PlonkError>>()?;
 
         let outputs = self
             .graph_witness
@@ -1298,9 +1306,12 @@ impl Circuit<Fp> for GraphCircuit {
             .iter_mut()
             .map(|i| {
                 i.set_visibility(output_vis);
-                ValTensor::from(i.clone())
+                ValTensor::try_from(i.clone()).map_err(|e| {
+                    log::error!("failed to convert output to valtensor: {:?}", e);
+                    PlonkError::Synthesis
+                })
             })
-            .collect::<Vec<ValTensor<Fp>>>();
+            .collect::<Result<Vec<ValTensor<Fp>>, PlonkError>>()?;
 
         let mut instance_offset = 0;
         trace!("running input module layout");
@@ -1356,7 +1367,10 @@ impl Circuit<Fp> for GraphCircuit {
                         PlonkError::Synthesis
                     })?;
                 t.set_visibility(param_visibility);
-                vec![t.into()]
+                vec![t.try_into().map_err(|_| {
+                    log::error!("failed to convert params to valtensor");
+                    PlonkError::Synthesis
+                })?]
             };
 
             // now do stuff to the model params
