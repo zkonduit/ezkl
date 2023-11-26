@@ -337,19 +337,35 @@ impl ParsedNodes {
     pub fn get_input_types(&self) -> Result<Vec<InputType>, GraphError> {
         self.inputs
             .iter()
-            .map(|o| match self.nodes.get(o).unwrap().opkind() {
-                SupportedOp::Input(Input { datum_type, .. }) => Ok(datum_type.clone()),
-                _ => Err(GraphError::InvalidInputTypes),
+            .map(|o| {
+                match self
+                    .nodes
+                    .get(o)
+                    .ok_or(GraphError::MissingNode(*o))?
+                    .opkind()
+                {
+                    SupportedOp::Input(Input { datum_type, .. }) => Ok(datum_type.clone()),
+                    _ => Err(GraphError::InvalidInputTypes),
+                }
             })
             .collect::<Result<Vec<_>, _>>()
     }
 
     ///  Returns shapes of the computational graph's inputs
-    pub fn input_shapes(&self) -> Vec<Vec<usize>> {
-        self.inputs
-            .iter()
-            .flat_map(|o| self.nodes.get(o).unwrap().out_dims())
-            .collect_vec()
+    pub fn input_shapes(&self) -> Result<Vec<Vec<usize>>, Box<dyn Error>> {
+        let mut inputs = vec![];
+
+        for input in self.inputs.iter() {
+            let node = self
+                .nodes
+                .get(input)
+                .ok_or(GraphError::MissingNode(*input))?;
+            let input_dims = node.out_dims();
+            let input_dim = input_dims.get(0).ok_or(GraphError::MissingNode(*input))?;
+            inputs.push(input_dim.clone());
+        }
+
+        Ok(inputs)
     }
 
     /// Returns the number of the computational graph's outputs
@@ -359,27 +375,49 @@ impl ParsedNodes {
     }
 
     /// Returns shapes of the computational graph's outputs
-    pub fn output_shapes(&self) -> Vec<Vec<usize>> {
-        self.outputs
-            .iter()
-            .map(|(idx, outlet)| self.nodes.get(idx).unwrap().out_dims()[*outlet].clone())
-            .collect_vec()
+    pub fn output_shapes(&self) -> Result<Vec<Vec<usize>>, GraphError> {
+        let mut outputs = vec![];
+
+        for output in self.outputs.iter() {
+            let (idx, outlet) = output;
+            let node = self.nodes.get(idx).ok_or(GraphError::MissingNode(*idx))?;
+            let out_dims = node.out_dims();
+            let out_dim = out_dims
+                .get(*outlet)
+                .ok_or(GraphError::MissingNode(*outlet))?;
+            outputs.push(out_dim.clone());
+        }
+
+        Ok(outputs)
     }
 
     /// Returns the fixed point scale of the computational graph's inputs
     pub fn get_input_scales(&self) -> Vec<crate::Scale> {
         let input_nodes = self.inputs.iter();
         input_nodes
-            .flat_map(|o| self.nodes.get(o).unwrap().out_scales())
-            .collect_vec()
+            .map(|idx| {
+                self.nodes
+                    .get(idx)
+                    .ok_or(GraphError::MissingNode(*idx))
+                    .map(|n| n.out_scales())
+                    .unwrap_or_default()
+            })
+            .flatten()
+            .collect()
     }
 
     /// Returns the fixed point scale of the computational graph's outputs
-    pub fn get_output_scales(&self) -> Vec<crate::Scale> {
+    pub fn get_output_scales(&self) -> Result<Vec<crate::Scale>, GraphError> {
         let output_nodes = self.outputs.iter();
         output_nodes
-            .map(|(idx, outlet)| self.nodes.get(idx).unwrap().out_scales()[*outlet])
-            .collect_vec()
+            .map(|(idx, outlet)| {
+                Ok(self
+                    .nodes
+                    .get(idx)
+                    .ok_or(GraphError::MissingNode(*idx))?
+                    .out_scales()[*outlet])
+            })
+            .collect::<Result<Vec<_>, GraphError>>()
     }
 }
 
@@ -434,7 +472,7 @@ impl Model {
         run_args: &RunArgs,
         check_mode: CheckMode,
     ) -> Result<GraphSettings, Box<dyn Error>> {
-        let instance_shapes = self.instance_shapes();
+        let instance_shapes = self.instance_shapes()?;
         #[cfg(not(target_arch = "wasm32"))]
         info!(
             "{} {} {}",
@@ -444,9 +482,8 @@ impl Model {
         );
         // this is the total number of variables we will need to allocate
         // for the circuit
-        let (num_rows, linear_coord, total_const_size) = self
-            .dummy_layout(run_args, &self.graph.input_shapes())
-            .unwrap();
+        let (num_rows, linear_coord, total_const_size) =
+            self.dummy_layout(run_args, &self.graph.input_shapes()?)?;
 
         // extract the requisite lookup ops from the model
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
@@ -454,7 +491,7 @@ impl Model {
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
 
         if run_args.tolerance.val > 0.0 {
-            for scale in self.graph.get_output_scales() {
+            for scale in self.graph.get_output_scales()? {
                 let mut tolerance = run_args.tolerance;
                 tolerance.scale = scale_to_multiplier(scale).into();
                 let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
@@ -472,7 +509,7 @@ impl Model {
             num_rows,
             total_assignments: linear_coord,
             required_lookups: lookup_ops,
-            model_output_scales: self.graph.get_output_scales(),
+            model_output_scales: self.graph.get_output_scales()?,
             model_input_scales: self.graph.get_input_scales(),
             total_const_size,
             check_mode,
@@ -491,7 +528,7 @@ impl Model {
         let mut max_lookup_inputs = 0;
         let mut min_lookup_inputs = 0;
 
-        let input_shapes = self.graph.input_shapes();
+        let input_shapes = self.graph.input_shapes()?;
 
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             let mut input = model_inputs[i].clone();
@@ -502,7 +539,7 @@ impl Model {
         for (idx, n) in self.graph.nodes.iter() {
             let mut inputs = vec![];
             if n.is_input() {
-                let t = results.get(idx).unwrap()[0].clone();
+                let t = results.get(idx).ok_or(GraphError::MissingResults)?[0].clone();
                 inputs.push(t);
             } else {
                 for (idx, outlet) in n.inputs().iter() {
@@ -523,8 +560,18 @@ impl Model {
             if n.is_lookup() {
                 let (mut min, mut max) = (0, 0);
                 for i in &inputs {
-                    max = max.max(i.iter().map(|x| felt_to_i128(*x)).max().unwrap());
-                    min = min.min(i.iter().map(|x| felt_to_i128(*x)).min().unwrap());
+                    max = max.max(
+                        i.iter()
+                            .map(|x| felt_to_i128(*x))
+                            .max()
+                            .ok_or("missing max")?,
+                    );
+                    min = min.min(
+                        i.iter()
+                            .map(|x| felt_to_i128(*x))
+                            .min()
+                            .ok_or("missing min")?,
+                    );
                 }
                 max_lookup_inputs = max_lookup_inputs.max(max);
                 min_lookup_inputs = min_lookup_inputs.min(min);
@@ -543,8 +590,8 @@ impl Model {
                     if !res.intermediate_lookups.is_empty() {
                         let (mut min, mut max) = (0, 0);
                         for i in &res.intermediate_lookups {
-                            max = max.max(i.clone().into_iter().max().unwrap());
-                            min = min.min(i.clone().into_iter().min().unwrap());
+                            max = max.max(i.clone().into_iter().max().ok_or("missing max")?);
+                            min = min.min(i.clone().into_iter().min().ok_or("missing min")?);
                         }
                         max_lookup_inputs = max_lookup_inputs.max(max);
                         min_lookup_inputs = min_lookup_inputs.min(min);
@@ -659,8 +706,10 @@ impl Model {
             output_nodes.clone().collect_vec()
         );
         let outputs = output_nodes
-            .map(|(idx, outlet)| results.get(&idx).unwrap()[*outlet].clone())
-            .collect_vec();
+            .map(|(idx, outlet)| {
+                Ok(results.get(&idx).ok_or(GraphError::MissingResults)?[*outlet].clone())
+            })
+            .collect::<Result<Vec<_>, GraphError>>()?;
 
         let res = ForwardResult {
             outputs,
@@ -713,7 +762,7 @@ impl Model {
         }
 
         for (i, _) in model.clone().outputs.iter().enumerate() {
-            model.set_output_fact(i, InferenceFact::default()).unwrap();
+            model.set_output_fact(i, InferenceFact::default())?;
         }
         // Note: do not optimize the model, as the layout will depend on underlying hardware
         let mut model = model.into_typed()?.into_decluttered()?;
@@ -815,8 +864,13 @@ impl Model {
                     let input_scales = n
                         .inputs
                         .iter()
-                        .map(|i| nodes.get(&i.node).unwrap().out_scales()[0])
-                        .collect_vec();
+                        .map(|i| {
+                            Ok(nodes
+                                .get(&i.node)
+                                .ok_or(GraphError::MissingNode(i.node))?
+                                .out_scales()[0])
+                        })
+                        .collect::<Result<Vec<_>, GraphError>>()?;
 
                     let mut input_mappings = vec![];
                     for mapping in &b.input_mapping {
@@ -898,18 +952,18 @@ impl Model {
 
                     let out_dims = node_output_shapes(n)?
                         .iter()
-                        .map(|shape| shape.as_ref().unwrap().clone())
-                        .collect_vec();
+                        .map(|shape| Ok(shape.as_ref().ok_or("missing shape dims")?.clone()))
+                        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
                     let mut output_scales = BTreeMap::new();
 
                     for (i, _mapping) in b.output_mapping.iter().enumerate() {
                         for mapping in b.output_mapping.iter() {
                             if let Some(outlet) = mapping.last_value_slot {
-                                output_scales.insert(outlet, om.graph.get_output_scales()[i]);
+                                output_scales.insert(outlet, om.graph.get_output_scales()?[i]);
                             }
                             if let Some(last) = mapping.scan {
-                                output_scales.insert(last.0, om.graph.get_output_scales()[i]);
+                                output_scales.insert(last.0, om.graph.get_output_scales()?[i]);
                             }
                         }
                     }
@@ -938,9 +992,9 @@ impl Model {
                         i,
                         symbol_values,
                     )?;
-                    if override_input_scales.is_some() {
+                    if let Some(ref scales) = override_input_scales {
                         if let Some(inp) = n.opkind.get_input() {
-                            let scale = override_input_scales.as_ref().unwrap()[input_idx];
+                            let scale = scales[input_idx];
                             n.opkind = SupportedOp::Input(Input {
                                 scale,
                                 datum_type: inp.datum_type,
@@ -1057,14 +1111,15 @@ impl Model {
 
         let mut results = BTreeMap::<usize, Vec<ValTensor<Fp>>>::new();
 
-        let input_shapes = self.graph.input_shapes();
+        let input_shapes = self.graph.input_shapes()?;
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
-                results.insert(*input_idx, vec![vars.instance.as_ref().unwrap().clone()]);
+                let instance = vars.instance.as_ref().ok_or("no instance")?.clone();
+                results.insert(*input_idx, vec![instance]);
                 vars.increment_instance_idx();
             } else {
                 let mut input = inputs[i].clone();
-                input.reshape(&input_shapes[i]).unwrap();
+                input.reshape(&input_shapes[i])?;
                 results.insert(*input_idx, vec![input]);
             }
         }
@@ -1092,7 +1147,10 @@ impl Model {
                     })?;
 
                 if run_args.output_visibility.is_public() || run_args.output_visibility.is_fixed() {
-                    let output_scales = self.graph.get_output_scales();
+                    let output_scales = self.graph.get_output_scales().map_err(|e| {
+                        error!("{}", e);
+                        halo2_proofs::plonk::Error::Synthesis
+                    })?;
                     let res = outputs
                         .iter()
                         .enumerate()
@@ -1101,7 +1159,7 @@ impl Model {
                             tolerance.scale = scale_to_multiplier(output_scales[i]).into();
 
                             let comparators = if run_args.output_visibility == Visibility::Public {
-                                let res = vars.instance.as_ref().unwrap().clone();
+                                let res = vars.instance.as_ref().ok_or("no instance")?.clone();
                                 vars.increment_instance_idx();
                                 res
                             } else {
@@ -1166,11 +1224,13 @@ impl Model {
             let mut values: Vec<ValTensor<Fp>> = if !node.is_input() {
                 node.inputs()
                     .iter()
-                    .map(|(idx, outlet)| results.get(idx).unwrap()[*outlet].clone())
-                    .collect_vec()
+                    .map(|(idx, outlet)| {
+                        Ok(results.get(idx).ok_or(GraphError::MissingResults)?[*outlet].clone())
+                    })
+                    .collect::<Result<Vec<_>, GraphError>>()?
             } else {
                 // we re-assign inputs, always from the 0 outlet
-                vec![results.get(idx).unwrap()[0].clone()]
+                vec![results.get(idx).ok_or(GraphError::MissingResults)?[0].clone()]
             };
 
             debug!(
@@ -1192,7 +1252,7 @@ impl Model {
                     let res = if node.is_constant() && node.num_uses() == 1 {
                         log::debug!("node {} is a constant with 1 use", n.idx);
                         let mut node = n.clone();
-                        let c = node.opkind.get_mutable_constant().unwrap();
+                        let c = node.opkind.get_mutable_constant().ok_or("no constant")?;
                         Some(c.quantized_values.clone().try_into()?)
                     } else {
                         config
@@ -1313,8 +1373,10 @@ impl Model {
             output_nodes.clone().collect_vec()
         );
         let outputs = output_nodes
-            .map(|(idx, outlet)| results.get(idx).unwrap()[*outlet].clone())
-            .collect_vec();
+            .map(|(idx, outlet)| {
+                Ok(results.get(idx).ok_or(GraphError::MissingResults)?[*outlet].clone())
+            })
+            .collect::<Result<Vec<_>, GraphError>>()?;
 
         Ok(outputs)
     }
@@ -1343,10 +1405,10 @@ impl Model {
             .map(|shape| {
                 let mut t: ValTensor<Fp> =
                     vec![default_value.clone(); shape.iter().product()].into();
-                t.reshape(shape).unwrap();
-                t
+                t.reshape(shape)?;
+                Ok(t)
             })
-            .collect_vec();
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             results.insert(*input_idx, vec![inputs[i].clone()]);
@@ -1375,24 +1437,22 @@ impl Model {
                 .map(|x| {
                     let mut v: ValTensor<Fp> =
                         vec![default_value.clone(); x.dims().iter().product::<usize>()].into();
-                    v.reshape(x.dims()).unwrap();
-                    v
+                    v.reshape(x.dims())?;
+                    Ok(v)
                 })
-                .collect_vec();
+                .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
             let _ = outputs
                 .into_iter()
                 .zip(comparator)
                 .map(|(o, c)| {
-                    dummy_config
-                        .layout(
-                            &mut region,
-                            &[o, c],
-                            Box::new(HybridOp::RangeCheck(run_args.tolerance)),
-                        )
-                        .unwrap()
+                    dummy_config.layout(
+                        &mut region,
+                        &[o, c],
+                        Box::new(HybridOp::RangeCheck(run_args.tolerance)),
+                    )
                 })
-                .collect_vec();
+                .collect::<Result<Vec<_>, _>>()?;
         }
 
         let duration = start_time.elapsed();
@@ -1479,14 +1539,14 @@ impl Model {
     }
 
     /// Shapes of the computational graph's public inputs (if any)
-    pub fn instance_shapes(&self) -> Vec<Vec<usize>> {
+    pub fn instance_shapes(&self) -> Result<Vec<Vec<usize>>, Box<dyn Error>> {
         let mut instance_shapes = vec![];
         if self.visibility.input.is_public() {
-            instance_shapes.extend(self.graph.input_shapes());
+            instance_shapes.extend(self.graph.input_shapes()?);
         }
         if self.visibility.output.is_public() {
-            instance_shapes.extend(self.graph.output_shapes());
+            instance_shapes.extend(self.graph.output_shapes()?);
         }
-        instance_shapes
+        Ok(instance_shapes)
     }
 }

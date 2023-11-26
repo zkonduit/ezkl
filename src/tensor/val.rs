@@ -348,14 +348,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     ///
-    pub fn any_unknowns(&self) -> bool {
+    pub fn any_unknowns(&self) -> Result<bool, Box<dyn Error>> {
         match self {
-            ValTensor::Instance { .. } => true,
-            _ => self.get_inner().unwrap().iter().any(|&x| {
+            ValTensor::Instance { .. } => Ok(true),
+            _ => Ok(self.get_inner()?.iter().any(|&x| {
                 let mut is_empty = true;
                 x.map(|_| is_empty = false);
                 is_empty
-            }),
+            })),
         }
     }
 

@@ -74,16 +74,15 @@ fn check_solc_requirement() {
     info!("checking solc installation..");
     _SOLC_REQUIREMENT.get_or_init(|| match Command::new("solc").arg("--version").output() {
         Ok(output) => {
-            #[cfg(not(target_arch = "wasm32"))]
             debug!("solc output: {:#?}", output);
-            #[cfg(not(target_arch = "wasm32"))]
             debug!("solc output success: {:#?}", output.status.success());
-            assert!(
-                output.status.success(),
-                "`solc` check failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            #[cfg(not(target_arch = "wasm32"))]
+            if !output.status.success() {
+                log::error!(
+                    "`solc` check failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                return false;
+            }
             debug!("solc check passed, proceeding");
             true
         }
@@ -628,7 +627,9 @@ pub(crate) fn calibrate(
         }
     };
 
-    let chunks = data.split_into_batches(model.graph.input_shapes()).unwrap();
+    let chunks = data
+        .split_into_batches(model.graph.input_shapes()?)
+        .unwrap();
 
     info!("num of calibration batches: {}", chunks.len());
 
@@ -1133,7 +1134,9 @@ pub(crate) async fn verify_evm(
 
     info!("Solidity verification result: {}", result);
 
-    assert!(result);
+    if !result {
+        return Err("Solidity verification failed".into());
+    }
 
     Ok(())
 }

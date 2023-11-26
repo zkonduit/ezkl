@@ -695,7 +695,9 @@ pub fn get_contract_artifacts(
     contract_name: &str,
     runs: usize,
 ) -> Result<(Contract, Bytes, Bytes), Box<dyn Error>> {
-    assert!(sol_code_path.exists());
+    if !sol_code_path.exists() {
+        return Err("sol_code_path does not exist".into());
+    }
     // Create the compiler input, enabling the optimizer and setting the optimzer runs.
     let input: CompilerInput = if runs > 0 {
         let mut i = CompilerInput::new(sol_code_path)?[0]
