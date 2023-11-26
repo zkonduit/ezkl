@@ -385,7 +385,8 @@ impl GraphModules {
                     x.clone_from(&inputs[i][0]);
                 });
             } else {
-                panic!("Poseidon config not initialized");
+                log::error!("Poseidon config not initialized");
+                return Err(Error::Synthesis);
             }
         // If the module is encrypted, then we need to encrypt the inputs
         } else if element_visibility.is_encrypted() && !values.is_empty() {
@@ -417,7 +418,8 @@ impl GraphModules {
 
                 config.initialized = true;
             } else {
-                panic!("ElGamal config not initialized");
+                log::error!("ElGamal config not initialized");
+                return Err(Error::Synthesis);
             }
         }
 

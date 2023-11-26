@@ -190,9 +190,9 @@ fn extract_tensor_value(
 
             const_value = Tensor::<f32>::new(Some(&cast?), &dims)?;
         }
-        _ => todo!("unsupported type"),
+        _ => return Err("unsupported data type".into()),
     }
-    const_value.reshape(&dims);
+    const_value.reshape(&dims)?;
 
     Ok(const_value)
 }
@@ -240,7 +240,7 @@ pub fn new_op_from_onnx(
 
             for (i, input) in inputs.iter_mut().enumerate() {
                 if !input.opkind().is_constant() {
-                    panic!("Range only supports constant inputs in a zk circuit");
+                    return Err("Range only supports constant inputs in a zk circuit".into());
                 } else {
                     input.decrement_use();
                     deleted_indices.push(i);
@@ -416,7 +416,13 @@ pub fn new_op_from_onnx(
                         destination,
                     })
                 }
-                _ => todo!(),
+
+                _ => {
+                    return Err(Box::new(GraphError::OpMismatch(
+                        idx,
+                        "MoveAxis".to_string(),
+                    )))
+                }
             }
         }
         "Concat" | "InferenceConcat" => {
@@ -451,7 +457,7 @@ pub fn new_op_from_onnx(
                 | DatumType::U32
                 | DatumType::U64 => 0,
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => scales.params,
-                _ => todo!("unsupported type"),
+                _ => return Err(Box::new(GraphError::UnsupportedDataType)),
             };
 
             // Quantize the raw value
@@ -546,7 +552,7 @@ pub fn new_op_from_onnx(
                 if c.len() == 1 {
                     c[0]
                 } else {
-                    todo!()
+                    return Err(Box::new(GraphError::InvalidDims(idx, "max".to_string())));
                 }
             } else {
                 return Err(Box::new(GraphError::OpMismatch(idx, "Max".to_string())));
@@ -566,7 +572,7 @@ pub fn new_op_from_onnx(
                     })
                 }
             } else {
-                todo!()
+                return Err(Box::new(GraphError::InvalidDims(idx, "max".to_string())));
             }
         }
         "Min" => {
@@ -590,7 +596,7 @@ pub fn new_op_from_onnx(
                 if c.len() == 1 {
                     c[0]
                 } else {
-                    todo!()
+                    return Err(Box::new(GraphError::InvalidDims(idx, "min".to_string())));
                 }
             } else {
                 return Err(Box::new(GraphError::OpMismatch(idx, "Min".to_string())));
@@ -606,7 +612,7 @@ pub fn new_op_from_onnx(
                     a: crate::circuit::utils::F32(unit),
                 })
             } else {
-                todo!()
+                return Err(Box::new(GraphError::InvalidDims(idx, "min".to_string())));
             }
         }
         "Recip" => {
@@ -643,7 +649,7 @@ pub fn new_op_from_onnx(
             })
         }
         "Scan" => {
-            panic!("should never reach here")
+            return Err("scan should never be analyzed explicitly".into());
         }
         "QuantizeLinearU8" | "DequantizeLinearF32" => SupportedOp::Linear(PolyOp::Identity),
         "Abs" => SupportedOp::Nonlinear(LookupOp::Abs),
@@ -717,7 +723,7 @@ pub fn new_op_from_onnx(
                 DatumType::F16 => (scales.input, InputType::F16),
                 DatumType::F32 => (scales.input, InputType::F32),
                 DatumType::F64 => (scales.input, InputType::F64),
-                _ => todo!(),
+                _ => return Err(Box::new(GraphError::UnsupportedDataType)),
             };
             SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
         }
@@ -774,7 +780,7 @@ pub fn new_op_from_onnx(
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => {
                     SupportedOp::Linear(PolyOp::Identity)
                 }
-                _ => todo!("unsupported type"),
+                _ => return Err(Box::new(GraphError::UnsupportedDataType)),
             }
         }
         "Add" => SupportedOp::Linear(PolyOp::Add),
@@ -811,14 +817,17 @@ pub fn new_op_from_onnx(
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::Less)
             } else {
-                todo!()
+                return Err(Box::new(GraphError::InvalidDims(idx, "less".to_string())));
             }
         }
         "LessEqual" => {
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::LessEqual)
             } else {
-                todo!()
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "less equal".to_string(),
+                )));
             }
         }
         "Greater" => {
@@ -826,7 +835,10 @@ pub fn new_op_from_onnx(
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::Greater)
             } else {
-                todo!()
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "greater".to_string(),
+                )));
             }
         }
         "GreaterEqual" => {
@@ -834,7 +846,10 @@ pub fn new_op_from_onnx(
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::GreaterEqual)
             } else {
-                todo!()
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "greater equal".to_string(),
+                )));
             }
         }
         "EinSum" => {
@@ -1406,7 +1421,7 @@ pub mod tests {
 
         tensor.set_visibility(&Visibility::Public);
 
-        let flattened: ValTensor<Fp> = tensor.into();
+        let flattened: ValTensor<Fp> = tensor.try_into().unwrap();
 
         assert_eq!(flattened.len(), 30);
 

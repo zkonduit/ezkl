@@ -70,7 +70,7 @@ fn runelgamal(c: &mut Criterion) {
 
         let mut message: Tensor<ValType<Fr>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
-        message.reshape(&[1, *size]);
+        message.reshape(&[1, *size]).unwrap();
 
         let circuit = EncryptytionCircuit {
             message: message.into(),

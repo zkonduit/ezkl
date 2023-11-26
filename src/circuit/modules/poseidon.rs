@@ -206,7 +206,11 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                                     *f,
                                 ),
                                 e => {
-                                    panic!("wrong input type {:?}, must be previously assigned", e)
+                                    log::error!(
+                                        "wrong input type {:?}, must be previously assigned",
+                                        e
+                                    );
+                                    Err(Error::Synthesis)
                                 }
                             }
                         })
@@ -323,7 +327,10 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
 
         let output = match result[0].clone() {
             ValType::PrevAssigned(v) => v,
-            _ => panic!(),
+            _ => {
+                log::error!("wrong input type, must be previously assigned");
+                return Err(Error::Synthesis);
+            }
         };
 
         if let Some(instance) = self.config.instance {
@@ -342,7 +349,10 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                 },
             )?;
 
-            assigned_input.reshape(input[0].dims());
+            assigned_input.reshape(input[0].dims()).map_err(|e| {
+                log::error!("reshape failed: {:?}", e);
+                Error::Synthesis
+            })?;
 
             Ok(assigned_input.into())
         } else {

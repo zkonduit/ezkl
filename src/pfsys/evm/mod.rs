@@ -23,6 +23,9 @@ pub enum EvmVerificationError {
     /// EVM verify errors
     #[error("evm deployment failed")]
     Deploy,
+    /// Invalid Visibilit
+    #[error("Invalid visibility")]
+    InvalidVisibility,
 }
 /// YulCode type which is just an alias of string
 pub type YulCode = String;

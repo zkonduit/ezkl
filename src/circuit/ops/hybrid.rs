@@ -373,8 +373,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> crate::Scale {
-        match self {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+        let scale = match self {
             HybridOp::Greater { .. }
             | HybridOp::GreaterEqual { .. }
             | HybridOp::Less { .. }
@@ -384,7 +384,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::ReduceArgMin { .. } => 0,
             HybridOp::Softmax { .. } => 2 * in_scales[0],
             _ => in_scales[0],
-        }
+        };
+        Ok(scale)
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {

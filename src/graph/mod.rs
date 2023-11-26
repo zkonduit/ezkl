@@ -35,7 +35,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{self, Bn256, Fr as Fp, G1Affine};
 use halo2curves::ff::PrimeField;
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
@@ -76,6 +76,9 @@ pub enum GraphError {
     /// This operation is unsupported
     #[error("unsupported operation in graph")]
     UnsupportedOp,
+    /// This operation is unsupported
+    #[error("unsupported datatype in graph")]
+    UnsupportedDataType,
     /// A node has missing parameters
     #[error("a node is missing required params: {0}")]
     MissingParams(String),
@@ -100,6 +103,9 @@ pub enum GraphError {
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
     PackingExponent,
+    /// Invalid Input Types
+    #[error("invalid input types")]
+    InvalidInputTypes,
 }
 
 const ASSUMED_BLINDING_FACTORS: usize = 5;
@@ -426,11 +432,13 @@ impl GraphSettings {
 
     ///
     pub fn available_col_size(&self) -> usize {
+        let base = 2u32;
         if let Some(num_blinding_factors) = self.num_blinding_factors {
-            let base = 2u32;
             base.pow(self.run_args.logrows) as usize - num_blinding_factors - 1
         } else {
-            panic!("num_blinding_factors not set")
+            log::error!("num_blinding_factors not set");
+            log::warn!("using default available_col_size");
+            base.pow(self.run_args.logrows) as usize - ASSUMED_BLINDING_FACTORS - 1
         }
     }
 
@@ -491,11 +499,10 @@ impl GraphCircuit {
     ///
     pub fn load(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         // read bytes from file
-        let mut f = std::fs::File::open(&path)
-            .unwrap_or_else(|_| panic!("failed to load model at {}", path.display()));
-        let metadata = std::fs::metadata(&path).expect("unable to read metadata");
+        let mut f = std::fs::File::open(&path)?;
+        let metadata = std::fs::metadata(&path)?;
         let mut buffer = vec![0; metadata.len() as usize];
-        f.read_exact(&mut buffer).expect("buffer overflow");
+        f.read_exact(&mut buffer)?;
         let result = bincode::deserialize(&buffer)?;
         Ok(result)
     }
@@ -516,7 +523,11 @@ impl From<String> for TestDataSource {
         match value.to_lowercase().as_str() {
             "file" => TestDataSource::File,
             "on-chain" => TestDataSource::OnChain,
-            _ => panic!("not a valid test data source"),
+            _ => {
+                error!("invalid data source: {}", value);
+                warn!("using default data source: on-chain");
+                TestDataSource::default()
+            }
         }
     }
 }
@@ -670,7 +681,7 @@ impl GraphCircuit {
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model().graph.input_shapes();
         let scales = self.model().graph.get_input_scales();
-        let input_types = self.model().graph.get_input_types();
+        let input_types = self.model().graph.get_input_types()?;
         self.process_data_source(&data.input_data, shapes, scales, input_types)
     }
 
@@ -681,16 +692,14 @@ impl GraphCircuit {
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model().graph.input_shapes();
         let scales = self.model().graph.get_input_scales();
-        let input_types = self.model().graph.get_input_types();
+        let input_types = self.model().graph.get_input_types()?;
         info!("input scales: {:?}", scales);
 
         match &data.input_data {
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
-            _ => {
-                panic!("Cannot use non-file data source as input for this method.")
-            }
+            _ => Err("Cannot use non-file data source as input for this method.".into()),
         }
     }
 
@@ -702,7 +711,7 @@ impl GraphCircuit {
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         let shapes = self.model().graph.input_shapes();
         let scales = self.model().graph.get_input_scales();
-        let input_types = self.model().graph.get_input_types();
+        let input_types = self.model().graph.get_input_types()?;
         info!("input scales: {:?}", scales);
 
         self.process_data_source(&data.input_data, shapes, scales, input_types)
@@ -723,7 +732,7 @@ impl GraphCircuit {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
             DataSource::OnChain(_) => {
-                panic!("Cannot use non-file data source as input for wasm rn.")
+                Err("Cannot use on-chain data source as input for this method.".into())
             }
         }
     }
@@ -773,7 +782,7 @@ impl GraphCircuit {
         let mut inputs: Vec<Tensor<Fp>> = vec![];
         for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
             let mut t: Tensor<Fp> = input.iter().cloned().collect();
-            t.reshape(shape);
+            t.reshape(shape)?;
             inputs.push(t);
         }
 
@@ -806,7 +815,7 @@ impl GraphCircuit {
                 .collect();
 
             let mut t: Tensor<Fp> = t.into_iter().into();
-            t.reshape(shape);
+            t.reshape(shape)?;
 
             data.push(t);
         }
@@ -823,7 +832,7 @@ impl GraphCircuit {
         let mut data: Vec<Tensor<Fp>> = vec![];
         for (d, shape) in file_data.iter().zip(shapes) {
             let mut t: Tensor<Fp> = d.clone().into_iter().into();
-            t.reshape(shape);
+            t.reshape(shape)?;
             data.push(t);
         }
         Ok(data)
@@ -1096,10 +1105,11 @@ impl GraphCircuit {
 
             let input_data = match &data.input_data {
                 DataSource::File(input_data) => input_data,
-                _ => panic!(
-                    "Cannot use non file source as input for on-chain test.
+                _ => {
+                    return Err("Cannot use non file source as input for on-chain test.
                     Manually populate on-chain data from file source instead"
-                ),
+                        .into())
+                }
             };
             // Get the flatten length of input_data
             // if the input source is a field then set scale to 0
@@ -1124,11 +1134,14 @@ impl GraphCircuit {
 
             let output_data = match &data.output_data {
                 Some(DataSource::File(output_data)) => output_data,
-                Some(DataSource::OnChain(_)) => panic!(
-                    "Cannot use on-chain data source as output for on-chain test. 
+                Some(DataSource::OnChain(_)) => {
+                    return Err(
+                        "Cannot use on-chain data source as output for on-chain test. 
                     Will manually populate on-chain data from file source instead"
-                ),
-                _ => panic!("No output data to populate"),
+                            .into(),
+                    )
+                }
+                _ => return Err("No output data found".into()),
             };
             let datum: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 output_data,
@@ -1280,9 +1293,12 @@ impl Circuit<Fp> for GraphCircuit {
             .iter_mut()
             .map(|i| {
                 i.set_visibility(input_vis);
-                ValTensor::from(i.clone())
+                ValTensor::try_from(i.clone()).map_err(|e| {
+                    log::error!("failed to convert input to valtensor: {:?}", e);
+                    PlonkError::Synthesis
+                })
             })
-            .collect::<Vec<ValTensor<Fp>>>();
+            .collect::<Result<Vec<ValTensor<Fp>>, PlonkError>>()?;
 
         let outputs = self
             .graph_witness
@@ -1290,9 +1306,12 @@ impl Circuit<Fp> for GraphCircuit {
             .iter_mut()
             .map(|i| {
                 i.set_visibility(output_vis);
-                ValTensor::from(i.clone())
+                ValTensor::try_from(i.clone()).map_err(|e| {
+                    log::error!("failed to convert output to valtensor: {:?}", e);
+                    PlonkError::Synthesis
+                })
             })
-            .collect::<Vec<ValTensor<Fp>>>();
+            .collect::<Result<Vec<ValTensor<Fp>>, PlonkError>>()?;
 
         let mut instance_offset = 0;
         trace!("running input module layout");
@@ -1348,7 +1367,10 @@ impl Circuit<Fp> for GraphCircuit {
                         PlonkError::Synthesis
                     })?;
                 t.set_visibility(param_visibility);
-                vec![t.into()]
+                vec![t.try_into().map_err(|_| {
+                    log::error!("failed to convert params to valtensor");
+                    PlonkError::Synthesis
+                })?]
             };
 
             // now do stuff to the model params

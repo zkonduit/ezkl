@@ -334,14 +334,14 @@ impl ParsedNodes {
     }
 
     /// Input types
-    pub fn get_input_types(&self) -> Vec<InputType> {
+    pub fn get_input_types(&self) -> Result<Vec<InputType>, GraphError> {
         self.inputs
             .iter()
             .map(|o| match self.nodes.get(o).unwrap().opkind() {
-                SupportedOp::Input(Input { datum_type, .. }) => datum_type.clone(),
-                _ => panic!("Expected input type"),
+                SupportedOp::Input(Input { datum_type, .. }) => Ok(datum_type.clone()),
+                _ => Err(GraphError::InvalidInputTypes),
             })
-            .collect_vec()
+            .collect::<Result<Vec<_>, _>>()
     }
 
     ///  Returns shapes of the computational graph's inputs
@@ -420,11 +420,10 @@ impl Model {
     ///
     pub fn load(path: PathBuf) -> Result<Self, Box<dyn Error>> {
         // read bytes from file
-        let mut f = std::fs::File::open(&path)
-            .unwrap_or_else(|_| panic!("failed to load model at {}", path.display()));
-        let metadata = fs::metadata(&path).expect("unable to read metadata");
+        let mut f = std::fs::File::open(&path)?;
+        let metadata = fs::metadata(&path)?;
         let mut buffer = vec![0; metadata.len() as usize];
-        f.read_exact(&mut buffer).expect("buffer overflow");
+        f.read_exact(&mut buffer)?;
         let result = bincode::deserialize(&buffer)?;
         Ok(result)
     }
@@ -496,7 +495,7 @@ impl Model {
 
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             let mut input = model_inputs[i].clone();
-            input.reshape(&input_shapes[i]);
+            input.reshape(&input_shapes[i])?;
             results.insert(input_idx, vec![input]);
         }
 
@@ -701,9 +700,10 @@ impl Model {
 
             for (i, x) in fact.clone().shape.dims().enumerate() {
                 if matches!(x, GenericFactoid::Any) {
-                    let batch_size = variables.get("batch_size").unwrap_or_else(|| {
-                            panic!("Unknown dimension batch_size in model inputs, set batch_size in variables")
-                        });
+                    let batch_size = match variables.get("batch_size") {
+                        Some(x) => x,
+                        None => return Err("Unknown dimension batch_size in model inputs, set batch_size in variables".into()),
+                    };
                     fact.shape
                         .set_dim(i, tract_onnx::prelude::TDim::Val(*batch_size as i64));
                 }
@@ -1193,7 +1193,7 @@ impl Model {
                         log::debug!("node {} is a constant with 1 use", n.idx);
                         let mut node = n.clone();
                         let c = node.opkind.get_mutable_constant().unwrap();
-                        Some(c.quantized_values.clone().into())
+                        Some(c.quantized_values.clone().try_into()?)
                     } else {
                         config
                             .base

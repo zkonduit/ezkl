@@ -99,12 +99,16 @@ fn runcnvrl(c: &mut Criterion) {
                 (0..IN_CHANNELS * IMAGE_HEIGHT * IMAGE_WIDTH)
                     .map(|_| Value::known(Fr::random(OsRng))),
             );
-            image.reshape(&[1, IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH]);
+            image
+                .reshape(&[1, IN_CHANNELS, IMAGE_HEIGHT, IMAGE_WIDTH])
+                .unwrap();
             let mut kernel = Tensor::from(
                 (0..{ OUT_CHANNELS * IN_CHANNELS * KERNEL_HEIGHT * KERNEL_WIDTH })
                     .map(|_| Fr::random(OsRng)),
             );
-            kernel.reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH]);
+            kernel
+                .reshape(&[OUT_CHANNELS, IN_CHANNELS, KERNEL_HEIGHT, KERNEL_WIDTH])
+                .unwrap();
             kernel.set_visibility(&ezkl::graph::Visibility::Private);
 
             let mut bias = Tensor::from((0..{ OUT_CHANNELS }).map(|_| Fr::random(OsRng)));
