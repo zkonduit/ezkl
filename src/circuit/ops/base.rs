@@ -56,23 +56,16 @@ impl BaseOp {
         a: Vec<T>,
         b: Vec<T>,
     ) -> T {
+        let zero = T::zero().unwrap();
+        let one = T::one().unwrap();
+
         match &self {
-            BaseOp::DotInit => a
-                .into_iter()
-                .zip(b)
-                .fold(T::zero().unwrap(), |acc, (a, b)| acc + a * b),
-            BaseOp::Dot => {
-                prev_output
-                    + a.into_iter()
-                        .zip(b)
-                        .fold(T::zero().unwrap(), |acc, (a, b)| acc + a * b)
-            }
-            BaseOp::CumProdInit => b.into_iter().fold(T::one().unwrap(), |acc, b| acc * b),
-            BaseOp::CumProd => {
-                prev_output * b.into_iter().fold(T::one().unwrap(), |acc, b| acc * b)
-            }
-            BaseOp::SumInit => b.into_iter().fold(T::zero().unwrap(), |acc, b| acc + b),
-            BaseOp::Sum => prev_output + b.into_iter().fold(T::zero().unwrap(), |acc, b| acc + b),
+            BaseOp::DotInit => a.into_iter().zip(b).fold(zero, |acc, (a, b)| acc + a * b),
+            BaseOp::Dot => prev_output + a.into_iter().zip(b).fold(zero, |acc, (a, b)| acc + a * b),
+            BaseOp::CumProdInit => b.into_iter().fold(one, |acc, b| acc * b),
+            BaseOp::CumProd => prev_output * b.into_iter().fold(one, |acc, b| acc * b),
+            BaseOp::SumInit => b.into_iter().fold(zero, |acc, b| acc + b),
+            BaseOp::Sum => prev_output + b.into_iter().fold(zero, |acc, b| acc + b),
             _ => panic!("accum_f called on non-accumulating operation"),
         }
     }

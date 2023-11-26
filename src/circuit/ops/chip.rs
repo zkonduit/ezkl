@@ -247,7 +247,9 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         for ((base_op, block_idx, inner_col_idx), selector) in nonaccum_selectors.iter() {
             meta.create_gate(base_op.as_str(), |meta| {
                 let selector = meta.query_selector(*selector);
-                let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
+
+                let zero = Expression::<F>::Constant(F::ZERO);
+                let mut qis = vec![zero; 2];
                 for (i, q_i) in qis
                     .iter_mut()
                     .enumerate()

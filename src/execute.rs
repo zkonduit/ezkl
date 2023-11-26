@@ -614,7 +614,7 @@ pub(crate) fn calibrate(
         Err(_) => None,
     };
 
-    let model = Model::from_run_args(&settings.run_args, &model_path).unwrap();
+    let model = Model::from_run_args(&settings.run_args, &model_path)?;
     // drop the gag
     std::mem::drop(_r);
 
@@ -627,9 +627,7 @@ pub(crate) fn calibrate(
         }
     };
 
-    let chunks = data
-        .split_into_batches(model.graph.input_shapes()?)
-        .unwrap();
+    let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
 
     info!("num of calibration batches: {}", chunks.len());
 
@@ -804,7 +802,11 @@ pub(crate) fn calibrate(
         CalibrationTarget::Resources { .. } => {
             let mut param_iterator = found_params.iter().sorted_by_key(|p| p.run_args.logrows);
 
-            let min_logrows = param_iterator.next().unwrap().run_args.logrows;
+            let min_logrows = param_iterator
+                .next()
+                .ok_or("no params found")?
+                .run_args
+                .logrows;
 
             // pick the ones that have the minimum logrows but also the largest scale:
             // this is the best tradeoff between resource usage and accuracy
@@ -819,7 +821,7 @@ pub(crate) fn calibrate(
                         p.run_args.scale_rebase_multiplier,
                     )
                 })
-                .unwrap()
+                .ok_or("no params found")?
                 .clone()
         }
         CalibrationTarget::Accuracy => {
@@ -832,7 +834,7 @@ pub(crate) fn calibrate(
                 )
             });
 
-            let last = param_iterator.last().unwrap();
+            let last = param_iterator.last().ok_or("no params found")?;
             let max_scale = (
                 last.run_args.input_scale,
                 last.run_args.param_scale,
@@ -851,7 +853,7 @@ pub(crate) fn calibrate(
                     ) == max_scale
                 })
                 .min_by_key(|p| p.run_args.logrows)
-                .unwrap()
+                .ok_or("no params found")?
                 .clone()
         }
     };
@@ -935,7 +937,7 @@ pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(
     // We could use SVGBackend if we want to render to .svg instead.
     // for an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
     let root = BitMapBackend::new(&output, (512, 512)).into_drawing_area();
-    root.fill(&TRANSPARENT).unwrap();
+    root.fill(&TRANSPARENT)?;
     let root = root.titled("Layout", ("sans-serif", 20))?;
 
     halo2_proofs::dev::CircuitLayout::default()
@@ -969,12 +971,9 @@ pub(crate) fn create_evm_verifier(
         halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
         num_instance,
     );
-    let verifier_solidity = generator.render().unwrap();
+    let verifier_solidity = generator.render()?;
 
-    File::create(sol_code_path.clone())
-        .unwrap()
-        .write_all(verifier_solidity.as_bytes())
-        .unwrap();
+    File::create(sol_code_path.clone())?.write_all(verifier_solidity.as_bytes())?;
 
     // fetch abi of the contract
     let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0)?;
@@ -1152,10 +1151,12 @@ pub(crate) fn create_evm_aggregate_verifier(
     check_solc_requirement();
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
-    let settings: Vec<GraphSettings> = circuit_settings
-        .iter()
-        .map(|path| GraphSettings::load(path).unwrap())
-        .collect::<Vec<_>>();
+    let mut settings: Vec<GraphSettings> = vec![];
+
+    for path in circuit_settings.iter() {
+        let s = GraphSettings::load(path)?;
+        settings.push(s);
+    }
 
     let num_instance: usize = settings
         .iter()
@@ -1183,12 +1184,9 @@ pub(crate) fn create_evm_aggregate_verifier(
 
     generator = generator.set_acc_encoding(Some(acc_encoding));
 
-    let verifier_solidity = generator.render().unwrap();
+    let verifier_solidity = generator.render()?;
 
-    File::create(sol_code_path.clone())
-        .unwrap()
-        .write_all(verifier_solidity.as_bytes())
-        .unwrap();
+    File::create(sol_code_path.clone())?.write_all(verifier_solidity.as_bytes())?;
 
     // fetch abi of the contract
     let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0)?;
@@ -1372,7 +1370,7 @@ pub(crate) fn fuzz(
 
     info!("setting up tests");
 
-    let _r = Gag::stdout().unwrap();
+    let _r = Gag::stdout()?;
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
     let data = GraphWitness::from_path(data_path)?;
@@ -1396,7 +1394,7 @@ pub(crate) fn fuzz(
 
         let bad_pk =
             create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &new_params)
-                .unwrap();
+                .map_err(|_| ())?;
 
         let bad_proof = create_proof_circuit_kzg(
             circuit.clone(),
@@ -1408,7 +1406,7 @@ pub(crate) fn fuzz(
             CheckMode::UNSAFE,
             None,
         )
-        .unwrap();
+        .map_err(|_| ())?;
 
         verify_proof_circuit_kzg(
             params.verifier_params(),
@@ -1469,7 +1467,7 @@ pub(crate) fn fuzz(
 
         let bad_pk =
             create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &new_params)
-                .unwrap();
+                .map_err(|_| ())?;
 
         let bad_vk = bad_pk.get_vk();
 
@@ -1583,7 +1581,7 @@ pub(crate) fn swap_proof_commitments(
     proof_path: PathBuf,
     witness: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
-    let snark = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path).unwrap();
+    let snark = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
     let witness = GraphWitness::from_path(witness)?;
     let commitments = witness.get_kzg_commitments();
 
@@ -1597,7 +1595,7 @@ pub(crate) fn swap_proof_commitments(
         log::warn!("swap proof has created a different proof");
     }
 
-    snark_new.save(&proof_path).unwrap();
+    snark_new.save(&proof_path)?;
     Ok(())
 }
 
