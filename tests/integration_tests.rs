@@ -2,7 +2,6 @@
 #[cfg(test)]
 mod native_tests {
 
-    use core::panic;
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
@@ -54,10 +53,8 @@ mod native_tests {
             Hardfork::ArrowGlacier => args.push("--hardfork=arrowGlacier"),
             Hardfork::GrayGlacier => args.push("--hardfork=grayGlacier"),
         }
-        // panic!("{}", args.join(" "));
         let child = Command::new("anvil")
             .args(args)
-            // .stdout(std::process::Stdio::piped())
             .spawn()
             .expect("failed to start anvil process");
         std::thread::sleep(std::time::Duration::from_secs(3));

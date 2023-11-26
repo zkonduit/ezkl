@@ -14,6 +14,7 @@ use pyo3::ToPyObject;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::Read;
+use std::panic::UnwindSafe;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
 #[cfg(not(target_arch = "wasm32"))]
@@ -321,7 +322,7 @@ impl OnChainSource {
         let mut inputs: Vec<Tensor<Fp>> = vec![];
         for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
             let mut t: Tensor<Fp> = input.iter().cloned().collect();
-            t.reshape(&shape);
+            t.reshape(&shape)?;
             inputs.push(t);
         }
 
@@ -441,6 +442,8 @@ pub struct GraphData {
     pub output_data: Option<DataSource>,
 }
 
+impl UnwindSafe for GraphData {}
+
 impl GraphData {
     ///
     pub fn new(input_data: DataSource) -> Self {
@@ -480,7 +483,12 @@ impl GraphData {
             GraphData {
                 input_data: DataSource::OnChain(_),
                 output_data: _,
-            } => todo!("on-chain data batching not implemented yet"),
+            } => {
+                return Err(Box::new(GraphError::InvalidDims(
+                    0,
+                    "on-chain data cannot be split into batches".to_string(),
+                )))
+            }
             #[cfg(not(target_arch = "wasm32"))]
             GraphData {
                 input_data: DataSource::DB(data),

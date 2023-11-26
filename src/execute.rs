@@ -53,8 +53,6 @@ use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
-use std::io::ErrorKind::NotFound;
-#[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
@@ -89,15 +87,9 @@ fn check_solc_requirement() {
             debug!("solc check passed, proceeding");
             true
         }
-        Err(e) => {
-            if let NotFound = e.kind() {
-                panic!(
-                    "`solc` was not found! Consider using solc-select or check your PATH! {}",
-                    e
-                );
-            } else {
-                panic!("`solc` check failed: {}", e);
-            }
+        Err(_) => {
+            log::error!("`solc` check failed: solc not found");
+            false
         }
     });
 }
@@ -659,7 +651,11 @@ pub(crate) fn calibrate(
         .collect::<Vec<(crate::Scale, crate::Scale)>>();
 
     // if all integers
-    let all_scale_0 = model.graph.get_input_types().iter().all(|t| t.is_integer());
+    let all_scale_0 = model
+        .graph
+        .get_input_types()?
+        .iter()
+        .all(|t| t.is_integer());
     if all_scale_0 {
         // set all a values to 0 then dedup
         range_grid = range_grid
@@ -1020,7 +1016,7 @@ pub(crate) fn create_evm_data_attestation(
 
     let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
         if visibility.output.is_private() {
-            todo!("private output data on chain is not supported on chain")
+            return Err("private output data on chain is not supported on chain".into());
         }
         let mut on_chain_output_data = vec![];
         for call in source.calls {
@@ -1033,7 +1029,7 @@ pub(crate) fn create_evm_data_attestation(
 
     let input_data = if let DataSource::OnChain(source) = data.input_data {
         if visibility.input.is_private() {
-            todo!("we currently don't support private input data on chain")
+            return Err("private input data on chain is not supported on chain".into());
         }
         let mut on_chain_input_data = vec![];
         for call in source.calls {

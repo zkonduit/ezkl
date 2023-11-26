@@ -67,7 +67,7 @@ fn runposeidon(c: &mut Criterion) {
                 .unwrap();
 
         let mut image = Tensor::from(message.into_iter().map(Value::known));
-        image.reshape(&[1, *size]);
+        image.reshape(&[1, *size]).unwrap();
 
         let circuit = MyCircuit {
             image: ValTensor::from(image),

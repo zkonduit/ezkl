@@ -93,7 +93,11 @@ impl From<&str> for CalibrationTarget {
             },
             "resources/col-overflow" => CalibrationTarget::Resources { col_overflow: true },
             "accuracy" => CalibrationTarget::Accuracy,
-            _ => panic!("invalid calibration target"),
+            _ => {
+                log::error!("Invalid value for CalibrationTarget");
+                log::warn!("Defaulting to resources");
+                CalibrationTarget::default()
+            }
         }
     }
 }

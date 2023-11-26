@@ -80,11 +80,11 @@ fn runmatmul(c: &mut Criterion) {
         };
 
         let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-        a.reshape(&[len, len]);
+        a.reshape(&[len, len]).unwrap();
 
         // parameters
         let mut b = Tensor::from((0..len * len).map(|_| Value::known(Fr::random(OsRng))));
-        b.reshape(&[len, len]);
+        b.reshape(&[len, len]).unwrap();
 
         let circuit = MyCircuit {
             inputs: [ValTensor::from(a), ValTensor::from(b)],

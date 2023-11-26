@@ -402,7 +402,8 @@ impl<F: PrimeField + TensorType + Clone + PartialOrd> From<Tensor<Value<F>>>
 {
     fn from(t: Tensor<Value<F>>) -> Tensor<Value<Assigned<F>>> {
         let mut ta: Tensor<Value<Assigned<F>>> = Tensor::from((0..t.len()).map(|i| t[i].into()));
-        ta.reshape(t.dims());
+        // safe to unwrap as we know the dims are correct
+        ta.reshape(t.dims()).unwrap();
         ta
     }
 }
@@ -411,7 +412,8 @@ impl<F: PrimeField + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> 
     fn from(t: Tensor<i32>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
             Tensor::from((0..t.len()).map(|i| Value::known(i32_to_felt::<F>(t[i]))));
-        ta.reshape(t.dims());
+        // safe to unwrap as we know the dims are correct
+        ta.reshape(t.dims()).unwrap();
         ta
     }
 }
@@ -420,7 +422,8 @@ impl<F: PrimeField + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>>
     fn from(t: Tensor<i128>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
             Tensor::from((0..t.len()).map(|i| Value::known(i128_to_felt::<F>(t[i]))));
-        ta.reshape(t.dims());
+        // safe to unwrap as we know the dims are correct
+        ta.reshape(t.dims()).unwrap();
         ta
     }
 }
@@ -792,7 +795,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// a.reshape(&[9, 3]);
     /// assert_eq!(a.dims(), &[9, 3]);
     /// ```
-    pub fn reshape(&mut self, new_dims: &[usize]) {
+    pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), TensorError> {
         // in onnx parlance this corresponds to converting a tensor to a single element
         if new_dims.is_empty() {
             assert!(self.len() == 1 || self.is_empty());
@@ -804,14 +807,11 @@ impl<T: Clone + TensorType> Tensor<T> {
                 0
             };
             if self.len() != product {
-                panic!(
-                    "Cannot reshape tensor of size {} to {:?}",
-                    self.len(),
-                    new_dims
-                );
+                return Err(TensorError::DimError);
             }
             self.dims = Vec::from(new_dims);
         }
+        Ok(())
     }
 
     /// Move axis of the tensor
@@ -877,7 +877,7 @@ impl<T: Clone + TensorType> Tensor<T> {
                 } else if i > destination && source > destination {
                     old_coord[i - 1] = *c;
                 } else {
-                    panic!()
+                    return Err(TensorError::DimError);
                 }
             }
             output.set(&coord, self.get(&old_coord));
@@ -1015,7 +1015,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     pub fn map<F: FnMut(T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
         let mut t = Tensor::from(self.inner.iter().map(|e| f(e.clone())));
-        t.reshape(self.dims());
+        // safe to unwrap as we know the dims are correct
+        t.reshape(self.dims()).unwrap();
         t
     }
 
@@ -1037,7 +1038,8 @@ impl<T: Clone + TensorType> Tensor<T> {
             .map(|(i, e)| f(i, e.clone()))
             .collect();
         let mut t: Tensor<G> = Tensor::from(vec?.iter().cloned());
-        t.reshape(self.dims());
+        // safe to unwrap as we know the dims are correct
+        t.reshape(self.dims()).unwrap();
         Ok(t)
     }
 
@@ -1066,7 +1068,8 @@ impl<T: Clone + TensorType> Tensor<T> {
             .map(move |(i, e)| f(i, e.clone()))
             .collect();
         let mut t: Tensor<G> = Tensor::from(vec?.iter().cloned());
-        t.reshape(self.dims());
+        // safe to unwrap as we know the dims are correct
+        t.reshape(self.dims()).unwrap();
         Ok(t)
     }
 
@@ -1489,7 +1492,7 @@ mod tests {
     fn tensor_eq() {
         let a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
         let mut b = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3, 1]).unwrap();
-        b.reshape(&[3]);
+        b.reshape(&[3]).unwrap();
         let c = Tensor::<i32>::new(Some(&[1, 2, 4]), &[3]).unwrap();
         let d = Tensor::<i32>::new(Some(&[1, 2, 4]), &[3, 1]).unwrap();
         assert_eq!(a, b);

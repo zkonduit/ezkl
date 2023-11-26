@@ -60,7 +60,11 @@ impl From<String> for CheckMode {
         match value.to_lowercase().as_str() {
             "safe" => CheckMode::SAFE,
             "unsafe" => CheckMode::UNSAFE,
-            _ => panic!("not a valid checkmode"),
+            _ => {
+                log::error!("Invalid value for CheckMode");
+                log::warn!("defaulting to SAFE");
+                CheckMode::SAFE
+            }
         }
     }
 }
@@ -340,6 +344,16 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     {
         let mut selectors = BTreeMap::new();
 
+        if !index.is_advice() {
+            return Err("wrong input type for lookup index".into());
+        }
+        if !input.is_advice() {
+            return Err("wrong input type for lookup input".into());
+        }
+        if !output.is_advice() {
+            return Err("wrong input type for lookup output".into());
+        }
+
         // we borrow mutably twice so we need to do this dance
 
         let table = if !self.tables.contains_key(nl) {
@@ -383,7 +397,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 VarTensor::Advice { inner: advices, .. } => {
                                     cs.query_advice(advices[x][y], Rotation(0))
                                 }
-                                _ => panic!("wrong input type"),
+                                _ => unreachable!(),
                             },
                         };
 
@@ -391,14 +405,14 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                             VarTensor::Advice { inner: advices, .. } => {
                                 cs.query_advice(advices[x][y], Rotation(0))
                             }
-                            _ => panic!("wrong input type"),
+                            _ => unreachable!(),
                         };
 
                         let output_query = match &output {
                             VarTensor::Advice { inner: advices, .. } => {
                                 cs.query_advice(advices[x][y], Rotation(0))
                             }
-                            _ => panic!("wrong input type"),
+                            _ => unreachable!(),
                         };
 
                         // we index from 1 to avoid the zero element creating soundness issues
