@@ -381,11 +381,19 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
         .await
         .map(|_| ()),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::GetHubProof {
+        Commands::GetHubArtifact {
             api_key,
             artifact_id,
             url,
-        } => get_hub_proof(api_key.as_deref(), url.as_deref(), &artifact_id)
+        } => get_deployed_model(api_key.as_deref(), url.as_deref(), &artifact_id)
+            .await
+            .map(|_| ()),
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::GetHubProof {
+            api_key,
+            proof_id,
+            url,
+        } => get_hub_proof(api_key.as_deref(), url.as_deref(), &proof_id)
             .await
             .map(|_| ()),
         #[cfg(not(target_arch = "wasm32"))]
@@ -393,17 +401,10 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             api_key,
             artifact_id,
             data,
-            transcript_type,
             url,
-        } => prove_hub(
-            api_key.as_deref(),
-            url.as_deref(),
-            &artifact_id,
-            &data,
-            transcript_type.as_deref(),
-        )
-        .await
-        .map(|_| ()),
+        } => prove_hub(api_key.as_deref(), url.as_deref(), &artifact_id, &data)
+            .await
+            .map(|_| ()),
     }
 }
 
@@ -1762,6 +1763,50 @@ pub(crate) fn verify_aggr(
     Ok(())
 }
 
+/// helper function to handle graphql errors
+async fn parse_response(
+    response: reqwest::Response,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    // Check if the response status is success
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_message = format!("Request failed with status code: {}", status);
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            error_message,
+        )));
+    }
+
+    let response_body = response.json::<serde_json::Value>().await?;
+
+    // Check if 'data' is null and 'errors' are present
+    if response_body.get("data").is_none() || response_body.get("data").unwrap().is_null() {
+        if let Some(errors) = response_body.get("errors") {
+            let error_messages: Vec<String> = errors
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|error| error["message"].as_str().unwrap_or_default().to_string())
+                .collect();
+
+            let custom_error_message = format!("An error occurred: {}", error_messages.join(", "));
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                custom_error_message,
+            )));
+        } else {
+            let error_message =
+                "An error occurred: Response contains null data but no error details.";
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                error_message,
+            )));
+        }
+    }
+
+    Ok(response_body)
+}
+
 /// Retrieves the user's credentials from the hub
 pub(crate) async fn get_hub_credentials(
     api_key: Option<&str>,
@@ -1787,13 +1832,15 @@ pub(crate) async fn get_hub_credentials(
 
     let response = client
         .post(url)
-        .header("Authorization", format!("Bearer {}", api_key))
+        .header("API-Key", format!("{}", api_key))
         .json(&request_body)
         .send()
         .await?;
 
-    let response_body = response.json::<serde_json::Value>().await?;
+    // Using the parse_response helper function
+    let response_body = parse_response(response).await?;
 
+    // Extracting the organizations data
     let organizations: crate::hub::Organizations =
         serde_json::from_value(response_body["data"].clone())?;
 
@@ -1856,6 +1903,8 @@ pub(crate) async fn deploy_model(
                 ) {
                     id
                     name
+                    status
+                    errors
                 }
             }",
         "variables": {
@@ -1886,19 +1935,57 @@ pub(crate) async fn deploy_model(
     //send request
     let response = client
         .post(url)
-        .header("Authorization", format!("Bearer {}", api_key))
+        .header("API-Key", format!("{}", api_key))
         .multipart(form)
         .send()
         .await?;
-    let response_body = response.json::<serde_json::Value>().await?;
-    println!("{}", response_body.to_string());
-    let artifact_id: crate::hub::Artifact =
+    let response_body = parse_response(response).await?;
+    let artifact_data: crate::hub::Artifact =
         serde_json::from_value(response_body["data"]["generateArtifact"].clone())?;
     log::info!(
-        "Artifact ID : {}",
-        artifact_id.as_json()?.to_colored_json_auto()?
+        "Artifact Data : {}",
+        artifact_data.as_json()?.to_colored_json_auto()?
     );
-    Ok(artifact_id)
+    Ok(artifact_data)
+}
+
+/// Get the artifact from the hub
+pub(crate) async fn get_deployed_model(
+    api_key: Option<&str>,
+    url: Option<&str>,
+    id: &str,
+) -> Result<crate::hub::Artifact, Box<dyn Error>> {
+    let query = serde_json::json!({
+        "query": "query getArtifact($id: String!){
+            artifact(id: $id) {
+                id
+                name
+                status
+                errors
+            }
+        }",
+        "variables": {
+            "id": id,
+        }
+    });
+    let client = reqwest::Client::new();
+    let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
+    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
+    //send request
+    let response = client
+        .post(url)
+        .header("API-Key", format!("{}", api_key))
+        .json(&query)
+        .send()
+        .await?;
+    let response_body = parse_response(response).await?;
+    let artifact_data: crate::hub::Artifact =
+        serde_json::from_value(response_body["data"]["artifact"].clone())?;
+    log::info!(
+        "Artifact Data : {}",
+        artifact_data.as_json()?.to_colored_json_auto()?
+    );
+    Ok(artifact_data)
 }
 
 /// Generates proofs on the hub
@@ -1907,7 +1994,6 @@ pub async fn prove_hub(
     url: Option<&str>,
     id: &str,
     input: &Path,
-    transcript_type: Option<&str>,
 ) -> Result<crate::hub::Proof, Box<dyn std::error::Error>> {
     let input_file = tokio::fs::File::open(input.canonicalize()?).await?;
     let stream = FramedRead::new(input_file, BytesCodec::new());
@@ -1923,8 +2009,8 @@ pub async fn prove_hub(
 
     let operations = serde_json::json!({
         "query": r#"
-            mutation($input: Upload!, $id: String!, $transcriptType: String) {
-                initiateProof(input: $input, id: $id, transcriptType: $transcriptType) {
+            mutation($input: Upload!, $id: String!) {
+                initiateProof(input: $input, id: $id) {
                     id
                 }
             }
@@ -1932,7 +2018,6 @@ pub async fn prove_hub(
         "variables": {
             "input": null,
             "id": id,
-            "transcriptType": transcript_type.unwrap_or("evm"),
         }
     })
     .to_string();
@@ -1947,11 +2032,39 @@ pub async fn prove_hub(
     let client = reqwest::Client::new();
     let response = client
         .post(url)
-        .header("Authorization", format!("Bearer {}", api_key))
+        .header("API-Key", format!("{}", api_key))
         .multipart(form)
         .send()
         .await?;
-    let response_body = response.json::<serde_json::Value>().await?;
+
+    let response_body = parse_response(response).await?;
+
+    // Check if 'data' is null and 'errors' are present
+    if response_body.get("data").is_none() || response_body.get("data").unwrap().is_null() {
+        if let Some(errors) = response_body.get("errors") {
+            let error_messages: Vec<String> = errors
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|error| error["message"].as_str().unwrap_or_default().to_string())
+                .collect();
+
+            let custom_error_message = format!("An error occurred: {}", error_messages.join(", "));
+            log::error!("{}", custom_error_message);
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                custom_error_message,
+            )));
+        } else {
+            let error_message =
+                "An error occurred: Response contains null data but no error details.";
+            log::error!("{}", error_message);
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                error_message,
+            )));
+        }
+    }
     let proof_id: crate::hub::Proof =
         serde_json::from_value(response_body["data"]["initiateProof"].clone())?;
     log::info!("Proof ID : {}", proof_id.as_json()?.to_colored_json_auto()?);
@@ -1975,7 +2088,6 @@ pub(crate) async fn get_hub_proof(
                     proof
                     instances
                     transcriptType
-                    strategy
                 }}
             }}
         "#, id),
@@ -1985,11 +2097,11 @@ pub(crate) async fn get_hub_proof(
 
     let response = client
         .post(url)
-        .header("Authorization", format!("Bearer {:?}", api_key))
+        .header("API-Key", format!("{:?}", api_key))
         .json(&request_body)
         .send()
         .await?;
-    let response_body = response.json::<serde_json::Value>().await?;
+    let response_body = parse_response(response).await?;
 
     let proof: crate::hub::Proof =
         serde_json::from_value(response_body["data"]["getProof"].clone())?;
