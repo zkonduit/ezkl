@@ -1186,24 +1186,30 @@ fn create_hub_artifact(
     Python::with_gil(|py| Ok(output.to_object(py)))
 }
 
+/// gets a deployed model from the hub
+#[pyfunction(signature = (id, api_key=None, url=None))]
+fn get_hub_artifact(id: &str, api_key: Option<&str>, url: Option<&str>) -> PyResult<PyObject> {
+    let output = Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::get_deployed_model(api_key, url, &id))
+        .map_err(|e| {
+            let err_str = format!("Failed to get model from hub: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+    Python::with_gil(|py| Ok(output.to_object(py)))
+}
+
 /// Generate a proof on the hub.
-#[pyfunction(signature = ( id, input,api_key=None, url=None, transcript_type=None))]
+#[pyfunction(signature = ( id, input,api_key=None, url=None))]
 fn prove_hub(
     id: &str,
     input: PathBuf,
     api_key: Option<&str>,
     url: Option<&str>,
-    transcript_type: Option<&str>,
 ) -> PyResult<PyObject> {
     let output = Runtime::new()
         .unwrap()
-        .block_on(crate::execute::prove_hub(
-            api_key,
-            url,
-            id,
-            &input,
-            transcript_type,
-        ))
+        .block_on(crate::execute::prove_hub(api_key, url, id, &input))
         .map_err(|e| {
             let err_str = format!("Failed to generate proof on hub: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -1287,6 +1293,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
     m.add_function(wrap_pyfunction!(create_hub_artifact, m)?)?;
+    m.add_function(wrap_pyfunction!(get_hub_artifact, m)?)?;
     m.add_function(wrap_pyfunction!(prove_hub, m)?)?;
     m.add_function(wrap_pyfunction!(get_hub_proof, m)?)?;
     m.add_function(wrap_pyfunction!(get_hub_credentials, m)?)?;
