@@ -54,6 +54,9 @@ pub enum TensorError {
     /// Failed to convert to field element tensor
     #[error("Failed to convert to field element tensor")]
     FeltError,
+    /// Table lookup error
+    #[error("Table lookup error")]
+    TableLookupError,
 }
 
 /// The (inner) type of tensor elements.
@@ -798,7 +801,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), TensorError> {
         // in onnx parlance this corresponds to converting a tensor to a single element
         if new_dims.is_empty() {
-            assert!(self.len() == 1 || self.is_empty());
+            if !(self.len() == 1 || self.is_empty()) {
+                return Err(TensorError::DimError);
+            }
             self.dims = vec![];
         } else {
             let product = if new_dims != [0] {
@@ -958,14 +963,18 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     pub fn expand(&self, shape: &[usize]) -> Result<Self, TensorError> {
-        assert!(self.dims().len() <= shape.len());
+        if !(self.dims().len() <= shape.len()) {
+            return Err(TensorError::DimError);
+        }
 
         if shape == self.dims() {
             return Ok(self.clone());
         }
 
         for d in self.dims() {
-            assert!(shape.contains(d) || *d == 1);
+            if !(shape.contains(d) || *d == 1) {
+                return Err(TensorError::DimError);
+            }
         }
 
         let cartesian_coords = shape

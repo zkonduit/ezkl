@@ -251,8 +251,8 @@ pub fn new_op_from_onnx(
             assert_eq!(input_ops.len(), 3, "Range requires 3 inputs");
             let input_ops = input_ops
                 .iter()
-                .map(|x| x.get_constant().unwrap())
-                .collect::<Vec<_>>();
+                .map(|x| x.get_constant().ok_or("Range requires constant inputs"))
+                .collect::<Result<Vec<_>, _>>()?;
 
             let start = input_ops[0].raw_values.map(|x| x as usize)[0];
             let end = input_ops[1].raw_values.map(|x| x as usize)[0];
@@ -795,7 +795,9 @@ pub fn new_op_from_onnx(
                 .map(|(i, _)| i)
                 .collect::<Vec<_>>();
 
-            assert!(const_idx.len() <= 1);
+            if !(const_idx.len() <= 1) {
+                return Err(Box::new(GraphError::InvalidDims(idx, "mul".to_string())));
+            }
 
             if const_idx.len() == 1 {
                 let const_idx = const_idx[0];
@@ -899,7 +901,10 @@ pub fn new_op_from_onnx(
                 )));
             }
 
-            let stride = pool_spec.strides.clone().unwrap();
+            let stride = pool_spec
+                .strides
+                .clone()
+                .ok_or(GraphError::MissingParams("stride".to_string()))?;
             let padding = match &pool_spec.padding {
                 PaddingSpec::Explicit(b, a) => [(b[0], b[1]), (a[0], a[1])],
                 PaddingSpec::ExplicitOnnxPool(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
@@ -1196,7 +1201,10 @@ pub fn new_op_from_onnx(
                 )));
             }
 
-            let stride = pool_spec.strides.clone().unwrap();
+            let stride = pool_spec
+                .strides
+                .clone()
+                .ok_or(GraphError::MissingParams("stride".to_string()))?;
             let padding = match &pool_spec.padding {
                 PaddingSpec::Explicit(b, a) => [(b[0], b[1]), (a[0], a[1])],
                 PaddingSpec::ExplicitOnnxPool(b, a, _) => [(b[0], b[1]), (a[0], a[1])],
@@ -1265,7 +1273,10 @@ pub fn new_op_from_onnx(
         "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams
             let shapes = node_output_shapes(&node)?;
-            let mut output_shape = shapes[0].as_ref().unwrap().clone();
+            let mut output_shape = shapes[0]
+                .as_ref()
+                .ok_or(GraphError::InvalidDims(idx, "reshape".to_string()))?
+                .clone();
             if output_shape.is_empty() {
                 output_shape = vec![1];
             }
@@ -1376,7 +1387,7 @@ pub fn homogenize_input_scales(
 
     let mut multipliers: Vec<u128> = vec![1; input_scales.len()];
 
-    let max_scale = input_scales.iter().max().unwrap();
+    let max_scale = input_scales.iter().max().ok_or("no max scale")?;
     let _ = input_scales
         .iter()
         .enumerate()

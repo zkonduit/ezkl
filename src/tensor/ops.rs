@@ -47,11 +47,12 @@ pub fn iff<
     b: &Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
     // assert is boolean
-    assert!(
-        mask.par_iter()
-            .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
-        "iff() only works on boolean mask"
-    );
+    if !mask
+        .par_iter()
+        .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap())
+    {
+        return Err(TensorError::WrongMethod);
+    }
 
     let masked_a = (mask.clone() * a.clone())?;
 
@@ -127,12 +128,12 @@ pub fn or<
     a: &Tensor<T>,
     b: &Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
-    // assert is boolean
-    assert!(
-        b.par_iter()
-            .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
-        "or() only works on boolean mask"
-    );
+    if !b
+        .par_iter()
+        .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap())
+    {
+        return Err(TensorError::WrongMethod);
+    }
 
     iff(a, a, b)
 }
@@ -208,17 +209,20 @@ pub fn and<
     b: &Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
     // assert is boolean
-    assert!(
-        b.par_iter()
-            .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
-        "and() only works on boolean values"
-    );
+    if !b
+        .par_iter()
+        .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap())
+    {
+        return Err(TensorError::WrongMethod);
+    }
 
-    assert!(
-        a.par_iter()
-            .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap()),
-        "and() only works on boolean values"
-    );
+    // assert is boolean
+    if !a
+        .par_iter()
+        .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap())
+    {
+        return Err(TensorError::WrongMethod);
+    }
 
     a.clone() * b.clone()
 }
@@ -1096,7 +1100,10 @@ pub fn downsample<T: TensorType + Send + Sync>(
     output_shape[dim] = div + (remainder > 0) as usize;
     let mut output = Tensor::<T>::new(None, &output_shape)?;
 
-    assert!(modulo <= input.dims()[dim]);
+    if modulo > input.dims()[dim] {
+        return Err(TensorError::DimMismatch("downsample".to_string()));
+    }
+
     // now downsample along axis dim offset by modulo
     let indices = (0..output_shape.len())
         .map(|i| {

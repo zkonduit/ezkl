@@ -278,8 +278,10 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
             // default_val must be Some because we must have assigned
             // at least one cell in each column, and in that case we checked
             // that all cells up to first_unused were assigned.
+            let default_val = default_val.ok_or(Error::Synthesis)?;
+
             self.cs
-                .fill_from_row(col.inner(), first_unused, default_val.unwrap())?;
+                .fill_from_row(col.inner(), first_unused, default_val)?;
         }
 
         Ok(())

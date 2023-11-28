@@ -42,6 +42,9 @@ pub enum CircuitError {
     /// This operation is unsupported
     #[error("unsupported operation in graph")]
     UnsupportedOp,
+    ///
+    #[error("invalid einsum expression")]
+    InvalidEinsum,
 }
 
 #[allow(missing_docs)]
@@ -213,8 +216,12 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         let mut nonaccum_selectors = BTreeMap::new();
         let mut accum_selectors = BTreeMap::new();
 
-        assert!(inputs[0].num_cols() == inputs[1].num_cols());
-        assert!(inputs[0].num_cols() == output.num_cols());
+        if !(inputs[0].num_cols() == inputs[1].num_cols()) {
+            log::warn!("input shapes do not match");
+        }
+        if !(inputs[0].num_cols() == output.num_cols()) {
+            log::warn!("input and output shapes do not match");
+        }
 
         for i in 0..output.num_blocks() {
             for j in 0..output.num_inner_cols() {
@@ -240,7 +247,9 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         for ((base_op, block_idx, inner_col_idx), selector) in nonaccum_selectors.iter() {
             meta.create_gate(base_op.as_str(), |meta| {
                 let selector = meta.query_selector(*selector);
-                let mut qis = vec![Expression::<F>::zero().unwrap(); 2];
+
+                let zero = Expression::<F>::Constant(F::ZERO);
+                let mut qis = vec![zero; 2];
                 for (i, q_i) in qis
                     .iter_mut()
                     .enumerate()
@@ -507,9 +516,9 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         if matches!(&self.check_mode, CheckMode::SAFE) && !region.is_dummy() {
             if let Some(claimed_output) = &res {
                 // during key generation this will be unknown vals so we use this as a flag to check
-                let mut is_assigned = !claimed_output.any_unknowns();
+                let mut is_assigned = !claimed_output.any_unknowns()?;
                 for val in values.iter() {
-                    is_assigned = is_assigned && !val.any_unknowns();
+                    is_assigned = is_assigned && !val.any_unknowns()?;
                 }
                 if is_assigned {
                     op.safe_mode_check(claimed_output, values)?;

@@ -380,16 +380,19 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                     if remainder != 0 {
                         block.extend(vec![Fp::ZERO; L - remainder].iter());
                     }
-                    halo2_gadgets::poseidon::primitives::Hash::<
+
+                    let message = block.try_into().map_err(|_| Error::Synthesis)?;
+
+                    Ok(halo2_gadgets::poseidon::primitives::Hash::<
                         _,
                         S,
                         ConstantLength<L>,
                         { WIDTH },
                         { RATE },
                     >::init()
-                    .hash(block.clone().try_into().unwrap())
+                    .hash(message))
                 })
-                .collect();
+                .collect::<Result<Vec<_>, Error>>()?;
             one_iter = true;
             hash_inputs = hashes;
         }

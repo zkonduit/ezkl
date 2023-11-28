@@ -106,6 +106,9 @@ pub enum GraphError {
     /// Invalid Input Types
     #[error("invalid input types")]
     InvalidInputTypes,
+    /// Missing results
+    #[error("missing results")]
+    MissingResults,
 }
 
 const ASSUMED_BLINDING_FACTORS: usize = 5;
@@ -250,13 +253,13 @@ impl ToPyObject for GraphWitness {
         if let Some(processed_inputs) = &self.processed_inputs {
             //poseidon_hash
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
-                insert_poseidon_hash_pydict(&dict_inputs, &processed_inputs_poseidon_hash);
+                insert_poseidon_hash_pydict(&dict_inputs, &processed_inputs_poseidon_hash).unwrap();
             }
             if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
-                insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal);
+                insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal).unwrap();
             }
             if let Some(processed_inputs_kzg_commit) = &processed_inputs.kzg_commit {
-                insert_kzg_commit_pydict(&dict_inputs, &processed_inputs_kzg_commit);
+                insert_kzg_commit_pydict(&dict_inputs, &processed_inputs_kzg_commit).unwrap();
             }
 
             dict.set_item("processed_inputs", dict_inputs).unwrap();
@@ -264,13 +267,13 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_params) = &self.processed_params {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_params, &processed_params_poseidon_hash);
+                insert_poseidon_hash_pydict(dict_params, &processed_params_poseidon_hash).unwrap();
             }
             if let Some(processed_params_elgamal) = &processed_params.elgamal {
-                insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal);
+                insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal).unwrap();
             }
             if let Some(processed_params_kzg_commit) = &processed_params.kzg_commit {
-                insert_kzg_commit_pydict(&dict_inputs, &processed_params_kzg_commit);
+                insert_kzg_commit_pydict(&dict_inputs, &processed_params_kzg_commit).unwrap();
             }
 
             dict.set_item("processed_params", dict_params).unwrap();
@@ -278,13 +281,14 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_outputs, &processed_outputs_poseidon_hash);
+                insert_poseidon_hash_pydict(dict_outputs, &processed_outputs_poseidon_hash)
+                    .unwrap();
             }
             if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
-                insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal);
+                insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal).unwrap();
             }
             if let Some(processed_outputs_kzg_commit) = &processed_outputs.kzg_commit {
-                insert_kzg_commit_pydict(&dict_inputs, &processed_outputs_kzg_commit);
+                insert_kzg_commit_pydict(&dict_inputs, &processed_outputs_kzg_commit).unwrap();
             }
 
             dict.set_item("processed_outputs", dict_outputs).unwrap();
@@ -295,28 +299,36 @@ impl ToPyObject for GraphWitness {
 }
 
 #[cfg(feature = "python-bindings")]
-fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) {
+fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) -> Result<(), PyErr> {
     let poseidon_hash: Vec<[u64; 4]> = poseidon_hash
         .iter()
         .map(field_to_vecu64_montgomery)
         .collect();
-    pydict.set_item("poseidon_hash", poseidon_hash).unwrap();
+    pydict.set_item("poseidon_hash", poseidon_hash)?;
+
+    Ok(())
 }
 
 #[cfg(feature = "python-bindings")]
-fn insert_kzg_commit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) {
+fn insert_kzg_commit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Result<(), PyErr> {
     use crate::python::PyG1Affine;
     let poseidon_hash: Vec<Vec<PyG1Affine>> = commits
         .iter()
         .map(|c| c.iter().map(|x| PyG1Affine::from(*x)).collect())
         .collect();
-    pydict.set_item("kzg_commit", poseidon_hash).unwrap();
+    pydict.set_item("kzg_commit", poseidon_hash)?;
+
+    Ok(())
 }
 
 #[cfg(feature = "python-bindings")]
 use modules::ElGamalResult;
 #[cfg(feature = "python-bindings")]
-fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &ElGamalResult) {
+fn insert_elgamal_results_pydict(
+    py: Python,
+    pydict: &PyDict,
+    elgamal_results: &ElGamalResult,
+) -> Result<(), PyErr> {
     let results_dict = PyDict::new(py);
     let cipher_text: Vec<Vec<[u64; 4]>> = elgamal_results
         .ciphertexts
@@ -327,7 +339,7 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
                 .collect::<Vec<[u64; 4]>>()
         })
         .collect::<Vec<Vec<[u64; 4]>>>();
-    results_dict.set_item("ciphertexts", cipher_text).unwrap();
+    results_dict.set_item("ciphertexts", cipher_text)?;
 
     let encrypted_messages: Vec<Vec<[u64; 4]>> = elgamal_results
         .encrypted_messages
@@ -338,15 +350,15 @@ fn insert_elgamal_results_pydict(py: Python, pydict: &PyDict, elgamal_results: &
                 .collect::<Vec<[u64; 4]>>()
         })
         .collect::<Vec<Vec<[u64; 4]>>>();
-    results_dict
-        .set_item("encrypted_messages", encrypted_messages)
-        .unwrap();
+    results_dict.set_item("encrypted_messages", encrypted_messages)?;
 
     let variables: crate::python::PyElGamalVariables = elgamal_results.variables.clone().into();
 
-    results_dict.set_item("variables", variables).unwrap();
+    results_dict.set_item("variables", variables)?;
 
-    pydict.set_item("elgamal", results_dict).unwrap();
+    pydict.set_item("elgamal", results_dict)?;
+
+    Ok(())
 
     //elgamal
 }
@@ -560,7 +572,7 @@ impl GraphCircuit {
     ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
         // // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
         let mut inputs: Vec<Vec<Fp>> = vec![];
-        for shape in model.graph.input_shapes() {
+        for shape in model.graph.input_shapes()? {
             let t: Vec<Fp> = vec![Fp::zero(); shape.iter().product::<usize>()];
             inputs.push(t);
         }
@@ -577,10 +589,10 @@ impl GraphCircuit {
         }
 
         let sizes = GraphModules::num_constraints_and_instances(
-            model.graph.input_shapes(),
+            model.graph.input_shapes()?,
             vec![vec![num_params]],
-            model.graph.output_shapes(),
-            VarVisibility::from_args(run_args).unwrap(),
+            model.graph.output_shapes()?,
+            VarVisibility::from_args(run_args)?,
         );
 
         // number of instances used by modules
@@ -609,7 +621,7 @@ impl GraphCircuit {
     ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
         // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
         let mut inputs: Vec<Vec<Fp>> = vec![];
-        for shape in model.graph.input_shapes() {
+        for shape in model.graph.input_shapes()? {
             let t: Vec<Fp> = vec![Fp::zero(); shape.iter().product::<usize>()];
             inputs.push(t);
         }
@@ -679,7 +691,7 @@ impl GraphCircuit {
         &mut self,
         data: &GraphData,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
-        let shapes = self.model().graph.input_shapes();
+        let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
         self.process_data_source(&data.input_data, shapes, scales, input_types)
@@ -690,7 +702,7 @@ impl GraphCircuit {
         &mut self,
         data: &GraphData,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
-        let shapes = self.model().graph.input_shapes();
+        let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
         info!("input scales: {:?}", scales);
@@ -709,7 +721,7 @@ impl GraphCircuit {
         &mut self,
         data: &GraphData,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
-        let shapes = self.model().graph.input_shapes();
+        let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
         info!("input scales: {:?}", scales);
@@ -899,7 +911,7 @@ impl GraphCircuit {
         {
             let mut max_instance_len = self
                 .model()
-                .instance_shapes()
+                .instance_shapes()?
                 .iter()
                 .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()))
                 as f64
@@ -1117,7 +1129,7 @@ impl GraphCircuit {
             let datam: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 input_data,
                 self.model().graph.get_input_scales(),
-                self.model().graph.input_shapes(),
+                self.model().graph.input_shapes()?,
                 test_on_chain_data.rpc.as_deref(),
             )
             .await?;
@@ -1145,8 +1157,8 @@ impl GraphCircuit {
             };
             let datum: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 output_data,
-                self.model().graph.get_output_scales(),
-                self.model().graph.output_shapes(),
+                self.model().graph.get_output_scales()?,
+                self.model().graph.output_shapes()?,
                 test_on_chain_data.rpc.as_deref(),
             )
             .await?;
@@ -1212,7 +1224,14 @@ impl Circuit<Fp> for GraphCircuit {
         GLOBAL_SETTINGS.with(|settings| {
             *settings.borrow_mut() = Some(params.clone());
         });
-        let visibility = VarVisibility::from_args(&params.run_args).unwrap();
+        let visibility = match VarVisibility::from_args(&params.run_args) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("failed to create visibility: {:?}", e);
+                log::warn!("using default visibility");
+                VarVisibility::default()
+            }
+        };
 
         let mut module_configs = ModuleConfigs::from_visibility(
             cs,

@@ -259,7 +259,7 @@ impl VarScales {
 }
 
 /// Represents whether the model input, model parameters, and model output are Public or Private to the prover.
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, PartialOrd)]
 pub struct VarVisibility {
     /// Input to the model or computational graph
     pub input: Visibility,
@@ -275,6 +275,16 @@ impl std::fmt::Display for VarVisibility {
             "(inputs: {}, params: {}, outputs: {})",
             self.input, self.params, self.output
         )
+    }
+}
+
+impl Default for VarVisibility {
+    fn default() -> Self {
+        Self {
+            input: Visibility::Private,
+            params: Visibility::Private,
+            output: Visibility::Public,
+        }
     }
 }
 

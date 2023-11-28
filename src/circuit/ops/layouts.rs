@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     error::Error,
+    ops::Range,
 };
 
 use halo2_proofs::circuit::Value;
@@ -8,9 +9,7 @@ use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::{error, trace};
 use rayon::{
-    prelude::{
-        IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-    },
+    prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
     slice::ParallelSliceMut,
 };
 
@@ -58,7 +57,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    region.flush();
+    region.flush()?;
     // time this entire function run
     let global_start = instant::Instant::now();
 
@@ -127,21 +126,25 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     // enable the selectors
     if !region.is_dummy() {
-        (0..output_assigned_len).for_each(|i| {
-            let (x, _, z) = config
-                .output
-                .cartesian_coord(region.linear_coord() + i * block_width);
-            // hop over duplicates at start of column
-            if z == 0 && i > 0 {
-                return;
-            }
-            let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::DotInit, x, 0))
-            } else {
-                config.selectors.get(&(BaseOp::Dot, x, 0))
-            };
-            region.enable(selector, z).unwrap();
-        });
+        (0..output_assigned_len)
+            .map(|i| {
+                let (x, _, z) = config
+                    .output
+                    .cartesian_coord(region.linear_coord() + i * block_width);
+                // hop over duplicates at start of column
+                if z == 0 && i > 0 {
+                    return Ok(());
+                }
+                let selector = if i == 0 {
+                    config.selectors.get(&(BaseOp::DotInit, x, 0))
+                } else {
+                    config.selectors.get(&(BaseOp::Dot, x, 0))
+                };
+                region.enable(selector, z)?;
+
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
     let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
@@ -164,8 +167,8 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     equation: &str,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let mut equation = equation.split("->");
-    let inputs_eq = equation.next().unwrap();
-    let output_eq = equation.next().unwrap();
+    let inputs_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
+    let output_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
     let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
 
     // Check that the number of inputs matches the number of inputs in the equation
@@ -176,7 +179,10 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     let mut indices_to_size = HashMap::new();
     for (i, input) in inputs.iter().enumerate() {
         for j in 0..inputs_eq[i].len() {
-            let c = inputs_eq[i].chars().nth(j).unwrap();
+            let c = inputs_eq[i]
+                .chars()
+                .nth(j)
+                .ok_or(CircuitError::InvalidEinsum)?;
             if let std::collections::hash_map::Entry::Vacant(e) = indices_to_size.entry(c) {
                 e.insert(input.dims()[j]);
             } else if indices_to_size[&c] != input.dims()[j] {
@@ -193,8 +199,13 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     // Compute the output tensor shape
     let mut output_shape: Vec<usize> = output_eq
         .chars()
-        .map(|c| *indices_to_size.get(&c).unwrap())
-        .collect();
+        .map(|c| {
+            indices_to_size
+                .get(&c)
+                .ok_or(CircuitError::InvalidEinsum)
+                .copied()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     if output_shape.is_empty() {
         output_shape.push(1);
@@ -225,12 +236,17 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         .map(|d| {
             // If the current index is in the output equation, then the slice should be the current coordinate
             if output_eq.contains(**d) {
-                1
+                Ok(1)
             // Otherwise, the slice should be the entire dimension of the input tensor
             } else {
-                *indices_to_size.get(d).unwrap()
+                indices_to_size
+                    .get(d)
+                    .ok_or(CircuitError::InvalidEinsum)
+                    .copied()
             }
         })
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
         .product::<usize>();
 
     let cartesian_coord = output_shape
@@ -245,12 +261,14 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         .map(|d| {
             // If the current index is in the output equation, then the slice should be the current coordinate
             if output_eq.contains(*d) {
-                0..1
+                Ok(0..1)
             // Otherwise, the slice should be the entire dimension of the input tensor
             } else {
-                0..*indices_to_size.get(d).unwrap()
+                Ok(0..*indices_to_size.get(d).ok_or(CircuitError::InvalidEinsum)?)
             }
         })
+        .collect::<Result<Vec<Range<_>>, Box<dyn Error>>>()?
+        .into_iter()
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
@@ -259,7 +277,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
         common_coord.push(vec![]);
     }
 
-    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> ValType<F> {
+    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
         let coord = cartesian_coord[i].clone();
         // Compute the slice of each input tensor given the current coordinate of the output tensor
         let inputs = (0..inputs.len())
@@ -275,17 +293,22 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                     }
                 }
                 // Get the slice of the input tensor
-                inputs[idx].get_slice(&slice).unwrap()
+                inputs[idx].get_slice(&slice)
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
 
         // in this case its just a dot product :)
         if non_common_coord_size == 1 && inputs.len() == 2 {
-            dot(config, region, inputs[..].try_into().unwrap())
-                .unwrap()
-                .get_inner_tensor()
-                .unwrap()[0]
-                .clone()
+            Ok(dot(
+                config,
+                region,
+                inputs[..].try_into().map_err(|e| {
+                    error!("{}", e);
+                    halo2_proofs::plonk::Error::Synthesis
+                })?,
+            )?
+            .get_inner_tensor()?[0]
+                .clone())
         } else {
             let mut prod = None;
 
@@ -304,9 +327,12 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                             }
                         }
                         // Get the slice of the input tensor
-                        inputs[idx].get_slice(&slice).unwrap()
+                        inputs[idx].get_slice(&slice).map_err(|e| {
+                            error!("{}", e);
+                            halo2_proofs::plonk::Error::Synthesis
+                        })
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 let input_pairs = inputs
                     .iter()
@@ -316,41 +342,41 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
 
                 // Compute the product of all input tensors
                 for pair in input_pairs {
-                    let product_across_pair =
+                    let product_across_pair: Result<ValTensor<F>, halo2_proofs::plonk::Error> =
                         pair[1..]
                             .iter()
-                            .fold(ValTensor::from(pair[0].clone()), |acc, x| {
-                                pairwise(config, region, &[acc, (*x).clone().into()], BaseOp::Mult)
-                                    .unwrap()
+                            .fold(Ok(ValTensor::from(pair[0].clone())), |acc, x| {
+                                pairwise(config, region, &[acc?, (*x).clone().into()], BaseOp::Mult)
+                                    .map_err(|e| {
+                                        error!("{}", e);
+                                        halo2_proofs::plonk::Error::Synthesis
+                                    })
                             });
+                    let product_across_pair = product_across_pair?;
 
-                    if prod.is_none() {
-                        prod = Some(product_across_pair);
-                    } else {
+                    if let Some(product) = prod {
                         prod = Some(
-                            pairwise(
-                                config,
-                                region,
-                                &[prod.unwrap(), product_across_pair],
-                                BaseOp::Add,
-                            )
-                            .unwrap(),
+                            pairwise(config, region, &[product, product_across_pair], BaseOp::Add)
+                                .map_err(|e| {
+                                    error!("{}", e);
+                                    halo2_proofs::plonk::Error::Synthesis
+                                })?,
                         );
+                    } else {
+                        prod = Some(product_across_pair);
                     }
                 }
             }
-            prod.unwrap().get_inner_tensor().unwrap()[0].clone()
+            Ok::<_, region::RegionError>(
+                prod.ok_or(Into::<region::RegionError>::into("missing prod"))?
+                    .get_inner_tensor()?[0]
+                    .clone(),
+            )
         }
     };
 
-    region.flush();
-    if !region.is_dummy() {
-        output.iter_mut().enumerate().for_each(|(i, o)| {
-            *o = inner_loop_function(i, region);
-        });
-    } else {
-        region.dummy_loop(&mut output, inner_loop_function)?;
-    }
+    region.flush()?;
+    region.apply_in_loop(&mut output, inner_loop_function)?;
 
     let output: ValTensor<F> = output.into();
 
@@ -367,7 +393,7 @@ fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
     // assert input is flat
     assert_eq!(input.dims().len(), 1);
 
-    let is_assigned = !input.any_unknowns();
+    let is_assigned = !input.any_unknowns()?;
 
     let sorted = if is_assigned {
         input
@@ -440,15 +466,15 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
     // assert input is flat
     assert_eq!(input.dims().len(), 1);
 
-    let is_assigned = !input.any_unknowns();
+    let is_assigned = !input.any_unknowns()?;
 
     let sorted = if is_assigned {
         input
             .get_int_evals()?
             .iter()
             .sorted_by(|a, b| a.cmp(b))
-            .map(|x| Value::known(input.get_felt_evals().unwrap().get(&[*x as usize])))
-            .collect::<Tensor<_>>()
+            .map(|x| Ok(Value::known(input.get_felt_evals()?.get(&[*x as usize]))))
+            .collect::<Result<Tensor<Value<F>>, Box<dyn Error>>>()?
     } else {
         Tensor::new(
             Some(&vec![Value::<F>::unknown(); input.len()]),
@@ -548,20 +574,22 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     input.flatten();
 
     // assert we have a single index
-    assert_eq!(index.dims().iter().product::<usize>(), 1);
-    assert!(dim_indices.all_prev_assigned() || region.is_dummy());
+    if !(index.dims().iter().product::<usize>() == 1) {
+        return Err("index must be a single element".into());
+    }
 
-    let is_assigned = !input.any_unknowns() && !index.any_unknowns();
+    if !(dim_indices.all_prev_assigned() || region.is_dummy()) {
+        return Err("dim_indices must be assigned".into());
+    }
+
+    let is_assigned = !input.any_unknowns()? && !index.any_unknowns()?;
 
     let output: ValTensor<F> = if is_assigned {
-        Tensor::from(
-            index
-                .get_int_evals()?
-                .par_iter()
-                .map(|x| Value::known(input.get_felt_evals().unwrap().get(&[*x as usize])))
-                .collect::<Vec<_>>()
-                .into_iter(),
-        )
+        index
+            .get_int_evals()?
+            .iter()
+            .map(|x| Ok(Value::known(input.get_felt_evals()?.get(&[*x as usize]))))
+            .collect::<Result<Tensor<Value<F>>, Box<dyn Error>>>()?
     } else {
         Tensor::new(
             Some(&vec![Value::<F>::unknown(); index.len()]),
@@ -570,9 +598,9 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     }
     .into();
 
-    let local_mask = equals(config, region, &[dim_indices.clone(), index]).unwrap();
+    let local_mask = equals(config, region, &[dim_indices.clone(), index])?;
 
-    let dot = dot(config, region, &[input.clone(), local_mask.clone()]).unwrap();
+    let dot = dot(config, region, &[input.clone(), local_mask.clone()])?;
 
     let assigned_output = enforce_equality(config, region, &[dot, output.clone()])?;
 
@@ -590,7 +618,7 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
     // assert its a single elelemnt
     assert_eq!(values[0].len(), 1);
     let input = values[0].clone();
-    let is_assigned = !input.any_unknowns();
+    let is_assigned = !input.any_unknowns()?;
 
     let output: ValTensor<F> = if is_assigned {
         let int_evals = input.get_int_evals()?;
@@ -653,22 +681,17 @@ pub fn one_hot_axis<F: PrimeField + TensorType + PartialOrd>(
     let mut output_dims = values[0].dims().to_vec();
     output_dims.insert(dim, num_classes);
 
-    let mut op_tensors = Tensor::new(None, input_inner.dims())?;
+    let mut op_tensors: Tensor<ValTensor<F>> = Tensor::new(None, input_inner.dims())?;
 
-    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> ValTensor<F> {
-        let inp = input_inner[i].clone();
-        let tensor = Tensor::new(Some(&[inp.clone()]), &[1]).unwrap();
+    let inner_loop_function =
+        |i: usize, region: &mut RegionCtx<'_, F>| -> Result<ValTensor<F>, _> {
+            let inp = input_inner[i].clone();
+            let tensor = Tensor::new(Some(&[inp.clone()]), &[1])?;
 
-        one_hot(config, region, &[tensor.into()], num_classes).unwrap()
-    };
+            Ok(one_hot(config, region, &[tensor.into()], num_classes)?)
+        };
 
-    if !region.is_dummy() {
-        op_tensors.iter_mut().enumerate().for_each(|(i, o)| {
-            *o = inner_loop_function(i, region);
-        });
-    } else {
-        region.dummy_loop(&mut op_tensors, inner_loop_function)?;
-    };
+    region.apply_in_loop(&mut op_tensors, inner_loop_function)?;
 
     // Allocate memory for the output tensor
     let cartesian_coord = output_dims
@@ -687,14 +710,11 @@ pub fn one_hot_axis<F: PrimeField + TensorType + PartialOrd>(
 
         let op_tensor = op_tensors.get(&op_idx);
 
-        let op_tensor = op_tensor.get_inner_tensor().map_err(|e| {
-            error!("{}", e);
-            halo2_proofs::plonk::Error::Synthesis
-        })?;
+        let op_tensor = op_tensor.get_inner_tensor()?;
 
         let one_hot_val = op_tensor.get(&coord_at_dims).clone();
 
-        Ok::<_, halo2_proofs::plonk::Error>(one_hot_val)
+        Ok::<_, region::RegionError>(one_hot_val)
     })?;
 
     Ok(output.into())
@@ -724,7 +744,7 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if !assigned_len.is_empty() {
-        region.increment(*assigned_len.iter().max().unwrap());
+        region.increment(*assigned_len.iter().max().ok_or(TensorError::DimError)?);
     }
 
     // Calculate the output tensor size
@@ -748,14 +768,14 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
 
     let mut output: Tensor<ValType<F>> = Tensor::new(None, &output_size)?;
 
-    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> ValType<F> {
+    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
         let coord = cartesian_coord[i].clone();
-        let index_val = index_clone.get_single_elem(coord[dim]).unwrap();
+        let index_val = index_clone.get_single_elem(coord[dim])?;
 
         let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
         slice[dim] = 0..input_dims[dim];
 
-        let mut sliced_input = input.get_slice(&slice).unwrap();
+        let mut sliced_input = input.get_slice(&slice)?;
         sliced_input.flatten();
 
         let res = select(
@@ -763,21 +783,14 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
             region,
             &[sliced_input, index_val.clone()],
             indices.clone(),
-        )
-        .unwrap();
+        )?;
 
-        let res = res.get_inner_tensor().unwrap();
+        let res = res.get_inner_tensor()?;
 
-        res[0].clone()
+        Ok(res[0].clone())
     };
 
-    if !region.is_dummy() {
-        output.iter_mut().enumerate().for_each(|(i, o)| {
-            *o = inner_loop_function(i, region);
-        });
-    } else {
-        region.dummy_loop(&mut output, inner_loop_function)?;
-    };
+    region.apply_in_loop(&mut output, inner_loop_function)?;
 
     // Reshape the output tensor
     if index_clone.is_singleton() {
@@ -827,14 +840,14 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
 
     let mut output = Tensor::new(None, &output_size)?;
 
-    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> ValType<F> {
+    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
         let coord = cartesian_coord[i].clone();
-        let index_val = index.get_inner_tensor().unwrap().get(&coord);
+        let index_val = index.get_inner_tensor()?.get(&coord);
 
         let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
         slice[dim] = 0..input_dim;
 
-        let mut sliced_input = input.get_slice(&slice).unwrap();
+        let mut sliced_input = input.get_slice(&slice)?;
         sliced_input.flatten();
 
         let index_valtensor: ValTensor<F> = Tensor::from([index_val.clone()].into_iter()).into();
@@ -844,21 +857,14 @@ pub fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
             region,
             &[sliced_input, index_valtensor],
             indices.clone(),
-        )
-        .unwrap();
+        )?;
 
-        let res = res.get_inner_tensor().unwrap();
+        let res = res.get_inner_tensor()?;
 
-        res[0].clone()
+        Ok(res[0].clone())
     };
 
-    if !region.is_dummy() {
-        output.iter_mut().enumerate().for_each(|(i, o)| {
-            *o = inner_loop_function(i, region);
-        });
-    } else {
-        region.dummy_loop(&mut output, inner_loop_function)?;
-    };
+    region.apply_in_loop(&mut output, inner_loop_function)?;
 
     Ok(output.into())
 }
@@ -890,7 +896,7 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if !assigned_len.is_empty() {
-        region.increment(*assigned_len.iter().max().unwrap());
+        region.increment(*assigned_len.iter().max().ok_or(TensorError::DimError)?);
     }
 
     // Calculate the output tensor size
@@ -913,61 +919,64 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
     let mut unit = Tensor::from(vec![F::from(1)].into_iter());
     unit.set_visibility(&crate::graph::Visibility::Fixed);
     let unit: ValTensor<F> = unit.try_into()?;
-    region.assign(&config.inputs[1], &unit).unwrap();
+    region.assign(&config.inputs[1], &unit)?;
     region.increment(1);
 
-    let mut output = Tensor::new(None, &output_size)?;
+    let mut output: Tensor<()> = Tensor::new(None, &output_size)?;
 
     let mut inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
         let coord = cartesian_coord[i].clone();
-        let index_val = index.get_inner_tensor().unwrap().get(&coord);
+        let index_val = index.get_inner_tensor()?.get(&coord);
 
-        let src_val = src.get_inner_tensor().unwrap().get(&coord);
+        let src_val = src.get_inner_tensor()?.get(&coord);
         let src_valtensor: ValTensor<F> = Tensor::from([src_val.clone()].into_iter()).into();
 
         let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
         slice[dim] = 0..input_dim;
 
-        let mut sliced_input = input.get_slice(&slice).unwrap();
+        let mut sliced_input = input.get_slice(&slice)?;
         sliced_input.flatten();
 
         let index_valtensor: ValTensor<F> = Tensor::from([index_val.clone()].into_iter()).into();
 
-        let mask = equals(config, region, &[index_valtensor, indices.clone()]).unwrap();
+        let mask = equals(config, region, &[index_valtensor, indices.clone()])?;
 
-        let one_minus_mask =
-            pairwise(config, region, &[unit.clone(), mask.clone()], BaseOp::Sub).unwrap();
+        let one_minus_mask = pairwise(config, region, &[unit.clone(), mask.clone()], BaseOp::Sub)?;
 
-        let pairwise_prod = pairwise(config, region, &[src_valtensor, mask], BaseOp::Mult).unwrap();
+        let pairwise_prod = pairwise(config, region, &[src_valtensor, mask], BaseOp::Mult)?;
         let pairwise_prod_2 = pairwise(
             config,
             region,
             &[sliced_input, one_minus_mask],
             BaseOp::Mult,
-        )
-        .unwrap();
+        )?;
 
         let res = pairwise(
             config,
             region,
             &[pairwise_prod, pairwise_prod_2],
             BaseOp::Add,
-        )
-        .unwrap();
+        )?;
 
         let input_cartesian_coord = slice.into_iter().multi_cartesian_product();
 
-        let mutable_input_inner = input.get_inner_tensor_mut().unwrap();
+        let mutable_input_inner = input.get_inner_tensor_mut()?;
 
-        for (i, r) in res.get_inner_tensor().unwrap().iter().enumerate() {
-            let coord = input_cartesian_coord.clone().nth(i).unwrap();
+        for (i, r) in res.get_inner_tensor()?.iter().enumerate() {
+            let coord = input_cartesian_coord
+                .clone()
+                .nth(i)
+                .ok_or("invalid coord")?;
             *mutable_input_inner.get_mut(&coord) = r.clone();
         }
+        Ok(())
     };
 
-    output.iter_mut().enumerate().for_each(|(i, o)| {
-        *o = inner_loop_function(i, region);
-    });
+    output
+        .iter_mut()
+        .enumerate()
+        .map(|(i, _)| inner_loop_function(i, region))
+        .collect::<Result<Vec<()>, Box<dyn Error>>>()?;
 
     Ok(input)
 }
@@ -978,7 +987,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    region.flush();
+    region.flush()?;
     // time this entire function run
     let global_start = instant::Instant::now();
 
@@ -1056,7 +1065,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    region.flush();
+    region.flush()?;
     // time this entire function run
     let global_start = instant::Instant::now();
 
@@ -1093,22 +1102,25 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
 
     // enable the selectors
     if !region.is_dummy() {
-        (0..output_assigned_len).for_each(|i| {
-            let (x, _, z) = config
-                .output
-                .cartesian_coord(region.linear_coord() + i * block_width);
-            // skip over duplicates at start of column
-            if z == 0 && i > 0 {
-                return;
-            }
-            let selector = if i == 0 {
-                config.selectors.get(&(BaseOp::CumProdInit, x, 0))
-            } else {
-                config.selectors.get(&(BaseOp::CumProd, x, 0))
-            };
+        (0..output_assigned_len)
+            .map(|i| {
+                let (x, _, z) = config
+                    .output
+                    .cartesian_coord(region.linear_coord() + i * block_width);
+                // skip over duplicates at start of column
+                if z == 0 && i > 0 {
+                    return Ok(());
+                }
+                let selector = if i == 0 {
+                    config.selectors.get(&(BaseOp::CumProdInit, x, 0))
+                } else {
+                    config.selectors.get(&(BaseOp::CumProd, x, 0))
+                };
 
-            region.enable(selector, z).unwrap();
-        });
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
     let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
@@ -1159,7 +1171,7 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| -> ValType<F> {
+    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
         let coord = cartesian_coord[i].clone();
         let mut prod_dims = vec![];
         for (i, c) in coord.iter().enumerate() {
@@ -1169,19 +1181,13 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd>(
                 prod_dims.push(*c..*c + 1);
             }
         }
-        let values = a.get_slice(&prod_dims).unwrap();
-        let op = op(config, region, &[values]).unwrap();
+        let values = a.get_slice(&prod_dims)?;
+        let op = op(config, region, &[values])?;
 
-        op.get_inner_tensor().unwrap()[0].clone()
+        Ok(op.get_inner_tensor()?[0].clone())
     };
 
-    if !region.is_dummy() {
-        res.iter_mut().enumerate().for_each(|(i, o)| {
-            *o = inner_loop_function(i, region);
-        });
-    } else {
-        region.dummy_loop(&mut res, inner_loop_function)?;
-    };
+    region.apply_in_loop(&mut res, inner_loop_function)?;
 
     Ok(res.into())
 }
@@ -1359,12 +1365,16 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
 
     // Enable the selectors
     if !region.is_dummy() {
-        (0..assigned_len).for_each(|i| {
-            let (x, y, z) = config.inputs[0].cartesian_coord(region.linear_coord() + i);
-            let selector = config.selectors.get(&(op.clone(), x, y));
+        (0..assigned_len)
+            .map(|i| {
+                let (x, y, z) = config.inputs[0].cartesian_coord(region.linear_coord() + i);
+                let selector = config.selectors.get(&(op.clone(), x, y));
 
-            region.enable(selector, z).unwrap();
-        });
+                region.enable(selector, z)?;
+
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
     region.increment(assigned_len);
 
@@ -1595,11 +1605,14 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
 
     // Enable the selectors
     if !region.is_dummy() {
-        (0..assigned_mask.len()).for_each(|i| {
-            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
-            region.enable(selector, z).unwrap();
-        });
+        (0..assigned_mask.len())
+            .map(|i| {
+                let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
+                let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
     region.increment(assigned_mask.len());
@@ -1633,12 +1646,15 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
 
     // Enable the selectors
     if !region.is_dummy() {
-        (0..values[0].len()).for_each(|i| {
-            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
-            let selector = config.selectors.get(&(BaseOp::Neg, x, y));
+        (0..values[0].len())
+            .map(|i| {
+                let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
+                let selector = config.selectors.get(&(BaseOp::Neg, x, y));
 
-            region.enable(selector, z).unwrap();
-        });
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
     region.increment(output.len());
@@ -1672,24 +1688,27 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
 
     let mut res = vec![];
 
-    cartesian_coord.iter().for_each(|coord| {
-        let (b, i) = (coord[0], coord[1]);
-        let input = values[0].get_slice(&[b..b + 1, i..i + 1]).unwrap();
-        let output = conv(
-            config,
-            region,
-            &[input, kernel.clone().into()],
-            padding,
-            stride,
-        )
-        .unwrap();
-        res.push(output);
-    });
+    cartesian_coord
+        .iter()
+        .map(|coord| {
+            let (b, i) = (coord[0], coord[1]);
+            let input = values[0].get_slice(&[b..b + 1, i..i + 1])?;
+            let output = conv(
+                config,
+                region,
+                &[input, kernel.clone().into()],
+                padding,
+                stride,
+            )?;
+            res.push(output);
+            Ok(())
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
     let shape = &res[0].dims()[2..];
-    let mut last_elem = res[1..].iter().fold(res[0].clone(), |acc, elem| {
-        acc.concat(elem.clone()).unwrap()
-    });
+    let mut last_elem = res[1..]
+        .iter()
+        .fold(Ok(res[0].clone()), |acc, elem| acc?.concat(elem.clone()))?;
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     Ok(last_elem)
@@ -1734,22 +1753,25 @@ pub fn max_pool2d<F: PrimeField + TensorType + PartialOrd>(
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    output.iter_mut().enumerate().for_each(|(flat_index, o)| {
-        let coord = &cartesian_coord[flat_index];
-        let (b, i, j, k) = (coord[0], coord[1], coord[2], coord[3]);
-        let rs = j * stride.0;
-        let cs = k * stride.1;
-        let slice = padded_image
-            .get_slice(&[
+    output
+        .iter_mut()
+        .enumerate()
+        .map(|(flat_index, o)| {
+            let coord = &cartesian_coord[flat_index];
+            let (b, i, j, k) = (coord[0], coord[1], coord[2], coord[3]);
+            let rs = j * stride.0;
+            let cs = k * stride.1;
+            let slice = padded_image.get_slice(&[
                 b..(b + 1),
                 i..(i + 1),
                 rs..(rs + pool_dims.0),
                 cs..(cs + pool_dims.1),
-            ])
-            .unwrap();
-        let max_w = max(config, region, &[slice]).unwrap();
-        *o = max_w.get_inner_tensor().unwrap()[0].clone();
-    });
+            ])?;
+            let max_w = max(config, region, &[slice])?;
+            *o = max_w.get_inner_tensor()?[0].clone();
+            Ok(())
+        })
+        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
     let res: ValTensor<F> = output.into();
 
@@ -1884,7 +1906,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     }
 
     if !assigned_len.is_empty() {
-        region.increment(*assigned_len.iter().max().unwrap());
+        region.increment(*assigned_len.iter().max().ok_or(TensorError::DimError)?);
     }
 
     let og_image_dims = image.dims().to_vec();
@@ -1966,7 +1988,7 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     .multi_cartesian_product()
     .collect::<Vec<_>>();
 
-    let inner_loop_function = |idx: usize, region: &mut RegionCtx<F>| -> ValType<F> {
+    let inner_loop_function = |idx: usize, region: &mut RegionCtx<F>| {
         let cartesian_coord_per_group = &cartesian_coord[idx];
         let (batch, group, i, j, k) = (
             cartesian_coord_per_group[0],
@@ -1981,45 +2003,35 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         let start_channel = group * input_channels_per_group;
         let end_channel = start_channel + input_channels_per_group;
 
-        let mut local_image = padded_image
-            .get_slice(&[
-                batch..batch + 1,
-                start_channel..end_channel,
-                rs..(rs + kernel_height),
-                cs..(cs + kernel_width),
-            ])
-            .unwrap();
+        let mut local_image = padded_image.get_slice(&[
+            batch..batch + 1,
+            start_channel..end_channel,
+            rs..(rs + kernel_height),
+            cs..(cs + kernel_width),
+        ])?;
 
         local_image.flatten();
 
         let start_kernel_index = group * output_channels_per_group + i;
         let end_kernel_index = start_kernel_index + 1;
-        let mut local_kernel = kernel
-            .get_slice(&[start_kernel_index..end_kernel_index])
-            .unwrap();
+        let mut local_kernel = kernel.get_slice(&[start_kernel_index..end_kernel_index])?;
 
         local_kernel.flatten();
 
         // this is dot product notation in einsum format
-        let mut res = einsum(config, region, &[local_image, local_kernel], "i,i->").unwrap();
+        let mut res = einsum(config, region, &[local_image, local_kernel], "i,i->")?;
 
         if has_bias {
-            let bias = values[2].get_single_elem(start_kernel_index).unwrap();
-            res = pairwise(config, region, &[res, bias], BaseOp::Add).unwrap()
+            let bias = values[2].get_single_elem(start_kernel_index)?;
+            res = pairwise(config, region, &[res, bias], BaseOp::Add)?;
         }
-        region.flush();
+        region.flush()?;
 
-        res.get_inner_tensor().unwrap()[0].clone()
+        Ok(res.get_inner_tensor()?[0].clone())
     };
 
-    region.flush();
-    if !region.is_dummy() {
-        output.iter_mut().enumerate().for_each(|(idx, o)| {
-            *o = inner_loop_function(idx, region);
-        });
-    } else {
-        region.dummy_loop(&mut output, inner_loop_function)?;
-    }
+    region.flush()?;
+    region.apply_in_loop(&mut output, inner_loop_function)?;
 
     let reshape_output = |output: &mut Tensor<ValType<F>>| -> Result<(), TensorError> {
         // remove dummy batch dimension if we added one
@@ -2093,9 +2105,9 @@ pub fn pack<F: PrimeField + TensorType + PartialOrd>(
 
     // these unwraps should never ever fail if the Tensortypes are correctly implemented
     // if anything we want these to hard fail if not implemented
-    let mut base_t = <F as TensorType>::zero().unwrap();
+    let mut base_t = <F as TensorType>::zero().ok_or(TensorError::FeltError)?;
     for _ in 0..base {
-        base_t += <F as TensorType>::one().unwrap();
+        base_t += <F as TensorType>::one().ok_or(TensorError::FeltError)?;
     }
     let mut accum_base = vec![];
     let base_tensor = Tensor::new(Some(&[base_t]), &[1])?;
@@ -2204,12 +2216,15 @@ pub fn boolean_identity<F: PrimeField + TensorType + PartialOrd>(
     let output = region.assign(&config.inputs[1], &values[0])?;
     // Enable the selectors
     if !region.is_dummy() {
-        (0..output.len()).for_each(|j| {
-            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + j);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+        (0..output.len())
+            .map(|j| {
+                let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + j);
+                let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
 
-            region.enable(selector, z).unwrap();
-        });
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
     region.increment(output.len());
 
@@ -2295,7 +2310,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
         .par_enum_map(|i, e| {
             Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
                 let col_idx = if !is_dummy {
-                    let table = config.tables.get(nl).unwrap();
+                    let table = config.tables.get(nl).ok_or(TensorError::TableLookupError)?;
                     table.get_col_index(f)
                 } else {
                     F::ZERO
@@ -2314,13 +2329,16 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     region.assign_with_omissions(&config.lookup_index, &table_index, removal_indices_ptr)?;
 
     if !is_dummy {
-        (0..assigned_len).for_each(|i| {
-            let (x, y, z) = config
-                .lookup_input
-                .cartesian_coord(region.linear_coord() + i);
-            let selector = config.lookup_selectors.get(&(nl.clone(), x, y));
-            region.enable(selector, z).unwrap();
-        });
+        (0..assigned_len)
+            .map(|i| {
+                let (x, y, z) = config
+                    .lookup_input
+                    .cartesian_coord(region.linear_coord() + i);
+                let selector = config.lookup_selectors.get(&(nl.clone(), x, y));
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
     region.increment(assigned_len);
@@ -2474,11 +2492,14 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     region.assign(&config.inputs[1], &relu)?;
 
     if !region.is_dummy() {
-        (0..len).for_each(|i| {
-            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
-            region.enable(selector, z).unwrap();
-        });
+        (0..len)
+            .map(|i| {
+                let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
+                let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
     region.increment(len);
@@ -2549,11 +2570,14 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     region.assign(&config.inputs[1], &relu)?;
     // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
     if !region.is_dummy() {
-        (0..len).for_each(|i| {
-            let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
-            region.enable(selector, z).unwrap();
-        });
+        (0..len)
+            .map(|i| {
+                let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
+                let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
     region.increment(len);
@@ -2632,19 +2656,13 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd>(
             slice.insert(*dim, 0..input_dims[*dim]);
         }
 
-        let mut sliced_input = input.get_slice(&slice).unwrap();
+        let mut sliced_input = input.get_slice(&slice)?;
         sliced_input.flatten();
 
-        op(config, region, &[sliced_input]).unwrap()
+        Ok(op(config, region, &[sliced_input])?)
     };
 
-    if !region.is_dummy() {
-        op_tensors.iter_mut().enumerate().for_each(|(idx, o)| {
-            *o = inner_loop_function(idx, region);
-        });
-    } else {
-        region.dummy_loop(&mut op_tensors, inner_loop_function)?;
-    }
+    region.apply_in_loop(&mut op_tensors, inner_loop_function)?;
 
     // assert all op_tensors have the same dims
     let sample_op_output_size = op_tensors[0].dims();
@@ -2677,15 +2695,11 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd>(
 
         let topk_elem = op_tensors
             .get(&op_idx)
-            .get_inner_tensor()
-            .map_err(|e| {
-                error!("{}", e);
-                halo2_proofs::plonk::Error::Synthesis
-            })?
+            .get_inner_tensor()?
             .get(&coord_at_dims)
             .clone();
 
-        Ok::<_, halo2_proofs::plonk::Error>(topk_elem)
+        Ok::<_, region::RegionError>(topk_elem)
     })?;
 
     Ok(output.into())
