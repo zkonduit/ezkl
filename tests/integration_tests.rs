@@ -2215,6 +2215,16 @@ mod native_tests {
         ];
         #[cfg(not(feature = "icicle"))]
         let args = ["build", "--release", "--bin", "ezkl"];
+        #[cfg(not(feature = "mv-lookup"))]
+        let args = [
+            "build",
+            "--release",
+            "--bin",
+            "ezkl",
+            "--no-default-features",
+            "--features",
+            "ezkl",
+        ];
 
         let status = Command::new("cargo")
             .args(&args)
