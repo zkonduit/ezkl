@@ -62,6 +62,8 @@ jobs:
         run: cargo test --doc --verbose
       - name: Library tests
         run: cargo nextest run --lib --verbose
+      - name: Library tests (original lookup)
+        run: cargo nextest run --lib --verbose --no-default-features --features ezkl
 
   ultra-overflow-tests-gpu:
     runs-on: GPU
