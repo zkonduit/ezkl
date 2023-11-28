@@ -62,6 +62,7 @@ mod py_tests {
                 .args([
                     "install",
                     "torch==2.0.1",
+                    "torchvision==0.16.1",
                     "pandas==2.0.3",
                     "numpy==1.23",
                     "seaborn==0.12.2",
