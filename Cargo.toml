@@ -13,8 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2", ref= "3d7b5e61b3052680ccb279e05bdcc21dd8a8fedf" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", ref= "3d7b5e61b3052680ccb279e05bdcc21dd8a8fedf"  }
+halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "ac/lookup-modularity" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "ac/lookup-modularity"  }
 halo2curves = { version = "0.1.0" }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
@@ -26,7 +26,7 @@ thiserror = { version = "1.0.38", default_features = false }
 hex = { version = "0.4.3", default_features = false }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/chunked-mv-lookup", package = "ecc" }
 snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup", features=["derive_serde"]}
-halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", ref = "de1326d837ac2fd97363793e30d0639a95bdc0e9" }
+halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier",  branch= "ac/lookup-modularity" }
 rayon = { version = "1.7.0",  default_features = false }
 bincode = { version = "1.3.3", default_features = false }
 ark-std = { version = "^0.3.0", default-features = false }
@@ -151,10 +151,11 @@ required-features = ["ezkl"]
 
 [features]
 web = ["wasm-bindgen-rayon"]
-default = ["ezkl"]
+default = ["ezkl", "mv-lookup"]
 render = ["halo2_proofs/dev-graph", "plotters"]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
 ezkl = ["onnx", "serde", "serde_json", "log", "colored", "env_logger", "tabled/color", "colored_json", "halo2_proofs/circuit-params"]
+mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup", "halo2_solidity_verifier/mv-lookup"]
 det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
