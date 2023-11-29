@@ -167,7 +167,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=34 {
+            seq!(N in 0..=36 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
@@ -184,6 +184,7 @@ mod py_tests {
                 test_dir.close().unwrap();
                 anvil_child.kill().unwrap();
             }
+            });
             #[test]
             fn voice_notebook_() {
                 crate::py_tests::init_binary();
@@ -207,7 +208,7 @@ mod py_tests {
                 run_notebook(path, "nbeats_timeseries_forecasting.ipynb");
                 test_dir.close().unwrap();
             }
-            });
+
 
     }
     };
