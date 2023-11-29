@@ -34,11 +34,11 @@ use tract_onnx::tract_core::ops::{
 use tract_onnx::tract_hir::{
     internal::DimLike,
     ops::array::{Pad, PadMode, TypedConcat},
-    ops::cnn::{ConvUnary, MaxPool, PoolSpec, SumPool},
+    ops::cnn::{ConvUnary, PoolSpec},
     ops::konst::Const,
     ops::nn::DataFormat,
     tract_core::ops::cast::Cast,
-    tract_core::ops::cnn::{conv::KernelFormat, PaddingSpec},
+    tract_core::ops::cnn::{conv::KernelFormat, MaxPool, PaddingSpec, SumPool},
 };
 
 // Warning: currently ignores stride information
