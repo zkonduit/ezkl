@@ -99,7 +99,6 @@ jobs:
         run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --features icicle -- --include-ignored
       - name: Conv + relu overflow
         run: cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture --features icicle -- --include-ignored
-  
 
   ultra-overflow-tests_og-lookup:
     runs-on: non-gpu
@@ -133,7 +132,6 @@ jobs:
         run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
       - name: Conv + relu overflow
         run: cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
-
 
   ultra-overflow-tests:
     runs-on: non-gpu
@@ -629,6 +627,8 @@ jobs:
         run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_fixed_params_
       - name: Public outputs
         run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_
+      - name: Public outputs + resources
+        run: source .env/bin/activate; cargo nextest run --release --verbose tests::resources_accuracy_measurement_public_outputs_
 
   python-integration-tests:
     runs-on:
