@@ -13,7 +13,7 @@ class LayerNorm(nn.Module):
         return self.ln(x)
     
 
-x = torch.randn(5, 10, 10)
+x = torch.randn(1, 10, 10)
 model = LayerNorm(10)
 out = model(x)
 
