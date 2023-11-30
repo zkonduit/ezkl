@@ -136,11 +136,11 @@ impl VarTensor {
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
         num_constants: usize,
-        uses_modules: bool,
+        module_requires_fixed: bool,
     ) -> usize {
-        if num_constants == 0 && !uses_modules {
+        if num_constants == 0 && !module_requires_fixed {
             return 0;
-        } else if num_constants == 0 && uses_modules {
+        } else if num_constants == 0 && module_requires_fixed {
             let col = cs.fixed_column();
             cs.enable_constant(col);
             return 1;

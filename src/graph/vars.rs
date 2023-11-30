@@ -417,7 +417,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         var_len: usize,
         num_inner_cols: usize,
         num_constants: usize,
-        uses_modules: bool,
+        module_requires_fixed: bool,
     ) -> Self {
         info!("number of blinding factors: {}", cs.blinding_factors());
 
@@ -431,7 +431,8 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
             num_inner_cols
         );
 
-        let num_const_cols = VarTensor::constant_cols(cs, logrows, num_constants, uses_modules);
+        let num_const_cols =
+            VarTensor::constant_cols(cs, logrows, num_constants, module_requires_fixed);
         debug!("model uses {} fixed columns", num_const_cols);
 
         ModelVars {
