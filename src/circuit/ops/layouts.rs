@@ -62,6 +62,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
     let global_start = instant::Instant::now();
 
     let mut values = values.clone();
+
     // this section has been optimized to death, don't mess with it
     let mut removal_indices = values[0].get_const_zero_indices()?;
     let second_zero_indices = values[1].get_const_zero_indices()?;
@@ -104,6 +105,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
         };
         inputs.push(inp);
     }
+
     let elapsed = start.elapsed();
     trace!("assigning inputs took: {:?}", elapsed);
 

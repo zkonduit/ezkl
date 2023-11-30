@@ -455,7 +455,7 @@ impl VarTensor {
         values: &ValTensor<F>,
         check_mode: &CheckMode,
         single_inner_col: bool,
-    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
+    ) -> Result<(ValTensor<F>, usize, usize), halo2_proofs::plonk::Error> {
         let mut prev_cell = None;
 
         match values {
@@ -526,6 +526,7 @@ impl VarTensor {
 
                 })?.into()};
                 let total_used_len = res.len();
+                let total_constants = res.num_constants();
                 res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
 
                 res.reshape(dims).unwrap();
@@ -544,7 +545,7 @@ impl VarTensor {
                     )};
                 }
 
-                Ok((res, total_used_len))
+                Ok((res, total_used_len, total_constants))
             }
         }
     }
