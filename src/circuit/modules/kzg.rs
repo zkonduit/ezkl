@@ -10,6 +10,7 @@ use halo2_proofs::poly::commitment::{Blind, Params};
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2_proofs::{circuit::*, plonk::*};
 use halo2curves::bn256::{Bn256, G1Affine};
+use halo2curves::ff::Field;
 use halo2curves::group::prime::PrimeCurveAffine;
 use halo2curves::group::Curve;
 use halo2curves::CurveAffine;
@@ -56,7 +57,7 @@ impl KZGChip {
 
         (0..num_unusable_rows).for_each(|i| {
             for p in &mut poly {
-                p[(n + i as u64) as usize] = Blind::default().0;
+                p[(n + i as u64) as usize] = Fp::ZERO;
             }
         });
 
@@ -68,7 +69,7 @@ impl KZGChip {
 
         let mut advice_commitments_projective = vec![];
         for a in poly {
-            advice_commitments_projective.push(params.commit_lagrange(&a, Blind::default()))
+            advice_commitments_projective.push(params.commit_lagrange(&a, Blind(Fp::ZERO)))
         }
 
         let mut advice_commitments =
