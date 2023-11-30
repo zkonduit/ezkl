@@ -59,6 +59,11 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
+    ///
+    pub fn increment_total_constants(&mut self, n: usize) {
+        self.total_constants += n;
+    }
+
     /// Create a new region context
     pub fn new(region: Region<'a, F>, row: usize, num_inner_cols: usize) -> RegionCtx<'a, F> {
         let region = Some(RefCell::new(region));
