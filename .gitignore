@@ -46,3 +46,5 @@ var/
 *.bak
 node_modules
 timingData.json
+!tests/wasm/pk.key
+!tests/wasm/vk.key

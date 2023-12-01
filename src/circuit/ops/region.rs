@@ -59,6 +59,11 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
+    ///
+    pub fn increment_total_constants(&mut self, n: usize) {
+        self.total_constants += n;
+    }
+
     /// Create a new region context
     pub fn new(region: Region<'a, F>, row: usize, num_inner_cols: usize) -> RegionCtx<'a, F> {
         let region = Some(RefCell::new(region));
@@ -291,14 +296,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     ) -> Result<(ValTensor<F>, usize), Error> {
         if let Some(region) = &self.region {
             // duplicates every nth element to adjust for column overflow
-            var.assign_with_duplication(
+            let (res, len, total_assigned_constants) = var.assign_with_duplication(
                 &mut region.borrow_mut(),
                 self.row,
                 self.linear_coord,
                 values,
                 check_mode,
                 single_inner_col,
-            )
+            )?;
+            self.total_constants += total_assigned_constants;
+            Ok((res, len))
         } else {
             let (_, len, total_assigned_constants) = var.dummy_assign_with_duplication(
                 self.row,
