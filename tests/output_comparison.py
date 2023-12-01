@@ -96,6 +96,8 @@ if __name__ == '__main__':
     witness_file = sys.argv[3]
     # settings file is fourth argument to script
     settings_file = sys.argv[4]
+    # target 
+    target = float(sys.argv[5])
     # get the ezkl output
     ezkl_output = get_ezkl_output(witness_file, settings_file)
     # get the onnx output
@@ -104,4 +106,4 @@ if __name__ == '__main__':
     percentage_difference = compare_outputs(ezkl_output, onnx_output)
     # print the percentage difference
     print("mean percent diff: ", percentage_difference)
-    assert percentage_difference < 1.2, "Percentage difference is too high"
+    assert percentage_difference < target, "Percentage difference is too high"

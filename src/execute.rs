@@ -623,8 +623,8 @@ pub(crate) fn calibrate(
         scales
     } else {
         match target {
-            CalibrationTarget::Resources { .. } => (4..8).collect::<Vec<crate::Scale>>(),
-            CalibrationTarget::Accuracy => (8..14).collect::<Vec<crate::Scale>>(),
+            CalibrationTarget::Resources { .. } => (8..10).collect::<Vec<crate::Scale>>(),
+            CalibrationTarget::Accuracy => (10..14).collect::<Vec<crate::Scale>>(),
         }
     };
 

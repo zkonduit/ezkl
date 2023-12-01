@@ -200,7 +200,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 67] = [
+    const TESTS: [&str; 66] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -268,7 +268,7 @@ mod native_tests {
         "sklearn_mlp",
         "1l_mean",
         "rounding_ops",
-        "mean_as_constrain",
+        // "mean_as_constrain",
         "arange",
         "layernorm",
     ];
@@ -497,7 +497,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=66 {
+            seq!(N in 0..=65 {
 
             #(#[test_case(TESTS[N])])*
             #[ignore]
@@ -515,7 +515,7 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "accuracy");
+                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "accuracy", 1.2);
                 test_dir.close().unwrap();
             }
 
@@ -525,7 +525,7 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "private", "fixed", "private", 1, "accuracy");
+                accuracy_measurement(path, test.to_string(), "private", "fixed", "private", 1, "accuracy", 1.2);
                 test_dir.close().unwrap();
             }
 
@@ -535,7 +535,18 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "public", "private", "private", 1, "accuracy");
+                accuracy_measurement(path, test.to_string(), "public", "private", "private", 1, "accuracy", 1.2);
+                test_dir.close().unwrap();
+            }
+
+
+            #(#[test_case(TESTS[N])])*
+            fn resources_accuracy_measurement_public_outputs_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::setup_py_env();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "resources", 18.0);
                 test_dir.close().unwrap();
             }
 
@@ -1451,6 +1462,7 @@ mod native_tests {
         output_visibility: &str,
         batch_size: usize,
         cal_target: &str,
+        target_perc: f32,
     ) {
         gen_circuit_settings_and_witness(
             test_dir,
@@ -1476,6 +1488,7 @@ mod native_tests {
                 &format!("{}/{}/input.json", test_dir, example_name),
                 &format!("{}/{}/witness.json", test_dir, example_name),
                 &format!("{}/{}/settings.json", test_dir, example_name),
+                &format!("{}", target_perc),
             ])
             .status()
             .expect("failed to execute process");

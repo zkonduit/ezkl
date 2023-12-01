@@ -458,6 +458,21 @@ impl GraphSettings {
     pub fn uses_modules(&self) -> bool {
         !self.module_sizes.max_constraints() > 0
     }
+
+    /// if any visibility is encrypted or hashed
+    pub fn module_requires_fixed(&self) -> bool {
+        if self.run_args.input_visibility.is_encrypted()
+            || self.run_args.input_visibility.is_hashed()
+            || self.run_args.output_visibility.is_encrypted()
+            || self.run_args.output_visibility.is_hashed()
+            || self.run_args.param_visibility.is_encrypted()
+            || self.run_args.param_visibility.is_hashed()
+        {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// Configuration for a computational graph / model loaded from a `.onnx` file.
@@ -1245,7 +1260,7 @@ impl Circuit<Fp> for GraphCircuit {
             params.total_assignments,
             params.run_args.num_inner_cols,
             params.total_const_size,
-            params.uses_modules(),
+            params.module_requires_fixed(),
         );
 
         module_configs.configure_complex_modules(cs, visibility, params.module_sizes.clone());
