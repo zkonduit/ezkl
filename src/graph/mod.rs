@@ -948,6 +948,19 @@ impl GraphCircuit {
         // ensure logrows is at least 4
         logrows = std::cmp::max(logrows, MIN_LOGROWS as usize);
         logrows = std::cmp::min(logrows, max_logrows as usize);
+
+        while logrows <= max_logrows as usize && !self.extended_k_is_large_enough(logrows as u32) {
+            logrows += 1;
+        }
+
+        if !self.extended_k_is_large_enough(logrows as u32) {
+            let err_string = format!(
+                "extended k is not large enough to accomodate the quotient polynomial with logrows {}",
+                logrows
+            );
+            return Err(err_string.into());
+        }
+
         let model = self.model().clone();
         let settings_mut = self.settings_mut();
         settings_mut.run_args.lookup_range = safe_range;
@@ -978,6 +991,19 @@ impl GraphCircuit {
         );
 
         Ok(())
+    }
+
+    fn extended_k_is_large_enough(&self, k: u32) -> bool {
+        let max_degree = self.settings().run_args.num_inner_cols + 2;
+        // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
+        let quotient_poly_degree = (max_degree - 1) as u64;
+        // n = 2^k
+        let n = 1u64 << k;
+        let mut extended_k = k;
+        while (1 << extended_k) < (n * quotient_poly_degree) {
+            extended_k += 1;
+        }
+        extended_k <= bn256::Fr::S
     }
 
     /// Calibrate the circuit to the supplied data.
@@ -1284,8 +1310,9 @@ impl Circuit<Fp> for GraphCircuit {
 
         let model_config = ModelConfig { base, vars };
 
-        trace!(
-            "log2_ceil of degrees {:?}",
+        debug!(
+            "degree: {}, log2_ceil of degrees: {:?}",
+            cs.degree(),
             (cs.degree() as f32).log2().ceil()
         );
 
