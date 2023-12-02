@@ -96,7 +96,7 @@ if __name__ == '__main__':
     witness_file = sys.argv[3]
     # settings file is fourth argument to script
     settings_file = sys.argv[4]
-    # target 
+    # target
     target = float(sys.argv[5])
     # get the ezkl output
     ezkl_output = get_ezkl_output(witness_file, settings_file)
