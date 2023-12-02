@@ -3761,8 +3761,6 @@ pub mod nonlinearities {
         a.par_enum_map(|_, a_i| {
             let denom = (1_f64) / (a_i as f64 + f64::EPSILON);
             let d_inv_x = scale * denom;
-            // clip to max and min of -2^26 and 2^26
-            let d_inv_x = d_inv_x.max(-67108864.0).min(67108864.0);
             Ok::<_, TensorError>(d_inv_x.round() as i128)
         })
         .unwrap()
