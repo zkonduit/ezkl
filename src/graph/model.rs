@@ -605,7 +605,7 @@ impl Model {
                         res.output
                             .map(|x| crate::fieldutils::felt_to_f64(x)
                                 / scale_to_multiplier(n.out_scale))
-                            .show(), 
+                            .show(),
                         res.output.clone().into_iter().map(crate::fieldutils::felt_to_i128).max().unwrap_or(0),
                         res.output.clone().into_iter().map(crate::fieldutils::felt_to_i128).min().unwrap_or(0),
                     );
