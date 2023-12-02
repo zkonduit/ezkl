@@ -949,11 +949,11 @@ impl GraphCircuit {
         logrows = std::cmp::max(logrows, MIN_LOGROWS as usize);
         logrows = std::cmp::min(logrows, max_logrows as usize);
 
-        while logrows >= MIN_LOGROWS as usize && !self.extended_k_is_large_enough(logrows as u32) {
+        while logrows >= MIN_LOGROWS as usize && !self.extended_k_is_small_enough(logrows as u32) {
             logrows -= 1;
         }
 
-        if !self.extended_k_is_large_enough(logrows as u32) {
+        if !self.extended_k_is_small_enough(logrows as u32) {
             let err_string = format!(
                 "extended k is not large enough to accomodate the quotient polynomial with logrows {}",
                 logrows
@@ -993,7 +993,7 @@ impl GraphCircuit {
         Ok(())
     }
 
-    fn extended_k_is_large_enough(&self, k: u32) -> bool {
+    fn extended_k_is_small_enough(&self, k: u32) -> bool {
         let max_degree = self.settings().run_args.num_inner_cols + 2;
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
         let quotient_poly_degree = (max_degree - 1) as u64;
