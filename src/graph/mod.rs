@@ -949,7 +949,7 @@ impl GraphCircuit {
         logrows = std::cmp::max(logrows, MIN_LOGROWS as usize);
         logrows = std::cmp::min(logrows, max_logrows as usize);
 
-        while logrows <= max_logrows as usize && !self.extended_k_is_large_enough(logrows as u32) {
+        while logrows >= MIN_LOGROWS as usize && !self.extended_k_is_large_enough(logrows as u32) {
             logrows -= 1;
         }
 
