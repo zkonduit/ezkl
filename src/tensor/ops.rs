@@ -3190,9 +3190,6 @@ pub mod nonlinearities {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input / (kix.sqrt() + f64::EPSILON);
-            // clip to -2^26 to 2^26
-            let fout = fout.max(-67108864.0).min(67108864.0);
-
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as i128)
         })
