@@ -56,7 +56,7 @@ pub use vars::*;
 use crate::pfsys::field_to_vecu64_montgomery;
 
 /// The safety factor for the range of the lookup table.
-pub const RANGE_MULTIPLIER: i128 = 3;
+pub const RANGE_MULTIPLIER: i128 = 2;
 
 /// Max representation of a lookup table input
 pub const MAX_LOOKUP_ABS: i128 = 8 * 2_i128.pow(MAX_PUBLIC_SRS);
