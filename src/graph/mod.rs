@@ -25,7 +25,7 @@ use self::modules::{
 };
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::table::{Table, RANGE_MULTIPLIER, RESERVED_BLINDING_ROWS_PAD};
+use crate::circuit::table::{Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
@@ -54,6 +54,12 @@ pub use vars::*;
 
 #[cfg(feature = "python-bindings")]
 use crate::pfsys::field_to_vecu64_montgomery;
+
+/// The safety factor for the range of the lookup table.
+pub const RANGE_MULTIPLIER: i128 = 2;
+
+/// Max representation of a lookup table input
+pub const MAX_LOOKUP_ABS: i128 = 8 * 2_i128.pow(MAX_PUBLIC_SRS);
 
 /// circuit related errors.
 #[derive(Debug, Error)]
@@ -117,6 +123,9 @@ pub const MIN_LOGROWS: u32 = 6;
 
 /// 26
 pub const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
+
+/// Lookup deg
+pub const LOOKUP_DEG: usize = 5;
 
 use std::cell::RefCell;
 
@@ -876,6 +885,14 @@ impl GraphCircuit {
         )
     }
 
+    fn calc_num_cols(safe_range: (i128, i128), max_logrows: u32) -> usize {
+        let max_col_size = Table::<Fp>::cal_col_size(
+            max_logrows as usize,
+            Self::reserved_blinding_rows() as usize,
+        );
+        Table::<Fp>::num_cols_required(safe_range, max_col_size)
+    }
+
     fn calc_min_logrows(
         &mut self,
         res: &GraphWitness,
@@ -884,30 +901,47 @@ impl GraphCircuit {
         // load the max logrows
         let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
         let max_logrows = std::cmp::min(max_logrows, MAX_PUBLIC_SRS);
-        let max_logrows = std::cmp::max(max_logrows, MIN_LOGROWS);
+        let mut max_logrows = std::cmp::max(max_logrows, MIN_LOGROWS);
 
         let reserved_blinding_rows = Self::reserved_blinding_rows();
-        // check if has overflowed i128 max
-        if res.max_lookup_inputs > i128::MAX / RANGE_MULTIPLIER
-            || res.min_lookup_inputs < i128::MIN / RANGE_MULTIPLIER
+        // check if has overflowed max lookup input
+        if res.max_lookup_inputs > MAX_LOOKUP_ABS / RANGE_MULTIPLIER
+            || res.min_lookup_inputs < -MAX_LOOKUP_ABS / RANGE_MULTIPLIER
         {
             let err_string = format!("max lookup input ({}) is too large", res.max_lookup_inputs);
             return Err(err_string.into());
         }
 
         let safe_range = Self::calc_safe_range(res);
+        let mut min_logrows = MIN_LOGROWS;
+        // degrade the max logrows until the extended k is small enough
+        while min_logrows < max_logrows
+            && !self.extended_k_is_small_enough(
+                min_logrows,
+                Self::calc_num_cols(safe_range, min_logrows),
+            )
+        {
+            min_logrows += 1;
+        }
 
-        let max_col_size =
-            Table::<Fp>::cal_col_size(max_logrows as usize, reserved_blinding_rows as usize);
-        let num_cols = Table::<Fp>::num_cols_required(safe_range, max_col_size);
-
-        // empirically determined that this is when performance starts to degrade significantly
-        if num_cols > 5 {
+        if !self
+            .extended_k_is_small_enough(min_logrows, Self::calc_num_cols(safe_range, min_logrows))
+        {
             let err_string = format!(
-                "No possible lookup range can accomodate max value min and max value ({}, {})",
-                safe_range.0, safe_range.1
+                "extended k is too large to accomodate the quotient polynomial with logrows {}",
+                min_logrows
             );
             return Err(err_string.into());
+        }
+
+        // degrade the max logrows until the extended k is small enough
+        while max_logrows > min_logrows
+            && !self.extended_k_is_small_enough(
+                max_logrows,
+                Self::calc_num_cols(safe_range, max_logrows),
+            )
+        {
+            max_logrows -= 1;
         }
 
         let min_bits = ((safe_range.1 - safe_range.0) as f64 + reserved_blinding_rows + 1.)
@@ -946,8 +980,9 @@ impl GraphCircuit {
         }
 
         // ensure logrows is at least 4
-        logrows = std::cmp::max(logrows, MIN_LOGROWS as usize);
+        logrows = std::cmp::max(logrows, min_logrows as usize);
         logrows = std::cmp::min(logrows, max_logrows as usize);
+
         let model = self.model().clone();
         let settings_mut = self.settings_mut();
         settings_mut.run_args.lookup_range = safe_range;
@@ -978,6 +1013,22 @@ impl GraphCircuit {
         );
 
         Ok(())
+    }
+
+    fn extended_k_is_small_enough(&self, k: u32, num_lookup_cols: usize) -> bool {
+        let max_degree = self.settings().run_args.num_inner_cols + 2;
+        let max_lookup_degree = LOOKUP_DEG + num_lookup_cols - 1; // num_lookup_cols - 1 is the degree of the lookup synthetic selector
+
+        let max_degree = std::cmp::max(max_degree, max_lookup_degree);
+        // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
+        let quotient_poly_degree = (max_degree - 1) as u64;
+        // n = 2^k
+        let n = 1u64 << k;
+        let mut extended_k = k;
+        while (1 << extended_k) < (n * quotient_poly_degree) {
+            extended_k += 1;
+        }
+        extended_k <= bn256::Fr::S
     }
 
     /// Calibrate the circuit to the supplied data.
@@ -1284,8 +1335,9 @@ impl Circuit<Fp> for GraphCircuit {
 
         let model_config = ModelConfig { base, vars };
 
-        trace!(
-            "log2_ceil of degrees {:?}",
+        debug!(
+            "degree: {}, log2_ceil of degrees: {:?}",
+            cs.degree(),
             (cs.degree() as f32).log2().ceil()
         );
 

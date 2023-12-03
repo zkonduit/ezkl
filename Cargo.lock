@@ -2181,7 +2181,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/lookup-modularity#aa437fbe92ae2e1d7d9993080cffb5338cbe3686"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/lookup-modularity#57b9123835aa7d8482f4182ede3e8f4b0aea5c0a"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2198,7 +2198,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/lookup-modularity#aa437fbe92ae2e1d7d9993080cffb5338cbe3686"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/lookup-modularity#57b9123835aa7d8482f4182ede3e8f4b0aea5c0a"
 dependencies = [
  "blake2b_simd",
  "env_logger",
