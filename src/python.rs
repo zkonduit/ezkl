@@ -31,8 +31,29 @@ use snark_verifier::util::arithmetic::PrimeField;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
+use crate::graph::TestDataSource;
 
 type PyFelt = [u64; 4];
+
+#[pyclass]
+#[derive(Debug, Clone)]
+enum PyTestDataSource {
+    /// The data is loaded from a file
+    File,
+    /// The data is loaded from the chain
+    OnChain,
+}
+
+impl From<PyTestDataSource> for TestDataSource {
+    fn from(py_test_data_source: PyTestDataSource) -> Self {
+        match py_test_data_source {
+            PyTestDataSource::File => TestDataSource::File,
+            PyTestDataSource::OnChain => TestDataSource::OnChain,
+        }
+    }
+}
+
+
 
 /// pyclass containing the struct used for G1
 #[pyclass]
@@ -1004,6 +1025,40 @@ fn create_evm_data_attestation(
 }
 
 #[pyfunction(signature = (
+    data_path,
+    compiled_circuit_path,
+    test_data, 
+    input_source,
+    output_source,
+    rpc_url=None,
+))]
+fn setup_test_evm_witness(
+    data_path: PathBuf,
+    compiled_circuit_path: PathBuf,
+    test_data: PathBuf,
+    input_source: PyTestDataSource,
+    output_source: PyTestDataSource,
+    rpc_url: Option<String>,
+) -> Result<bool, PyErr> {
+    Runtime::new()
+    .unwrap()
+    .block_on(crate::execute::setup_test_evm_witness(
+        data_path,
+        compiled_circuit_path,
+        test_data,
+        rpc_url,
+        input_source.into(),
+        output_source.into(),
+    )).map_err(|e| {
+        let err_str = format!("Failed to run setup_test_evm_witness: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
+
+Ok(true)
+
+}
+
+#[pyfunction(signature = (
     addr_path,
     sol_code_path,
     rpc_url=None,
@@ -1257,6 +1312,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyElGamalVariables>()?;
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
+    m.add_class::<PyTestDataSource>()?;
     m.add_function(wrap_pyfunction!(vecu64_to_felt, m)?)?;
     m.add_function(wrap_pyfunction!(vecu64_to_int, m)?)?;
     m.add_function(wrap_pyfunction!(vecu64_to_float, m)?)?;
@@ -1290,6 +1346,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
     m.add_function(wrap_pyfunction!(print_proof_hex, m)?)?;
+    m.add_function(wrap_pyfunction!(setup_test_evm_witness, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
     m.add_function(wrap_pyfunction!(create_hub_artifact, m)?)?;
