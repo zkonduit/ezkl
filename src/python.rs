@@ -1186,6 +1186,38 @@ fn create_hub_artifact(
     Python::with_gil(|py| Ok(output.to_object(py)))
 }
 
+/// Uploads post setup artifacts to hub (uploading compiled model, settings and pk)
+#[pyfunction(signature = (model, settings, pk, name, organization_id, api_key=None, url=None))]
+fn upload_hub_artifact(
+    model: PathBuf,
+    settings: PathBuf,
+    pk: PathBuf,
+    name: String,
+    organization_id: String,
+    api_key: Option<&str>,
+    url: Option<&str>,
+) -> PyResult<PyObject> {
+    let output = Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::upload_artifacts(
+            api_key,
+            url,
+            &model,
+            &settings,
+            &pk,
+            &name,
+            &organization_id,
+        ))
+        .map_err(|e| {
+            let err_str = format!(
+                "Failed to deploy model through uploading artifacts to hub: {}",
+                e
+            );
+            PyRuntimeError::new_err(err_str)
+        })?;
+    Python::with_gil(|py| Ok(output.to_object(py)))
+}
+
 /// gets a deployed model from the hub
 #[pyfunction(signature = (id, api_key=None, url=None))]
 fn get_hub_artifact(id: &str, api_key: Option<&str>, url: Option<&str>) -> PyResult<PyObject> {
@@ -1293,10 +1325,10 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
     m.add_function(wrap_pyfunction!(create_hub_artifact, m)?)?;
+    m.add_function(wrap_pyfunction!(upload_hub_artifact, m)?)?;
     m.add_function(wrap_pyfunction!(get_hub_artifact, m)?)?;
     m.add_function(wrap_pyfunction!(prove_hub, m)?)?;
     m.add_function(wrap_pyfunction!(get_hub_proof, m)?)?;
     m.add_function(wrap_pyfunction!(get_hub_credentials, m)?)?;
-
     Ok(())
 }

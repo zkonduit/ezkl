@@ -379,6 +379,27 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
         )
         .await
         .map(|_| ()),
+
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::UploadHubArtifact {
+            api_key,
+            compiled_circuit,
+            settings,
+            pk_path,
+            organization_id,
+            artifact_name,
+            url,
+        } => upload_artifacts(
+            api_key.as_deref(),
+            url.as_deref(),
+            &compiled_circuit,
+            &settings,
+            &pk_path,
+            &artifact_name,
+            &organization_id,
+        )
+        .await
+        .map(|_| ()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::GetHubArtifact {
             api_key,
@@ -1943,6 +1964,110 @@ pub(crate) async fn deploy_model(
     let response_body = parse_response(response).await?;
     let artifact_data: crate::hub::Artifact =
         serde_json::from_value(response_body["data"]["generateArtifact"].clone())?;
+    log::info!(
+        "Artifact Data : {}",
+        artifact_data.as_json()?.to_colored_json_auto()?
+    );
+    Ok(artifact_data)
+}
+
+/// Uploads post setup artifacts to hub (uploading compiled model, settings and pk)
+pub(crate) async fn upload_artifacts(
+    api_key: Option<&str>,
+    url: Option<&str>,
+    model: &Path,
+    settings: &Path,
+    pk: &Path,
+    name: &str,
+    organization_id: &str,
+) -> Result<crate::hub::Artifact, Box<dyn Error>> {
+    // Step 1 : Create file body stream for each file (compiled model, settings and pk)
+    let model_file = tokio::fs::File::open(model.canonicalize()?).await?;
+    // read file body stream
+    let stream = FramedRead::new(model_file, BytesCodec::new());
+    let model_file_body = reqwest::Body::wrap_stream(stream);
+
+    let model_file = reqwest::multipart::Part::stream(model_file_body).file_name("compiledModel");
+
+    let settings_file = tokio::fs::File::open(settings.canonicalize()?).await?;
+    // read file body stream
+    let stream = FramedRead::new(settings_file, BytesCodec::new());
+    let settings_file_body = reqwest::Body::wrap_stream(stream);
+
+    let settings_file = reqwest::multipart::Part::stream(settings_file_body).file_name("settings");
+
+    let pk_file = tokio::fs::File::open(pk.canonicalize()?).await?;
+    // read file body stream
+    let stream = FramedRead::new(pk_file, BytesCodec::new());
+    let pk_file_body = reqwest::Body::wrap_stream(stream);
+
+    let pk_file = reqwest::multipart::Part::stream(pk_file_body).file_name("pk");
+
+    // Step 2 : Create the graphql request map
+    // the graphql request map
+    let map = r#"{
+            "model": [
+                "variables.model"
+            ],
+            "settings": [
+                "variables.settings"
+            ],
+            "pk": [
+                "variables.pk"
+            ]
+        }"#;
+
+    let operations = serde_json::json!({
+        "query": "mutation($model: Upload!, $settings: Upload!, $pk: Upload!, $organizationId: String!, $name: String!) {
+                uploadArtifactLegacy(
+                    name: $name,
+                    description: $name,
+                    model: $model,
+                    settings: $settings,
+                    pk: $pk,
+                    organizationId: $organizationId,
+                ) {
+                    id
+                    name
+                    status
+                    errors
+                }
+            }",
+        "variables": {
+            "name": name,
+            "model": null,
+            "settings": null,
+            "pk": null,
+            "organizationId": organization_id,
+        }
+    })
+    .to_string();
+
+    // Step 3 : Create the form data
+    let mut form = reqwest::multipart::Form::new();
+    form = form
+        .text("operations", operations)
+        .text("map", map)
+        .part("model", model_file)
+        .part("settings", settings_file)
+        .part("pk", pk_file);
+
+    // Step 4 : Send the request
+    let client = reqwest::Client::new();
+    let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
+    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
+
+    let response = client
+        .post(url)
+        .header("API-Key", format!("{}", api_key))
+        .multipart(form)
+        .send()
+        .await?;
+
+    // Step 5 : Parse the response
+    let response_body = parse_response(response).await?;
+    let artifact_data: crate::hub::Artifact =
+        serde_json::from_value(response_body["data"]["uploadArtifactLegacy"].clone())?;
     log::info!(
         "Artifact Data : {}",
         artifact_data.as_json()?.to_colored_json_auto()?

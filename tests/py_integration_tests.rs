@@ -209,7 +209,17 @@ mod py_tests {
                 test_dir.close().unwrap();
             }
 
-
+            #[test]
+            fn hub_upload_artifacts_notebook_() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("hub_upload_artifacts").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "generate_hub_artifacts.ipynb");
+                crate::py_tests::mv_test_(path, "hub_upload_artifacts.ipynb");
+                run_notebook(path, "generate_hub_artifacts.ipynb");
+                run_notebook(path, "hub_upload_artifacts.ipynb");
+                test_dir.close().unwrap();
+            }
     }
     };
 }

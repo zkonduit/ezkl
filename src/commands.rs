@@ -718,6 +718,35 @@ pub enum Commands {
         target: CalibrationTarget,
     },
 
+    /// Uploads existing artifacts and deploys them on the hub
+    /// For folks who want to run the circuit setup steps locally
+    /// and then upload the artifacts to the hub for delagted proving
+    #[command(name = "upload-hub-artifact", arg_required_else_help = true)]
+    #[cfg(not(target_arch = "wasm32"))]
+    UploadHubArtifact {
+        /// The user's api key
+        #[arg(short = 'K', long)]
+        api_key: Option<String>,
+        /// The path to the compiled model file (.ezkl)
+        #[arg(short = 'M', long)]
+        compiled_circuit: PathBuf,
+        /// The path to the settings file
+        #[arg(short = 'D', long)]
+        settings: PathBuf,
+        /// the pk path
+        #[arg(short = 'P', long)]
+        pk_path: PathBuf,
+        /// organization id
+        #[arg(short = 'O', long)]
+        organization_id: String,
+        /// artifact name
+        #[arg(short = 'A', long)]
+        artifact_name: String,
+        /// the hub's url
+        #[arg(short = 'U', long)]
+        url: Option<String>,
+    },
+
     #[command(name = "get-hub-artifact", arg_required_else_help = true)]
     #[cfg(not(target_arch = "wasm32"))]
     GetHubArtifact {
