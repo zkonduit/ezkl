@@ -663,7 +663,24 @@ pub fn resize<T: TensorType + Send + Sync>(
 /// let expected = Tensor::<i128>::new(Some(&[41, 68]), &[2, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// ```
+/// let x = Tensor::<i128>::new(
+///    Some(&[0, 0, 0, 3]),
+///  &[1, 4],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[213, 227, 74, 77]),
+///  &[4],
+/// ).unwrap();
+///
+/// let result = einsum("mk,k->ma", &[x.clone(), k.clone()]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[231]), &[1, 1]).unwrap();
+/// assert_eq!(result, expected);
+/// // subtle difference
+/// let result = einsum("mk,n->ma", &[x.clone(), k.clone()]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1773]), &[1, 1]).unwrap();
+/// assert_eq!(result, expected);
+///
+////// ```
 pub fn einsum<
     T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
 >(

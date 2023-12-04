@@ -2007,8 +2007,6 @@ mod native_tests {
             ));
         }
 
-        println!("input is {:?}", input);
-
         input.save(data_path.clone().into()).unwrap();
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))

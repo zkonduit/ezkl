@@ -173,8 +173,6 @@ pub async fn deploy_da_verifier_via_solidity(
         }
     }
 
-    println!("instance_shapes: {:#?}", instance_shapes);
-
     let mut instance_idx = 0;
     let mut contract_instance_offset = 0;
 
