@@ -3189,7 +3189,7 @@ pub mod nonlinearities {
     pub fn rsqrt(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
-            let fout = scale_input * (1.0 / kix.sqrt());
+            let fout = scale_input / (kix.sqrt() + f64::EPSILON);
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as i128)
         })
@@ -3756,7 +3756,7 @@ pub mod nonlinearities {
     /// ```
     pub fn recip(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
-            let denom = (1_f64) / (a_i as f64);
+            let denom = (1_f64) / (a_i as f64 + f64::EPSILON);
             let d_inv_x = scale * denom;
             Ok::<_, TensorError>(d_inv_x.round() as i128)
         })
