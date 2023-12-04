@@ -200,7 +200,7 @@ mod native_tests {
         "1l_prelu",
     ];
 
-    const TESTS: [&str; 67] = [
+    const TESTS: [&str; 68] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -272,6 +272,7 @@ mod native_tests {
         "arange",
         "layernorm",
         "bitwise_ops",
+        "blackman_window",
     ];
 
     const WASM_TESTS: [&str; 48] = [
@@ -498,7 +499,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=66 {
+            seq!(N in 0..=67 {
 
             #(#[test_case(TESTS[N])])*
             #[ignore]
