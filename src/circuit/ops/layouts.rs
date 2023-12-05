@@ -1740,7 +1740,6 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
             },
         )?;
     }
-
     Ok(last_elem)
 }
 
