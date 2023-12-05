@@ -189,16 +189,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 }
             }
             HybridOp::ScatterElements { dim, constant_idx } => {
-                let src = inputs[2].clone().map(|x| felt_to_i128(x));
                 if let Some(idx) = constant_idx {
                     log::debug!("idx: {}", idx.show());
+                    let src = inputs[1].clone().map(|x| felt_to_i128(x));
                     let res = tensor::ops::scatter(&x, idx, &src, *dim)?;
                     (res.clone(), vec![])
                 } else {
-                    let idx = inputs[1].clone().map(|x| felt_to_i128(x));
+                    let idx = inputs[1].clone().map(|x| felt_to_i128(x) as usize);
+                    let src = inputs[2].clone().map(|x| felt_to_i128(x));
                     let indices = Tensor::from(0..x.dims()[*dim] as i128);
                     let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
-                    let res = tensor::ops::scatter(&x, &idx.map(|x| x as usize), &src, *dim)?;
+                    let res = tensor::ops::scatter(&x, &idx, &src, *dim)?;
                     (res.clone(), inter_equals)
                 }
             }
