@@ -663,7 +663,24 @@ pub fn resize<T: TensorType + Send + Sync>(
 /// let expected = Tensor::<i128>::new(Some(&[41, 68]), &[2, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// ```
+/// let x = Tensor::<i128>::new(
+///    Some(&[0, 0, 0, 3]),
+///  &[1, 4],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///    Some(&[213, 227, 74, 77]),
+///  &[4],
+/// ).unwrap();
+///
+/// let result = einsum("mk,k->ma", &[x.clone(), k.clone()]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[231]), &[1, 1]).unwrap();
+/// assert_eq!(result, expected);
+/// // subtle difference
+/// let result = einsum("mk,n->ma", &[x.clone(), k.clone()]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1773]), &[1, 1]).unwrap();
+/// assert_eq!(result, expected);
+///
+////// ```
 pub fn einsum<
     T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
 >(
@@ -3652,23 +3669,18 @@ pub mod nonlinearities {
     ///    Some(&[2, 15, 2, 1, 1, -5]),
     ///   &[2, 3],
     /// ).unwrap();
-    /// let result = max(&x, 1, 1, 1.0);
+    /// let result = max(&x, 1.0, 1.0);
     /// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn max(
-        a: &Tensor<i128>,
-        in_scale: usize,
-        out_scale: usize,
-        threshold: f64,
-    ) -> Tensor<i128> {
+    pub fn max(a: &Tensor<i128>, scale_input: f64, threshold: f64) -> Tensor<i128> {
         // calculate value of output
         a.par_enum_map(|_, a_i| {
-            let d_inv_x = (a_i as f64) / (in_scale as f64);
+            let d_inv_x = (a_i as f64) / scale_input;
             let rounded = if d_inv_x <= threshold {
-                (threshold * (out_scale as f64)).round() as i128
+                (threshold * scale_input).round() as i128
             } else {
-                (d_inv_x * (out_scale as f64)).round() as i128
+                (d_inv_x * scale_input).round() as i128
             };
             Ok::<_, TensorError>(rounded)
         })
@@ -3687,23 +3699,18 @@ pub mod nonlinearities {
     ///    Some(&[2, 15, 2, 1, 1, -5]),
     ///   &[2, 3],
     /// ).unwrap();
-    /// let result = min(&x, 1, 1, 2.0);
+    /// let result = min(&x, 1.0, 2.0);
     /// let expected = Tensor::<i128>::new(Some(&[2, 2, 2, 1, 1, -5]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn min(
-        a: &Tensor<i128>,
-        in_scale: usize,
-        out_scale: usize,
-        threshold: f64,
-    ) -> Tensor<i128> {
+    pub fn min(a: &Tensor<i128>, scale_input: f64, threshold: f64) -> Tensor<i128> {
         // calculate value of output
         a.par_enum_map(|_, a_i| {
-            let d_inv_x = (a_i as f64) / (in_scale as f64);
+            let d_inv_x = (a_i as f64) / scale_input;
             let rounded = if d_inv_x >= threshold {
-                (threshold * (out_scale as f64)).round() as i128
+                (threshold * scale_input).round() as i128
             } else {
-                (d_inv_x * (out_scale as f64)).round() as i128
+                (d_inv_x * scale_input).round() as i128
             };
             Ok::<_, TensorError>(rounded)
         })

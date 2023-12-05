@@ -312,7 +312,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
             .get_inner_tensor()?[0]
                 .clone())
         } else {
-            let mut prod = None;
+            let mut prod_res = None;
 
             // Compute the cartesian product of all common indices
             for common_dim in &common_coord {
@@ -336,28 +336,30 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let input_pairs = inputs
-                    .iter()
-                    .map(|d| d.get_inner_tensor().into_iter())
+                let mut input_pairs = vec![];
+
+                for input in inputs {
+                    input_pairs.push(input.get_inner_tensor()?.clone().into_iter());
+                }
+
+                let input_pairs = input_pairs
+                    .into_iter()
                     .multi_cartesian_product()
                     .collect::<Vec<_>>();
 
                 // Compute the product of all input tensors
                 for pair in input_pairs {
-                    let product_across_pair: Result<ValTensor<F>, halo2_proofs::plonk::Error> =
-                        pair[1..]
-                            .iter()
-                            .fold(Ok(ValTensor::from(pair[0].clone())), |acc, x| {
-                                pairwise(config, region, &[acc?, (*x).clone().into()], BaseOp::Mult)
-                                    .map_err(|e| {
-                                        error!("{}", e);
-                                        halo2_proofs::plonk::Error::Synthesis
-                                    })
-                            });
-                    let product_across_pair = product_across_pair?;
+                    let product_across_pair = prod(
+                        config,
+                        region,
+                        &[pair.try_into().map_err(|e| {
+                            error!("{}", e);
+                            halo2_proofs::plonk::Error::Synthesis
+                        })?],
+                    )?;
 
-                    if let Some(product) = prod {
-                        prod = Some(
+                    if let Some(product) = prod_res {
+                        prod_res = Some(
                             pairwise(config, region, &[product, product_across_pair], BaseOp::Add)
                                 .map_err(|e| {
                                     error!("{}", e);
@@ -365,12 +367,13 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
                                 })?,
                         );
                     } else {
-                        prod = Some(product_across_pair);
+                        prod_res = Some(product_across_pair);
                     }
                 }
             }
             Ok::<_, region::RegionError>(
-                prod.ok_or(Into::<region::RegionError>::into("missing prod"))?
+                prod_res
+                    .ok_or(Into::<region::RegionError>::into("missing prod"))?
                     .get_inner_tensor()?[0]
                     .clone(),
             )

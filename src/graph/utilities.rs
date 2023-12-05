@@ -567,7 +567,7 @@ pub fn new_op_from_onnx(
                     SupportedOp::Nonlinear(LookupOp::ReLU)
                 } else {
                     SupportedOp::Nonlinear(LookupOp::Max {
-                        scales: (1, 1),
+                        scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
                         a: crate::circuit::utils::F32(unit),
                     })
                 }
@@ -607,8 +607,9 @@ pub fn new_op_from_onnx(
                     node.decrement_use();
                     deleted_indices.push(const_idx);
                 }
+
                 SupportedOp::Nonlinear(LookupOp::Min {
-                    scales: (1, 1),
+                    scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
                     a: crate::circuit::utils::F32(unit),
                 })
             } else {
