@@ -610,6 +610,7 @@ pub(crate) fn calibrate(
     // we load the model to get the input and output shapes
     // check if gag already exists
 
+    #[cfg(unix)]
     let _r = match Gag::stdout() {
         Ok(r) => Some(r),
         Err(_) => None,
@@ -617,6 +618,7 @@ pub(crate) fn calibrate(
 
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
     // drop the gag
+    #[cfg(unix)]
     std::mem::drop(_r);
 
     let range = if let Some(scales) = scales {
@@ -682,10 +684,12 @@ pub(crate) fn calibrate(
         // vec of settings copied chunks.len() times
         let run_args_iterable = vec![settings.run_args.clone(); chunks.len()];
 
+        #[cfg(unix)]
         let _r = match Gag::stdout() {
             Ok(r) => Some(r),
             Err(_) => None,
         };
+        #[cfg(unix)]
         let _q = match Gag::stderr() {
             Ok(r) => Some(r),
             Err(_) => None,
@@ -757,7 +761,9 @@ pub(crate) fn calibrate(
         }
 
         // drop the gag
+        #[cfg(unix)]
         std::mem::drop(_r);
+        #[cfg(unix)]
         std::mem::drop(_q);
 
         let max_lookup_range = res
