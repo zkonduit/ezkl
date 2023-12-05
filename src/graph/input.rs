@@ -461,11 +461,13 @@ impl GraphData {
         match &self.input_data {
             DataSource::File(data) => {
                 for (i, input) in data.iter().enumerate() {
-                    let dt = datum_types[i];
-                    let input = input.iter().map(|e| e.to_float()).collect::<Vec<f64>>();
-                    let tt = TractTensor::from_shape(&shapes[i], &input)?;
-                    let tt = tt.cast_to_dt(dt)?;
-                    inputs.push(tt.into_owned().into());
+                    if !input.is_empty() {
+                        let dt = datum_types[i];
+                        let input = input.iter().map(|e| e.to_float()).collect::<Vec<f64>>();
+                        let tt = TractTensor::from_shape(&shapes[i], &input)?;
+                        let tt = tt.cast_to_dt(dt)?;
+                        inputs.push(tt.into_owned().into());
+                    }
                 }
             }
             _ => {

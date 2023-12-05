@@ -703,7 +703,9 @@ pub(crate) fn calibrate(
     std::mem::drop(_r);
 
     let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
+    info!("num of calibration batches: {}", chunks.len());
 
+    info!("running onnx predictions...");
     let original_predictions = Model::run_onnx_predictions(
         &settings.run_args,
         &model_path,
@@ -719,8 +721,6 @@ pub(crate) fn calibrate(
             CalibrationTarget::Accuracy => (10..14).collect::<Vec<crate::Scale>>(),
         }
     };
-
-    info!("num of calibration batches: {}", chunks.len());
 
     let mut found_params: Vec<GraphSettings> = vec![];
 
