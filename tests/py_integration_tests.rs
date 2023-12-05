@@ -61,8 +61,8 @@ mod py_tests {
             let status = Command::new("pip")
                 .args([
                     "install",
-                    "torch==2.1.1",
-                    "torchvision==0.16.1",
+                    "torch==2.0.0",
+                    "torchvision==0.15.0",
                     "pandas==2.0.3",
                     "numpy==1.23",
                     "seaborn==0.12.2",
