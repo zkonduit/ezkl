@@ -17,108 +17,41 @@ use halo2curves::ff::PrimeField;
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum LookupOp {
     Abs,
-    Div {
-        denom: utils::F32,
-    },
+    Div { denom: utils::F32 },
     ReLU,
-    Max {
-        scales: (usize, usize),
-        a: utils::F32,
-    },
-    Min {
-        scales: (usize, usize),
-        a: utils::F32,
-    },
-    Ceil {
-        scale: utils::F32,
-    },
-    Floor {
-        scale: utils::F32,
-    },
-    Round {
-        scale: utils::F32,
-    },
-    RoundHalfToEven {
-        scale: utils::F32,
-    },
-    Sqrt {
-        scale: utils::F32,
-    },
-    Rsqrt {
-        scale: utils::F32,
-    },
-    Recip {
-        scale: utils::F32,
-    },
-    LeakyReLU {
-        slope: utils::F32,
-    },
-    Sigmoid {
-        scale: utils::F32,
-    },
-    Ln {
-        scale: utils::F32,
-    },
-    Exp {
-        scale: utils::F32,
-    },
-    Cos {
-        scale: utils::F32,
-    },
-    ACos {
-        scale: utils::F32,
-    },
-    Cosh {
-        scale: utils::F32,
-    },
-    ACosh {
-        scale: utils::F32,
-    },
-    Sin {
-        scale: utils::F32,
-    },
-    ASin {
-        scale: utils::F32,
-    },
-    Sinh {
-        scale: utils::F32,
-    },
-    ASinh {
-        scale: utils::F32,
-    },
-    Tan {
-        scale: utils::F32,
-    },
-    ATan {
-        scale: utils::F32,
-    },
-    Tanh {
-        scale: utils::F32,
-    },
-    ATanh {
-        scale: utils::F32,
-    },
-    Erf {
-        scale: utils::F32,
-    },
-    GreaterThan {
-        a: utils::F32,
-    },
-    LessThan {
-        a: utils::F32,
-    },
-    GreaterThanEqual {
-        a: utils::F32,
-    },
-    LessThanEqual {
-        a: utils::F32,
-    },
+    Max { scale: utils::F32, a: utils::F32 },
+    Min { scale: utils::F32, a: utils::F32 },
+    Ceil { scale: utils::F32 },
+    Floor { scale: utils::F32 },
+    Round { scale: utils::F32 },
+    RoundHalfToEven { scale: utils::F32 },
+    Sqrt { scale: utils::F32 },
+    Rsqrt { scale: utils::F32 },
+    Recip { scale: utils::F32 },
+    LeakyReLU { slope: utils::F32 },
+    Sigmoid { scale: utils::F32 },
+    Ln { scale: utils::F32 },
+    Exp { scale: utils::F32 },
+    Cos { scale: utils::F32 },
+    ACos { scale: utils::F32 },
+    Cosh { scale: utils::F32 },
+    ACosh { scale: utils::F32 },
+    Sin { scale: utils::F32 },
+    ASin { scale: utils::F32 },
+    Sinh { scale: utils::F32 },
+    ASinh { scale: utils::F32 },
+    Tan { scale: utils::F32 },
+    ATan { scale: utils::F32 },
+    Tanh { scale: utils::F32 },
+    ATanh { scale: utils::F32 },
+    Erf { scale: utils::F32 },
+    GreaterThan { a: utils::F32 },
+    LessThan { a: utils::F32 },
+    GreaterThanEqual { a: utils::F32 },
+    LessThanEqual { a: utils::F32 },
     Sign,
     KroneckerDelta,
-    Pow {
-        scale: utils::F32,
-        a: utils::F32,
-    },
+    Pow { scale: utils::F32, a: utils::F32 },
 }
 
 impl LookupOp {
@@ -152,16 +85,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 a.0.into(),
             )),
             LookupOp::KroneckerDelta => Ok(tensor::ops::nonlinearities::kronecker_delta(&x)),
-            LookupOp::Max { scales, a } => Ok(tensor::ops::nonlinearities::max(
+            LookupOp::Max { scale, a } => Ok(tensor::ops::nonlinearities::max(
                 &x,
-                scales.0,
-                scales.1,
+                scale.0.into(),
                 a.0.into(),
             )),
-            LookupOp::Min { scales, a } => Ok(tensor::ops::nonlinearities::min(
+            LookupOp::Min { scale, a } => Ok(tensor::ops::nonlinearities::min(
                 &x,
-                scales.0,
-                scales.1,
+                scale.0.into(),
                 a.0.into(),
             )),
             LookupOp::Sign => Ok(tensor::ops::nonlinearities::sign(&x)),
@@ -230,8 +161,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::RoundHalfToEven { scale } => format!("ROUND_HALF_TO_EVEN(scale={})", scale),
             LookupOp::Pow { a, scale } => format!("POW(scale={}, exponent={})", scale, a),
             LookupOp::KroneckerDelta => "K_DELTA".into(),
-            LookupOp::Max { scales, a } => format!("MAX(scales={:?}, a={})", scales, a),
-            LookupOp::Min { scales, a } => format!("MIN(scales={:?}, a={})", scales, a),
+            LookupOp::Max { scale, a } => format!("MAX(scale={}, a={})", scale, a),
+            LookupOp::Min { scale, a } => format!("MIN(scale={}, a={})", scale, a),
             LookupOp::Sign => "SIGN".into(),
             LookupOp::GreaterThan { .. } => "GREATER_THAN".into(),
             LookupOp::GreaterThanEqual { .. } => "GREATER_THAN_EQUAL".into(),
