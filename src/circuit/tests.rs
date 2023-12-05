@@ -1464,10 +1464,11 @@ mod sumpool {
                             .layout(
                                 &mut region,
                                 &self.inputs.clone(),
-                                Box::new(PolyOp::SumPool {
+                                Box::new(HybridOp::SumPool {
                                     padding: [(0, 0); 2],
                                     stride: (1, 1),
                                     kernel_shape: (3, 3),
+                                    normalized: false,
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
