@@ -704,7 +704,11 @@ impl GraphCircuit {
             public_inputs.extend(processed_outputs.get_instances().into_iter().flatten());
         }
 
-        debug!("public inputs: {:?}", public_inputs);
+        if public_inputs.len() < 11 {
+            debug!("public inputs: {:?}", public_inputs);
+        } else {
+            debug!("public inputs: {:?} ...", &public_inputs[0..10]);
+        }
 
         Ok(public_inputs)
     }
@@ -1133,7 +1137,7 @@ impl GraphCircuit {
         };
 
         #[cfg(not(target_arch = "wasm32"))]
-        log::debug!(
+        log::trace!(
             "witness: \n {}",
             &witness.as_json()?.to_colored_json_auto()?
         );
