@@ -1448,6 +1448,7 @@ pub fn expand<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let mut assigned_input = region.assign(&config.inputs[0], &values[0])?;
     assigned_input.expand(shape)?;
+    region.increment(assigned_input.len());
     Ok(assigned_input)
 }
 
