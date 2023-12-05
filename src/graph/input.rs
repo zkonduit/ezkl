@@ -1,3 +1,5 @@
+use super::quantize_float;
+use super::GraphError;
 use crate::circuit::InputType;
 use crate::fieldutils::i128_to_felt;
 #[cfg(not(target_arch = "wasm32"))]
@@ -18,10 +20,12 @@ use std::panic::UnwindSafe;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
 #[cfg(not(target_arch = "wasm32"))]
+use tract_onnx::tract_core::{
+    tract_data::{prelude::Tensor as TractTensor, TVec},
+    value::TValue,
+};
+#[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_hir::tract_num_traits::ToPrimitive;
-
-use super::quantize_float;
-use super::GraphError;
 
 type Decimals = u8;
 type Call = String;
@@ -445,6 +449,35 @@ pub struct GraphData {
 impl UnwindSafe for GraphData {}
 
 impl GraphData {
+    // not wasm
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Convert the input data to tract data
+    pub fn to_tract_data(
+        &self,
+        shapes: &[Vec<usize>],
+        datum_types: &[tract_onnx::prelude::DatumType],
+    ) -> Result<TVec<TValue>, Box<dyn std::error::Error>> {
+        let mut inputs = TVec::new();
+        match &self.input_data {
+            DataSource::File(data) => {
+                for (i, input) in data.iter().enumerate() {
+                    let dt = datum_types[i];
+                    let input = input.iter().map(|e| e.to_float()).collect::<Vec<f64>>();
+                    let tt = TractTensor::from_shape(&shapes[i], &input)?;
+                    let tt = tt.cast_to_dt(dt)?;
+                    inputs.push(tt.into_owned().into());
+                }
+            }
+            _ => {
+                return Err(Box::new(GraphError::InvalidDims(
+                    0,
+                    "non file data cannot be split into batches".to_string(),
+                )))
+            }
+        }
+        Ok(inputs)
+    }
+
     ///
     pub fn new(input_data: DataSource) -> Self {
         GraphData {

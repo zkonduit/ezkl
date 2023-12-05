@@ -19,6 +19,8 @@ use crate::{
 use halo2curves::bn256::Fr as Fp;
 
 #[cfg(not(target_arch = "wasm32"))]
+use super::input::GraphData;
+#[cfg(not(target_arch = "wasm32"))]
 use colored::Colorize;
 use halo2_proofs::{
     circuit::{Layouter, Value},
@@ -26,19 +28,10 @@ use halo2_proofs::{
 };
 use halo2curves::ff::Field;
 use itertools::Itertools;
-use serde::Deserialize;
-use serde::Serialize;
-#[cfg(not(target_arch = "wasm32"))]
-use tract_onnx;
-#[cfg(not(target_arch = "wasm32"))]
-use tract_onnx::prelude::{
-    Framework, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
-};
-#[cfg(not(target_arch = "wasm32"))]
-use tract_onnx::tract_hir::ops::scan::Scan;
-
 use log::error;
 use log::{debug, info, trace};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::collections::HashMap;
@@ -49,6 +42,16 @@ use std::io::Read;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use tabled::Table;
+#[cfg(not(target_arch = "wasm32"))]
+use tract_onnx;
+#[cfg(not(target_arch = "wasm32"))]
+use tract_onnx::prelude::{
+    Framework, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
+};
+#[cfg(not(target_arch = "wasm32"))]
+use tract_onnx::tract_core::internal::DatumType;
+#[cfg(not(target_arch = "wasm32"))]
+use tract_onnx::tract_hir::ops::scan::Scan;
 use unzip_n::unzip_n;
 
 unzip_n!(pub 3);
@@ -728,14 +731,11 @@ impl Model {
     /// * `scale` - The scale to use for quantization.
     /// * `public_params` - Whether to make the params public.
     #[cfg(not(target_arch = "wasm32"))]
-    fn load_onnx_model(
+    fn load_onnx_using_tract(
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
-        visibility: &VarVisibility,
-    ) -> Result<ParsedNodes, Box<dyn Error>> {
+    ) -> Result<(Graph<TypedFact, Box<dyn TypedOp>>, SymbolValues), Box<dyn Error>> {
         use tract_onnx::tract_hir::internal::GenericFactoid;
-
-        let start_time = instant::Instant::now();
 
         let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
@@ -775,6 +775,23 @@ impl Model {
             info!("set {} to {}", symbol, value);
         }
         model = model.concretize_dims(&symbol_values)?;
+        Ok((model, symbol_values))
+    }
+
+    /// Loads an Onnx model from a specified path.
+    /// # Arguments
+    /// * `reader` - A reader for an Onnx file.
+    /// * `scale` - The scale to use for quantization.
+    /// * `public_params` - Whether to make the params public.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn load_onnx_model(
+        reader: &mut dyn std::io::Read,
+        run_args: &RunArgs,
+        visibility: &VarVisibility,
+    ) -> Result<ParsedNodes, Box<dyn Error>> {
+        let start_time = instant::Instant::now();
+
+        let (model, symbol_values) = Self::load_onnx_using_tract(reader, run_args)?;
 
         let scales = VarScales::from_args(run_args)?;
         let nodes = Self::nodes_from_graph(
@@ -1042,6 +1059,45 @@ impl Model {
                 true
             }
         });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Run tract onnx model on sample data !
+    pub fn run_onnx_predictions(
+        run_args: &RunArgs,
+        model_path: &std::path::Path,
+        data_chunks: &[GraphData],
+        input_shapes: Vec<Vec<usize>>,
+    ) -> Result<Vec<Vec<Tensor<f32>>>, Box<dyn Error>> {
+        use tract_onnx::tract_core::internal::IntoArcTensor;
+
+        let (model, symbols) = Model::load_onnx_using_tract(
+            &mut std::fs::File::open(model_path)
+                .map_err(|_| format!("failed to load model at {}", model_path.display()))?,
+            run_args,
+        )?;
+
+        let datum_types: Vec<DatumType> = model
+            .input_outlets()?
+            .iter()
+            .map(|o| model.node(o.node).outputs[o.slot].fact.datum_type)
+            .collect();
+
+        let runnable_model = model.into_runnable()?;
+        let mut outputs = vec![];
+        for chunk in data_chunks {
+            let result = runnable_model.run(chunk.to_tract_data(&input_shapes, &datum_types)?)?;
+            outputs.push(
+                result
+                    .into_iter()
+                    .map(|t| {
+                        crate::graph::utilities::extract_tensor_value(t.into_arc_tensor(), &symbols)
+                            .unwrap()
+                    })
+                    .collect(),
+            );
+        }
+        Ok(outputs)
     }
 
     /// Creates a `Model` from parsed run_args

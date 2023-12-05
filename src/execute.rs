@@ -63,6 +63,7 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::OnceLock;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
+use tabled::Tabled;
 use thiserror::Error;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -592,6 +593,84 @@ pub(crate) fn init_bar(len: u64) -> ProgressBar {
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
 
+#[derive(Debug, Clone, Tabled)]
+/// Accuracy tearsheet
+pub struct AccuracyResults {
+    mean_error: f32,
+    median_error: f32,
+    max_error: f32,
+    min_error: f32,
+    mean_abs_error: f32,
+    median_abs_error: f32,
+    max_abs_error: f32,
+    min_abs_error: f32,
+    mean_squared_error: f32,
+}
+
+impl AccuracyResults {
+    /// Create a new accuracy results struct
+    pub fn new(
+        mut original_preds: Vec<crate::tensor::Tensor<f32>>,
+        mut calibrated_preds: Vec<crate::tensor::Tensor<f32>>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let mut errors = vec![];
+        let mut abs_errors = vec![];
+        let mut squared_errors = vec![];
+
+        for (original, calibrated) in original_preds.iter_mut().zip(calibrated_preds.iter_mut()) {
+            original.flatten();
+            calibrated.flatten();
+            let error = (original.clone() - calibrated.clone())?;
+            let abs_error = error.map(|x| x.abs());
+            let squared_error = error.map(|x| x.powi(2));
+
+            errors.extend(error.into_iter());
+            abs_errors.extend(abs_error.into_iter());
+            squared_errors.extend(squared_error.into_iter());
+        }
+
+        let mean_error = errors.iter().sum::<f32>() / errors.len() as f32;
+        let median_error = errors[errors.len() / 2];
+        let max_error = errors
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap()
+            .clone();
+        let min_error = errors
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap()
+            .clone();
+
+        let mean_abs_error = abs_errors.iter().sum::<f32>() / abs_errors.len() as f32;
+        let median_abs_error = abs_errors[abs_errors.len() / 2];
+        let max_abs_error = abs_errors
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap()
+            .clone();
+        let min_abs_error = abs_errors
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap()
+            .clone();
+
+        let mean_squared_error = squared_errors.iter().sum::<f32>() / squared_errors.len() as f32;
+
+        Ok(Self {
+            mean_error,
+            median_error,
+            max_error,
+            min_error,
+            mean_abs_error,
+            median_abs_error,
+            max_abs_error,
+            min_abs_error,
+            mean_squared_error,
+        })
+    }
+}
+
 /// Calibrate the circuit parameters to a given a dataset
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(trivial_casts)]
@@ -603,6 +682,10 @@ pub(crate) fn calibrate(
     scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
 ) -> Result<(), Box<dyn Error>> {
+    use std::collections::HashMap;
+
+    use tabled::Table;
+
     let data = GraphData::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
@@ -619,6 +702,15 @@ pub(crate) fn calibrate(
     // drop the gag
     std::mem::drop(_r);
 
+    let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
+
+    let original_predictions = Model::run_onnx_predictions(
+        &settings.run_args,
+        &model_path,
+        &chunks,
+        model.graph.input_shapes()?,
+    )?;
+
     let range = if let Some(scales) = scales {
         scales
     } else {
@@ -627,8 +719,6 @@ pub(crate) fn calibrate(
             CalibrationTarget::Accuracy => (10..14).collect::<Vec<crate::Scale>>(),
         }
     };
-
-    let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
 
     info!("num of calibration batches: {}", chunks.len());
 
@@ -671,6 +761,8 @@ pub(crate) fn calibrate(
         .map(|(a, b)| (*a, *b))
         .collect::<Vec<((crate::Scale, crate::Scale), u32)>>();
 
+    let mut forward_pass_res = HashMap::new();
+
     let pb = init_bar(range_grid.len() as u64);
     pb.set_message("calibrating...");
 
@@ -690,6 +782,9 @@ pub(crate) fn calibrate(
             Ok(r) => Some(r),
             Err(_) => None,
         };
+
+        let key = (input_scale, param_scale, scale_rebase_multiplier);
+        forward_pass_res.insert(key, vec![]);
 
         let tasks = chunks
             .iter()
@@ -719,9 +814,15 @@ pub(crate) fn calibrate(
                     .load_graph_from_file_exclusively(&chunk)
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
-                circuit
+                let forward_res = circuit
                     .calibrate(&data, max_logrows)
                     .map_err(|e| format!("failed to calibrate: {}", e))?;
+
+                // push result to the hashmap
+                forward_pass_res
+                    .get_mut(&key)
+                    .ok_or("key not found")?
+                    .push(forward_res);
 
                 let settings = circuit.settings().clone();
 
@@ -858,6 +959,32 @@ pub(crate) fn calibrate(
                 .clone()
         }
     };
+
+    let outputs = forward_pass_res
+        .get(&(
+            best_params.run_args.input_scale,
+            best_params.run_args.param_scale,
+            best_params.run_args.scale_rebase_multiplier,
+        ))
+        .ok_or("no params found")?
+        .iter()
+        .map(|x| x.get_float_outputs(&best_params.model_output_scales))
+        .collect::<Vec<_>>();
+
+    let accuracy_res = AccuracyResults::new(
+        original_predictions.into_iter().flatten().collect(),
+        outputs.into_iter().flatten().collect(),
+    )?;
+
+    let tear_sheet_table = Table::new(vec![accuracy_res]);
+
+    println!(
+        "\n\n <------------- Numerical Fidelity Report (input_scale: {}, param_scale: {}, scale_input_multiplier: {}) ------------->\n\n{}\n\n",
+        best_params.run_args.input_scale,
+        best_params.run_args.param_scale,
+        best_params.run_args.scale_rebase_multiplier,
+        tear_sheet_table.to_string().as_str()
+    );
 
     if matches!(target, CalibrationTarget::Resources { col_overflow: true }) {
         let lookup_log_rows = ((best_params.run_args.lookup_range.1

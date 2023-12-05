@@ -27,6 +27,7 @@ use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::table::{Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
+use crate::fieldutils::felt_to_f64;
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
 use halo2_proofs::{
@@ -155,6 +156,19 @@ pub struct GraphWitness {
 }
 
 impl GraphWitness {
+    ///
+    pub fn get_float_outputs(&self, scales: &[crate::Scale]) -> Vec<Tensor<f32>> {
+        self.outputs
+            .iter()
+            .enumerate()
+            .map(|(i, x)| {
+                x.iter()
+                    .map(|y| (felt_to_f64(*y) / scale_to_multiplier(scales[i])) as f32)
+                    .collect::<Tensor<f32>>()
+            })
+            .collect()
+    }
+
     ///
     pub fn new(inputs: Vec<Vec<Fp>>, outputs: Vec<Vec<Fp>>) -> Self {
         GraphWitness {
@@ -1036,9 +1050,10 @@ impl GraphCircuit {
         &mut self,
         input: &[Tensor<Fp>],
         max_logrows: Option<u32>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec(), None, None)?;
-        self.calc_min_logrows(&res, max_logrows)
+        self.calc_min_logrows(&res, max_logrows)?;
+        Ok(res)
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.

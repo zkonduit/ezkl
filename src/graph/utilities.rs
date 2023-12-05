@@ -89,7 +89,8 @@ pub fn node_output_shapes(
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::prelude::SymbolValues;
 #[cfg(not(target_arch = "wasm32"))]
-fn extract_tensor_value(
+/// Extracts the raw values from a tensor.
+pub fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
     symbol_values: &SymbolValues,
 ) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
