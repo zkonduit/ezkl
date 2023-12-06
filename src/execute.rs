@@ -549,7 +549,7 @@ pub(crate) async fn gen_witness(
     // if any of the settings have kzg visibility then we need to load the srs
 
     let srs = if settings.module_requires_kzg() {
-        if get_srs_path(settings.run_args.logrows, srs_path).exists() {
+        if get_srs_path(settings.run_args.logrows, srs_path.clone()).exists() {
             Some(load_params_cmd(srs_path, settings.run_args.logrows)?)
         } else {
             warn!("SRS for kzg commit does not exist (will be ignored)");
