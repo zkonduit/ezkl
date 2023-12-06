@@ -9,6 +9,9 @@ use super::{base::BaseOp, *};
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
+    MultiBroadcastTo {
+        shape: Vec<usize>,
+    },
     Einsum {
         equation: String,
     },
@@ -29,11 +32,6 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         padding: [(usize, usize); 2],
         output_padding: (usize, usize),
         stride: (usize, usize),
-    },
-    SumPool {
-        padding: [(usize, usize); 2],
-        stride: (usize, usize),
-        kernel_shape: (usize, usize),
     },
     Add,
     Sub,
@@ -87,6 +85,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
 
     fn as_string(&self) -> String {
         match &self {
+            PolyOp::MultiBroadcastTo { shape } => format!("MULTIBROADCASTTO (shape={:?})", shape),
             PolyOp::MoveAxis { .. } => "MOVEAXIS".into(),
             PolyOp::Downsample { .. } => "DOWNSAMPLE".into(),
             PolyOp::Resize { .. } => "RESIZE".into(),
@@ -106,7 +105,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::GlobalSumPool => "GLOBALSUMPOOL".into(),
             PolyOp::Conv { .. } => "CONV".into(),
             PolyOp::DeConv { .. } => "DECONV".into(),
-            PolyOp::SumPool { .. } => "SUMPOOL".into(),
             PolyOp::Concat { axis } => format!("CONCAT (axis={})", axis),
             PolyOp::Slice { axis, start, end } => {
                 format!("SLICE (axis={}, start={}, end={})", axis, start, end)
@@ -123,6 +121,14 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let mut inputs = inputs.to_vec();
         let res = match &self {
+            PolyOp::MultiBroadcastTo { shape } => {
+                if 1 != inputs.len() {
+                    return Err(TensorError::DimMismatch(
+                        "multibroadcastto inputs".to_string(),
+                    ));
+                }
+                inputs[0].expand(shape)
+            }
             PolyOp::And => tensor::ops::and(&inputs[0], &inputs[1]),
             PolyOp::Or => tensor::ops::or(&inputs[0], &inputs[1]),
             PolyOp::Xor => tensor::ops::xor(&inputs[0], &inputs[1]),
@@ -185,11 +191,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 }
                 tensor::ops::deconv(&inputs, *padding, *output_padding, *stride)
             }
-            PolyOp::SumPool {
-                padding,
-                stride,
-                kernel_shape,
-            } => tensor::ops::sumpool(&inputs[0], *padding, *stride, *kernel_shape),
             PolyOp::Pack(base, scale) => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("pack inputs".to_string()));
@@ -242,6 +243,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         let mut values = values.to_vec();
 
         Ok(Some(match self {
+            PolyOp::MultiBroadcastTo { shape } => {
+                layouts::expand(config, region, values[..].try_into()?, shape)?
+            }
             PolyOp::Xor => layouts::xor(config, region, values[..].try_into()?)?,
             PolyOp::Or => layouts::or(config, region, values[..].try_into()?)?,
             PolyOp::And => layouts::and(config, region, values[..].try_into()?)?,
@@ -299,18 +303,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                     *stride,
                 )?
             }
-            PolyOp::SumPool {
-                padding,
-                stride,
-                kernel_shape,
-            } => layouts::sumpool(
-                config,
-                region,
-                values[..].try_into()?,
-                *padding,
-                *stride,
-                *kernel_shape,
-            )?,
             PolyOp::Add => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?,
             PolyOp::Sub => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub)?,
             PolyOp::Mult => {
@@ -340,6 +332,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
 
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         let scale = match self {
+            PolyOp::MultiBroadcastTo { .. } => in_scales[0],
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,
             PolyOp::Neg => in_scales[0],
             PolyOp::MoveAxis { .. } => in_scales[0],
@@ -385,7 +378,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 }
                 output_scale
             }
-            PolyOp::SumPool { .. } => in_scales[0],
             PolyOp::Add => {
                 let mut scale_a = 0;
                 let scale_b = in_scales[0];
