@@ -43,7 +43,7 @@ use instant::Instant;
 use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::debug;
-use log::{info, trace};
+use log::{info, trace, warn};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
@@ -549,7 +549,12 @@ pub(crate) async fn gen_witness(
     // if any of the settings have kzg visibility then we need to load the srs
 
     let srs = if settings.module_requires_kzg() {
-        Some(load_params_cmd(srs_path, settings.run_args.logrows)?)
+        if get_srs_path(settings.run_args.logrows, srs_path).exists() {
+            Some(load_params_cmd(srs_path, settings.run_args.logrows)?)
+        } else {
+            warn!("SRS for kzg commit does not exist (will be ignored)");
+            None
+        }
     } else {
         None
     };
