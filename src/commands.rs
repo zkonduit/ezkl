@@ -704,6 +704,9 @@ pub enum Commands {
         /// The path to the input json file
         #[arg(short = 'D', long)]
         data: PathBuf,
+        /// The path to the calibration input json file
+        #[arg(short = 'C', long)]
+        cal_data: Option<PathBuf>,
         /// the hub's url
         #[arg(short = 'O', long)]
         organization_id: String,
