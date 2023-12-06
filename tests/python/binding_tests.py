@@ -253,7 +253,7 @@ def test_get_srs():
     Test for get_srs
     """
     settings_path = os.path.join(folder_path, 'settings.json')
-    res = ezkl.get_srs(srs_path, settings_path)
+    res = ezkl.get_srs(settings_path, srs_path=srs_path)
 
     assert res == True
 
@@ -261,7 +261,7 @@ def test_get_srs():
 
     another_srs_path = os.path.join(folder_path, "kzg_test_k8.params")
 
-    res = ezkl.get_srs(another_srs_path, logrows=8)
+    res = ezkl.get_srs(logrows=8, srs_path=another_srs_path)
 
     assert os.path.isfile(another_srs_path)
 
@@ -310,7 +310,7 @@ def test_setup():
         model_path,
         vk_path,
         pk_path,
-        srs_path,
+        srs_path=srs_path,
     )
     assert res == True
     assert os.path.isfile(vk_path)
@@ -339,7 +339,7 @@ def test_setup_evm():
         model_path,
         vk_path,
         pk_path,
-        srs_path,
+        srs_path=srs_path,
     )
     assert res == True
     assert os.path.isfile(vk_path)
@@ -369,8 +369,8 @@ def test_prove_and_verify():
         model_path,
         pk_path,
         proof_path,
-        srs_path,
         "for-aggr",
+        srs_path=srs_path,
     )
     assert res['transcript_type'] == 'Poseidon'
     assert os.path.isfile(proof_path)
@@ -405,8 +405,8 @@ def test_prove_evm():
         model_path,
         pk_path,
         proof_path,
-        srs_path,
         "single",
+        srs_path=srs_path,
     )
     assert res['transcript_type'] == 'EVM'
     assert os.path.isfile(proof_path)
@@ -428,10 +428,10 @@ def test_create_evm_verifier():
 
     res = ezkl.create_evm_verifier(
         vk_path,
-        srs_path,
         settings_path,
         sol_code_path,
-        abi_path
+        abi_path,
+        srs_path=srs_path,
     )
 
     assert res == True
@@ -559,7 +559,7 @@ def test_aggregate_and_verify_aggr():
         compiled_model_path,
         vk_path,
         pk_path,
-        srs_path,
+        srs_path=srs_path,
     )
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
@@ -577,8 +577,8 @@ def test_aggregate_and_verify_aggr():
         compiled_model_path,
         pk_path,
         proof_path,
-        srs_path,
         "for-aggr",
+        srs_path=srs_path,
     )
 
     # mock aggregate
@@ -593,8 +593,8 @@ def test_aggregate_and_verify_aggr():
         [proof_path],
         aggregate_vk_path,
         aggregate_pk_path,
-        params_k20_path,
         20,
+        srs_path=params_k20_path,
     )
 
     res = ezkl.gen_vk_from_pk_aggr(aggregate_pk_path, aggregate_vk_path)
@@ -668,7 +668,7 @@ def test_evm_aggregate_and_verify_aggr():
         compiled_model_path,
         vk_path,
         pk_path,
-        srs_path,
+        srs_path=srs_path,
     )
 
     proof_path = os.path.join(folder_path, '1l_relu.pf')
@@ -686,8 +686,8 @@ def test_evm_aggregate_and_verify_aggr():
         compiled_model_path,
         pk_path,
         proof_path,
-        srs_path,
         "for-aggr",
+        srs_path=srs_path,
     )
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_evm_1l_relu.pf')
@@ -698,8 +698,8 @@ def test_evm_aggregate_and_verify_aggr():
         [proof_path],
         aggregate_vk_path,
         aggregate_pk_path,
-        params_k20_path,
         20,
+        srs_path=params_k20_path,
     )
 
     res = ezkl.aggregate(
@@ -724,7 +724,8 @@ def test_evm_aggregate_and_verify_aggr():
         params_k20_path,
         sol_code_path,
         abi_path,
-        [settings_path]
+        [settings_path],
+        logrows=20,
     )
 
     assert res == True
@@ -843,8 +844,8 @@ def test_all_examples(model_file, input_file):
         compiled_model_path,
         pk_path,
         proof_path,
-        srs_path,
         "single",
+        srs_path=srs_path,
     )
 
     assert os.path.isfile(proof_path)
@@ -854,7 +855,7 @@ def test_all_examples(model_file, input_file):
         proof_path,
         settings_path,
         vk_path,
-        srs_path,
+        srs_path=srs_path,
     )
 
     assert res == True
