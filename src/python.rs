@@ -1207,12 +1207,13 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
 }
 
 /// deploys a model to the hub
-#[pyfunction(signature = (model, input, name, organization_id, api_key=None,target=None, py_run_args=None, url=None))]
+#[pyfunction(signature = (model, input, name, organization_id, cal_input=None, api_key=None,target=None, py_run_args=None, url=None))]
 fn create_hub_artifact(
     model: PathBuf,
     input: PathBuf,
     name: String,
     organization_id: String,
+    cal_input: Option<PathBuf>,
     api_key: Option<&str>,
     target: Option<CalibrationTarget>,
     py_run_args: Option<PyRunArgs>,
@@ -1229,6 +1230,7 @@ fn create_hub_artifact(
             url,
             &model,
             &input,
+            cal_input.as_deref(),
             &name,
             &organization_id,
             &run_args,

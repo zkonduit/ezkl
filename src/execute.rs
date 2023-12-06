@@ -362,23 +362,28 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             api_key,
             uncompiled_circuit,
             data,
+            cal_data,
             organization_id,
             artifact_name,
             url,
             args,
             target,
-        } => deploy_model(
-            api_key.as_deref(),
-            url.as_deref(),
-            &uncompiled_circuit,
-            &data,
-            &artifact_name,
-            &organization_id,
-            &args,
-            &target,
-        )
-        .await
-        .map(|_| ()),
+        } => {
+            // make form part of file
+            deploy_model(
+                api_key.as_deref(),
+                url.as_deref(),
+                &uncompiled_circuit,
+                &data,
+                cal_data.as_deref(),
+                &artifact_name,
+                &organization_id,
+                &args,
+                &target,
+            )
+            .await
+            .map(|_| ())
+        }
         #[cfg(not(target_arch = "wasm32"))]
         Commands::GetHubArtifact {
             api_key,
@@ -1864,6 +1869,7 @@ pub(crate) async fn deploy_model(
     url: Option<&str>,
     model: &Path,
     input: &Path,
+    calibration_input: Option<&Path>,
     name: &str,
     organization_id: &str,
     args: &RunArgs,
@@ -1881,8 +1887,18 @@ pub(crate) async fn deploy_model(
     let stream = FramedRead::new(input_file, BytesCodec::new());
     let input_file_body = reqwest::Body::wrap_stream(stream);
 
-    //make form part of file
     let input_file = reqwest::multipart::Part::stream(input_file_body).file_name("input");
+
+    // set calibration input to input if not provided
+    let calibration_file =
+        tokio::fs::File::open(calibration_input.unwrap_or(input).canonicalize()?).await?;
+    // read file body stream
+    let stream = FramedRead::new(calibration_file, BytesCodec::new());
+    let calibration_file_body = reqwest::Body::wrap_stream(stream);
+
+    //make form part of file
+    let calibration_file =
+        reqwest::multipart::Part::stream(calibration_file_body).file_name("calibrationInput");
 
     // the graphql request map
     let map = r#"{
@@ -1891,15 +1907,19 @@ pub(crate) async fn deploy_model(
             ],
             "input": [
                 "variables.input"
+            ],
+            "calibrationInput": [
+                "variables.calibrationInput"
             ]
         }"#;
 
     let operations = serde_json::json!({
-        "query": "mutation($uncompiledModel: Upload!, $input: Upload!, $organizationId: String!, $name: String!, $calibrationTarget: String!, $tolerance: Float!, $inputVisibility: String!, $outputVisibility: String!, $paramVisibility: String!) {
+        "query": "mutation($uncompiledModel: Upload!, $input: Upload!, $calibrationInput: Upload!, $organizationId: String!, $name: String!, $calibrationTarget: String!, $tolerance: Float!, $inputVisibility: String!, $outputVisibility: String!, $paramVisibility: String!) {
                 generateArtifact(
                     name: $name,
                     description: $name,
                     uncompiledModel: $uncompiledModel,
+                    calibrationInput: $calibrationInput,
                     input: $input,
                     organizationId: $organizationId, 
                     calibrationTarget: $calibrationTarget, 
@@ -1918,6 +1938,7 @@ pub(crate) async fn deploy_model(
             "name": name,
             "uncompiledModel": null,
             "input": null,
+            "calibrationInput": null,
             "organizationId": organization_id,
             "calibrationTarget": target.to_string(),
             "tolerance": args.tolerance.val,
@@ -1934,7 +1955,8 @@ pub(crate) async fn deploy_model(
         .text("operations", operations)
         .text("map", map)
         .part("uncompiledModel", model_file)
-        .part("input", input_file);
+        .part("input", input_file)
+        .part("calibrationInput", calibration_file);
 
     let client = reqwest::Client::new();
     let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
