@@ -2274,70 +2274,55 @@ pub fn deconv<
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap();
-/// let pooled = sumpool::<i128>(&x, [(0, 0); 2], (1, 1), (2, 2)).unwrap();
+/// let pooled = sumpool(&x, [(0, 0); 2], (1, 1), (2, 2), false).unwrap().0;
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[11, 8, 8, 10]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
-pub fn sumpool<
-    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Sync + std::marker::Send,
->(
-    image: &Tensor<T>,
+pub fn sumpool(
+    image: &Tensor<i128>,
     padding: [(usize, usize); 2],
     stride: (usize, usize),
     kernel_shape: (usize, usize),
-) -> Result<Tensor<T>, TensorError> {
-    if image.dims().len() != 4 {
-        return Err(TensorError::DimMismatch("sumpool".to_string()));
-    }
+    normalize: bool,
+) -> Result<(Tensor<i128>, Vec<Tensor<i128>>), TensorError> {
     let image_dims = image.dims();
+    let batch_size = image_dims[0];
+    let image_channels = image_dims[1];
 
-    let (batch, image_channels, image_height, image_width) =
-        (image_dims[0], image_dims[1], image_dims[2], image_dims[3]);
+    let unit = 1_i128;
 
-    let (output_channels, kernel_height, kernel_width) =
-        (image_channels, kernel_shape.0, kernel_shape.1);
+    let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit.clone());
+    kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1])?;
 
-    let padded_image = pad::<T>(image, padding)?;
+    let cartesian_coord = [(0..batch_size), (0..image_channels)]
+        .iter()
+        .cloned()
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
 
-    let vert_slides = (image_height + padding[0].0 + padding[1].0 - kernel_height) / stride.0 + 1;
-    let horz_slides = (image_width + padding[0].1 + padding[1].1 - kernel_width) / stride.1 + 1;
+    let res = cartesian_coord
+        .iter()
+        .map(|coord| {
+            let (b, i) = (coord[0], coord[1]);
+            let input = image.get_slice(&[b..b + 1, i..i + 1])?;
+            let output = conv(&[input, kernel.clone()], padding, stride)?;
+            Ok(output)
+        })
+        .collect::<Result<Tensor<_>, TensorError>>()?;
 
-    // calculate value of output
-    let mut output: Tensor<T> =
-        Tensor::new(None, &[batch, output_channels, vert_slides, horz_slides]).unwrap();
+    let shape = &res[0].dims()[2..];
+    let mut combined = res.combine()?;
+    combined.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
-    let cartesian_coord = [
-        (0..batch),
-        (0..output_channels),
-        (0..vert_slides),
-        (0..horz_slides),
-    ]
-    .iter()
-    .cloned()
-    .multi_cartesian_product()
-    .collect::<Vec<_>>();
+    let mut inter = vec![];
 
-    output
-        .par_iter_mut()
-        .enumerate()
-        .for_each(|(flat_index, o)| {
-            let coord = &cartesian_coord[flat_index];
-            let (b, i, j, k) = (coord[0], coord[1], coord[2], coord[3]);
-            let rs = j * stride.0;
-            let cs = k * stride.1;
-            let thesum = sum(&padded_image
-                .get_slice(&[
-                    b..b + 1,
-                    i..i + 1,
-                    rs..(rs + kernel_height),
-                    cs..(cs + kernel_width),
-                ])
-                .unwrap())
-            .unwrap();
-            *o = thesum[0].clone();
-        });
+    if normalize {
+        inter.push(combined.clone());
+        let norm = kernel.len();
+        combined = nonlinearities::const_div(&combined, norm as f64);
+    }
 
-    Ok(output)
+    Ok((combined, inter))
 }
 
 /// Applies 2D max pooling over a 4D tensor of shape B x C x H x W.

@@ -1439,6 +1439,19 @@ pub fn pairwise<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
+/// expand the tensor to the given shape
+pub fn expand<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    shape: &[usize],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut assigned_input = region.assign(&config.inputs[0], &values[0])?;
+    assigned_input.expand(shape)?;
+    region.increment(assigned_input.len());
+    Ok(assigned_input)
+}
+
 ///
 pub fn greater<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
@@ -1675,6 +1688,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     padding: [(usize, usize); 2],
     stride: (usize, usize),
     kernel_shape: (usize, usize),
+    normalized: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let batch_size = values[0].dims()[0];
     let image_channels = values[0].dims()[1];
@@ -1716,6 +1730,16 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
         .fold(Ok(res[0].clone()), |acc, elem| acc?.concat(elem.clone()))?;
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
+    if normalized {
+        last_elem = nonlinearity(
+            config,
+            region,
+            &[last_elem],
+            &LookupOp::Div {
+                denom: utils::F32((kernel_shape.0 * kernel_shape.1) as f32),
+            },
+        )?;
+    }
     Ok(last_elem)
 }
 
