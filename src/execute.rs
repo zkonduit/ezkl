@@ -101,11 +101,11 @@ lazy_static! {
     pub static ref EZKL_REPO_PATH: String =
         std::env::var("EZKL_REPO_PATH").unwrap_or_else(|_|
             // $HOME/.ezkl/
-            format!("{}/.ezkl/", std::env::var("HOME").unwrap())
+            format!("{}/.ezkl", std::env::var("HOME").unwrap())
         );
 
     /// The path to the ezkl related data (SRS)
-    pub static ref EZKL_SRS_REPO_PATH: String = format!("{}/srs/", *EZKL_REPO_PATH);
+    pub static ref EZKL_SRS_REPO_PATH: String = format!("{}/srs", *EZKL_REPO_PATH);
 
 }
 
@@ -433,7 +433,7 @@ pub fn get_srs_path(logrows: u32, srs_path: Option<PathBuf>) -> PathBuf {
         if !Path::new(&*EZKL_SRS_REPO_PATH).exists() {
             std::fs::create_dir_all(&*EZKL_SRS_REPO_PATH).unwrap();
         }
-        (EZKL_SRS_REPO_PATH.clone() + &format!("srs{}.srs", logrows)).into()
+        (EZKL_SRS_REPO_PATH.clone() + &format!("/srs{}.srs", logrows)).into()
     }
 }
 
