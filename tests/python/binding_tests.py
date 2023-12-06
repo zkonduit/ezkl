@@ -605,10 +605,10 @@ def test_aggregate_and_verify_aggr():
         aggregate_proof_path,
         [proof_path],
         aggregate_pk_path,
-        params_k20_path,
         "poseidon",
         20,
-        "unsafe"
+        "unsafe",
+        srs_path=params_k20_path,
     )
 
     assert res == True
@@ -618,8 +618,8 @@ def test_aggregate_and_verify_aggr():
     res = ezkl.verify_aggr(
         aggregate_proof_path,
         aggregate_vk_path,
-        params_k20_path,
         20,
+        srs_path=params_k20_path,
     )
     assert res == True
 
@@ -706,10 +706,10 @@ def test_evm_aggregate_and_verify_aggr():
         aggregate_proof_path,
         [proof_path],
         aggregate_pk_path,
-        params_k20_path,
         "evm",
         20,
-        "unsafe"
+        "unsafe",
+        srs_path=params_k20_path,
     )
 
     assert res == True
@@ -721,11 +721,11 @@ def test_evm_aggregate_and_verify_aggr():
 
     res = ezkl.create_evm_verifier_aggr(
         aggregate_vk_path,
-        params_k20_path,
         sol_code_path,
         abi_path,
         [settings_path],
         logrows=20,
+        srs_path=params_k20_path,
     )
 
     assert res == True
@@ -743,8 +743,8 @@ def test_evm_aggregate_and_verify_aggr():
     res = ezkl.verify_aggr(
         aggregate_proof_path,
         aggregate_vk_path,
-        params_k20_path,
         20,
+        srs_path=params_k20_path,
     )
     assert res == True
 
