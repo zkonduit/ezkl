@@ -1253,11 +1253,6 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(setup_test_evm_witness, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
-    m.add_function(wrap_pyfunction!(create_hub_artifact, m)?)?;
-    m.add_function(wrap_pyfunction!(get_hub_artifact, m)?)?;
-    m.add_function(wrap_pyfunction!(prove_hub, m)?)?;
-    m.add_function(wrap_pyfunction!(get_hub_proof, m)?)?;
-    m.add_function(wrap_pyfunction!(get_hub_credentials, m)?)?;
 
     Ok(())
 }
