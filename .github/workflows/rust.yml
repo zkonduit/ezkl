@@ -295,7 +295,7 @@ jobs:
 
   prove-and-verify-evm-tests:
     runs-on: non-gpu
-    needs: [build, library-tests, python-tests]
+    needs: [build, library-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -352,7 +352,7 @@ jobs:
 
   prove-and-verify-tests:
     runs-on: non-gpu
-    needs: [build, library-tests, python-tests]
+    needs: [build, library-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
