@@ -438,7 +438,7 @@ pub fn get_srs_path(logrows: u32, srs_path: Option<PathBuf>) -> PathBuf {
         if !Path::new(&*EZKL_SRS_REPO_PATH).exists() {
             std::fs::create_dir_all(&*EZKL_SRS_REPO_PATH).unwrap();
         }
-        (EZKL_SRS_REPO_PATH.clone() + &format!("/srs{}.srs", logrows)).into()
+        (EZKL_SRS_REPO_PATH.clone() + &format!("/kzg{}.srs", logrows)).into()
     }
 }
 
