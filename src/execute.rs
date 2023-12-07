@@ -101,8 +101,19 @@ pub enum ExecutionError {
     VerifyError(Vec<VerifyFailure>),
 }
 
+lazy_static::lazy_static! {
+    // read from env EZKL_WORKING_DIR var or default to current dir
+    static ref WORKING_DIR: PathBuf = {
+        let wd = std::env::var("EZKL_WORKING_DIR").unwrap_or_else(|_| ".".to_string());
+        PathBuf::from(wd)
+    };
+}
+
 /// Run an ezkl command with given args
 pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
+    // set working dir
+    std::env::set_current_dir(WORKING_DIR.as_path())?;
+
     match command {
         Commands::Empty => Ok(()),
         #[cfg(not(target_arch = "wasm32"))]
