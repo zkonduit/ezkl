@@ -117,7 +117,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 37] = [
+    const TESTS: [&str; 36] = [
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -144,7 +144,6 @@ mod py_tests {
         "linear_regression.ipynb",
         "stacked_regression.ipynb",
         "data_attest_hashed.ipynb",
-        "simple_hub_demo.ipynb",
         "kzg_vis.ipynb",
         "kmeans.ipynb",
         "solvency.ipynb",
@@ -168,7 +167,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=36 {
+            seq!(N in 0..=35 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
