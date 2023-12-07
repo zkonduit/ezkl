@@ -4,6 +4,12 @@ import JSONBig from 'json-bigint';
 import { vecU64ToFelt } from '@ezkljs/engine/nodejs'
 const solc = require('solc');
 
+// import os module
+const os = require('os');
+
+// check the available memory
+const userHomeDir = os.homedir();
+
 export async function readEzklArtifactsFile(path: string, example: string, filename: string): Promise<Uint8ClampedArray> {
   //const filePath = path.join(__dirname, '..', '..', 'ezkl', 'examples', 'onnx', example, filename);
   const filePath = `${path}/${example}/${filename}`
@@ -20,7 +26,7 @@ export async function readEzklSrsFile(path: string, example: string): Promise<Ui
   const logrows = settings.run_args.logrows;
   // const filePath = path.join(__dirname, '..', '..', 'ezkl', 'examples', 'onnx', `kzg${logrows}.srs`);
   // srs path is at $HOME/.ezkl/srs
-  const filePath = `~/.ezkl/srs/kzg${logrows}.srs`
+  const filePath = `${userHomeDir}/.ezkl/srs/kzg${logrows}.srs`
   const buffer = await fs.readFile(filePath);
   return new Uint8ClampedArray(buffer.buffer);
 }

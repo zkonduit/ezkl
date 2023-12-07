@@ -16,6 +16,8 @@ const timingData: {
     verifyResult: boolean | undefined
 }[] = [];
 
+
+
 describe('Generate witness, prove and verify', () => {
 
     let proof_ser: Uint8ClampedArray
