@@ -482,6 +482,18 @@ impl GraphSettings {
             false
         }
     }
+
+    /// any kzg visibility
+    pub fn module_requires_kzg(&self) -> bool {
+        if self.run_args.input_visibility.is_kzgcommit()
+            || self.run_args.output_visibility.is_kzgcommit()
+            || self.run_args.param_visibility.is_kzgcommit()
+        {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// Configuration for a computational graph / model loaded from a `.onnx` file.

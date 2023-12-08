@@ -473,26 +473,28 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
 /// Generate a kzg commitment.
 #[pyfunction(signature = (
     message,
-    srs_path,
     vk_path,
-    settings_path
+    settings_path,
+    srs_path=None
     ))]
 fn kzg_commit(
     message: Vec<PyFelt>,
-    srs_path: PathBuf,
     vk_path: PathBuf,
     settings_path: PathBuf,
+    srs_path: Option<PathBuf>,
 ) -> PyResult<Vec<PyG1Affine>> {
     let message: Vec<Fr> = message
         .iter()
         .map(|x| crate::pfsys::vecu64_to_field_montgomery::<Fr>(&x))
         .collect::<Vec<_>>();
 
-    let srs = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)
-        .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
-
     let settings = GraphSettings::load(&settings_path)
         .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
+
+    let srs_path = crate::execute::get_srs_path(settings.run_args.logrows, srs_path);
+
+    let srs = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)
+        .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
 
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings)
         .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
@@ -646,14 +648,14 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
 
 /// gets a public srs
 #[pyfunction(signature = (
-    srs_path,
     settings_path=None,
     logrows=None,
+    srs_path=None
 ))]
 fn get_srs(
-    srs_path: PathBuf,
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
+    srs_path: Option<PathBuf>,
 ) -> PyResult<bool> {
     Runtime::new()
         .unwrap()
@@ -783,14 +785,14 @@ fn mock_aggregate(
     model,
     vk_path,
     pk_path,
-    srs_path,
+    srs_path=None,
     witness_path = None
 ))]
 fn setup(
     model: PathBuf,
     vk_path: PathBuf,
     pk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     witness_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::setup(model, srs_path, vk_path, pk_path, witness_path).map_err(|e| {
@@ -807,16 +809,16 @@ fn setup(
     model,
     pk_path,
     proof_path,
-    srs_path,
     proof_type,
+    srs_path=None,
 ))]
 fn prove(
     witness: PathBuf,
     model: PathBuf,
     pk_path: PathBuf,
     proof_path: Option<PathBuf>,
-    srs_path: PathBuf,
     proof_type: ProofType,
+     srs_path: Option<PathBuf>,
 ) -> PyResult<PyObject> {
     let snark = crate::execute::prove(
         witness,
@@ -840,13 +842,13 @@ fn prove(
     proof_path,
     settings_path,
     vk_path,
-    srs_path,
+    srs_path=None,
 ))]
 fn verify(
     proof_path: PathBuf,
     settings_path: PathBuf,
     vk_path: PathBuf,
-    srs_path: PathBuf,
+     srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::verify(proof_path, settings_path, vk_path, srs_path).map_err(|e| {
         let err_str = format!("Failed to run verify: {}", e);
@@ -860,17 +862,17 @@ fn verify(
     sample_snarks,
     vk_path,
     pk_path,
-    srs_path,
     logrows,
     split_proofs = false,
+    srs_path = None
 ))]
 fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
     vk_path: PathBuf,
     pk_path: PathBuf,
-    srs_path: PathBuf,
     logrows: u32,
     split_proofs: bool,
+    srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::setup_aggregate(
         sample_snarks,
@@ -911,21 +913,22 @@ fn compile_circuit(
     proof_path,
     aggregation_snarks,
     vk_path,
-    srs_path,
     transcript,
     logrows,
     check_mode,
     split_proofs = false,
+    srs_path=None,
 ))]
 fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
     vk_path: PathBuf,
-    srs_path: PathBuf,
+   
     transcript: TranscriptType,
     logrows: u32,
     check_mode: CheckMode,
     split_proofs: bool,
+     srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     // the K used for the aggregation circuit
     crate::execute::aggregate(
@@ -950,14 +953,14 @@ fn aggregate(
 #[pyfunction(signature = (
     proof_path,
     vk_path,
-    srs_path,
-    logrows
+    logrows,
+    srs_path=None,
 ))]
 fn verify_aggr(
     proof_path: PathBuf,
     vk_path: PathBuf,
-    srs_path: PathBuf,
     logrows: u32,
+     srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::verify_aggr(proof_path, vk_path, srs_path, logrows).map_err(|e| {
         let err_str = format!("Failed to run verify_aggr: {}", e);
@@ -970,17 +973,17 @@ fn verify_aggr(
 /// creates an EVM compatible verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     vk_path,
-    srs_path,
     settings_path,
     sol_code_path,
-    abi_path
+    abi_path,
+    srs_path=None,
 ))]
 fn create_evm_verifier(
     vk_path: PathBuf,
-    srs_path: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
+     srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path)
         .map_err(|e| {
@@ -994,19 +997,20 @@ fn create_evm_verifier(
 // creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     vk_path,
-    srs_path,
     settings_path,
     sol_code_path,
     abi_path,
-    input_data
+    input_data,
+    srs_path=None,
 ))]
 fn create_evm_data_attestation(
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
     input_data: PathBuf,
+     srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_data_attestation(
         vk_path,
@@ -1171,17 +1175,19 @@ fn verify_evm(
 /// creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     vk_path,
-    srs_path,
     sol_code_path,
     abi_path,
-    aggregation_settings
+    aggregation_settings, 
+    logrows,
+    srs_path=None,
 ))]
 fn create_evm_verifier_aggr(
     vk_path: PathBuf,
-    srs_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
     aggregation_settings: Vec<PathBuf>,
+    logrows: u32,
+    srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_aggregate_verifier(
         vk_path,
@@ -1189,6 +1195,7 @@ fn create_evm_verifier_aggr(
         sol_code_path,
         abi_path,
         aggregation_settings,
+        logrows
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);

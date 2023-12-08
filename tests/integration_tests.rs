@@ -95,26 +95,16 @@ mod native_tests {
         });
     }
 
-    fn download_srs(test_dir: &str, logrows: u32) -> String {
-        let srs_path = format!("{}/kzg{}.srs", test_dir, logrows);
+    fn download_srs(logrows: u32) {
         // if does not exist, download it
-        if !std::path::Path::new(&srs_path).exists() {
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-                .args([
-                    "get-srs",
-                    "--logrows",
-                    &format!("{}", logrows),
-                    "--srs-path",
-                    &srs_path,
-                ])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
-        }
-        srs_path
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(["get-srs", "--logrows", &format!("{}", logrows)])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
     }
 
-    fn init_params(test_dir: &str, settings_path: std::path::PathBuf) -> String {
+    fn init_params(settings_path: std::path::PathBuf) -> () {
         println!("using settings path: {}", settings_path.to_str().unwrap());
         // read in settings json
         let settings =
@@ -123,7 +113,7 @@ mod native_tests {
         let settings: GraphSettings = serde_json::from_str(&settings).unwrap();
         let logrows = settings.run_args.logrows;
 
-        download_srs(test_dir, logrows)
+        download_srs(logrows)
     }
 
     fn mv_test_(test_dir: &str, test: &str) {
@@ -1569,8 +1559,7 @@ mod native_tests {
             "for-aggr",
         );
 
-        let srs_path = download_srs(test_dir, 23);
-        let srs_path = format!("--srs-path={}", srs_path);
+        download_srs(23);
         // now setup-aggregate
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1582,7 +1571,6 @@ mod native_tests {
                 &format!("{}/{}/aggr.vk", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/aggr.pk", test_dir, example_name),
-                &srs_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -1598,7 +1586,6 @@ mod native_tests {
                 &format!("{}/{}/aggr.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/aggr.pk", test_dir, example_name),
-                &srs_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -1611,7 +1598,6 @@ mod native_tests {
                 &format!("{}/{}/aggr.pf", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/aggr.vk", test_dir, example_name),
-                &srs_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -1634,8 +1620,7 @@ mod native_tests {
             output_visibility,
         );
 
-        let srs_path = download_srs(test_dir, 23);
-        let srs_path = format!("--srs-path={}", srs_path);
+        download_srs(23);
 
         let vk_arg = &format!("{}/{}/aggr.vk", test_dir, example_name);
 
@@ -1655,11 +1640,11 @@ mod native_tests {
 
         let base_args = vec![
             "create-evm-verifier-aggr",
-            srs_path.as_str(),
             "--vk-path",
             vk_arg.as_str(),
             "--aggregation-settings",
             settings_arg.as_str(),
+            "--logrows=23",
         ];
 
         let args = build_args(base_args, &sol_arg);
@@ -1750,8 +1735,7 @@ mod native_tests {
 
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
 
-        let srs_path = init_params(test_dir, settings_path.clone().into());
-        let srs_path = format!("--srs-path={}", srs_path);
+        init_params(settings_path.clone().into());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1762,7 +1746,6 @@ mod native_tests {
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
-                &srs_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -1779,7 +1762,6 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
-                &srs_path,
                 &format!("--check-mode={}", checkmode),
                 &format!("--proof-type={}", proof_type),
             ])
@@ -1807,7 +1789,6 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
-                &srs_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -1867,8 +1848,7 @@ mod native_tests {
         );
 
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
-        let srs_path = init_params(test_dir, settings_path.clone().into());
-        let srs_path = format!("--srs-path={}", srs_path);
+        init_params(settings_path.clone().into());
 
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
         let rpc_arg = format!("--rpc-url={}", anvil_url);
@@ -1876,13 +1856,7 @@ mod native_tests {
         let settings_arg = format!("--settings-path={}", settings_path);
 
         // create the verifier
-        let mut args = vec![
-            "create-evm-verifier",
-            &srs_path,
-            "--vk-path",
-            &vk_arg,
-            &settings_arg,
-        ];
+        let mut args = vec!["create-evm-verifier", "--vk-path", &vk_arg, &settings_arg];
 
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
 
@@ -1981,8 +1955,7 @@ mod native_tests {
         let model_path = format!("{}/{}/network.compiled", test_dir, example_name);
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
 
-        let srs_path = init_params(test_dir, settings_path.clone().into());
-        let srs_path = format!("--srs-path={}", srs_path);
+        init_params(settings_path.clone().into());
 
         let data_path = format!("{}/{}/input.json", test_dir, example_name);
         let witness_path = format!("{}/{}/witness.json", test_dir, example_name);
@@ -2044,7 +2017,6 @@ mod native_tests {
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
-                &srs_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -2061,7 +2033,6 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/key.pk", test_dir, example_name),
-                &srs_path,
             ])
             .status()
             .expect("failed to execute process");
@@ -2072,13 +2043,7 @@ mod native_tests {
         let settings_arg = format!("--settings-path={}", settings_path);
 
         // create the verifier
-        let mut args = vec![
-            "create-evm-verifier",
-            &srs_path,
-            "--vk-path",
-            &vk_arg,
-            &settings_arg,
-        ];
+        let mut args = vec!["create-evm-verifier", "--vk-path", &vk_arg, &settings_arg];
 
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
 
@@ -2120,7 +2085,6 @@ mod native_tests {
                 &settings_arg,
                 "--sol-code-path",
                 sol_arg.as_str(),
-                &srs_path,
                 "--vk-path",
                 &vk_arg,
                 "-D",

@@ -266,7 +266,7 @@ pub enum Commands {
     #[command(name = "gen-srs", arg_required_else_help = true)]
     GenSrs {
         /// The path to output to the desired srs file
-        #[arg(long, default_value = "kzg.srs")]
+        #[arg(long)]
         srs_path: PathBuf,
         /// number of logrows to use for srs
         #[arg(long)]
@@ -278,8 +278,8 @@ pub enum Commands {
     #[command(name = "get-srs", arg_required_else_help = true)]
     GetSrs {
         /// The path to output to the desired srs file
-        #[arg(long, default_value = "kzg.srs")]
-        srs_path: PathBuf,
+        #[arg(long)]
+        srs_path: Option<PathBuf>,
         /// Path to circuit_settings file to read in. Overrides logrows if specified.
         #[arg(short = 'S', long, default_value = None)]
         settings_path: Option<PathBuf>,
@@ -329,7 +329,7 @@ pub enum Commands {
         pk_path: PathBuf,
         /// The path to SRS
         #[arg(long)]
-        srs_path: PathBuf,
+        srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
         #[arg(long)]
         logrows: u32,
@@ -351,7 +351,7 @@ pub enum Commands {
         proof_path: PathBuf,
         /// The path to SRS
         #[arg(long)]
-        srs_path: PathBuf,
+        srs_path: Option<PathBuf>,
         #[arg(
             long,
             require_equals = true,
@@ -391,7 +391,7 @@ pub enum Commands {
         compiled_circuit: PathBuf,
         /// The srs path
         #[arg(long)]
-        srs_path: PathBuf,
+        srs_path: Option<PathBuf>,
         /// The path to output the verification key file
         #[arg(long, default_value = "vk.key")]
         vk_path: PathBuf,
@@ -490,7 +490,7 @@ pub enum Commands {
         proof_path: PathBuf,
         /// The parameter path
         #[arg(long)]
-        srs_path: PathBuf,
+        srs_path: Option<PathBuf>,
         #[arg(
             long,
             require_equals = true,
@@ -509,7 +509,7 @@ pub enum Commands {
     CreateEVMVerifier {
         /// The path to load the desired params file
         #[arg(long)]
-        srs_path: PathBuf,
+        srs_path: Option<PathBuf>,
         /// The path to load circuit settings from
         #[arg(short = 'S', long)]
         settings_path: PathBuf,
@@ -529,7 +529,7 @@ pub enum Commands {
     CreateEVMDataAttestation {
         /// The path to load the desired srs file from
         #[arg(long)]
-        srs_path: PathBuf,
+        srs_path: Option<PathBuf>,
         /// The path to load circuit settings from
         #[arg(short = 'S', long)]
         settings_path: PathBuf,
@@ -558,7 +558,7 @@ pub enum Commands {
     CreateEVMVerifierAggr {
         /// The path to load the desired srs file from
         #[arg(long)]
-        srs_path: PathBuf,
+        srs_path: Option<PathBuf>,
         /// The path to output to load the desired verification key file
         #[arg(long)]
         vk_path: PathBuf,
@@ -571,6 +571,9 @@ pub enum Commands {
         // aggregated circuit settings paths, used to calculate the number of instances in the aggregate proof
         #[arg(long)]
         aggregation_settings: Vec<PathBuf>,
+        // logrows used for aggregation circuit
+        #[arg(long)]
+        logrows: u32,
     },
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
@@ -586,7 +589,7 @@ pub enum Commands {
         vk_path: PathBuf,
         /// The kzg srs path
         #[arg(long)]
-        srs_path: PathBuf,
+        srs_path: Option<PathBuf>,
     },
     /// Verifies an aggregate proof, returning accept or reject
     #[command(arg_required_else_help = true)]
@@ -599,7 +602,7 @@ pub enum Commands {
         vk_path: PathBuf,
         /// The srs path
         #[arg(long)]
-        srs_path: PathBuf,
+        srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
         #[arg(long)]
         logrows: u32,
