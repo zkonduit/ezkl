@@ -54,6 +54,7 @@ use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
+use std::path::Path;
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
