@@ -43,7 +43,7 @@ use instant::Instant;
 use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::debug;
-use log::{info, trace};
+use log::{info, trace, warn};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
@@ -91,6 +91,22 @@ fn check_solc_requirement() {
             false
         }
     });
+}
+
+use lazy_static::lazy_static;
+
+lazy_static! {
+    #[derive(Debug)]
+    /// The path to the ezkl related data.
+    pub static ref EZKL_REPO_PATH: String =
+        std::env::var("EZKL_REPO_PATH").unwrap_or_else(|_|
+            // $HOME/.ezkl/
+            format!("{}/.ezkl", std::env::var("HOME").unwrap())
+        );
+
+    /// The path to the ezkl related data (SRS)
+    pub static ref EZKL_SRS_REPO_PATH: String = format!("{}/srs", *EZKL_REPO_PATH);
+
 }
 
 /// A wrapper for tensor related errors.
@@ -194,12 +210,14 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             abi_path,
             aggregation_settings,
+            logrows,
         } => create_evm_aggregate_verifier(
             vk_path,
             srs_path,
             sol_code_path,
             abi_path,
             aggregation_settings,
+            logrows,
         ),
         Commands::CompileCircuit {
             model,
@@ -423,6 +441,22 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
     }
 }
 
+/// Get the srs path
+pub fn get_srs_path(logrows: u32, srs_path: Option<PathBuf>) -> PathBuf {
+    if let Some(srs_path) = srs_path {
+        srs_path
+    } else {
+        if !Path::new(&*EZKL_SRS_REPO_PATH).exists() {
+            std::fs::create_dir_all(&*EZKL_SRS_REPO_PATH).unwrap();
+        }
+        (EZKL_SRS_REPO_PATH.clone() + &format!("/kzg{}.srs", logrows)).into()
+    }
+}
+
+fn srs_exists_check(logrows: u32, srs_path: Option<PathBuf>) -> bool {
+    Path::new(&get_srs_path(logrows, srs_path)).exists()
+}
+
 pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>> {
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
     save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
@@ -451,7 +485,7 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn get_srs_cmd(
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
     check_mode: CheckMode,
@@ -475,23 +509,28 @@ pub(crate) async fn get_srs_cmd(
         return Err(err_string.into());
     };
 
-    let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
-    let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
-    // check the SRS
-    if matches!(check_mode, CheckMode::SAFE) {
-        #[cfg(not(target_arch = "wasm32"))]
-        let pb = init_spinner();
-        #[cfg(not(target_arch = "wasm32"))]
-        pb.set_message("Validating SRS (this may take a while) ...");
-        ParamsKZG::<Bn256>::read(&mut reader)?;
-        #[cfg(not(target_arch = "wasm32"))]
-        pb.finish_with_message("SRS validated");
+    if !srs_exists_check(k, srs_path.clone()) {
+        info!("SRS does not exist, downloading...");
+        let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
+        let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
+        // check the SRS
+        if matches!(check_mode, CheckMode::SAFE) {
+            #[cfg(not(target_arch = "wasm32"))]
+            let pb = init_spinner();
+            #[cfg(not(target_arch = "wasm32"))]
+            pb.set_message("Validating SRS (this may take a while) ...");
+            ParamsKZG::<Bn256>::read(&mut reader)?;
+            #[cfg(not(target_arch = "wasm32"))]
+            pb.finish_with_message("SRS validated");
+        }
+
+        let mut file = std::fs::File::create(get_srs_path(k, srs_path))?;
+        file.write_all(reader.get_ref())?;
+        info!("SRS downloaded");
+    } else {
+        info!("SRS already exists at that path");
     }
 
-    let mut file = std::fs::File::create(srs_path)?;
-    file.write_all(reader.get_ref())?;
-
-    info!("SRS downloaded");
     Ok(())
 }
 
@@ -523,8 +562,15 @@ pub(crate) async fn gen_witness(
         None
     };
 
-    let srs = if let Some(srs) = srs_path {
-        Some(load_params_cmd(srs, settings.run_args.logrows)?)
+    // if any of the settings have kzg visibility then we need to load the srs
+
+    let srs = if settings.module_requires_kzg() {
+        if get_srs_path(settings.run_args.logrows, srs_path.clone()).exists() {
+            Some(load_params_cmd(srs_path, settings.run_args.logrows)?)
+        } else {
+            warn!("SRS for kzg commit does not exist (will be ignored)");
+            None
+        }
     } else {
         None
     };
@@ -973,7 +1019,7 @@ pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_verifier(
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
@@ -1009,7 +1055,7 @@ pub(crate) fn create_evm_verifier(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_data_attestation(
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
@@ -1166,12 +1212,14 @@ pub(crate) async fn verify_evm(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
     circuit_settings: Vec<PathBuf>,
+    logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
+    let srs_path = get_srs_path(logrows, srs_path);
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
     let mut settings: Vec<GraphSettings> = vec![];
@@ -1232,7 +1280,7 @@ pub(crate) fn compile_circuit(
 
 pub(crate) fn setup(
     compiled_circuit: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     vk_path: PathBuf,
     pk_path: PathBuf,
     witness: Option<PathBuf>,
@@ -1314,7 +1362,7 @@ pub(crate) fn prove(
     compiled_circuit_path: PathBuf,
     pk_path: PathBuf,
     proof_path: Option<PathBuf>,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     proof_type: ProofType,
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
@@ -1655,7 +1703,7 @@ pub(crate) fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
     vk_path: PathBuf,
     pk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     logrows: u32,
     split_proofs: bool,
 ) -> Result<(), Box<dyn Error>> {
@@ -1684,7 +1732,7 @@ pub(crate) fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
     pk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     transcript: TranscriptType,
     logrows: u32,
     check_mode: CheckMode,
@@ -1740,7 +1788,7 @@ pub(crate) fn verify(
     proof_path: PathBuf,
     settings_path: PathBuf,
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
@@ -1763,7 +1811,7 @@ pub(crate) fn verify(
 pub(crate) fn verify_aggr(
     proof_path: PathBuf,
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
     let params = load_params_cmd(srs_path, logrows)?;
@@ -2152,9 +2200,10 @@ pub(crate) async fn get_hub_proof(
 
 /// helper function for load_params
 pub(crate) fn load_params_cmd(
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     logrows: u32,
 ) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
+    let srs_path = get_srs_path(logrows, srs_path);
     let mut params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
     info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {
