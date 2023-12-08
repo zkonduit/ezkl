@@ -118,6 +118,7 @@ mod py_tests {
     }
 
     const TESTS: [&str; 36] = [
+        "proof_splitting.ipynb",
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -147,7 +148,6 @@ mod py_tests {
         "kzg_vis.ipynb",
         "kmeans.ipynb",
         "solvency.ipynb",
-        "proof_splitting.ipynb",
         "mnist_gan_proof_splitting.ipynb",
         "sklearn_mlp.ipynb",
         "generalized_inverse.ipynb",
