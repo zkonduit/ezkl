@@ -117,7 +117,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 36] = [
+    const TESTS: [&str; 34] = [
         "proof_splitting.ipynb",
         "mnist_gan_proof_splitting.ipynb",
         "mnist_gan.ipynb",
@@ -153,8 +153,6 @@ mod py_tests {
         "generalized_inverse.ipynb",
         "mnist_classifier.ipynb",
         "world_rotation.ipynb",
-        "tictactoe_binary_classification.ipynb",
-        "tictactoe_autoencoder.ipynb",
     ];
 
     macro_rules! test_func {
@@ -167,7 +165,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=35 {
+            seq!(N in 0..=33 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
@@ -196,6 +194,26 @@ mod py_tests {
                 run_notebook(path, "voice_judge.ipynb");
                 test_dir.close().unwrap();
                 anvil_child.kill().unwrap();
+            }
+
+            #[test]
+            fn tictactoe_autoencoder_notebook_() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("tictactoe_autoencoder").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "tictactoe_autoencoder.ipynb");
+                run_notebook(path, "tictactoe_autoencoder.ipynb");
+                test_dir.close().unwrap();
+            }
+
+            #[test]
+            fn tictactoe_binary_classification_notebook_() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("tictactoe_binary_classification").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "tictactoe_binary_classification.ipynb");
+                run_notebook(path, "tictactoe_binary_classification.ipynb");
+                test_dir.close().unwrap();
             }
 
             #[test]
