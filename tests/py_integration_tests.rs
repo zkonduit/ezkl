@@ -117,7 +117,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 34] = [
+    const TESTS: [&str; 33] = [
         "proof_splitting.ipynb",
         "mnist_gan_proof_splitting.ipynb",
         "mnist_gan.ipynb",
@@ -128,7 +128,6 @@ mod py_tests {
         "simple_demo_all_public.ipynb",
         "data_attest.ipynb",
         "variance.ipynb",
-        "mean_postgres.ipynb",
         "little_transformer.ipynb",
         "simple_demo_aggregated_proofs.ipynb",
         "ezkl_demo.ipynb",
@@ -165,7 +164,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=33 {
+            seq!(N in 0..=32 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
@@ -194,6 +193,16 @@ mod py_tests {
                 run_notebook(path, "voice_judge.ipynb");
                 test_dir.close().unwrap();
                 anvil_child.kill().unwrap();
+            }
+
+            #[test]
+            fn postgres_notebook_() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("mean_postgres").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "mean_postgres.ipynb");
+                run_notebook(path, "mean_postgres.ipynb");
+                test_dir.close().unwrap();
             }
 
             #[test]
