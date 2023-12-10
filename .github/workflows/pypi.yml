@@ -298,9 +298,6 @@ jobs:
           arch: ${{ matrix.platform.arch }}
           distro: alpine_latest
           githubToken: ${{ github.token }}
-          install: |
-            apk add py3-pip
-            pip3 install -U pip
           run: |
             apk add py3-pip
             pip3 install -U pip
