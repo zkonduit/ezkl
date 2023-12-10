@@ -508,8 +508,8 @@ def test_verify_evm():
     # sol_code_path = os.path.join(folder_path, 'test.sol')
 
     res = ezkl.verify_evm(
-        proof_path,
         addr,
+        proof_path,
         rpc_url=anvil_url,
         # sol_code_path
         # optimizer_runs
@@ -602,8 +602,8 @@ def test_aggregate_and_verify_aggr():
     assert os.path.isfile(vk_path)
 
     res = ezkl.aggregate(
-        aggregate_proof_path,
         [proof_path],
+        aggregate_proof_path,
         aggregate_pk_path,
         "poseidon",
         20,
@@ -703,8 +703,8 @@ def test_evm_aggregate_and_verify_aggr():
     )
 
     res = ezkl.aggregate(
-        aggregate_proof_path,
         [proof_path],
+        aggregate_proof_path,
         aggregate_pk_path,
         "evm",
         20,
@@ -720,10 +720,10 @@ def test_evm_aggregate_and_verify_aggr():
     abi_path = os.path.join(folder_path, 'aggr_evm_1l_relu.abi')
 
     res = ezkl.create_evm_verifier_aggr(
+        [settings_path],
         aggregate_vk_path,
         sol_code_path,
         abi_path,
-        [settings_path],
         logrows=20,
         srs_path=params_k20_path,
     )

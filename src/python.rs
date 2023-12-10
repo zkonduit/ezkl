@@ -674,8 +674,8 @@ fn get_srs(
 
 /// generates the circuit settings
 #[pyfunction(signature = (
-    model,
-    output,
+    model=PathBuf::from("network.onnx"),
+    output=PathBuf::from("settings.json"),
     py_run_args = None,
 ))]
 fn gen_settings(
@@ -696,9 +696,9 @@ fn gen_settings(
 /// calibrates the circuit settings
 #[pyfunction(signature = (
     data,
-    model,
-    settings,
-    target,
+    model = PathBuf::from("network.onnx"),
+    settings = PathBuf::from("settings.json"),
+    target = None, // default is "resources
     scales = None,
     max_logrows = None,
 ))]
@@ -723,9 +723,9 @@ fn calibrate_settings(
 
 /// runs the forward pass operation
 #[pyfunction(signature = (
-    data,
-    model,
-    output,
+    data=PathBuf::from("input.json"),
+    model=PathBuf::from("network.onnx"),
+    output=None,
     vk_path=None,
     srs_path=None,
 ))]
@@ -750,8 +750,8 @@ fn gen_witness(
 
 /// mocks the prover
 #[pyfunction(signature = (
-    witness,
-    model,
+    witness=PathBuf::from("witness.json"),
+    model=PathBuf::from("network.onnx"),
 ))]
 fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     crate::execute::mock(model, witness).map_err(|e| {
@@ -782,9 +782,9 @@ fn mock_aggregate(
 
 /// runs the prover on a set of inputs
 #[pyfunction(signature = (
-    model,
-    vk_path,
-    pk_path,
+    model=PathBuf::from("network.onnx"),
+    vk_path=PathBuf::from("vk.key"),
+    pk_path=PathBuf::from("pk.key"),
     srs_path=None,
     witness_path = None
 ))]
@@ -805,11 +805,11 @@ fn setup(
 
 /// runs the prover on a set of inputs
 #[pyfunction(signature = (
-    witness,
-    model,
-    pk_path,
-    proof_path,
-    proof_type,
+    witness=PathBuf::from("witness.json"),
+    model=PathBuf::from("network.onnx"),
+    pk_path=PathBuf::from("pk.key"),
+    proof_path=None,
+    proof_type=ProofType::Single,
     srs_path=None,
 ))]
 fn prove(
@@ -839,9 +839,9 @@ fn prove(
 
 /// verifies a given proof
 #[pyfunction(signature = (
-    proof_path,
-    settings_path,
-    vk_path,
+    proof_path=PathBuf::from("proof.proof"),
+    settings_path=PathBuf::from("settings.json"),
+    vk_path=PathBuf::from("vk.key"),
     srs_path=None,
 ))]
 fn verify(
@@ -860,9 +860,9 @@ fn verify(
 
 #[pyfunction(signature = (
     sample_snarks,
-    vk_path,
-    pk_path,
-    logrows,
+    vk_path=PathBuf::from("vk_aggr.key"),
+    pk_path=PathBuf::from("pk_aggr.key"),
+    logrows=23,
     split_proofs = false,
     srs_path = None
 ))]
@@ -891,9 +891,9 @@ fn setup_aggregate(
 }
 
 #[pyfunction(signature = (
-    model,
-    compiled_circuit,
-    settings_path,
+    model=PathBuf::from("network.onnx"),
+    compiled_circuit=PathBuf::from("model.compiled"),
+    settings_path=PathBuf::from("settings.json"),
 ))]
 fn compile_circuit(
     model: PathBuf,
@@ -910,20 +910,19 @@ fn compile_circuit(
 
 /// creates an aggregated proof
 #[pyfunction(signature = (
-    proof_path,
     aggregation_snarks,
-    vk_path,
-    transcript,
-    logrows,
-    check_mode,
+    proof_path=PathBuf::from("proof_aggr.proof"),
+    vk_path=PathBuf::from("vk.key"),
+    transcript=TranscriptType::EVM,
+    logrows=23,
+    check_mode=CheckMode::UNSAFE,
     split_proofs = false,
     srs_path=None,
 ))]
 fn aggregate(
-    proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
+    proof_path: PathBuf,
     vk_path: PathBuf,
-   
     transcript: TranscriptType,
     logrows: u32,
     check_mode: CheckMode,
@@ -951,9 +950,9 @@ fn aggregate(
 
 /// verifies and aggregate proof
 #[pyfunction(signature = (
-    proof_path,
-    vk_path,
-    logrows,
+    proof_path=PathBuf::from("proof_aggr.proof"),
+    vk_path=PathBuf::from("vk.key"),
+    logrows=23,
     srs_path=None,
 ))]
 fn verify_aggr(
@@ -973,9 +972,9 @@ fn verify_aggr(
 /// creates an EVM compatible verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     vk_path,
-    settings_path,
-    sol_code_path,
-    abi_path,
+    settings_path=PathBuf::from("settings.json"),
+    sol_code_path=PathBuf::from("evm_deploy.sol"),
+    abi_path=PathBuf::from("verifier_abi.json"),
     srs_path=None,
 ))]
 fn create_evm_verifier(
@@ -996,21 +995,20 @@ fn create_evm_verifier(
 
 // creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
-    vk_path,
-    settings_path,
-    sol_code_path,
-    abi_path,
     input_data,
+    vk_path=PathBuf::from("vk.key"),
+    settings_path=PathBuf::from("settings.json"),
+    sol_code_path=PathBuf::from("evm_da_deploy.sol"),
+    abi_path=PathBuf::from("verifier_da_abi.json"),
     srs_path=None,
 ))]
 fn create_evm_data_attestation(
+    input_data: PathBuf,
     vk_path: PathBuf,
-    
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    input_data: PathBuf,
-     srs_path: Option<PathBuf>,
+    srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_data_attestation(
         vk_path,
@@ -1064,7 +1062,7 @@ Ok(true)
 
 #[pyfunction(signature = (
     addr_path,
-    sol_code_path,
+    sol_code_path=PathBuf::from("evm_deploy.sol"),
     rpc_url=None,
     optimizer_runs=1,
     private_key=None
@@ -1096,8 +1094,8 @@ fn deploy_evm(
 #[pyfunction(signature = (
     addr_path,
     input_data,
-    settings_path,
-    sol_code_path,
+    settings_path=PathBuf::from("settings.json"),
+    sol_code_path=PathBuf::from("evm_da_deploy.sol"),
     rpc_url=None,
     optimizer_runs=1,
     private_key=None
@@ -1131,14 +1129,14 @@ fn deploy_da_evm(
 }
 /// verifies an evm compatible proof, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
-    proof_path,
     addr_verifier,
+    proof_path=PathBuf::from("proof.proof"),
     rpc_url=None,
     addr_da = None,
 ))]
 fn verify_evm(
-    proof_path: PathBuf,
     addr_verifier: &str,
+    proof_path: PathBuf,
     rpc_url: Option<String>,
     addr_da: Option<&str>,
 ) -> Result<bool, PyErr> {
@@ -1174,18 +1172,18 @@ fn verify_evm(
 
 /// creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
-    vk_path,
-    sol_code_path,
-    abi_path,
-    aggregation_settings, 
-    logrows,
+    aggregation_settings,
+    vk_path=PathBuf::from("vk_aggr.key"),
+    sol_code_path=PathBuf::from("evm_aggr_deploy.sol"),
+    abi_path=PathBuf::from("verifier_aggr_abi.json"),
+    logrows=23,
     srs_path=None,
 ))]
 fn create_evm_verifier_aggr(
+    aggregation_settings: Vec<PathBuf>,
     vk_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    aggregation_settings: Vec<PathBuf>,
     logrows: u32,
     srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
