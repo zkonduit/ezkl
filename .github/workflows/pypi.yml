@@ -248,6 +248,8 @@ jobs:
           run: |
             apk add py3-pip
             pip3 install -U pip
+            python3 -m venv .venv
+            source .venv/bin/activate            
             pip3 install ezkl --no-index --find-links /io/dist/ --force-reinstall
             python3 -c "import ezkl"
 
@@ -300,6 +302,8 @@ jobs:
             apk add py3-pip
             pip3 install -U pip
           run: |
+            python3 -m venv .venv
+            source .venv/bin/activate
             pip3 install ezkl --no-index --find-links dist/ --force-reinstall
             python3 -c "import ezkl"
 
