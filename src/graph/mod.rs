@@ -254,21 +254,21 @@ impl ToPyObject for GraphWitness {
             .map(|x| x.iter().map(field_to_vecu64_montgomery).collect())
             .collect();
 
-        dict.set_item("inputs", &inputs).unwrap();
-        dict.set_item("outputs", &outputs).unwrap();
-        dict.set_item("max_lookup_inputs", &self.max_lookup_inputs)
+        dict.set_item("inputs", inputs).unwrap();
+        dict.set_item("outputs", outputs).unwrap();
+        dict.set_item("max_lookup_inputs", self.max_lookup_inputs)
             .unwrap();
 
         if let Some(processed_inputs) = &self.processed_inputs {
             //poseidon_hash
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
-                insert_poseidon_hash_pydict(&dict_inputs, &processed_inputs_poseidon_hash).unwrap();
+                insert_poseidon_hash_pydict(dict_inputs, processed_inputs_poseidon_hash).unwrap();
             }
             if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal).unwrap();
             }
             if let Some(processed_inputs_kzg_commit) = &processed_inputs.kzg_commit {
-                insert_kzg_commit_pydict(&dict_inputs, &processed_inputs_kzg_commit).unwrap();
+                insert_kzg_commit_pydict(dict_inputs, processed_inputs_kzg_commit).unwrap();
             }
 
             dict.set_item("processed_inputs", dict_inputs).unwrap();
@@ -276,13 +276,13 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_params) = &self.processed_params {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_params, &processed_params_poseidon_hash).unwrap();
+                insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash).unwrap();
             }
             if let Some(processed_params_elgamal) = &processed_params.elgamal {
                 insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal).unwrap();
             }
             if let Some(processed_params_kzg_commit) = &processed_params.kzg_commit {
-                insert_kzg_commit_pydict(&dict_inputs, &processed_params_kzg_commit).unwrap();
+                insert_kzg_commit_pydict(dict_inputs, processed_params_kzg_commit).unwrap();
             }
 
             dict.set_item("processed_params", dict_params).unwrap();
@@ -290,14 +290,14 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_outputs, &processed_outputs_poseidon_hash)
+                insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash)
                     .unwrap();
             }
             if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal).unwrap();
             }
             if let Some(processed_outputs_kzg_commit) = &processed_outputs.kzg_commit {
-                insert_kzg_commit_pydict(&dict_inputs, &processed_outputs_kzg_commit).unwrap();
+                insert_kzg_commit_pydict(dict_inputs, processed_outputs_kzg_commit).unwrap();
             }
 
             dict.set_item("processed_outputs", dict_outputs).unwrap();
@@ -470,29 +470,17 @@ impl GraphSettings {
 
     /// if any visibility is encrypted or hashed
     pub fn module_requires_fixed(&self) -> bool {
-        if self.run_args.input_visibility.is_encrypted()
+        self.run_args.input_visibility.is_encrypted()
             || self.run_args.input_visibility.is_hashed()
             || self.run_args.output_visibility.is_encrypted()
             || self.run_args.output_visibility.is_hashed()
-            || self.run_args.param_visibility.is_encrypted()
-            || self.run_args.param_visibility.is_hashed()
-        {
-            true
-        } else {
-            false
-        }
+            || self.run_args.param_visibility.is_encrypted() || self.run_args.param_visibility.is_hashed()
     }
 
     /// any kzg visibility
     pub fn module_requires_kzg(&self) -> bool {
-        if self.run_args.input_visibility.is_kzgcommit()
-            || self.run_args.output_visibility.is_kzgcommit()
-            || self.run_args.param_visibility.is_kzgcommit()
-        {
-            true
-        } else {
-            false
-        }
+        self.run_args.input_visibility.is_kzgcommit()
+            || self.run_args.output_visibility.is_kzgcommit() || self.run_args.param_visibility.is_kzgcommit()
     }
 }
 

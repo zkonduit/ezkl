@@ -116,7 +116,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
             };
             let index = index.parse::<usize>().map_err(|_| {
                 log::error!("Invalid module name");
-                return Error::Synthesis;
+                Error::Synthesis
             })?;
             if !self.regions.contains_key(&index) {
                 warn!("spawning module {}", index)

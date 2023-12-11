@@ -19,6 +19,57 @@ use crate::circuit::CheckMode;
 use crate::graph::TestDataSource;
 use crate::pfsys::TranscriptType;
 
+/// The default path to the .json data file
+pub const DEFAULT_DATA: &str = "input.json";
+/// The default path to the .onnx model file
+pub const DEFAULT_MODEL: &str = "network.onnx";
+/// The default path to the compiled model file
+pub const DEFAULT_COMPILED_CIRCUIT: &str = "model.compiled";
+/// The default path to the .json witness file
+pub const DEFAULT_WITNESS: &str = "witness.json";
+/// The default path to the circuit settings file
+pub const DEFAULT_SETTINGS: &str = "settings.json";
+/// The default path to the proving key file
+pub const DEFAULT_PK: &str = "pk.key";
+/// The default path to the verification key file
+pub const DEFAULT_VK: &str = "vk.key";
+/// The default path to the proving key file for aggregated proofs
+pub const DEFAULT_PK_AGGREGATED: &str = "pk_aggr.key";
+/// The default path to the verification key file for aggregated proofs
+pub const DEFAULT_VK_AGGREGATED: &str = "vk_aggr.key";
+/// The default path to the proof file
+pub const DEFAULT_PROOF: &str = "proof.proof";
+/// The default path to the proof file for aggregated proofs
+pub const DEFAULT_PROOF_AGGREGATED: &str = "proof_aggr.proof";
+/// Default for whether to split proofs
+pub const DEFAULT_SPLIT: &str = "false";
+/// Default verifier abi
+pub const DEFAULT_VERIFIER_ABI: &str = "verifier_abi.json";
+/// Default verifier abi for aggregated proofs
+pub const DEFAULT_VERIFIER_AGGREGATED_ABI: &str = "verifier_aggr_abi.json";
+/// Default verifier abi for data attestation
+pub const DEFAULT_VERIFIER_DA_ABI: &str = "verifier_da_abi.json";
+/// Default solidity code
+pub const DEFAULT_SOL_CODE: &str = "evm_deploy.sol";
+/// Default solidity code for aggregated proofs
+pub const DEFAULT_SOL_CODE_AGGREGATED: &str = "evm_deploy_aggr.sol";
+/// Default solidity code for data attestation
+pub const DEFAULT_SOL_CODE_DA: &str = "evm_deploy_da.sol";
+/// Default contract address
+pub const DEFAULT_CONTRACT_ADDRESS: &str = "contract.address";
+/// Default contract address for data attestation
+pub const DEFAULT_CONTRACT_ADDRESS_DA: &str = "contract_da.address";
+/// Default check mode
+pub const DEFAULT_CHECKMODE: &str = "safe";
+/// Default calibration target
+pub const DEFAULT_CALIBRATION_TARGET: &str = "resources";
+/// Default logrows for aggregated proofs
+pub const DEFAULT_AGGREGATED_LOGROWS: &str = "23";
+/// Default optimizer runs
+pub const DEFAULT_OPTIMIZER_RUNS: &str = "1";
+/// Default fuzz runs
+pub const DEFAULT_FUZZ_RUNS: &str = "10";
+
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.to_possible_value()
@@ -182,7 +233,7 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Table {
         /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
+        #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
         model: PathBuf,
         /// proving arguments
         #[clap(flatten)]
@@ -208,13 +259,13 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     GenWitness {
         /// The path to the .json data file
-        #[arg(short = 'D', long, default_value = "input.json")]
+        #[arg(short = 'D', long, default_value = DEFAULT_DATA)]
         data: PathBuf,
         /// The path to the compiled model file
-        #[arg(short = 'M', long, default_value = "model.compiled")]
+        #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
         compiled_circuit: PathBuf,
         /// Path to the witness (public and private inputs) .json file
-        #[arg(short = 'O', long, default_value = "witness.json")]
+        #[arg(short = 'O', long, default_value = DEFAULT_WITNESS)]
         output: PathBuf,
         /// Path to the witness (public and private inputs) .json file (optional - solely used to generate kzg commits)
         #[arg(short = 'V', long)]
@@ -228,10 +279,10 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     GenSettings {
         /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = "network.onnx")]
+        #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
         model: PathBuf,
         /// Path to circuit_settings file to output
-        #[arg(short = 'O', long, default_value = "settings.json")]
+        #[arg(short = 'O', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
         /// proving arguments
         #[clap(flatten)]
@@ -243,15 +294,15 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     CalibrateSettings {
         /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = "network.onnx")]
+        #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
         model: PathBuf,
         /// Path to circuit_settings file to read in AND overwrite.
-        #[arg(short = 'O', long, default_value = "settings.json")]
+        #[arg(short = 'O', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
         /// The path to the .json calibration data file.
         #[arg(short = 'D', long)]
         data: PathBuf,
-        #[arg(long = "target", default_value = "resources")]
+        #[arg(long = "target", default_value = DEFAULT_CALIBRATION_TARGET)]
         /// Target for calibration.
         target: CalibrationTarget,
         /// Optional scales to specifically try for calibration.
@@ -287,17 +338,17 @@ pub enum Commands {
         #[arg(long, default_value = None)]
         logrows: Option<u32>,
         /// Check mode for srs. verifies downloaded srs is valid. set to unsafe for speed.
-        #[arg(long, default_value = "safe")]
+        #[arg(long, default_value = DEFAULT_CHECKMODE)]
         check: CheckMode,
     },
     /// Loads model and input and runs mock prover (for testing)
     #[command(arg_required_else_help = true)]
     Mock {
         /// The path to the .json witness file
-        #[arg(short = 'W', long, default_value = "witness.json")]
+        #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
         witness: PathBuf,
         /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = "network.onnx")]
+        #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
         model: PathBuf,
     },
 
@@ -311,7 +362,7 @@ pub enum Commands {
         #[arg(long)]
         logrows: u32,
         /// whether the accumulated are segments of a larger proof
-        #[arg(long, default_value = "false")]
+        #[arg(long, default_value = DEFAULT_SPLIT)]
         split_proofs: bool,
     },
 
@@ -322,19 +373,19 @@ pub enum Commands {
         #[arg(long)]
         sample_snarks: Vec<PathBuf>,
         /// The path to save the desired verification key file
-        #[arg(long, default_value = "vk_aggr.key")]
+        #[arg(long, default_value = DEFAULT_VK_AGGREGATED)]
         vk_path: PathBuf,
         /// The path to save the desired proving key file
-        #[arg(long, default_value = "pk_aggr.key")]
+        #[arg(long, default_value = DEFAULT_PK_AGGREGATED)]
         pk_path: PathBuf,
         /// The path to SRS
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
-        #[arg(long, default_value = "23")]
+        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
         logrows: u32,
         /// whether the accumulated are segments of a larger proof
-        #[arg(long, default_value = "false")]
+        #[arg(long, default_value = DEFAULT_SPLIT)]
         split_proofs: bool,
     },
     /// Aggregates proofs :)
@@ -344,10 +395,10 @@ pub enum Commands {
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
         /// The path to load the desired proving key file
-        #[arg(long, default_value = "pk_aggr.key")]
+        #[arg(long, default_value = DEFAULT_PK_AGGREGATED)]
         pk_path: PathBuf,
         /// The path to the desired output file
-        #[arg(long, default_value = "proof_aggr.proof")]
+        #[arg(long, default_value = DEFAULT_PROOF_AGGREGATED)]
         proof_path: PathBuf,
         /// The path to SRS
         #[arg(long)]
@@ -361,23 +412,23 @@ pub enum Commands {
         )]
         transcript: TranscriptType,
         /// logrows used for aggregation circuit
-        #[arg(long, default_value = "23")]
+        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
         logrows: u32,
         /// run sanity checks during calculations (safe or unsafe)
-        #[arg(long, default_value = "safe")]
+        #[arg(long, default_value = DEFAULT_CHECKMODE)]
         check_mode: CheckMode,
         /// whether the accumulated are segments of a larger proof
-        #[arg(long, default_value = "false")]
+        #[arg(long, default_value = DEFAULT_SPLIT)]
         split_proofs: bool,
     },
     /// Compiles a circuit from onnx to a simplified graph (einsum + other ops) and parameters as sets of field elements
     #[command(arg_required_else_help = true)]
     CompileCircuit {
         /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = "network.onnx")]
+        #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
         model: PathBuf,
         /// The path to output the processed model
-        #[arg(long, default_value = "model.compiled")]
+        #[arg(long, default_value = DEFAULT_COMPILED_CIRCUIT)]
         compiled_circuit: PathBuf,
         /// The path to load circuit params from
         #[arg(short = 'S', long)]
@@ -387,16 +438,16 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Setup {
         /// The path to the compiled model file
-        #[arg(short = 'M', long, default_value = "model.compiled")]
+        #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
         compiled_circuit: PathBuf,
         /// The srs path
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// The path to output the verification key file
-        #[arg(long, default_value = "vk.key")]
+        #[arg(long, default_value = DEFAULT_VK)]
         vk_path: PathBuf,
         /// The path to output the proving key file
-        #[arg(long, default_value = "pk.key")]
+        #[arg(long, default_value = DEFAULT_PK)]
         pk_path: PathBuf,
         /// The graph witness (optional - used to override fixed values in the circuit)
         #[arg(short = 'W', long)]
@@ -408,10 +459,10 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Fuzz {
         /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'W', long, default_value = "witness.json")]
+        #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
         witness: PathBuf,
         /// The path to the processed model file
-        #[arg(short = 'M', long, default_value = "model.compiled")]
+        #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
         compiled_circuit: PathBuf,
         #[arg(
             long,
@@ -422,7 +473,7 @@ pub enum Commands {
         )]
         transcript: TranscriptType,
         /// number of fuzz iterations
-        #[arg(long, default_value = "10")]
+        #[arg(long, default_value = DEFAULT_FUZZ_RUNS)]
         num_runs: usize,
     },
     #[cfg(not(target_arch = "wasm32"))]
@@ -477,16 +528,16 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'W', long, default_value = "witness.json")]
+        #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
         witness: PathBuf,
         /// The path to the compiled model file
-        #[arg(short = 'M', long, default_value = "model.compiled")]
+        #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
         compiled_circuit: PathBuf,
         /// The path to load the desired proving key file
-        #[arg(long, default_value = "pk.key")]
+        #[arg(long, default_value = DEFAULT_PK)]
         pk_path: PathBuf,
         /// The path to the desired output file
-        #[arg(long, default_value = "proof.proof")]
+        #[arg(long, default_value = DEFAULT_PROOF)]
         proof_path: PathBuf,
         /// The parameter path
         #[arg(long)]
@@ -500,7 +551,7 @@ pub enum Commands {
         )]
         proof_type: ProofType,
         /// run sanity checks during calculations (safe or unsafe)
-        #[arg(long, default_value = "safe")]
+        #[arg(long, default_value = DEFAULT_CHECKMODE)]
         check_mode: CheckMode,
     },
     #[cfg(not(target_arch = "wasm32"))]
@@ -511,16 +562,16 @@ pub enum Commands {
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// The path to load circuit settings from
-        #[arg(short = 'S', long, default_value = "settings.json")]
+        #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
         /// The path to load the desired verification key file
-        #[arg(long, default_value = "vk.key")]
+        #[arg(long, default_value = DEFAULT_VK)]
         vk_path: PathBuf,
         /// The path to output the Solidity code
-        #[arg(long, default_value = "evm_deploy.sol")]
+        #[arg(long, default_value = DEFAULT_SOL_CODE)]
         sol_code_path: PathBuf,
         /// The path to output the Solidity verifier ABI
-        #[arg(long, default_value = "verifier_abi.json")]
+        #[arg(long, default_value = DEFAULT_VERIFIER_ABI)]
         abi_path: PathBuf,
     },
     #[cfg(not(target_arch = "wasm32"))]
@@ -531,23 +582,23 @@ pub enum Commands {
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// The path to load circuit settings from
-        #[arg(short = 'S', long, default_value = "settings.json")]
+        #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
         /// The path to load the desired verification key file
-        #[arg(long, default_value = "vk.key")]
+        #[arg(long, default_value = DEFAULT_VK)]
         vk_path: PathBuf,
         /// The path to output the Solidity code
-        #[arg(long, default_value = "evm_da_deploy.sol")]
+        #[arg(long, default_value = DEFAULT_SOL_CODE_DA)]
         sol_code_path: PathBuf,
         /// The path to output the Solidity verifier ABI
-        #[arg(long, default_value = "verifier_da_abi.json")]
+        #[arg(long, default_value = DEFAULT_VERIFIER_DA_ABI)]
         abi_path: PathBuf,
         /// The path to the .json data file, which should
         /// contain the necessary calldata and accoount addresses
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
         /// ingests as inputs.
-        #[arg(short = 'D', long, default_value = "input.json")]
+        #[arg(short = 'D', long, default_value = DEFAULT_DATA)]
         data: PathBuf,
         // todo, optionally allow supplying proving key
     },
@@ -560,32 +611,32 @@ pub enum Commands {
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// The path to  to load the desired verification key file
-        #[arg(long, default_value = "vk_aggr.key")]
+        #[arg(long, default_value = DEFAULT_VK_AGGREGATED)]
         vk_path: PathBuf,
         /// The path to the Solidity code
-        #[arg(long, default_value = "evm_deploy_aggr.sol")]
+        #[arg(long, default_value = DEFAULT_SOL_CODE_AGGREGATED)]
         sol_code_path: PathBuf,
         /// The path to output the Solidity verifier ABI
-        #[arg(long, default_value = "verifier_aggr_abi.json")]
+        #[arg(long, default_value = DEFAULT_VERIFIER_AGGREGATED_ABI)]
         abi_path: PathBuf,
         // aggregated circuit settings paths, used to calculate the number of instances in the aggregate proof
         #[arg(long)]
         aggregation_settings: Vec<PathBuf>,
         // logrows used for aggregation circuit
-        #[arg(long, default_value = "23")]
+        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
         logrows: u32,
     },
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
         /// The path to load circuit params from
-        #[arg(short = 'S', long, default_value = "settings.json")]
+        #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
         /// The path to the proof file
-        #[arg(long, default_value = "proof.proof")]
+        #[arg(long, default_value = DEFAULT_PROOF)]
         proof_path: PathBuf,
         /// The path to output the desired verification key file (optional)
-        #[arg(long, default_value = "vk.key")]
+        #[arg(long, default_value = DEFAULT_VK)]
         vk_path: PathBuf,
         /// The kzg srs path
         #[arg(long)]
@@ -595,31 +646,31 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     VerifyAggr {
         /// The path to the proof file
-        #[arg(long, default_value = "proof_aggr.proof")]
+        #[arg(long, default_value = DEFAULT_PROOF_AGGREGATED)]
         proof_path: PathBuf,
         /// The path to output the desired verification key file (optional)
-        #[arg(long, default_value = "vk_aggr.key")]
+        #[arg(long, default_value = DEFAULT_VK_AGGREGATED)]
         vk_path: PathBuf,
         /// The srs path
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
-        #[arg(long, default_value = "23")]
+        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
         logrows: u32,
     },
     #[cfg(not(target_arch = "wasm32"))]
     DeployEvmVerifier {
         /// The path to the Solidity code
-        #[arg(long, default_value = "evm_deploy.sol")]
+        #[arg(long, default_value = DEFAULT_SOL_CODE)]
         sol_code_path: PathBuf,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
-        #[arg(long, default_value = "contract.address")]
+        #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS)]
         /// The path to output the contract address
         addr_path: PathBuf,
         /// The optimizer runs to set on the verifier. (Lower values optimize for deployment, while higher values optimize for execution)
-        #[arg(long, default_value = "1")]
+        #[arg(long, default_value = DEFAULT_OPTIMIZER_RUNS)]
         optimizer_runs: usize,
         /// Private secp256K1 key in hex format, 64 chars, no 0x prefix, of the account signing transactions. If None the private key will be generated by Anvil
         #[arg(short = 'P', long)]
@@ -632,19 +683,19 @@ pub enum Commands {
         #[arg(short = 'D', long)]
         data: PathBuf,
         /// The path to load circuit params from
-        #[arg(long, default_value = "settings.json")]
+        #[arg(long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
         /// The path to the Solidity code
-        #[arg(long, default_value = "evm_deploy_da.sol")]
+        #[arg(long, default_value = DEFAULT_SOL_CODE_DA)]
         sol_code_path: PathBuf,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
-        #[arg(long, default_value = "contract_da.address")]
+        #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS_DA)]
         /// The path to output the contract address
         addr_path: PathBuf,
         /// The optimizer runs to set on the verifier. (Lower values optimize for deployment, while higher values optimize for execution)
-        #[arg(long, default_value = "1")]
+        #[arg(long, default_value = DEFAULT_OPTIMIZER_RUNS)]
         optimizer_runs: usize,
         /// Private secp256K1 key in hex format, 64 chars, no 0x prefix, of the account signing transactions. If None the private key will be generated by Anvil
         #[arg(short = 'P', long)]
@@ -655,10 +706,10 @@ pub enum Commands {
     #[command(name = "verify-evm", arg_required_else_help = true)]
     VerifyEVM {
         /// The path to the proof file
-        #[arg(long, default_value = "proof.proof")]
+        #[arg(long, default_value = DEFAULT_PROOF)]
         proof_path: PathBuf,
         /// The path to verfier contract's address
-        #[arg(long, default_value = "contract.address")]
+        #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS)]
         addr_verifier: H160,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]

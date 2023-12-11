@@ -579,7 +579,7 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     input.flatten();
 
     // assert we have a single index
-    if !(index.dims().iter().product::<usize>() == 1) {
+    if index.dims().iter().product::<usize>() != 1 {
         return Err("index must be a single element".into());
     }
 

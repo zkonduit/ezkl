@@ -395,14 +395,13 @@ impl ParsedNodes {
     pub fn get_input_scales(&self) -> Vec<crate::Scale> {
         let input_nodes = self.inputs.iter();
         input_nodes
-            .map(|idx| {
+            .flat_map(|idx| {
                 self.nodes
                     .get(idx)
                     .ok_or(GraphError::MissingNode(*idx))
                     .map(|n| n.out_scales())
                     .unwrap_or_default()
             })
-            .flatten()
             .collect()
     }
 
