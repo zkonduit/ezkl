@@ -72,6 +72,7 @@ pub const DEFAULT_FUZZ_RUNS: &str = "10";
 /// Default calibration file
 pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
 
+
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.to_possible_value()

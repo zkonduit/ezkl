@@ -75,7 +75,7 @@ pub mod wasm;
 pub type Scale = i32;
 
 /// Parameters specific to a proving run
-#[derive(Debug, Args, Deserialize, Serialize, Clone, Default, PartialEq, PartialOrd)]
+#[derive(Debug, Args, Deserialize, Serialize, Clone, PartialEq, PartialOrd)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
@@ -110,6 +110,24 @@ pub struct RunArgs {
     /// Flags whether params are public, private, hashed
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
+}
+
+impl Default for RunArgs {
+    fn default() -> Self {
+        Self {
+            tolerance: Tolerance::default(),
+            input_scale: 7,
+            param_scale: 7,
+            scale_rebase_multiplier: 1,
+            lookup_range: (-32768, 32768),
+            logrows: 17,
+            num_inner_cols: 2,
+            variables: vec![("batch_size".to_string(), 1)],
+            input_visibility: Visibility::Private,
+            output_visibility: Visibility::Public,
+            param_visibility: Visibility::Private,
+        }
+    }
 }
 
 impl RunArgs {

@@ -963,7 +963,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     pub fn expand(&self, shape: &[usize]) -> Result<Self, TensorError> {
-        if !(self.dims().len() <= shape.len()) {
+        if self.dims().len() > shape.len() {
             return Err(TensorError::DimError);
         }
 

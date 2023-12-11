@@ -216,10 +216,10 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         let mut nonaccum_selectors = BTreeMap::new();
         let mut accum_selectors = BTreeMap::new();
 
-        if !(inputs[0].num_cols() == inputs[1].num_cols()) {
+        if inputs[0].num_cols() != inputs[1].num_cols() {
             log::warn!("input shapes do not match");
         }
-        if !(inputs[0].num_cols() == output.num_cols()) {
+        if inputs[0].num_cols() != output.num_cols() {
             log::warn!("input and output shapes do not match");
         }
 

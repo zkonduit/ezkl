@@ -104,7 +104,7 @@ mod native_tests {
         assert!(status.success());
     }
 
-    fn init_params(settings_path: std::path::PathBuf) -> () {
+    fn init_params(settings_path: std::path::PathBuf) {
         println!("using settings path: {}", settings_path.to_str().unwrap());
         // read in settings json
         let settings =
@@ -2212,7 +2212,7 @@ mod native_tests {
         ];
 
         let status = Command::new("cargo")
-            .args(&args)
+            .args(args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
