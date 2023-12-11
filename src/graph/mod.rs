@@ -290,8 +290,7 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash)
-                    .unwrap();
+                insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash).unwrap();
             }
             if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
                 insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal).unwrap();
@@ -474,13 +473,15 @@ impl GraphSettings {
             || self.run_args.input_visibility.is_hashed()
             || self.run_args.output_visibility.is_encrypted()
             || self.run_args.output_visibility.is_hashed()
-            || self.run_args.param_visibility.is_encrypted() || self.run_args.param_visibility.is_hashed()
+            || self.run_args.param_visibility.is_encrypted()
+            || self.run_args.param_visibility.is_hashed()
     }
 
     /// any kzg visibility
     pub fn module_requires_kzg(&self) -> bool {
         self.run_args.input_visibility.is_kzgcommit()
-            || self.run_args.output_visibility.is_kzgcommit() || self.run_args.param_visibility.is_kzgcommit()
+            || self.run_args.output_visibility.is_kzgcommit()
+            || self.run_args.param_visibility.is_kzgcommit()
     }
 }
 
@@ -1176,6 +1177,11 @@ impl GraphCircuit {
     ) -> Result<(), Box<dyn std::error::Error>> {
         // Set up local anvil instance for reading on-chain data
 
+        let input_scales = self.model().graph.get_input_scales();
+        let output_scales = self.model().graph.get_output_scales()?;
+        let input_shapes = self.model().graph.input_shapes()?;
+        let output_shapes = self.model().graph.output_shapes()?;
+
         if matches!(
             test_on_chain_data.data_sources.input,
             TestDataSource::OnChain
@@ -1198,8 +1204,8 @@ impl GraphCircuit {
 
             let datam: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 input_data,
-                self.model().graph.get_input_scales(),
-                self.model().graph.input_shapes()?,
+                input_scales,
+                input_shapes,
                 test_on_chain_data.rpc.as_deref(),
             )
             .await?;
@@ -1227,8 +1233,8 @@ impl GraphCircuit {
             };
             let datum: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 output_data,
-                self.model().graph.get_output_scales()?,
-                self.model().graph.output_shapes()?,
+                output_scales,
+                output_shapes,
                 test_on_chain_data.rpc.as_deref(),
             )
             .await?;
