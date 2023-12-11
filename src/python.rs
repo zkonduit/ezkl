@@ -497,8 +497,8 @@ fn kzg_commit(
 
 /// Swap the commitments in a proof
 #[pyfunction(signature = (
-    proof_path,
-    witness_path,
+    proof_path=PathBuf::from(DEFAULT_PROOF),
+    witness_path=PathBuf::from(DEFAULT_WITNESS),
     ))]
 fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResult<()> {
     crate::execute::swap_proof_commitments(proof_path, witness_path)
@@ -607,7 +607,7 @@ fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult
 
 /// Displays the table as a string in python
 #[pyfunction(signature = (
-    model,
+    model = PathBuf::from(DEFAULT_MODEL),
     py_run_args = None
 ))]
 fn table(model: String, py_run_args: Option<PyRunArgs>) -> PyResult<String> {
@@ -634,7 +634,7 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
 
 /// gets a public srs
 #[pyfunction(signature = (
-    settings_path=None,
+    settings_path=Some(PathBuf::from(DEFAULT_SETTINGS)),
     logrows=None,
     srs_path=None
 ))]
@@ -681,7 +681,7 @@ fn gen_settings(
 
 /// calibrates the circuit settings
 #[pyfunction(signature = (
-    data,
+    data = PathBuf::from(DEFAULT_CALIBRATION_FILE),
     model = PathBuf::from(DEFAULT_MODEL),
     settings = PathBuf::from(DEFAULT_SETTINGS),
     target = CalibrationTarget::default(), // default is "resources
@@ -746,8 +746,8 @@ fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
 
 /// mocks the aggregate prover
 #[pyfunction(signature = (
-    aggregation_snarks,
-    logrows,
+    aggregation_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
+    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     split_proofs = false,
 ))]
 fn mock_aggregate(
@@ -842,7 +842,7 @@ fn verify(
 }
 
 #[pyfunction(signature = (
-    sample_snarks,
+    sample_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
     vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
     pk_path=PathBuf::from(DEFAULT_PK_AGGREGATED),
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
@@ -893,7 +893,7 @@ fn compile_circuit(
 
 /// creates an aggregated proof
 #[pyfunction(signature = (
-    aggregation_snarks,
+    aggregation_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
     proof_path=PathBuf::from(DEFAULT_PROOF_AGGREGATED),
     vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
     transcript=TranscriptType::default(),
@@ -954,7 +954,7 @@ fn verify_aggr(
 
 /// creates an EVM compatible verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
-    vk_path,
+    vk_path=PathBuf::from(DEFAULT_VK),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
     abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
@@ -978,7 +978,7 @@ fn create_evm_verifier(
 
 // creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
-    input_data,
+    input_data=PathBuf::from(DEFAULT_DATA),
     vk_path=PathBuf::from(DEFAULT_VK),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
@@ -1155,7 +1155,7 @@ fn verify_evm(
 
 /// creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
-    aggregation_settings,
+    aggregation_settings=vec![PathBuf::from(DEFAULT_PROOF)],
     vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
     abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),

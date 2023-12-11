@@ -69,6 +69,9 @@ pub const DEFAULT_AGGREGATED_LOGROWS: &str = "23";
 pub const DEFAULT_OPTIMIZER_RUNS: &str = "1";
 /// Default fuzz runs
 pub const DEFAULT_FUZZ_RUNS: &str = "10";
+/// Default calibration file
+pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
+
 
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -230,7 +233,6 @@ impl Cli {
 pub enum Commands {
     Empty,
     /// Loads model and prints model table
-    #[command(arg_required_else_help = true)]
     Table {
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
@@ -256,7 +258,6 @@ pub enum Commands {
     },
 
     /// Generates the witness from an input file.
-    #[command(arg_required_else_help = true)]
     GenWitness {
         /// The path to the .json data file
         #[arg(short = 'D', long, default_value = DEFAULT_DATA)]
@@ -276,7 +277,6 @@ pub enum Commands {
     },
 
     /// Produces the proving hyperparameters, from run-args
-    #[command(arg_required_else_help = true)]
     GenSettings {
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
@@ -291,17 +291,16 @@ pub enum Commands {
 
     /// Calibrates the proving scale, lookup bits and logrows from a circuit settings file.
     #[cfg(not(target_arch = "wasm32"))]
-    #[command(arg_required_else_help = true)]
     CalibrateSettings {
+        /// The path to the .json calibration data file.
+        #[arg(short = 'D', long, default_value = DEFAULT_CALIBRATION_FILE)]
+        data: PathBuf,
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
         model: PathBuf,
         /// Path to circuit_settings file to read in AND overwrite.
         #[arg(short = 'O', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
-        /// The path to the .json calibration data file.
-        #[arg(short = 'D', long)]
-        data: PathBuf,
         #[arg(long = "target", default_value = DEFAULT_CALIBRATION_TARGET)]
         /// Target for calibration.
         target: CalibrationTarget,
@@ -326,15 +325,15 @@ pub enum Commands {
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Gets an SRS from a circuit settings file.
-    #[command(name = "get-srs", arg_required_else_help = true)]
+    #[command(name = "get-srs")]
     GetSrs {
         /// The path to output to the desired srs file
         #[arg(long)]
         srs_path: Option<PathBuf>,
-        /// Path to circuit_settings file to read in. Overrides logrows if specified.
-        #[arg(short = 'S', long, default_value = None)]
+        /// Path to circuit_settings file to read in. Overriden by logrows if specified.
+        #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
         settings_path: Option<PathBuf>,
-        /// Number of logrows to use for srs. To manually override the logrows, omit specifying the settings_path
+        /// Number of logrows to use for srs. Overrides settings_path if specified.
         #[arg(long, default_value = None)]
         logrows: Option<u32>,
         /// Check mode for srs. verifies downloaded srs is valid. set to unsafe for speed.
@@ -342,7 +341,6 @@ pub enum Commands {
         check: CheckMode,
     },
     /// Loads model and input and runs mock prover (for testing)
-    #[command(arg_required_else_help = true)]
     Mock {
         /// The path to the .json witness file
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
@@ -353,13 +351,12 @@ pub enum Commands {
     },
 
     /// Mock aggregate proofs
-    #[command(arg_required_else_help = true)]
     MockAggregate {
         /// The path to the snarks to aggregate over
-        #[arg(long)]
+        #[arg(long, default_value = DEFAULT_PROOF, value_delimiter = ',', allow_hyphen_values = true)]
         aggregation_snarks: Vec<PathBuf>,
         /// logrows used for aggregation circuit
-        #[arg(long)]
+        #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
         logrows: u32,
         /// whether the accumulated are segments of a larger proof
         #[arg(long, default_value = DEFAULT_SPLIT)]
@@ -367,10 +364,9 @@ pub enum Commands {
     },
 
     /// setup aggregation circuit :)
-    #[command(arg_required_else_help = true)]
     SetupAggregate {
         /// The path to samples of snarks that will be aggregated over
-        #[arg(long)]
+        #[arg(long, default_value = DEFAULT_PROOF, value_delimiter = ',', allow_hyphen_values = true)]
         sample_snarks: Vec<PathBuf>,
         /// The path to save the desired verification key file
         #[arg(long, default_value = DEFAULT_VK_AGGREGATED)]
@@ -389,10 +385,9 @@ pub enum Commands {
         split_proofs: bool,
     },
     /// Aggregates proofs :)
-    #[command(arg_required_else_help = true)]
     Aggregate {
         /// The path to the snarks to aggregate over
-        #[arg(long)]
+        #[arg(long, default_value = DEFAULT_PROOF, value_delimiter = ',', allow_hyphen_values = true)]
         aggregation_snarks: Vec<PathBuf>,
         /// The path to load the desired proving key file
         #[arg(long, default_value = DEFAULT_PK_AGGREGATED)]
@@ -422,7 +417,6 @@ pub enum Commands {
         split_proofs: bool,
     },
     /// Compiles a circuit from onnx to a simplified graph (einsum + other ops) and parameters as sets of field elements
-    #[command(arg_required_else_help = true)]
     CompileCircuit {
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
@@ -431,11 +425,10 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_COMPILED_CIRCUIT)]
         compiled_circuit: PathBuf,
         /// The path to load circuit params from
-        #[arg(short = 'S', long)]
+        #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
     },
     /// Creates pk and vk
-    #[command(arg_required_else_help = true)]
     Setup {
         /// The path to the compiled model file
         #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
@@ -456,7 +449,6 @@ pub enum Commands {
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Fuzzes the proof pipeline with random inputs, random parameters, and random keys
-    #[command(arg_required_else_help = true)]
     Fuzz {
         /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
@@ -477,6 +469,7 @@ pub enum Commands {
         num_runs: usize,
     },
     #[cfg(not(target_arch = "wasm32"))]
+    #[command(arg_required_else_help = true)]
     SetupTestEVMData {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
@@ -500,6 +493,7 @@ pub enum Commands {
         output_source: TestDataSource,
     },
     #[cfg(not(target_arch = "wasm32"))]
+    #[command(arg_required_else_help = true)]
     TestUpdateAccountCalls {
         /// The path to verfier contract's address
         #[arg(long)]
@@ -513,19 +507,17 @@ pub enum Commands {
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Swaps the positions in the transcript that correspond to commitments
-    #[command(arg_required_else_help = true)]
     SwapProofCommitments {
         /// The path to the proof file
-        #[arg(short = 'P', long)]
+        #[arg(short = 'P', long, default_value = DEFAULT_PROOF)]
         proof_path: PathBuf,
         /// The path to the witness file
-        #[arg(short = 'W', long)]
+        #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
         witness_path: PathBuf,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Loads model, data, and creates proof
-    #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
@@ -556,7 +548,7 @@ pub enum Commands {
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for a single proof
-    #[command(name = "create-evm-verifier", arg_required_else_help = true)]
+    #[command(name = "create-evm-verifier")]
     CreateEVMVerifier {
         /// The path to load the desired params file
         #[arg(long)]
@@ -576,7 +568,7 @@ pub enum Commands {
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier that attests to on-chain inputs for a single proof
-    #[command(name = "create-evm-da", arg_required_else_help = true)]
+    #[command(name = "create-evm-da")]
     CreateEVMDataAttestation {
         /// The path to load the desired srs file from
         #[arg(long)]
@@ -605,7 +597,7 @@ pub enum Commands {
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an EVM verifier for an aggregate proof
-    #[command(name = "create-evm-verifier-aggr", arg_required_else_help = true)]
+    #[command(name = "create-evm-verifier-aggr")]
     CreateEVMVerifierAggr {
         /// The path to load the desired srs file from
         #[arg(long)]
@@ -620,14 +612,13 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_VERIFIER_AGGREGATED_ABI)]
         abi_path: PathBuf,
         // aggregated circuit settings paths, used to calculate the number of instances in the aggregate proof
-        #[arg(long)]
+        #[arg(long, default_value = DEFAULT_SETTINGS, value_delimiter = ',', allow_hyphen_values = true)]
         aggregation_settings: Vec<PathBuf>,
         // logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
         logrows: u32,
     },
     /// Verifies a proof, returning accept or reject
-    #[command(arg_required_else_help = true)]
     Verify {
         /// The path to load circuit params from
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
@@ -643,7 +634,6 @@ pub enum Commands {
         srs_path: Option<PathBuf>,
     },
     /// Verifies an aggregate proof, returning accept or reject
-    #[command(arg_required_else_help = true)]
     VerifyAggr {
         /// The path to the proof file
         #[arg(long, default_value = DEFAULT_PROOF_AGGREGATED)]
@@ -677,10 +667,10 @@ pub enum Commands {
         private_key: Option<String>,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    #[command(name = "deploy-evm-da", arg_required_else_help = true)]
+    #[command(name = "deploy-evm-da")]
     DeployEvmDataAttestation {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long)]
+        #[arg(short = 'D', long, default_value = DEFAULT_DATA)]
         data: PathBuf,
         /// The path to load circuit params from
         #[arg(long, default_value = DEFAULT_SETTINGS)]
@@ -703,7 +693,7 @@ pub enum Commands {
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Verifies a proof using a local EVM executor, returning accept or reject
-    #[command(name = "verify-evm", arg_required_else_help = true)]
+    #[command(name = "verify-evm")]
     VerifyEVM {
         /// The path to the proof file
         #[arg(long, default_value = DEFAULT_PROOF)]
@@ -720,10 +710,10 @@ pub enum Commands {
     },
 
     /// Print the proof in hexadecimal
-    #[command(name = "print-proof-hex", arg_required_else_help = true)]
+    #[command(name = "print-proof-hex")]
     PrintProofHex {
         /// The path to the proof file
-        #[arg(long)]
+        #[arg(long, default_value = DEFAULT_PROOF)]
         proof_path: PathBuf,
     },
 }
