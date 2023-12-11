@@ -610,7 +610,7 @@ fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult
     model = PathBuf::from(DEFAULT_MODEL),
     py_run_args = None
 ))]
-fn table(model: String, py_run_args: Option<PyRunArgs>) -> PyResult<String> {
+fn table(model: PathBuf, py_run_args: Option<PyRunArgs>) -> PyResult<String> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
     let result = Model::new(&mut reader, &run_args);
@@ -634,7 +634,7 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
 
 /// gets a public srs
 #[pyfunction(signature = (
-    settings_path=Some(PathBuf::from(DEFAULT_SETTINGS)),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
     logrows=None,
     srs_path=None
 ))]
