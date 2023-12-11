@@ -208,10 +208,10 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     GenWitness {
         /// The path to the .json data file
-        #[arg(short = 'D', long)]
+        #[arg(short = 'D', long, default_value = "input.json")]
         data: PathBuf,
         /// The path to the compiled model file
-        #[arg(short = 'M', long)]
+        #[arg(short = 'M', long, default_value = "model.compiled")]
         compiled_circuit: PathBuf,
         /// Path to the witness (public and private inputs) .json file
         #[arg(short = 'O', long, default_value = "witness.json")]
@@ -228,7 +228,7 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     GenSettings {
         /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
+        #[arg(short = 'M', long, default_value = "network.onnx")]
         model: PathBuf,
         /// Path to circuit_settings file to output
         #[arg(short = 'O', long, default_value = "settings.json")]
@@ -243,13 +243,13 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     CalibrateSettings {
         /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
+        #[arg(short = 'M', long, default_value = "network.onnx")]
         model: PathBuf,
         /// Path to circuit_settings file to read in AND overwrite.
         #[arg(short = 'O', long, default_value = "settings.json")]
         settings_path: PathBuf,
         /// The path to the .json calibration data file.
-        #[arg(short = 'D', long = "data")]
+        #[arg(short = 'D', long)]
         data: PathBuf,
         #[arg(long = "target", default_value = "resources")]
         /// Target for calibration.
@@ -294,10 +294,10 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Mock {
         /// The path to the .json witness file
-        #[arg(short = 'W', long)]
+        #[arg(short = 'W', long, default_value = "witness.json")]
         witness: PathBuf,
         /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
+        #[arg(short = 'M', long, default_value = "network.onnx")]
         model: PathBuf,
     },
 
@@ -331,7 +331,7 @@ pub enum Commands {
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
-        #[arg(long)]
+        #[arg(long, default_value = "23")]
         logrows: u32,
         /// whether the accumulated are segments of a larger proof
         #[arg(long, default_value = "false")]
@@ -344,7 +344,7 @@ pub enum Commands {
         #[arg(long)]
         aggregation_snarks: Vec<PathBuf>,
         /// The path to load the desired proving key file
-        #[arg(long)]
+        #[arg(long, default_value = "pk_aggr.key")]
         pk_path: PathBuf,
         /// The path to the desired output file
         #[arg(long, default_value = "proof_aggr.proof")]
@@ -361,7 +361,7 @@ pub enum Commands {
         )]
         transcript: TranscriptType,
         /// logrows used for aggregation circuit
-        #[arg(long)]
+        #[arg(long, default_value = "23")]
         logrows: u32,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = "safe")]
@@ -374,10 +374,10 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     CompileCircuit {
         /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
+        #[arg(short = 'M', long, default_value = "network.onnx")]
         model: PathBuf,
         /// The path to output the processed model
-        #[arg(long)]
+        #[arg(long, default_value = "model.compiled")]
         compiled_circuit: PathBuf,
         /// The path to load circuit params from
         #[arg(short = 'S', long)]
@@ -387,7 +387,7 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Setup {
         /// The path to the compiled model file
-        #[arg(short = 'M', long)]
+        #[arg(short = 'M', long, default_value = "model.compiled")]
         compiled_circuit: PathBuf,
         /// The srs path
         #[arg(long)]
@@ -408,10 +408,10 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Fuzz {
         /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'W', long)]
+        #[arg(short = 'W', long, default_value = "witness.json")]
         witness: PathBuf,
         /// The path to the processed model file
-        #[arg(short = 'M', long)]
+        #[arg(short = 'M', long, default_value = "model.compiled")]
         compiled_circuit: PathBuf,
         #[arg(
             long,
@@ -477,13 +477,13 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     Prove {
         /// The path to the .json witness file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'W', long)]
+        #[arg(short = 'W', long, default_value = "witness.json")]
         witness: PathBuf,
         /// The path to the compiled model file
-        #[arg(short = 'M', long)]
+        #[arg(short = 'M', long, default_value = "model.compiled")]
         compiled_circuit: PathBuf,
         /// The path to load the desired proving key file
-        #[arg(long)]
+        #[arg(long, default_value = "pk.key")]
         pk_path: PathBuf,
         /// The path to the desired output file
         #[arg(long, default_value = "proof.proof")]
@@ -511,10 +511,10 @@ pub enum Commands {
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// The path to load circuit settings from
-        #[arg(short = 'S', long)]
+        #[arg(short = 'S', long, default_value = "settings.json")]
         settings_path: PathBuf,
         /// The path to load the desired verification key file
-        #[arg(long)]
+        #[arg(long, default_value = "vk.key")]
         vk_path: PathBuf,
         /// The path to output the Solidity code
         #[arg(long, default_value = "evm_deploy.sol")]
@@ -531,10 +531,10 @@ pub enum Commands {
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// The path to load circuit settings from
-        #[arg(short = 'S', long)]
+        #[arg(short = 'S', long, default_value = "settings.json")]
         settings_path: PathBuf,
         /// The path to load the desired verification key file
-        #[arg(long)]
+        #[arg(long, default_value = "vk.key")]
         vk_path: PathBuf,
         /// The path to output the Solidity code
         #[arg(long, default_value = "evm_da_deploy.sol")]
@@ -547,7 +547,7 @@ pub enum Commands {
         /// needed need to read from all the on-chain
         /// view functions that return the data that the network
         /// ingests as inputs.
-        #[arg(short = 'D', long)]
+        #[arg(short = 'D', long, default_value = "input.json")]
         data: PathBuf,
         // todo, optionally allow supplying proving key
     },
@@ -559,8 +559,8 @@ pub enum Commands {
         /// The path to load the desired srs file from
         #[arg(long)]
         srs_path: Option<PathBuf>,
-        /// The path to output to load the desired verification key file
-        #[arg(long)]
+        /// The path to  to load the desired verification key file
+        #[arg(long, default_value = "vk_aggr.key")]
         vk_path: PathBuf,
         /// The path to the Solidity code
         #[arg(long, default_value = "evm_deploy_aggr.sol")]
@@ -572,20 +572,20 @@ pub enum Commands {
         #[arg(long)]
         aggregation_settings: Vec<PathBuf>,
         // logrows used for aggregation circuit
-        #[arg(long)]
+        #[arg(long, default_value = "23")]
         logrows: u32,
     },
     /// Verifies a proof, returning accept or reject
     #[command(arg_required_else_help = true)]
     Verify {
         /// The path to load circuit params from
-        #[arg(short = 'S', long)]
+        #[arg(short = 'S', long, default_value = "settings.json")]
         settings_path: PathBuf,
         /// The path to the proof file
-        #[arg(long)]
+        #[arg(long, default_value = "proof.proof")]
         proof_path: PathBuf,
         /// The path to output the desired verification key file (optional)
-        #[arg(long)]
+        #[arg(long, default_value = "vk.key")]
         vk_path: PathBuf,
         /// The kzg srs path
         #[arg(long)]
@@ -595,22 +595,22 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     VerifyAggr {
         /// The path to the proof file
-        #[arg(long)]
+        #[arg(long, default_value = "proof_aggr.proof")]
         proof_path: PathBuf,
         /// The path to output the desired verification key file (optional)
-        #[arg(long)]
+        #[arg(long, default_value = "vk_aggr.key")]
         vk_path: PathBuf,
         /// The srs path
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
-        #[arg(long)]
+        #[arg(long, default_value = "23")]
         logrows: u32,
     },
     #[cfg(not(target_arch = "wasm32"))]
     DeployEvmVerifier {
         /// The path to the Solidity code
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy.sol")]
         sol_code_path: PathBuf,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
@@ -632,10 +632,10 @@ pub enum Commands {
         #[arg(short = 'D', long)]
         data: PathBuf,
         /// The path to load circuit params from
-        #[arg(long)]
+        #[arg(long, default_value = "settings.json")]
         settings_path: PathBuf,
         /// The path to the Solidity code
-        #[arg(long)]
+        #[arg(long, default_value = "evm_deploy_da.sol")]
         sol_code_path: PathBuf,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
@@ -655,10 +655,10 @@ pub enum Commands {
     #[command(name = "verify-evm", arg_required_else_help = true)]
     VerifyEVM {
         /// The path to the proof file
-        #[arg(long)]
+        #[arg(long, default_value = "proof.proof")]
         proof_path: PathBuf,
         /// The path to verfier contract's address
-        #[arg(long)]
+        #[arg(long, default_value = "contract.address")]
         addr_verifier: H160,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
