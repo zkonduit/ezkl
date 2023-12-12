@@ -6,9 +6,10 @@ use crate::circuit::modules::poseidon::{
 };
 use crate::circuit::modules::Module;
 use crate::circuit::{CheckMode, Tolerance};
-use crate::commands::CalibrationTarget;
+use crate::commands::*;
 use crate::fieldutils::{felt_to_i128, i128_to_felt};
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
+use crate::graph::TestDataSource;
 use crate::graph::{
     quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
 };
@@ -31,7 +32,6 @@ use snark_verifier::util::arithmetic::PrimeField;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
-use crate::graph::TestDataSource;
 
 type PyFelt = [u64; 4];
 
@@ -52,8 +52,6 @@ impl From<PyTestDataSource> for TestDataSource {
         }
     }
 }
-
-
 
 /// pyclass containing the struct used for G1
 #[pyclass]
@@ -77,12 +75,12 @@ impl From<G1> for PyG1 {
     }
 }
 
-impl Into<G1> for PyG1 {
-    fn into(self) -> G1 {
+impl From<PyG1> for G1 {
+    fn from(val: PyG1) -> Self {
         G1 {
-            x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&self.x),
-            y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&self.y),
-            z: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&self.z),
+            x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.x),
+            y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.y),
+            z: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.z),
         }
     }
 }
@@ -119,11 +117,11 @@ impl From<G1Affine> for PyG1Affine {
     }
 }
 
-impl Into<G1Affine> for PyG1Affine {
-    fn into(self) -> G1Affine {
+impl From<PyG1Affine> for G1Affine {
+    fn from(val: PyG1Affine) -> Self {
         G1Affine {
-            x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&self.x),
-            y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&self.y),
+            x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.x),
+            y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.y),
         }
     }
 }
@@ -157,7 +155,7 @@ impl From<PyElGamalCipher> for ElGamalCipher {
             c2: py_elgamal_cipher
                 .c2
                 .iter()
-                .map(|x| crate::pfsys::vecu64_to_field_montgomery::<Fr>(&x))
+                .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
                 .collect::<Vec<_>>(),
         }
     }
@@ -170,7 +168,7 @@ impl From<ElGamalCipher> for PyElGamalCipher {
             c2: elgamal_cipher
                 .c2
                 .iter()
-                .map(|x| crate::pfsys::field_to_vecu64_montgomery::<Fr>(&x))
+                .map(crate::pfsys::field_to_vecu64_montgomery::<Fr>)
                 .collect::<Vec<_>>(),
         }
     }
@@ -290,19 +288,7 @@ struct PyRunArgs {
 impl PyRunArgs {
     #[new]
     fn new() -> Self {
-        PyRunArgs {
-            tolerance: 0.0,
-            input_scale: 7,
-            param_scale: 7,
-            scale_rebase_multiplier: 1,
-            num_inner_cols: 2,
-            lookup_range: (-32768, 32768),
-            logrows: 17,
-            input_visibility: Visibility::Private,
-            output_visibility: Visibility::Public,
-            param_visibility: Visibility::Private,
-            variables: vec![("batch_size".to_string(), 1)],
-        }
+        RunArgs::default().into()
     }
 }
 
@@ -328,7 +314,7 @@ impl From<PyRunArgs> for RunArgs {
 impl Into<PyRunArgs> for RunArgs {
     fn into(self) -> PyRunArgs {
         PyRunArgs {
-            tolerance: self.tolerance.val.into(),
+            tolerance: self.tolerance.val,
             input_scale: self.input_scale,
             param_scale: self.param_scale,
             num_inner_cols: self.num_inner_cols,
@@ -426,7 +412,7 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
 
     let mut chunks = chunks?;
 
-    if remainder.len() != 0 {
+    if !remainder.is_empty() {
         remainder.resize(16, 0);
         // Convert the Vec<u8> to [u8; 16]
         let remainder_array: [u8; 16] = remainder
@@ -454,7 +440,7 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
 fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
     let message: Vec<Fr> = message
         .iter()
-        .map(|x| crate::pfsys::vecu64_to_field_montgomery::<Fr>(&x))
+        .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
         .collect::<Vec<_>>();
 
     let output =
@@ -465,7 +451,7 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
 
     let hash = output[0]
         .iter()
-        .map(|x| crate::pfsys::field_to_vecu64_montgomery::<Fr>(&x))
+        .map(crate::pfsys::field_to_vecu64_montgomery::<Fr>)
         .collect::<Vec<_>>();
     Ok(hash)
 }
@@ -485,7 +471,7 @@ fn kzg_commit(
 ) -> PyResult<Vec<PyG1Affine>> {
     let message: Vec<Fr> = message
         .iter()
-        .map(|x| crate::pfsys::vecu64_to_field_montgomery::<Fr>(&x))
+        .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
         .collect::<Vec<_>>();
 
     let settings = GraphSettings::load(&settings_path)
@@ -511,8 +497,8 @@ fn kzg_commit(
 
 /// Swap the commitments in a proof
 #[pyfunction(signature = (
-    proof_path,
-    witness_path,
+    proof_path=PathBuf::from(DEFAULT_PROOF),
+    witness_path=PathBuf::from(DEFAULT_WITNESS),
     ))]
 fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResult<()> {
     crate::execute::swap_proof_commitments(proof_path, witness_path)
@@ -533,7 +519,7 @@ pub fn elgamal_encrypt(
     let pk: G1Affine = pk.into();
     let message = message
         .iter()
-        .map(|x| crate::pfsys::vecu64_to_field_montgomery::<Fr>(&x))
+        .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
         .collect::<Vec<_>>();
     let r = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&r);
 
@@ -552,7 +538,7 @@ pub fn elgamal_decrypt(cipher: PyElGamalCipher, sk: PyFelt) -> PyResult<Vec<PyFe
 
     let output = output
         .iter()
-        .map(|x| crate::pfsys::field_to_vecu64_montgomery::<Fr>(&x))
+        .map(crate::pfsys::field_to_vecu64_montgomery::<Fr>)
         .collect::<Vec<_>>();
 
     Ok(output)
@@ -621,10 +607,10 @@ fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult
 
 /// Displays the table as a string in python
 #[pyfunction(signature = (
-    model,
+    model = PathBuf::from(DEFAULT_MODEL),
     py_run_args = None
 ))]
-fn table(model: String, py_run_args: Option<PyRunArgs>) -> PyResult<String> {
+fn table(model: PathBuf, py_run_args: Option<PyRunArgs>) -> PyResult<String> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
     let result = Model::new(&mut reader, &run_args);
@@ -648,7 +634,7 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
 
 /// gets a public srs
 #[pyfunction(signature = (
-    settings_path=None,
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
     logrows=None,
     srs_path=None
 ))]
@@ -674,8 +660,8 @@ fn get_srs(
 
 /// generates the circuit settings
 #[pyfunction(signature = (
-    model=PathBuf::from("network.onnx"),
-    output=PathBuf::from("settings.json"),
+    model=PathBuf::from(DEFAULT_MODEL),
+    output=PathBuf::from(DEFAULT_SETTINGS),
     py_run_args = None,
 ))]
 fn gen_settings(
@@ -695,10 +681,10 @@ fn gen_settings(
 
 /// calibrates the circuit settings
 #[pyfunction(signature = (
-    data,
-    model = PathBuf::from("network.onnx"),
-    settings = PathBuf::from("settings.json"),
-    target = None, // default is "resources
+    data = PathBuf::from(DEFAULT_CALIBRATION_FILE),
+    model = PathBuf::from(DEFAULT_MODEL),
+    settings = PathBuf::from(DEFAULT_SETTINGS),
+    target = CalibrationTarget::default(), // default is "resources
     scales = None,
     max_logrows = None,
 ))]
@@ -706,13 +692,10 @@ fn calibrate_settings(
     data: PathBuf,
     model: PathBuf,
     settings: PathBuf,
-    target: Option<CalibrationTarget>,
+    target: CalibrationTarget,
     scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
 ) -> Result<bool, PyErr> {
-    let target = target.unwrap_or(CalibrationTarget::Resources {
-        col_overflow: false,
-    });
     crate::execute::calibrate(model, data, settings, target, scales, max_logrows).map_err(|e| {
         let err_str = format!("Failed to calibrate settings: {}", e);
         PyRuntimeError::new_err(err_str)
@@ -723,8 +706,8 @@ fn calibrate_settings(
 
 /// runs the forward pass operation
 #[pyfunction(signature = (
-    data=PathBuf::from("input.json"),
-    model=PathBuf::from("network.onnx"),
+    data=PathBuf::from(DEFAULT_DATA),
+    model=PathBuf::from(DEFAULT_MODEL),
     output=None,
     vk_path=None,
     srs_path=None,
@@ -750,8 +733,8 @@ fn gen_witness(
 
 /// mocks the prover
 #[pyfunction(signature = (
-    witness=PathBuf::from("witness.json"),
-    model=PathBuf::from("network.onnx"),
+    witness=PathBuf::from(DEFAULT_WITNESS),
+    model=PathBuf::from(DEFAULT_MODEL),
 ))]
 fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     crate::execute::mock(model, witness).map_err(|e| {
@@ -763,8 +746,8 @@ fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
 
 /// mocks the aggregate prover
 #[pyfunction(signature = (
-    aggregation_snarks,
-    logrows,
+    aggregation_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
+    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     split_proofs = false,
 ))]
 fn mock_aggregate(
@@ -782,9 +765,9 @@ fn mock_aggregate(
 
 /// runs the prover on a set of inputs
 #[pyfunction(signature = (
-    model=PathBuf::from("network.onnx"),
-    vk_path=PathBuf::from("vk.key"),
-    pk_path=PathBuf::from("pk.key"),
+    model=PathBuf::from(DEFAULT_MODEL),
+    vk_path=PathBuf::from(DEFAULT_VK),
+    pk_path=PathBuf::from(DEFAULT_PK),
     srs_path=None,
     witness_path = None
 ))]
@@ -805,11 +788,11 @@ fn setup(
 
 /// runs the prover on a set of inputs
 #[pyfunction(signature = (
-    witness=PathBuf::from("witness.json"),
-    model=PathBuf::from("network.onnx"),
-    pk_path=PathBuf::from("pk.key"),
+    witness=PathBuf::from(DEFAULT_WITNESS),
+    model=PathBuf::from(DEFAULT_MODEL),
+    pk_path=PathBuf::from(DEFAULT_PK),
     proof_path=None,
-    proof_type=ProofType::Single,
+    proof_type=ProofType::default(),
     srs_path=None,
 ))]
 fn prove(
@@ -818,7 +801,7 @@ fn prove(
     pk_path: PathBuf,
     proof_path: Option<PathBuf>,
     proof_type: ProofType,
-     srs_path: Option<PathBuf>,
+    srs_path: Option<PathBuf>,
 ) -> PyResult<PyObject> {
     let snark = crate::execute::prove(
         witness,
@@ -839,16 +822,16 @@ fn prove(
 
 /// verifies a given proof
 #[pyfunction(signature = (
-    proof_path=PathBuf::from("proof.proof"),
-    settings_path=PathBuf::from("settings.json"),
-    vk_path=PathBuf::from("vk.key"),
+    proof_path=PathBuf::from(DEFAULT_PROOF),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    vk_path=PathBuf::from(DEFAULT_VK),
     srs_path=None,
 ))]
 fn verify(
     proof_path: PathBuf,
     settings_path: PathBuf,
     vk_path: PathBuf,
-     srs_path: Option<PathBuf>,
+    srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::verify(proof_path, settings_path, vk_path, srs_path).map_err(|e| {
         let err_str = format!("Failed to run verify: {}", e);
@@ -859,10 +842,10 @@ fn verify(
 }
 
 #[pyfunction(signature = (
-    sample_snarks,
-    vk_path=PathBuf::from("vk_aggr.key"),
-    pk_path=PathBuf::from("pk_aggr.key"),
-    logrows=23,
+    sample_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
+    vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
+    pk_path=PathBuf::from(DEFAULT_PK_AGGREGATED),
+    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     split_proofs = false,
     srs_path = None
 ))]
@@ -891,9 +874,9 @@ fn setup_aggregate(
 }
 
 #[pyfunction(signature = (
-    model=PathBuf::from("network.onnx"),
-    compiled_circuit=PathBuf::from("model.compiled"),
-    settings_path=PathBuf::from("settings.json"),
+    model=PathBuf::from(DEFAULT_MODEL),
+    compiled_circuit=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
 ))]
 fn compile_circuit(
     model: PathBuf,
@@ -910,11 +893,11 @@ fn compile_circuit(
 
 /// creates an aggregated proof
 #[pyfunction(signature = (
-    aggregation_snarks,
-    proof_path=PathBuf::from("proof_aggr.proof"),
-    vk_path=PathBuf::from("vk.key"),
-    transcript=TranscriptType::EVM,
-    logrows=23,
+    aggregation_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
+    proof_path=PathBuf::from(DEFAULT_PROOF_AGGREGATED),
+    vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
+    transcript=TranscriptType::default(),
+    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     check_mode=CheckMode::UNSAFE,
     split_proofs = false,
     srs_path=None,
@@ -927,7 +910,7 @@ fn aggregate(
     logrows: u32,
     check_mode: CheckMode,
     split_proofs: bool,
-     srs_path: Option<PathBuf>,
+    srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     // the K used for the aggregation circuit
     crate::execute::aggregate(
@@ -950,16 +933,16 @@ fn aggregate(
 
 /// verifies and aggregate proof
 #[pyfunction(signature = (
-    proof_path=PathBuf::from("proof_aggr.proof"),
-    vk_path=PathBuf::from("vk.key"),
-    logrows=23,
+    proof_path=PathBuf::from(DEFAULT_PROOF_AGGREGATED),
+    vk_path=PathBuf::from(DEFAULT_VK),
+    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     srs_path=None,
 ))]
 fn verify_aggr(
     proof_path: PathBuf,
     vk_path: PathBuf,
     logrows: u32,
-     srs_path: Option<PathBuf>,
+    srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::verify_aggr(proof_path, vk_path, srs_path, logrows).map_err(|e| {
         let err_str = format!("Failed to run verify_aggr: {}", e);
@@ -971,10 +954,10 @@ fn verify_aggr(
 
 /// creates an EVM compatible verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
-    vk_path,
-    settings_path=PathBuf::from("settings.json"),
-    sol_code_path=PathBuf::from("evm_deploy.sol"),
-    abi_path=PathBuf::from("verifier_abi.json"),
+    vk_path=PathBuf::from(DEFAULT_VK),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
+    abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
     srs_path=None,
 ))]
 fn create_evm_verifier(
@@ -982,7 +965,7 @@ fn create_evm_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-     srs_path: Option<PathBuf>,
+    srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path)
         .map_err(|e| {
@@ -995,11 +978,11 @@ fn create_evm_verifier(
 
 // creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
-    input_data,
-    vk_path=PathBuf::from("vk.key"),
-    settings_path=PathBuf::from("settings.json"),
-    sol_code_path=PathBuf::from("evm_da_deploy.sol"),
-    abi_path=PathBuf::from("verifier_da_abi.json"),
+    input_data=PathBuf::from(DEFAULT_DATA),
+    vk_path=PathBuf::from(DEFAULT_VK),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
+    abi_path=PathBuf::from(DEFAULT_VERIFIER_DA_ABI),
     srs_path=None,
 ))]
 fn create_evm_data_attestation(
@@ -1029,7 +1012,7 @@ fn create_evm_data_attestation(
 #[pyfunction(signature = (
     data_path,
     compiled_circuit_path,
-    test_data, 
+    test_data,
     input_source,
     output_source,
     rpc_url=None,
@@ -1043,28 +1026,28 @@ fn setup_test_evm_witness(
     rpc_url: Option<String>,
 ) -> Result<bool, PyErr> {
     Runtime::new()
-    .unwrap()
-    .block_on(crate::execute::setup_test_evm_witness(
-        data_path,
-        compiled_circuit_path,
-        test_data,
-        rpc_url,
-        input_source.into(),
-        output_source.into(),
-    )).map_err(|e| {
-        let err_str = format!("Failed to run setup_test_evm_witness: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+        .unwrap()
+        .block_on(crate::execute::setup_test_evm_witness(
+            data_path,
+            compiled_circuit_path,
+            test_data,
+            rpc_url,
+            input_source.into(),
+            output_source.into(),
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to run setup_test_evm_witness: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
-Ok(true)
-
+    Ok(true)
 }
 
 #[pyfunction(signature = (
     addr_path,
-    sol_code_path=PathBuf::from("evm_deploy.sol"),
+    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
     rpc_url=None,
-    optimizer_runs=1,
+    optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
     private_key=None
 ))]
 fn deploy_evm(
@@ -1094,10 +1077,10 @@ fn deploy_evm(
 #[pyfunction(signature = (
     addr_path,
     input_data,
-    settings_path=PathBuf::from("settings.json"),
-    sol_code_path=PathBuf::from("evm_da_deploy.sol"),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
     rpc_url=None,
-    optimizer_runs=1,
+    optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
     private_key=None
 ))]
 fn deploy_da_evm(
@@ -1130,7 +1113,7 @@ fn deploy_da_evm(
 /// verifies an evm compatible proof, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     addr_verifier,
-    proof_path=PathBuf::from("proof.proof"),
+    proof_path=PathBuf::from(DEFAULT_PROOF),
     rpc_url=None,
     addr_da = None,
 ))]
@@ -1172,11 +1155,11 @@ fn verify_evm(
 
 /// creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
-    aggregation_settings,
-    vk_path=PathBuf::from("vk_aggr.key"),
-    sol_code_path=PathBuf::from("evm_aggr_deploy.sol"),
-    abi_path=PathBuf::from("verifier_aggr_abi.json"),
-    logrows=23,
+    aggregation_settings=vec![PathBuf::from(DEFAULT_PROOF)],
+    vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
+    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
+    abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
+    logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     srs_path=None,
 ))]
 fn create_evm_verifier_aggr(
@@ -1193,7 +1176,7 @@ fn create_evm_verifier_aggr(
         sol_code_path,
         abi_path,
         aggregation_settings,
-        logrows
+        logrows,
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);

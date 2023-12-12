@@ -375,7 +375,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             let diff = self.num_inner_cols - remainder;
             self.increment(diff);
         }
-        if !(self.linear_coord % self.num_inner_cols == 0) {
+        if self.linear_coord % self.num_inner_cols != 0 {
             return Err("flush: linear coord is not aligned with the next row".into());
         }
         Ok(())

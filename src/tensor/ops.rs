@@ -2291,7 +2291,7 @@ pub fn sumpool(
 
     let unit = 1_i128;
 
-    let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit.clone());
+    let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit);
     kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1])?;
 
     let cartesian_coord = [(0..batch_size), (0..image_channels)]

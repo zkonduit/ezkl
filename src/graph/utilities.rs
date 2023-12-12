@@ -806,7 +806,7 @@ pub fn new_op_from_onnx(
                 .map(|(i, _)| i)
                 .collect::<Vec<_>>();
 
-            if !(const_idx.len() <= 1) {
+            if const_idx.len() > 1 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "mul".to_string())));
             }
 

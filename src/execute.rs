@@ -428,7 +428,10 @@ pub(crate) async fn get_srs_cmd(
     logrows: Option<u32>,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
-    let k = if let Some(settings_p) = settings_path {
+    // logrows overrides settings
+    let k = if let Some(k) = logrows {
+        k
+    } else if let Some(settings_p) = settings_path {
         if settings_p.exists() {
             let settings = GraphSettings::load(&settings_p)?;
             settings.run_args.logrows
@@ -438,8 +441,6 @@ pub(crate) async fn get_srs_cmd(
             );
             return Err(err_string.into());
         }
-    } else if let Some(k) = logrows {
-        k
     } else {
         let err_string = format!(
             "You will need to provide a settings file or set the logrows. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows)."

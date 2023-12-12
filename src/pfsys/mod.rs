@@ -43,8 +43,11 @@ use thiserror::Error as thisError;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
 #[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
+#[derive(
+    ValueEnum, Copy, Clone, Default, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd,
+)]
 pub enum ProofType {
+    #[default]
     Single,
     ForAggr,
 }
@@ -142,9 +145,12 @@ pub enum PfSysError {
 }
 
 #[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
+#[derive(
+    ValueEnum, Default, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd,
+)]
 pub enum TranscriptType {
     Poseidon,
+    #[default]
     EVM,
 }
 
@@ -230,10 +236,10 @@ where
             .iter()
             .map(|x| x.iter().map(|fp| field_to_vecu64_montgomery(fp)).collect())
             .collect::<Vec<_>>();
-        dict.set_item("instances", &field_elems).unwrap();
+        dict.set_item("instances", field_elems).unwrap();
         let hex_proof = hex::encode(&self.proof);
-        dict.set_item("proof", &hex_proof).unwrap();
-        dict.set_item("transcript_type", &self.transcript_type)
+        dict.set_item("proof", hex_proof).unwrap();
+        dict.set_item("transcript_type", self.transcript_type)
             .unwrap();
         dict.to_object(py)
     }
