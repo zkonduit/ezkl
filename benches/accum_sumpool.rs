@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use ezkl::circuit::poly::PolyOp;
+use ezkl::circuit::hybrid::HybridOp;
 use ezkl::circuit::*;
 use ezkl::pfsys::create_keys;
 use ezkl::pfsys::create_proof_circuit_kzg;
@@ -61,10 +61,11 @@ impl Circuit<Fr> for MyCircuit {
                     .layout(
                         &mut region,
                         &[self.image.clone()],
-                        Box::new(PolyOp::SumPool {
+                        Box::new(HybridOp::SumPool {
                             padding: [(0, 0); 2],
                             stride: (1, 1),
                             kernel_shape: (2, 2),
+                            normalized: false,
                         }),
                     )
                     .unwrap();

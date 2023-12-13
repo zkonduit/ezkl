@@ -44,7 +44,7 @@ use instant::Instant;
 use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::debug;
-use log::{info, trace};
+use log::{info, trace, warn};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
@@ -55,7 +55,8 @@ use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
@@ -66,8 +67,6 @@ use std::sync::OnceLock;
 use std::time::Duration;
 use tabled::Tabled;
 use thiserror::Error;
-#[cfg(not(target_arch = "wasm32"))]
-use tokio_util::codec::{BytesCodec, FramedRead};
 
 #[cfg(not(target_arch = "wasm32"))]
 static _SOLC_REQUIREMENT: OnceLock<bool> = OnceLock::new();
@@ -95,6 +94,22 @@ fn check_solc_requirement() {
     });
 }
 
+use lazy_static::lazy_static;
+
+lazy_static! {
+    #[derive(Debug)]
+    /// The path to the ezkl related data.
+    pub static ref EZKL_REPO_PATH: String =
+        std::env::var("EZKL_REPO_PATH").unwrap_or_else(|_|
+            // $HOME/.ezkl/
+            format!("{}/.ezkl", std::env::var("HOME").unwrap())
+        );
+
+    /// The path to the ezkl related data (SRS)
+    pub static ref EZKL_SRS_REPO_PATH: String = format!("{}/srs", *EZKL_REPO_PATH);
+
+}
+
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum ExecutionError {
@@ -103,8 +118,19 @@ pub enum ExecutionError {
     VerifyError(Vec<VerifyFailure>),
 }
 
+lazy_static::lazy_static! {
+    // read from env EZKL_WORKING_DIR var or default to current dir
+    static ref WORKING_DIR: PathBuf = {
+        let wd = std::env::var("EZKL_WORKING_DIR").unwrap_or_else(|_| ".".to_string());
+        PathBuf::from(wd)
+    };
+}
+
 /// Run an ezkl command with given args
 pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
+    // set working dir
+    std::env::set_current_dir(WORKING_DIR.as_path())?;
+
     match command {
         Commands::Empty => Ok(()),
         #[cfg(not(target_arch = "wasm32"))]
@@ -185,12 +211,14 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             sol_code_path,
             abi_path,
             aggregation_settings,
+            logrows,
         } => create_evm_aggregate_verifier(
             vk_path,
             srs_path,
             sol_code_path,
             abi_path,
             aggregation_settings,
+            logrows,
         ),
         Commands::CompileCircuit {
             model,
@@ -350,63 +378,23 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             addr_da,
         } => verify_evm(proof_path, addr_verifier, rpc_url, addr_da).await,
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::GetHubCredentials {
-            api_key,
-            username,
-            url,
-        } => get_hub_credentials(api_key.as_deref(), url.as_deref(), &username)
-            .await
-            .map(|_| ()),
-
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::CreateHubArtifact {
-            api_key,
-            uncompiled_circuit,
-            data,
-            organization_id,
-            artifact_name,
-            url,
-            args,
-            target,
-        } => deploy_model(
-            api_key.as_deref(),
-            url.as_deref(),
-            &uncompiled_circuit,
-            &data,
-            &artifact_name,
-            &organization_id,
-            &args,
-            &target,
-        )
-        .await
-        .map(|_| ()),
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::GetHubArtifact {
-            api_key,
-            artifact_id,
-            url,
-        } => get_deployed_model(api_key.as_deref(), url.as_deref(), &artifact_id)
-            .await
-            .map(|_| ()),
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::GetHubProof {
-            api_key,
-            proof_id,
-            url,
-        } => get_hub_proof(api_key.as_deref(), url.as_deref(), &proof_id)
-            .await
-            .map(|_| ()),
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::ProveHub {
-            api_key,
-            artifact_id,
-            data,
-            url,
-        } => prove_hub(api_key.as_deref(), url.as_deref(), &artifact_id, &data)
-            .await
-            .map(|_| ()),
     }
+}
+
+/// Get the srs path
+pub fn get_srs_path(logrows: u32, srs_path: Option<PathBuf>) -> PathBuf {
+    if let Some(srs_path) = srs_path {
+        srs_path
+    } else {
+        if !Path::new(&*EZKL_SRS_REPO_PATH).exists() {
+            std::fs::create_dir_all(&*EZKL_SRS_REPO_PATH).unwrap();
+        }
+        (EZKL_SRS_REPO_PATH.clone() + &format!("/kzg{}.srs", logrows)).into()
+    }
+}
+
+fn srs_exists_check(logrows: u32, srs_path: Option<PathBuf>) -> bool {
+    Path::new(&get_srs_path(logrows, srs_path)).exists()
 }
 
 pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>> {
@@ -437,12 +425,15 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn get_srs_cmd(
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
     check_mode: CheckMode,
 ) -> Result<(), Box<dyn Error>> {
-    let k = if let Some(settings_p) = settings_path {
+    // logrows overrides settings
+    let k = if let Some(k) = logrows {
+        k
+    } else if let Some(settings_p) = settings_path {
         if settings_p.exists() {
             let settings = GraphSettings::load(&settings_p)?;
             settings.run_args.logrows
@@ -452,8 +443,6 @@ pub(crate) async fn get_srs_cmd(
             );
             return Err(err_string.into());
         }
-    } else if let Some(k) = logrows {
-        k
     } else {
         let err_string = format!(
             "You will need to provide a settings file or set the logrows. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows)."
@@ -461,23 +450,28 @@ pub(crate) async fn get_srs_cmd(
         return Err(err_string.into());
     };
 
-    let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
-    let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
-    // check the SRS
-    if matches!(check_mode, CheckMode::SAFE) {
-        #[cfg(not(target_arch = "wasm32"))]
-        let pb = init_spinner();
-        #[cfg(not(target_arch = "wasm32"))]
-        pb.set_message("Validating SRS (this may take a while) ...");
-        ParamsKZG::<Bn256>::read(&mut reader)?;
-        #[cfg(not(target_arch = "wasm32"))]
-        pb.finish_with_message("SRS validated");
+    if !srs_exists_check(k, srs_path.clone()) {
+        info!("SRS does not exist, downloading...");
+        let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
+        let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
+        // check the SRS
+        if matches!(check_mode, CheckMode::SAFE) {
+            #[cfg(not(target_arch = "wasm32"))]
+            let pb = init_spinner();
+            #[cfg(not(target_arch = "wasm32"))]
+            pb.set_message("Validating SRS (this may take a while) ...");
+            ParamsKZG::<Bn256>::read(&mut reader)?;
+            #[cfg(not(target_arch = "wasm32"))]
+            pb.finish_with_message("SRS validated");
+        }
+
+        let mut file = std::fs::File::create(get_srs_path(k, srs_path))?;
+        file.write_all(reader.get_ref())?;
+        info!("SRS downloaded");
+    } else {
+        info!("SRS already exists at that path");
     }
 
-    let mut file = std::fs::File::create(srs_path)?;
-    file.write_all(reader.get_ref())?;
-
-    info!("SRS downloaded");
     Ok(())
 }
 
@@ -509,8 +503,15 @@ pub(crate) async fn gen_witness(
         None
     };
 
-    let srs = if let Some(srs) = srs_path {
-        Some(load_params_cmd(srs, settings.run_args.logrows)?)
+    // if any of the settings have kzg visibility then we need to load the srs
+
+    let srs = if settings.module_requires_kzg() {
+        if get_srs_path(settings.run_args.logrows, srs_path.clone()).exists() {
+            Some(load_params_cmd(srs_path, settings.run_args.logrows)?)
+        } else {
+            warn!("SRS for kzg commit does not exist (will be ignored)");
+            None
+        }
     } else {
         None
     };
@@ -709,6 +710,7 @@ pub(crate) fn calibrate(
     // we load the model to get the input and output shapes
     // check if gag already exists
 
+    #[cfg(unix)]
     let _r = match Gag::stdout() {
         Ok(r) => Some(r),
         Err(_) => None,
@@ -716,6 +718,7 @@ pub(crate) fn calibrate(
 
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
     // drop the gag
+    #[cfg(unix)]
     std::mem::drop(_r);
 
     let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
@@ -790,10 +793,12 @@ pub(crate) fn calibrate(
         // vec of settings copied chunks.len() times
         let run_args_iterable = vec![settings.run_args.clone(); chunks.len()];
 
+        #[cfg(unix)]
         let _r = match Gag::stdout() {
             Ok(r) => Some(r),
             Err(_) => None,
         };
+        #[cfg(unix)]
         let _q = match Gag::stderr() {
             Ok(r) => Some(r),
             Err(_) => None,
@@ -874,7 +879,9 @@ pub(crate) fn calibrate(
         }
 
         // drop the gag
+        #[cfg(unix)]
         std::mem::drop(_r);
+        #[cfg(unix)]
         std::mem::drop(_q);
 
         let max_lookup_range = res
@@ -1094,7 +1101,7 @@ pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_verifier(
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
@@ -1130,7 +1137,7 @@ pub(crate) fn create_evm_verifier(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_data_attestation(
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
@@ -1287,12 +1294,14 @@ pub(crate) async fn verify_evm(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
     circuit_settings: Vec<PathBuf>,
+    logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
     check_solc_requirement();
+    let srs_path = get_srs_path(logrows, srs_path);
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
     let mut settings: Vec<GraphSettings> = vec![];
@@ -1353,7 +1362,7 @@ pub(crate) fn compile_circuit(
 
 pub(crate) fn setup(
     compiled_circuit: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     vk_path: PathBuf,
     pk_path: PathBuf,
     witness: Option<PathBuf>,
@@ -1435,7 +1444,7 @@ pub(crate) fn prove(
     compiled_circuit_path: PathBuf,
     pk_path: PathBuf,
     proof_path: Option<PathBuf>,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     proof_type: ProofType,
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
@@ -1776,7 +1785,7 @@ pub(crate) fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
     vk_path: PathBuf,
     pk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     logrows: u32,
     split_proofs: bool,
 ) -> Result<(), Box<dyn Error>> {
@@ -1805,7 +1814,7 @@ pub(crate) fn aggregate(
     proof_path: PathBuf,
     aggregation_snarks: Vec<PathBuf>,
     pk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     transcript: TranscriptType,
     logrows: u32,
     check_mode: CheckMode,
@@ -1861,7 +1870,7 @@ pub(crate) fn verify(
     proof_path: PathBuf,
     settings_path: PathBuf,
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
@@ -1884,7 +1893,7 @@ pub(crate) fn verify(
 pub(crate) fn verify_aggr(
     proof_path: PathBuf,
     vk_path: PathBuf,
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     logrows: u32,
 ) -> Result<(), Box<dyn Error>> {
     let params = load_params_cmd(srs_path, logrows)?;
@@ -1907,358 +1916,12 @@ pub(crate) fn verify_aggr(
     Ok(())
 }
 
-/// helper function to handle graphql errors
-async fn parse_response(
-    response: reqwest::Response,
-) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    // Check if the response status is success
-    if !response.status().is_success() {
-        let status = response.status();
-        let error_message = format!("Request failed with status code: {}", status);
-        return Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            error_message,
-        )));
-    }
-
-    let response_body = response.json::<serde_json::Value>().await?;
-
-    // Check if 'data' is null and 'errors' are present
-    if response_body.get("data").is_none() || response_body.get("data").unwrap().is_null() {
-        if let Some(errors) = response_body.get("errors") {
-            let error_messages: Vec<String> = errors
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|error| error["message"].as_str().unwrap_or_default().to_string())
-                .collect();
-
-            let custom_error_message = format!("An error occurred: {}", error_messages.join(", "));
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                custom_error_message,
-            )));
-        } else {
-            let error_message =
-                "An error occurred: Response contains null data but no error details.";
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                error_message,
-            )));
-        }
-    }
-
-    Ok(response_body)
-}
-
-/// Retrieves the user's credentials from the hub
-pub(crate) async fn get_hub_credentials(
-    api_key: Option<&str>,
-    url: Option<&str>,
-    username: &str,
-) -> Result<crate::hub::Organizations, Box<dyn Error>> {
-    let client = reqwest::Client::new();
-    let request_body = serde_json::json!({
-        "query": r#"
-            query GetOrganizationId($username: String!) {
-                organizations(name: $username) {
-                    id
-                    name
-                }
-            }
-        "#,
-        "variables": {
-            "username": username,
-        }
-    });
-    let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
-    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
-
-    let response = client
-        .post(url)
-        .header("API-Key", format!("{}", api_key))
-        .json(&request_body)
-        .send()
-        .await?;
-
-    // Using the parse_response helper function
-    let response_body = parse_response(response).await?;
-
-    // Extracting the organizations data
-    let organizations: crate::hub::Organizations =
-        serde_json::from_value(response_body["data"].clone())?;
-
-    log::info!(
-        "Organization ID : {}",
-        organizations.as_json()?.to_colored_json_auto()?
-    );
-    Ok(organizations)
-}
-
-/// Deploy a model
-pub(crate) async fn deploy_model(
-    api_key: Option<&str>,
-    url: Option<&str>,
-    model: &Path,
-    input: &Path,
-    name: &str,
-    organization_id: &str,
-    args: &RunArgs,
-    target: &CalibrationTarget,
-) -> Result<crate::hub::Artifact, Box<dyn Error>> {
-    let model_file = tokio::fs::File::open(model.canonicalize()?).await?;
-    // read file body stream
-    let stream = FramedRead::new(model_file, BytesCodec::new());
-    let model_file_body = reqwest::Body::wrap_stream(stream);
-
-    let model_file = reqwest::multipart::Part::stream(model_file_body).file_name("uncompiledModel");
-
-    let input_file = tokio::fs::File::open(input.canonicalize()?).await?;
-    // read file body stream
-    let stream = FramedRead::new(input_file, BytesCodec::new());
-    let input_file_body = reqwest::Body::wrap_stream(stream);
-
-    //make form part of file
-    let input_file = reqwest::multipart::Part::stream(input_file_body).file_name("input");
-
-    // the graphql request map
-    let map = r#"{
-            "uncompiledModel": [
-                "variables.uncompiledModel"
-            ],
-            "input": [
-                "variables.input"
-            ]
-        }"#;
-
-    let operations = serde_json::json!({
-        "query": "mutation($uncompiledModel: Upload!, $input: Upload!, $organizationId: String!, $name: String!, $calibrationTarget: String!, $tolerance: Float!, $inputVisibility: String!, $outputVisibility: String!, $paramVisibility: String!) {
-                generateArtifact(
-                    name: $name,
-                    description: $name,
-                    uncompiledModel: $uncompiledModel,
-                    input: $input,
-                    organizationId: $organizationId, 
-                    calibrationTarget: $calibrationTarget, 
-                    tolerance: $tolerance, 
-                    inputVisibility: $inputVisibility,
-                    outputVisibility: $outputVisibility,
-                    paramVisibility: $paramVisibility,
-                ) {
-                    id
-                    name
-                    status
-                    errors
-                }
-            }",
-        "variables": {
-            "name": name,
-            "uncompiledModel": null,
-            "input": null,
-            "organizationId": organization_id,
-            "calibrationTarget": target.to_string(),
-            "tolerance": args.tolerance.val,
-            "inputVisibility": args.input_visibility.to_string(),
-            "outputVisibility": args.output_visibility.to_string(),
-            "paramVisibility": args.param_visibility.to_string(),
-        }
-    })
-    .to_string();
-
-    // now the form data
-    let mut form = reqwest::multipart::Form::new();
-    form = form
-        .text("operations", operations)
-        .text("map", map)
-        .part("uncompiledModel", model_file)
-        .part("input", input_file);
-
-    let client = reqwest::Client::new();
-    let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
-    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
-    //send request
-    let response = client
-        .post(url)
-        .header("API-Key", format!("{}", api_key))
-        .multipart(form)
-        .send()
-        .await?;
-    let response_body = parse_response(response).await?;
-    let artifact_data: crate::hub::Artifact =
-        serde_json::from_value(response_body["data"]["generateArtifact"].clone())?;
-    log::info!(
-        "Artifact Data : {}",
-        artifact_data.as_json()?.to_colored_json_auto()?
-    );
-    Ok(artifact_data)
-}
-
-/// Get the artifact from the hub
-pub(crate) async fn get_deployed_model(
-    api_key: Option<&str>,
-    url: Option<&str>,
-    id: &str,
-) -> Result<crate::hub::Artifact, Box<dyn Error>> {
-    let query = serde_json::json!({
-        "query": "query getArtifact($id: String!){
-            artifact(id: $id) {
-                id
-                name
-                status
-                errors
-            }
-        }",
-        "variables": {
-            "id": id,
-        }
-    });
-    let client = reqwest::Client::new();
-    let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
-    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
-    //send request
-    let response = client
-        .post(url)
-        .header("API-Key", format!("{}", api_key))
-        .json(&query)
-        .send()
-        .await?;
-    let response_body = parse_response(response).await?;
-    let artifact_data: crate::hub::Artifact =
-        serde_json::from_value(response_body["data"]["artifact"].clone())?;
-    log::info!(
-        "Artifact Data : {}",
-        artifact_data.as_json()?.to_colored_json_auto()?
-    );
-    Ok(artifact_data)
-}
-
-/// Generates proofs on the hub
-pub async fn prove_hub(
-    api_key: Option<&str>,
-    url: Option<&str>,
-    id: &str,
-    input: &Path,
-) -> Result<crate::hub::Proof, Box<dyn std::error::Error>> {
-    let input_file = tokio::fs::File::open(input.canonicalize()?).await?;
-    let stream = FramedRead::new(input_file, BytesCodec::new());
-    let input_file_body = reqwest::Body::wrap_stream(stream);
-
-    let input_file = reqwest::multipart::Part::stream(input_file_body).file_name("input");
-
-    let map = r#"{
-        "input": [
-            "variables.input"
-        ]
-    }"#;
-
-    let operations = serde_json::json!({
-        "query": r#"
-            mutation($input: Upload!, $id: String!) {
-                initiateProof(input: $input, id: $id) {
-                    id
-                }
-            }
-        "#,
-        "variables": {
-            "input": null,
-            "id": id,
-        }
-    })
-    .to_string();
-
-    let mut form = reqwest::multipart::Form::new();
-    form = form
-        .text("operations", operations)
-        .text("map", map)
-        .part("input", input_file);
-    let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
-    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
-    let client = reqwest::Client::new();
-    let response = client
-        .post(url)
-        .header("API-Key", format!("{}", api_key))
-        .multipart(form)
-        .send()
-        .await?;
-
-    let response_body = parse_response(response).await?;
-
-    // Check if 'data' is null and 'errors' are present
-    if response_body.get("data").is_none() || response_body.get("data").unwrap().is_null() {
-        if let Some(errors) = response_body.get("errors") {
-            let error_messages: Vec<String> = errors
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|error| error["message"].as_str().unwrap_or_default().to_string())
-                .collect();
-
-            let custom_error_message = format!("An error occurred: {}", error_messages.join(", "));
-            log::error!("{}", custom_error_message);
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                custom_error_message,
-            )));
-        } else {
-            let error_message =
-                "An error occurred: Response contains null data but no error details.";
-            log::error!("{}", error_message);
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                error_message,
-            )));
-        }
-    }
-    let proof_id: crate::hub::Proof =
-        serde_json::from_value(response_body["data"]["initiateProof"].clone())?;
-    log::info!("Proof ID : {}", proof_id.as_json()?.to_colored_json_auto()?);
-    Ok(proof_id)
-}
-
-/// Fetches proofs from the hub
-pub(crate) async fn get_hub_proof(
-    api_key: Option<&str>,
-    url: Option<&str>,
-    id: &str,
-) -> Result<crate::hub::Proof, Box<dyn Error>> {
-    let client = reqwest::Client::new();
-    let request_body = serde_json::json!({
-        "query": format!(r#"
-            query {{
-                getProof(id: "{}") {{
-                    id
-                    artifact {{ id name }}
-                    status
-                    proof
-                    instances
-                    transcriptType
-                }}
-            }}
-        "#, id),
-    });
-    let url = url.unwrap_or("https://hub-staging.ezkl.xyz/graphql");
-    let api_key = api_key.unwrap_or("ed896983-2ec3-4aaf-afa7-f01299f3d61f");
-
-    let response = client
-        .post(url)
-        .header("API-Key", format!("{:?}", api_key))
-        .json(&request_body)
-        .send()
-        .await?;
-    let response_body = parse_response(response).await?;
-
-    let proof: crate::hub::Proof =
-        serde_json::from_value(response_body["data"]["getProof"].clone())?;
-
-    log::info!("Proof : {}", proof.as_json()?.to_colored_json_auto()?);
-    Ok(proof)
-}
-
 /// helper function for load_params
 pub(crate) fn load_params_cmd(
-    srs_path: PathBuf,
+    srs_path: Option<PathBuf>,
     logrows: u32,
 ) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
+    let srs_path = get_srs_path(logrows, srs_path);
     let mut params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
     info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {

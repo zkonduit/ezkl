@@ -62,6 +62,7 @@ mod py_tests {
                 .args([
                     "install",
                     "torch==2.0.1",
+                    "torchvision==0.15.2",
                     "pandas==2.0.3",
                     "numpy==1.23",
                     "seaborn==0.12.2",
@@ -116,7 +117,9 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 37] = [
+    const TESTS: [&str; 33] = [
+        "proof_splitting.ipynb",
+        "mnist_gan_proof_splitting.ipynb",
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
@@ -125,7 +128,6 @@ mod py_tests {
         "simple_demo_all_public.ipynb",
         "data_attest.ipynb",
         "variance.ipynb",
-        "mean_postgres.ipynb",
         "little_transformer.ipynb",
         "simple_demo_aggregated_proofs.ipynb",
         "ezkl_demo.ipynb",
@@ -143,18 +145,13 @@ mod py_tests {
         "linear_regression.ipynb",
         "stacked_regression.ipynb",
         "data_attest_hashed.ipynb",
-        "simple_hub_demo.ipynb",
         "kzg_vis.ipynb",
         "kmeans.ipynb",
         "solvency.ipynb",
-        "proof_splitting.ipynb",
-        "mnist_gan_proof_splitting.ipynb",
         "sklearn_mlp.ipynb",
         "generalized_inverse.ipynb",
         "mnist_classifier.ipynb",
         "world_rotation.ipynb",
-        "tictactoe_binary_classification.ipynb",
-        "tictactoe_autoencoder.ipynb",
     ];
 
     macro_rules! test_func {
@@ -167,7 +164,7 @@ mod py_tests {
             use super::*;
 
 
-            seq!(N in 0..=36 {
+            seq!(N in 0..=32 {
 
             #(#[test_case(TESTS[N])])*
             fn run_notebook_(test: &str) {
@@ -196,6 +193,36 @@ mod py_tests {
                 run_notebook(path, "voice_judge.ipynb");
                 test_dir.close().unwrap();
                 anvil_child.kill().unwrap();
+            }
+
+            #[test]
+            fn postgres_notebook_() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("mean_postgres").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "mean_postgres.ipynb");
+                run_notebook(path, "mean_postgres.ipynb");
+                test_dir.close().unwrap();
+            }
+
+            #[test]
+            fn tictactoe_autoencoder_notebook_() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("tictactoe_autoencoder").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "tictactoe_autoencoder.ipynb");
+                run_notebook(path, "tictactoe_autoencoder.ipynb");
+                test_dir.close().unwrap();
+            }
+
+            #[test]
+            fn tictactoe_binary_classification_notebook_() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("tictactoe_binary_classification").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "tictactoe_binary_classification.ipynb");
+                run_notebook(path, "tictactoe_binary_classification.ipynb");
+                test_dir.close().unwrap();
             }
 
             #[test]

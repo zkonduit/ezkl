@@ -619,7 +619,10 @@ impl Node {
 
         input_ids
             .iter()
-            .map(|(i, _)| Ok(inputs.push(other_nodes.get(i).ok_or("input not found")?.clone())))
+            .map(|(i, _)| {
+                inputs.push(other_nodes.get(i).ok_or("input not found")?.clone());
+                Ok(())
+            })
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
         let (mut opkind, deleted_indices) = new_op_from_onnx(

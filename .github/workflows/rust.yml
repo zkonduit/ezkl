@@ -294,8 +294,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_fixed_params_ --test-threads 32
 
   prove-and-verify-evm-tests:
-    runs-on: ubuntu-latest-16-cores
-    needs: [build, library-tests, python-tests]
+    runs-on: non-gpu
+    needs: [build, library-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -351,8 +351,8 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify --test-threads 1
 
   prove-and-verify-tests:
-    runs-on: ubuntu-latest-32-cores
-    needs: [build, library-tests, python-tests]
+    runs-on: non-gpu
+    needs: [build, library-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -395,6 +395,8 @@ jobs:
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+      - name: KZG prove and verify tests (public outputs + column overflow)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests single inner col
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_single_col
       - name: KZG prove and verify tests triple inner col
@@ -402,11 +404,9 @@ jobs:
       - name: KZG prove and verify tests quadruple inner col
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_quadruple_col
       - name: KZG prove and verify tests octuple inner col
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_octuple_col
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_octuple_col --test-threads 8
       - name: KZG prove and verify tests (kzg outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output
-      - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (public outputs)
@@ -683,81 +683,14 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
-      - name: TicTacToe (Binary Classification)
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_35_expects
-      - name: TicTacToe (Anomaly Detection)
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_36_expects
-      - name: World Rotation
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_34_expects
-      - name: MNIST Classifier
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_33_expects
-      - name: Generalized Inverse
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_32_expects
-      - name: Proof Splitting
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_29_expects
-      - name: Gan Proof Splitting (MNIST)
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_30_expects
-      - name: Sklearn MLP
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_31_expects
-      - name: Gan tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_0_expects
-      - name: Solvency demo
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_28_expects
-      - name: KMeans
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_27_expects
-      - name: KZG Vis demo
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_26_expects
-      - name: Simple hub demo
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_25_expects
-      - name: Hashed DA tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_24_expects
-      - name: Little transformer tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_8_expects
-      - name: Stacked Regression tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_23_expects
-      - name: Linear Regression tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_22_expects
-      - name: Simple tutorial (public network and outputs)
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_20_expects
-      - name: Simple tutorial (public inputs and outputs)
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_19_expects
-      - name: Simple tutorial (all public)
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_4_expects
+      - name: Tictactoe tutorials
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
+      # - name: Postgres tutorials
+      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
+      - name: All notebooks
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1 
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
-      - name: SVM
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_18_expects
-      - name: LightGBM
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_17_expects
-      - name: XGBoost
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_16_expects
-      - name: Gradient boosted tres
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_15_expects
-      - name: Random Forest
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_14_expects
-      - name: Decision Tree
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_13_expects
-      - name: Set membership
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_12_expects
       - name: Voice tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
-      # - name: Mean tutorial
-      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_7_expects --no-capture
-      - name: End to end demo tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_10_expects
-      - name: LSTM tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_11_expects
-      - name: Keras tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_1_expects
-      - name: Simple aggregation tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_9_expects
-      - name: Encrypted tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_2_expects
-      - name: Hashed tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_3_expects
-      - name: DA tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_5_expects
-      - name: Variance tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_6_expects
-      - name: GCN tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_::tests_21_expects
+

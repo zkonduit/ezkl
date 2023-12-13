@@ -368,7 +368,7 @@ pub async fn verify_proof_via_solidity(
     let result = result?;
     info!("result: {:#?}", result.to_vec());
     // decode return bytes value into uint8
-    let result = result.to_vec().last().ok_or("no contract ouput")? == &1u8;
+    let result = result.to_vec().last().ok_or("no contract output")? == &1u8;
     if !result {
         return Err(Box::new(EvmVerificationError::InvalidProof));
     }
@@ -522,7 +522,7 @@ pub async fn verify_proof_with_data_attestation(
     let result = result?;
     info!("result: {:#?}", result);
     // decode return bytes value into uint8
-    let result = result.to_vec().last().ok_or("no contract ouput")? == &1u8;
+    let result = result.to_vec().last().ok_or("no contract output")? == &1u8;
     if !result {
         return Err(Box::new(EvmVerificationError::InvalidProof));
     }

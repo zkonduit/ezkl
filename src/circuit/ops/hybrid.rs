@@ -19,6 +19,12 @@ pub enum HybridOp {
     ReduceArgMax {
         dim: usize,
     },
+    SumPool {
+        padding: [(usize, usize); 2],
+        stride: (usize, usize),
+        kernel_shape: (usize, usize),
+        normalized: bool,
+    },
     MaxPool2d {
         padding: [(usize, usize); 2],
         stride: (usize, usize),
@@ -183,16 +189,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 }
             }
             HybridOp::ScatterElements { dim, constant_idx } => {
-                let src = inputs[2].clone().map(|x| felt_to_i128(x));
                 if let Some(idx) = constant_idx {
                     log::debug!("idx: {}", idx.show());
+                    let src = inputs[1].clone().map(|x| felt_to_i128(x));
                     let res = tensor::ops::scatter(&x, idx, &src, *dim)?;
                     (res.clone(), vec![])
                 } else {
-                    let idx = inputs[1].clone().map(|x| felt_to_i128(x));
+                    let idx = inputs[1].clone().map(|x| felt_to_i128(x) as usize);
+                    let src = inputs[2].clone().map(|x| felt_to_i128(x));
                     let indices = Tensor::from(0..x.dims()[*dim] as i128);
                     let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
-                    let res = tensor::ops::scatter(&x, &idx.map(|x| x as usize), &src, *dim)?;
+                    let res = tensor::ops::scatter(&x, &idx, &src, *dim)?;
                     (res.clone(), inter_equals)
                 }
             }
@@ -215,6 +222,12 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     vec![inter_1, inter_2],
                 )
             }
+            HybridOp::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+                normalized,
+            } => tensor::ops::sumpool(&x, *padding, *stride, *kernel_shape, *normalized)?,
             HybridOp::Softmax { scale, axes } => {
                 tensor::ops::nonlinearities::softmax_axes(&x, scale.into(), axes)
             }
@@ -258,6 +271,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn as_string(&self) -> String {
         match self {
+            HybridOp::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+                normalized,
+            } => format!(
+                "SUMPOOL (padding={:?}, stride={:?}, kernel_shape={:?}, normalized={})",
+                padding, stride, kernel_shape, normalized
+            ),
             HybridOp::ReduceMax { axes } => format!("REDUCEMAX (axes={:?})", axes),
             HybridOp::ReduceArgMax { dim } => format!("REDUCEARGMAX (dim={})", dim),
             HybridOp::MaxPool2d {
@@ -296,6 +318,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
         Ok(Some(match self {
+            HybridOp::SumPool {
+                padding,
+                stride,
+                kernel_shape,
+                normalized,
+            } => layouts::sumpool(
+                config,
+                region,
+                values[..].try_into()?,
+                *padding,
+                *stride,
+                *kernel_shape,
+                *normalized,
+            )?,
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
                     tensor::ops::gather(values[0].get_inner_tensor()?, idx, *dim)?.into()
@@ -449,6 +485,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::ReduceArgMax { .. } | HybridOp::ReduceArgMin { .. } => {
                 vec![LookupOp::ReLU, LookupOp::KroneckerDelta]
+            }
+            HybridOp::SumPool {
+                kernel_shape,
+                normalized: true,
+                ..
+            } => {
+                vec![LookupOp::Div {
+                    denom: utils::F32((kernel_shape.0 * kernel_shape.1) as f32),
+                }]
             }
             _ => vec![],
         }
