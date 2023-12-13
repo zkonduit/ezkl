@@ -38,7 +38,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         Ok(_) => info!("succeeded"),
         Err(e) => error!("failed: {}", e),
     };
-    res
+    Ok(())
 }
 
 #[cfg(target_arch = "wasm32")]

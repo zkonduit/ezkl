@@ -125,12 +125,12 @@ lazy_static::lazy_static! {
 }
 
 /// Run an ezkl command with given args
-pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
+pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
     // set working dir
     std::env::set_current_dir(WORKING_DIR.as_path())?;
 
     match command {
-        Commands::Empty => Ok(()),
+        Commands::Empty => Ok(String::new()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Fuzz {
             witness,
@@ -167,7 +167,8 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             target,
             scales,
             max_logrows,
-        } => calibrate(model, data, settings_path, target, scales, max_logrows),
+        } => calibrate(model, data, settings_path, target, scales, max_logrows)
+            .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::GenWitness {
             data,
             compiled_circuit,
@@ -176,7 +177,7 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             srs_path,
         } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path)
             .await
-            .map(|_| ()),
+            .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::Mock { model, witness } => mock(model, witness),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifier {
@@ -259,7 +260,8 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
         Commands::SwapProofCommitments {
             proof_path,
             witness_path,
-        } => swap_proof_commitments(proof_path, witness_path),
+        } => swap_proof_commitments(proof_path, witness_path)
+            .map(|e| serde_json::to_string(&e).unwrap()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             witness,
@@ -278,7 +280,7 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             proof_type,
             check_mode,
         )
-        .map(|_| ()),
+        .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::MockAggregate {
             aggregation_snarks,
             logrows,
@@ -317,19 +319,22 @@ pub async fn run(command: Commands) -> Result<(), Box<dyn Error>> {
             logrows,
             check_mode,
             split_proofs,
-        ),
+        )
+        .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::Verify {
             proof_path,
             settings_path,
             vk_path,
             srs_path,
-        } => verify(proof_path, settings_path, vk_path, srs_path),
+        } => verify(proof_path, settings_path, vk_path, srs_path)
+            .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::VerifyAggr {
             proof_path,
             vk_path,
             srs_path,
             logrows,
-        } => verify_aggr(proof_path, vk_path, srs_path, logrows),
+        } => verify_aggr(proof_path, vk_path, srs_path, logrows)
+            .map(|e| serde_json::to_string(&e).unwrap()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvmVerifier {
             sol_code_path,
@@ -395,10 +400,10 @@ fn srs_exists_check(logrows: u32, srs_path: Option<PathBuf>) -> bool {
     Path::new(&get_srs_path(logrows, srs_path)).exists()
 }
 
-pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<(), Box<dyn Error>> {
+pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<String, Box<dyn Error>> {
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
     save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -427,7 +432,7 @@ pub(crate) async fn get_srs_cmd(
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
     check_mode: CheckMode,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     // logrows overrides settings
     let k = if let Some(k) = logrows {
         k
@@ -470,13 +475,13 @@ pub(crate) async fn get_srs_cmd(
         info!("SRS already exists at that path");
     }
 
-    Ok(())
+    Ok(String::new())
 }
 
-pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<(), Box<dyn Error>> {
+pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, Box<dyn Error>> {
     let model = Model::from_run_args(&run_args, &model)?;
     info!("\n {}", model.table_nodes());
-    Ok(())
+    Ok(String::new())
 }
 
 pub(crate) async fn gen_witness(
@@ -547,10 +552,11 @@ pub(crate) fn gen_circuit_settings(
     model_path: PathBuf,
     params_output: PathBuf,
     run_args: RunArgs,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     let circuit = GraphCircuit::from_run_args(&run_args, &model_path)?;
     let params = circuit.settings();
-    params.save(&params_output).map_err(Box::<dyn Error>::from)
+    params.save(&params_output)?;
+    Ok(String::new())
 }
 
 // not for wasm targets
@@ -603,7 +609,7 @@ pub(crate) fn calibrate(
     target: CalibrationTarget,
     scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<GraphSettings, Box<dyn Error>> {
     let data = GraphData::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
@@ -897,13 +903,13 @@ pub(crate) fn calibrate(
 
     debug!("Saved parameters.");
 
-    Ok(())
+    Ok(best_params)
 }
 
 pub(crate) fn mock(
     compiled_circuit_path: PathBuf,
     data_path: PathBuf,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     // mock should catch any issues by default so we set it to safe
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
@@ -924,20 +930,25 @@ pub(crate) fn mock(
     prover
         .verify_par()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
-    Ok(())
+    Ok(String::new())
 }
 
-pub(crate) fn print_proof_hex(proof_path: PathBuf) -> Result<(), Box<dyn Error>> {
+pub(crate) fn print_proof_hex(proof_path: PathBuf) -> Result<String, Box<dyn Error>> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
     for instance in proof.instances {
         println!("{:?}", instance);
     }
-    info!("{}", hex::encode(proof.proof));
-    Ok(())
+    let hex_str = hex::encode(proof.proof);
+    info!("{}", hex_str);
+    Ok(hex_str)
 }
 
 #[cfg(feature = "render")]
-pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(), Box<dyn Error>> {
+pub(crate) fn render(
+    model: PathBuf,
+    output: PathBuf,
+    args: RunArgs,
+) -> Result<String, Box<dyn Error>> {
     let circuit = GraphCircuit::from_run_args(&args, &model)?;
     info!("Rendering circuit");
 
@@ -952,7 +963,7 @@ pub(crate) fn render(model: PathBuf, output: PathBuf, args: RunArgs) -> Result<(
         // We hide labels, else most circuits become impossible to decipher because of overlaid text
         .show_labels(false)
         .render(circuit.settings().run_args.logrows, &circuit, &root)?;
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -962,7 +973,7 @@ pub(crate) fn create_evm_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
@@ -988,7 +999,7 @@ pub(crate) fn create_evm_verifier(
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -999,7 +1010,7 @@ pub(crate) fn create_evm_data_attestation(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
     input: PathBuf,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     use crate::graph::{DataSource, VarVisibility};
     check_solc_requirement();
 
@@ -1060,7 +1071,7 @@ pub(crate) fn create_evm_data_attestation(
             "Neither input or output data source is on-chain. Atleast one must be on chain.".into(),
         );
     }
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1072,7 +1083,7 @@ pub(crate) async fn deploy_da_evm(
     addr_path: PathBuf,
     runs: usize,
     private_key: Option<String>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let contract_address = deploy_da_verifier_via_solidity(
         settings_path,
@@ -1088,7 +1099,7 @@ pub(crate) async fn deploy_da_evm(
     let mut f = File::create(addr_path)?;
     write!(f, "{:#?}", contract_address)?;
 
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1098,7 +1109,7 @@ pub(crate) async fn deploy_evm(
     addr_path: PathBuf,
     runs: usize,
     private_key: Option<String>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let contract_address = deploy_verifier_via_solidity(
         sol_code_path,
@@ -1112,7 +1123,7 @@ pub(crate) async fn deploy_evm(
 
     let mut f = File::create(addr_path)?;
     write!(f, "{:#?}", contract_address)?;
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1121,7 +1132,7 @@ pub(crate) async fn verify_evm(
     addr_verifier: H160,
     rpc_url: Option<String>,
     addr_da: Option<H160>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
     check_solc_requirement();
 
@@ -1145,7 +1156,7 @@ pub(crate) async fn verify_evm(
         return Err("Solidity verification failed".into());
     }
 
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1156,7 +1167,7 @@ pub(crate) fn create_evm_aggregate_verifier(
     abi_path: PathBuf,
     circuit_settings: Vec<PathBuf>,
     logrows: u32,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let srs_path = get_srs_path(logrows, srs_path);
     let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
@@ -1203,18 +1214,18 @@ pub(crate) fn create_evm_aggregate_verifier(
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
-    Ok(())
+    Ok(String::new())
 }
 
 pub(crate) fn compile_circuit(
     model_path: PathBuf,
     compiled_circuit: PathBuf,
     settings_path: PathBuf,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     let settings = GraphSettings::load(&settings_path)?;
     let circuit = GraphCircuit::from_settings(&settings, &model_path, CheckMode::UNSAFE)?;
     circuit.save(compiled_circuit)?;
-    Ok(())
+    Ok(String::new())
 }
 
 pub(crate) fn setup(
@@ -1223,7 +1234,7 @@ pub(crate) fn setup(
     vk_path: PathBuf,
     pk_path: PathBuf,
     witness: Option<PathBuf>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
     let mut circuit = GraphCircuit::load(compiled_circuit)?;
     if let Some(witness) = witness {
@@ -1238,7 +1249,7 @@ pub(crate) fn setup(
 
     save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk())?;
     save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &pk)?;
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1249,7 +1260,7 @@ pub(crate) async fn setup_test_evm_witness(
     rpc_url: Option<String>,
     input_source: TestDataSource,
     output_source: TestDataSource,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     use crate::graph::TestOnChainData;
 
     info!("run this command in background to keep the instance running for testing");
@@ -1275,7 +1286,7 @@ pub(crate) async fn setup_test_evm_witness(
         .populate_on_chain_test_data(&mut data, test_on_chain_data)
         .await?;
 
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1285,13 +1296,13 @@ pub(crate) async fn test_update_account_calls(
     addr: H160,
     data: PathBuf,
     rpc_url: Option<String>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     use crate::eth::update_account_calls;
 
     check_solc_requirement();
     update_account_calls(addr, data, rpc_url.as_deref()).await?;
 
-    Ok(())
+    Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1373,7 +1384,7 @@ pub(crate) fn fuzz(
     data_path: PathBuf,
     transcript: TranscriptType,
     num_runs: usize,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let passed = AtomicBool::new(true);
 
@@ -1562,7 +1573,7 @@ pub(crate) fn fuzz(
     if !passed.into_inner() {
         Err("fuzzing failed".into())
     } else {
-        Ok(())
+        Ok(String::new())
     }
 }
 
@@ -1597,7 +1608,7 @@ pub(crate) fn run_fuzz_fn(
 pub(crate) fn swap_proof_commitments(
     proof_path: PathBuf,
     witness: PathBuf,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let snark = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
     let witness = GraphWitness::from_path(witness)?;
     let commitments = witness.get_kzg_commitments();
@@ -1613,14 +1624,14 @@ pub(crate) fn swap_proof_commitments(
     }
 
     snark_new.save(&proof_path)?;
-    Ok(())
+    Ok(snark_new)
 }
 
 pub(crate) fn mock_aggregate(
     aggregation_snarks: Vec<PathBuf>,
     logrows: u32,
     split_proofs: bool,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
         snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
@@ -1642,7 +1653,7 @@ pub(crate) fn mock_aggregate(
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
     #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");
-    Ok(())
+    Ok(String::new())
 }
 
 pub(crate) fn setup_aggregate(
@@ -1652,7 +1663,7 @@ pub(crate) fn setup_aggregate(
     srs_path: Option<PathBuf>,
     logrows: u32,
     split_proofs: bool,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     // the K used for the aggregation circuit
     let params = load_params_cmd(srs_path, logrows)?;
 
@@ -1670,7 +1681,7 @@ pub(crate) fn setup_aggregate(
     // now save
     save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_vk)?;
     save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &agg_pk)?;
-    Ok(())
+    Ok(String::new())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1683,7 +1694,7 @@ pub(crate) fn aggregate(
     logrows: u32,
     check_mode: CheckMode,
     split_proofs: bool,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     // the K used for the aggregation circuit
     let params = load_params_cmd(srs_path, logrows)?;
 
@@ -1701,33 +1712,32 @@ pub(crate) fn aggregate(
         pb
     };
 
-    {
-        let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks, split_proofs)?;
+    let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks, split_proofs)?;
 
-        let now = Instant::now();
-        let snark = create_proof_circuit_kzg(
-            agg_circuit.clone(),
-            &params,
-            Some(agg_circuit.instances()),
-            &agg_pk,
-            transcript,
-            AccumulatorStrategy::new(&params),
-            check_mode,
-            None,
-        )?;
+    let now = Instant::now();
+    let snark = create_proof_circuit_kzg(
+        agg_circuit.clone(),
+        &params,
+        Some(agg_circuit.instances()),
+        &agg_pk,
+        transcript,
+        AccumulatorStrategy::new(&params),
+        check_mode,
+        None,
+    )?;
 
-        let elapsed = now.elapsed();
-        info!(
-            "Aggregation proof took {}.{}",
-            elapsed.as_secs(),
-            elapsed.subsec_millis()
-        );
-        snark.save(&proof_path)?;
-    }
+    let elapsed = now.elapsed();
+    info!(
+        "Aggregation proof took {}.{}",
+        elapsed.as_secs(),
+        elapsed.subsec_millis()
+    );
+    snark.save(&proof_path)?;
+
     #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");
 
-    Ok(())
+    Ok(snark)
 }
 
 pub(crate) fn verify(
@@ -1735,7 +1745,7 @@ pub(crate) fn verify(
     settings_path: PathBuf,
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<bool, Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
@@ -1751,7 +1761,7 @@ pub(crate) fn verify(
         elapsed.subsec_millis()
     );
     info!("verified: {}", result.is_ok());
-    result.map_err(|e| e.into())
+    result.map_err(|e| e.into()).map(|_| true)
 }
 
 pub(crate) fn verify_aggr(
@@ -1759,7 +1769,7 @@ pub(crate) fn verify_aggr(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     logrows: u32,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<bool, Box<dyn Error>> {
     let params = load_params_cmd(srs_path, logrows)?;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
@@ -1777,7 +1787,7 @@ pub(crate) fn verify_aggr(
     );
     info!("verified: {}", result.is_ok());
     result?;
-    Ok(())
+    Ok(true)
 }
 
 /// helper function for load_params
