@@ -767,7 +767,7 @@ pub fn einsum<
                 })
                 .collect::<Vec<_>>();
 
-            // Get the indices common accross input tensors
+            // Get the indices common across input tensors
             let mut common_coord = common_indices_to_inputs
                 .iter()
                 .map(|d| {

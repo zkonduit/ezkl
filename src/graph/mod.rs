@@ -933,7 +933,7 @@ impl GraphCircuit {
             .extended_k_is_small_enough(min_logrows, Self::calc_num_cols(safe_range, min_logrows))
         {
             let err_string = format!(
-                "extended k is too large to accomodate the quotient polynomial with logrows {}",
+                "extended k is too large to accommodate the quotient polynomial with logrows {}",
                 min_logrows
             );
             return Err(err_string.into());

@@ -495,7 +495,7 @@ pub enum Commands {
     #[cfg(not(target_arch = "wasm32"))]
     #[command(arg_required_else_help = true)]
     TestUpdateAccountCalls {
-        /// The path to verfier contract's address
+        /// The path to verifier contract's address
         #[arg(long)]
         addr: H160,
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -698,7 +698,7 @@ pub enum Commands {
         /// The path to the proof file
         #[arg(long, default_value = DEFAULT_PROOF)]
         proof_path: PathBuf,
-        /// The path to verfier contract's address
+        /// The path to verifier contract's address
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS)]
         addr_verifier: H160,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
