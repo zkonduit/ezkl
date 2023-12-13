@@ -137,12 +137,16 @@ thread_local!(
 );
 
 /// Result from a forward pass
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct GraphWitness {
     /// The inputs of the forward pass
     pub inputs: Vec<Vec<Fp>>,
+    /// The rescaled inputs of the forward pass
+    pub rescaled_inputs: Option<Vec<Vec<f64>>>,
     /// The output of the forward pass
     pub outputs: Vec<Vec<Fp>>,
+    /// The rescaled outputs of the forward pass
+    pub rescaled_outputs: Option<Vec<Vec<f64>>>,
     /// Any hashes of inputs generated during the forward pass
     pub processed_inputs: Option<ModuleForwardResult>,
     /// Any hashes of params generated during the forward pass
@@ -161,6 +165,8 @@ impl GraphWitness {
         GraphWitness {
             inputs,
             outputs,
+            rescaled_inputs: None,
+            rescaled_outputs: None,
             processed_inputs: None,
             processed_params: None,
             processed_outputs: None,
@@ -725,13 +731,6 @@ impl GraphCircuit {
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
 
-        fn dequantize(felt: Fp, scale: crate::Scale) -> f64 {
-            let int_rep = crate::fieldutils::felt_to_i128(felt);
-            let multiplier = scale_to_multiplier(scale);
-            let float_rep = int_rep as f64 / multiplier;
-            float_rep
-        }
-
         let mut public_inputs = RescaledInstances::default();
         if self.settings().run_args.input_visibility.is_public() {
             let inputs = self.graph_witness.inputs.clone();
@@ -739,7 +738,7 @@ impl GraphCircuit {
             public_inputs.rescaled_inputs = inputs
                 .iter()
                 .zip(scales)
-                .map(|(i, s)| i.iter().map(|x| dequantize(*x, s)).collect_vec())
+                .map(|(i, s)| i.iter().map(|x| dequantize(*x, s, 0.)).collect_vec())
                 .collect_vec();
         } else if let Some(processed_inputs) = &data.processed_inputs {
             public_inputs.processed_inputs = processed_inputs.get_instances();
@@ -755,7 +754,7 @@ impl GraphCircuit {
             public_inputs.rescaled_outputs = outputs
                 .iter()
                 .zip(scales)
-                .map(|(i, s)| i.iter().map(|x| dequantize(*x, s)).collect_vec())
+                .map(|(i, s)| i.iter().map(|x| dequantize(*x, s, 0.)).collect_vec())
                 .collect_vec();
         } else if let Some(processed_outputs) = &data.processed_outputs {
             public_inputs.processed_outputs = processed_outputs.get_instances();
@@ -1177,11 +1176,32 @@ impl GraphCircuit {
             }
         }
 
+        let rescaled_inputs = original_inputs
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let scale = self.model().graph.get_input_scales()[i];
+                t.map(|x| dequantize(x, scale, 0.)).to_vec()
+            })
+            .collect();
+
+        let rescaled_outputs: Result<Vec<Vec<f64>>, Box<dyn std::error::Error>> = model_results
+            .outputs
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let scale = self.model().graph.get_output_scales()?[i];
+                Ok(t.map(|x| dequantize(x, scale, 0.)).to_vec())
+            })
+            .collect();
+
         let witness = GraphWitness {
             inputs: original_inputs
                 .iter()
                 .map(|t| t.deref().to_vec())
                 .collect_vec(),
+            rescaled_inputs: Some(rescaled_inputs),
+            rescaled_outputs: Some(rescaled_outputs?),
             outputs: model_results
                 .outputs
                 .iter()
