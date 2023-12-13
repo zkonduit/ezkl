@@ -202,6 +202,21 @@ pub fn vecu64_to_field_montgomery<F: PrimeField + SerdeObject + Serialize + Dese
     fp
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Contains the instances of the circuit in human readable form
+pub struct RescaledInstances {
+    /// the inputs as rescaled floats (if any)
+    pub rescaled_inputs: Vec<Vec<f64>>,
+    /// the processed inputs (eg. hash of the inputs) -- stays as a felt
+    pub processed_inputs: Vec<Vec<Fr>>,
+    /// the processed params (eg. hash of the params) -- stays as a felt
+    pub processed_params: Vec<Vec<Fr>>,
+    /// the processed outputs (eg. hash of the outputs) -- stays as a felt
+    pub processed_outputs: Vec<Vec<Fr>>,
+    /// the outputs as rescaled floats (if any)
+    pub rescaled_outputs: Vec<Vec<f64>>,
+}
+
 /// An application snark with proof and instance variables ready for aggregation (raw field element)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snark<F: PrimeField + SerdeObject, C: CurveAffine>
@@ -219,6 +234,10 @@ where
     pub transcript_type: TranscriptType,
     /// the split proof
     pub split: Option<ProofSplitCommit>,
+    /// the proof instances as rescaled floats
+    pub rescaled_instances: Option<RescaledInstances>,
+    /// timestamp
+    pub timestamp: Option<u128>,
 }
 
 #[cfg(feature = "python-bindings")]
@@ -260,6 +279,7 @@ where
         proof: Vec<u8>,
         transcript_type: TranscriptType,
         split: Option<ProofSplitCommit>,
+        rescaled_instances: Option<RescaledInstances>,
     ) -> Self {
         Self {
             protocol: Some(protocol),
@@ -267,6 +287,14 @@ where
             proof,
             transcript_type,
             split,
+            rescaled_instances,
+            // unix timestamp
+            timestamp: Some(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis(),
+            ),
         }
     }
 
@@ -487,7 +515,7 @@ where
     )?;
     let proof = transcript.finalize();
 
-    let checkable_pf = Snark::new(protocol, instances, proof, transcript_type, split);
+    let checkable_pf = Snark::new(protocol, instances, proof, transcript_type, split, None);
 
     // sanity check that the generated proof is valid
     if check_mode == CheckMode::SAFE {
@@ -856,6 +884,8 @@ mod tests {
             transcript_type: TranscriptType::EVM,
             protocol: None,
             split: None,
+            rescaled_instances: None,
+            timestamp: None,
         };
 
         snark

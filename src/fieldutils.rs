@@ -35,7 +35,7 @@ pub fn felt_to_i32<F: PrimeField + PartialOrd + Field>(x: F) -> i32 {
     }
 }
 
-/// Converts a PrimeField element to an i128.
+/// Converts a PrimeField element to an f64.
 pub fn felt_to_f64<F: PrimeField + PartialOrd + Field>(x: F) -> f64 {
     if x > F::from_u128(i128::MAX as u128) {
         let rep = (-x).to_repr();

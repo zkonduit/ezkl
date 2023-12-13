@@ -27,6 +27,7 @@ use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::table::{Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
+use crate::pfsys::RescaledInstances;
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
 use halo2_proofs::{
@@ -398,6 +399,8 @@ pub struct GraphSettings {
     pub version: String,
     /// num blinding factors
     pub num_blinding_factors: Option<usize>,
+    /// unix time timestamp
+    pub timestamp: Option<u128>,
 }
 
 impl GraphSettings {
@@ -682,10 +685,9 @@ impl GraphCircuit {
 
     /// Prepare the public inputs for the circuit.
     pub fn prepare_public_inputs(
-        &mut self,
+        &self,
         data: &GraphWitness,
     ) -> Result<Vec<Fp>, Box<dyn std::error::Error>> {
-        // quantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
         let mut public_inputs: Vec<Fp> = vec![];
@@ -710,6 +712,61 @@ impl GraphCircuit {
         } else {
             debug!("public inputs: {:?} ...", &public_inputs[0..10]);
         }
+
+        Ok(public_inputs)
+    }
+
+    /// get rescaled public inputs as floating points for the circuit.
+    pub fn rescaled_public_inputs(
+        &self,
+        data: &GraphWitness,
+    ) -> Result<RescaledInstances, Box<dyn std::error::Error>> {
+        // dequantize the supplied data using the provided scale.
+        // the ordering here is important, we want the inputs to come before the outputs
+        // as they are configured in that order as Column<Instances>
+
+        fn dequantize(felt: Fp, scale: crate::Scale) -> f64 {
+            let int_rep = crate::fieldutils::felt_to_i128(felt);
+            let multiplier = scale_to_multiplier(scale);
+            let float_rep = int_rep as f64 / multiplier;
+            float_rep
+        }
+
+        let mut public_inputs = RescaledInstances::default();
+        if self.settings().run_args.input_visibility.is_public() {
+            let inputs = self.graph_witness.inputs.clone();
+            let scales = self.model().graph.get_input_scales();
+            public_inputs.rescaled_inputs = inputs
+                .iter()
+                .zip(scales)
+                .map(|(i, s)| i.iter().map(|x| dequantize(*x, s)).collect_vec())
+                .collect_vec();
+        } else if let Some(processed_inputs) = &data.processed_inputs {
+            public_inputs.processed_inputs = processed_inputs.get_instances();
+        }
+
+        if let Some(processed_params) = &data.processed_params {
+            public_inputs.processed_params = processed_params.get_instances();
+        }
+
+        if self.settings().run_args.output_visibility.is_public() {
+            let outputs = self.graph_witness.outputs.clone();
+            let scales = self.model().graph.get_output_scales()?;
+            public_inputs.rescaled_outputs = outputs
+                .iter()
+                .zip(scales)
+                .map(|(i, s)| i.iter().map(|x| dequantize(*x, s)).collect_vec())
+                .collect_vec();
+        } else if let Some(processed_outputs) = &data.processed_outputs {
+            public_inputs.processed_outputs = processed_outputs.get_instances();
+        } else if let Some(processed_outputs) = &data.processed_outputs {
+            public_inputs.processed_outputs = processed_outputs.get_instances();
+        }
+
+        debug!(
+            "rescaled and processed public inputs: {}",
+            serde_json::to_string(&public_inputs)?.to_colored_json_auto()?
+        );
 
         Ok(public_inputs)
     }

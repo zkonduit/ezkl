@@ -1312,6 +1312,7 @@ pub(crate) fn prove(
 
     circuit.load_graph_witness(&data)?;
 
+    let rescaled_public_inputs = circuit.rescaled_public_inputs(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let circuit_settings = circuit.settings().clone();
@@ -1328,7 +1329,7 @@ pub(crate) fn prove(
     let proof_split_commits: Option<ProofSplitCommit> = data.into();
 
     // creates and verifies the proof
-    let snark = match strategy {
+    let mut snark = match strategy {
         StrategyType::Single => {
             let strategy = KZGSingleStrategy::new(&params);
             create_proof_circuit_kzg(
@@ -1356,6 +1357,8 @@ pub(crate) fn prove(
             )?
         }
     };
+
+    snark.rescaled_instances = Some(rescaled_public_inputs);
 
     if let Some(proof_path) = proof_path {
         snark.save(&proof_path)?;
@@ -1507,6 +1510,8 @@ pub(crate) fn fuzz(
             protocol: proof.protocol.clone(),
             transcript_type: transcript,
             split: None,
+            rescaled_instances: None,
+            timestamp: None,
         };
 
         verify_proof_circuit_kzg(
@@ -1539,6 +1544,8 @@ pub(crate) fn fuzz(
             protocol: proof.protocol.clone(),
             transcript_type: transcript,
             split: None,
+            rescaled_instances: None,
+            timestamp: None,
         };
 
         verify_proof_circuit_kzg(
