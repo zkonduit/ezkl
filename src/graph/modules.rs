@@ -429,7 +429,7 @@ impl GraphModules {
     /// Run forward pass
     pub fn forward(
         inputs: &[Tensor<Fp>],
-        element_visibility: Visibility,
+        element_visibility: &Visibility,
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&ParamsKZG<Bn256>>,
     ) -> Result<ModuleForwardResult, Box<dyn std::error::Error>> {

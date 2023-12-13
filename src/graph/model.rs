@@ -515,11 +515,14 @@ impl Model {
             version: env!("CARGO_PKG_VERSION").to_string(),
             num_blinding_factors: None,
             // unix time timestamp
+            #[cfg(not(target_arch = "wasm32"))]
             timestamp: Some(
                 instant::SystemTime::now()
                     .duration_since(instant::SystemTime::UNIX_EPOCH)?
                     .as_millis(),
             ),
+            #[cfg(target_arch = "wasm32")]
+            timestamp: None,
         })
     }
 

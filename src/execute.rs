@@ -1312,7 +1312,7 @@ pub(crate) fn prove(
 
     circuit.load_graph_witness(&data)?;
 
-    let rescaled_public_inputs = circuit.rescaled_public_inputs(&data)?;
+    let pretty_public_inputs = circuit.pretty_public_inputs(&data)?;
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let circuit_settings = circuit.settings().clone();
@@ -1358,7 +1358,7 @@ pub(crate) fn prove(
         }
     };
 
-    snark.rescaled_instances = Some(rescaled_public_inputs);
+    snark.pretty_public_inputs = pretty_public_inputs;
 
     if let Some(proof_path) = proof_path {
         snark.save(&proof_path)?;
@@ -1510,7 +1510,7 @@ pub(crate) fn fuzz(
             protocol: proof.protocol.clone(),
             transcript_type: transcript,
             split: None,
-            rescaled_instances: None,
+            pretty_public_inputs: None,
             timestamp: None,
         };
 
@@ -1544,7 +1544,7 @@ pub(crate) fn fuzz(
             protocol: proof.protocol.clone(),
             transcript_type: transcript,
             split: None,
-            rescaled_instances: None,
+            pretty_public_inputs: None,
             timestamp: None,
         };
 

@@ -202,19 +202,23 @@ pub fn vecu64_to_field_montgomery<F: PrimeField + SerdeObject + Serialize + Dese
     fp
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 /// Contains the instances of the circuit in human readable form
-pub struct RescaledInstances {
-    /// the inputs as rescaled floats (if any)
-    pub rescaled_inputs: Vec<Vec<f64>>,
-    /// the processed inputs (eg. hash of the inputs) -- stays as a felt
-    pub processed_inputs: Vec<Vec<Fr>>,
-    /// the processed params (eg. hash of the params) -- stays as a felt
-    pub processed_params: Vec<Vec<Fr>>,
-    /// the processed outputs (eg. hash of the outputs) -- stays as a felt
-    pub processed_outputs: Vec<Vec<Fr>>,
-    /// the outputs as rescaled floats (if any)
-    pub rescaled_outputs: Vec<Vec<f64>>,
+pub struct PrettyElements {
+    /// the inputs as rescaled floats -- represented as a String for maximum compatibility with Python and JS
+    pub rescaled_inputs: Vec<Vec<String>>,
+    /// the inputs as felts but 0x strings -- represented as a String for maximum compatibility with Python and JS
+    pub inputs: Vec<Vec<String>>,
+    /// the processed inputs (eg. hash of the inputs) -- stays as a felt represented as a 0x string for maximum compatibility with Python and JS
+    pub processed_inputs: Vec<Vec<String>>,
+    /// the processed params (eg. hash of the params) -- stays as a felt represented as a 0x string for maximum compatibility with Python and JS
+    pub processed_params: Vec<Vec<String>>,
+    /// the processed outputs (eg. hash of the outputs) -- stays as a felt represented as a 0x string for maximum compatibility with Python and JS
+    pub processed_outputs: Vec<Vec<String>>,
+    /// the outputs as rescaled floats (if any) -- represented as a String for maximum compatibility with Python and JS
+    pub rescaled_outputs: Vec<Vec<String>>,
+    /// the outputs as felts but 0x strings (if any) -- represented as a String for maximum compatibility with Python and JS
+    pub outputs: Vec<Vec<String>>,
 }
 
 /// An application snark with proof and instance variables ready for aggregation (raw field element)
@@ -235,7 +239,7 @@ where
     /// the split proof
     pub split: Option<ProofSplitCommit>,
     /// the proof instances as rescaled floats
-    pub rescaled_instances: Option<RescaledInstances>,
+    pub pretty_public_inputs: Option<PrettyElements>,
     /// timestamp
     pub timestamp: Option<u128>,
 }
@@ -279,7 +283,7 @@ where
         proof: Vec<u8>,
         transcript_type: TranscriptType,
         split: Option<ProofSplitCommit>,
-        rescaled_instances: Option<RescaledInstances>,
+        pretty_public_inputs: Option<PrettyElements>,
     ) -> Self {
         Self {
             protocol: Some(protocol),
@@ -287,7 +291,7 @@ where
             proof,
             transcript_type,
             split,
-            rescaled_instances,
+            pretty_public_inputs,
             // unix timestamp
             timestamp: Some(
                 instant::SystemTime::now()
@@ -884,7 +888,7 @@ mod tests {
             transcript_type: TranscriptType::EVM,
             protocol: None,
             split: None,
-            rescaled_instances: None,
+            pretty_public_inputs: None,
             timestamp: None,
         };
 
