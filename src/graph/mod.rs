@@ -762,6 +762,7 @@ impl GraphCircuit {
             public_inputs.processed_outputs = processed_outputs.get_instances();
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         debug!(
             "rescaled and processed public inputs: {}",
             serde_json::to_string(&public_inputs)?.to_colored_json_auto()?
