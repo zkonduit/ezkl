@@ -278,7 +278,7 @@ where
 {
     /// Create a new application snark from proof and instance variables ready for aggregation
     pub fn new(
-        protocol: PlonkProtocol<C>,
+        protocol: Option<PlonkProtocol<C>>,
         instances: Vec<Vec<F>>,
         proof: Vec<u8>,
         transcript_type: TranscriptType,
@@ -286,7 +286,7 @@ where
         pretty_public_inputs: Option<PrettyElements>,
     ) -> Self {
         Self {
-            protocol: Some(protocol),
+            protocol,
             instances,
             proof,
             transcript_type,
@@ -468,6 +468,7 @@ pub fn create_proof_circuit<
     check_mode: CheckMode,
     transcript_type: TranscriptType,
     split: Option<ProofSplitCommit>,
+    set_protocol: bool,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
@@ -488,11 +489,15 @@ where
     let mut rng = OsRng;
     let number_instance = instances.iter().map(|x| x.len()).collect();
     trace!("number_instance {:?}", number_instance);
-    let protocol = compile(
-        params,
-        pk.get_vk(),
-        Config::kzg().with_num_instance(number_instance),
-    );
+    let mut protocol = None;
+
+    if set_protocol {
+        protocol = Some(compile(
+            params,
+            pk.get_vk(),
+            Config::kzg().with_num_instance(number_instance),
+        ))
+    }
 
     let pi_inner = instances
         .iter()
@@ -776,6 +781,7 @@ pub fn create_proof_circuit_kzg<
             check_mode,
             transcript,
             split,
+            false,
         )
         .map_err(Box::<dyn Error>::from),
         TranscriptType::Poseidon => create_proof_circuit::<
@@ -797,6 +803,7 @@ pub fn create_proof_circuit_kzg<
             check_mode,
             transcript,
             split,
+            true,
         )
         .map_err(Box::<dyn Error>::from),
     }
