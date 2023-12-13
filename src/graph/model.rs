@@ -516,8 +516,8 @@ impl Model {
             num_blinding_factors: None,
             // unix time timestamp
             timestamp: Some(
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)?
+                instant::SystemTime::now()
+                    .duration_since(instant::SystemTime::UNIX_EPOCH)?
                     .as_millis(),
             ),
         })
