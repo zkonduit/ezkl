@@ -28,7 +28,7 @@ mod wasm32 {
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
     pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/witness.json");
-    pub const NETWORK_COMPILED: &[u8] = include_bytes!("../tests/wasm/network.compiled");
+    pub const NETWORK_COMPILED: &[u8] = include_bytes!("../tests/wasm/model.compiled");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/network.onnx");
     pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
     pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");

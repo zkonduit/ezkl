@@ -38,9 +38,9 @@ pub const DEFAULT_PK_AGGREGATED: &str = "pk_aggr.key";
 /// The default path to the verification key file for aggregated proofs
 pub const DEFAULT_VK_AGGREGATED: &str = "vk_aggr.key";
 /// The default path to the proof file
-pub const DEFAULT_PROOF: &str = "proof.proof";
+pub const DEFAULT_PROOF: &str = "proof.json";
 /// The default path to the proof file for aggregated proofs
-pub const DEFAULT_PROOF_AGGREGATED: &str = "proof_aggr.proof";
+pub const DEFAULT_PROOF_AGGREGATED: &str = "proof_aggr.json";
 /// Default for whether to split proofs
 pub const DEFAULT_SPLIT: &str = "false";
 /// Default verifier abi
@@ -71,7 +71,6 @@ pub const DEFAULT_OPTIMIZER_RUNS: &str = "1";
 pub const DEFAULT_FUZZ_RUNS: &str = "10";
 /// Default calibration file
 pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
-
 
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

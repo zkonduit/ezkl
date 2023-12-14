@@ -41,7 +41,6 @@ use tract_onnx::tract_hir::{
     tract_core::ops::cnn::{conv::KernelFormat, MaxPool, PaddingSpec, SumPool},
 };
 
-// Warning: currently ignores stride information
 /// Quantizes an iterable of f32s to a [Tensor] of i32s using a fixed point representation.
 /// Arguments
 ///
@@ -61,6 +60,18 @@ pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i12
     let scaled = (mult * *elem + shift).round() as i128;
 
     Ok(scaled)
+}
+
+/// Dequantizes a field element to a f64 using a fixed point representation.
+/// Arguments
+/// * `felt` - the field element to dequantize.
+/// * `scale` - `2^scale` used in the fixed point representation.
+/// * `shift` - offset used in the fixed point representation.
+pub fn dequantize(felt: Fp, scale: crate::Scale, shift: f64) -> f64 {
+    let int_rep = crate::fieldutils::felt_to_i128(felt);
+    let multiplier = scale_to_multiplier(scale);
+    let float_rep = int_rep as f64 / multiplier - shift;
+    float_rep
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
