@@ -2,9 +2,6 @@
 pub mod poseidon;
 
 ///
-pub mod elgamal;
-
-///
 pub mod kzg;
 
 ///

@@ -20,9 +20,7 @@ use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use self::input::OnChainSource;
 use self::input::{FileSource, GraphData};
-use self::modules::{
-    GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSettings, ModuleSizes,
-};
+use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::table::{Table, RESERVED_BLINDING_ROWS_PAD};
@@ -549,11 +547,8 @@ impl GraphSettings {
 
     /// if any visibility is encrypted or hashed
     pub fn module_requires_fixed(&self) -> bool {
-        self.run_args.input_visibility.is_encrypted()
-            || self.run_args.input_visibility.is_hashed()
-            || self.run_args.output_visibility.is_encrypted()
+        self.run_args.input_visibility.is_hashed()
             || self.run_args.output_visibility.is_hashed()
-            || self.run_args.param_visibility.is_encrypted()
             || self.run_args.param_visibility.is_hashed()
     }
 
@@ -588,8 +583,6 @@ pub struct GraphCircuit {
     pub core: CoreCircuit,
     /// The witness data for the model.
     pub graph_witness: GraphWitness,
-    /// The settings of the model's modules.
-    pub module_settings: ModuleSettings,
 }
 
 impl GraphCircuit {
@@ -683,7 +676,6 @@ impl GraphCircuit {
         }
 
         // dummy module settings, must load from GraphData after
-        let module_settings = ModuleSettings::default();
         let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
 
         let mut num_params = 0;
@@ -714,7 +706,6 @@ impl GraphCircuit {
         Ok(GraphCircuit {
             core,
             graph_witness: GraphWitness::new(inputs, vec![]),
-            module_settings,
         })
     }
 
@@ -732,7 +723,6 @@ impl GraphCircuit {
         }
 
         // dummy module settings, must load from GraphData after
-        let module_settings = ModuleSettings::default();
 
         settings.check_mode = check_mode;
 
@@ -744,7 +734,6 @@ impl GraphCircuit {
         Ok(GraphCircuit {
             core,
             graph_witness: GraphWitness::new(inputs, vec![]),
-            module_settings,
         })
     }
 
@@ -755,8 +744,6 @@ impl GraphCircuit {
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.graph_witness = data.clone();
         // load the module settings
-        self.module_settings = ModuleSettings::from(data);
-
         Ok(())
     }
 
@@ -1555,7 +1542,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut input_outlets,
                 input_visibility,
                 &mut instance_offset,
-                &self.module_settings.input,
             )?;
             // replace inputs with the outlets
             for (i, outlet) in outlets.iter().enumerate() {
@@ -1568,7 +1554,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut inputs,
                 input_visibility,
                 &mut instance_offset,
-                &self.module_settings.input,
             )?;
         }
 
@@ -1605,7 +1590,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut flattened_params,
                 param_visibility,
                 &mut instance_offset,
-                &self.module_settings.params,
             )?;
 
             let shapes = self.model().const_shapes();
@@ -1658,7 +1642,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut output_outlets,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
-                &self.module_settings.output,
             )?;
 
             // replace outputs with the outlets
@@ -1672,7 +1655,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut outputs,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
-                &self.module_settings.output,
             )?;
         }
 

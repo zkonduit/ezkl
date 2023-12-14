@@ -36,8 +36,6 @@ pub enum Visibility {
     },
     /// Mark an item as publicly committed to (KZG commitment sent in the proof submitted for verification)
     KZGCommit,
-    /// Mark an item as encrypted (public key and encrypted message sent in the proof submitted for verificatio)
-    Encrypted,
     /// assigned as a constant in the circuit
     Fixed,
 }
@@ -67,7 +65,6 @@ impl<'a> From<&'a str> for Visibility {
                 hash_is_public: true,
                 outlets: vec![],
             },
-            "encrypted" => Visibility::Encrypted,
             _ => {
                 log::error!("Invalid value for Visibility: {}", s);
                 log::warn!("Defaulting to private");
@@ -101,7 +98,6 @@ impl IntoPy<PyObject> for Visibility {
                     format!("hashed/private/{}", outlets).to_object(py)
                 }
             }
-            Visibility::Encrypted => "encrypted".to_object(py),
         }
     }
 }
@@ -143,7 +139,6 @@ impl<'source> FromPyObject<'source> for Visibility {
                 outlets: vec![],
             }),
             "fixed" => Ok(Visibility::Fixed),
-            "encrypted" => Ok(Visibility::Encrypted),
             _ => Err(PyValueError::new_err("Invalid value for Visibility")),
         }
     }
@@ -194,15 +189,10 @@ impl Visibility {
         }
         false
     }
-    #[allow(missing_docs)]
-    pub fn is_encrypted(&self) -> bool {
-        matches!(&self, Visibility::Encrypted)
-    }
+
     #[allow(missing_docs)]
     pub fn requires_processing(&self) -> bool {
-        matches!(&self, Visibility::Encrypted)
-            | matches!(&self, Visibility::Hashed { .. })
-            | matches!(&self, Visibility::KZGCommit)
+        matches!(&self, Visibility::Hashed { .. }) | matches!(&self, Visibility::KZGCommit)
     }
     #[allow(missing_docs)]
     pub fn overwrites_inputs(&self) -> Vec<usize> {
@@ -220,7 +210,6 @@ impl std::fmt::Display for Visibility {
             Visibility::Public => write!(f, "public"),
             Visibility::Fixed => write!(f, "fixed"),
             Visibility::Hashed { .. } => write!(f, "hashed"),
-            Visibility::Encrypted => write!(f, "encrypted"),
         }
     }
 }
@@ -311,9 +300,6 @@ impl VarVisibility {
             & !output_vis.is_hashed()
             & !params_vis.is_hashed()
             & !input_vis.is_hashed()
-            & !output_vis.is_encrypted()
-            & !params_vis.is_encrypted()
-            & !input_vis.is_encrypted()
             & !output_vis.is_kzgcommit()
             & !params_vis.is_kzgcommit()
             & !input_vis.is_kzgcommit()
