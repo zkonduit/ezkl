@@ -340,9 +340,6 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_inputs, processed_inputs_poseidon_hash).unwrap();
             }
-            if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
-                insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal).unwrap();
-            }
             if let Some(processed_inputs_kzg_commit) = &processed_inputs.kzg_commit {
                 insert_kzg_commit_pydict(dict_inputs, processed_inputs_kzg_commit).unwrap();
             }
@@ -354,9 +351,6 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash).unwrap();
             }
-            if let Some(processed_params_elgamal) = &processed_params.elgamal {
-                insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal).unwrap();
-            }
             if let Some(processed_params_kzg_commit) = &processed_params.kzg_commit {
                 insert_kzg_commit_pydict(dict_inputs, processed_params_kzg_commit).unwrap();
             }
@@ -367,9 +361,6 @@ impl ToPyObject for GraphWitness {
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash).unwrap();
-            }
-            if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
-                insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal).unwrap();
             }
             if let Some(processed_outputs_kzg_commit) = &processed_outputs.kzg_commit {
                 insert_kzg_commit_pydict(dict_inputs, processed_outputs_kzg_commit).unwrap();
@@ -403,48 +394,6 @@ fn insert_kzg_commit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Re
     pydict.set_item("kzg_commit", poseidon_hash)?;
 
     Ok(())
-}
-
-#[cfg(feature = "python-bindings")]
-use modules::ElGamalResult;
-#[cfg(feature = "python-bindings")]
-fn insert_elgamal_results_pydict(
-    py: Python,
-    pydict: &PyDict,
-    elgamal_results: &ElGamalResult,
-) -> Result<(), PyErr> {
-    let results_dict = PyDict::new(py);
-    let cipher_text: Vec<Vec<[u64; 4]>> = elgamal_results
-        .ciphertexts
-        .iter()
-        .map(|v| {
-            v.iter()
-                .map(field_to_vecu64_montgomery)
-                .collect::<Vec<[u64; 4]>>()
-        })
-        .collect::<Vec<Vec<[u64; 4]>>>();
-    results_dict.set_item("ciphertexts", cipher_text)?;
-
-    let encrypted_messages: Vec<Vec<[u64; 4]>> = elgamal_results
-        .encrypted_messages
-        .iter()
-        .map(|v| {
-            v.iter()
-                .map(field_to_vecu64_montgomery)
-                .collect::<Vec<[u64; 4]>>()
-        })
-        .collect::<Vec<Vec<[u64; 4]>>>();
-    results_dict.set_item("encrypted_messages", encrypted_messages)?;
-
-    let variables: crate::python::PyElGamalVariables = elgamal_results.variables.clone().into();
-
-    results_dict.set_item("variables", variables)?;
-
-    pydict.set_item("elgamal", results_dict)?;
-
-    Ok(())
-
-    //elgamal
 }
 
 /// model parameters
