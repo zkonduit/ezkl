@@ -1,8 +1,6 @@
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 #[cfg(test)]
 mod wasm32 {
-    use ark_std::test_rng;
-    use ezkl::circuit::modules::elgamal::ElGamalVariables;
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
     use ezkl::circuit::modules::Module;
@@ -10,16 +8,13 @@ mod wasm32 {
     use ezkl::graph::GraphWitness;
     use ezkl::pfsys;
     use ezkl::wasm::{
-        bufferToVecOfVecU64, compiledCircuitValidation, elgamalDecrypt, elgamalEncrypt,
-        elgamalGenRandom, encodeVerifierCalldata, genPk, genVk, genWitness, inputValidation,
-        pkValidation, poseidonHash, printProofHex, proofValidation, prove, settingsValidation,
-        srsValidation, u8_array_to_u128_le, vecU64ToFelt, vecU64ToFloat, vecU64ToInt, verify,
-        vkValidation, witnessValidation,
+        bufferToVecOfVecU64, compiledCircuitValidation, encodeVerifierCalldata, genPk, genVk,
+        genWitness, inputValidation, pkValidation, poseidonHash, printProofHex, proofValidation,
+        prove, settingsValidation, srsValidation, u8_array_to_u128_le, vecU64ToFelt, vecU64ToFloat,
+        vecU64ToInt, verify, vkValidation, witnessValidation,
     };
     use halo2_solidity_verifier::encode_calldata;
     use halo2curves::bn256::{Fr, G1Affine};
-    use rand::rngs::StdRng;
-    use rand::SeedableRng;
     use snark_verifier::util::arithmetic::PrimeField;
     #[cfg(feature = "web")]
     pub use wasm_bindgen_rayon::init_thread_pool;
@@ -144,62 +139,6 @@ mod wasm32 {
 
         assert_eq!(field_elements[0], reference_field_element_sample);
         assert_eq!(field_elements[1], reference_field_element_high);
-    }
-
-    #[wasm_bindgen_test]
-    async fn verify_elgamal_gen_random_wasm() {
-        // Generate a seed value
-        let seed = [0u8; 32];
-
-        // Convert the seed to a wasm-friendly format
-        let wasm_seed = wasm_bindgen::Clamped(seed.to_vec());
-
-        // Use the seed to generate ElGamal variables via WASM function
-        let wasm_output = elgamalGenRandom(wasm_seed).map_err(|_| "failed").unwrap();
-
-        let wasm_vars: ElGamalVariables = serde_json::from_slice(&wasm_output[..]).unwrap();
-
-        // Use the same seed to generate ElGamal variables directly
-        let mut rng_from_seed = StdRng::from_seed(seed);
-        let direct_vars = ElGamalVariables::gen_random(&mut rng_from_seed);
-
-        // Check if both variables are the same
-        assert_eq!(direct_vars, wasm_vars)
-    }
-
-    #[wasm_bindgen_test]
-    async fn verify_elgamal_wasm() {
-        let mut rng = test_rng();
-
-        let var = ElGamalVariables::gen_random(&mut rng);
-
-        let mut message: Vec<Fr> = vec![];
-        for i in 0..32 {
-            message.push(Fr::from(i as u64));
-        }
-
-        let pk = serde_json::to_vec(&var.pk).unwrap();
-        let message_ser = serde_json::to_vec(&message).unwrap();
-        let r = serde_json::to_vec(&var.r).unwrap();
-
-        let cipher = elgamalEncrypt(
-            wasm_bindgen::Clamped(pk.clone()),
-            wasm_bindgen::Clamped(message_ser.clone()),
-            wasm_bindgen::Clamped(r.clone()),
-        )
-        .map_err(|_| "failed")
-        .unwrap();
-
-        let sk = serde_json::to_vec(&var.sk).unwrap();
-
-        let decrypted_message =
-            elgamalDecrypt(wasm_bindgen::Clamped(cipher), wasm_bindgen::Clamped(sk))
-                .map_err(|_| "failed")
-                .unwrap();
-
-        let decrypted_message: Vec<Fr> = serde_json::from_slice(&decrypted_message[..]).unwrap();
-
-        assert_eq!(message, decrypted_message)
     }
 
     #[wasm_bindgen_test]
