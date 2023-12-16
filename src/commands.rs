@@ -267,7 +267,7 @@ pub enum Commands {
         /// Path to the witness (public and private inputs) .json file
         #[arg(short = 'O', long, default_value = DEFAULT_WITNESS)]
         output: PathBuf,
-        /// Path to the witness (public and private inputs) .json file (optional - solely used to generate kzg commits)
+        /// Path to the verification key file (optional - solely used to generate kzg commits)
         #[arg(short = 'V', long)]
         vk_path: Option<PathBuf>,
         /// Path to the srs file (optional - solely used to generate kzg commits)
