@@ -431,12 +431,13 @@ fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box
     let path = get_srs_path(logrows, srs_path);
     let hash = sha256::digest(&std::fs::read(path.clone())?);
     info!("SRS hash: {}", hash);
-    if hash
-        != crate::srs_sha::PUBLIC_SRS_SHA256_HASHES
-            .get(&logrows)
-            .unwrap()
-            .to_string()
-    {
+
+    let predefined_hash = match { crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) } {
+        Some(h) => h,
+        None => return Err(format!("SRS (k={}) hash not found in public set", logrows).into()),
+    };
+
+    if hash != predefined_hash.to_string() {
         // delete file
         warn!("removing SRS file at {}", path.display());
         std::fs::remove_file(path)?;
