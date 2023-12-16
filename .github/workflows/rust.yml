@@ -248,8 +248,6 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_kzg_output_::t  --test-threads 32
       - name: kzg inputs + params + outputs
         run: cargo nextest run --release --verbose tests::mock_kzg_all_::t  --test-threads 32
-      - name: encrypted inputs + kzg params + hashed output
-        run: cargo nextest run --release --verbose tests::mock_hashed_output_kzg_params_::t  --test-threads 32
       - name: Mock fixed inputs
         run: cargo nextest run --release --verbose tests::mock_fixed_inputs_ --test-threads 32
       - name: Mock fixed outputs
@@ -266,18 +264,6 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_hashed_all_::t  --test-threads 32
       - name: hashed inputs + fixed params
         run: cargo nextest run --release --verbose tests::mock_hashed_output_fixed_params_::t  --test-threads 32
-      - name: encrypted inputs
-        run: cargo nextest run --release --verbose tests::mock_encrypted_input_::t  --test-threads 32
-      - name: encrypted params
-        run: cargo nextest run --release --verbose tests::mock_encrypted_params_::t  --test-threads 32
-      - name: encrypted outputs
-        run: cargo nextest run --release --verbose tests::mock_encrypted_output_::t  --test-threads 32
-      - name: encrypted inputs + params
-        run: cargo nextest run --release --verbose tests::mock_encrypted_input_params_::t  --test-threads 32
-      - name: encrypted inputs + params + outputs
-        run: cargo nextest run --release --verbose tests::mock_encrypted_all_::t  --test-threads 32
-      - name: encrypted inputs + hashed params
-        run: cargo nextest run --release --verbose tests::mock_encrypted_input_hashed_params_::t  --test-threads 32
       - name: MNIST Gan Mock
         run: cargo nextest run --release --verbose tests::large_mock_::large_tests_4_expects -- --include-ignored
       - name: NanoGPT Mock
@@ -419,8 +405,6 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed
-      - name: KZG prove and verify tests (encrypted outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted
 
   prove-and-verify-tests-gpu:
     runs-on: GPU
@@ -456,8 +440,6 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params --features icicle  --test-threads 2
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 2
-      - name: KZG prove and verify tests (encrypted outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_encrypted --features icicle  --test-threads 2
 
   fuzz-tests:
     runs-on: ubuntu-latest-32-cores
@@ -554,8 +536,6 @@ jobs:
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
       - name: KZG prove and verify aggr tests
         run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 4 -- --include-ignored
-      - name: KZG prove and verify aggr tests (encrypted input)
-        run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_encrypted --test-threads 4 -- --include-ignored
 
   examples:
     runs-on: ubuntu-latest-32-cores
@@ -688,9 +668,8 @@ jobs:
       # - name: Postgres tutorials
       #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
       - name: All notebooks
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1 
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       - name: Voice tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
-

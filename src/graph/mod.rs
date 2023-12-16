@@ -20,9 +20,7 @@ use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use self::input::OnChainSource;
 use self::input::{FileSource, GraphData};
-use self::modules::{
-    GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSettings, ModuleSizes,
-};
+use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::table::{Table, RESERVED_BLINDING_ROWS_PAD};
@@ -137,10 +135,12 @@ thread_local!(
 );
 
 /// Result from a forward pass
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct GraphWitness {
     /// The inputs of the forward pass
     pub inputs: Vec<Vec<Fp>>,
+    /// The prettified outputs of the forward pass, we use a String to maximize compatibility with Python and JS clients
+    pub pretty_elements: Option<PrettyElements>,
     /// The output of the forward pass
     pub outputs: Vec<Vec<Fp>>,
     /// Any hashes of inputs generated during the forward pass
@@ -174,12 +174,87 @@ impl GraphWitness {
         GraphWitness {
             inputs,
             outputs,
+            pretty_elements: None,
             processed_inputs: None,
             processed_params: None,
             processed_outputs: None,
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
         }
+    }
+
+    /// Generate the rescaled elements for the witness
+    pub fn generate_rescaled_elements(
+        &mut self,
+        input_scales: Vec<crate::Scale>,
+        output_scales: Vec<crate::Scale>,
+        visibility: VarVisibility,
+    ) {
+        let mut pretty_elements = PrettyElements::default();
+        pretty_elements.rescaled_inputs = self
+            .inputs
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let scale = input_scales[i];
+                t.iter()
+                    .map(|x| dequantize(*x, scale, 0.).to_string())
+                    .collect()
+            })
+            .collect();
+
+        pretty_elements.inputs = self
+            .inputs
+            .iter()
+            .map(|t| t.iter().map(|x| format!("{:?}", x)).collect())
+            .collect();
+
+        pretty_elements.rescaled_outputs = self
+            .outputs
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let scale = output_scales[i];
+                t.iter()
+                    .map(|x| dequantize(*x, scale, 0.).to_string())
+                    .collect()
+            })
+            .collect();
+
+        pretty_elements.outputs = self
+            .outputs
+            .iter()
+            .map(|t| t.iter().map(|x| format!("{:?}", x)).collect())
+            .collect();
+
+        if let Some(processed_inputs) = self.processed_inputs.clone() {
+            pretty_elements.processed_inputs = processed_inputs
+                .get_result(visibility.input)
+                .iter()
+                // gets printed as hex string
+                .map(|x| x.iter().map(|y| format!("{:?}", y)).collect())
+                .collect();
+        }
+
+        if let Some(processed_params) = self.processed_params.clone() {
+            pretty_elements.processed_params = processed_params
+                .get_result(visibility.params)
+                .iter()
+                // gets printed as hex string
+                .map(|x| x.iter().map(|y| format!("{:?}", y)).collect())
+                .collect();
+        }
+
+        if let Some(processed_outputs) = self.processed_outputs.clone() {
+            pretty_elements.processed_outputs = processed_outputs
+                .get_result(visibility.output)
+                .iter()
+                // gets printed as hex string
+                .map(|x| x.iter().map(|y| format!("{:?}", y)).collect())
+                .collect();
+        }
+
+        self.pretty_elements = Some(pretty_elements);
     }
 
     ///
@@ -278,9 +353,6 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_inputs, processed_inputs_poseidon_hash).unwrap();
             }
-            if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
-                insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal).unwrap();
-            }
             if let Some(processed_inputs_kzg_commit) = &processed_inputs.kzg_commit {
                 insert_kzg_commit_pydict(dict_inputs, processed_inputs_kzg_commit).unwrap();
             }
@@ -292,9 +364,6 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash).unwrap();
             }
-            if let Some(processed_params_elgamal) = &processed_params.elgamal {
-                insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal).unwrap();
-            }
             if let Some(processed_params_kzg_commit) = &processed_params.kzg_commit {
                 insert_kzg_commit_pydict(dict_inputs, processed_params_kzg_commit).unwrap();
             }
@@ -305,9 +374,6 @@ impl ToPyObject for GraphWitness {
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash).unwrap();
-            }
-            if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
-                insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal).unwrap();
             }
             if let Some(processed_outputs_kzg_commit) = &processed_outputs.kzg_commit {
                 insert_kzg_commit_pydict(dict_inputs, processed_outputs_kzg_commit).unwrap();
@@ -343,48 +409,6 @@ fn insert_kzg_commit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Re
     Ok(())
 }
 
-#[cfg(feature = "python-bindings")]
-use modules::ElGamalResult;
-#[cfg(feature = "python-bindings")]
-fn insert_elgamal_results_pydict(
-    py: Python,
-    pydict: &PyDict,
-    elgamal_results: &ElGamalResult,
-) -> Result<(), PyErr> {
-    let results_dict = PyDict::new(py);
-    let cipher_text: Vec<Vec<[u64; 4]>> = elgamal_results
-        .ciphertexts
-        .iter()
-        .map(|v| {
-            v.iter()
-                .map(field_to_vecu64_montgomery)
-                .collect::<Vec<[u64; 4]>>()
-        })
-        .collect::<Vec<Vec<[u64; 4]>>>();
-    results_dict.set_item("ciphertexts", cipher_text)?;
-
-    let encrypted_messages: Vec<Vec<[u64; 4]>> = elgamal_results
-        .encrypted_messages
-        .iter()
-        .map(|v| {
-            v.iter()
-                .map(field_to_vecu64_montgomery)
-                .collect::<Vec<[u64; 4]>>()
-        })
-        .collect::<Vec<Vec<[u64; 4]>>>();
-    results_dict.set_item("encrypted_messages", encrypted_messages)?;
-
-    let variables: crate::python::PyElGamalVariables = elgamal_results.variables.clone().into();
-
-    results_dict.set_item("variables", variables)?;
-
-    pydict.set_item("elgamal", results_dict)?;
-
-    Ok(())
-
-    //elgamal
-}
-
 /// model parameters
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct GraphSettings {
@@ -412,6 +436,8 @@ pub struct GraphSettings {
     pub version: String,
     /// num blinding factors
     pub num_blinding_factors: Option<usize>,
+    /// unix time timestamp
+    pub timestamp: Option<u128>,
 }
 
 impl GraphSettings {
@@ -483,11 +509,8 @@ impl GraphSettings {
 
     /// if any visibility is encrypted or hashed
     pub fn module_requires_fixed(&self) -> bool {
-        self.run_args.input_visibility.is_encrypted()
-            || self.run_args.input_visibility.is_hashed()
-            || self.run_args.output_visibility.is_encrypted()
+        self.run_args.input_visibility.is_hashed()
             || self.run_args.output_visibility.is_hashed()
-            || self.run_args.param_visibility.is_encrypted()
             || self.run_args.param_visibility.is_hashed()
     }
 
@@ -522,8 +545,6 @@ pub struct GraphCircuit {
     pub core: CoreCircuit,
     /// The witness data for the model.
     pub graph_witness: GraphWitness,
-    /// The settings of the model's modules.
-    pub module_settings: ModuleSettings,
 }
 
 impl GraphCircuit {
@@ -617,7 +638,6 @@ impl GraphCircuit {
         }
 
         // dummy module settings, must load from GraphData after
-        let module_settings = ModuleSettings::default();
         let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
 
         let mut num_params = 0;
@@ -648,7 +668,6 @@ impl GraphCircuit {
         Ok(GraphCircuit {
             core,
             graph_witness: GraphWitness::new(inputs, vec![]),
-            module_settings,
         })
     }
 
@@ -666,7 +685,6 @@ impl GraphCircuit {
         }
 
         // dummy module settings, must load from GraphData after
-        let module_settings = ModuleSettings::default();
 
         settings.check_mode = check_mode;
 
@@ -678,7 +696,6 @@ impl GraphCircuit {
         Ok(GraphCircuit {
             core,
             graph_witness: GraphWitness::new(inputs, vec![]),
-            module_settings,
         })
     }
 
@@ -689,17 +706,14 @@ impl GraphCircuit {
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.graph_witness = data.clone();
         // load the module settings
-        self.module_settings = ModuleSettings::from(data);
-
         Ok(())
     }
 
     /// Prepare the public inputs for the circuit.
     pub fn prepare_public_inputs(
-        &mut self,
+        &self,
         data: &GraphWitness,
     ) -> Result<Vec<Fp>, Box<dyn std::error::Error>> {
-        // quantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
         let mut public_inputs: Vec<Fp> = vec![];
@@ -726,6 +740,50 @@ impl GraphCircuit {
         }
 
         Ok(public_inputs)
+    }
+
+    /// get rescaled public inputs as floating points for the circuit.
+    pub fn pretty_public_inputs(
+        &self,
+        data: &GraphWitness,
+    ) -> Result<Option<PrettyElements>, Box<dyn std::error::Error>> {
+        // dequantize the supplied data using the provided scale.
+        // the ordering here is important, we want the inputs to come before the outputs
+        // as they are configured in that order as Column<Instances>
+
+        if data.pretty_elements.is_none() {
+            warn!("no rescaled elements found in witness data");
+            return Ok(None);
+        }
+
+        let mut public_inputs = PrettyElements::default();
+        let elements = data.pretty_elements.as_ref().unwrap();
+
+        if self.settings().run_args.input_visibility.is_public() {
+            public_inputs.rescaled_inputs = elements.rescaled_inputs.clone();
+            public_inputs.inputs = elements.inputs.clone();
+        } else if let Some(_) = &data.processed_inputs {
+            public_inputs.processed_inputs = elements.processed_inputs.clone();
+        }
+
+        if let Some(_) = &data.processed_params {
+            public_inputs.processed_params = elements.processed_params.clone();
+        }
+
+        if self.settings().run_args.output_visibility.is_public() {
+            public_inputs.rescaled_outputs = elements.rescaled_outputs.clone();
+            public_inputs.outputs = elements.outputs.clone();
+        } else if let Some(_) = &data.processed_outputs {
+            public_inputs.processed_outputs = elements.processed_outputs.clone();
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        debug!(
+            "rescaled and processed public inputs: {}",
+            serde_json::to_string(&public_inputs)?.to_colored_json_auto()?
+        );
+
+        Ok(Some(public_inputs))
     }
 
     ///
@@ -1082,7 +1140,7 @@ impl GraphCircuit {
                 for outlet in &module_outlets {
                     module_inputs.push(inputs[*outlet].clone());
                 }
-                let res = GraphModules::forward(&module_inputs, visibility.input.clone(), vk, srs)?;
+                let res = GraphModules::forward(&module_inputs, &visibility.input, vk, srs)?;
                 processed_inputs = Some(res.clone());
                 let module_results = res.get_result(visibility.input.clone());
 
@@ -1090,7 +1148,7 @@ impl GraphCircuit {
                     inputs[*outlet] = Tensor::from(module_results[i].clone().into_iter());
                 }
             } else {
-                processed_inputs = Some(GraphModules::forward(inputs, visibility.input, vk, srs)?);
+                processed_inputs = Some(GraphModules::forward(inputs, &visibility.input, vk, srs)?);
             }
         }
 
@@ -1100,7 +1158,7 @@ impl GraphCircuit {
                 let flattened_params = Tensor::new(Some(&params), &[params.len()])?.combine()?;
                 processed_params = Some(GraphModules::forward(
                     &[flattened_params],
-                    visibility.params,
+                    &visibility.params,
                     vk,
                     srs,
                 )?);
@@ -1116,8 +1174,7 @@ impl GraphCircuit {
                 for outlet in &module_outlets {
                     module_inputs.push(model_results.outputs[*outlet].clone());
                 }
-                let res =
-                    GraphModules::forward(&module_inputs, visibility.output.clone(), vk, srs)?;
+                let res = GraphModules::forward(&module_inputs, &visibility.output, vk, srs)?;
                 processed_outputs = Some(res.clone());
                 let module_results = res.get_result(visibility.output.clone());
 
@@ -1128,18 +1185,19 @@ impl GraphCircuit {
             } else {
                 processed_outputs = Some(GraphModules::forward(
                     &model_results.outputs,
-                    visibility.output,
+                    &visibility.output,
                     vk,
                     srs,
                 )?);
             }
         }
 
-        let witness = GraphWitness {
+        let mut witness = GraphWitness {
             inputs: original_inputs
                 .iter()
                 .map(|t| t.deref().to_vec())
                 .collect_vec(),
+            pretty_elements: None,
             outputs: model_results
                 .outputs
                 .iter()
@@ -1151,6 +1209,12 @@ impl GraphCircuit {
             max_lookup_inputs: model_results.max_lookup_inputs,
             min_lookup_inputs: model_results.min_lookup_inputs,
         };
+
+        witness.generate_rescaled_elements(
+            self.model().graph.get_input_scales(),
+            self.model().graph.get_output_scales()?,
+            visibility,
+        );
 
         #[cfg(not(target_arch = "wasm32"))]
         log::trace!(
@@ -1441,7 +1505,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut input_outlets,
                 input_visibility,
                 &mut instance_offset,
-                &self.module_settings.input,
             )?;
             // replace inputs with the outlets
             for (i, outlet) in outlets.iter().enumerate() {
@@ -1454,7 +1517,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut inputs,
                 input_visibility,
                 &mut instance_offset,
-                &self.module_settings.input,
             )?;
         }
 
@@ -1491,7 +1553,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut flattened_params,
                 param_visibility,
                 &mut instance_offset,
-                &self.module_settings.params,
             )?;
 
             let shapes = self.model().const_shapes();
@@ -1544,7 +1605,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut output_outlets,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
-                &self.module_settings.output,
             )?;
 
             // replace outputs with the outlets
@@ -1558,7 +1618,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut outputs,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
-                &self.module_settings.output,
             )?;
         }
 

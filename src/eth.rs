@@ -1,5 +1,5 @@
 use crate::graph::input::{CallsToAccount, FileSourceInner, GraphData};
-use crate::graph::modules::{ELGAMAL_INSTANCES, POSEIDON_INSTANCES};
+use crate::graph::modules::POSEIDON_INSTANCES;
 use crate::graph::DataSource;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::GraphSettings;
@@ -145,8 +145,6 @@ pub async fn deploy_da_verifier_via_solidity(
 
     if settings.run_args.input_visibility.is_hashed() {
         instance_shapes.push(POSEIDON_INSTANCES)
-    } else if settings.run_args.input_visibility.is_encrypted() {
-        instance_shapes.push(ELGAMAL_INSTANCES)
     } else if settings.run_args.input_visibility.is_public() {
         for idx in 0..settings.model_input_scales.len() {
             let shape = &settings.model_instance_shapes[idx];
@@ -155,16 +153,12 @@ pub async fn deploy_da_verifier_via_solidity(
         }
     }
 
-    if settings.run_args.param_visibility.is_hashed()
-        || settings.run_args.param_visibility.is_encrypted()
-    {
+    if settings.run_args.param_visibility.is_hashed() {
         return Err(Box::new(EvmVerificationError::InvalidVisibility));
     }
 
     if settings.run_args.output_visibility.is_hashed() {
         instance_shapes.push(POSEIDON_INSTANCES)
-    } else if settings.run_args.output_visibility.is_encrypted() {
-        instance_shapes.push(ELGAMAL_INSTANCES)
     } else if settings.run_args.output_visibility.is_public() {
         for idx in model_instance_offset..model_instance_offset + settings.model_output_scales.len()
         {
@@ -177,9 +171,7 @@ pub async fn deploy_da_verifier_via_solidity(
     let mut contract_instance_offset = 0;
 
     if let DataSource::OnChain(source) = input.input_data {
-        if settings.run_args.input_visibility.is_hashed_public()
-            | settings.run_args.input_visibility.is_encrypted()
-        {
+        if settings.run_args.input_visibility.is_hashed_public() {
             // set scales 1.0
             scales.extend(vec![0; instance_shapes[instance_idx]]);
             instance_idx += 1;
@@ -204,9 +196,7 @@ pub async fn deploy_da_verifier_via_solidity(
     }
 
     if let Some(DataSource::OnChain(source)) = input.output_data {
-        if settings.run_args.output_visibility.is_hashed_public()
-            | settings.run_args.output_visibility.is_encrypted()
-        {
+        if settings.run_args.output_visibility.is_hashed_public() {
             // set scales 1.0
             scales.extend(vec![0; instance_shapes[instance_idx]]);
         } else {

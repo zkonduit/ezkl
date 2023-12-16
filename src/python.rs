@@ -1,4 +1,3 @@
-use crate::circuit::modules::elgamal::{ElGamalCipher, ElGamalVariables};
 use crate::circuit::modules::kzg::KZGChip;
 use crate::circuit::modules::poseidon::{
     spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
@@ -26,8 +25,6 @@ use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
 use snark_verifier::util::arithmetic::PrimeField;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
@@ -133,125 +130,6 @@ impl pyo3::ToPyObject for PyG1Affine {
         g1_dict.set_item("x", self.x.to_object(py)).unwrap();
         g1_dict.set_item("y", self.y.to_object(py)).unwrap();
         g1_dict.into()
-    }
-}
-
-/// pyclass containing the struct used for ElgamalCipher
-#[pyclass]
-#[derive(Debug, Clone)]
-pub struct PyElGamalCipher {
-    #[pyo3(get, set)]
-    ///
-    c1: PyG1,
-    #[pyo3(get, set)]
-    ///
-    c2: Vec<PyFelt>,
-}
-
-impl From<PyElGamalCipher> for ElGamalCipher {
-    fn from(py_elgamal_cipher: PyElGamalCipher) -> Self {
-        ElGamalCipher {
-            c1: py_elgamal_cipher.c1.into(),
-            c2: py_elgamal_cipher
-                .c2
-                .iter()
-                .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
-                .collect::<Vec<_>>(),
-        }
-    }
-}
-
-impl From<ElGamalCipher> for PyElGamalCipher {
-    fn from(elgamal_cipher: ElGamalCipher) -> Self {
-        PyElGamalCipher {
-            c1: elgamal_cipher.c1.into(),
-            c2: elgamal_cipher
-                .c2
-                .iter()
-                .map(crate::pfsys::field_to_vecu64_montgomery::<Fr>)
-                .collect::<Vec<_>>(),
-        }
-    }
-}
-
-/// pyclass containing the struct used for ElgamalVariables
-#[pyclass]
-#[derive(Debug, Clone)]
-pub struct PyElGamalVariables {
-    #[pyo3(get, set)]
-    r: PyFelt,
-    #[pyo3(get, set)]
-    pk: PyG1Affine,
-    #[pyo3(get, set)]
-    sk: PyFelt,
-    #[pyo3(get, set)]
-    window_size: usize,
-    #[pyo3(get, set)]
-    aux_generator: PyG1Affine,
-}
-
-impl From<PyElGamalVariables> for ElGamalVariables {
-    fn from(py_elgamal_variables: PyElGamalVariables) -> Self {
-        ElGamalVariables {
-            r: crate::pfsys::vecu64_to_field_montgomery::<Fr>(&py_elgamal_variables.r),
-            pk: G1Affine {
-                x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&py_elgamal_variables.pk.x),
-                y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&py_elgamal_variables.pk.y),
-            },
-            sk: crate::pfsys::vecu64_to_field_montgomery::<Fr>(&py_elgamal_variables.sk),
-            window_size: py_elgamal_variables.window_size,
-            aux_generator: G1Affine {
-                x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(
-                    &py_elgamal_variables.aux_generator.x,
-                ),
-                y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(
-                    &py_elgamal_variables.aux_generator.y,
-                ),
-            },
-        }
-    }
-}
-
-impl From<ElGamalVariables> for PyElGamalVariables {
-    fn from(elgamal_variables: ElGamalVariables) -> Self {
-        PyElGamalVariables {
-            r: crate::pfsys::field_to_vecu64_montgomery::<Fr>(&elgamal_variables.r),
-            pk: PyG1Affine {
-                x: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&elgamal_variables.pk.x),
-                y: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&elgamal_variables.pk.y),
-            },
-            sk: crate::pfsys::field_to_vecu64_montgomery::<Fr>(&elgamal_variables.sk),
-            window_size: elgamal_variables.window_size,
-            aux_generator: PyG1Affine {
-                x: crate::pfsys::field_to_vecu64_montgomery::<Fq>(
-                    &elgamal_variables.aux_generator.x,
-                ),
-                y: crate::pfsys::field_to_vecu64_montgomery::<Fq>(
-                    &elgamal_variables.aux_generator.y,
-                ),
-            },
-        }
-    }
-}
-
-impl pyo3::ToPyObject for PyElGamalVariables {
-    fn to_object(&self, py: pyo3::Python) -> pyo3::PyObject {
-        let variables_dict = pyo3::types::PyDict::new(py);
-
-        variables_dict.set_item("r", self.r.to_object(py)).unwrap();
-        variables_dict
-            .set_item("pk", self.pk.to_object(py))
-            .unwrap();
-        variables_dict
-            .set_item("sk", self.sk.to_object(py))
-            .unwrap();
-        variables_dict
-            .set_item("window_size", self.window_size.to_object(py))
-            .unwrap();
-        variables_dict
-            .set_item("aux_generator", self.aux_generator.to_object(py))
-            .unwrap();
-        variables_dict.into()
     }
 }
 
@@ -505,60 +383,6 @@ fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResul
         .map_err(|_| PyIOError::new_err("Failed to swap commitments"))?;
 
     Ok(())
-}
-
-/// Encrypt using elgamal
-#[pyfunction(signature = (
-    pk, message, r
-    ))]
-pub fn elgamal_encrypt(
-    pk: PyG1Affine,
-    message: Vec<PyFelt>,
-    r: PyFelt,
-) -> PyResult<PyElGamalCipher> {
-    let pk: G1Affine = pk.into();
-    let message = message
-        .iter()
-        .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
-        .collect::<Vec<_>>();
-    let r = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&r);
-
-    let output = crate::circuit::modules::elgamal::ElGamalGadget::encrypt(pk, message, r);
-    Ok(output.into())
-}
-
-/// Decrypt using elgamal
-#[pyfunction(signature = (
-    cipher, sk
-    ))]
-pub fn elgamal_decrypt(cipher: PyElGamalCipher, sk: PyFelt) -> PyResult<Vec<PyFelt>> {
-    let sk: Fr = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&sk);
-
-    let output = crate::circuit::modules::elgamal::ElGamalGadget::decrypt(&cipher.into(), sk);
-
-    let output = output
-        .iter()
-        .map(crate::pfsys::field_to_vecu64_montgomery::<Fr>)
-        .collect::<Vec<_>>();
-
-    Ok(output)
-}
-
-/// Generates random elgamal variables from a random seed value in browser.
-/// Make sure input seed comes a secure source of randomness
-#[pyfunction(signature = (
-    rng
-    ))]
-pub fn elgamal_gen_random(rng: Vec<u8>) -> PyResult<PyElGamalVariables> {
-    let seed: &[u8] = &rng;
-    let mut rng = StdRng::from_seed(
-        seed.try_into()
-            .map_err(|_| PyIOError::new_err("Failed to create random seed"))?,
-    );
-
-    let output = crate::circuit::modules::elgamal::ElGamalVariables::gen_random(&mut rng);
-
-    Ok(output.into())
 }
 
 /// Generates a vk from a pk for a model circuit and saves it to a file
@@ -1200,8 +1024,6 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     // NOTE: DeployVerifierEVM and SendProofEVM will be implemented in python in pyezkl
     pyo3_log::init();
     m.add_class::<PyRunArgs>()?;
-    m.add_class::<PyElGamalCipher>()?;
-    m.add_class::<PyElGamalVariables>()?;
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
@@ -1211,9 +1033,6 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(kzg_commit, m)?)?;
     m.add_function(wrap_pyfunction!(swap_proof_commitments, m)?)?;
     m.add_function(wrap_pyfunction!(poseidon_hash, m)?)?;
-    m.add_function(wrap_pyfunction!(elgamal_encrypt, m)?)?;
-    m.add_function(wrap_pyfunction!(elgamal_decrypt, m)?)?;
-    m.add_function(wrap_pyfunction!(elgamal_gen_random, m)?)?;
     m.add_function(wrap_pyfunction!(float_to_vecu64, m)?)?;
     m.add_function(wrap_pyfunction!(buffer_to_felts, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_aggr, m)?)?;

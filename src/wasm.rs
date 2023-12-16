@@ -1,4 +1,3 @@
-use crate::circuit::modules::elgamal::ElGamalCipher;
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::PoseidonChip;
 use crate::circuit::modules::Module;
@@ -16,8 +15,6 @@ use halo2_proofs::poly::kzg::{
 use halo2_solidity_verifier::encode_calldata;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
-use rand::rngs::StdRng;
-use rand::SeedableRng;
 
 use crate::tensor::TensorType;
 use wasm_bindgen::prelude::*;
@@ -195,63 +192,6 @@ pub fn poseidonHash(
     Ok(wasm_bindgen::Clamped(serde_json::to_vec(&output).map_err(
         |e| JsError::new(&format!("Failed to serialize poseidon hash output: {}", e)),
     )?))
-}
-
-/// Generates random elgamal variables from a random seed value in browser.
-/// Make sure input seed comes a secure source of randomness
-#[wasm_bindgen]
-#[allow(non_snake_case)]
-pub fn elgamalGenRandom(rng: wasm_bindgen::Clamped<Vec<u8>>) -> Result<Vec<u8>, JsError> {
-    let seed: &[u8] = &rng;
-    let mut rng = StdRng::from_seed(
-        seed.try_into()
-            .map_err(|e| JsError::new(&format!("{}", e)))?,
-    );
-
-    let output = crate::circuit::modules::elgamal::ElGamalVariables::gen_random(&mut rng);
-
-    serde_json::to_vec(&output)
-        .map_err(|e| JsError::new(&format!("Failed to serialize elgamal variables: {}", e)))
-}
-
-/// Encrypt using elgamal in browser. Input message
-#[wasm_bindgen]
-#[allow(non_snake_case)]
-pub fn elgamalEncrypt(
-    pk: wasm_bindgen::Clamped<Vec<u8>>,
-    message: wasm_bindgen::Clamped<Vec<u8>>,
-    r: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Result<Vec<u8>, JsError> {
-    let pk: G1Affine = serde_json::from_slice(&pk[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize pk: {}", e)))?;
-    let message: Vec<Fr> = serde_json::from_slice(&message[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize message: {}", e)))?;
-    let r: Fr = serde_json::from_slice(&r[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize r: {}", e)))?;
-
-    let output = crate::circuit::modules::elgamal::ElGamalGadget::encrypt(pk, message, r);
-
-    serde_json::to_vec(&output)
-        .map_err(|e| JsError::new(&format!("Failed to serialize cipher {}", e)))
-}
-
-/// Decrypt using elgamal in browser. Input message
-#[wasm_bindgen]
-#[allow(non_snake_case)]
-pub fn elgamalDecrypt(
-    cipher: wasm_bindgen::Clamped<Vec<u8>>,
-    sk: wasm_bindgen::Clamped<Vec<u8>>,
-) -> Result<Vec<u8>, JsError> {
-    let sk: Fr = serde_json::from_slice(&sk[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize sk: {}", e)))?;
-
-    let cipher: ElGamalCipher = serde_json::from_slice(&cipher[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize cipher: {}", e)))?;
-
-    let output = crate::circuit::modules::elgamal::ElGamalGadget::decrypt(&cipher, sk);
-
-    serde_json::to_vec(&output)
-        .map_err(|e| JsError::new(&format!("Failed to serialize decrypted cipher: {}", e)))
 }
 
 /// Generate a witness file from input.json, compiled model and a settings.json file.

@@ -38,9 +38,9 @@ pub const DEFAULT_PK_AGGREGATED: &str = "pk_aggr.key";
 /// The default path to the verification key file for aggregated proofs
 pub const DEFAULT_VK_AGGREGATED: &str = "vk_aggr.key";
 /// The default path to the proof file
-pub const DEFAULT_PROOF: &str = "proof.proof";
+pub const DEFAULT_PROOF: &str = "proof.json";
 /// The default path to the proof file for aggregated proofs
-pub const DEFAULT_PROOF_AGGREGATED: &str = "proof_aggr.proof";
+pub const DEFAULT_PROOF_AGGREGATED: &str = "proof_aggr.json";
 /// Default for whether to split proofs
 pub const DEFAULT_SPLIT: &str = "false";
 /// Default verifier abi
@@ -71,7 +71,6 @@ pub const DEFAULT_OPTIMIZER_RUNS: &str = "1";
 pub const DEFAULT_FUZZ_RUNS: &str = "10";
 /// Default calibration file
 pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
-
 
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -268,7 +267,7 @@ pub enum Commands {
         /// Path to the witness (public and private inputs) .json file
         #[arg(short = 'O', long, default_value = DEFAULT_WITNESS)]
         output: PathBuf,
-        /// Path to the witness (public and private inputs) .json file (optional - solely used to generate kzg commits)
+        /// Path to the verification key file (optional - solely used to generate kzg commits)
         #[arg(short = 'V', long)]
         vk_path: Option<PathBuf>,
         /// Path to the srs file (optional - solely used to generate kzg commits)
@@ -302,9 +301,9 @@ pub enum Commands {
         #[arg(short = 'O', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
         #[arg(long = "target", default_value = DEFAULT_CALIBRATION_TARGET)]
-        /// Target for calibration.
+        /// Target for calibration. Set to "resources" to optimize for computational resource. Otherwise, set to "accuracy" to optimize for accuracy.
         target: CalibrationTarget,
-        /// Optional scales to specifically try for calibration.
+        /// Optional scales to specifically try for calibration. Example, --scales 0,4
         #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
         scales: Option<Vec<crate::Scale>>,
         /// max logrows to use for calibration, 26 is the max public SRS size

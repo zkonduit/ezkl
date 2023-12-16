@@ -202,6 +202,25 @@ pub fn vecu64_to_field_montgomery<F: PrimeField + SerdeObject + Serialize + Dese
     fp
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+/// Contains the instances of the circuit in human readable form
+pub struct PrettyElements {
+    /// the inputs as rescaled floats -- represented as a String for maximum compatibility with Python and JS
+    pub rescaled_inputs: Vec<Vec<String>>,
+    /// the inputs as felts but 0x strings -- represented as a String for maximum compatibility with Python and JS
+    pub inputs: Vec<Vec<String>>,
+    /// the processed inputs (eg. hash of the inputs) -- stays as a felt represented as a 0x string for maximum compatibility with Python and JS
+    pub processed_inputs: Vec<Vec<String>>,
+    /// the processed params (eg. hash of the params) -- stays as a felt represented as a 0x string for maximum compatibility with Python and JS
+    pub processed_params: Vec<Vec<String>>,
+    /// the processed outputs (eg. hash of the outputs) -- stays as a felt represented as a 0x string for maximum compatibility with Python and JS
+    pub processed_outputs: Vec<Vec<String>>,
+    /// the outputs as rescaled floats (if any) -- represented as a String for maximum compatibility with Python and JS
+    pub rescaled_outputs: Vec<Vec<String>>,
+    /// the outputs as felts but 0x strings (if any) -- represented as a String for maximum compatibility with Python and JS
+    pub outputs: Vec<Vec<String>>,
+}
+
 /// An application snark with proof and instance variables ready for aggregation (raw field element)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snark<F: PrimeField + SerdeObject, C: CurveAffine>
@@ -219,6 +238,10 @@ where
     pub transcript_type: TranscriptType,
     /// the split proof
     pub split: Option<ProofSplitCommit>,
+    /// the proof instances as rescaled floats
+    pub pretty_public_inputs: Option<PrettyElements>,
+    /// timestamp
+    pub timestamp: Option<u128>,
 }
 
 #[cfg(feature = "python-bindings")]
@@ -255,18 +278,27 @@ where
 {
     /// Create a new application snark from proof and instance variables ready for aggregation
     pub fn new(
-        protocol: PlonkProtocol<C>,
+        protocol: Option<PlonkProtocol<C>>,
         instances: Vec<Vec<F>>,
         proof: Vec<u8>,
         transcript_type: TranscriptType,
         split: Option<ProofSplitCommit>,
+        pretty_public_inputs: Option<PrettyElements>,
     ) -> Self {
         Self {
-            protocol: Some(protocol),
+            protocol,
             instances,
             proof,
             transcript_type,
             split,
+            pretty_public_inputs,
+            // unix timestamp
+            timestamp: Some(
+                instant::SystemTime::now()
+                    .duration_since(instant::SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis(),
+            ),
         }
     }
 
@@ -436,6 +468,7 @@ pub fn create_proof_circuit<
     check_mode: CheckMode,
     transcript_type: TranscriptType,
     split: Option<ProofSplitCommit>,
+    set_protocol: bool,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
 where
     C: Circuit<Scheme::Scalar>,
@@ -456,11 +489,15 @@ where
     let mut rng = OsRng;
     let number_instance = instances.iter().map(|x| x.len()).collect();
     trace!("number_instance {:?}", number_instance);
-    let protocol = compile(
-        params,
-        pk.get_vk(),
-        Config::kzg().with_num_instance(number_instance),
-    );
+    let mut protocol = None;
+
+    if set_protocol {
+        protocol = Some(compile(
+            params,
+            pk.get_vk(),
+            Config::kzg().with_num_instance(number_instance),
+        ))
+    }
 
     let pi_inner = instances
         .iter()
@@ -487,7 +524,7 @@ where
     )?;
     let proof = transcript.finalize();
 
-    let checkable_pf = Snark::new(protocol, instances, proof, transcript_type, split);
+    let checkable_pf = Snark::new(protocol, instances, proof, transcript_type, split, None);
 
     // sanity check that the generated proof is valid
     if check_mode == CheckMode::SAFE {
@@ -744,6 +781,7 @@ pub fn create_proof_circuit_kzg<
             check_mode,
             transcript,
             split,
+            false,
         )
         .map_err(Box::<dyn Error>::from),
         TranscriptType::Poseidon => create_proof_circuit::<
@@ -765,6 +803,7 @@ pub fn create_proof_circuit_kzg<
             check_mode,
             transcript,
             split,
+            true,
         )
         .map_err(Box::<dyn Error>::from),
     }
@@ -856,6 +895,8 @@ mod tests {
             transcript_type: TranscriptType::EVM,
             protocol: None,
             split: None,
+            pretty_public_inputs: None,
+            timestamp: None,
         };
 
         snark

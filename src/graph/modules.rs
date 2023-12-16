@@ -1,17 +1,15 @@
-use crate::circuit::modules::elgamal::{ElGamalConfig, ElGamalGadget, ElGamalVariables};
 use crate::circuit::modules::kzg::{KZGChip, KZGConfig};
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::Module;
-use crate::tensor::{Tensor, ValTensor, ValType};
-use halo2_proofs::circuit::{Layouter, Value};
+use crate::tensor::{Tensor, ValTensor};
+use halo2_proofs::circuit::Layouter;
 use halo2_proofs::plonk::{Column, ConstraintSystem, Error, Instance, VerifyingKey};
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 use halo2curves::bn256::{Bn256, Fr as Fp, G1Affine};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use super::GraphWitness;
 use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
@@ -35,8 +33,6 @@ pub struct ModuleConfigs {
     kzg: Vec<KZGConfig>,
     /// Poseidon
     poseidon: Option<ModulePoseidonConfig>,
-    /// ElGamal
-    elgamal: Option<ElGamalConfig>,
     /// Instance
     pub instance: Option<Column<Instance>>,
 }
@@ -64,16 +60,6 @@ impl ModuleConfigs {
         visibility: VarVisibility,
         module_size: ModuleSizes,
     ) {
-        if (visibility.input.is_encrypted()
-            || visibility.output.is_encrypted()
-            || visibility.params.is_encrypted())
-            && module_size.elgamal.1[0] > 0
-        {
-            let elgamal = ElGamalGadget::configure(cs, ());
-            self.instance = Some(elgamal.instance);
-            self.elgamal = Some(elgamal);
-        };
-
         if (visibility.input.is_hashed()
             || visibility.output.is_hashed()
             || visibility.params.is_hashed())
@@ -103,84 +89,11 @@ impl ModuleConfigs {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-/// Module variable settings
-pub struct ModuleVarSettings {
-    ///
-    elgamal: Option<ElGamalVariables>,
-}
-
-impl ModuleVarSettings {
-    /// Create new module variable settings
-    pub fn new(elgamal: ElGamalVariables) -> Self {
-        ModuleVarSettings {
-            elgamal: Some(elgamal),
-        }
-    }
-}
-
-impl Default for ModuleVarSettings {
-    fn default() -> Self {
-        let dummy_elgamal = ElGamalVariables::default();
-        ModuleVarSettings {
-            elgamal: Some(dummy_elgamal),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-/// Module input settings
-pub struct ModuleSettings {
-    ///
-    pub input: ModuleVarSettings,
-    ///
-    pub params: ModuleVarSettings,
-    ///
-    pub output: ModuleVarSettings,
-}
-
-impl From<&GraphWitness> for ModuleSettings {
-    fn from(graph_input: &GraphWitness) -> Self {
-        let mut settings = Self::default();
-
-        if let Some(processed_inputs) = &graph_input.processed_inputs {
-            if let Some(elgamal_result) = &processed_inputs.elgamal {
-                settings.input = ModuleVarSettings::new(elgamal_result.variables.clone());
-            }
-        }
-        if let Some(processed_params) = &graph_input.processed_params {
-            if let Some(elgamal_result) = &processed_params.elgamal {
-                settings.params = ModuleVarSettings::new(elgamal_result.variables.clone());
-            }
-        }
-        if let Some(processed_outputs) = &graph_input.processed_outputs {
-            if let Some(elgamal_result) = &processed_outputs.elgamal {
-                settings.output = ModuleVarSettings::new(elgamal_result.variables.clone());
-            }
-        }
-
-        settings
-    }
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-/// Result from ElGamal
-pub struct ElGamalResult {
-    /// ElGamal variables
-    pub variables: ElGamalVariables,
-    /// ElGamal ciphertexts
-    pub ciphertexts: Vec<Vec<Fp>>,
-    /// ElGamal encrypted message
-    pub encrypted_messages: Vec<Vec<Fp>>,
-}
-
 /// Result from a forward pass
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ModuleForwardResult {
     /// The inputs of the forward pass for poseidon
     pub poseidon_hash: Option<Vec<Fp>>,
-    /// The outputs of the forward pass for ElGamal
-    pub elgamal: Option<ElGamalResult>,
     /// The outputs of the forward pass for KZG
     pub kzg_commit: Option<Vec<Vec<G1Affine>>>,
 }
@@ -195,8 +108,6 @@ impl ModuleForwardResult {
                 .into_iter()
                 .map(|x| vec![x])
                 .collect()
-        } else if vis.is_encrypted() {
-            self.elgamal.clone().unwrap().encrypted_messages
         } else {
             vec![]
         }
@@ -206,8 +117,6 @@ impl ModuleForwardResult {
     pub fn get_instances(&self) -> Vec<Vec<Fp>> {
         if let Some(poseidon) = &self.poseidon_hash {
             poseidon.iter().map(|x| vec![*x]).collect()
-        } else if let Some(elgamal) = &self.elgamal {
-            elgamal.ciphertexts.clone()
         } else {
             vec![]
         }
@@ -219,7 +128,6 @@ impl ModuleForwardResult {
 pub struct ModuleSizes {
     kzg: Vec<usize>,
     poseidon: (usize, Vec<usize>),
-    elgamal: (usize, Vec<usize>),
 }
 
 impl ModuleSizes {
@@ -231,26 +139,17 @@ impl ModuleSizes {
                 0,
                 vec![0; crate::circuit::modules::poseidon::NUM_INSTANCE_COLUMNS],
             ),
-            elgamal: (
-                0,
-                vec![0; crate::circuit::modules::elgamal::NUM_INSTANCE_COLUMNS],
-            ),
         }
     }
 
     /// Get the number of constraints
     pub fn max_constraints(&self) -> usize {
-        self.poseidon.0.max(self.elgamal.0)
+        self.poseidon.0
     }
     /// Get the number of instances
     pub fn num_instances(&self) -> Vec<usize> {
         // concat
-        self.poseidon
-            .1
-            .iter()
-            .chain(self.elgamal.1.iter())
-            .copied()
-            .collect_vec()
+        self.poseidon.1.clone()
     }
 }
 
@@ -287,11 +186,6 @@ impl GraphModules {
                     sizes.poseidon.0 += ModulePoseidon::num_rows(total_len);
                     // 1 constraints for hash
                     sizes.poseidon.1[0] += 1;
-                } else if visibility.is_encrypted() {
-                    // add the 1 time fixed cost of maingate + ecc chips
-                    sizes.elgamal.0 += ElGamalGadget::num_rows(total_len);
-                    // 4 constraints for each ciphertext c1, c2, and sk
-                    sizes.elgamal.1[0] += 4;
                 }
             }
         }
@@ -341,7 +235,6 @@ impl GraphModules {
         values: &mut [ValTensor<Fp>],
         element_visibility: &Visibility,
         instance_offset: &mut usize,
-        module_settings: &ModuleVarSettings,
     ) -> Result<(), Error> {
         if element_visibility.is_kzgcommit() && !values.is_empty() {
             // concat values and sk to get the inputs
@@ -388,39 +281,7 @@ impl GraphModules {
                 log::error!("Poseidon config not initialized");
                 return Err(Error::Synthesis);
             }
-        // If the module is encrypted, then we need to encrypt the inputs
-        } else if element_visibility.is_encrypted() && !values.is_empty() {
-            if let Some(config) = &mut configs.elgamal {
-                // reserve module 1 for elgamal modules
-                layouter.assign_region(|| "_enter_module_1", |_| Ok(()))?;
-                // create the module
-                let mut chip = ElGamalGadget::new(config.clone());
-                // load the variables
-                let variables = module_settings.elgamal.as_ref().unwrap().clone();
-                chip.load_variables(variables.clone());
-                // load the sk:
-                let sk: Tensor<ValType<Fp>> =
-                    Tensor::new(Some(&[Value::known(variables.sk).into()]), &[1]).unwrap();
-                // concat values and sk to get the inputs
-                let mut inputs = values
-                    .iter_mut()
-                    .map(|x| vec![x.clone(), sk.clone().into()])
-                    .collect_vec();
-                // layout the module
-                inputs.iter_mut().for_each(|x| {
-                    Self::layout_module(&chip, layouter, x, instance_offset).unwrap();
-                    chip.config.initialized = true;
-                });
-                // replace the inputs with the outputs
-                values.iter_mut().enumerate().for_each(|(i, x)| {
-                    x.clone_from(&inputs[i][0]);
-                });
-
-                config.initialized = true;
-            } else {
-                log::error!("ElGamal config not initialized");
-                return Err(Error::Synthesis);
-            }
+            // If the module is encrypted, then we need to encrypt the inputs
         }
 
         Ok(())
@@ -429,13 +290,11 @@ impl GraphModules {
     /// Run forward pass
     pub fn forward(
         inputs: &[Tensor<Fp>],
-        element_visibility: Visibility,
+        element_visibility: &Visibility,
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&ParamsKZG<Bn256>>,
     ) -> Result<ModuleForwardResult, Box<dyn std::error::Error>> {
-        let mut rng = &mut rand::thread_rng();
         let mut poseidon_hash = None;
-        let mut elgamal = None;
         let mut kzg_commit = None;
 
         if element_visibility.is_hashed() {
@@ -471,30 +330,8 @@ impl GraphModules {
             }
         }
 
-        if element_visibility.is_encrypted() {
-            let variables = ElGamalVariables::gen_random(&mut rng);
-            let ciphertexts = inputs.iter().fold(vec![], |mut acc, x| {
-                let res = ElGamalGadget::run((x.to_vec(), variables.clone())).unwrap();
-                acc.extend(res);
-                acc
-            });
-
-            let encrypted_messages = inputs.iter().fold(vec![], |mut acc, x| {
-                let res = ElGamalGadget::encrypt(variables.pk, x.to_vec(), variables.r).c2;
-                acc.push(res);
-                acc
-            });
-
-            elgamal = Some(ElGamalResult {
-                variables,
-                ciphertexts,
-                encrypted_messages,
-            });
-        }
-
         Ok(ModuleForwardResult {
             poseidon_hash,
-            elgamal,
             kzg_commit,
         })
     }
