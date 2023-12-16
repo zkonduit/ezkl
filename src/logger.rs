@@ -75,7 +75,10 @@ pub fn init_logger() {
             "{} [{}, {}] - {}",
             prefix_token(&record.level()),
             //    pretty print UTC time
-            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+            chrono::Utc::now()
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+                .bright_magenta(),
             record.metadata().target(),
             level_text_color(&record.level(), &format!("{}", record.args()))
                 .replace('\n', &format!("\n{} ", " | ".white().bold()))
