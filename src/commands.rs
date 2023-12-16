@@ -267,7 +267,7 @@ pub enum Commands {
         /// Path to the witness (public and private inputs) .json file
         #[arg(short = 'O', long, default_value = DEFAULT_WITNESS)]
         output: PathBuf,
-        /// Path to the witness (public and private inputs) .json file (optional - solely used to generate kzg commits)
+        /// Path to the verification key file (optional - solely used to generate kzg commits)
         #[arg(short = 'V', long)]
         vk_path: Option<PathBuf>,
         /// Path to the srs file (optional - solely used to generate kzg commits)
@@ -301,9 +301,9 @@ pub enum Commands {
         #[arg(short = 'O', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
         #[arg(long = "target", default_value = DEFAULT_CALIBRATION_TARGET)]
-        /// Target for calibration.
+        /// Target for calibration. Set to "resources" to optimize for computational resource. Otherwise, set to "accuracy" to optimize for accuracy.
         target: CalibrationTarget,
-        /// Optional scales to specifically try for calibration.
+        /// Optional scales to specifically try for calibration. Example, --scales 0,4
         #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
         scales: Option<Vec<crate::Scale>>,
         /// max logrows to use for calibration, 26 is the max public SRS size
