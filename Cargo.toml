@@ -112,11 +112,6 @@ name = "poseidon"
 harness = false
 
 [[bench]]
-name = "elgamal"
-harness = false
-
-
-[[bench]]
 name = "accum_einsum_matmul"
 harness = false
 
