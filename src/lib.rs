@@ -65,6 +65,9 @@ pub mod pfsys;
 /// Python bindings
 #[cfg(feature = "python-bindings")]
 pub mod python;
+/// srs sha hashes
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+pub mod srs_sha;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
 /// wasm prover and verifier
