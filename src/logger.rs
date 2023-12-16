@@ -1,6 +1,5 @@
 use colored::*;
 use env_logger::Builder;
-use instant::Instant;
 use log::{Level, LevelFilter, Record};
 use std::env;
 use std::fmt::Formatter;
@@ -68,15 +67,15 @@ pub fn format(buf: &mut Formatter, record: &Record<'_>) -> Result<(), std::fmt::
 
 /// initializes the logger
 pub fn init_logger() {
-    let start = Instant::now();
     let mut builder = Builder::new();
 
     builder.format(move |buf, record| {
         writeln!(
             buf,
-            "{} [{}s, {}] - {}",
+            "{} [{}, {}] - {}",
             prefix_token(&record.level()),
-            start.elapsed().as_secs(),
+            //    pretty print UTC time
+            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             record.metadata().target(),
             level_text_color(&record.level(), &format!("{}", record.args()))
                 .replace('\n', &format!("\n{} ", " | ".white().bold()))

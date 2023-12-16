@@ -427,6 +427,28 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box<dyn Error>> {
+    let path = get_srs_path(logrows, srs_path);
+    let hash = sha256::digest(&std::fs::read(path.clone())?);
+    info!("SRS hash: {}", hash);
+    if hash
+        != crate::srs_sha::PUBLIC_SRS_SHA256_HASHES
+            .get(&logrows)
+            .unwrap()
+            .to_string()
+    {
+        // delete file
+        warn!("removing SRS file at {}", path.display());
+        std::fs::remove_file(path)?;
+        return Err(
+            "SRS hash does not match the expected hash. Remote SRS may have been tampered with."
+                .into(),
+        );
+    }
+    Ok(hash)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn get_srs_cmd(
     srs_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
@@ -434,6 +456,7 @@ pub(crate) async fn get_srs_cmd(
     check_mode: CheckMode,
 ) -> Result<String, Box<dyn Error>> {
     // logrows overrides settings
+
     let k = if let Some(k) = logrows {
         k
     } else if let Some(settings_p) = settings_path {
@@ -468,12 +491,15 @@ pub(crate) async fn get_srs_cmd(
             pb.finish_with_message("SRS validated");
         }
 
-        let mut file = std::fs::File::create(get_srs_path(k, srs_path))?;
+        let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone()))?;
         file.write_all(reader.get_ref())?;
         info!("SRS downloaded");
+        check_srs_hash(k, srs_path.clone())?;
     } else {
         info!("SRS already exists at that path");
-    }
+        // load and hash the SRS
+        check_srs_hash(k, srs_path.clone())?;
+    };
 
     Ok(String::new())
 }
