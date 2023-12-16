@@ -494,12 +494,11 @@ pub(crate) async fn get_srs_cmd(
         let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone()))?;
         file.write_all(reader.get_ref())?;
         info!("SRS downloaded");
-        check_srs_hash(k, srs_path.clone())?;
     } else {
         info!("SRS already exists at that path");
-        // load and hash the SRS
-        check_srs_hash(k, srs_path.clone())?;
     };
+    // check the hash
+    check_srs_hash(k, srs_path.clone())?;
 
     Ok(String::new())
 }
