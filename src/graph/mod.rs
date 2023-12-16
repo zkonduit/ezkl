@@ -20,9 +20,7 @@ use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use self::input::OnChainSource;
 use self::input::{FileSource, GraphData};
-use self::modules::{
-    GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSettings, ModuleSizes,
-};
+use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::table::{Table, RESERVED_BLINDING_ROWS_PAD};
@@ -342,9 +340,6 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_inputs, processed_inputs_poseidon_hash).unwrap();
             }
-            if let Some(processed_inputs_elgamal) = &processed_inputs.elgamal {
-                insert_elgamal_results_pydict(py, dict_inputs, processed_inputs_elgamal).unwrap();
-            }
             if let Some(processed_inputs_kzg_commit) = &processed_inputs.kzg_commit {
                 insert_kzg_commit_pydict(dict_inputs, processed_inputs_kzg_commit).unwrap();
             }
@@ -356,9 +351,6 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash).unwrap();
             }
-            if let Some(processed_params_elgamal) = &processed_params.elgamal {
-                insert_elgamal_results_pydict(py, dict_params, processed_params_elgamal).unwrap();
-            }
             if let Some(processed_params_kzg_commit) = &processed_params.kzg_commit {
                 insert_kzg_commit_pydict(dict_inputs, processed_params_kzg_commit).unwrap();
             }
@@ -369,9 +361,6 @@ impl ToPyObject for GraphWitness {
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash).unwrap();
-            }
-            if let Some(processed_outputs_elgamal) = &processed_outputs.elgamal {
-                insert_elgamal_results_pydict(py, dict_outputs, processed_outputs_elgamal).unwrap();
             }
             if let Some(processed_outputs_kzg_commit) = &processed_outputs.kzg_commit {
                 insert_kzg_commit_pydict(dict_inputs, processed_outputs_kzg_commit).unwrap();
@@ -405,48 +394,6 @@ fn insert_kzg_commit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Re
     pydict.set_item("kzg_commit", poseidon_hash)?;
 
     Ok(())
-}
-
-#[cfg(feature = "python-bindings")]
-use modules::ElGamalResult;
-#[cfg(feature = "python-bindings")]
-fn insert_elgamal_results_pydict(
-    py: Python,
-    pydict: &PyDict,
-    elgamal_results: &ElGamalResult,
-) -> Result<(), PyErr> {
-    let results_dict = PyDict::new(py);
-    let cipher_text: Vec<Vec<[u64; 4]>> = elgamal_results
-        .ciphertexts
-        .iter()
-        .map(|v| {
-            v.iter()
-                .map(field_to_vecu64_montgomery)
-                .collect::<Vec<[u64; 4]>>()
-        })
-        .collect::<Vec<Vec<[u64; 4]>>>();
-    results_dict.set_item("ciphertexts", cipher_text)?;
-
-    let encrypted_messages: Vec<Vec<[u64; 4]>> = elgamal_results
-        .encrypted_messages
-        .iter()
-        .map(|v| {
-            v.iter()
-                .map(field_to_vecu64_montgomery)
-                .collect::<Vec<[u64; 4]>>()
-        })
-        .collect::<Vec<Vec<[u64; 4]>>>();
-    results_dict.set_item("encrypted_messages", encrypted_messages)?;
-
-    let variables: crate::python::PyElGamalVariables = elgamal_results.variables.clone().into();
-
-    results_dict.set_item("variables", variables)?;
-
-    pydict.set_item("elgamal", results_dict)?;
-
-    Ok(())
-
-    //elgamal
 }
 
 /// model parameters
@@ -549,11 +496,8 @@ impl GraphSettings {
 
     /// if any visibility is encrypted or hashed
     pub fn module_requires_fixed(&self) -> bool {
-        self.run_args.input_visibility.is_encrypted()
-            || self.run_args.input_visibility.is_hashed()
-            || self.run_args.output_visibility.is_encrypted()
+        self.run_args.input_visibility.is_hashed()
             || self.run_args.output_visibility.is_hashed()
-            || self.run_args.param_visibility.is_encrypted()
             || self.run_args.param_visibility.is_hashed()
     }
 
@@ -588,8 +532,6 @@ pub struct GraphCircuit {
     pub core: CoreCircuit,
     /// The witness data for the model.
     pub graph_witness: GraphWitness,
-    /// The settings of the model's modules.
-    pub module_settings: ModuleSettings,
 }
 
 impl GraphCircuit {
@@ -683,7 +625,6 @@ impl GraphCircuit {
         }
 
         // dummy module settings, must load from GraphData after
-        let module_settings = ModuleSettings::default();
         let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
 
         let mut num_params = 0;
@@ -714,7 +655,6 @@ impl GraphCircuit {
         Ok(GraphCircuit {
             core,
             graph_witness: GraphWitness::new(inputs, vec![]),
-            module_settings,
         })
     }
 
@@ -732,7 +672,6 @@ impl GraphCircuit {
         }
 
         // dummy module settings, must load from GraphData after
-        let module_settings = ModuleSettings::default();
 
         settings.check_mode = check_mode;
 
@@ -744,7 +683,6 @@ impl GraphCircuit {
         Ok(GraphCircuit {
             core,
             graph_witness: GraphWitness::new(inputs, vec![]),
-            module_settings,
         })
     }
 
@@ -755,8 +693,6 @@ impl GraphCircuit {
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.graph_witness = data.clone();
         // load the module settings
-        self.module_settings = ModuleSettings::from(data);
-
         Ok(())
     }
 
@@ -1555,7 +1491,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut input_outlets,
                 input_visibility,
                 &mut instance_offset,
-                &self.module_settings.input,
             )?;
             // replace inputs with the outlets
             for (i, outlet) in outlets.iter().enumerate() {
@@ -1568,7 +1503,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut inputs,
                 input_visibility,
                 &mut instance_offset,
-                &self.module_settings.input,
             )?;
         }
 
@@ -1605,7 +1539,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut flattened_params,
                 param_visibility,
                 &mut instance_offset,
-                &self.module_settings.params,
             )?;
 
             let shapes = self.model().const_shapes();
@@ -1658,7 +1591,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut output_outlets,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
-                &self.module_settings.output,
             )?;
 
             // replace outputs with the outlets
@@ -1672,7 +1604,6 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut outputs,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
-                &self.module_settings.output,
             )?;
         }
 

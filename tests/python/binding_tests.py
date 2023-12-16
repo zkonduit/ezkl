@@ -62,25 +62,6 @@ def test_poseidon_hash():
         res[0]) == "0x0da7e5e5c8877242fa699f586baf770d731defd54f952d4adeb85047a0e32f45"
 
 
-def test_elgamal():
-    """
-    Test for elgamal encryption and decryption
-    """
-    message = [1.0, 2.0, 3.0, 4.0]
-    felt_message = [ezkl.float_to_vecu64(x, 7) for x in message]
-
-    # list of len 32
-    rng = [0 for _ in range(32)]
-
-    variables = ezkl.elgamal_gen_random(rng)
-    encrypted_message = ezkl.elgamal_encrypt(
-        variables.pk, felt_message, variables.r)
-    decrypted_message = ezkl.elgamal_decrypt(encrypted_message, variables.sk)
-    assert decrypted_message == felt_message
-
-    recovered_message = [ezkl.vecu64_to_float(x, 7) for x in decrypted_message]
-    assert recovered_message == message
-
 
 def test_field_serialization():
     """
