@@ -1548,6 +1548,7 @@ pub(crate) fn fuzz(
             transcript_type: transcript,
             split: None,
             pretty_public_inputs: None,
+            hex_proof: None,
             timestamp: None,
         };
 
@@ -1581,6 +1582,7 @@ pub(crate) fn fuzz(
             protocol: proof.protocol.clone(),
             transcript_type: transcript,
             split: None,
+            hex_proof: None,
             pretty_public_inputs: None,
             timestamp: None,
         };
