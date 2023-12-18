@@ -388,7 +388,8 @@ pub fn prove(
 pub fn printProofHex(proof: wasm_bindgen::Clamped<Vec<u8>>) -> Result<String, JsError> {
     let proof: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof[..])
         .map_err(|e| JsError::new(&format!("Failed to deserialize proof: {}", e)))?;
-    Ok(hex::encode(proof.proof))
+    let hex_str = hex::encode(proof.proof);
+    Ok(format!("0x{}", hex_str))
 }
 // VALIDATION FUNCTIONS
 

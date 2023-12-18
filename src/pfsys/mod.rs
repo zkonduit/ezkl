@@ -263,7 +263,7 @@ where
             .collect::<Vec<_>>();
         dict.set_item("instances", field_elems).unwrap();
         let hex_proof = hex::encode(&self.proof);
-        dict.set_item("proof", hex_proof).unwrap();
+        dict.set_item("proof", format!("0x{}", hex_proof)).unwrap();
         dict.set_item("transcript_type", self.transcript_type)
             .unwrap();
         dict.to_object(py)
@@ -527,7 +527,7 @@ where
         &mut transcript,
     )?;
     let proof = transcript.finalize();
-    let hex_proof = hex::encode(&proof);
+    let hex_proof = format!("0x{}", hex::encode(&proof));
 
     let checkable_pf = Snark::new(
         protocol,

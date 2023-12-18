@@ -1015,7 +1015,8 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)
         .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
 
-    Ok(hex::encode(proof.proof))
+    let hex_str = hex::encode(proof.proof);
+    Ok(format!("0x{}", hex_str))
 }
 
 // Python Module
