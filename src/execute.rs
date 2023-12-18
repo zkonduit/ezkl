@@ -965,8 +965,8 @@ pub(crate) fn print_proof_hex(proof_path: PathBuf) -> Result<String, Box<dyn Err
         println!("{:?}", instance);
     }
     let hex_str = hex::encode(proof.proof);
-    info!("{}", hex_str);
-    Ok(hex_str)
+    info!("0x{}", hex_str);
+    Ok(format!("0x{}", hex_str))
 }
 
 #[cfg(feature = "render")]
