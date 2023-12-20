@@ -630,24 +630,14 @@ impl Node {
         out_scale = opkind.out_scale(in_scales)?;
 
         // get the output shape
-        let mut out_dims = {
-            let output_shapes = match node_output_shapes(&node) {
-                Ok(s) => Some(s),
-                _ => None,
-            };
-
-            if let Some([Some(v)]) = output_shapes.as_deref() {
-                v.to_vec()
-            } else if let Some([Some(v), Some(_)]) = output_shapes.as_deref() {
-                v.to_vec()
-            } else {
-                return Err("could not get output shape for node".into());
-            }
-        };
+        let mut out_dims = node_output_shapes(&node, symbol_values)?;
 
         if out_dims.is_empty() {
-            out_dims = vec![1];
+            out_dims = vec![vec![1]];
         }
+
+        // nodes vs subgraphs always have a single output
+        let out_dims = out_dims[0].clone();
 
         Ok(Node {
             idx,

@@ -960,10 +960,7 @@ impl Model {
                         visibility: visibility.clone(),
                     };
 
-                    let out_dims = node_output_shapes(n)?
-                        .iter()
-                        .map(|shape| Ok(shape.as_ref().ok_or("missing shape dims")?.clone()))
-                        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+                    let out_dims = node_output_shapes(n, symbol_values)?;
 
                     let mut output_scales = BTreeMap::new();
 

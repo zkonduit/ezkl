@@ -88,11 +88,14 @@ pub fn multiplier_to_scale(mult: f64) -> crate::Scale {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn node_output_shapes(
     node: &OnnxNode<TypedFact, Box<dyn TypedOp>>,
-) -> Result<Vec<Option<Vec<usize>>>, Box<dyn std::error::Error>> {
+    symbol_values: &SymbolValues,
+) -> Result<Vec<Vec<usize>>, Box<dyn std::error::Error>> {
     let mut shapes = Vec::new();
     let outputs = node.outputs.to_vec();
     for output in outputs {
-        let mv = output.fact.shape.clone().as_concrete().map(|x| x.to_vec());
+        let shape = output.fact.shape;
+        let shape = shape.eval_to_usize(symbol_values)?;
+        let mv = shape.to_vec();
         shapes.push(mv)
     }
     Ok(shapes)
@@ -1356,11 +1359,8 @@ pub fn new_op_from_onnx(
         }
         "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams
-            let shapes = node_output_shapes(&node)?;
-            let mut output_shape = shapes[0]
-                .as_ref()
-                .ok_or(GraphError::InvalidDims(idx, "reshape".to_string()))?
-                .clone();
+            let shapes = node_output_shapes(&node, symbol_values)?;
+            let mut output_shape = shapes[0].clone();
             if output_shape.is_empty() {
                 output_shape = vec![1];
             }
