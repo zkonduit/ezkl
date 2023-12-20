@@ -5,14 +5,13 @@ use crate::commands::Commands;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(unused_imports)]
 use crate::eth::{fix_da_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation::AggregationCircuit;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::{single::gen_evm_verifier, YulCode};
 use crate::pfsys::{
     create_keys, load_pk, load_vk, save_params, save_pk, swap_proof_commitments_kzg, Snark,
     StrategyType, TranscriptType,
@@ -1033,17 +1032,18 @@ pub(crate) fn create_evm_data_attestation(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    abi_path: PathBuf,
-    input: PathBuf,
+    _sol_code_path: PathBuf,
+    _abi_path: PathBuf,
+    _input: PathBuf,
 ) -> Result<String, Box<dyn Error>> {
+    #[allow(unused_imports)]
     use crate::graph::{DataSource, VarVisibility};
     check_solc_requirement();
 
     let settings = GraphSettings::load(&settings_path)?;
     let params = load_params_cmd(srs_path, settings.run_args.logrows)?;
 
-    let visibility = VarVisibility::from_args(&settings.run_args)?;
+    let _visibility = VarVisibility::from_args(&settings.run_args)?;
 
     let num_instance = settings.total_instances();
     let num_instance: usize = num_instance.iter().sum::<usize>();
@@ -1051,53 +1051,62 @@ pub(crate) fn create_evm_data_attestation(
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings.clone())?;
     trace!("params computed");
 
-    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
+    let generator = halo2_solidity_verifier::SolidityGenerator::new(
+        &params,
+        &vk,
+        halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
+        num_instance,
+    );
 
-    let mut f = File::create(sol_code_path.clone())?;
-    let _ = f.write(yul_code.as_bytes());
+    let _verifier_solidity = generator.render()?;
 
-    let data = GraphData::from_path(input)?;
+    todo!();
 
-    let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
-        if visibility.output.is_private() {
-            return Err("private output data on chain is not supported on chain".into());
-        }
-        let mut on_chain_output_data = vec![];
-        for call in source.calls {
-            on_chain_output_data.push(call);
-        }
-        Some(on_chain_output_data)
-    } else {
-        None
-    };
+    // let mut f = File::create(sol_code_path.clone())?;
+    // let _ = f.write(yul_code.as_bytes());
 
-    let input_data = if let DataSource::OnChain(source) = data.input_data {
-        if visibility.input.is_private() {
-            return Err("private input data on chain is not supported on chain".into());
-        }
-        let mut on_chain_input_data = vec![];
-        for call in source.calls {
-            on_chain_input_data.push(call);
-        }
-        Some(on_chain_input_data)
-    } else {
-        None
-    };
+    // let data = GraphData::from_path(input)?;
 
-    if input_data.is_some() || output_data.is_some() {
-        let output = fix_da_sol(input_data, output_data)?;
-        let mut f = File::create(sol_code_path.clone())?;
-        let _ = f.write(output.as_bytes());
-        // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestation", 0)?;
-        // save abi to file
-        serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
-    } else {
-        return Err(
-            "Neither input or output data source is on-chain. Atleast one must be on chain.".into(),
-        );
-    }
-    Ok(String::new())
+    // let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
+    //     if visibility.output.is_private() {
+    //         return Err("private output data on chain is not supported on chain".into());
+    //     }
+    //     let mut on_chain_output_data = vec![];
+    //     for call in source.calls {
+    //         on_chain_output_data.push(call);
+    //     }
+    //     Some(on_chain_output_data)
+    // } else {
+    //     None
+    // };
+
+    // let input_data = if let DataSource::OnChain(source) = data.input_data {
+    //     if visibility.input.is_private() {
+    //         return Err("private input data on chain is not supported on chain".into());
+    //     }
+    //     let mut on_chain_input_data = vec![];
+    //     for call in source.calls {
+    //         on_chain_input_data.push(call);
+    //     }
+    //     Some(on_chain_input_data)
+    // } else {
+    //     None
+    // };
+
+    // if input_data.is_some() || output_data.is_some() {
+    //     let output = fix_da_sol(input_data, output_data)?;
+    //     let mut f = File::create(sol_code_path.clone())?;
+    //     let _ = f.write(output.as_bytes());
+    //     // fetch abi of the contract
+    //     let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestation", 0)?;
+    //     // save abi to file
+    //     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
+    // } else {
+    //     return Err(
+    //         "Neither input or output data source is on-chain. Atleast one must be on chain.".into(),
+    //     );
+    // }
+    // Ok(String::new())
 }
 
 #[cfg(not(target_arch = "wasm32"))]

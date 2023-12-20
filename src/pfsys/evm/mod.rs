@@ -2,8 +2,6 @@ use thiserror::Error;
 
 /// Aggregate proof generation for EVM
 pub mod aggregation;
-/// Simple (single) proof generation for EVM
-pub mod single;
 
 #[derive(Error, Debug)]
 /// Errors related to evm verification
@@ -27,5 +25,3 @@ pub enum EvmVerificationError {
     #[error("Invalid visibility")]
     InvalidVisibility,
 }
-/// YulCode type which is just an alias of string
-pub type YulCode = String;
