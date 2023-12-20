@@ -569,15 +569,9 @@ pub enum Commands {
     /// Creates an EVM verifier that attests to on-chain inputs for a single proof
     #[command(name = "create-evm-da")]
     CreateEVMDataAttestation {
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
-        #[arg(long)]
-        srs_path: Option<PathBuf>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
-        /// The path to load the desired verification key file
-        #[arg(long, default_value = DEFAULT_VK)]
-        vk_path: PathBuf,
         /// The path to output the Solidity code
         #[arg(long, default_value = DEFAULT_SOL_CODE_DA)]
         sol_code_path: PathBuf,
