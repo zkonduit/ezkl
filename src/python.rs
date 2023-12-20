@@ -803,32 +803,21 @@ fn create_evm_verifier(
 // creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
 #[pyfunction(signature = (
     input_data=PathBuf::from(DEFAULT_DATA),
-    vk_path=PathBuf::from(DEFAULT_VK),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
     abi_path=PathBuf::from(DEFAULT_VERIFIER_DA_ABI),
-    srs_path=None,
 ))]
 fn create_evm_data_attestation(
     input_data: PathBuf,
-    vk_path: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
-    crate::execute::create_evm_data_attestation(
-        vk_path,
-        srs_path,
-        settings_path,
-        sol_code_path,
-        abi_path,
-        input_data,
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to run create_evm_data_attestation: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+    crate::execute::create_evm_data_attestation(settings_path, sol_code_path, abi_path, input_data)
+        .map_err(|e| {
+            let err_str = format!("Failed to run create_evm_data_attestation: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
     Ok(true)
 }

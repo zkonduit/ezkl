@@ -1997,8 +1997,6 @@ mod native_tests {
                 &settings_arg,
                 "--sol-code-path",
                 sol_arg.as_str(),
-                "--vk-path",
-                &vk_arg,
                 "-D",
                 test_on_chain_data_path.as_str(),
             ])
