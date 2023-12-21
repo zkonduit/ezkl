@@ -17,7 +17,7 @@ mod wasm32 {
     use halo2curves::bn256::{Fr, G1Affine};
     use snark_verifier::util::arithmetic::PrimeField;
     #[cfg(feature = "web")]
-    pub use wasm_bindgen_rayon::init_thread_pool;
+    pub use wasm_bindgen_maybe_rayon::init_thread_pool;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);

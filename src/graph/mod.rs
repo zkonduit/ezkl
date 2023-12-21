@@ -35,6 +35,7 @@ use halo2_proofs::{
 use halo2curves::bn256::{self, Bn256, Fr as Fp, G1Affine};
 use halo2curves::ff::PrimeField;
 use log::{debug, error, info, trace, warn};
+use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
@@ -43,7 +44,6 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::ops::Deref;

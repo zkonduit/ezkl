@@ -104,7 +104,7 @@ fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
     symbol_values: &SymbolValues,
 ) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
-    use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+    use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
     let dt = input.datum_type();
     let dims = input.shape().to_vec();

@@ -1,7 +1,7 @@
 use super::TensorError;
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
-use rayon::{
+use maybe_rayon::{
     iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
     prelude::IntoParallelRefIterator,
 };
