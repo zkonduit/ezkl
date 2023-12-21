@@ -5,6 +5,7 @@ use crate::commands::Commands;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(unused_imports)]
 use crate::eth::{fix_da_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
@@ -12,7 +13,6 @@ use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation::AggregationCircuit;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::pfsys::evm::{single::gen_evm_verifier, YulCode};
 use crate::pfsys::{
     create_keys, load_pk, load_vk, save_params, save_pk, swap_proof_commitments_kzg, Snark,
     StrategyType, TranscriptType,
@@ -189,20 +189,11 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
         } => create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMDataAttestation {
-            vk_path,
-            srs_path,
             settings_path,
             sol_code_path,
             abi_path,
             data,
-        } => create_evm_data_attestation(
-            vk_path,
-            srs_path,
-            settings_path,
-            sol_code_path,
-            abi_path,
-            data,
-        ),
+        } => create_evm_data_attestation(settings_path, sol_code_path, abi_path, data),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMVerifierAggr {
             vk_path,
@@ -1030,33 +1021,21 @@ pub(crate) fn create_evm_verifier(
 
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_data_attestation(
-    vk_path: PathBuf,
-    srs_path: Option<PathBuf>,
     settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    abi_path: PathBuf,
-    input: PathBuf,
+    _sol_code_path: PathBuf,
+    _abi_path: PathBuf,
+    _input: PathBuf,
 ) -> Result<String, Box<dyn Error>> {
+    #[allow(unused_imports)]
     use crate::graph::{DataSource, VarVisibility};
     check_solc_requirement();
 
     let settings = GraphSettings::load(&settings_path)?;
-    let params = load_params_cmd(srs_path, settings.run_args.logrows)?;
 
     let visibility = VarVisibility::from_args(&settings.run_args)?;
-
-    let num_instance = settings.total_instances();
-    let num_instance: usize = num_instance.iter().sum::<usize>();
-
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings.clone())?;
     trace!("params computed");
 
-    let yul_code: YulCode = gen_evm_verifier(&params, &vk, num_instance)?;
-
-    let mut f = File::create(sol_code_path.clone())?;
-    let _ = f.write(yul_code.as_bytes());
-
-    let data = GraphData::from_path(input)?;
+    let data = GraphData::from_path(_input)?;
 
     let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
         if visibility.output.is_private() {
@@ -1086,12 +1065,12 @@ pub(crate) fn create_evm_data_attestation(
 
     if input_data.is_some() || output_data.is_some() {
         let output = fix_da_sol(input_data, output_data)?;
-        let mut f = File::create(sol_code_path.clone())?;
+        let mut f = File::create(_sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestation", 0)?;
+        let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0)?;
         // save abi to file
-        serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
+        serde_json::to_writer(std::fs::File::create(_abi_path)?, &abi)?;
     } else {
         return Err(
             "Neither input or output data source is on-chain. Atleast one must be on chain.".into(),
