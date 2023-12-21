@@ -841,6 +841,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2da6da31387c7e4ef160ffab6d5e7f00c42626fe39aea70a7b0f1773f7dd6c1b"
 
 [[package]]
+name = "cmake"
+version = "0.1.50"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a31c789563b815f77f4250caee12365734369f942439b7defd71e18a48197130"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "coins-bip32"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2542,7 +2551,7 @@ dependencies = [
 [[package]]
 name = "icicle"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/icicle.git?branch=rust/large-bucket-factor-msm#2820f43746263fbae7b30a29e08099ea19383c64"
+source = "git+https://github.com/ingonyama-zk/icicle.git?branch=rust/large-bucket-factor-msm#bd72fb7be1a8cfbb95f5080ba752dafeddeb71f2"
 dependencies = [
  "ark-bls12-377",
  "ark-bls12-381",
@@ -2552,6 +2561,7 @@ dependencies = [
  "ark-poly",
  "ark-std 0.3.0",
  "cc",
+ "cmake",
  "hex",
  "rand 0.8.5",
  "rustacuda",
