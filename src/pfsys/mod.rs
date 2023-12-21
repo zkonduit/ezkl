@@ -234,6 +234,8 @@ where
     pub instances: Vec<Vec<F>>,
     /// the proof
     pub proof: Vec<u8>,
+    /// hex encoded proof
+    pub hex_proof: Option<String>,
     /// transcript type
     pub transcript_type: TranscriptType,
     /// the split proof
@@ -261,7 +263,7 @@ where
             .collect::<Vec<_>>();
         dict.set_item("instances", field_elems).unwrap();
         let hex_proof = hex::encode(&self.proof);
-        dict.set_item("proof", hex_proof).unwrap();
+        dict.set_item("proof", format!("0x{}", hex_proof)).unwrap();
         dict.set_item("transcript_type", self.transcript_type)
             .unwrap();
         dict.to_object(py)
@@ -281,6 +283,7 @@ where
         protocol: Option<PlonkProtocol<C>>,
         instances: Vec<Vec<F>>,
         proof: Vec<u8>,
+        hex_proof: Option<String>,
         transcript_type: TranscriptType,
         split: Option<ProofSplitCommit>,
         pretty_public_inputs: Option<PrettyElements>,
@@ -289,6 +292,7 @@ where
             protocol,
             instances,
             proof,
+            hex_proof,
             transcript_type,
             split,
             pretty_public_inputs,
@@ -523,8 +527,17 @@ where
         &mut transcript,
     )?;
     let proof = transcript.finalize();
+    let hex_proof = format!("0x{}", hex::encode(&proof));
 
-    let checkable_pf = Snark::new(protocol, instances, proof, transcript_type, split, None);
+    let checkable_pf = Snark::new(
+        protocol,
+        instances,
+        proof,
+        Some(hex_proof),
+        transcript_type,
+        split,
+        None,
+    );
 
     // sanity check that the generated proof is valid
     if check_mode == CheckMode::SAFE {
@@ -894,6 +907,7 @@ mod tests {
             instances: vec![vec![Fr::from(1)], vec![Fr::from(2)]],
             transcript_type: TranscriptType::EVM,
             protocol: None,
+            hex_proof: None,
             split: None,
             pretty_public_inputs: None,
             timestamp: None,

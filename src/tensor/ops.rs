@@ -2262,6 +2262,7 @@ pub fn deconv<
 /// * `padding` - Tuple of padding values in x and y directions.
 /// * `stride` - Tuple of stride values in x and y directions.
 /// * `pool_dims` - Tuple of pooling window size in x and y directions.
+/// * `normalize` - Flag to normalize the output by the number of elements in the pooling window.
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -2276,6 +2277,11 @@ pub fn deconv<
 /// ).unwrap();
 /// let pooled = sumpool(&x, [(0, 0); 2], (1, 1), (2, 2), false).unwrap().0;
 /// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[11, 8, 8, 10]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(pooled, expected);
+///
+/// // This time with normalization
+/// let pooled = sumpool(&x, [(0, 0); 2], (1, 1), (2, 2), true).unwrap().0;
+/// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[3, 2, 2, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled, expected);
 /// ```
 pub fn sumpool(
