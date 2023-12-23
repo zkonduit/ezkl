@@ -8,7 +8,7 @@ use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::{error, trace};
-use rayon::{
+use maybe_rayon::{
     prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
     slice::ParallelSliceMut,
 };
