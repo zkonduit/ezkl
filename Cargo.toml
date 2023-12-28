@@ -155,3 +155,8 @@ ezkl = ["onnx", "serde", "serde_json", "log", "colored", "env_logger", "tabled/c
 mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup", "halo2_solidity_verifier/mv-lookup"]
 det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
+
+
+# icicle patch to 0.1.0 if feature icicle is enabled
+[patch.'https://github.com/ingonyama-zk/icicle']
+icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=f8610dd", rev="f8610dd5b617d11832418ce0f683c54b0ae3e3b2", package = "icicle" }

@@ -2551,7 +2551,7 @@ dependencies = [
 [[package]]
 name = "icicle"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/icicle.git?branch=rust/large-bucket-factor-msm#bd72fb7be1a8cfbb95f5080ba752dafeddeb71f2"
+source = "git+https://github.com/ingonyama-zk/icicle?rev=f8610dd?rev=f8610dd5b617d11832418ce0f683c54b0ae3e3b2#f8610dd5b617d11832418ce0f683c54b0ae3e3b2"
 dependencies = [
  "ark-bls12-377",
  "ark-bls12-381",
