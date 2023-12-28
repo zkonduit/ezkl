@@ -44,12 +44,12 @@ use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::debug;
 use log::{info, trace, warn};
+#[cfg(not(target_arch = "wasm32"))]
+use maybe_rayon::prelude::{IntoParallelIterator, ParallelIterator};
 #[cfg(feature = "render")]
 use plotters::prelude::*;
 #[cfg(not(target_arch = "wasm32"))]
 use rand::Rng;
-#[cfg(not(target_arch = "wasm32"))]
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]

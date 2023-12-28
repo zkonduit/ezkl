@@ -344,8 +344,8 @@ pub enum Commands {
         /// The path to the .json witness file (generated using the gen-witness command)
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
         witness: PathBuf,
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
+        /// The path to the compiled model file (generated using the compile-circuit command)
+        #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
         model: PathBuf,
     },
 

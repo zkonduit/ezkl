@@ -6,7 +6,7 @@ pub mod val;
 pub mod var;
 
 use halo2curves::ff::PrimeField;
-use rayon::{
+use maybe_rayon::{
     prelude::{
         IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator,
         ParallelIterator,
@@ -432,9 +432,9 @@ impl<F: PrimeField + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>>
 }
 
 impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
-    rayon::iter::IntoParallelIterator for Tensor<T>
+    maybe_rayon::iter::IntoParallelIterator for Tensor<T>
 {
-    type Iter = rayon::vec::IntoIter<T>;
+    type Iter = maybe_rayon::vec::IntoIter<T>;
     type Item = T;
     fn into_par_iter(self) -> Self::Iter {
         self.inner.into_par_iter()
@@ -442,9 +442,9 @@ impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
 }
 
 impl<'data, T: Clone + TensorType + std::marker::Send + std::marker::Sync>
-    rayon::iter::IntoParallelRefMutIterator<'data> for Tensor<T>
+    maybe_rayon::iter::IntoParallelRefMutIterator<'data> for Tensor<T>
 {
-    type Iter = rayon::slice::IterMut<'data, T>;
+    type Iter = maybe_rayon::slice::IterMut<'data, T>;
     type Item = &'data mut T;
     fn par_iter_mut(&'data mut self) -> Self::Iter {
         self.inner.par_iter_mut()

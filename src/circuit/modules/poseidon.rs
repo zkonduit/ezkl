@@ -12,9 +12,9 @@ use halo2_gadgets::poseidon::{primitives::*, Hash, Pow5Chip, Pow5Config};
 use halo2_proofs::arithmetic::Field;
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
 use halo2_proofs::{circuit::*, plonk::*};
-// use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator};
-use rayon::prelude::ParallelIterator;
-use rayon::slice::ParallelSlice;
+// use maybe_rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator};
+use maybe_rayon::prelude::ParallelIterator;
+use maybe_rayon::slice::ParallelSlice;
 
 use std::marker::PhantomData;
 
