@@ -57,6 +57,9 @@ pub enum TensorError {
     /// Table lookup error
     #[error("Table lookup error")]
     TableLookupError,
+    /// Unsupported operation
+    #[error("Unsupported operation on a tensor type")]
+    Unsupported,
 }
 
 /// The (inner) type of tensor elements.
