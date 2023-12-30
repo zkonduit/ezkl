@@ -749,7 +749,8 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if !assigned_len.is_empty() {
-        region.increment(*assigned_len.iter().max().ok_or(TensorError::DimError)?);
+        // safe to unwrap since we've just checked it has at least one element
+        region.increment(*assigned_len.iter().max().unwrap());
     }
 
     // Calculate the output tensor size
@@ -901,7 +902,8 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if !assigned_len.is_empty() {
-        region.increment(*assigned_len.iter().max().ok_or(TensorError::DimError)?);
+        // safe to unwrap since we've just checked it has at least one element
+        region.increment(*assigned_len.iter().max().unwrap());
     }
 
     // Calculate the output tensor size
@@ -1935,7 +1937,8 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     }
 
     if !assigned_len.is_empty() {
-        region.increment(*assigned_len.iter().max().ok_or(TensorError::DimError)?);
+        // safe to unwrap since we've just checked it has at least one element
+        region.increment(*assigned_len.iter().max().unwrap());
     }
 
     let og_image_dims = image.dims().to_vec();
