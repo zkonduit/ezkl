@@ -974,6 +974,7 @@ impl GraphCircuit {
             || res.min_lookup_inputs < -MAX_LOOKUP_ABS / lookup_safety_margin
         {
             let err_string = format!("max lookup input ({}) is too large", res.max_lookup_inputs);
+            error!("{}", err_string);
             return Err(err_string.into());
         }
 
@@ -996,6 +997,7 @@ impl GraphCircuit {
                 "extended k is too large to accommodate the quotient polynomial with logrows {}",
                 min_logrows
             );
+            error!("{}", err_string);
             return Err(err_string.into());
         }
 
