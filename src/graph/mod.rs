@@ -942,10 +942,10 @@ impl GraphCircuit {
         (ASSUMED_BLINDING_FACTORS + RESERVED_BLINDING_ROWS_PAD) as f64
     }
 
-    fn calc_safe_range(res: &GraphWitness) -> (i128, i128) {
+    fn calc_safe_lookup_range(res: &GraphWitness, lookup_safety_margin: i128) -> (i128, i128) {
         (
-            RANGE_MULTIPLIER * res.min_lookup_inputs,
-            RANGE_MULTIPLIER * res.max_lookup_inputs,
+            lookup_safety_margin * res.min_lookup_inputs,
+            lookup_safety_margin * res.max_lookup_inputs,
         )
     }
 
@@ -961,6 +961,7 @@ impl GraphCircuit {
         &mut self,
         res: &GraphWitness,
         max_logrows: Option<u32>,
+        lookup_safety_margin: i128,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // load the max logrows
         let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
@@ -969,14 +970,14 @@ impl GraphCircuit {
 
         let reserved_blinding_rows = Self::reserved_blinding_rows();
         // check if has overflowed max lookup input
-        if res.max_lookup_inputs > MAX_LOOKUP_ABS / RANGE_MULTIPLIER
-            || res.min_lookup_inputs < -MAX_LOOKUP_ABS / RANGE_MULTIPLIER
+        if res.max_lookup_inputs > MAX_LOOKUP_ABS / lookup_safety_margin
+            || res.min_lookup_inputs < -MAX_LOOKUP_ABS / lookup_safety_margin
         {
             let err_string = format!("max lookup input ({}) is too large", res.max_lookup_inputs);
             return Err(err_string.into());
         }
 
-        let safe_range = Self::calc_safe_range(res);
+        let safe_range = Self::calc_safe_lookup_range(res, lookup_safety_margin);
         let mut min_logrows = MIN_LOGROWS;
         // degrade the max logrows until the extended k is small enough
         while min_logrows < max_logrows
@@ -1100,9 +1101,10 @@ impl GraphCircuit {
         &mut self,
         input: &[Tensor<Fp>],
         max_logrows: Option<u32>,
+        lookup_safety_margin: i128,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec(), None, None)?;
-        self.calc_min_logrows(&res, max_logrows)
+        self.calc_min_logrows(&res, max_logrows, lookup_safety_margin)
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
