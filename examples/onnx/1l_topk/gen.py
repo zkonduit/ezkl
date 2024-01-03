@@ -8,9 +8,11 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
     def forward(self, x):
-        topk = torch.topk(x, 4)
-        print(topk)
-        return [topk.values]
+        topk_largest = torch.topk(x, 4)
+        topk_smallest = torch.topk(x, 4, largest=False)
+        print(topk_largest)
+        print(topk_smallest)
+        return [topk_largest.values, topk_smallest.values]
 
 
 circuit = MyModel()
@@ -21,7 +23,7 @@ y = circuit(x)
 
 torch.onnx.export(circuit, x, "network.onnx",
                   export_params=True,        # store the trained parameter weights inside the model file
-                  opset_version=10,          # the ONNX version to export the model to
+                  opset_version=14,          # the ONNX version to export the model to
                   do_constant_folding=True,  # whether to execute constant folding for optimization
                   input_names=['input'],   # the model's input names
                   output_names=['output'],  # the model's output names

@@ -1415,14 +1415,18 @@ pub fn prod_axes<T: TensorType + Mul<Output = T> + Send + Sync>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[6],
 /// ).unwrap();
-/// let result = topk(&x, 3).unwrap();
+/// let result = topk(&x, 3, false).unwrap();
 /// let expected = Tensor::<i128>::new(
 ///     Some(&[15, 2, 2]),
 ///     &[3],
 /// ).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn topk<T: TensorType + PartialOrd>(a: &Tensor<T>, k: usize) -> Result<Tensor<T>, TensorError> {
+pub fn topk<T: TensorType + PartialOrd>(
+    a: &Tensor<T>,
+    k: usize,
+    largest: bool,
+) -> Result<Tensor<T>, TensorError> {
     let mut indexed_a = a.clone();
     indexed_a.flatten();
 
@@ -1432,7 +1436,11 @@ pub fn topk<T: TensorType + PartialOrd>(a: &Tensor<T>, k: usize) -> Result<Tenso
         .map(|(i, x)| (i, x))
         .collect::<Vec<_>>();
 
-    indexed_a.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
+    if largest {
+        indexed_a.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
+    } else {
+        indexed_a.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+    }
 
     let indexed_a = indexed_a
         .into_iter()
@@ -1454,6 +1462,8 @@ pub fn topk<T: TensorType + PartialOrd>(a: &Tensor<T>, k: usize) -> Result<Tenso
 ///
 /// * `a` - Tensor
 /// * `b` - Single value
+/// * `dim` - Dimension to topk along
+/// * `largest` - Whether to return the largest or largest values
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -1473,6 +1483,7 @@ pub fn topk_axes<T: TensorType + PartialOrd + Send + Sync>(
     a: &Tensor<T>,
     k: usize,
     dim: usize,
+    largest: bool,
 ) -> Result<Tensor<T>, TensorError> {
     let mut new_dims = a.dims().to_vec();
     new_dims[dim] = k;
@@ -1496,7 +1507,7 @@ pub fn topk_axes<T: TensorType + PartialOrd + Send + Sync>(
             }
         }
         let sliced_value = a.get_slice(&slice)?;
-        let topk = topk(&sliced_value, k)?;
+        let topk = topk(&sliced_value, k, largest)?;
         Ok(topk[coord[dim]].clone())
     })?;
 

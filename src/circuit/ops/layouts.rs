@@ -544,8 +544,13 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     k: usize,
+    largest: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let sorted = _sort_descending(config, region, values)?.get_slice(&[0..k])?;
+    let sorted = if largest {
+        _sort_descending(config, region, values)?.get_slice(&[0..k])?
+    } else {
+        _sort_ascending(config, region, values)?.get_slice(&[0..k])?
+    };
     Ok(sorted)
 }
 
@@ -556,12 +561,13 @@ pub fn topk_axes<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     k: usize,
     dim: usize,
+    largest: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let topk_at_k = move |config: &BaseConfig<F>,
                           region: &mut RegionCtx<F>,
                           values: &[ValTensor<F>; 1]|
           -> Result<ValTensor<F>, Box<dyn Error>> {
-        _select_topk(config, region, values, k)
+        _select_topk(config, region, values, k, largest)
     };
 
     let output: ValTensor<F> = multi_dim_axes_op(config, region, values, &[dim], topk_at_k)?;

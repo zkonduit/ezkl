@@ -53,6 +53,7 @@ pub enum HybridOp {
     TopK {
         dim: usize,
         k: usize,
+        largest: bool,
     },
     OneHot {
         dim: usize,
@@ -151,8 +152,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 let res = tensor::ops::one_hot(&x, *num_classes, *dim)?;
                 (res.clone(), inter_equals)
             }
-            HybridOp::TopK { dim, k } => {
-                let res = tensor::ops::topk_axes(&x, *k, *dim)?;
+            HybridOp::TopK { dim, k, largest } => {
+                let res = tensor::ops::topk_axes(&x, *k, *dim, *largest)?;
 
                 let mut inter_equals = x
                     .clone()
@@ -302,7 +303,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::LessEqual => "LESSEQUAL".into(),
             HybridOp::Equals => "EQUALS".into(),
             HybridOp::Gather { dim, .. } => format!("GATHER (dim={})", dim),
-            HybridOp::TopK { k, dim } => format!("TOPK (k={}, dim={})", k, dim),
+            HybridOp::TopK { k, dim, largest } => {
+                format!("TOPK (k={}, dim={}, largest={})", k, dim, largest)
+            }
             HybridOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
             HybridOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
             HybridOp::OneHot { dim, num_classes } => {
@@ -400,8 +403,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Less => layouts::less(config, region, values[..].try_into()?)?,
             HybridOp::LessEqual => layouts::less_equal(config, region, values[..].try_into()?)?,
             HybridOp::Equals => layouts::equals(config, region, values[..].try_into()?)?,
-            HybridOp::TopK { dim, k } => {
-                layouts::topk_axes(config, region, values[..].try_into()?, *k, *dim)?
+            HybridOp::TopK { dim, k, largest } => {
+                layouts::topk_axes(config, region, values[..].try_into()?, *k, *dim, *largest)?
             }
             HybridOp::OneHot { dim, num_classes } => {
                 layouts::one_hot_axis(config, region, values[..].try_into()?, *num_classes, *dim)?
