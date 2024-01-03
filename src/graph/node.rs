@@ -528,6 +528,8 @@ impl Node {
         idx: usize,
         symbol_values: &SymbolValues,
     ) -> Result<Self, Box<dyn Error>> {
+        use log::warn;
+
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
 
@@ -603,21 +605,25 @@ impl Node {
             .into_iter()
             .filter(|i| !deleted_indices.contains(i))
         {
-            let input_node = other_nodes
-                .get_mut(&inputs[input].idx())
-                .ok_or("input not found")?;
-            let input_opkind = &mut input_node.opkind();
-            if let Some(constant) = input_opkind.get_mutable_constant() {
-                rescale_const_with_single_use(
-                    constant,
-                    in_scales.clone(),
-                    param_visibility,
-                    input_node.num_uses(),
-                )?;
-                input_node.replace_opkind(constant.clone_dyn().into());
-                let out_scale = input_opkind.out_scale(vec![])?;
-                input_node.bump_scale(out_scale);
-                in_scales[input] = out_scale;
+            if inputs.len() > input {
+                let input_node = other_nodes
+                    .get_mut(&inputs[input].idx())
+                    .ok_or("input not found")?;
+                let input_opkind = &mut input_node.opkind();
+                if let Some(constant) = input_opkind.get_mutable_constant() {
+                    rescale_const_with_single_use(
+                        constant,
+                        in_scales.clone(),
+                        param_visibility,
+                        input_node.num_uses(),
+                    )?;
+                    input_node.replace_opkind(constant.clone_dyn().into());
+                    let out_scale = input_opkind.out_scale(vec![])?;
+                    input_node.bump_scale(out_scale);
+                    in_scales[input] = out_scale;
+                }
+            } else {
+                warn!("input {} not found for rescaling, skipping ...", input);
             }
         }
 

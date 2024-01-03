@@ -18,6 +18,7 @@ use halo2curves::ff::PrimeField;
 pub enum LookupOp {
     Abs,
     Div { denom: utils::F32 },
+    Cast { scale: utils::F32 },
     ReLU,
     Max { scale: utils::F32, a: utils::F32 },
     Min { scale: utils::F32, a: utils::F32 },
@@ -115,6 +116,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 &x,
                 f32::from(*denom).into(),
             )),
+            LookupOp::Cast { scale } => Ok(tensor::ops::nonlinearities::const_div(
+                &x,
+                f32::from(*scale).into(),
+            )),
             LookupOp::Recip { scale } => Ok(tensor::ops::nonlinearities::recip(&x, scale.into())),
             LookupOp::ReLU => Ok(tensor::ops::nonlinearities::leakyrelu(&x, 0_f64)),
 
@@ -170,6 +175,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::LessThanEqual { .. } => "LESS_THAN_EQUAL".into(),
             LookupOp::Recip { scale, .. } => format!("RECIP(scale={})", scale),
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
+            LookupOp::Cast { scale } => format!("CAST(scale={})", scale),
             LookupOp::Ln { scale } => format!("LN(scale={})", scale),
             LookupOp::ReLU => "RELU".to_string(),
             LookupOp::LeakyReLU { slope: a } => format!("L_RELU(slope={})", a),
@@ -210,12 +216,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
     /// Returns the scale of the output of the operation.
     fn out_scale(&self, inputs_scale: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         let scale = match self {
-            LookupOp::Div { denom } => {
-                let mut scale = inputs_scale[0];
-                if scale == 0 {
-                    scale += multiplier_to_scale(1. / denom.0 as f64);
-                }
-                scale
+            LookupOp::Cast { scale } => {
+                let in_scale = inputs_scale[0];
+                in_scale + multiplier_to_scale(1. / scale.0 as f64)
             }
             LookupOp::Recip { scale } => {
                 let mut out_scale = inputs_scale[0];

@@ -310,7 +310,13 @@ pub fn new_op_from_onnx(
                 deleted_indices.push(inputs.len() - 1);
                 op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
                     dim: axis,
-                    constant_idx: Some(c.raw_values.map(|x| x as usize)),
+                    constant_idx: Some(c.raw_values.map(|x| {
+                        if x == -1.0 {
+                            inputs[0].out_dims()[0][axis] - 1
+                        } else {
+                            x as usize
+                        }
+                    })),
                 });
             }
             // }
@@ -339,7 +345,11 @@ pub fn new_op_from_onnx(
                 op.fallback_k.to_i64()? as usize
             };
 
-            SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK { dim: axis, k })
+            SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK {
+                dim: axis,
+                k,
+                largest: op.largest,
+            })
         }
         "Onehot" => {
             let op = load_op::<OneHot>(node.op(), idx, node.op().name().to_string())?;
@@ -791,8 +801,8 @@ pub fn new_op_from_onnx(
                     if input_scales[0] != 0 {
                         replace_const(
                             0,
-                            SupportedOp::Nonlinear(LookupOp::Div {
-                                denom: crate::circuit::utils::F32(scale_to_multiplier(
+                            SupportedOp::Nonlinear(LookupOp::Cast {
+                                scale: crate::circuit::utils::F32(scale_to_multiplier(
                                     input_scales[0],
                                 )
                                     as f32),
