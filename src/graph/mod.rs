@@ -944,7 +944,7 @@ impl GraphCircuit {
 
     fn calc_safe_lookup_range(res: &GraphWitness, lookup_safety_margin: i128) -> (i128, i128) {
         (
-            lookup_safety_margin * res.min_lookup_inputs + 1,
+            lookup_safety_margin * res.min_lookup_inputs - 1,
             lookup_safety_margin * res.max_lookup_inputs + 1,
         )
     }
