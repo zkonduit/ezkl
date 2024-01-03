@@ -12,7 +12,7 @@ class MyModel(nn.Module):
         topk_smallest = torch.topk(x, 4, largest=False)
         print(topk_largest)
         print(topk_smallest)
-        return [topk_largest.values, topk_smallest.values]
+        return topk_largest.values + topk_smallest.values
 
 
 circuit = MyModel()

@@ -478,7 +478,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
             .get_int_evals()?
             .iter()
             .sorted_by(|a, b| a.cmp(b))
-            .map(|x| Ok(Value::known(input.get_felt_evals()?.get(&[*x as usize]))))
+            .map(|x| Ok(Value::known(i128_to_felt(*x))))
             .collect::<Result<Tensor<Value<F>>, Box<dyn Error>>>()?
     } else {
         Tensor::new(

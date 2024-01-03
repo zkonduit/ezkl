@@ -1415,7 +1415,7 @@ pub fn prod_axes<T: TensorType + Mul<Output = T> + Send + Sync>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[6],
 /// ).unwrap();
-/// let result = topk(&x, 3, false).unwrap();
+/// let result = topk(&x, 3, true).unwrap();
 /// let expected = Tensor::<i128>::new(
 ///     Some(&[15, 2, 2]),
 ///     &[3],
@@ -1472,7 +1472,7 @@ pub fn topk<T: TensorType + PartialOrd>(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2,3],
 /// ).unwrap();
-/// let result = topk_axes(&x, 2, 1).unwrap();
+/// let result = topk_axes(&x, 2, 1, true).unwrap();
 /// let expected = Tensor::<i128>::new(
 ///     Some(&[15, 2, 1, 1]),
 ///     &[2,2],
