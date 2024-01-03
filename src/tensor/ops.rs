@@ -56,7 +56,7 @@ pub fn iff<
 
     let masked_a = (mask.clone() * a.clone())?;
 
-    let masked_b = ((Tensor::from(vec![T::one().ok_or(TensorError::DimError)?].into_iter())
+    let masked_b = ((Tensor::from(vec![T::one().ok_or(TensorError::Unsupported)?].into_iter())
         - mask.clone())?
         * b.clone())?;
 
@@ -305,10 +305,10 @@ pub fn greater<
 ) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
     let mask_inter = (a.clone() - b.clone())?;
     let mask = mask_inter.map(|x| {
-        if x > T::zero().ok_or(TensorError::DimError).unwrap() {
-            T::one().ok_or(TensorError::DimError).unwrap()
+        if x > T::zero().ok_or(TensorError::Unsupported).unwrap() {
+            T::one().ok_or(TensorError::Unsupported).unwrap()
         } else {
-            T::zero().ok_or(TensorError::DimError).unwrap()
+            T::zero().ok_or(TensorError::Unsupported).unwrap()
         }
     });
     Ok((mask, vec![mask_inter]))
@@ -348,10 +348,10 @@ pub fn greater_equal<
 ) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
     let mask_inter = (a.clone() - b.clone())?;
     let mask = mask_inter.map(|x| {
-        if x >= T::zero().ok_or(TensorError::DimError).unwrap() {
-            T::one().ok_or(TensorError::DimError).unwrap()
+        if x >= T::zero().ok_or(TensorError::Unsupported).unwrap() {
+            T::one().ok_or(TensorError::Unsupported).unwrap()
         } else {
-            T::zero().ok_or(TensorError::DimError).unwrap()
+            T::zero().ok_or(TensorError::Unsupported).unwrap()
         }
     });
     Ok((mask, vec![mask_inter]))

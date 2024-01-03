@@ -586,7 +586,10 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             }
             ValTensor::Instance { dims: d, idx, .. } => {
                 if d[*idx].iter().product::<usize>() != new_dims.iter().product::<usize>() {
-                    return Err(Box::new(TensorError::DimError));
+                    return Err(Box::new(TensorError::DimError(format!(
+                        "Cannot reshape {:?} to {:?} as they have number of elements",
+                        d[*idx], new_dims
+                    ))));
                 }
                 d[*idx] = new_dims.to_vec();
             }
