@@ -943,10 +943,18 @@ impl GraphCircuit {
     }
 
     fn calc_safe_lookup_range(res: &GraphWitness, lookup_safety_margin: i128) -> (i128, i128) {
-        (
-            lookup_safety_margin * res.min_lookup_inputs - 1,
-            lookup_safety_margin * res.max_lookup_inputs + 1,
-        )
+
+        let mut  margin  = (
+            lookup_safety_margin * res.min_lookup_inputs,
+            lookup_safety_margin * res.max_lookup_inputs,
+        );
+        
+
+        if res.lookup_safety_margin == 1 {
+            margin.0 -= 1;
+            margin.1 += 1;
+        }
+        margin
     }
 
     fn calc_num_cols(safe_range: (i128, i128), max_logrows: u32) -> usize {

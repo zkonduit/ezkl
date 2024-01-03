@@ -607,7 +607,7 @@ impl Model {
                         debug!("intermediate min lookup inputs: {}", min);
                     }
                     debug!(
-                        "------------ output node int {}: {} \n ------------ float: {} \n ------------ max: {} \n ------------ min: {}",
+                        "------------ output node int {}: {} \n ------------ float: {} \n ------------ max: {} \n ------------ min: {} ------------ scale: {}",
                         idx,
                         res.output.map(crate::fieldutils::felt_to_i32).show(),
                         res.output
@@ -616,6 +616,7 @@ impl Model {
                             .show(),
                         res.output.clone().into_iter().map(crate::fieldutils::felt_to_i128).max().unwrap_or(0),
                         res.output.clone().into_iter().map(crate::fieldutils::felt_to_i128).min().unwrap_or(0),
+                        n.out_scale
                     );
                     results.insert(idx, vec![res.output]);
                 }
