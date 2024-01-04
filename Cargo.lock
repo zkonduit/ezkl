@@ -2551,7 +2551,7 @@ dependencies = [
 [[package]]
 name = "icicle"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/icicle?rev=f8610dd?rev=f8610dd5b617d11832418ce0f683c54b0ae3e3b2#f8610dd5b617d11832418ce0f683c54b0ae3e3b2"
+source = "git+https://github.com/ingonyama-zk/icicle?rev=45b00fb?branch=fix/vhnat/ezkl-build-fix#45b00fb1966cb236979f03f9068f6db9bf59f41e"
 dependencies = [
  "ark-bls12-377",
  "ark-bls12-381",
