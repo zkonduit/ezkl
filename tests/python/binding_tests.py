@@ -137,7 +137,7 @@ def test_calibrate_over_user_range():
     assert res == True
 
     res = ezkl.calibrate_settings(
-        data_path, model_path, output_path, "resources", [0, 1, 2])
+        data_path, model_path, output_path, "resources", 1, [0, 1, 2])
     assert res == True
     assert os.path.isfile(output_path)
 

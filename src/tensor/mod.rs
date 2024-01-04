@@ -43,8 +43,8 @@ pub enum TensorError {
     #[error("dimension mismatch in tensor op: {0}")]
     DimMismatch(String),
     /// Shape when instantiating
-    #[error("dimensionality error when manipulating a tensor")]
-    DimError,
+    #[error("dimensionality error when manipulating a tensor: {0}")]
+    DimError(String),
     /// wrong method was called on a tensor-like struct
     #[error("wrong method called")]
     WrongMethod,
@@ -57,6 +57,9 @@ pub enum TensorError {
     /// Table lookup error
     #[error("Table lookup error")]
     TableLookupError,
+    /// Unsupported operation
+    #[error("Unsupported operation on a tensor type")]
+    Unsupported,
 }
 
 /// The (inner) type of tensor elements.
@@ -464,7 +467,11 @@ impl<T: Clone + TensorType> Tensor<T> {
         match values {
             Some(v) => {
                 if total_dims != v.len() {
-                    return Err(TensorError::DimError);
+                    return Err(TensorError::DimError(format!(
+                        "Cannot create tensor of length {} with dims {:?}",
+                        v.len(),
+                        dims
+                    )));
                 }
                 Ok(Tensor {
                     inner: Vec::from(v),
@@ -631,7 +638,10 @@ impl<T: Clone + TensorType> Tensor<T> {
             return Ok(self.clone());
         }
         if self.dims.len() < indices.len() {
-            return Err(TensorError::DimError);
+            return Err(TensorError::DimError(format!(
+                "The dimensionality of the slice {:?} is greater than the tensor's {:?}",
+                indices, self.dims
+            )));
         } else if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims {
             // else if slice is the same as dims, return self
             return Ok(self.clone());
@@ -802,7 +812,9 @@ impl<T: Clone + TensorType> Tensor<T> {
         // in onnx parlance this corresponds to converting a tensor to a single element
         if new_dims.is_empty() {
             if !(self.len() == 1 || self.is_empty()) {
-                return Err(TensorError::DimError);
+                return Err(TensorError::DimError(
+                    "Cannot reshape to empty tensor".to_string(),
+                ));
             }
             self.dims = vec![];
         } else {
@@ -812,7 +824,11 @@ impl<T: Clone + TensorType> Tensor<T> {
                 0
             };
             if self.len() != product {
-                return Err(TensorError::DimError);
+                return Err(TensorError::DimError(format!(
+                    "Cannot reshape tensor of length {} to {:?}",
+                    self.len(),
+                    new_dims
+                )));
             }
             self.dims = Vec::from(new_dims);
         }
@@ -882,7 +898,9 @@ impl<T: Clone + TensorType> Tensor<T> {
                 } else if i > destination && source > destination {
                     old_coord[i - 1] = *c;
                 } else {
-                    return Err(TensorError::DimError);
+                    return Err(TensorError::DimError(
+                        "Unknown condition for moving the axis".to_string(),
+                    ));
                 }
             }
             output.set(&coord, self.get(&old_coord));
@@ -964,7 +982,11 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     pub fn expand(&self, shape: &[usize]) -> Result<Self, TensorError> {
         if self.dims().len() > shape.len() {
-            return Err(TensorError::DimError);
+            return Err(TensorError::DimError(format!(
+                "Cannot expand {:?} to the smaller shape {:?}",
+                self.dims(),
+                shape
+            )));
         }
 
         if shape == self.dims() {
@@ -973,7 +995,10 @@ impl<T: Clone + TensorType> Tensor<T> {
 
         for d in self.dims() {
             if !(shape.contains(d) || *d == 1) {
-                return Err(TensorError::DimError);
+                return Err(TensorError::DimError(format!(
+                    "The current dimension {} must be contained in the new shape {:?} or be 1",
+                    d, shape
+                )));
             }
         }
 

@@ -165,10 +165,19 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             settings_path,
             data,
             target,
+            lookup_safety_margin,
             scales,
             max_logrows,
-        } => calibrate(model, data, settings_path, target, scales, max_logrows)
-            .map(|e| serde_json::to_string(&e).unwrap()),
+        } => calibrate(
+            model,
+            data,
+            settings_path,
+            target,
+            lookup_safety_margin,
+            scales,
+            max_logrows,
+        )
+        .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::GenWitness {
             data,
             compiled_circuit,
@@ -624,6 +633,7 @@ pub(crate) fn calibrate(
     data: PathBuf,
     settings_path: PathBuf,
     target: CalibrationTarget,
+    lookup_safety_margin: i128,
     scales: Option<Vec<crate::Scale>>,
     max_logrows: Option<u32>,
 ) -> Result<GraphSettings, Box<dyn Error>> {
@@ -748,7 +758,7 @@ pub(crate) fn calibrate(
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                 circuit
-                    .calibrate(&data, max_logrows)
+                    .calibrate(&data, max_logrows, lookup_safety_margin)
                     .map_err(|e| format!("failed to calibrate: {}", e))?;
 
                 let settings = circuit.settings().clone();
