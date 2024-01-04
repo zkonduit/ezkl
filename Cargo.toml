@@ -161,7 +161,7 @@ icicle = ["halo2_proofs/icicle_gpu"]
 
 # icicle patch to 0.1.0 if feature icicle is enabled
 [patch.'https://github.com/ingonyama-zk/icicle']
-icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", rev="45b00fb1966cb236979f03f9068f6db9bf59f41e", package = "icicle", branch = "fix/vhnat/ezkl-build-fix"}
+icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix"}
 
 [profile.release]
 rustflags = [ "-C", "relocation-model=pic" ]
