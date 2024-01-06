@@ -106,7 +106,6 @@ use tract_onnx::prelude::SymbolValues;
 /// Extracts the raw values from a tensor.
 pub fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
-    symbol_values: &SymbolValues,
 ) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
     use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
@@ -196,7 +195,7 @@ pub fn extract_tensor_value(
                 .par_iter()
                 .map(|x| match x.to_i64() {
                     Ok(v) => Ok(v as f32),
-                    Err(_) => match x.eval(symbol_values).to_i64() {
+                    Err(_) => match x.to_i64() {
                         Ok(v) => Ok(v as f32),
                         Err(_) => Err("could not evaluate tdim"),
                     },
@@ -478,7 +477,7 @@ pub fn new_op_from_onnx(
             let op: Const = load_op::<Const>(node.op(), idx, node.op().name().to_string())?;
             let dt = op.0.datum_type();
             // Raw values are always f32
-            let raw_value = extract_tensor_value(op.0, symbol_values)?;
+            let raw_value = extract_tensor_value(op.0)?;
             // If bool or a tensor dimension then don't scale
             let constant_scale = match dt {
                 DatumType::Bool
@@ -1075,12 +1074,12 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            let kernel = extract_tensor_value(conv_node.kernel.clone(), symbol_values)?;
+            let kernel = extract_tensor_value(conv_node.kernel.clone())?;
             let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match conv_node.bias.clone() {
                 Some(b) => {
-                    let const_value = extract_tensor_value(b, symbol_values)?;
+                    let const_value = extract_tensor_value(b)?;
 
                     let val = quantize_tensor(
                         const_value,
@@ -1153,12 +1152,12 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            let kernel = extract_tensor_value(deconv_node.kernel.clone(), symbol_values)?;
+            let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
             let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
 
             let bias = match deconv_node.bias.clone() {
                 Some(b) => {
-                    let const_value = extract_tensor_value(b, symbol_values)?;
+                    let const_value = extract_tensor_value(b)?;
 
                     let val = quantize_tensor(
                         const_value,

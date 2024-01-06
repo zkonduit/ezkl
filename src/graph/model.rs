@@ -744,7 +744,8 @@ impl Model {
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
     ) -> Result<(Graph<TypedFact, Box<dyn TypedOp>>, SymbolValues), Box<dyn Error>> {
-        use tract_onnx::tract_hir::internal::GenericFactoid;
+        use maybe_rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+        use tract_onnx::{tract_core::internal::TDim, tract_hir::internal::GenericFactoid};
 
         let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
@@ -781,15 +782,54 @@ impl Model {
             let symbol = model.symbol_table.sym(symbol);
             symbol_values = symbol_values.with(&symbol, *value as i64);
             info!("set {} to {}", symbol, value);
+            println!("set {} to {}", symbol, value);
         }
 
         // Note: do not optimize the model, as the layout will depend on underlying hardware
-        let model = model
+        let mut typed_model = model
             .into_typed()?
-            .into_decluttered()?
-            .concretize_dims(&symbol_values)?;
+            .concretize_dims(&symbol_values)?
+            .into_decluttered()?;
 
-        Ok((model, symbol_values))
+        // concretize constants
+        for node in typed_model.eval_order()? {
+            let node = typed_model.node_mut(node);
+            if node.op_is::<tract_onnx::tract_hir::ops::konst::Const>() {
+                // map option to err
+                let op = node
+                    .op_as_mut::<tract_onnx::tract_hir::ops::konst::Const>()
+                    .unwrap();
+                // get inner value to Arc<Tensor>
+                let constant = op.0.as_ref();
+
+                match constant.datum_type() {
+                    DatumType::TDim => {
+                        // Generally a shape or hyperparam
+                        let vec = constant.as_slice::<tract_onnx::prelude::TDim>()?.to_vec();
+                        let data: Vec<TDim> =
+                            vec.par_iter().map(|x| x.eval(&symbol_values)).collect();
+
+                        // allow unsafe
+                        #[allow(unsafe_code)]
+                        unsafe {
+                            let bytes = std::slice::from_raw_parts(
+                                data.as_ptr() as *const u8,
+                                data.len() * DatumType::TDim.size_of(),
+                            );
+
+                            op.0 = std::sync::Arc::new(tract_onnx::prelude::Tensor::from_raw_dt(
+                                DatumType::TDim,
+                                constant.shape(),
+                                bytes,
+                            )?);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok((typed_model, symbol_values))
     }
 
     /// Loads an Onnx model from a specified path.
@@ -1082,7 +1122,7 @@ impl Model {
     ) -> Result<Vec<Vec<Tensor<f32>>>, Box<dyn Error>> {
         use tract_onnx::tract_core::internal::IntoArcTensor;
 
-        let (model, symbols) = Model::load_onnx_using_tract(
+        let (model, _) = Model::load_onnx_using_tract(
             &mut std::fs::File::open(model_path)
                 .map_err(|_| format!("failed to load model at {}", model_path.display()))?,
             run_args,
@@ -1102,8 +1142,7 @@ impl Model {
                 result
                     .into_iter()
                     .map(|t| {
-                        crate::graph::utilities::extract_tensor_value(t.into_arc_tensor(), &symbols)
-                            .unwrap()
+                        crate::graph::utilities::extract_tensor_value(t.into_arc_tensor()).unwrap()
                     })
                     .collect(),
             );
