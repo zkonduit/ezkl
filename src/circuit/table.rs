@@ -7,7 +7,7 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Expression, TableColumn},
 };
 use log::warn;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use maybe_rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     circuit::CircuitError,

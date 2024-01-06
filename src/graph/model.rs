@@ -610,7 +610,7 @@ impl Model {
                         debug!("intermediate min lookup inputs: {}", min);
                     }
                     debug!(
-                        "------------ output node int {}: {} \n ------------ float: {} \n ------------ max: {} \n ------------ min: {}",
+                        "------------ output node int {}: {} \n ------------ float: {} \n ------------ max: {} \n ------------ min: {} ------------ scale: {}",
                         idx,
                         res.output.map(crate::fieldutils::felt_to_i32).show(),
                         res.output
@@ -619,6 +619,7 @@ impl Model {
                             .show(),
                         res.output.clone().into_iter().map(crate::fieldutils::felt_to_i128).max().unwrap_or(0),
                         res.output.clone().into_iter().map(crate::fieldutils::felt_to_i128).min().unwrap_or(0),
+                        n.out_scale
                     );
                     results.insert(idx, vec![res.output]);
                 }
@@ -977,10 +978,7 @@ impl Model {
                         visibility: visibility.clone(),
                     };
 
-                    let out_dims = node_output_shapes(n)?
-                        .iter()
-                        .map(|shape| Ok(shape.as_ref().ok_or("missing shape dims")?.clone()))
-                        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+                    let out_dims = node_output_shapes(n, symbol_values)?;
 
                     let mut output_scales = BTreeMap::new();
 

@@ -88,11 +88,14 @@ pub fn multiplier_to_scale(mult: f64) -> crate::Scale {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn node_output_shapes(
     node: &OnnxNode<TypedFact, Box<dyn TypedOp>>,
-) -> Result<Vec<Option<Vec<usize>>>, Box<dyn std::error::Error>> {
+    symbol_values: &SymbolValues,
+) -> Result<Vec<Vec<usize>>, Box<dyn std::error::Error>> {
     let mut shapes = Vec::new();
     let outputs = node.outputs.to_vec();
     for output in outputs {
-        let mv = output.fact.shape.clone().as_concrete().map(|x| x.to_vec());
+        let shape = output.fact.shape;
+        let shape = shape.eval_to_usize(symbol_values)?;
+        let mv = shape.to_vec();
         shapes.push(mv)
     }
     Ok(shapes)
@@ -105,7 +108,7 @@ pub fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
     symbol_values: &SymbolValues,
 ) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
-    use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+    use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
     let dt = input.datum_type();
     let dims = input.shape().to_vec();
@@ -308,7 +311,13 @@ pub fn new_op_from_onnx(
                 deleted_indices.push(inputs.len() - 1);
                 op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::Gather {
                     dim: axis,
-                    constant_idx: Some(c.raw_values.map(|x| x as usize)),
+                    constant_idx: Some(c.raw_values.map(|x| {
+                        if x == -1.0 {
+                            inputs[0].out_dims()[0][axis] - 1
+                        } else {
+                            x as usize
+                        }
+                    })),
                 });
             }
             // }
@@ -337,7 +346,11 @@ pub fn new_op_from_onnx(
                 op.fallback_k.to_i64()? as usize
             };
 
-            SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK { dim: axis, k })
+            SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::TopK {
+                dim: axis,
+                k,
+                largest: op.largest,
+            })
         }
         "Onehot" => {
             let op = load_op::<OneHot>(node.op(), idx, node.op().name().to_string())?;
@@ -789,8 +802,8 @@ pub fn new_op_from_onnx(
                     if input_scales[0] != 0 {
                         replace_const(
                             0,
-                            SupportedOp::Nonlinear(LookupOp::Div {
-                                denom: crate::circuit::utils::F32(scale_to_multiplier(
+                            SupportedOp::Nonlinear(LookupOp::Cast {
+                                scale: crate::circuit::utils::F32(scale_to_multiplier(
                                     input_scales[0],
                                 )
                                     as f32),
@@ -1357,11 +1370,8 @@ pub fn new_op_from_onnx(
         }
         "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams
-            let shapes = node_output_shapes(&node)?;
-            let mut output_shape = shapes[0]
-                .as_ref()
-                .ok_or(GraphError::InvalidDims(idx, "reshape".to_string()))?
-                .clone();
+            let shapes = node_output_shapes(&node, symbol_values)?;
+            let mut output_shape = shapes[0].clone();
             if output_shape.is_empty() {
                 output_shape = vec![1];
             }

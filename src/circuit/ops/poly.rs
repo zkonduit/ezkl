@@ -312,7 +312,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
             PolyOp::Pad(p) => {
                 if values.len() != 1 {
-                    return Err(Box::new(TensorError::DimError));
+                    return Err(Box::new(TensorError::DimError(
+                        "Pad operation requires a single input".to_string(),
+                    )));
                 }
                 let mut input = values[0].clone();
                 input.pad(*p)?;
@@ -404,7 +406,10 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     }
 
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
-        if matches!(self, PolyOp::Add { .. } | PolyOp::Sub) {
+        if matches!(
+            self,
+            PolyOp::Add { .. } | PolyOp::Sub | PolyOp::Concat { .. }
+        ) {
             vec![0, 1]
         } else if matches!(self, PolyOp::Iff) {
             vec![1, 2]

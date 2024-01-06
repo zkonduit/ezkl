@@ -8,7 +8,7 @@ use halo2_proofs::circuit::Value;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::{error, trace};
-use rayon::{
+use maybe_rayon::{
     prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
     slice::ParallelSliceMut,
 };
@@ -478,7 +478,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
             .get_int_evals()?
             .iter()
             .sorted_by(|a, b| a.cmp(b))
-            .map(|x| Ok(Value::known(input.get_felt_evals()?.get(&[*x as usize]))))
+            .map(|x| Ok(Value::known(i128_to_felt(*x))))
             .collect::<Result<Tensor<Value<F>>, Box<dyn Error>>>()?
     } else {
         Tensor::new(
@@ -544,8 +544,13 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     k: usize,
+    largest: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let sorted = _sort_descending(config, region, values)?.get_slice(&[0..k])?;
+    let sorted = if largest {
+        _sort_descending(config, region, values)?.get_slice(&[0..k])?
+    } else {
+        _sort_ascending(config, region, values)?.get_slice(&[0..k])?
+    };
     Ok(sorted)
 }
 
@@ -556,12 +561,13 @@ pub fn topk_axes<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     k: usize,
     dim: usize,
+    largest: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let topk_at_k = move |config: &BaseConfig<F>,
                           region: &mut RegionCtx<F>,
                           values: &[ValTensor<F>; 1]|
           -> Result<ValTensor<F>, Box<dyn Error>> {
-        _select_topk(config, region, values, k)
+        _select_topk(config, region, values, k, largest)
     };
 
     let output: ValTensor<F> = multi_dim_axes_op(config, region, values, &[dim], topk_at_k)?;
@@ -749,7 +755,8 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if !assigned_len.is_empty() {
-        region.increment(*assigned_len.iter().max().ok_or(TensorError::DimError)?);
+        // safe to unwrap since we've just checked it has at least one element
+        region.increment(*assigned_len.iter().max().unwrap());
     }
 
     // Calculate the output tensor size
@@ -901,7 +908,8 @@ pub fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
     }
 
     if !assigned_len.is_empty() {
-        region.increment(*assigned_len.iter().max().ok_or(TensorError::DimError)?);
+        // safe to unwrap since we've just checked it has at least one element
+        region.increment(*assigned_len.iter().max().unwrap());
     }
 
     // Calculate the output tensor size
@@ -1935,7 +1943,8 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
     }
 
     if !assigned_len.is_empty() {
-        region.increment(*assigned_len.iter().max().ok_or(TensorError::DimError)?);
+        // safe to unwrap since we've just checked it has at least one element
+        region.increment(*assigned_len.iter().max().unwrap());
     }
 
     let og_image_dims = image.dims().to_vec();

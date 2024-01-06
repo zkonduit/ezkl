@@ -528,6 +528,8 @@ impl Node {
         idx: usize,
         symbol_values: &SymbolValues,
     ) -> Result<Self, Box<dyn Error>> {
+        use log::warn;
+
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
 
@@ -603,21 +605,25 @@ impl Node {
             .into_iter()
             .filter(|i| !deleted_indices.contains(i))
         {
-            let input_node = other_nodes
-                .get_mut(&inputs[input].idx())
-                .ok_or("input not found")?;
-            let input_opkind = &mut input_node.opkind();
-            if let Some(constant) = input_opkind.get_mutable_constant() {
-                rescale_const_with_single_use(
-                    constant,
-                    in_scales.clone(),
-                    param_visibility,
-                    input_node.num_uses(),
-                )?;
-                input_node.replace_opkind(constant.clone_dyn().into());
-                let out_scale = input_opkind.out_scale(vec![])?;
-                input_node.bump_scale(out_scale);
-                in_scales[input] = out_scale;
+            if inputs.len() > input {
+                let input_node = other_nodes
+                    .get_mut(&inputs[input].idx())
+                    .ok_or("input not found")?;
+                let input_opkind = &mut input_node.opkind();
+                if let Some(constant) = input_opkind.get_mutable_constant() {
+                    rescale_const_with_single_use(
+                        constant,
+                        in_scales.clone(),
+                        param_visibility,
+                        input_node.num_uses(),
+                    )?;
+                    input_node.replace_opkind(constant.clone_dyn().into());
+                    let out_scale = input_opkind.out_scale(vec![])?;
+                    input_node.bump_scale(out_scale);
+                    in_scales[input] = out_scale;
+                }
+            } else {
+                warn!("input {} not found for rescaling, skipping ...", input);
             }
         }
 
@@ -630,20 +636,9 @@ impl Node {
         out_scale = opkind.out_scale(in_scales)?;
 
         // get the output shape
-        let mut out_dims = {
-            let output_shapes = match node_output_shapes(&node) {
-                Ok(s) => Some(s),
-                _ => None,
-            };
-
-            if let Some([Some(v)]) = output_shapes.as_deref() {
-                v.to_vec()
-            } else if let Some([Some(v), Some(_)]) = output_shapes.as_deref() {
-                v.to_vec()
-            } else {
-                return Err("could not get output shape for node".into());
-            }
-        };
+        let out_dims = node_output_shapes(&node, symbol_values)?;
+        // nodes vs subgraphs always have a single output
+        let mut out_dims = out_dims[0].clone();
 
         if out_dims.is_empty() {
             out_dims = vec![1];

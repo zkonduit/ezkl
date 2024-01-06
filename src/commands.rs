@@ -71,6 +71,8 @@ pub const DEFAULT_OPTIMIZER_RUNS: &str = "1";
 pub const DEFAULT_FUZZ_RUNS: &str = "10";
 /// Default calibration file
 pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
+/// Default lookup safety margin
+pub const DEFAULT_LOOKUP_SAFETY_MARGIN: &str = "2";
 
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -303,6 +305,9 @@ pub enum Commands {
         #[arg(long = "target", default_value = DEFAULT_CALIBRATION_TARGET)]
         /// Target for calibration. Set to "resources" to optimize for computational resource. Otherwise, set to "accuracy" to optimize for accuracy.
         target: CalibrationTarget,
+        /// the lookup safety margin to use for calibration. if the max lookup is 2^k, then the max lookup will be 2^k * lookup_safety_margin. larger = safer but slower
+        #[arg(long, default_value = DEFAULT_LOOKUP_SAFETY_MARGIN)]
+        lookup_safety_margin: i128,
         /// Optional scales to specifically try for calibration. Example, --scales 0,4
         #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
         scales: Option<Vec<crate::Scale>>,
@@ -344,8 +349,8 @@ pub enum Commands {
         /// The path to the .json witness file (generated using the gen-witness command)
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
         witness: PathBuf,
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
+        /// The path to the compiled model file (generated using the compile-circuit command)
+        #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
         model: PathBuf,
     },
 
@@ -569,15 +574,9 @@ pub enum Commands {
     /// Creates an EVM verifier that attests to on-chain inputs for a single proof
     #[command(name = "create-evm-da")]
     CreateEVMDataAttestation {
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
-        #[arg(long)]
-        srs_path: Option<PathBuf>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
-        /// The path to load the desired verification key file
-        #[arg(long, default_value = DEFAULT_VK)]
-        vk_path: PathBuf,
         /// The path to output the Solidity code
         #[arg(long, default_value = DEFAULT_SOL_CODE_DA)]
         sol_code_path: PathBuf,

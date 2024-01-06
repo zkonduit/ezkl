@@ -1,3 +1,5 @@
+cargo-features = ["profile-rustflags"]
+
 [package]
 name = "ezkl"
 version = "0.0.0"
@@ -27,7 +29,7 @@ hex = { version = "0.4.3", default_features = false }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/chunked-mv-lookup", package = "ecc" }
 snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup", features=["derive_serde"]}
 halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier",  branch= "ac/lookup-modularity" }
-rayon = { version = "1.7.0",  default_features = false }
+maybe-rayon = { version = "0.1.1",  default_features = false }
 bincode = { version = "1.3.3", default_features = false }
 ark-std = { version = "^0.3.0", default-features = false }
 unzip-n = "0.1.2"
@@ -155,3 +157,11 @@ ezkl = ["onnx", "serde", "serde_json", "log", "colored", "env_logger", "tabled/c
 mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup", "halo2_solidity_verifier/mv-lookup"]
 det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
+
+
+# icicle patch to 0.1.0 if feature icicle is enabled
+[patch.'https://github.com/ingonyama-zk/icicle']
+icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix"}
+
+[profile.release]
+rustflags = [ "-C", "relocation-model=pic" ]
