@@ -26,6 +26,7 @@ use crate::circuit::modules::ModulePlanner;
 use crate::circuit::table::{Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::fieldutils::felt_to_f64;
+use crate::pfsys::PrettyElements;
 use crate::tensor::{Tensor, ValTensor};
 use crate::RunArgs;
 use halo2_proofs::{
@@ -1124,7 +1125,7 @@ impl GraphCircuit {
         lookup_safety_margin: i128,
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let res = self.forward(&mut input.to_vec(), None, None)?;
-        self.calc_min_logrows(&res, max_logrows)?;
+        self.calc_min_logrows(&res, max_logrows, lookup_safety_margin)?;
         Ok(res)
     }
 

@@ -775,15 +775,20 @@ impl Model {
         for (i, _) in model.clone().outputs.iter().enumerate() {
             model.set_output_fact(i, InferenceFact::default())?;
         }
-        // Note: do not optimize the model, as the layout will depend on underlying hardware
-        let mut model = model.into_typed()?.into_decluttered()?;
+
         let mut symbol_values = SymbolValues::default();
         for (symbol, value) in run_args.variables.iter() {
             let symbol = model.symbol_table.sym(symbol);
             symbol_values = symbol_values.with(&symbol, *value as i64);
             info!("set {} to {}", symbol, value);
         }
-        model = model.concretize_dims(&symbol_values)?;
+
+        // Note: do not optimize the model, as the layout will depend on underlying hardware
+        let model = model
+            .into_typed()?
+            .into_decluttered()?
+            .concretize_dims(&symbol_values)?;
+
         Ok((model, symbol_values))
     }
 

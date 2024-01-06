@@ -867,7 +867,7 @@ pub(crate) fn calibrate(
                     .load_graph_from_file_exclusively(&chunk)
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
-                circuit
+                let forward_res = circuit
                     .calibrate(&data, max_logrows, lookup_safety_margin)
                     .map_err(|e| format!("failed to calibrate: {}", e))?;
 
