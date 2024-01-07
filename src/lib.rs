@@ -54,9 +54,6 @@ pub mod fieldutils;
 /// a Halo2 circuit.
 #[cfg(feature = "onnx")]
 pub mod graph;
-/// Methods for deploying and interacting with the ezkl hub
-#[cfg(not(target_arch = "wasm32"))]
-pub mod hub;
 /// beautiful logging
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 pub mod logger;
