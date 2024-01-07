@@ -744,8 +744,9 @@ impl Model {
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
     ) -> Result<(Graph<TypedFact, Box<dyn TypedOp>>, SymbolValues), Box<dyn Error>> {
-        use maybe_rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-        use tract_onnx::{tract_core::internal::TDim, tract_hir::internal::GenericFactoid};
+        use tract_onnx::{
+            tract_core::internal::IntoArcTensor, tract_hir::internal::GenericFactoid,
+        };
 
         let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
@@ -800,29 +801,17 @@ impl Model {
                     .op_as_mut::<tract_onnx::tract_hir::ops::konst::Const>()
                     .unwrap();
                 // get inner value to Arc<Tensor>
-                let constant = op.0.as_ref();
+                let mut constant = op.0.as_ref().clone();
 
                 match constant.datum_type() {
                     DatumType::TDim => {
                         // Generally a shape or hyperparam
-                        let vec = constant.as_slice::<tract_onnx::prelude::TDim>()?.to_vec();
-                        let data: Vec<TDim> =
-                            vec.par_iter().map(|x| x.eval(&symbol_values)).collect();
+                        constant
+                            .as_slice_mut::<tract_onnx::prelude::TDim>()?
+                            .iter_mut()
+                            .for_each(|x| *x = x.eval(&symbol_values));
 
-                        // allow unsafe
-                        #[allow(unsafe_code)]
-                        unsafe {
-                            let bytes = std::slice::from_raw_parts(
-                                data.as_ptr() as *const u8,
-                                data.len() * DatumType::TDim.size_of(),
-                            );
-
-                            op.0 = std::sync::Arc::new(tract_onnx::prelude::Tensor::from_raw_dt(
-                                DatumType::TDim,
-                                constant.shape(),
-                                bytes,
-                            )?);
-                        }
+                        op.0 = constant.into_arc_tensor();
                     }
                     _ => {}
                 }
