@@ -796,19 +796,16 @@ impl Model {
         for node in typed_model.eval_order()? {
             let node = typed_model.node_mut(node);
             if let Some(op) = node.op_as_mut::<tract_onnx::tract_core::ops::konst::Const>() {
-                match op.0.datum_type() {
-                    DatumType::TDim => {
-                        // get inner value to Arc<Tensor>
-                        let mut constant = op.0.as_ref().clone();
-                        // Generally a shape or hyperparam
-                        constant
-                            .as_slice_mut::<tract_onnx::prelude::TDim>()?
-                            .iter_mut()
-                            .for_each(|x| *x = x.eval(&symbol_values));
+                if op.0.datum_type() == DatumType::TDim {
+                    // get inner value to Arc<Tensor>
+                    let mut constant = op.0.as_ref().clone();
+                    // Generally a shape or hyperparam
+                    constant
+                        .as_slice_mut::<tract_onnx::prelude::TDim>()?
+                        .iter_mut()
+                        .for_each(|x| *x = x.eval(&symbol_values));
 
-                        op.0 = constant.into_arc_tensor();
-                    }
-                    _ => {}
+                    op.0 = constant.into_arc_tensor();
                 }
             }
         }
