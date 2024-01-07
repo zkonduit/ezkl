@@ -795,7 +795,7 @@ impl Model {
         // concretize constants
         for node in typed_model.eval_order()? {
             let node = typed_model.node_mut(node);
-            if let Some(op) = node.op_as_mut::<Const>() {
+            if let Some(op) = node.op_as_mut::<tract_onnx::tract_core::ops::konst::Const>() {
                 match op.0.datum_type() {
                     DatumType::TDim => {
                         // get inner value to Arc<Tensor>
