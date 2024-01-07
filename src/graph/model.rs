@@ -800,11 +800,11 @@ impl Model {
                 let op = node
                     .op_as_mut::<tract_onnx::tract_hir::ops::konst::Const>()
                     .unwrap();
-                // get inner value to Arc<Tensor>
-                let mut constant = op.0.as_ref().clone();
 
-                match constant.datum_type() {
+                match op.0.datum_type() {
                     DatumType::TDim => {
+                        // get inner value to Arc<Tensor>
+                        let mut constant = op.0.as_ref().clone();
                         // Generally a shape or hyperparam
                         constant
                             .as_slice_mut::<tract_onnx::prelude::TDim>()?
