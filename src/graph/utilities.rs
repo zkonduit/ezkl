@@ -7,6 +7,7 @@ use super::{Rescaled, SupportedOp, Visibility};
 use crate::circuit::hybrid::HybridOp;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::lookup::LookupOp;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::poly::PolyOp;
 use crate::circuit::Op;
 use crate::tensor::{Tensor, TensorError, TensorType};
@@ -270,6 +271,50 @@ pub fn new_op_from_onnx(
     debug!("Loading node: {:?}", node);
     let mut deleted_indices = vec![];
     let node = match node.op().name().as_ref() {
+        "ShiftLeft" => {
+            // load shift amount
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(1);
+                let raw_values = &c.raw_values;
+                if raw_values.len() != 1 {
+                    return Err(Box::new(GraphError::InvalidDims(
+                        idx,
+                        "shift left".to_string(),
+                    )));
+                }
+                SupportedOp::Nonlinear(LookupOp::Div {
+                    denom: crate::circuit::utils::F32(1.0 / 2.0f32.powf(raw_values[0])),
+                })
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(
+                    idx,
+                    "ShiftLeft".to_string(),
+                )));
+            }
+        }
+        "ShiftRight" => {
+            // load shift amount
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(1);
+                let raw_values = &c.raw_values;
+                if raw_values.len() != 1 {
+                    return Err(Box::new(GraphError::InvalidDims(
+                        idx,
+                        "shift right".to_string(),
+                    )));
+                }
+                SupportedOp::Nonlinear(LookupOp::Div {
+                    denom: crate::circuit::utils::F32(2.0f32.powf(raw_values[0])),
+                })
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(
+                    idx,
+                    "ShiftRight".to_string(),
+                )));
+            }
+        }
         "MultiBroadcastTo" => {
             let op = load_op::<MultiBroadcastTo>(node.op(), idx, node.op().name().to_string())?;
             let shape = op.shape.clone();

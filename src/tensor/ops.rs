@@ -2759,7 +2759,7 @@ pub mod nonlinearities {
     ///  &[3, 2],
     /// ).unwrap();
     /// let result = ceil(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn ceil(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
@@ -2784,7 +2784,7 @@ pub mod nonlinearities {
     ///  &[3, 2],
     /// ).unwrap();
     /// let result = floor(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 1, 2, 2, 3]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[0, 2, 2, 4, 4, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn floor(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
@@ -2809,7 +2809,7 @@ pub mod nonlinearities {
     /// &[3, 2],
     /// ).unwrap();
     /// let result = round(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn round(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
@@ -2834,7 +2834,7 @@ pub mod nonlinearities {
     /// &[3, 2],
     /// ).unwrap();
     /// let result = round_half_to_even(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 2, 2, 2, 3]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[0, 2, 4, 4, 4, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn round_half_to_even(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
