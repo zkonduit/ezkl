@@ -594,7 +594,8 @@ impl Model {
                 NodeType::Node(n) => {
                     // execute the op
                     let start = instant::Instant::now();
-                    let res = Op::<Fp>::f(&n.opkind, &inputs)?;
+                    let mut res = Op::<Fp>::f(&n.opkind, &inputs)?;
+                    res.output.reshape(&n.out_dims)?;
                     let elapsed = start.elapsed();
                     trace!("op took: {:?}", elapsed);
                     // see if any of the intermediate lookup calcs are the max
@@ -1357,7 +1358,8 @@ impl Model {
                             })?
                     };
 
-                    if let Some(vt) = res {
+                    if let Some(mut vt) = res {
+                        vt.reshape(&node.out_dims()[0])?;
                         // we get the max as for fused nodes this corresponds to the node output
                         results.insert(*idx, vec![vt.clone()]);
                         //only use with mock prover
