@@ -28,8 +28,8 @@ const K: usize = 17;
 #[derive(Clone, Debug)]
 struct MyCircuit {
     image: ValTensor<Fr>,
-    kernel: Tensor<Fr>,
-    bias: Tensor<Fr>,
+    kernel: ValTensor<Fr>,
+    bias: ValTensor<Fr>,
 }
 
 impl Circuit<Fr> for MyCircuit {
@@ -65,10 +65,8 @@ impl Circuit<Fr> for MyCircuit {
                 config
                     .layout(
                         &mut region,
-                        &[self.image.clone()],
+                        &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
                         Box::new(PolyOp::Conv {
-                            kernel: self.kernel.clone(),
-                            bias: Some(self.bias.clone()),
                             padding: [(0, 0); 2],
                             stride: (1, 1),
                         }),
@@ -116,8 +114,8 @@ fn runcnvrl(c: &mut Criterion) {
 
             let circuit = MyCircuit {
                 image: ValTensor::from(image),
-                kernel,
-                bias,
+                kernel: ValTensor::try_from(kernel).unwrap(),
+                bias: ValTensor::try_from(bias).unwrap(),
             };
 
             group.throughput(Throughput::Elements(*size as u64));

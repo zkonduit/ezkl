@@ -1834,7 +1834,12 @@ pub fn conv<
     let kernel_dims = kernel.dims();
 
     if has_bias {
-        let bias = &inputs[2];
+        let bias = &mut inputs[2].clone();
+
+        if bias.dims().is_empty() {
+            bias.reshape(&[1])?;
+        }
+
         if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
             return Err(TensorError::DimMismatch("conv bias".to_string()));
         }
@@ -2194,7 +2199,12 @@ pub fn deconv<
     }
 
     if has_bias {
-        let bias = &inputs[2];
+        let bias = &mut inputs[2].clone();
+
+        if bias.dims().is_empty() {
+            bias.reshape(&[1])?;
+        }
+
         if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
             return Err(TensorError::DimMismatch("deconv bias".to_string()));
         }
@@ -2755,7 +2765,7 @@ pub mod nonlinearities {
     pub fn ceil(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
-            let rounded = kix.ceil();
+            let rounded = kix.ceil() * scale;
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()
@@ -2780,7 +2790,7 @@ pub mod nonlinearities {
     pub fn floor(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
-            let rounded = kix.floor();
+            let rounded = kix.floor() * scale;
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()
@@ -2805,7 +2815,7 @@ pub mod nonlinearities {
     pub fn round(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
-            let rounded = kix.round();
+            let rounded = kix.round() * scale;
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()
@@ -2830,7 +2840,7 @@ pub mod nonlinearities {
     pub fn round_half_to_even(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
-            let rounded = kix.round_ties_even();
+            let rounded = kix.round_ties_even() * scale;
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()

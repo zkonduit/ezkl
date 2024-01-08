@@ -1041,10 +1041,12 @@ mod conv {
                         config
                             .layout(
                                 &mut region,
-                                &[self.inputs[0].clone().try_into().unwrap()],
+                                &[
+                                    self.inputs[0].clone().try_into().unwrap(),
+                                    self.inputs[1].clone().try_into().unwrap(),
+                                    self.inputs[2].clone().try_into().unwrap(),
+                                ],
                                 Box::new(PolyOp::Conv {
-                                    kernel: self.inputs[1].clone(),
-                                    bias: None,
                                     padding: [(1, 1); 2],
                                     stride: (2, 2),
                                 }),
@@ -1144,7 +1146,7 @@ mod conv_col_ultra_overflow {
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
         image: ValTensor<F>,
-        kernel: Tensor<F>,
+        kernel: ValTensor<F>,
         _marker: PhantomData<F>,
     }
 
@@ -1177,10 +1179,8 @@ mod conv_col_ultra_overflow {
                         config
                             .layout(
                                 &mut region,
-                                &[self.image.clone()],
+                                &[self.image.clone(), self.kernel.clone()],
                                 Box::new(PolyOp::Conv {
-                                    kernel: self.kernel.clone(),
-                                    bias: None,
                                     padding: [(1, 1); 2],
                                     stride: (2, 2),
                                 }),
@@ -1224,7 +1224,7 @@ mod conv_col_ultra_overflow {
 
         let circuit = ConvCircuit::<F> {
             image: ValTensor::try_from(image).unwrap(),
-            kernel: kernels,
+            kernel: ValTensor::try_from(kernels).unwrap(),
             _marker: PhantomData,
         };
 
@@ -1281,7 +1281,7 @@ mod conv_relu_col_ultra_overflow {
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
         image: ValTensor<F>,
-        kernel: Tensor<F>,
+        kernel: ValTensor<F>,
         _marker: PhantomData<F>,
     }
 
@@ -1321,10 +1321,8 @@ mod conv_relu_col_ultra_overflow {
                         let output = config
                             .layout(
                                 &mut region,
-                                &[self.image.clone()],
+                                &[self.image.clone(), self.kernel.clone()],
                                 Box::new(PolyOp::Conv {
-                                    kernel: self.kernel.clone(),
-                                    bias: None,
                                     padding: [(1, 1); 2],
                                     stride: (2, 2),
                                 }),
@@ -1376,7 +1374,7 @@ mod conv_relu_col_ultra_overflow {
 
         let circuit = ConvCircuit::<F> {
             image: ValTensor::try_from(image).unwrap(),
-            kernel: kernels,
+            kernel: ValTensor::try_from(kernels).unwrap(),
             _marker: PhantomData,
         };
 

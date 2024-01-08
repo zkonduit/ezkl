@@ -231,11 +231,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             | LookupOp::LessThan { .. }
             | LookupOp::GreaterThanEqual { .. }
             | LookupOp::LessThanEqual { .. }
-            | LookupOp::KroneckerDelta
-            | LookupOp::Round { .. }
-            | LookupOp::RoundHalfToEven { .. }
-            | LookupOp::Ceil { .. }
-            | LookupOp::Floor { .. } => 0,
+            | LookupOp::KroneckerDelta => 0,
             _ => inputs_scale[0],
         };
         Ok(scale)
