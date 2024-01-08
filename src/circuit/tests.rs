@@ -1008,7 +1008,7 @@ mod conv {
 
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
-        inputs: Vec<Tensor<F>>,
+        inputs: Vec<ValTensor<F>>,
         _marker: PhantomData<F>,
     }
 
@@ -1041,11 +1041,7 @@ mod conv {
                         config
                             .layout(
                                 &mut region,
-                                &[
-                                    self.inputs[0].clone().try_into().unwrap(),
-                                    self.inputs[1].clone().try_into().unwrap(),
-                                    self.inputs[2].clone().try_into().unwrap(),
-                                ],
+                                &self.inputs,
                                 Box::new(PolyOp::Conv {
                                     padding: [(1, 1); 2],
                                     stride: (2, 2),
@@ -1076,6 +1072,8 @@ mod conv {
             .unwrap();
         image.set_visibility(&crate::graph::Visibility::Private);
 
+        let image = ValTensor::try_from(image).unwrap();
+
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width })
                 .map(|_| F::random(OsRng)),
@@ -1085,8 +1083,11 @@ mod conv {
             .unwrap();
         kernels.set_visibility(&crate::graph::Visibility::Private);
 
+        let kernels = ValTensor::try_from(kernels).unwrap();
         let mut bias = Tensor::from((0..{ out_channels }).map(|_| F::random(OsRng)));
         bias.set_visibility(&crate::graph::Visibility::Private);
+
+        let bias = ValTensor::try_from(bias).unwrap();
 
         let circuit = ConvCircuit::<F> {
             inputs: [image, kernels, bias].to_vec(),
@@ -1122,6 +1123,9 @@ mod conv {
             .reshape(&[out_channels, in_channels, kernel_height, kernel_width])
             .unwrap();
         kernels.set_visibility(&crate::graph::Visibility::Private);
+
+        let image = ValTensor::try_from(image).unwrap();
+        let kernels = ValTensor::try_from(kernels).unwrap();
 
         let circuit = ConvCircuit::<F> {
             inputs: [image, kernels].to_vec(),
