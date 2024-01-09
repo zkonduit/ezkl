@@ -1840,7 +1840,7 @@ pub fn conv<
             bias.reshape(&[1])?;
         }
 
-        if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
+        if (bias.dims().len() != 1) && (bias.dims()[0] != kernel.dims()[0]) {
             return Err(TensorError::DimMismatch("conv bias".to_string()));
         }
     }
@@ -1920,7 +1920,12 @@ pub fn conv<
 
         let res = dot(&[local_image, local_kernel]).unwrap()[0].clone();
         if has_bias {
-            *o = res + inputs[2][start_kernel_index].clone();
+            let bias_index = if inputs[2].len() > 1 {
+                start_kernel_index
+            } else {
+                0
+            };
+            *o = res + inputs[2][bias_index].clone();
         } else {
             *o = res;
         }
@@ -2194,7 +2199,7 @@ pub fn deconv<
 
     if stride.0 == 0 || stride.1 == 0 {
         return Err(TensorError::DimMismatch(
-            "non-positive stride is not supported for deconv".to_string(),
+            "nil stride is not supported for deconv".to_string(),
         ));
     }
 
@@ -2205,7 +2210,7 @@ pub fn deconv<
             bias.reshape(&[1])?;
         }
 
-        if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
+        if (bias.dims().len() != 1) && (bias.dims()[0] != kernel.dims()[0]) {
             return Err(TensorError::DimMismatch("deconv bias".to_string()));
         }
     }
