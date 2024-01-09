@@ -2060,7 +2060,13 @@ pub fn conv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std::m
         let mut res = einsum(config, region, &[local_image, local_kernel], "i,i->")?;
 
         if has_bias {
-            let bias = values[2].get_single_elem(start_kernel_index)?;
+            let bias_index = if values[2].len() > 1 {
+                start_kernel_index
+            } else {
+                0
+            };
+
+            let bias = values[2].get_single_elem(bias_index)?;
             res = pairwise(config, region, &[res, bias], BaseOp::Add)?;
         }
         region.flush()?;

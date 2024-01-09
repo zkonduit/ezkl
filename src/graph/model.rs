@@ -784,7 +784,6 @@ impl Model {
             let symbol = model.symbol_table.sym(symbol);
             symbol_values = symbol_values.with(&symbol, *value as i64);
             info!("set {} to {}", symbol, value);
-            println!("set {} to {}", symbol, value);
         }
 
         // Note: do not optimize the model, as the layout will depend on underlying hardware
