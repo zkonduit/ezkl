@@ -7,6 +7,7 @@ use super::{Rescaled, SupportedOp, Visibility};
 use crate::circuit::hybrid::HybridOp;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::lookup::LookupOp;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::poly::PolyOp;
 use crate::circuit::Op;
 use crate::tensor::{Tensor, TensorError, TensorType};
@@ -24,7 +25,7 @@ use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 use tract_onnx::tract_core::ops::{
     array::{Gather, GatherElements, MultiBroadcastTo, OneHot, ScatterElements, Slice, Topk},
     change_axes::AxisOp,
-    cnn::DeconvUnary,
+    cnn::{Conv, Deconv},
     einsum::EinSum,
     element_wise::ElementWiseOp,
     nn::{LeakyRelu, Reduce, Softmax},
@@ -34,7 +35,7 @@ use tract_onnx::tract_core::ops::{
 use tract_onnx::tract_hir::{
     internal::DimLike,
     ops::array::{Pad, PadMode, TypedConcat},
-    ops::cnn::{ConvUnary, PoolSpec},
+    ops::cnn::PoolSpec,
     ops::konst::Const,
     ops::nn::DataFormat,
     tract_core::ops::cast::Cast,
@@ -246,9 +247,74 @@ pub fn new_op_from_onnx(
 ) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
     use crate::circuit::InputType;
 
+    let input_scales = inputs
+        .iter()
+        .flat_map(|x| x.out_scales())
+        .collect::<Vec<_>>();
+
+    let mut replace_const = |scale: crate::Scale,
+                             index: usize,
+                             default_op: SupportedOp|
+     -> Result<SupportedOp, Box<dyn std::error::Error>> {
+        let mut constant = inputs[index].opkind();
+        let constant = constant.get_mutable_constant();
+        if let Some(c) = constant {
+            inputs[index].bump_scale(scale);
+            c.rebase_scale(scale)?;
+            inputs[index].replace_opkind(SupportedOp::Constant(c.clone()));
+            Ok(SupportedOp::Linear(PolyOp::Identity))
+        } else {
+            Ok(default_op)
+        }
+    };
+
     debug!("Loading node: {:?}", node);
     let mut deleted_indices = vec![];
     let node = match node.op().name().as_ref() {
+        "ShiftLeft" => {
+            // load shift amount
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(1);
+                let raw_values = &c.raw_values;
+                if raw_values.len() != 1 {
+                    return Err(Box::new(GraphError::InvalidDims(
+                        idx,
+                        "shift left".to_string(),
+                    )));
+                }
+                SupportedOp::Nonlinear(LookupOp::Div {
+                    denom: crate::circuit::utils::F32(1.0 / 2.0f32.powf(raw_values[0])),
+                })
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(
+                    idx,
+                    "ShiftLeft".to_string(),
+                )));
+            }
+        }
+        "ShiftRight" => {
+            // load shift amount
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(1);
+                let raw_values = &c.raw_values;
+                if raw_values.len() != 1 {
+                    return Err(Box::new(GraphError::InvalidDims(
+                        idx,
+                        "shift right".to_string(),
+                    )));
+                }
+                SupportedOp::Nonlinear(LookupOp::Div {
+                    denom: crate::circuit::utils::F32(2.0f32.powf(raw_values[0])),
+                })
+            } else {
+                return Err(Box::new(GraphError::OpMismatch(
+                    idx,
+                    "ShiftRight".to_string(),
+                )));
+            }
+        }
         "MultiBroadcastTo" => {
             let op = load_op::<MultiBroadcastTo>(node.op(), idx, node.op().name().to_string())?;
             let shape = op.shape.clone();
@@ -765,27 +831,8 @@ pub fn new_op_from_onnx(
         "Cast" => {
             let op = load_op::<Cast>(node.op(), idx, node.op().name().to_string())?;
             let dt = op.to;
-            let input_scales = inputs
-                .iter()
-                .flat_map(|x| x.out_scales())
-                .collect::<Vec<_>>();
+
             assert_eq!(input_scales.len(), 1);
-
-            let mut constant = inputs[0].opkind();
-            let constant = constant.get_mutable_constant();
-
-            let replace_const = |scale: crate::Scale,
-                                 default_op: SupportedOp|
-             -> Result<SupportedOp, Box<dyn std::error::Error>> {
-                if let Some(c) = constant {
-                    inputs[0].bump_scale(scale);
-                    c.rebase_scale(scale)?;
-                    inputs[0].replace_opkind(SupportedOp::Constant(c.clone()));
-                    Ok(SupportedOp::Linear(PolyOp::Identity))
-                } else {
-                    Ok(default_op)
-                }
-            };
 
             match dt {
                 DatumType::Bool
@@ -800,6 +847,7 @@ pub fn new_op_from_onnx(
                 | DatumType::U64 => {
                     if input_scales[0] != 0 {
                         replace_const(
+                            0,
                             0,
                             SupportedOp::Nonlinear(LookupOp::Cast {
                                 scale: crate::circuit::utils::F32(scale_to_multiplier(
@@ -1015,8 +1063,8 @@ pub fn new_op_from_onnx(
         }
         "Cube" => SupportedOp::Linear(PolyOp::Pow(3)),
         "Square" => SupportedOp::Linear(PolyOp::Pow(2)),
-        "ConvUnary" => {
-            let conv_node: &ConvUnary = match node.op().downcast_ref::<ConvUnary>() {
+        "Conv" => {
+            let conv_node: &Conv = match node.op().downcast_ref::<Conv>() {
                 Some(b) => b,
                 None => {
                     return Err(Box::new(GraphError::OpMismatch(idx, "conv".to_string())));
@@ -1074,37 +1122,31 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            let kernel = extract_tensor_value(conv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
+            // if bias exists then rescale it to the input + kernel scale
+            if input_scales.len() == 3 {
+                let bias_scale = input_scales[2];
+                let input_scale = input_scales[0];
+                let kernel_scale = input_scales[1];
 
-            let bias = match conv_node.bias.clone() {
-                Some(b) => {
-                    let const_value = extract_tensor_value(b)?;
-
-                    let val = quantize_tensor(
-                        const_value,
-                        scales.params + inputs[0].out_scales()[0],
-                        param_visibility,
+                let output_scale = input_scale + kernel_scale;
+                if bias_scale != output_scale {
+                    replace_const(
+                        output_scale,
+                        2,
+                        SupportedOp::Unknown(crate::circuit::Unknown),
                     )?;
-                    Some(val)
                 }
-                None => None,
-            };
+            }
 
-            SupportedOp::Linear(PolyOp::Conv {
-                kernel,
-                bias,
-                padding,
-                stride,
-            })
+            SupportedOp::Linear(PolyOp::Conv { padding, stride })
         }
         "Not" => SupportedOp::Linear(PolyOp::Not),
         "And" => SupportedOp::Linear(PolyOp::And),
         "Or" => SupportedOp::Linear(PolyOp::Or),
         "Xor" => SupportedOp::Linear(PolyOp::Xor),
         "Equals" => SupportedOp::Hybrid(HybridOp::Equals),
-        "DeconvUnary" => {
-            let deconv_node: &DeconvUnary = match node.op().downcast_ref::<DeconvUnary>() {
+        "Deconv" => {
+            let deconv_node: &Deconv = match node.op().downcast_ref::<Deconv>() {
                 Some(b) => b,
                 None => {
                     return Err(Box::new(GraphError::OpMismatch(idx, "deconv".to_string())));
@@ -1152,29 +1194,26 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            let kernel = extract_tensor_value(deconv_node.kernel.clone())?;
-            let kernel = quantize_tensor(kernel, scales.params, param_visibility)?;
-
-            let bias = match deconv_node.bias.clone() {
-                Some(b) => {
-                    let const_value = extract_tensor_value(b)?;
-
-                    let val = quantize_tensor(
-                        const_value,
-                        scales.params + inputs[0].out_scales()[0],
-                        param_visibility,
-                    )?;
-                    Some(val)
-                }
-                None => None,
-            };
-
             let output_padding: (usize, usize) =
                 (deconv_node.adjustments[0], deconv_node.adjustments[1]);
 
+            // if bias exists then rescale it to the input + kernel scale
+            if input_scales.len() == 3 {
+                let bias_scale = input_scales[2];
+                let input_scale = input_scales[0];
+                let kernel_scale = input_scales[1];
+
+                let output_scale = input_scale + kernel_scale;
+                if bias_scale != output_scale {
+                    replace_const(
+                        output_scale,
+                        2,
+                        SupportedOp::Unknown(crate::circuit::Unknown),
+                    )?;
+                }
+            }
+
             SupportedOp::Linear(PolyOp::DeConv {
-                kernel,
-                bias,
                 padding,
                 output_padding,
                 stride,
@@ -1406,18 +1445,6 @@ pub fn extract_const_quantized_values(op: SupportedOp) -> Option<Tensor<Fp>> {
         }) => Some(quantized_values),
         _ => None,
     }
-}
-
-/// Extract the quantized values from a conv op
-pub fn extract_conv_values(boxed_op: Box<dyn crate::circuit::Op<Fp>>) -> [Option<Tensor<Fp>>; 2] {
-    let op = boxed_op
-        .as_any()
-        .downcast_ref::<crate::circuit::ops::poly::PolyOp<Fp>>();
-
-    if let Some(PolyOp::Conv { kernel, bias, .. }) = op {
-        return [Some(kernel.clone()), bias.clone()];
-    }
-    [None, None]
 }
 
 /// Converts a tensor to a [ValTensor] with a given scale.

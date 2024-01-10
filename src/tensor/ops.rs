@@ -1834,8 +1834,13 @@ pub fn conv<
     let kernel_dims = kernel.dims();
 
     if has_bias {
-        let bias = &inputs[2];
-        if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
+        let bias = &mut inputs[2].clone();
+
+        if bias.dims().is_empty() {
+            bias.reshape(&[1])?;
+        }
+
+        if (bias.dims().len() != 1) && (bias.dims()[0] != kernel.dims()[0]) {
             return Err(TensorError::DimMismatch("conv bias".to_string()));
         }
     }
@@ -1915,7 +1920,12 @@ pub fn conv<
 
         let res = dot(&[local_image, local_kernel]).unwrap()[0].clone();
         if has_bias {
-            *o = res + inputs[2][start_kernel_index].clone();
+            let bias_index = if inputs[2].len() > 1 {
+                start_kernel_index
+            } else {
+                0
+            };
+            *o = res + inputs[2][bias_index].clone();
         } else {
             *o = res;
         }
@@ -2189,13 +2199,18 @@ pub fn deconv<
 
     if stride.0 == 0 || stride.1 == 0 {
         return Err(TensorError::DimMismatch(
-            "non-positive stride is not supported for deconv".to_string(),
+            "nil stride is not supported for deconv".to_string(),
         ));
     }
 
     if has_bias {
-        let bias = &inputs[2];
-        if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
+        let bias = &mut inputs[2].clone();
+
+        if bias.dims().is_empty() {
+            bias.reshape(&[1])?;
+        }
+
+        if (bias.dims().len() != 1) && (bias.dims()[0] != kernel.dims()[0]) {
             return Err(TensorError::DimMismatch("deconv bias".to_string()));
         }
     }
@@ -2749,13 +2764,13 @@ pub mod nonlinearities {
     ///  &[3, 2],
     /// ).unwrap();
     /// let result = ceil(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn ceil(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
-            let rounded = kix.ceil();
+            let rounded = kix.ceil() * scale;
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()
@@ -2774,13 +2789,13 @@ pub mod nonlinearities {
     ///  &[3, 2],
     /// ).unwrap();
     /// let result = floor(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 1, 2, 2, 3]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[0, 2, 2, 4, 4, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn floor(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
-            let rounded = kix.floor();
+            let rounded = kix.floor() * scale;
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()
@@ -2799,13 +2814,13 @@ pub mod nonlinearities {
     /// &[3, 2],
     /// ).unwrap();
     /// let result = round(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn round(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
-            let rounded = kix.round();
+            let rounded = kix.round() * scale;
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()
@@ -2824,13 +2839,13 @@ pub mod nonlinearities {
     /// &[3, 2],
     /// ).unwrap();
     /// let result = round_half_to_even(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 2, 2, 2, 3]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[0, 2, 4, 4, 4, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn round_half_to_even(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
-            let rounded = kix.round_ties_even();
+            let rounded = kix.round_ties_even() * scale;
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()

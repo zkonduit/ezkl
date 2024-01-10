@@ -82,8 +82,8 @@ struct MyCircuit<
     // Given the stateless ConvConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
     input: ValTensor<F>,
-    l0_params: [Tensor<F>; 2],
-    l2_params: [Tensor<F>; 2],
+    l0_params: [ValTensor<F>; 2],
+    l2_params: [ValTensor<F>; 2],
 }
 
 impl<
@@ -202,14 +202,20 @@ where
                     let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
 
                     let op = PolyOp::Conv {
-                        kernel: self.l0_params[0].clone(),
-                        bias: Some(self.l0_params[1].clone()),
                         padding: [(PADDING, PADDING); 2],
                         stride: (STRIDE, STRIDE),
                     };
                     let x = config
                         .layer_config
-                        .layout(&mut region, &[self.input.clone()], Box::new(op))
+                        .layout(
+                            &mut region,
+                            &[
+                                self.input.clone(),
+                                self.l0_params[0].clone(),
+                                self.l0_params[1].clone(),
+                            ],
+                            Box::new(op),
+                        )
                         .unwrap();
 
                     let x = config
@@ -233,7 +239,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[self.l2_params[0].clone().try_into().unwrap(), x],
+                            &[self.l2_params[0].clone(), x],
                             Box::new(PolyOp::Einsum {
                                 equation: "ij,j->ik".to_string(),
                             }),
@@ -245,7 +251,7 @@ where
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x, self.l2_params[1].clone().try_into().unwrap()],
+                            &[x, self.l2_params[1].clone()],
                             Box::new(PolyOp::Add),
                         )
                         .unwrap()
@@ -345,8 +351,12 @@ pub fn runconv() {
         .unwrap();
     l0_kernels.set_visibility(&ezkl::graph::Visibility::Private);
 
+    let l0_kernels = l0_kernels.try_into().unwrap();
+
     let mut l0_bias = Tensor::<F>::from((0..OUT_CHANNELS).map(|_| fieldutils::i32_to_felt(0)));
     l0_bias.set_visibility(&ezkl::graph::Visibility::Private);
+
+    let l0_bias = l0_bias.try_into().unwrap();
 
     let mut l2_biases = Tensor::<F>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * 32_f32;
@@ -357,6 +367,8 @@ pub fn runconv() {
     l2_biases.set_visibility(&ezkl::graph::Visibility::Private);
     l2_biases.reshape(&[l2_biases.len(), 1]).unwrap();
 
+    let l2_biases = l2_biases.try_into().unwrap();
+
     let mut l2_weights = Tensor::<F>::from(myparams.weights.into_iter().flatten().map(|fl| {
         let dx = fl * 32_f32;
         let rounded = dx.round();
@@ -365,6 +377,8 @@ pub fn runconv() {
     }));
     l2_weights.set_visibility(&ezkl::graph::Visibility::Private);
     l2_weights.reshape(&[CLASSES, LEN]).unwrap();
+
+    let l2_weights = l2_weights.try_into().unwrap();
 
     let circuit = MyCircuit::<
         LEN,

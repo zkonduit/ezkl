@@ -262,7 +262,7 @@ impl Op<Fp> for RebaseScale {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SupportedOp {
     /// A linear operation.
-    Linear(PolyOp<Fp>),
+    Linear(PolyOp),
     /// A nonlinear operation.
     Nonlinear(LookupOp),
     /// A hybrid operation.
@@ -356,7 +356,7 @@ impl SupportedOp {
 
 impl From<Box<dyn Op<Fp>>> for SupportedOp {
     fn from(value: Box<dyn Op<Fp>>) -> Self {
-        if let Some(op) = value.as_any().downcast_ref::<PolyOp<Fp>>() {
+        if let Some(op) = value.as_any().downcast_ref::<PolyOp>() {
             return SupportedOp::Linear(op.clone());
         };
 

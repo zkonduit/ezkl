@@ -8,7 +8,7 @@ use super::{base::BaseOp, *};
 #[allow(missing_docs)]
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
+pub enum PolyOp {
     MultiBroadcastTo {
         shape: Vec<usize>,
     },
@@ -16,8 +16,6 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         equation: String,
     },
     Conv {
-        kernel: Tensor<F>,
-        bias: Option<Tensor<F>>,
         padding: [(usize, usize); 2],
         stride: (usize, usize),
     },
@@ -27,8 +25,6 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
         modulo: usize,
     },
     DeConv {
-        kernel: Tensor<F>,
-        bias: Option<Tensor<F>>,
         padding: [(usize, usize); 2],
         output_padding: (usize, usize),
         stride: (usize, usize),
@@ -73,10 +69,8 @@ pub enum PolyOp<F: PrimeField + TensorType + PartialOrd> {
     Xor,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> PolyOp<F> {}
-
 impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F>
-    for PolyOp<F>
+    for PolyOp
 {
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {
@@ -166,31 +160,12 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Neg => tensor::ops::neg(&inputs[0]),
             PolyOp::Sub => tensor::ops::sub(&inputs),
             PolyOp::Mult => tensor::ops::mult(&inputs),
-            PolyOp::Conv {
-                kernel: a,
-                bias,
-                padding,
-                stride,
-            } => {
-                inputs.push(a.clone());
-                if let Some(b) = bias {
-                    inputs.push(b.clone());
-                }
-                tensor::ops::conv(&inputs, *padding, *stride)
-            }
+            PolyOp::Conv { padding, stride } => tensor::ops::conv(&inputs, *padding, *stride),
             PolyOp::DeConv {
-                kernel: a,
-                bias,
                 padding,
                 output_padding,
                 stride,
-            } => {
-                inputs.push(a.clone());
-                if let Some(b) = bias {
-                    inputs.push(b.clone());
-                }
-                tensor::ops::deconv(&inputs, *padding, *output_padding, *stride)
-            }
+            } => tensor::ops::deconv(&inputs, *padding, *output_padding, *stride),
             PolyOp::Pack(base, scale) => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("pack inputs".to_string()));
@@ -240,8 +215,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        let mut values = values.to_vec();
-
         Ok(Some(match self {
             PolyOp::MultiBroadcastTo { shape } => {
                 layouts::expand(config, region, values[..].try_into()?, shape)?
@@ -271,38 +244,21 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Prod { axes, .. } => {
                 layouts::prod_axes(config, region, values[..].try_into()?, axes)?
             }
-            PolyOp::Conv {
-                kernel,
-                bias,
-                padding,
-                stride,
-            } => {
-                values.push(kernel.clone().try_into()?);
-                if let Some(bias) = bias {
-                    values.push(bias.clone().try_into()?);
-                }
+            PolyOp::Conv { padding, stride } => {
                 layouts::conv(config, region, values[..].try_into()?, *padding, *stride)?
             }
             PolyOp::DeConv {
-                kernel,
-                bias,
                 padding,
                 output_padding,
                 stride,
-            } => {
-                values.push(kernel.clone().try_into()?);
-                if let Some(bias) = bias {
-                    values.push(bias.clone().try_into()?);
-                }
-                layouts::deconv(
-                    config,
-                    region,
-                    values[..].try_into()?,
-                    *padding,
-                    *output_padding,
-                    *stride,
-                )?
-            }
+            } => layouts::deconv(
+                config,
+                region,
+                values[..].try_into()?,
+                *padding,
+                *output_padding,
+                *stride,
+            )?,
             PolyOp::Add => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?,
             PolyOp::Sub => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub)?,
             PolyOp::Mult => {
@@ -350,32 +306,22 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             }
             PolyOp::Prod { len_prod, .. } => in_scales[0] * (*len_prod as crate::Scale),
             PolyOp::Sum { .. } => in_scales[0],
-            PolyOp::Conv { kernel, bias, .. } => {
-                let kernel_scale = match kernel.scale() {
-                    Some(s) => s,
-                    None => return Err("scale must be set for conv kernel".into()),
-                };
-                let output_scale = in_scales[0] + kernel_scale;
-                if let Some(b) = bias {
-                    let bias_scale = match b.scale() {
-                        Some(s) => s,
-                        None => return Err("scale must be set for conv bias".into()),
-                    };
+            PolyOp::Conv { .. } => {
+                let input_scale = in_scales[0];
+                let kernel_scale = in_scales[1];
+                let output_scale = input_scale + kernel_scale;
+                if in_scales.len() == 3 {
+                    let bias_scale = in_scales[2];
                     assert_eq!(output_scale, bias_scale);
                 }
                 output_scale
             }
-            PolyOp::DeConv { kernel, bias, .. } => {
-                let kernel_scale = match kernel.scale() {
-                    Some(s) => s,
-                    None => return Err("scale must be set for deconv kernel".into()),
-                };
-                let output_scale = in_scales[0] + kernel_scale;
-                if let Some(b) = bias {
-                    let bias_scale = match b.scale() {
-                        Some(s) => s,
-                        None => return Err("scale must be set for deconv bias".into()),
-                    };
+            PolyOp::DeConv { .. } => {
+                let input_scale = in_scales[0];
+                let kernel_scale = in_scales[1];
+                let output_scale = input_scale + kernel_scale;
+                if in_scales.len() == 3 {
+                    let bias_scale = in_scales[2];
                     assert_eq!(output_scale, bias_scale);
                 }
                 output_scale

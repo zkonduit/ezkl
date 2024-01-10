@@ -1008,7 +1008,7 @@ mod conv {
 
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
-        inputs: Vec<Tensor<F>>,
+        inputs: Vec<ValTensor<F>>,
         _marker: PhantomData<F>,
     }
 
@@ -1041,10 +1041,8 @@ mod conv {
                         config
                             .layout(
                                 &mut region,
-                                &[self.inputs[0].clone().try_into().unwrap()],
+                                &self.inputs,
                                 Box::new(PolyOp::Conv {
-                                    kernel: self.inputs[1].clone(),
-                                    bias: None,
                                     padding: [(1, 1); 2],
                                     stride: (2, 2),
                                 }),
@@ -1074,6 +1072,8 @@ mod conv {
             .unwrap();
         image.set_visibility(&crate::graph::Visibility::Private);
 
+        let image = ValTensor::try_from(image).unwrap();
+
         let mut kernels = Tensor::from(
             (0..{ out_channels * in_channels * kernel_height * kernel_width })
                 .map(|_| F::random(OsRng)),
@@ -1083,8 +1083,11 @@ mod conv {
             .unwrap();
         kernels.set_visibility(&crate::graph::Visibility::Private);
 
+        let kernels = ValTensor::try_from(kernels).unwrap();
         let mut bias = Tensor::from((0..{ out_channels }).map(|_| F::random(OsRng)));
         bias.set_visibility(&crate::graph::Visibility::Private);
+
+        let bias = ValTensor::try_from(bias).unwrap();
 
         let circuit = ConvCircuit::<F> {
             inputs: [image, kernels, bias].to_vec(),
@@ -1121,6 +1124,9 @@ mod conv {
             .unwrap();
         kernels.set_visibility(&crate::graph::Visibility::Private);
 
+        let image = ValTensor::try_from(image).unwrap();
+        let kernels = ValTensor::try_from(kernels).unwrap();
+
         let circuit = ConvCircuit::<F> {
             inputs: [image, kernels].to_vec(),
             _marker: PhantomData,
@@ -1144,7 +1150,7 @@ mod conv_col_ultra_overflow {
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
         image: ValTensor<F>,
-        kernel: Tensor<F>,
+        kernel: ValTensor<F>,
         _marker: PhantomData<F>,
     }
 
@@ -1177,10 +1183,8 @@ mod conv_col_ultra_overflow {
                         config
                             .layout(
                                 &mut region,
-                                &[self.image.clone()],
+                                &[self.image.clone(), self.kernel.clone()],
                                 Box::new(PolyOp::Conv {
-                                    kernel: self.kernel.clone(),
-                                    bias: None,
                                     padding: [(1, 1); 2],
                                     stride: (2, 2),
                                 }),
@@ -1224,7 +1228,7 @@ mod conv_col_ultra_overflow {
 
         let circuit = ConvCircuit::<F> {
             image: ValTensor::try_from(image).unwrap(),
-            kernel: kernels,
+            kernel: ValTensor::try_from(kernels).unwrap(),
             _marker: PhantomData,
         };
 
@@ -1281,7 +1285,7 @@ mod conv_relu_col_ultra_overflow {
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
         image: ValTensor<F>,
-        kernel: Tensor<F>,
+        kernel: ValTensor<F>,
         _marker: PhantomData<F>,
     }
 
@@ -1321,10 +1325,8 @@ mod conv_relu_col_ultra_overflow {
                         let output = config
                             .layout(
                                 &mut region,
-                                &[self.image.clone()],
+                                &[self.image.clone(), self.kernel.clone()],
                                 Box::new(PolyOp::Conv {
-                                    kernel: self.kernel.clone(),
-                                    bias: None,
                                     padding: [(1, 1); 2],
                                     stride: (2, 2),
                                 }),
@@ -1376,7 +1378,7 @@ mod conv_relu_col_ultra_overflow {
 
         let circuit = ConvCircuit::<F> {
             image: ValTensor::try_from(image).unwrap(),
-            kernel: kernels,
+            kernel: ValTensor::try_from(kernels).unwrap(),
             _marker: PhantomData,
         };
 
