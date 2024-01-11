@@ -475,7 +475,7 @@ pub enum Commands {
         num_runs: usize,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    /// TODO:
+    /// Deploys a test contact that the data attester reads from and creates a data attestation formatted input.json file that contains call data information
     #[command(arg_required_else_help = true)]
     SetupTestEVMData {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
@@ -500,7 +500,7 @@ pub enum Commands {
         output_source: TestDataSource,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    /// TODO:
+    /// The Data Attestation Verifier contract stores the account calls to fetch data to feed into ezkl. This call data can be updated by an admin account. This tests that admin account is able to update this call data.
     #[command(arg_required_else_help = true)]
     TestUpdateAccountCalls {
         /// The path to the verifier contract's address
