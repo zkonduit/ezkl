@@ -157,7 +157,7 @@ ezkl = ["onnx", "serde", "serde_json", "log", "colored", "env_logger", "tabled/c
 mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup", "halo2_solidity_verifier/mv-lookup"]
 det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
-
+empty-cmd = []
 
 # icicle patch to 0.1.0 if feature icicle is enabled
 [patch.'https://github.com/ingonyama-zk/icicle']
