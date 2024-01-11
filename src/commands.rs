@@ -232,8 +232,8 @@ impl Cli {
 #[allow(missing_docs)]
 #[derive(Debug, Subcommand, Clone, Deserialize, Serialize, PartialEq, PartialOrd)]
 pub enum Commands {
-    #[cfg(feature = "lilith")]
-    /// Creates an empty buffer to provide commands when using the Lilith cluster
+    #[cfg(feature = "empty-cmd")]
+    /// Creates an empty buffer
     Empty,
     /// Loads model and prints model table
     Table {

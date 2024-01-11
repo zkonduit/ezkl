@@ -132,7 +132,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
     std::env::set_current_dir(WORKING_DIR.as_path())?;
 
     match command {
-        #[cfg(feature = "lilith")]
+        #[cfg(feature = "empty-cmd")]
         Commands::Empty => Ok(String::new()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Fuzz {
