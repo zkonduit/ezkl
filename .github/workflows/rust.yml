@@ -663,12 +663,12 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
-      - name: Tictactoe tutorials
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 2
-      # - name: Postgres tutorials
-      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
       - name: All notebooks
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 8
+      - name: Tictactoe tutorials
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
+      # - name: Postgres tutorials
+      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       - name: Voice tutorial
