@@ -1901,6 +1901,20 @@ mod native_tests {
                     .map(|h| vec![FileSourceInner::Field(*h)])
                     .collect(),
             ));
+        } else {
+            input.output_data = Some(DataSource::File(
+                witness
+                    .pretty_elements
+                    .unwrap()
+                    .rescaled_outputs
+                    .iter()
+                    .map(|o| {
+                        o.iter()
+                            .map(|f| FileSourceInner::Float(f.parse().unwrap()))
+                            .collect()
+                    })
+                    .collect(),
+            ));
         }
 
         input.save(data_path.clone().into()).unwrap();
