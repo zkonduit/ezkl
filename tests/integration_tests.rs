@@ -516,7 +516,7 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "accuracy", 1.2);
+                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "accuracy", 2.6);
                 test_dir.close().unwrap();
             }
 
@@ -526,7 +526,7 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "private", "fixed", "private", 1, "accuracy", 1.2);
+                accuracy_measurement(path, test.to_string(), "private", "fixed", "private", 1, "accuracy", 2.6);
                 test_dir.close().unwrap();
             }
 
@@ -536,7 +536,7 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "public", "private", "private", 1, "accuracy", 1.2);
+                accuracy_measurement(path, test.to_string(), "public", "private", "private", 1, "accuracy", 2.6);
                 test_dir.close().unwrap();
             }
 
