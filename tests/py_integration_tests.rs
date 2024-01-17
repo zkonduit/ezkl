@@ -98,7 +98,7 @@ mod py_tests {
     fn init_binary() {
         COMPILE.call_once(|| {
             println!("using cargo target dir: {}", *CARGO_TARGET_DIR);
-            setup_py_env();
+            // setup_py_env();
         });
     }
 
