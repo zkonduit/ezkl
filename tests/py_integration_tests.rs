@@ -118,6 +118,7 @@ mod py_tests {
     }
 
     const TESTS: [&str; 32] = [
+        "variance.ipynb",
         "proof_splitting.ipynb",
         "mnist_gan_proof_splitting.ipynb",
         "mnist_gan.ipynb",
@@ -126,7 +127,6 @@ mod py_tests {
         "hashed_vis.ipynb",
         "simple_demo_all_public.ipynb",
         "data_attest.ipynb",
-        "variance.ipynb",
         "little_transformer.ipynb",
         "simple_demo_aggregated_proofs.ipynb",
         "ezkl_demo.ipynb",
