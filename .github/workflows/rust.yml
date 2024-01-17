@@ -611,10 +611,7 @@ jobs:
         run: source .env/bin/activate; cargo nextest run --release --verbose tests::resources_accuracy_measurement_public_outputs_
 
   python-integration-tests:
-    runs-on:
-      large-self-hosted
-      # Service containers to run with `container-job`
-    # needs: [build,  library-tests, docs]
+    runs-on: large-self-hosted
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
@@ -646,12 +643,12 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: All notebooks
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
       - name: Tictactoe tutorials
         run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
       # - name: Postgres tutorials
       #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
-      - name: All notebooks
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       - name: Voice tutorial
