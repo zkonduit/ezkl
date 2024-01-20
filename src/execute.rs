@@ -823,8 +823,6 @@ pub(crate) fn calibrate(
             "input scale: {}, param scale: {}, scale rebase multiplier: {}",
             input_scale, param_scale, scale_rebase_multiplier
         ));
-        // vec of settings copied chunks.len() times
-        let run_args_iterable = vec![settings.run_args.clone(); chunks.len()];
 
         #[cfg(unix)]
         let _r = match Gag::stdout() {
@@ -836,41 +834,41 @@ pub(crate) fn calibrate(
             Ok(r) => Some(r),
             Err(_) => None,
         };
-
         let key = (input_scale, param_scale, scale_rebase_multiplier);
         forward_pass_res.insert(key, vec![]);
 
-        let tasks = chunks
+        let local_run_args = RunArgs {
+            input_scale,
+            param_scale,
+            scale_rebase_multiplier,
+            ..settings.run_args.clone()
+        };
+
+        let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
+            Ok(c) => c,
+            Err(e) => {
+                // drop the gag
+                #[cfg(unix)]
+                std::mem::drop(_r);
+                #[cfg(unix)]
+                std::mem::drop(_q);
+                debug!("circuit creation from run args failed: {:?}", e);
+                continue;
+            }
+        };
+
+        chunks
             .iter()
-            .zip(run_args_iterable)
-            .map(|(chunk, run_args)| {
-                // we need to create a new run args for each chunk
-                // time it
+            .map(|chunk| {
                 let chunk = chunk.clone();
-                let local_run_args = RunArgs {
-                    input_scale,
-                    param_scale,
-                    scale_rebase_multiplier,
-                    ..run_args.clone()
-                };
-
-                let original_settings = settings.clone();
-
-                let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
-                    Ok(c) => c,
-                    Err(_) => {
-                        return Err(format!("failed to create circuit from run args"))
-                            as Result<GraphSettings, String>
-                    }
-                };
 
                 let data = circuit
                     .load_graph_from_file_exclusively(&chunk)
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                 let forward_res = circuit
-                    .calibrate(&data, max_logrows, lookup_safety_margin)
-                    .map_err(|e| format!("failed to calibrate: {}", e))?;
+                    .forward(&mut data.clone(), None, None)
+                    .map_err(|e| format!("failed to forward: {}", e))?;
 
                 // push result to the hashmap
                 forward_pass_res
@@ -878,38 +876,32 @@ pub(crate) fn calibrate(
                     .ok_or("key not found")?
                     .push(forward_res);
 
-                let settings = circuit.settings().clone();
-
-                let found_run_args = RunArgs {
-                    input_scale: settings.run_args.input_scale,
-                    param_scale: settings.run_args.param_scale,
-                    lookup_range: settings.run_args.lookup_range,
-                    logrows: settings.run_args.logrows,
-                    scale_rebase_multiplier: settings.run_args.scale_rebase_multiplier,
-                    ..run_args.clone()
-                };
-
-                let found_settings = GraphSettings {
-                    run_args: found_run_args,
-                    required_lookups: settings.required_lookups,
-                    model_output_scales: settings.model_output_scales,
-                    model_input_scales: settings.model_input_scales,
-                    num_rows: settings.num_rows,
-                    total_assignments: settings.total_assignments,
-                    total_const_size: settings.total_const_size,
-                    ..original_settings.clone()
-                };
-
-                Ok(found_settings) as Result<GraphSettings, String>
+                Ok(()) as Result<(), String>
             })
-            .collect::<Vec<Result<GraphSettings, String>>>();
+            .collect::<Result<Vec<()>, String>>()?;
 
-        let mut res: Vec<GraphSettings> = vec![];
-        for task in tasks {
-            if let Ok(task) = task {
-                res.push(task);
-            }
-        }
+        let min_lookup_range = forward_pass_res
+            .get(&key)
+            .unwrap()
+            .iter()
+            .map(|x| x.min_lookup_inputs)
+            .min()
+            .unwrap_or(0);
+
+        let max_lookup_range = forward_pass_res
+            .get(&key)
+            .unwrap()
+            .iter()
+            .map(|x| x.max_lookup_inputs)
+            .max()
+            .unwrap_or(0);
+
+        let res = circuit.calibrate_from_min_max(
+            min_lookup_range,
+            max_lookup_range,
+            max_logrows,
+            lookup_safety_margin,
+        );
 
         // drop the gag
         #[cfg(unix)]
@@ -917,31 +909,37 @@ pub(crate) fn calibrate(
         #[cfg(unix)]
         std::mem::drop(_q);
 
-        let max_lookup_range = res
-            .iter()
-            .map(|x| x.run_args.lookup_range.1)
-            .max()
-            .unwrap_or(0);
-        let min_lookup_range = res
-            .iter()
-            .map(|x| x.run_args.lookup_range.0)
-            .min()
-            .unwrap_or(0);
+        if res.is_ok() {
+            let new_settings = circuit.settings().clone();
 
-        if let Some(mut best) = res.into_iter().max_by_key(|p| {
-            (
-                p.run_args.logrows,
-                p.run_args.input_scale,
-                p.run_args.param_scale,
-            )
-        }) {
-            best.run_args.lookup_range = (min_lookup_range, max_lookup_range);
-            // pick the one with the largest logrows
-            found_params.push(best.clone());
+            let found_run_args = RunArgs {
+                input_scale: new_settings.run_args.input_scale,
+                param_scale: new_settings.run_args.param_scale,
+                lookup_range: new_settings.run_args.lookup_range,
+                logrows: new_settings.run_args.logrows,
+                scale_rebase_multiplier: new_settings.run_args.scale_rebase_multiplier,
+                ..settings.run_args.clone()
+            };
+
+            let found_settings = GraphSettings {
+                run_args: found_run_args,
+                required_lookups: new_settings.required_lookups,
+                model_output_scales: new_settings.model_output_scales,
+                model_input_scales: new_settings.model_input_scales,
+                num_rows: new_settings.num_rows,
+                total_assignments: new_settings.total_assignments,
+                total_const_size: new_settings.total_const_size,
+                ..settings.clone()
+            };
+
+            found_params.push(found_settings.clone());
+
             debug!(
                 "found settings: \n {}",
-                best.as_json()?.to_colored_json_auto()?
+                found_settings.as_json()?.to_colored_json_auto()?
             );
+        } else {
+            debug!("calibration failed {}", res.err().unwrap());
         }
 
         pb.inc(1);

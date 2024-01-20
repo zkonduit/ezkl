@@ -956,10 +956,14 @@ impl GraphCircuit {
         (ASSUMED_BLINDING_FACTORS + RESERVED_BLINDING_ROWS_PAD) as f64
     }
 
-    fn calc_safe_lookup_range(res: &GraphWitness, lookup_safety_margin: i128) -> (i128, i128) {
+    fn calc_safe_lookup_range(
+        min_lookup_inputs: i128,
+        max_lookup_inputs: i128,
+        lookup_safety_margin: i128,
+    ) -> (i128, i128) {
         let mut margin = (
-            lookup_safety_margin * res.min_lookup_inputs,
-            lookup_safety_margin * res.max_lookup_inputs,
+            lookup_safety_margin * min_lookup_inputs,
+            lookup_safety_margin * max_lookup_inputs,
         );
         if lookup_safety_margin == 1 {
             margin.0 -= 1;
@@ -978,7 +982,8 @@ impl GraphCircuit {
 
     fn calc_min_logrows(
         &mut self,
-        res: &GraphWitness,
+        min_lookup_inputs: i128,
+        max_lookup_inputs: i128,
         max_logrows: Option<u32>,
         lookup_safety_margin: i128,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -986,19 +991,24 @@ impl GraphCircuit {
         let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
         let max_logrows = std::cmp::min(max_logrows, MAX_PUBLIC_SRS);
         let mut max_logrows = std::cmp::max(max_logrows, MIN_LOGROWS);
+        let mut min_logrows = MIN_LOGROWS;
 
         let reserved_blinding_rows = Self::reserved_blinding_rows();
         // check if has overflowed max lookup input
-        if res.max_lookup_inputs > MAX_LOOKUP_ABS / lookup_safety_margin
-            || res.min_lookup_inputs < -MAX_LOOKUP_ABS / lookup_safety_margin
+        if max_lookup_inputs > MAX_LOOKUP_ABS / lookup_safety_margin
+            || min_lookup_inputs < -MAX_LOOKUP_ABS / lookup_safety_margin
         {
-            let err_string = format!("max lookup input ({}) is too large", res.max_lookup_inputs);
+            let err_string = format!("max lookup input ({}) is too large", max_lookup_inputs);
             error!("{}", err_string);
             return Err(err_string.into());
         }
 
-        let safe_range = Self::calc_safe_lookup_range(res, lookup_safety_margin);
-        let mut min_logrows = MIN_LOGROWS;
+        let safe_range = Self::calc_safe_lookup_range(
+            min_lookup_inputs,
+            max_lookup_inputs,
+            lookup_safety_margin,
+        );
+
         // degrade the max logrows until the extended k is small enough
         while min_logrows < max_logrows
             && !self.extended_k_is_small_enough(
@@ -1020,14 +1030,24 @@ impl GraphCircuit {
             return Err(err_string.into());
         }
 
-        // degrade the max logrows until the extended k is small enough
-        while max_logrows > min_logrows
+        while min_logrows < max_logrows
             && !self.extended_k_is_small_enough(
                 max_logrows,
                 Self::calc_num_cols(safe_range, max_logrows),
             )
         {
             max_logrows -= 1;
+        }
+
+        if !self
+            .extended_k_is_small_enough(max_logrows, Self::calc_num_cols(safe_range, max_logrows))
+        {
+            let err_string = format!(
+                "extended k is too large to accommodate the quotient polynomial with logrows {}",
+                max_logrows
+            );
+            error!("{}", err_string);
+            return Err(err_string.into());
         }
 
         let min_bits = ((safe_range.1 - safe_range.0) as f64 + reserved_blinding_rows + 1.)
@@ -1111,22 +1131,31 @@ impl GraphCircuit {
         // n = 2^k
         let n = 1u64 << k;
         let mut extended_k = k;
+
         while (1 << extended_k) < (n * quotient_poly_degree) {
             extended_k += 1;
+            if !(extended_k <= bn256::Fr::S) {
+                return false;
+            }
         }
-        extended_k <= bn256::Fr::S
+        true
     }
 
     /// Calibrate the circuit to the supplied data.
-    pub fn calibrate(
+    pub fn calibrate_from_min_max(
         &mut self,
-        input: &[Tensor<Fp>],
+        min_lookup_inputs: i128,
+        max_lookup_inputs: i128,
         max_logrows: Option<u32>,
         lookup_safety_margin: i128,
-    ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
-        let res = self.forward(&mut input.to_vec(), None, None)?;
-        self.calc_min_logrows(&res, max_logrows, lookup_safety_margin)?;
-        Ok(res)
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.calc_min_logrows(
+            min_lookup_inputs,
+            max_lookup_inputs,
+            max_logrows,
+            lookup_safety_margin,
+        )?;
+        Ok(())
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
