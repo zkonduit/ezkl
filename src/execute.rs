@@ -1032,7 +1032,7 @@ pub(crate) fn calibrate(
 
     let tear_sheet_table = Table::new(vec![accuracy_res]);
 
-    println!(
+    warn!(
         "\n\n <------------- Numerical Fidelity Report (input_scale: {}, param_scale: {}, scale_input_multiplier: {}) ------------->\n\n{}\n\n",
         best_params.run_args.input_scale,
         best_params.run_args.param_scale,
