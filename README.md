@@ -64,8 +64,8 @@ More notebook tutorials can be found within `examples/notebooks`.
 
 #### CLI
 Install the CLI
-```bash
-curl https://hub.ezkl.xyz/install_ezkl_cli.sh | bash
+``` shell
+curl https://github.com/JSeam2/ezkl/blob/main/install_ezkl_cli.sh | bash
 ```
 
 https://user-images.githubusercontent.com/45801863/236771676-5bbbbfd1-ba6f-418a-902e-20738ce0e9f0.mp4

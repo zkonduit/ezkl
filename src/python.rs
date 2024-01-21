@@ -1022,7 +1022,6 @@ fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
 // Python Module
 #[pymodule]
 fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-    // NOTE: DeployVerifierEVM and SendProofEVM will be implemented in python in pyezkl
     pyo3_log::init();
     m.add_class::<PyRunArgs>()?;
     m.add_class::<PyG1Affine>()?;
