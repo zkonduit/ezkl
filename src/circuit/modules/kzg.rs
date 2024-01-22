@@ -219,7 +219,7 @@ mod tests {
             };
             let prover = halo2_proofs::dev::MockProver::run(K as u32, &circuit, vec![]).unwrap();
 
-            assert_eq!(prover.verify_par(), Ok(()))
+            assert_eq!(prover.verify(), Ok(()))
         }
     }
 
@@ -240,6 +240,6 @@ mod tests {
             message: message.into(),
         };
         let prover = halo2_proofs::dev::MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify_par(), Ok(()))
+        assert_eq!(prover.verify(), Ok(()))
     }
 }

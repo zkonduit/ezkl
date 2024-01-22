@@ -224,6 +224,7 @@ pub fn genWitness(
 pub fn genVk(
     compiled_circuit: wasm_bindgen::Clamped<Vec<u8>>,
     params_ser: wasm_bindgen::Clamped<Vec<u8>>,
+    compress_selectors: bool,
 ) -> Result<Vec<u8>, JsError> {
     // Read in kzg params
     let mut reader = std::io::BufReader::new(&params_ser[..]);
@@ -235,9 +236,13 @@ pub fn genVk(
         .map_err(|e| JsError::new(&format!("Failed to deserialize compiled model: {}", e)))?;
 
     // Create verifying key
-    let vk = create_vk_wasm::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
-        .map_err(Box::<dyn std::error::Error>::from)
-        .map_err(|e| JsError::new(&format!("Failed to create verifying key: {}", e)))?;
+    let vk = create_vk_wasm::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
+        &circuit,
+        &params,
+        compress_selectors,
+    )
+    .map_err(Box::<dyn std::error::Error>::from)
+    .map_err(|e| JsError::new(&format!("Failed to create verifying key: {}", e)))?;
 
     let mut serialized_vk = Vec::new();
     vk.write(&mut serialized_vk, halo2_proofs::SerdeFormat::RawBytes)
@@ -497,6 +502,7 @@ pub fn srsValidation(srs: wasm_bindgen::Clamped<Vec<u8>>) -> Result<bool, JsErro
 pub fn create_vk_wasm<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     circuit: &C,
     params: &'_ Scheme::ParamsProver,
+    compress_selectors: bool,
 ) -> Result<VerifyingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
 where
     C: Circuit<Scheme::Scalar>,
@@ -506,7 +512,7 @@ where
     let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
 
     // Initialize the verifying key
-    let vk = keygen_vk(params, &empty_circuit)?;
+    let vk = keygen_vk(params, &empty_circuit, compress_selectors)?;
     Ok(vk)
 }
 /// Creates a [ProvingKey] from a [VerifyingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target

@@ -499,7 +499,7 @@ mod tests {
             _spec: PhantomData,
         };
         let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
-        assert_eq!(prover.verify_par(), Ok(()))
+        assert_eq!(prover.verify(), Ok(()))
     }
 
     #[test]
@@ -518,7 +518,7 @@ mod tests {
             _spec: PhantomData,
         };
         let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
-        assert_eq!(prover.verify_par(), Ok(()))
+        assert_eq!(prover.verify(), Ok(()))
     }
 
     #[test]
@@ -551,7 +551,7 @@ mod tests {
             };
             let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
 
-            assert_eq!(prover.verify_par(), Ok(()))
+            assert_eq!(prover.verify(), Ok(()))
         }
     }
 
@@ -573,6 +573,6 @@ mod tests {
             _spec: PhantomData,
         };
         let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
-        assert_eq!(prover.verify_par(), Ok(()))
+        assert_eq!(prover.verify(), Ok(()))
     }
 }

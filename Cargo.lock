@@ -1059,16 +1059,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crossbeam-channel"
-version = "0.5.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a33c2bf77f2df06183c3aa30d1e96c0695a313d4f9c453cc3762a6db39f99200"
-dependencies = [
- "cfg-if",
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-deque"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1378,7 +1368,7 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#c1d7551c82953829caee30fe218759b0d2657d26"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#b43ebe30e84825d0d004fa27803d99c4187d419f"
 dependencies = [
  "integer",
  "num-bigint",
@@ -1862,7 +1852,7 @@ dependencies = [
  "halo2_gadgets",
  "halo2_proofs",
  "halo2_solidity_verifier",
- "halo2curves 0.1.0",
+ "halo2curves 0.6.0",
  "hex",
  "indicatif",
  "instant",
@@ -2253,7 +2243,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/lookup-modularity#57b9123835aa7d8482f4182ede3e8f4b0aea5c0a"
+source = "git+https://github.com/zkonduit/halo2?branch=main#9cae3bb75a789b6c3f7c299d1a6b3796a79dbba6"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2269,14 +2259,14 @@ dependencies = [
 
 [[package]]
 name = "halo2_proofs"
-version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/lookup-modularity#57b9123835aa7d8482f4182ede3e8f4b0aea5c0a"
+version = "0.3.0"
+source = "git+https://github.com/zkonduit/halo2?branch=main#9cae3bb75a789b6c3f7c299d1a6b3796a79dbba6"
 dependencies = [
  "blake2b_simd",
  "env_logger",
  "ff",
  "group",
- "halo2curves 0.1.0",
+ "halo2curves 0.6.0",
  "icicle",
  "log",
  "maybe-rayon",
@@ -2292,7 +2282,7 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/lookup-modularity#cf9a3128bb583680dd4c418defd8d37bd8e5c3f1"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/lookup-modularity#26076e7a40e28958e48395728024b0a70330a0d1"
 dependencies = [
  "askama",
  "blake2b_simd",
@@ -2319,8 +2309,6 @@ dependencies = [
  "paste",
  "rand 0.8.5",
  "rand_core 0.6.4",
- "serde",
- "serde_arrays",
  "static_assertions",
  "subtle",
 ]
@@ -2344,9 +2332,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "halo2curves"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3675880dc0cc7cd468943266297198a28f88210ba60ca5e0e04d121edf86b46"
+dependencies = [
+ "blake2b_simd",
+ "ff",
+ "group",
+ "hex",
+ "lazy_static",
+ "num-bigint",
+ "num-traits",
+ "pairing",
+ "pasta_curves",
+ "paste",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "rayon",
+ "serde",
+ "serde_arrays",
+ "static_assertions",
+ "subtle",
+]
+
+[[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#c1d7551c82953829caee30fe218759b0d2657d26"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#b43ebe30e84825d0d004fa27803d99c4187d419f"
 dependencies = [
  "halo2_proofs",
  "num-bigint",
@@ -2423,6 +2436,9 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "hex-literal"
@@ -2696,7 +2712,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#c1d7551c82953829caee30fe218759b0d2657d26"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#b43ebe30e84825d0d004fa27803d99c4187d419f"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2941,7 +2957,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#c1d7551c82953829caee30fe218759b0d2657d26"
+source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#b43ebe30e84825d0d004fa27803d99c4187d419f"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -3325,6 +3341,15 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
+name = "pairing"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81fec4625e73cf41ef4bb6846cafa6d44736525f442ba45e407c4a000a13996f"
+dependencies = [
+ "group",
+]
 
 [[package]]
 name = "papergrid"
@@ -4032,9 +4057,9 @@ checksum = "60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3"
 
 [[package]]
 name = "rayon"
-version = "1.7.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d2df5196e37bcc87abebc0053e20787d73847bb33134a69841207dd0a47f03b"
+checksum = "fa7237101a77a10773db45d62004a272517633fbcc3df19d96455ede1122e051"
 dependencies = [
  "either",
  "rayon-core",
@@ -4042,14 +4067,12 @@ dependencies = [
 
 [[package]]
 name = "rayon-core"
-version = "1.11.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b8f95bd6966f5c87776639160a66bd8ab9895d9d4ab01ddba9fc60661aebe8d"
+checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
 dependencies = [
- "crossbeam-channel",
  "crossbeam-deque",
  "crossbeam-utils",
- "num_cpus",
 ]
 
 [[package]]
@@ -4737,11 +4760,11 @@ dependencies = [
 [[package]]
 name = "snark-verifier"
 version = "0.1.1"
-source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#22ee76bee1a24f3732e994b72b10ec09939348de"
+source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#574b65ea6b4d43eebac5565146519a95b435815c"
 dependencies = [
  "ecc",
  "halo2_proofs",
- "halo2curves 0.1.0",
+ "halo2curves 0.6.0",
  "hex",
  "itertools 0.10.5",
  "lazy_static",
