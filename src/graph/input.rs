@@ -617,13 +617,13 @@ impl ToPyObject for DataSource {
 }
 
 #[cfg(feature = "python-bindings")]
-use crate::pfsys::field_to_vecu64_montgomery;
+use crate::pfsys::field_to_string_montgomery;
 
 #[cfg(feature = "python-bindings")]
 impl ToPyObject for FileSourceInner {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
-            FileSourceInner::Field(data) => field_to_vecu64_montgomery(data).to_object(py),
+            FileSourceInner::Field(data) => field_to_string_montgomery(data).to_object(py),
             FileSourceInner::Bool(data) => data.to_object(py),
             FileSourceInner::Float(data) => data.to_object(py),
         }

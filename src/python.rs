@@ -30,7 +30,7 @@ use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
 
-type PyFelt = [u64; 4];
+type PyFelt = String;
 
 #[pyclass]
 #[derive(Debug, Clone)]
@@ -65,9 +65,9 @@ struct PyG1 {
 impl From<G1> for PyG1 {
     fn from(g1: G1) -> Self {
         PyG1 {
-            x: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.x),
-            y: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.y),
-            z: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.z),
+            x: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.x),
+            y: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.y),
+            z: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.z),
         }
     }
 }
@@ -75,9 +75,9 @@ impl From<G1> for PyG1 {
 impl From<PyG1> for G1 {
     fn from(val: PyG1) -> Self {
         G1 {
-            x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.x),
-            y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.y),
-            z: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.z),
+            x: crate::pfsys::string_to_field_montgomery::<Fq>(&val.x),
+            y: crate::pfsys::string_to_field_montgomery::<Fq>(&val.y),
+            z: crate::pfsys::string_to_field_montgomery::<Fq>(&val.z),
         }
     }
 }
@@ -108,8 +108,8 @@ pub struct PyG1Affine {
 impl From<G1Affine> for PyG1Affine {
     fn from(g1: G1Affine) -> Self {
         PyG1Affine {
-            x: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.x),
-            y: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.y),
+            x: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.x),
+            y: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.y),
         }
     }
 }
@@ -117,8 +117,8 @@ impl From<G1Affine> for PyG1Affine {
 impl From<PyG1Affine> for G1Affine {
     fn from(val: PyG1Affine) -> Self {
         G1Affine {
-            x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.x),
-            y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.y),
+            x: crate::pfsys::string_to_field_montgomery::<Fq>(&val.x),
+            y: crate::pfsys::string_to_field_montgomery::<Fq>(&val.y),
         }
     }
 }
@@ -211,10 +211,10 @@ impl Into<PyRunArgs> for RunArgs {
 #[pyfunction(signature = (
     array,
 ))]
-fn vecu64_to_felt(array: PyFelt) -> PyResult<String> {
+fn string_to_felt(array: PyFelt) -> PyResult<String> {
     Ok(format!(
         "{:?}",
-        crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array)
+        crate::pfsys::string_to_field_montgomery::<Fr>(&array)
     ))
 }
 
@@ -222,8 +222,8 @@ fn vecu64_to_felt(array: PyFelt) -> PyResult<String> {
 #[pyfunction(signature = (
     array,
 ))]
-fn vecu64_to_int(array: PyFelt) -> PyResult<i128> {
-    let felt = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array);
+fn string_to_int(array: PyFelt) -> PyResult<i128> {
+    let felt = crate::pfsys::string_to_field_montgomery::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     Ok(int_rep)
 }
@@ -233,8 +233,8 @@ fn vecu64_to_int(array: PyFelt) -> PyResult<i128> {
     array,
     scale
 ))]
-fn vecu64_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
-    let felt = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array);
+fn string_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
+    let felt = crate::pfsys::string_to_field_montgomery::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
     let float_rep = int_rep as f64 / multiplier;
@@ -246,11 +246,11 @@ fn vecu64_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
 input,
 scale
 ))]
-fn float_to_vecu64(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
+fn float_to_string(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = i128_to_felt(int_rep);
-    Ok(crate::pfsys::field_to_vecu64_montgomery::<Fr>(&felt))
+    Ok(crate::pfsys::field_to_string_montgomery::<Fr>(&felt))
 }
 
 /// Converts a buffer to vector of 4 u64s representing a fixed point field element
@@ -318,7 +318,7 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
 fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
     let message: Vec<Fr> = message
         .iter()
-        .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
+        .map(crate::pfsys::string_to_field_montgomery::<Fr>)
         .collect::<Vec<_>>();
 
     let output =
@@ -329,7 +329,7 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
 
     let hash = output[0]
         .iter()
-        .map(crate::pfsys::field_to_vecu64_montgomery::<Fr>)
+        .map(crate::pfsys::field_to_string_montgomery::<Fr>)
         .collect::<Vec<_>>();
     Ok(hash)
 }
@@ -349,7 +349,7 @@ fn kzg_commit(
 ) -> PyResult<Vec<PyG1Affine>> {
     let message: Vec<Fr> = message
         .iter()
-        .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
+        .map(crate::pfsys::string_to_field_montgomery::<Fr>)
         .collect::<Vec<_>>();
 
     let settings = GraphSettings::load(&settings_path)
@@ -1040,13 +1040,13 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
-    m.add_function(wrap_pyfunction!(vecu64_to_felt, m)?)?;
-    m.add_function(wrap_pyfunction!(vecu64_to_int, m)?)?;
-    m.add_function(wrap_pyfunction!(vecu64_to_float, m)?)?;
+    m.add_function(wrap_pyfunction!(string_to_felt, m)?)?;
+    m.add_function(wrap_pyfunction!(string_to_int, m)?)?;
+    m.add_function(wrap_pyfunction!(string_to_float, m)?)?;
     m.add_function(wrap_pyfunction!(kzg_commit, m)?)?;
     m.add_function(wrap_pyfunction!(swap_proof_commitments, m)?)?;
     m.add_function(wrap_pyfunction!(poseidon_hash, m)?)?;
-    m.add_function(wrap_pyfunction!(float_to_vecu64, m)?)?;
+    m.add_function(wrap_pyfunction!(float_to_string, m)?)?;
     m.add_function(wrap_pyfunction!(buffer_to_felts, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_single, m)?)?;
