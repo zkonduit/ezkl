@@ -170,9 +170,9 @@ mod native_tests {
         }
     }
 
-    const PF_FAILURE: &str = "examples/test_failure.proof";
+    const PF_FAILURE: &str = "examples/test_failure_proof.json";
 
-    const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr.proof";
+    const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr_proof.json";
 
     const LARGE_TESTS: [&str; 5] = [
         "self_attention",
