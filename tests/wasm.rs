@@ -26,7 +26,7 @@ mod wasm32 {
     pub const NETWORK_COMPILED: &[u8] = include_bytes!("../tests/wasm/model.compiled");
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/network.onnx");
     pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
-    pub const PROOF: &[u8] = include_bytes!("../tests/wasm/test.proof");
+    pub const PROOF: &[u8] = include_bytes!("../tests/wasm/proof.json");
     pub const SETTINGS: &[u8] = include_bytes!("../tests/wasm/settings.json");
     pub const PK: &[u8] = include_bytes!("../tests/wasm/pk.key");
     pub const VK: &[u8] = include_bytes!("../tests/wasm/vk.key");
