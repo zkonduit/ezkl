@@ -186,6 +186,7 @@ mod wasm32 {
         let vk = genVk(
             wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()),
             wasm_bindgen::Clamped(SRS.to_vec()),
+            true,
         )
         .map_err(|_| "failed")
         .unwrap();
@@ -206,6 +207,7 @@ mod wasm32 {
         let vk = genVk(
             wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()),
             wasm_bindgen::Clamped(SRS.to_vec()),
+            true,
         )
         .map_err(|_| "failed")
         .unwrap();
@@ -218,6 +220,7 @@ mod wasm32 {
         let vk = genVk(
             wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()),
             wasm_bindgen::Clamped(SRS.to_vec()),
+            true,
         )
         .map_err(|_| "failed")
         .unwrap();

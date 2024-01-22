@@ -337,8 +337,8 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
 /// Generate a kzg commitment.
 #[pyfunction(signature = (
     message,
-    vk_path,
-    settings_path,
+    vk_path=PathBuf::from(DEFAULT_VK),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
     srs_path=None
     ))]
 fn kzg_commit(
@@ -387,9 +387,9 @@ fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResul
 
 /// Generates a vk from a pk for a model circuit and saves it to a file
 #[pyfunction(signature = (
-    path_to_pk,
-    circuit_settings_path,
-    vk_output_path
+    path_to_pk=PathBuf::from(DEFAULT_PK),
+    circuit_settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    vk_output_path=PathBuf::from(DEFAULT_VK),
     ))]
 fn gen_vk_from_pk_single(
     path_to_pk: PathBuf,
@@ -413,8 +413,8 @@ fn gen_vk_from_pk_single(
 
 /// Generates a vk from a pk for an aggregate circuit and saves it to a file
 #[pyfunction(signature = (
-    path_to_pk,
-    vk_output_path
+    path_to_pk=PathBuf::from(DEFAULT_PK_AGGREGATED),
+    vk_output_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
     ))]
 fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult<bool> {
     let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(path_to_pk, ())
@@ -543,7 +543,7 @@ fn calibrate_settings(
 #[pyfunction(signature = (
     data=PathBuf::from(DEFAULT_DATA),
     model=PathBuf::from(DEFAULT_MODEL),
-    output=None,
+    output=PathBuf::from(DEFAULT_WITNESS),
     vk_path=None,
     srs_path=None,
 ))]
@@ -604,7 +604,8 @@ fn mock_aggregate(
     vk_path=PathBuf::from(DEFAULT_VK),
     pk_path=PathBuf::from(DEFAULT_PK),
     srs_path=None,
-    witness_path = None
+    witness_path = None,
+    compress_selectors=DEFAULT_COMPRESS_SELECTORS.parse().unwrap(),
 ))]
 fn setup(
     model: PathBuf,
@@ -612,8 +613,17 @@ fn setup(
     pk_path: PathBuf,
     srs_path: Option<PathBuf>,
     witness_path: Option<PathBuf>,
+    compress_selectors: bool,
 ) -> Result<bool, PyErr> {
-    crate::execute::setup(model, srs_path, vk_path, pk_path, witness_path).map_err(|e| {
+    crate::execute::setup(
+        model,
+        srs_path,
+        vk_path,
+        pk_path,
+        witness_path,
+        compress_selectors,
+    )
+    .map_err(|e| {
         let err_str = format!("Failed to run setup: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
@@ -682,7 +692,8 @@ fn verify(
     pk_path=PathBuf::from(DEFAULT_PK_AGGREGATED),
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     split_proofs = false,
-    srs_path = None
+    srs_path = None, 
+    compress_selectors=DEFAULT_COMPRESS_SELECTORS.parse().unwrap(),
 ))]
 fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
@@ -691,6 +702,7 @@ fn setup_aggregate(
     logrows: u32,
     split_proofs: bool,
     srs_path: Option<PathBuf>,
+    compress_selectors: bool,
 ) -> Result<bool, PyErr> {
     crate::execute::setup_aggregate(
         sample_snarks,
@@ -699,6 +711,7 @@ fn setup_aggregate(
         srs_path,
         logrows,
         split_proofs,
+        compress_selectors,
     )
     .map_err(|e| {
         let err_str = format!("Failed to setup aggregate: {}", e);

@@ -512,7 +512,7 @@ where
     let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
 
     // Initialize the verifying key
-    let vk = keygen_vk(params, &empty_circuit, compress_selectors)?;
+    let vk = keygen_vk_custom(params, &empty_circuit, compress_selectors)?;
     Ok(vk)
 }
 /// Creates a [ProvingKey] from a [VerifyingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
