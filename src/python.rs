@@ -692,7 +692,7 @@ fn verify(
     pk_path=PathBuf::from(DEFAULT_PK_AGGREGATED),
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     split_proofs = false,
-    srs_path = None, 
+    srs_path = None,
     compress_selectors=DEFAULT_COMPRESS_SELECTORS.parse().unwrap(),
 ))]
 fn setup_aggregate(
