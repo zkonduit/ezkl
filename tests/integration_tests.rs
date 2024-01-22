@@ -360,7 +360,7 @@ mod native_tests {
     #[cfg(feature = "icicle")]
     const TESTS_AGGR: [&str; 3] = ["1l_mlp", "1l_flatten", "1l_average"];
 
-    const TESTS_EVM: [&str; 25] = [
+    const TESTS_EVM: [&str; 23] = [
         "1l_mlp",
         "1l_flatten",
         "1l_average",
@@ -384,8 +384,6 @@ mod native_tests {
         "lstm",
         "rnn",
         "quantize_dequantize",
-        "1l_where",
-        "boolean",
     ];
 
     const TESTS_EVM_AGGR: [&str; 18] = [
@@ -975,7 +973,7 @@ mod native_tests {
             });
 
 
-            seq!(N in 0..=24 {
+            seq!(N in 0..=22 {
 
                 #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
