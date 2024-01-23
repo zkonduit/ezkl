@@ -999,7 +999,6 @@ impl GraphCircuit {
             || min_lookup_inputs < -MAX_LOOKUP_ABS / lookup_safety_margin
         {
             let err_string = format!("max lookup input ({}) is too large", max_lookup_inputs);
-            error!("{}", err_string);
             return Err(err_string.into());
         }
 
