@@ -306,6 +306,12 @@ where
         }
     }
 
+    /// create hex proof from proof
+    pub fn create_hex_proof(&mut self) {
+        let hex_proof = hex::encode(&self.proof);
+        self.hex_proof = Some(format!("0x{}", hex_proof));
+    }
+
     /// Saves the Proof to a specified `proof_path`.
     pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let file = std::fs::File::create(proof_path)?;
@@ -595,6 +601,7 @@ where
     let mut snark_new = snark.clone();
     // swap the proof bytes for the new ones
     snark_new.proof[..proof_first_bytes.len()].copy_from_slice(&proof_first_bytes);
+    snark_new.create_hex_proof();
 
     Ok(snark_new)
 }

@@ -118,38 +118,38 @@ mod py_tests {
     }
 
     const TESTS: [&str; 32] = [
-        "variance.ipynb",
+        "variance.ipynb", // 0
         "proof_splitting.ipynb",
         "mnist_gan_proof_splitting.ipynb",
         "mnist_gan.ipynb",
         // "mnist_vae.ipynb",
         "keras_simple_demo.ipynb",
-        "hashed_vis.ipynb",
+        "hashed_vis.ipynb", // 5
         "simple_demo_all_public.ipynb",
         "data_attest.ipynb",
         "little_transformer.ipynb",
         "simple_demo_aggregated_proofs.ipynb",
-        "ezkl_demo.ipynb",
+        "ezkl_demo.ipynb", // 10
         "lstm.ipynb",
         "set_membership.ipynb",
         "decision_tree.ipynb",
         "random_forest.ipynb",
-        "gradient_boosted_trees.ipynb",
+        "gradient_boosted_trees.ipynb", // 15
         "xgboost.ipynb",
         "lightgbm.ipynb",
         "svm.ipynb",
         "simple_demo_public_input_output.ipynb",
-        "simple_demo_public_network_output.ipynb",
+        "simple_demo_public_network_output.ipynb", // 20
         "gcn.ipynb",
         "linear_regression.ipynb",
         "stacked_regression.ipynb",
         "data_attest_hashed.ipynb",
-        "kzg_vis.ipynb",
+        "kzg_vis.ipynb", // 25
         "kmeans.ipynb",
         "solvency.ipynb",
         "sklearn_mlp.ipynb",
         "generalized_inverse.ipynb",
-        "mnist_classifier.ipynb",
+        "mnist_classifier.ipynb", // 30
         "world_rotation.ipynb",
     ];
 

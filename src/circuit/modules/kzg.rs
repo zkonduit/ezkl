@@ -56,7 +56,7 @@ impl KZGChip {
 
         (0..num_unusable_rows).for_each(|i| {
             for p in &mut poly {
-                p[(n + i as u64) as usize] = Blind::default().0;
+                p[(n + i as u64) as usize] = Fp::zero();
             }
         });
 
@@ -68,7 +68,7 @@ impl KZGChip {
 
         let mut advice_commitments_projective = vec![];
         for a in poly {
-            advice_commitments_projective.push(params.commit_lagrange(&a, Blind::default()))
+            advice_commitments_projective.push(params.commit_lagrange(&a, Blind(Fp::zero())))
         }
 
         let mut advice_commitments =
