@@ -2243,7 +2243,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=main#2502e5b833f1589cf438260bb890b9a24482f01b"
+source = "git+https://github.com/zkonduit/halo2?branch=main#7a22d151fc83bdb51d48069df9de65b818513589"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2260,7 +2260,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2?branch=main#2502e5b833f1589cf438260bb890b9a24482f01b"
+source = "git+https://github.com/zkonduit/halo2?branch=main#7a22d151fc83bdb51d48069df9de65b818513589"
 dependencies = [
  "blake2b_simd",
  "env_logger",
