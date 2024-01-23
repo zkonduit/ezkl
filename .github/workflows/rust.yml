@@ -644,13 +644,13 @@ jobs:
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
       - name: All notebooks
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --no-capture
       - name: Voice tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       - name: Tictactoe tutorials
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --no-capture
       # - name: Postgres tutorials
       #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
      
