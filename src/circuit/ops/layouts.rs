@@ -1837,15 +1837,6 @@ pub fn deconv<F: PrimeField + TensorType + PartialOrd + std::marker::Send + std:
         )));
     }
 
-    if has_bias {
-        let bias = &inputs[2];
-        if (bias.dims().len() != 1) || (bias.dims()[0] != kernel.dims()[0]) {
-            return Err(Box::new(TensorError::DimMismatch(
-                "deconv bias".to_string(),
-            )));
-        }
-    }
-
     let (kernel_height, kernel_width) = (kernel.dims()[2], kernel.dims()[3]);
 
     let null_val = ValType::Constant(F::ZERO);
