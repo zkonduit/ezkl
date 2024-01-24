@@ -30,7 +30,7 @@ use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
 
-type PyFelt = [u64; 4];
+type PyFelt = String;
 
 #[pyclass]
 #[derive(Debug, Clone)]
@@ -65,9 +65,9 @@ struct PyG1 {
 impl From<G1> for PyG1 {
     fn from(g1: G1) -> Self {
         PyG1 {
-            x: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.x),
-            y: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.y),
-            z: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.z),
+            x: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.x),
+            y: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.y),
+            z: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.z),
         }
     }
 }
@@ -75,9 +75,9 @@ impl From<G1> for PyG1 {
 impl From<PyG1> for G1 {
     fn from(val: PyG1) -> Self {
         G1 {
-            x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.x),
-            y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.y),
-            z: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.z),
+            x: crate::pfsys::string_to_field_montgomery::<Fq>(&val.x),
+            y: crate::pfsys::string_to_field_montgomery::<Fq>(&val.y),
+            z: crate::pfsys::string_to_field_montgomery::<Fq>(&val.z),
         }
     }
 }
@@ -108,8 +108,8 @@ pub struct PyG1Affine {
 impl From<G1Affine> for PyG1Affine {
     fn from(g1: G1Affine) -> Self {
         PyG1Affine {
-            x: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.x),
-            y: crate::pfsys::field_to_vecu64_montgomery::<Fq>(&g1.y),
+            x: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.x),
+            y: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.y),
         }
     }
 }
@@ -117,8 +117,8 @@ impl From<G1Affine> for PyG1Affine {
 impl From<PyG1Affine> for G1Affine {
     fn from(val: PyG1Affine) -> Self {
         G1Affine {
-            x: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.x),
-            y: crate::pfsys::vecu64_to_field_montgomery::<Fq>(&val.y),
+            x: crate::pfsys::string_to_field_montgomery::<Fq>(&val.x),
+            y: crate::pfsys::string_to_field_montgomery::<Fq>(&val.y),
         }
     }
 }
@@ -211,10 +211,10 @@ impl Into<PyRunArgs> for RunArgs {
 #[pyfunction(signature = (
     array,
 ))]
-fn vecu64_to_felt(array: PyFelt) -> PyResult<String> {
+fn string_to_felt(array: PyFelt) -> PyResult<String> {
     Ok(format!(
         "{:?}",
-        crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array)
+        crate::pfsys::string_to_field_montgomery::<Fr>(&array)
     ))
 }
 
@@ -222,8 +222,8 @@ fn vecu64_to_felt(array: PyFelt) -> PyResult<String> {
 #[pyfunction(signature = (
     array,
 ))]
-fn vecu64_to_int(array: PyFelt) -> PyResult<i128> {
-    let felt = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array);
+fn string_to_int(array: PyFelt) -> PyResult<i128> {
+    let felt = crate::pfsys::string_to_field_montgomery::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     Ok(int_rep)
 }
@@ -233,8 +233,8 @@ fn vecu64_to_int(array: PyFelt) -> PyResult<i128> {
     array,
     scale
 ))]
-fn vecu64_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
-    let felt = crate::pfsys::vecu64_to_field_montgomery::<Fr>(&array);
+fn string_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
+    let felt = crate::pfsys::string_to_field_montgomery::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
     let float_rep = int_rep as f64 / multiplier;
@@ -246,11 +246,11 @@ fn vecu64_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
 input,
 scale
 ))]
-fn float_to_vecu64(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
+fn float_to_string(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = i128_to_felt(int_rep);
-    Ok(crate::pfsys::field_to_vecu64_montgomery::<Fr>(&felt))
+    Ok(crate::pfsys::field_to_string_montgomery::<Fr>(&felt))
 }
 
 /// Converts a buffer to vector of 4 u64s representing a fixed point field element
@@ -318,7 +318,7 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
 fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
     let message: Vec<Fr> = message
         .iter()
-        .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
+        .map(crate::pfsys::string_to_field_montgomery::<Fr>)
         .collect::<Vec<_>>();
 
     let output =
@@ -329,7 +329,7 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
 
     let hash = output[0]
         .iter()
-        .map(crate::pfsys::field_to_vecu64_montgomery::<Fr>)
+        .map(crate::pfsys::field_to_string_montgomery::<Fr>)
         .collect::<Vec<_>>();
     Ok(hash)
 }
@@ -337,8 +337,8 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
 /// Generate a kzg commitment.
 #[pyfunction(signature = (
     message,
-    vk_path,
-    settings_path,
+    vk_path=PathBuf::from(DEFAULT_VK),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
     srs_path=None
     ))]
 fn kzg_commit(
@@ -349,7 +349,7 @@ fn kzg_commit(
 ) -> PyResult<Vec<PyG1Affine>> {
     let message: Vec<Fr> = message
         .iter()
-        .map(crate::pfsys::vecu64_to_field_montgomery::<Fr>)
+        .map(crate::pfsys::string_to_field_montgomery::<Fr>)
         .collect::<Vec<_>>();
 
     let settings = GraphSettings::load(&settings_path)
@@ -387,9 +387,9 @@ fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResul
 
 /// Generates a vk from a pk for a model circuit and saves it to a file
 #[pyfunction(signature = (
-    path_to_pk,
-    circuit_settings_path,
-    vk_output_path
+    path_to_pk=PathBuf::from(DEFAULT_PK),
+    circuit_settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    vk_output_path=PathBuf::from(DEFAULT_VK),
     ))]
 fn gen_vk_from_pk_single(
     path_to_pk: PathBuf,
@@ -413,8 +413,8 @@ fn gen_vk_from_pk_single(
 
 /// Generates a vk from a pk for an aggregate circuit and saves it to a file
 #[pyfunction(signature = (
-    path_to_pk,
-    vk_output_path
+    path_to_pk=PathBuf::from(DEFAULT_PK_AGGREGATED),
+    vk_output_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
     ))]
 fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult<bool> {
     let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(path_to_pk, ())
@@ -543,7 +543,7 @@ fn calibrate_settings(
 #[pyfunction(signature = (
     data=PathBuf::from(DEFAULT_DATA),
     model=PathBuf::from(DEFAULT_MODEL),
-    output=None,
+    output=PathBuf::from(DEFAULT_WITNESS),
     vk_path=None,
     srs_path=None,
 ))]
@@ -604,7 +604,8 @@ fn mock_aggregate(
     vk_path=PathBuf::from(DEFAULT_VK),
     pk_path=PathBuf::from(DEFAULT_PK),
     srs_path=None,
-    witness_path = None
+    witness_path = None,
+    compress_selectors=DEFAULT_COMPRESS_SELECTORS.parse().unwrap(),
 ))]
 fn setup(
     model: PathBuf,
@@ -612,8 +613,17 @@ fn setup(
     pk_path: PathBuf,
     srs_path: Option<PathBuf>,
     witness_path: Option<PathBuf>,
+    compress_selectors: bool,
 ) -> Result<bool, PyErr> {
-    crate::execute::setup(model, srs_path, vk_path, pk_path, witness_path).map_err(|e| {
+    crate::execute::setup(
+        model,
+        srs_path,
+        vk_path,
+        pk_path,
+        witness_path,
+        compress_selectors,
+    )
+    .map_err(|e| {
         let err_str = format!("Failed to run setup: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
@@ -682,7 +692,8 @@ fn verify(
     pk_path=PathBuf::from(DEFAULT_PK_AGGREGATED),
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     split_proofs = false,
-    srs_path = None
+    srs_path = None,
+    compress_selectors=DEFAULT_COMPRESS_SELECTORS.parse().unwrap(),
 ))]
 fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
@@ -691,6 +702,7 @@ fn setup_aggregate(
     logrows: u32,
     split_proofs: bool,
     srs_path: Option<PathBuf>,
+    compress_selectors: bool,
 ) -> Result<bool, PyErr> {
     crate::execute::setup_aggregate(
         sample_snarks,
@@ -699,6 +711,7 @@ fn setup_aggregate(
         srs_path,
         logrows,
         split_proofs,
+        compress_selectors,
     )
     .map_err(|e| {
         let err_str = format!("Failed to setup aggregate: {}", e);
@@ -1027,13 +1040,13 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
-    m.add_function(wrap_pyfunction!(vecu64_to_felt, m)?)?;
-    m.add_function(wrap_pyfunction!(vecu64_to_int, m)?)?;
-    m.add_function(wrap_pyfunction!(vecu64_to_float, m)?)?;
+    m.add_function(wrap_pyfunction!(string_to_felt, m)?)?;
+    m.add_function(wrap_pyfunction!(string_to_int, m)?)?;
+    m.add_function(wrap_pyfunction!(string_to_float, m)?)?;
     m.add_function(wrap_pyfunction!(kzg_commit, m)?)?;
     m.add_function(wrap_pyfunction!(swap_proof_commitments, m)?)?;
     m.add_function(wrap_pyfunction!(poseidon_hash, m)?)?;
-    m.add_function(wrap_pyfunction!(float_to_vecu64, m)?)?;
+    m.add_function(wrap_pyfunction!(float_to_string, m)?)?;
     m.add_function(wrap_pyfunction!(buffer_to_felts, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_single, m)?)?;

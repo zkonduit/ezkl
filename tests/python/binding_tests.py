@@ -56,9 +56,9 @@ def test_poseidon_hash():
     Test for poseidon_hash
     """
     message = [1.0, 2.0, 3.0, 4.0]
-    message = [ezkl.float_to_vecu64(x, 7) for x in message]
+    message = [ezkl.float_to_string(x, 7) for x in message]
     res = ezkl.poseidon_hash(message)
-    assert ezkl.vecu64_to_felt(
+    assert ezkl.string_to_felt(
         res[0]) == "0x0da7e5e5c8877242fa699f586baf770d731defd54f952d4adeb85047a0e32f45"
 
 
@@ -70,14 +70,14 @@ def test_field_serialization():
 
     input = 890
     scale = 7
-    felt = ezkl.float_to_vecu64(input, scale)
-    roundtrip_input = ezkl.vecu64_to_float(felt, scale)
+    felt = ezkl.float_to_string(input, scale)
+    roundtrip_input = ezkl.string_to_float(felt, scale)
     assert input == roundtrip_input
 
     input = -700
     scale = 7
-    felt = ezkl.float_to_vecu64(input, scale)
-    roundtrip_input = ezkl.vecu64_to_float(felt, scale)
+    felt = ezkl.float_to_string(input, scale)
+    roundtrip_input = ezkl.string_to_float(felt, scale)
     assert input == roundtrip_input
 
 

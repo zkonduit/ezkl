@@ -53,7 +53,7 @@ pub use utilities::*;
 pub use vars::*;
 
 #[cfg(feature = "python-bindings")]
-use crate::pfsys::field_to_vecu64_montgomery;
+use crate::pfsys::field_to_string_montgomery;
 
 /// The safety factor for the range of the lookup table.
 pub const RANGE_MULTIPLIER: i128 = 2;
@@ -332,16 +332,16 @@ impl ToPyObject for GraphWitness {
         let dict_params = PyDict::new(py);
         let dict_outputs = PyDict::new(py);
 
-        let inputs: Vec<Vec<[u64; 4]>> = self
+        let inputs: Vec<Vec<String>> = self
             .inputs
             .iter()
-            .map(|x| x.iter().map(field_to_vecu64_montgomery).collect())
+            .map(|x| x.iter().map(field_to_string_montgomery).collect())
             .collect();
 
-        let outputs: Vec<Vec<[u64; 4]>> = self
+        let outputs: Vec<Vec<String>> = self
             .outputs
             .iter()
-            .map(|x| x.iter().map(field_to_vecu64_montgomery).collect())
+            .map(|x| x.iter().map(field_to_string_montgomery).collect())
             .collect();
 
         dict.set_item("inputs", inputs).unwrap();
@@ -389,9 +389,9 @@ impl ToPyObject for GraphWitness {
 
 #[cfg(feature = "python-bindings")]
 fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) -> Result<(), PyErr> {
-    let poseidon_hash: Vec<[u64; 4]> = poseidon_hash
+    let poseidon_hash: Vec<String> = poseidon_hash
         .iter()
-        .map(field_to_vecu64_montgomery)
+        .map(field_to_string_montgomery)
         .collect();
     pydict.set_item("poseidon_hash", poseidon_hash)?;
 
@@ -999,7 +999,6 @@ impl GraphCircuit {
             || min_lookup_inputs < -MAX_LOOKUP_ABS / lookup_safety_margin
         {
             let err_string = format!("max lookup input ({}) is too large", max_lookup_inputs);
-            error!("{}", err_string);
             return Err(err_string.into());
         }
 

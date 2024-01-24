@@ -11,7 +11,7 @@ use crate::tensor::TensorType;
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
-    create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey,
+    create_proof, keygen_pk, keygen_vk_custom, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
 use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG};
@@ -167,8 +167,8 @@ impl ToPyObject for TranscriptType {
 #[cfg(feature = "python-bindings")]
 ///
 pub fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
-    let g1affine_x = field_to_vecu64_montgomery(&g1affine.x);
-    let g1affine_y = field_to_vecu64_montgomery(&g1affine.y);
+    let g1affine_x = field_to_string_montgomery(&g1affine.x);
+    let g1affine_y = field_to_string_montgomery(&g1affine.y);
     g1affine_dict.set_item("x", g1affine_x).unwrap();
     g1affine_dict.set_item("y", g1affine_y).unwrap();
 }
@@ -178,24 +178,24 @@ use halo2curves::bn256::G1;
 #[cfg(feature = "python-bindings")]
 ///
 pub fn g1_to_pydict(g1_dict: &PyDict, g1: &G1) {
-    let g1_x = field_to_vecu64_montgomery(&g1.x);
-    let g1_y = field_to_vecu64_montgomery(&g1.y);
-    let g1_z = field_to_vecu64_montgomery(&g1.z);
+    let g1_x = field_to_string_montgomery(&g1.x);
+    let g1_y = field_to_string_montgomery(&g1.y);
+    let g1_z = field_to_string_montgomery(&g1.z);
     g1_dict.set_item("x", g1_x).unwrap();
     g1_dict.set_item("y", g1_y).unwrap();
     g1_dict.set_item("z", g1_z).unwrap();
 }
 
 /// converts fp into `Vec<u64>` in Montgomery form
-pub fn field_to_vecu64_montgomery<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> [u64; 4] {
+pub fn field_to_string_montgomery<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> String {
     let repr = serde_json::to_string(&fp).unwrap();
-    let b: [u64; 4] = serde_json::from_str(&repr).unwrap();
+    let b: String = serde_json::from_str(&repr).unwrap();
     b
 }
 
 /// converts `Vec<u64>` in Montgomery form into fp
-pub fn vecu64_to_field_montgomery<F: PrimeField + SerdeObject + Serialize + DeserializeOwned>(
-    b: &[u64; 4],
+pub fn string_to_field_montgomery<F: PrimeField + SerdeObject + Serialize + DeserializeOwned>(
+    b: &String,
 ) -> F {
     let repr = serde_json::to_string(&b).unwrap();
     let fp: F = serde_json::from_str(&repr).unwrap();
@@ -256,10 +256,10 @@ where
 {
     fn to_object(&self, py: Python) -> PyObject {
         let dict = PyDict::new(py);
-        let field_elems: Vec<Vec<[u64; 4]>> = self
+        let field_elems: Vec<Vec<String>> = self
             .instances
             .iter()
-            .map(|x| x.iter().map(|fp| field_to_vecu64_montgomery(fp)).collect())
+            .map(|x| x.iter().map(|fp| field_to_string_montgomery(fp)).collect())
             .collect::<Vec<_>>();
         dict.set_item("instances", field_elems).unwrap();
         let hex_proof = hex::encode(&self.proof);
@@ -304,6 +304,12 @@ where
                     .as_millis(),
             ),
         }
+    }
+
+    /// create hex proof from proof
+    pub fn create_hex_proof(&mut self) {
+        let hex_proof = hex::encode(&self.proof);
+        self.hex_proof = Some(format!("0x{}", hex_proof));
     }
 
     /// Saves the Proof to a specified `proof_path`.
@@ -427,6 +433,7 @@ where
 pub fn create_keys<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     circuit: &C,
     params: &'_ Scheme::ParamsProver,
+    compress_selectors: bool,
 ) -> Result<ProvingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
 where
     C: Circuit<Scheme::Scalar>,
@@ -438,7 +445,7 @@ where
     // Initialize verifying key
     let now = Instant::now();
     trace!("preparing VK");
-    let vk = keygen_vk(params, &empty_circuit)?;
+    let vk = keygen_vk_custom(params, &empty_circuit, compress_selectors)?;
     let elapsed = now.elapsed();
     info!("VK took {}.{}", elapsed.as_secs(), elapsed.subsec_millis());
 
@@ -594,6 +601,7 @@ where
     let mut snark_new = snark.clone();
     // swap the proof bytes for the new ones
     snark_new.proof[..proof_first_bytes.len()].copy_from_slice(&proof_first_bytes);
+    snark_new.create_hex_proof();
 
     Ok(snark_new)
 }

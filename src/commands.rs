@@ -73,6 +73,8 @@ pub const DEFAULT_FUZZ_RUNS: &str = "10";
 pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
 /// Default lookup safety margin
 pub const DEFAULT_LOOKUP_SAFETY_MARGIN: &str = "2";
+/// Default Compress selectors
+pub const DEFAULT_COMPRESS_SELECTORS: &str = "false";
 
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -389,6 +391,9 @@ pub enum Commands {
         /// whether the accumulated are segments of a larger proof
         #[arg(long, default_value = DEFAULT_SPLIT)]
         split_proofs: bool,
+        /// compress selectors
+        #[arg(long, default_value = DEFAULT_COMPRESS_SELECTORS)]
+        compress_selectors: bool,
     },
     /// Aggregates proofs :)
     Aggregate {
@@ -451,6 +456,9 @@ pub enum Commands {
         /// The graph witness (optional - used to override fixed values in the circuit)
         #[arg(short = 'W', long)]
         witness: Option<PathBuf>,
+        /// compress selectors
+        #[arg(long, default_value = DEFAULT_COMPRESS_SELECTORS)]
+        compress_selectors: bool,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -473,6 +481,9 @@ pub enum Commands {
         /// number of fuzz iterations
         #[arg(long, default_value = DEFAULT_FUZZ_RUNS)]
         num_runs: usize,
+        /// compress selectors
+        #[arg(long, default_value = DEFAULT_COMPRESS_SELECTORS)]
+        compress_selectors: bool,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Deploys a test contact that the data attester reads from and creates a data attestation formatted input.json file that contains call data information

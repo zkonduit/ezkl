@@ -12,7 +12,7 @@ def get_ezkl_output(witness_file, settings_file):
     outputs = witness_output['outputs']
     with open(settings_file) as f:
         settings = json.load(f)
-    ezkl_outputs = [[ezkl.vecu64_to_float(
+    ezkl_outputs = [[ezkl.string_to_float(
         outputs[i][j], settings['model_output_scales'][i]) for j in range(len(outputs[i]))] for i in range(len(outputs))]
     return ezkl_outputs
 

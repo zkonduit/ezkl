@@ -90,13 +90,13 @@ fn runrelu(c: &mut Criterion) {
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::new("pk", len), &len, |b, &_| {
             b.iter(|| {
-                create_keys::<KZGCommitmentScheme<Bn256>, Fr, NLCircuit>(&circuit, &params)
+                create_keys::<KZGCommitmentScheme<Bn256>, Fr, NLCircuit>(&circuit, &params, true)
                     .unwrap();
             });
         });
 
-        let pk =
-            create_keys::<KZGCommitmentScheme<Bn256>, Fr, NLCircuit>(&circuit, &params).unwrap();
+        let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, NLCircuit>(&circuit, &params, true)
+            .unwrap();
 
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::new("prove", len), &len, |b, &_| {

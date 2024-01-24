@@ -140,8 +140,14 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             compiled_circuit,
             transcript,
             num_runs,
-        } => fuzz(compiled_circuit, witness, transcript, num_runs),
-
+            compress_selectors,
+        } => fuzz(
+            compiled_circuit,
+            witness,
+            transcript,
+            num_runs,
+            compress_selectors,
+        ),
         Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::GetSrs {
@@ -233,7 +239,15 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             vk_path,
             pk_path,
             witness,
-        } => setup(compiled_circuit, srs_path, vk_path, pk_path, witness),
+            compress_selectors,
+        } => setup(
+            compiled_circuit,
+            srs_path,
+            vk_path,
+            pk_path,
+            witness,
+            compress_selectors,
+        ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::SetupTestEVMData {
             data,
@@ -296,6 +310,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             split_proofs,
+            compress_selectors,
         } => setup_aggregate(
             sample_snarks,
             vk_path,
@@ -303,6 +318,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             split_proofs,
+            compress_selectors,
         ),
         Commands::Aggregate {
             proof_path,
@@ -1096,7 +1112,7 @@ pub(crate) fn mock(
     )
     .map_err(Box::<dyn Error>::from)?;
     prover
-        .verify_par()
+        .verify()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
     Ok(String::new())
 }
@@ -1390,6 +1406,7 @@ pub(crate) fn setup(
     vk_path: PathBuf,
     pk_path: PathBuf,
     witness: Option<PathBuf>,
+    compress_selectors: bool,
 ) -> Result<String, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
     let mut circuit = GraphCircuit::load(compiled_circuit)?;
@@ -1400,8 +1417,12 @@ pub(crate) fn setup(
 
     let params = load_params_cmd(srs_path, circuit.settings().run_args.logrows)?;
 
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
-        .map_err(Box::<dyn Error>::from)?;
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
+        &circuit,
+        &params,
+        compress_selectors,
+    )
+    .map_err(Box::<dyn Error>::from)?;
 
     save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk())?;
     save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &pk)?;
@@ -1540,6 +1561,7 @@ pub(crate) fn fuzz(
     data_path: PathBuf,
     transcript: TranscriptType,
     num_runs: usize,
+    compress_selectors: bool,
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let passed = AtomicBool::new(true);
@@ -1555,8 +1577,12 @@ pub(crate) fn fuzz(
 
     let data = GraphWitness::from_path(data_path)?;
 
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &params)
-        .map_err(Box::<dyn Error>::from)?;
+    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
+        &circuit,
+        &params,
+        compress_selectors,
+    )
+    .map_err(Box::<dyn Error>::from)?;
 
     circuit.load_graph_witness(&data)?;
 
@@ -1572,9 +1598,12 @@ pub(crate) fn fuzz(
     let fuzz_pk = || {
         let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
-        let bad_pk =
-            create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &new_params)
-                .map_err(|_| ())?;
+        let bad_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
+            &circuit,
+            &new_params,
+            compress_selectors,
+        )
+        .map_err(|_| ())?;
 
         let bad_proof = create_proof_circuit_kzg(
             circuit.clone(),
@@ -1645,9 +1674,12 @@ pub(crate) fn fuzz(
     let fuzz_vk = || {
         let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
-        let bad_pk =
-            create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(&circuit, &new_params)
-                .map_err(|_| ())?;
+        let bad_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
+            &circuit,
+            &new_params,
+            compress_selectors,
+        )
+        .map_err(|_| ())?;
 
         let bad_vk = bad_pk.get_vk();
 
@@ -1807,7 +1839,7 @@ pub(crate) fn mock_aggregate(
     let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, vec![circuit.instances()])
         .map_err(Box::<dyn Error>::from)?;
     prover
-        .verify_par()
+        .verify()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
     #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");
@@ -1821,6 +1853,7 @@ pub(crate) fn setup_aggregate(
     srs_path: Option<PathBuf>,
     logrows: u32,
     split_proofs: bool,
+    compress_selectors: bool,
 ) -> Result<String, Box<dyn Error>> {
     // the K used for the aggregation circuit
     let params = load_params_cmd(srs_path, logrows)?;
@@ -1831,8 +1864,11 @@ pub(crate) fn setup_aggregate(
     }
 
     let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks, split_proofs)?;
-    let agg_pk =
-        create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(&agg_circuit, &params)?;
+    let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
+        &agg_circuit,
+        &params,
+        compress_selectors,
+    )?;
 
     let agg_vk = agg_pk.get_vk();
 

@@ -90,7 +90,7 @@ mod matmul {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -165,7 +165,7 @@ mod matmul_col_overflow_double_col {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -239,7 +239,7 @@ mod matmul_col_overflow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -327,7 +327,7 @@ mod matmul_col_ultra_overflow_double_col {
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
             F,
             MatmulCircuit<F>,
-        >(&circuit, &params)
+        >(&circuit, &params, true)
         .unwrap();
 
         let prover = crate::pfsys::create_proof_circuit_kzg(
@@ -441,7 +441,7 @@ mod matmul_col_ultra_overflow {
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
             F,
             MatmulCircuit<F>,
-        >(&circuit, &params)
+        >(&circuit, &params, true)
         .unwrap();
 
         let prover = crate::pfsys::create_proof_circuit_kzg(
@@ -543,7 +543,7 @@ mod dot {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -620,7 +620,7 @@ mod dot_col_overflow_triple_col {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -693,7 +693,7 @@ mod dot_col_overflow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -762,7 +762,7 @@ mod sum {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -832,7 +832,7 @@ mod sum_col_overflow_double_col {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -901,7 +901,7 @@ mod sum_col_overflow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -994,7 +994,7 @@ mod composition {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -1095,7 +1095,7 @@ mod conv {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 
     #[test]
@@ -1133,7 +1133,7 @@ mod conv {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -1240,7 +1240,7 @@ mod conv_col_ultra_overflow {
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
             F,
             ConvCircuit<F>,
-        >(&circuit, &params)
+        >(&circuit, &params, true)
         .unwrap();
 
         let prover = crate::pfsys::create_proof_circuit_kzg(
@@ -1390,7 +1390,7 @@ mod conv_relu_col_ultra_overflow {
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
             F,
             ConvCircuit<F>,
-        >(&circuit, &params)
+        >(&circuit, &params, true)
         .unwrap();
 
         let prover = crate::pfsys::create_proof_circuit_kzg(
@@ -1484,7 +1484,7 @@ mod add_w_shape_casting {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -1551,7 +1551,7 @@ mod add {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -1618,7 +1618,7 @@ mod add_with_overflow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -1727,7 +1727,7 @@ mod add_with_overflow_and_poseidon {
 
         let prover =
             MockProver::run(K as u32, &circuit, vec![vec![commitment_a, commitment_b]]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 
     #[test]
@@ -1822,7 +1822,7 @@ mod sub {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -1889,7 +1889,7 @@ mod mult {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -1954,7 +1954,7 @@ mod pow {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -2023,7 +2023,7 @@ mod pack {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -2116,7 +2116,7 @@ mod matmul_relu {
         };
 
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -2222,7 +2222,7 @@ mod rangecheckpercent {
                 _marker: PhantomData,
             };
             let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-            prover.assert_satisfied_par();
+            prover.assert_satisfied();
         }
         {
             let inp = Tensor::new(Some(&[Value::<F>::known(F::from(200_u64))]), &[1]).unwrap();
@@ -2233,7 +2233,7 @@ mod rangecheckpercent {
                 _marker: PhantomData,
             };
             let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-            prover.assert_satisfied_par();
+            prover.assert_satisfied();
         }
 
         // Unsuccessful case
@@ -2328,7 +2328,7 @@ mod relu {
         };
 
         let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }
 
@@ -2421,7 +2421,7 @@ mod lookup_ultra_overflow {
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
             F,
             ReLUCircuit<F>,
-        >(&circuit, &params)
+        >(&circuit, &params, true)
         .unwrap();
 
         let prover = crate::pfsys::create_proof_circuit_kzg(
@@ -2557,6 +2557,6 @@ mod softmax {
             _marker: PhantomData,
         };
         let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied_par();
+        prover.assert_satisfied();
     }
 }

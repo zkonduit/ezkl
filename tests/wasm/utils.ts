@@ -1,7 +1,6 @@
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs'
 import JSONBig from 'json-bigint';
-import { vecU64ToFelt } from '@ezkljs/engine/nodejs'
 const solc = require('solc');
 
 // import os module
