@@ -101,17 +101,18 @@ pub async fn setup_eth_backend(
 }
 
 ///
-pub async fn deploy_verifier_via_solidity(
+pub async fn deploy_contract_via_solidity(
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
     runs: usize,
     private_key: Option<&str>,
+    contract_name: &str,
 ) -> Result<ethers::types::Address, Box<dyn Error>> {
     // anvil instance must be alive at least until the factory completes the deploy
     let (anvil, client) = setup_eth_backend(rpc_url, private_key).await?;
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "Halo2Verifier", runs)?;
+        get_contract_artifacts(sol_code_path, contract_name, runs)?;
 
     let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone())?;
     let contract = factory.deploy(())?.send().await?;
@@ -335,11 +336,16 @@ pub async fn update_account_calls(
 pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     addr: ethers::types::Address,
+    addr_vk: Option<H160>,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
     let flattened_instances = proof.instances.into_iter().flatten();
 
-    let encoded = encode_calldata(None, &proof.proof, &flattened_instances.collect::<Vec<_>>());
+    let encoded = encode_calldata(
+        addr_vk.as_ref().map(|x| x.0),
+        &proof.proof,
+        &flattened_instances.collect::<Vec<_>>(),
+    );
 
     info!("encoded: {:#?}", hex::encode(&encoded));
     let (anvil, client) = setup_eth_backend(rpc_url, None).await?;
@@ -439,6 +445,7 @@ pub async fn verify_proof_with_data_attestation(
     proof: Snark<Fr, G1Affine>,
     addr_verifier: ethers::types::Address,
     addr_da: ethers::types::Address,
+    addr_vk: Option<H160>,
     rpc_url: Option<&str>,
 ) -> Result<bool, Box<dyn Error>> {
     use ethers::abi::{Function, Param, ParamType, StateMutability, Token};
@@ -452,8 +459,11 @@ pub async fn verify_proof_with_data_attestation(
         public_inputs.push(u);
     }
 
-    let encoded_verifier =
-        encode_calldata(None, &proof.proof, &flattened_instances.collect::<Vec<_>>());
+    let encoded_verifier = encode_calldata(
+        addr_vk.as_ref().map(|x| x.0),
+        &proof.proof,
+        &flattened_instances.collect::<Vec<_>>(),
+    );
 
     info!("encoded: {:#?}", hex::encode(&encoded_verifier));
 
