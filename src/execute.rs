@@ -3,7 +3,7 @@ use crate::circuit::CheckMode;
 use crate::commands::CalibrationTarget;
 use crate::commands::Commands;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{deploy_da_verifier_via_solidity, deploy_verifier_via_solidity};
+use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(unused_imports)]
 use crate::eth::{fix_da_sol, get_contract_artifacts, verify_proof_via_solidity};
@@ -204,7 +204,22 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             settings_path,
             sol_code_path,
             abi_path,
-        } => create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path),
+            render_vk_seperately,
+        } => create_evm_verifier(
+            vk_path,
+            srs_path,
+            settings_path,
+            sol_code_path,
+            abi_path,
+            render_vk_seperately,
+        ),
+        Commands::CreateEVMVK {
+            vk_path,
+            srs_path,
+            settings_path,
+            sol_code_path,
+            abi_path,
+        } => create_evm_vk(vk_path, srs_path, settings_path, sol_code_path, abi_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEVMDataAttestation {
             settings_path,
@@ -220,6 +235,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             abi_path,
             aggregation_settings,
             logrows,
+            render_vk_seperately,
         } => create_evm_aggregate_verifier(
             vk_path,
             srs_path,
@@ -227,6 +243,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             abi_path,
             aggregation_settings,
             logrows,
+            render_vk_seperately,
         ),
         Commands::CompileCircuit {
             model,
@@ -368,6 +385,25 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
                 addr_path,
                 optimizer_runs,
                 private_key,
+                "Halo2Verifier",
+            )
+            .await
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::DeployEvmVK {
+            sol_code_path,
+            rpc_url,
+            addr_path,
+            optimizer_runs,
+            private_key,
+        } => {
+            deploy_evm(
+                sol_code_path,
+                rpc_url,
+                addr_path,
+                optimizer_runs,
+                private_key,
+                "Halo2VerifyingKey",
             )
             .await
         }
@@ -398,7 +434,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             addr_verifier,
             rpc_url,
             addr_da,
-        } => verify_evm(proof_path, addr_verifier, rpc_url, addr_da).await,
+            addr_vk,
+        } => verify_evm(proof_path, addr_verifier, rpc_url, addr_da, addr_vk).await,
         Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
     }
 }
@@ -448,7 +485,7 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 #[cfg(not(target_arch = "wasm32"))]
 fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box<dyn Error>> {
     let path = get_srs_path(logrows, srs_path);
-    let hash = sha256::digest(&std::fs::read(path.clone())?);
+    let hash = sha256::digest(std::fs::read(path.clone())?);
     info!("SRS hash: {}", hash);
 
     let predefined_hash = match { crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) } {
@@ -456,7 +493,7 @@ fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box
         None => return Err(format!("SRS (k={}) hash not found in public set", logrows).into()),
     };
 
-    if hash != predefined_hash.to_string() {
+    if hash != *predefined_hash {
         // delete file
         warn!("removing SRS file at {}", path.display());
         std::fs::remove_file(path)?;
@@ -679,7 +716,7 @@ impl AccuracyResults {
             let abs_error = error.map(|x| x.abs());
             let squared_error = error.map(|x| x.powi(2));
             let percentage_error =
-                error.enum_map(|i, x| Ok::<_, TensorError>(x / original[i].clone()))?;
+                error.enum_map(|i, x| Ok::<_, TensorError>(x / original[i]))?;
             let abs_percentage_error = percentage_error.map(|x| x.abs());
 
             errors.extend(error.into_iter());
@@ -695,29 +732,25 @@ impl AccuracyResults {
             abs_percentage_errors.iter().sum::<f32>() / abs_percentage_errors.len() as f32;
         let mean_error = errors.iter().sum::<f32>() / errors.len() as f32;
         let median_error = errors[errors.len() / 2];
-        let max_error = errors
+        let max_error = *errors
             .iter()
             .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap()
-            .clone();
-        let min_error = errors
+            .unwrap();
+        let min_error = *errors
             .iter()
             .min_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap()
-            .clone();
+            .unwrap();
 
         let mean_abs_error = abs_errors.iter().sum::<f32>() / abs_errors.len() as f32;
         let median_abs_error = abs_errors[abs_errors.len() / 2];
-        let max_abs_error = abs_errors
+        let max_abs_error = *abs_errors
             .iter()
             .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap()
-            .clone();
-        let min_abs_error = abs_errors
+            .unwrap();
+        let min_abs_error = *abs_errors
             .iter()
             .min_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap()
-            .clone();
+            .unwrap();
 
         let mean_squared_error = squared_errors.iter().sum::<f32>() / squared_errors.len() as f32;
 
@@ -1157,6 +1190,7 @@ pub(crate) fn create_evm_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
+    render_vk_seperately: bool,
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
@@ -1174,12 +1208,53 @@ pub(crate) fn create_evm_verifier(
         halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
         num_instance,
     );
-    let verifier_solidity = generator.render()?;
+    let verifier_solidity = if render_vk_seperately {
+        generator.render_separately()?.0 // ignore the rendered vk for now and generate it in create_evm_vk
+    } else {
+        generator.render()?
+    };
 
     File::create(sol_code_path.clone())?.write_all(verifier_solidity.as_bytes())?;
 
     // fetch abi of the contract
     let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0)?;
+    // save abi to file
+    serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
+
+    Ok(String::new())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn create_evm_vk(
+    vk_path: PathBuf,
+    srs_path: Option<PathBuf>,
+    settings_path: PathBuf,
+    sol_code_path: PathBuf,
+    abi_path: PathBuf,
+) -> Result<String, Box<dyn Error>> {
+    check_solc_requirement();
+    let circuit_settings = GraphSettings::load(&settings_path)?;
+    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
+
+    let num_instance = circuit_settings.total_instances();
+    let num_instance: usize = num_instance.iter().sum::<usize>();
+
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
+    trace!("params computed");
+
+    let generator = halo2_solidity_verifier::SolidityGenerator::new(
+        &params,
+        &vk,
+        halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
+        num_instance,
+    );
+
+    let vk_solidity = generator.render_separately()?.1;
+
+    File::create(sol_code_path.clone())?.write_all(vk_solidity.as_bytes())?;
+
+    // fetch abi of the contract
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2VerifyingKey", 0)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -1281,13 +1356,15 @@ pub(crate) async fn deploy_evm(
     addr_path: PathBuf,
     runs: usize,
     private_key: Option<String>,
+    contract_name: &str,
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
-    let contract_address = deploy_verifier_via_solidity(
+    let contract_address = deploy_contract_via_solidity(
         sol_code_path,
         rpc_url.as_deref(),
         runs,
         private_key.as_deref(),
+        contract_name,
     )
     .await?;
 
@@ -1304,6 +1381,7 @@ pub(crate) async fn verify_evm(
     addr_verifier: H160,
     rpc_url: Option<String>,
     addr_da: Option<H160>,
+    addr_vk: Option<H160>,
 ) -> Result<String, Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
     check_solc_requirement();
@@ -1315,11 +1393,12 @@ pub(crate) async fn verify_evm(
             proof.clone(),
             addr_verifier,
             addr_da,
+            addr_vk,
             rpc_url.as_deref(),
         )
         .await?
     } else {
-        verify_proof_via_solidity(proof.clone(), addr_verifier, rpc_url.as_deref()).await?
+        verify_proof_via_solidity(proof.clone(), addr_verifier, addr_vk, rpc_url.as_deref()).await?
     };
 
     info!("Solidity verification result: {}", result);
@@ -1339,6 +1418,7 @@ pub(crate) fn create_evm_aggregate_verifier(
     abi_path: PathBuf,
     circuit_settings: Vec<PathBuf>,
     logrows: u32,
+    render_vk_seperately: bool,
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let srs_path = get_srs_path(logrows, srs_path);
@@ -1377,7 +1457,11 @@ pub(crate) fn create_evm_aggregate_verifier(
 
     generator = generator.set_acc_encoding(Some(acc_encoding));
 
-    let verifier_solidity = generator.render()?;
+    let verifier_solidity = if render_vk_seperately {
+        generator.render_separately()?.0 // ignore the rendered vk for now and generate it in create_evm_vk
+    } else {
+        generator.render()?
+    };
 
     File::create(sol_code_path.clone())?.write_all(verifier_solidity.as_bytes())?;
 

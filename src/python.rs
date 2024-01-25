@@ -807,6 +807,7 @@ fn verify_aggr(
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
     abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
     srs_path=None,
+    render_vk_seperately = DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap(),
 ))]
 fn create_evm_verifier(
     vk_path: PathBuf,
@@ -814,12 +815,20 @@ fn create_evm_verifier(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
     srs_path: Option<PathBuf>,
+    render_vk_seperately: bool,
 ) -> Result<bool, PyErr> {
-    crate::execute::create_evm_verifier(vk_path, srs_path, settings_path, sol_code_path, abi_path)
-        .map_err(|e| {
-            let err_str = format!("Failed to run create_evm_verifier: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+    crate::execute::create_evm_verifier(
+        vk_path,
+        srs_path,
+        settings_path,
+        sol_code_path,
+        abi_path,
+        render_vk_seperately,
+    )
+    .map_err(|e| {
+        let err_str = format!("Failed to run create_evm_verifier: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }
@@ -885,7 +894,7 @@ fn setup_test_evm_witness(
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
     rpc_url=None,
     optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
-    private_key=None
+    private_key=None,
 ))]
 fn deploy_evm(
     addr_path: PathBuf,
@@ -902,6 +911,39 @@ fn deploy_evm(
             addr_path,
             optimizer_runs,
             private_key,
+            "Halo2Verifier",
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to run deploy_evm: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+
+    Ok(true)
+}
+
+#[pyfunction(signature = (
+    addr_path,
+    sol_code_path=PathBuf::from(DEFAULT_VK_SOL),
+    rpc_url=None,
+    optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
+    private_key=None,
+))]
+fn deploy_vk_evm(
+    addr_path: PathBuf,
+    sol_code_path: PathBuf,
+    rpc_url: Option<String>,
+    optimizer_runs: usize,
+    private_key: Option<String>,
+) -> Result<bool, PyErr> {
+    Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::deploy_evm(
+            sol_code_path,
+            rpc_url,
+            addr_path,
+            optimizer_runs,
+            private_key,
+            "Halo2VerifyingKey",
         ))
         .map_err(|e| {
             let err_str = format!("Failed to run deploy_evm: {}", e);
@@ -953,12 +995,14 @@ fn deploy_da_evm(
     proof_path=PathBuf::from(DEFAULT_PROOF),
     rpc_url=None,
     addr_da = None,
+    addr_vk = None,
 ))]
 fn verify_evm(
     addr_verifier: &str,
     proof_path: PathBuf,
     rpc_url: Option<String>,
     addr_da: Option<&str>,
+    addr_vk: Option<&str>,
 ) -> Result<bool, PyErr> {
     let addr_verifier = H160::from_str(addr_verifier).map_err(|e| {
         let err_str = format!("address is invalid: {}", e);
@@ -973,6 +1017,15 @@ fn verify_evm(
     } else {
         None
     };
+    let addr_vk = if let Some(addr_vk) = addr_vk {
+        let addr_vk = H160::from_str(addr_vk).map_err(|e| {
+            let err_str = format!("address is invalid: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+        Some(addr_vk)
+    } else {
+        None
+    };
 
     Runtime::new()
         .unwrap()
@@ -981,6 +1034,7 @@ fn verify_evm(
             addr_verifier,
             rpc_url,
             addr_da,
+            addr_vk,
         ))
         .map_err(|e| {
             let err_str = format!("Failed to run verify_evm: {}", e);
@@ -998,6 +1052,7 @@ fn verify_evm(
     abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     srs_path=None,
+    render_vk_seperately = DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap(),
 ))]
 fn create_evm_verifier_aggr(
     aggregation_settings: Vec<PathBuf>,
@@ -1006,6 +1061,7 @@ fn create_evm_verifier_aggr(
     abi_path: PathBuf,
     logrows: u32,
     srs_path: Option<PathBuf>,
+    render_vk_seperately: bool,
 ) -> Result<bool, PyErr> {
     crate::execute::create_evm_aggregate_verifier(
         vk_path,
@@ -1014,6 +1070,7 @@ fn create_evm_verifier_aggr(
         abi_path,
         aggregation_settings,
         logrows,
+        render_vk_seperately,
     )
     .map_err(|e| {
         let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
@@ -1067,6 +1124,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
+    m.add_function(wrap_pyfunction!(deploy_vk_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
     m.add_function(wrap_pyfunction!(print_proof_hex, m)?)?;

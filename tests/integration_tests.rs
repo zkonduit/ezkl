@@ -882,7 +882,8 @@ mod native_tests {
             use crate::native_tests::TESTS_EVM_AGGR;
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
-            use crate::native_tests::run_js_tests;
+            use crate::native_tests::kzg_evm_prove_and_verify_render_seperately;
+            
             use crate::native_tests::kzg_evm_on_chain_input_prove_and_verify;
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
@@ -982,6 +983,19 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "public");
+                    // #[cfg(not(feature = "icicle"))]
+                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    test_dir.close().unwrap();
+
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_prove_and_verify_render_seperately_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
+                    kzg_evm_prove_and_verify_render_seperately(2, path, test.to_string(), "private", "private", "public");
                     // #[cfg(not(feature = "icicle"))]
                     // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
@@ -1817,6 +1831,137 @@ mod native_tests {
             pf_arg.as_str(),
             rpc_arg.as_str(),
             deployed_addr_arg.as_str(),
+        ];
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+        // As sanity check, add example that should fail.
+        args[2] = PF_FAILURE;
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(args)
+            .status()
+            .expect("failed to execute process");
+        assert!(!status.success());
+    }
+
+    // prove-serialize-verify, the usual full path
+    fn kzg_evm_prove_and_verify_render_seperately(
+        num_inner_columns: usize,
+        test_dir: &str,
+        example_name: String,
+        input_visibility: &str,
+        param_visibility: &str,
+        output_visibility: &str,
+    ) {
+        let anvil_url = ANVIL_URL.as_str();
+
+        kzg_prove_and_verify(
+            test_dir,
+            example_name.clone(),
+            "safe",
+            input_visibility,
+            param_visibility,
+            output_visibility,
+            num_inner_columns,
+            None,
+            false,
+            "single",
+        );
+
+        let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
+        init_params(settings_path.clone().into());
+
+        let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
+        let rpc_arg = format!("--rpc-url={}", anvil_url);
+        let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
+        let settings_arg = format!("--settings-path={}", settings_path);
+        let sol_arg = format!("--sol-code-path={}/{}/kzg.sol", test_dir, example_name);
+
+        // create the verifier
+        let args = vec![
+            "create-evm-verifier",
+            "--vk-path",
+            &vk_arg,
+            &settings_arg,
+            &sol_arg,
+            "--render-vk-seperately",
+        ];
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        let addr_path_arg_vk = format!("--addr-path={}/{}/addr_vk.txt", test_dir, example_name);
+        let sol_arg_vk = format!("--sol-code-path={}/{}/vk.sol", test_dir, example_name);
+        // create the verifier
+        let args = vec![
+            "create-evm-vk",
+            "--vk-path",
+            &vk_arg,
+            &settings_arg,
+            &sol_arg_vk,
+        ];
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // deploy the verifier
+        let args = vec![
+            "deploy-evm-verifier",
+            rpc_arg.as_str(),
+            addr_path_arg.as_str(),
+            sol_arg.as_str(),
+        ];
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // read in the address
+        let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
+            .expect("failed to read address file");
+
+        let deployed_addr_arg = format!("--addr-verifier={}", addr);
+
+        // deploy the vk
+        let args = vec![
+            "deploy-evm-vk",
+            rpc_arg.as_str(),
+            addr_path_arg_vk.as_str(),
+            sol_arg_vk.as_str(),
+        ];
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // read in the address
+        let addr_vk = std::fs::read_to_string(format!("{}/{}/addr_vk.txt", test_dir, example_name))
+            .expect("failed to read address file");
+
+        let deployed_addr_arg_vk = format!("--addr-vk={}", addr_vk);
+
+        // now verify the proof
+        let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
+        let mut args = vec![
+            "verify-evm",
+            "--proof-path",
+            pf_arg.as_str(),
+            rpc_arg.as_str(),
+            deployed_addr_arg.as_str(),
+            deployed_addr_arg_vk.as_str(),
         ];
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))

@@ -313,6 +313,8 @@ jobs:
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
+      - name: KZG prove and verify tests (EVM + VK rendered seperately)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify_render_seperately_ --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg all)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_kzg_all_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg inputs)
@@ -653,4 +655,3 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --no-capture
       # - name: Postgres tutorials
       #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
-     

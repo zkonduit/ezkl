@@ -763,18 +763,18 @@ impl GraphCircuit {
         if self.settings().run_args.input_visibility.is_public() {
             public_inputs.rescaled_inputs = elements.rescaled_inputs.clone();
             public_inputs.inputs = elements.inputs.clone();
-        } else if let Some(_) = &data.processed_inputs {
+        } else if data.processed_inputs.is_some() {
             public_inputs.processed_inputs = elements.processed_inputs.clone();
         }
 
-        if let Some(_) = &data.processed_params {
+        if data.processed_params.is_some() {
             public_inputs.processed_params = elements.processed_params.clone();
         }
 
         if self.settings().run_args.output_visibility.is_public() {
             public_inputs.rescaled_outputs = elements.rescaled_outputs.clone();
             public_inputs.outputs = elements.outputs.clone();
-        } else if let Some(_) = &data.processed_outputs {
+        } else if data.processed_outputs.is_some() {
             public_inputs.processed_outputs = elements.processed_outputs.clone();
         }
 
@@ -1133,7 +1133,7 @@ impl GraphCircuit {
 
         while (1 << extended_k) < (n * quotient_poly_degree) {
             extended_k += 1;
-            if !(extended_k <= bn256::Fr::S) {
+            if extended_k > bn256::Fr::S {
                 return false;
             }
         }

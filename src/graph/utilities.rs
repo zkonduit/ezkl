@@ -71,8 +71,8 @@ pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i12
 pub fn dequantize(felt: Fp, scale: crate::Scale, shift: f64) -> f64 {
     let int_rep = crate::fieldutils::felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
-    let float_rep = int_rep as f64 / multiplier - shift;
-    float_rep
+    
+    int_rep as f64 / multiplier - shift
 }
 
 /// Converts a scale (log base 2) to a fixed point multiplier.
