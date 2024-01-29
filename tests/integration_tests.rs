@@ -1312,22 +1312,27 @@ mod native_tests {
         num_inner_columns: usize,
         multiplicative_rebasing: bool,
     ) {
+        let mut args = vec![
+            "gen-settings".to_string(),
+            "-M".to_string(),
+            format!("{}/{}/network.onnx", test_dir, example_name),
+            format!(
+                "--settings-path={}/{}/settings.json",
+                test_dir, example_name
+            ),
+            format!("--variables=batch_size={}", batch_size),
+            format!("--input-visibility={}", input_visibility),
+            format!("--param-visibility={}", param_visibility),
+            format!("--output-visibility={}", output_visibility),
+            format!("--num-inner-cols={}", num_inner_columns),
+        ];
+
+        if multiplicative_rebasing {
+            args.push("--multiplicative-rebasing".to_string());
+        };
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "gen-settings",
-                "-M",
-                format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
-                &format!(
-                    "--settings-path={}/{}/settings.json",
-                    test_dir, example_name
-                ),
-                &format!("--variables=batch_size={}", batch_size),
-                &format!("--input-visibility={}", input_visibility),
-                &format!("--param-visibility={}", param_visibility),
-                &format!("--output-visibility={}", output_visibility),
-                &format!("--num-inner-cols={}", num_inner_columns),
-                &format!("--multiplicative-rebasing={}", multiplicative_rebasing),
-            ])
+            .args(args)
             .stdout(std::process::Stdio::null())
             .status()
             .expect("failed to execute process");
