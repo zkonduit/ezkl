@@ -961,14 +961,10 @@ impl GraphCircuit {
         max_lookup_inputs: i128,
         lookup_safety_margin: i128,
     ) -> (i128, i128) {
-        let mut margin = (
-            lookup_safety_margin * min_lookup_inputs,
-            lookup_safety_margin * max_lookup_inputs,
+        let margin = (
+            lookup_safety_margin * min_lookup_inputs - 1,
+            lookup_safety_margin * max_lookup_inputs + 1,
         );
-        if lookup_safety_margin == 1 {
-            margin.0 -= 1;
-            margin.1 += 1;
-        }
         margin
     }
 

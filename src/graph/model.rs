@@ -611,7 +611,7 @@ impl Model {
                         debug!("intermediate min lookup inputs: {}", min);
                     }
                     debug!(
-                        "------------ output node int {}: {} \n ------------ float: {} \n ------------ max: {} \n ------------ min: {} ------------ scale: {}",
+                        "------------ output node int {}: {} \n ------------ float: {} \n ------------ max: {} \n ------------ min: {} \n ------------ scale: {}",
                         idx,
                         res.output.map(crate::fieldutils::felt_to_i32).show(),
                         res.output

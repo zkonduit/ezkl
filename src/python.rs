@@ -511,6 +511,7 @@ fn gen_settings(
     target = CalibrationTarget::default(), // default is "resources
     lookup_safety_margin = DEFAULT_LOOKUP_SAFETY_MARGIN.parse().unwrap(),
     scales = None,
+    scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.parse().unwrap(),
     max_logrows = None,
 ))]
 fn calibrate_settings(
@@ -520,6 +521,7 @@ fn calibrate_settings(
     target: CalibrationTarget,
     lookup_safety_margin: i128,
     scales: Option<Vec<crate::Scale>>,
+    scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
 ) -> Result<bool, PyErr> {
     crate::execute::calibrate(
@@ -529,6 +531,7 @@ fn calibrate_settings(
         target,
         lookup_safety_margin,
         scales,
+        scale_rebase_multiplier,
         max_logrows,
     )
     .map_err(|e| {
