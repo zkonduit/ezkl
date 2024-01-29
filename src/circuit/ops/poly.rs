@@ -290,12 +290,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
 
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         let scale = match self {
-            PolyOp::MultiBroadcastTo { .. } => in_scales[0],
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,
-            PolyOp::Neg => in_scales[0],
-            PolyOp::MoveAxis { .. } => in_scales[0],
-            PolyOp::Downsample { .. } => in_scales[0],
-            PolyOp::Resize { .. } => in_scales[0],
             PolyOp::Iff => in_scales[1],
             PolyOp::Einsum { .. } => {
                 let mut scale = in_scales[0];
@@ -339,14 +334,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 scale += in_scales[1];
                 scale
             }
-            PolyOp::Identity => in_scales[0],
             PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
-            PolyOp::Pad(_) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow as crate::Scale),
-            PolyOp::Pack(_, _) => in_scales[0],
-            PolyOp::GlobalSumPool => in_scales[0],
-            PolyOp::Concat { axis: _ } => in_scales[0],
-            PolyOp::Slice { .. } => in_scales[0],
+            _ => in_scales[0],
         };
         Ok(scale)
     }

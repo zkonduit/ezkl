@@ -18,6 +18,7 @@ use crate::fieldutils::i128_to_felt;
 use crate::graph::new_op_from_onnx;
 use crate::tensor::Tensor;
 use crate::tensor::TensorError;
+use crate::tensor::ValTensor;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(not(target_arch = "wasm32"))]
 use itertools::Itertools;
@@ -132,6 +133,8 @@ pub struct RebaseScale {
     pub target_scale: i32,
     /// The original scale of the operation's inputs.
     pub original_scale: i32,
+    /// if true then the operation is a multiplicative division
+    pub multiplicative_rebasing: bool,
 }
 
 impl RebaseScale {
@@ -141,6 +144,7 @@ impl RebaseScale {
         global_scale: crate::Scale,
         op_out_scale: crate::Scale,
         scale_rebase_multiplier: u32,
+        multiplicative_rebasing: bool,
     ) -> SupportedOp {
         if (op_out_scale > (global_scale * scale_rebase_multiplier as i32))
             && !inner.is_constant()
@@ -154,6 +158,7 @@ impl RebaseScale {
                     target_scale: op.target_scale,
                     multiplier: op.multiplier * multiplier,
                     original_scale: op.original_scale,
+                    multiplicative_rebasing,
                 })
             } else {
                 SupportedOp::RebaseScale(RebaseScale {
@@ -161,6 +166,7 @@ impl RebaseScale {
                     target_scale: global_scale * scale_rebase_multiplier as i32,
                     multiplier,
                     original_scale: op_out_scale,
+                    multiplicative_rebasing,
                 })
             }
         } else {
@@ -173,6 +179,7 @@ impl RebaseScale {
         inner: SupportedOp,
         target_scale: crate::Scale,
         op_out_scale: crate::Scale,
+        multiplicative_rebasing: bool,
     ) -> SupportedOp {
         if (op_out_scale < (target_scale)) && !inner.is_constant() && !inner.is_input() {
             let multiplier = scale_to_multiplier(op_out_scale - target_scale);
@@ -182,6 +189,7 @@ impl RebaseScale {
                     target_scale: op.target_scale,
                     multiplier: op.multiplier * multiplier,
                     original_scale: op.original_scale,
+                    multiplicative_rebasing,
                 })
             } else {
                 SupportedOp::RebaseScale(RebaseScale {
@@ -189,6 +197,7 @@ impl RebaseScale {
                     target_scale,
                     multiplier,
                     original_scale: op_out_scale,
+                    multiplicative_rebasing,
                 })
             }
         } else {
@@ -203,19 +212,29 @@ impl Op<Fp> for RebaseScale {
     }
     fn f(&self, x: &[Tensor<Fp>]) -> Result<crate::circuit::ForwardResult<Fp>, TensorError> {
         let mut res = Op::<Fp>::f(&*self.inner, x)?;
-        let ri = res.output.map(felt_to_i128);
-        let rescaled = crate::tensor::ops::nonlinearities::const_div(&ri, self.multiplier);
-        res.output = rescaled.map(i128_to_felt);
 
-        res.intermediate_lookups.push(ri);
+        if !self.multiplicative_rebasing {
+            let ri = res.output.map(felt_to_i128);
+            let rescaled = crate::tensor::ops::nonlinearities::const_div(&ri, self.multiplier);
+            res.output = rescaled.map(i128_to_felt);
+            res.intermediate_lookups.push(ri);
+        } else {
+            let ri = res.output.map(felt_to_i128);
+            let rescaled = crate::tensor::ops::div(&[
+                ri,
+                Tensor::from(vec![self.multiplier as i128].into_iter()),
+            ])?;
+            res.output = rescaled.map(i128_to_felt);
+        }
 
         Ok(res)
     }
 
     fn as_string(&self) -> String {
         format!(
-            "REBASED (div={:?}) ({})",
+            "REBASED (div={:?}, mult_div={}) ({})",
             self.multiplier,
+            self.multiplicative_rebasing,
             self.inner.as_string()
         )
     }
@@ -226,9 +245,11 @@ impl Op<Fp> for RebaseScale {
 
     fn required_lookups(&self) -> Vec<LookupOp> {
         let mut lookups = self.inner.required_lookups();
-        lookups.push(LookupOp::Div {
-            denom: crate::circuit::utils::F32(self.multiplier as f32),
-        });
+        if !self.multiplicative_rebasing {
+            lookups.push(LookupOp::Div {
+                denom: crate::circuit::utils::F32(self.multiplier as f32),
+            });
+        }
         lookups
     }
 
@@ -243,14 +264,27 @@ impl Op<Fp> for RebaseScale {
             .layout(config, region, values)?
             .ok_or("no layout")?;
 
-        Ok(Some(crate::circuit::layouts::nonlinearity(
-            config,
-            region,
-            &[original_res],
-            &LookupOp::Div {
-                denom: crate::circuit::utils::F32(self.multiplier as f32),
-            },
-        )?))
+        // assign scale as constant if not already
+        let mut multiplier = Tensor::from(vec![Fp::from(self.multiplier as u64)].into_iter());
+        multiplier.set_visibility(&crate::graph::Visibility::Fixed);
+        let multiplier: ValTensor<Fp> = multiplier.try_into()?;
+
+        if self.multiplicative_rebasing {
+            Ok(Some(crate::circuit::layouts::div(
+                config,
+                region,
+                &[original_res, multiplier],
+            )?))
+        } else {
+            Ok(Some(crate::circuit::layouts::nonlinearity(
+                config,
+                region,
+                &[original_res],
+                &LookupOp::Div {
+                    denom: crate::circuit::utils::F32(self.multiplier as f32),
+                },
+            )?))
+        }
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<Fp>> {
@@ -527,6 +561,7 @@ impl Node {
         param_visibility: &Visibility,
         idx: usize,
         symbol_values: &SymbolValues,
+        multiplicative_rebasing: bool,
     ) -> Result<Self, Box<dyn Error>> {
         use log::warn;
 
@@ -631,7 +666,13 @@ impl Node {
         let mut out_scale = opkind.out_scale(in_scales.clone())?;
         // rescale the inputs if necessary to get consistent fixed points, we select the largest scale (highest precision)
         let global_scale = scales.get_max();
-        opkind = RebaseScale::rebase(opkind, global_scale, out_scale, scales.rebase_multiplier);
+        opkind = RebaseScale::rebase(
+            opkind,
+            global_scale,
+            out_scale,
+            scales.rebase_multiplier,
+            multiplicative_rebasing,
+        );
 
         out_scale = opkind.out_scale(in_scales)?;
 

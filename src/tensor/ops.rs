@@ -950,8 +950,7 @@ pub fn neg<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sy
 /// Elementwise multiplies multiple tensors.
 /// # Arguments
 ///
-/// * `a` - Tensor
-/// * `b` - Tensor
+/// * `t` - Tensors
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -988,6 +987,45 @@ pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::S
 
     for e in t[1..].iter() {
         output = (output * e.clone())?;
+    }
+
+    Ok(output)
+}
+
+/// Divides multiple tensors.
+/// # Arguments
+/// * `t` - Tensors
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::div;
+/// let x = Tensor::<i128>::new(
+///    Some(&[2, 1, 2, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///   Some(&[2, 3, 2, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = div(&[x, k], 1).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 1, 1, 1]), &[2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+pub fn div<
+    T: TensorType
+        + Div<Output = T>
+        + Mul<Output = T>
+        + From<u64>
+        + std::marker::Send
+        + std::marker::Sync,
+>(
+    t: &[Tensor<T>],
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+    let mut output: Tensor<T> = t[0].clone();
+
+    for e in t[1..].iter() {
+        output = (output / e.clone())?;
     }
 
     Ok(output)

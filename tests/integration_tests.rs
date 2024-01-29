@@ -513,12 +513,22 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn accuracy_measurement_div_rebase_(test: &str) {
+                crate::native_tests::init_binary();
+                crate::native_tests::setup_py_env();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "accuracy", 2.6, false);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn accuracy_measurement_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "accuracy", 2.6);
+                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "accuracy", 2.6, true);
                 test_dir.close().unwrap();
             }
 
@@ -528,7 +538,7 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "private", "fixed", "private", 1, "accuracy", 2.6);
+                accuracy_measurement(path, test.to_string(), "private", "fixed", "private", 1, "accuracy", 2.6 , true);
                 test_dir.close().unwrap();
             }
 
@@ -538,7 +548,7 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "public", "private", "private", 1, "accuracy", 2.6);
+                accuracy_measurement(path, test.to_string(), "public", "private", "private", 1, "accuracy", 2.6, true);
                 test_dir.close().unwrap();
             }
 
@@ -549,7 +559,7 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "resources", 18.0);
+                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "resources", 18.0, true);
                 test_dir.close().unwrap();
             }
 
@@ -883,7 +893,7 @@ mod native_tests {
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
             use crate::native_tests::kzg_evm_prove_and_verify_render_seperately;
-            
+
             use crate::native_tests::kzg_evm_on_chain_input_prove_and_verify;
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use crate::native_tests::kzg_fuzz;
@@ -1273,6 +1283,7 @@ mod native_tests {
             cal_target,
             scales_to_use,
             2,
+            true,
         );
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1299,6 +1310,7 @@ mod native_tests {
         cal_target: &str,
         scales_to_use: Option<Vec<u32>>,
         num_inner_columns: usize,
+        multiplicative_rebasing: bool,
     ) {
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1314,6 +1326,7 @@ mod native_tests {
                 &format!("--param-visibility={}", param_visibility),
                 &format!("--output-visibility={}", output_visibility),
                 &format!("--num-inner-cols={}", num_inner_columns),
+                &format!("--multiplicative-rebasing={}", multiplicative_rebasing),
             ])
             .stdout(std::process::Stdio::null())
             .status()
@@ -1392,6 +1405,7 @@ mod native_tests {
         batch_size: usize,
         cal_target: &str,
         target_perc: f32,
+        multiplicative_rebasing: bool,
     ) {
         gen_circuit_settings_and_witness(
             test_dir,
@@ -1403,6 +1417,7 @@ mod native_tests {
             cal_target,
             None,
             2,
+            multiplicative_rebasing,
         );
 
         println!(
@@ -1661,6 +1676,7 @@ mod native_tests {
             target_str,
             scales_to_use,
             num_inner_columns,
+            true,
         );
 
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
@@ -1737,6 +1753,7 @@ mod native_tests {
             "resources",
             None,
             2,
+            true,
         );
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2012,6 +2029,7 @@ mod native_tests {
             // we need the accuracy
             Some(vec![7, 8]),
             1,
+            true,
         );
 
         let model_path = format!("{}/{}/network.compiled", test_dir, example_name);

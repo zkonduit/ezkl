@@ -159,6 +159,8 @@ struct PyRunArgs {
     pub param_visibility: Visibility,
     #[pyo3(get, set)]
     pub variables: Vec<(String, usize)>,
+    #[pyo3(get, set)]
+    pub multiplicative_rebasing: bool,
 }
 
 /// default instantiation of PyRunArgs
@@ -185,6 +187,7 @@ impl From<PyRunArgs> for RunArgs {
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
             variables: py_run_args.variables,
+            multiplicative_rebasing: py_run_args.multiplicative_rebasing,
         }
     }
 }
@@ -203,6 +206,7 @@ impl Into<PyRunArgs> for RunArgs {
             output_visibility: self.output_visibility,
             param_visibility: self.param_visibility,
             variables: self.variables,
+            multiplicative_rebasing: self.multiplicative_rebasing,
         }
     }
 }

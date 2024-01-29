@@ -71,7 +71,6 @@ pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i12
 pub fn dequantize(felt: Fp, scale: crate::Scale, shift: f64) -> f64 {
     let int_rep = crate::fieldutils::felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
-    
     int_rep as f64 / multiplier - shift
 }
 
@@ -717,8 +716,8 @@ pub fn new_op_from_onnx(
             }
         }
         "Recip" => {
-            // Extract the slope layer hyperparams
             let in_scale = inputs[0].out_scales()[0];
+            // If the input scale is larger than the params scale
             let scale_diff = std::cmp::max(scales.input, scales.params) - inputs[0].out_scales()[0];
             let additional_scale = if scale_diff > 0 {
                 scale_to_multiplier(scale_diff)

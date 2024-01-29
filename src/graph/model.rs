@@ -1042,6 +1042,7 @@ impl Model {
                         &run_args.param_visibility,
                         i,
                         symbol_values,
+                        run_args.multiplicative_rebasing,
                     )?;
                     if let Some(ref scales) = override_input_scales {
                         if let Some(inp) = n.opkind.get_input() {
@@ -1058,9 +1059,20 @@ impl Model {
                         if scales.contains_key(&i) {
                             let scale_diff = n.out_scale - scales[&i];
                             n.opkind = if scale_diff > 0 {
-                                RebaseScale::rebase(n.opkind, scales[&i], n.out_scale, 1)
+                                RebaseScale::rebase(
+                                    n.opkind,
+                                    scales[&i],
+                                    n.out_scale,
+                                    1,
+                                    run_args.multiplicative_rebasing,
+                                )
                             } else {
-                                RebaseScale::rebase_up(n.opkind, scales[&i], n.out_scale)
+                                RebaseScale::rebase_up(
+                                    n.opkind,
+                                    scales[&i],
+                                    n.out_scale,
+                                    run_args.multiplicative_rebasing,
+                                )
                             };
                             n.out_scale = scales[&i];
                         }

@@ -110,6 +110,9 @@ pub struct RunArgs {
     /// Flags whether params are public, private, hashed
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
+    #[arg(long, default_value = "true")]
+    /// Multiplicative division
+    pub multiplicative_rebasing: bool,
 }
 
 impl Default for RunArgs {
@@ -126,6 +129,7 @@ impl Default for RunArgs {
             input_visibility: Visibility::Private,
             output_visibility: Visibility::Public,
             param_visibility: Visibility::Private,
+            multiplicative_rebasing: true,
         }
     }
 }
