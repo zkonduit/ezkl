@@ -511,7 +511,7 @@ fn gen_settings(
     target = CalibrationTarget::default(), // default is "resources
     lookup_safety_margin = DEFAULT_LOOKUP_SAFETY_MARGIN.parse().unwrap(),
     scales = None,
-    scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.parse().unwrap(),
+    scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.split(",").map(|x| x.parse().unwrap()).collect(),
     max_logrows = None,
 ))]
 fn calibrate_settings(
