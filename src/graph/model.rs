@@ -507,7 +507,7 @@ impl Model {
         // extract the requisite lookup ops from the model
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
         // extract the requisite lookup ops from the model
-        let range_checks: Vec<Range> = self.required_range_checks();
+        let mut range_checks: Vec<Range> = self.required_range_checks();
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
 
@@ -522,6 +522,9 @@ impl Model {
 
         let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
         lookup_ops.extend(set.into_iter().sorted());
+
+        let set: HashSet<_> = range_checks.drain(..).collect(); // dedup
+        range_checks.extend(set.into_iter().sorted());
 
         Ok(GraphSettings {
             run_args: run_args.clone(),
