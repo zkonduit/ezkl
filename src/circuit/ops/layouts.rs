@@ -61,7 +61,7 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(div);
+    let range_check_bracket = felt_to_i128(div) - 1;
 
     let mut divisor = Tensor::from(vec![ValType::Constant(div)].into_iter());
     divisor.set_visibility(&crate::graph::Visibility::Fixed);
