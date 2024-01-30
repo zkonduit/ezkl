@@ -228,11 +228,8 @@ impl Op<Fp> for RebaseScale {
             res.intermediate_lookups.push(ri);
         } else {
             let ri = res.output.map(felt_to_i128);
-            let divisor = Tensor::from(vec![self.multiplier as i128].into_iter());
-            let rescaled = crate::tensor::ops::div(&[
-                ri,
-                Tensor::from(vec![self.multiplier as i128].into_iter()),
-            ])?;
+            let divisor = Tensor::from(vec![self.range_bracket()].into_iter());
+            let rescaled = crate::tensor::ops::div(&[ri, divisor.clone()])?;
             res.output = rescaled.map(i128_to_felt);
             res.intermediate_lookups.extend([-divisor.clone(), divisor]);
         }
