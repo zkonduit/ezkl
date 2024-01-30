@@ -55,46 +55,30 @@ pub fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usi
 pub fn div<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 2],
+    value: &[ValTensor<F>; 1],
+    div: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (mut input, mut divisor) = (values[0].clone(), values[1].clone());
+    let input = value[0].clone();
 
-    // broadcast the divisor to the input shape
-    let broadcasted_shape = get_broadcasted_shape(input.dims(), divisor.dims())?;
-    divisor.expand(&broadcasted_shape)?;
-    input.expand(&broadcasted_shape)?;
+    let inv: F = match div.invert().into() {
+        Some(inv) => inv,
+        None => return Err("cannot invert".into()),
+    };
 
-    let is_assigned = !input.any_unknowns()? && !divisor.any_unknowns()?;
+    let mut multiplicative_inverse = Tensor::from(vec![ValType::Constant(inv)].into_iter());
+    multiplicative_inverse.set_visibility(&crate::graph::Visibility::Fixed);
+    let multiplicative_inverse =
+        region.assign(&config.inputs[1], &multiplicative_inverse.into())?;
 
-    let claimed_output: ValTensor<F> = if is_assigned {
-        let input_evals = input.get_int_evals()?;
-        let divisor_evals = divisor.get_int_evals()?;
-        tensor::ops::div(&[input_evals, divisor_evals])?
-            .iter()
-            .map(|x| Ok(Value::known(i128_to_felt(*x))))
-            .collect::<Result<Tensor<Value<F>>, Box<dyn Error>>>()?
-    } else {
-        Tensor::new(
-            Some(&vec![Value::<F>::unknown(); input.len()]),
-            &[input.len()],
-        )?
-    }
-    .into();
+    region.increment(multiplicative_inverse.len());
 
-    let assigned_output = region.assign(&config.inputs[0], &claimed_output)?;
-    let assigned_divisor = region.assign(&config.inputs[1], &divisor)?;
-    let _ = region.assign(&config.output, &input)?;
-
-    // now assert that the output * divisor = input
-    for i in 0..assigned_output.len() {
-        let (x, y, z) = config.output.cartesian_coord(region.linear_coord() + i);
-        let selector = config.selectors.get(&(BaseOp::Mult, x, y));
-        region.enable(selector, z)?;
-    }
-
-    region.increment(std::cmp::max(assigned_output.len(), assigned_divisor.len()));
-
-    Ok(assigned_output)
+    // pairwise mu
+    pairwise(
+        config,
+        region,
+        &[input.clone(), multiplicative_inverse],
+        BaseOp::Mult,
+    )
 }
 
 /// Dot product accumulated layout

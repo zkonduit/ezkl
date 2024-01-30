@@ -18,7 +18,6 @@ use crate::fieldutils::i128_to_felt;
 use crate::graph::new_op_from_onnx;
 use crate::tensor::Tensor;
 use crate::tensor::TensorError;
-use crate::tensor::ValTensor;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(not(target_arch = "wasm32"))]
 use itertools::Itertools;
@@ -264,16 +263,12 @@ impl Op<Fp> for RebaseScale {
             .layout(config, region, values)?
             .ok_or("no layout")?;
 
-        // assign scale as constant if not already
-        let mut multiplier = Tensor::from(vec![Fp::from(self.multiplier as u64)].into_iter());
-        multiplier.set_visibility(&crate::graph::Visibility::Fixed);
-        let multiplier: ValTensor<Fp> = multiplier.try_into()?;
-
         if self.multiplicative_rebasing {
             Ok(Some(crate::circuit::layouts::div(
                 config,
                 region,
-                &[original_res, multiplier],
+                &[original_res],
+                Fp::from(self.multiplier as u64),
             )?))
         } else {
             Ok(Some(crate::circuit::layouts::nonlinearity(

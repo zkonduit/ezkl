@@ -1007,7 +1007,7 @@ pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::S
 ///   Some(&[2, 3, 2, 1, 1, 1]),
 /// &[2, 3],
 /// ).unwrap();
-/// let result = div(&[x, k], 1).unwrap();
+/// let result = div(&[x, k]).unwrap();
 /// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
