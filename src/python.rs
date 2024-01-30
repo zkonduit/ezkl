@@ -521,6 +521,7 @@ fn gen_settings(
     scales = None,
     scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.split(",").map(|x| x.parse().unwrap()).collect(),
     max_logrows = None,
+    div_rebasing = None,
 ))]
 fn calibrate_settings(
     data: PathBuf,
@@ -531,6 +532,7 @@ fn calibrate_settings(
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
+    div_rebasing: Option<bool>,
 ) -> Result<bool, PyErr> {
     crate::execute::calibrate(
         model,
@@ -540,6 +542,7 @@ fn calibrate_settings(
         lookup_safety_margin,
         scales,
         scale_rebase_multiplier,
+        div_rebasing,
         max_logrows,
     )
     .map_err(|e| {

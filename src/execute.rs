@@ -178,6 +178,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             scales,
             scale_rebase_multiplier,
             max_logrows,
+            div_rebasing,
         } => calibrate(
             model,
             data,
@@ -186,6 +187,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             lookup_safety_margin,
             scales,
             scale_rebase_multiplier,
+            div_rebasing,
             max_logrows,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
@@ -782,6 +784,7 @@ pub(crate) fn calibrate(
     lookup_safety_margin: i128,
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
+    div_rebasing: Option<bool>,
     max_logrows: Option<u32>,
 ) -> Result<GraphSettings, Box<dyn Error>> {
     use std::collections::HashMap;
@@ -825,6 +828,12 @@ pub(crate) fn calibrate(
         }
     };
 
+    let div_rebasing = if let Some(div_rebasing) = div_rebasing {
+        vec![div_rebasing]
+    } else {
+        vec![true, false]
+    };
+
     let mut found_params: Vec<GraphSettings> = vec![];
 
     // 2 x 2 grid
@@ -862,15 +871,21 @@ pub(crate) fn calibrate(
         .map(|(a, b)| (*a, *b))
         .collect::<Vec<((crate::Scale, crate::Scale), u32)>>();
 
+    let range_grid = range_grid
+        .iter()
+        .cartesian_product(div_rebasing.iter())
+        .map(|(a, b)| (*a, *b))
+        .collect::<Vec<(((crate::Scale, crate::Scale), u32), bool)>>();
+
     let mut forward_pass_res = HashMap::new();
 
     let pb = init_bar(range_grid.len() as u64);
     pb.set_message("calibrating...");
 
-    for ((input_scale, param_scale), scale_rebase_multiplier) in range_grid {
+    for (((input_scale, param_scale), scale_rebase_multiplier), div_rebasing) in range_grid {
         pb.set_message(format!(
-            "input scale: {}, param scale: {}, scale rebase multiplier: {}",
-            input_scale, param_scale, scale_rebase_multiplier
+            "input scale: {}, param scale: {}, scale rebase multiplier: {}, div rebasing: {}",
+            input_scale, param_scale, scale_rebase_multiplier, div_rebasing
         ));
 
         #[cfg(unix)]
@@ -890,6 +905,7 @@ pub(crate) fn calibrate(
             input_scale,
             param_scale,
             scale_rebase_multiplier,
+            div_rebasing,
             ..settings.run_args.clone()
         };
 
