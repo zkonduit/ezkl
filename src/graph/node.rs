@@ -203,6 +203,15 @@ impl RebaseScale {
             inner
         }
     }
+
+    /// Calculate the require range bracket for the operation
+    fn range_bracket(&self) -> i128 {
+        if self.div_rebasing {
+            0
+        } else {
+            self.multiplier as i128 - 1
+        }
+    }
 }
 
 impl Op<Fp> for RebaseScale {
@@ -257,7 +266,8 @@ impl Op<Fp> for RebaseScale {
     fn required_range_checks(&self) -> Vec<crate::circuit::table::Range> {
         let mut range_checks = self.inner.required_range_checks();
         if !self.div_rebasing {
-            range_checks.push((-self.multiplier as i128, self.multiplier as i128));
+            let bracket = self.range_bracket();
+            range_checks.push((-bracket, bracket));
         }
         range_checks
     }
@@ -278,7 +288,7 @@ impl Op<Fp> for RebaseScale {
                 config,
                 region,
                 &[original_res],
-                Fp::from(self.multiplier as u64),
+                Fp::from(self.range_bracket() as u64),
             )?))
         } else {
             Ok(Some(crate::circuit::layouts::nonlinearity(

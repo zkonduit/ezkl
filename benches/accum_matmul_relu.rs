@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl::circuit::table::Range;
 use ezkl::circuit::*;
 
 use ezkl::circuit::lookup::LookupOp;
@@ -16,7 +17,7 @@ use halo2_proofs::{
 use halo2curves::bn256::{Bn256, Fr};
 use std::marker::PhantomData;
 
-const BITS: (i128, i128) = (-32768, 32768);
+const BITS: Range = (-32768, 32768);
 static mut LEN: usize = 4;
 const K: usize = 16;
 

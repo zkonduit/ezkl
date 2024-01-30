@@ -973,6 +973,7 @@ pub(crate) fn calibrate(
             let found_settings = GraphSettings {
                 run_args: found_run_args,
                 required_lookups: new_settings.required_lookups,
+                required_range_checks: new_settings.required_range_checks,
                 model_output_scales: new_settings.model_output_scales,
                 model_input_scales: new_settings.model_input_scales,
                 num_rows: new_settings.num_rows,

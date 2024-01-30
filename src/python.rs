@@ -146,7 +146,7 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub scale_rebase_multiplier: u32,
     #[pyo3(get, set)]
-    pub lookup_range: Range,
+    pub lookup_range: crate::circuit::table::Range,
     #[pyo3(get, set)]
     pub logrows: u32,
     #[pyo3(get, set)]

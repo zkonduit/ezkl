@@ -1253,6 +1253,7 @@ impl Model {
         let instance_idx = vars.get_instance_idx();
 
         config.base.layout_tables(layouter)?;
+        config.base.layout_range_checks(layouter)?;
 
         let mut num_rows = 0;
         let mut linear_coord = 0;

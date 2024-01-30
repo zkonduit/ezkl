@@ -309,11 +309,7 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
     }
 
     /// Assigns values to the constraints generated when calling `configure`.
-    pub fn layout(
-        &mut self,
-        layouter: &mut impl Layouter<F>,
-        preassigned_input: bool,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
         if self.is_assigned {
             return Err(Box::new(CircuitError::TableAlreadyAssigned));
         }
@@ -332,14 +328,12 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
                     .iter()
                     .enumerate()
                     .map(|(row_offset, input)| {
-                        if !preassigned_input {
-                            table.assign_cell(
-                                || format!("rc_i_col row {}", row_offset),
-                                self.input,
-                                row_offset,
-                                || Value::known(*input),
-                            )?;
-                        }
+                        table.assign_cell(
+                            || format!("rc_i_col row {}", row_offset),
+                            self.input,
+                            row_offset,
+                            || Value::known(*input),
+                        )?;
                         Ok(())
                     })
                     .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;

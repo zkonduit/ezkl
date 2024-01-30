@@ -579,6 +579,20 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         Ok(())
     }
 
+    /// layout_range_checks must be called before layout.
+    pub fn layout_range_checks(
+        &mut self,
+        layouter: &mut impl Layouter<F>,
+    ) -> Result<(), Box<dyn Error>> {
+        for range_check in self.range_checks.values_mut() {
+            if !range_check.is_assigned {
+                debug!("laying out range check for {:?}", range_check.range);
+                range_check.layout(layouter)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Assigns variables to the regions created when calling `configure`.
     /// # Arguments
     /// * `values` - The explicit values to the operations.
