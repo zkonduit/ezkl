@@ -10,6 +10,8 @@ use halo2curves::ff::PrimeField;
 
 use self::{lookup::LookupOp, region::RegionCtx};
 
+use super::table::Range;
+
 ///
 pub mod base;
 ///
@@ -57,6 +59,11 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
 
     /// Returns the lookups required by the operation.
     fn required_lookups(&self) -> Vec<LookupOp> {
+        vec![]
+    }
+
+    /// Returns the range checks required by the operation.
+    fn required_range_checks(&self) -> Vec<Range> {
         vec![]
     }
 

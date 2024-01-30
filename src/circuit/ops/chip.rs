@@ -19,7 +19,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     circuit::ops::base::BaseOp,
-    circuit::{table::Table, utils},
+    circuit::{
+        table::{Range, RangeCheck, Table},
+        utils,
+    },
     tensor::{Tensor, TensorType, ValTensor, VarTensor},
 };
 use std::{collections::BTreeMap, error::Error, marker::PhantomData};
@@ -176,6 +179,10 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     pub lookup_selectors: BTreeMap<(LookupOp, usize, usize), Selector>,
     ///
     pub tables: BTreeMap<LookupOp, Table<F>>,
+    ///
+    pub range_checks: BTreeMap<Range, RangeCheck<F>>,
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
+    pub range_check_selectors: BTreeMap<(Range, usize, usize), Selector>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
@@ -194,7 +201,9 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             lookup_index: dummy_var,
             selectors: BTreeMap::new(),
             lookup_selectors: BTreeMap::new(),
+            range_check_selectors: BTreeMap::new(),
             tables: BTreeMap::new(),
+            range_checks: BTreeMap::new(),
             check_mode: CheckMode::SAFE,
             _marker: PhantomData,
         }
@@ -325,11 +334,13 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         Self {
             selectors,
             lookup_selectors: BTreeMap::new(),
+            range_check_selectors: BTreeMap::new(),
             inputs: inputs.to_vec(),
             lookup_input: VarTensor::Empty,
             lookup_output: VarTensor::Empty,
             lookup_index: VarTensor::Empty,
             tables: BTreeMap::new(),
+            range_checks: BTreeMap::new(),
             output: output.clone(),
             check_mode,
             _marker: PhantomData,
@@ -344,7 +355,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         input: &VarTensor,
         output: &VarTensor,
         index: &VarTensor,
-        lookup_range: (i128, i128),
+        lookup_range: Range,
         logrows: usize,
         nl: &LookupOp,
     ) -> Result<(), Box<dyn Error>>
@@ -479,6 +490,74 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             debug!("assigning lookup index");
             self.lookup_index = index.clone();
         }
+        Ok(())
+    }
+
+    /// Configures and creates lookup selectors
+    #[allow(clippy::too_many_arguments)]
+    pub fn configure_range_check(
+        &mut self,
+        cs: &mut ConstraintSystem<F>,
+        input: &VarTensor,
+        range: Range,
+    ) -> Result<(), Box<dyn Error>>
+    where
+        F: Field,
+    {
+        let mut selectors = BTreeMap::new();
+
+        if !input.is_advice() {
+            return Err("wrong input type for lookup input".into());
+        }
+
+        // we borrow mutably twice so we need to do this dance
+
+        let range_check = if !self.range_checks.contains_key(&range) {
+            // as all tables have the same input we see if there's another table who's input we can reuse
+            let range_check = RangeCheck::<F>::configure(cs, range);
+            self.range_checks.insert(range, range_check.clone());
+            range_check
+        } else {
+            return Ok(());
+        };
+
+        for x in 0..input.num_blocks() {
+            for y in 0..input.num_inner_cols() {
+                let single_col_sel = cs.complex_selector();
+
+                cs.lookup("", |cs| {
+                    let mut res = vec![];
+                    let sel = cs.query_selector(single_col_sel);
+
+                    let input_query = match &input {
+                        VarTensor::Advice { inner: advices, .. } => {
+                            cs.query_advice(advices[x][y], Rotation(0))
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    let default_x = range_check.get_first_element();
+
+                    let not_sel = Expression::Constant(F::ONE) - sel.clone();
+
+                    res.extend([(
+                        sel.clone() * input_query.clone()
+                            + not_sel.clone() * Expression::Constant(default_x),
+                        range_check.input,
+                    )]);
+
+                    res
+                });
+                selectors.insert((range, x, y), single_col_sel);
+            }
+        }
+        self.range_check_selectors.extend(selectors);
+        // if we haven't previously initialized the input/output, do so now
+        if let VarTensor::Empty = self.lookup_input {
+            debug!("assigning lookup input");
+            self.lookup_input = input.clone();
+        }
+
         Ok(())
     }
 

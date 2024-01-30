@@ -23,7 +23,7 @@ use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::table::{Table, RESERVED_BLINDING_ROWS_PAD};
+use crate::circuit::table::{Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::fieldutils::felt_to_f64;
 use crate::pfsys::PrettyElements;
@@ -431,6 +431,8 @@ pub struct GraphSettings {
     pub module_sizes: ModuleSizes,
     /// required_lookups
     pub required_lookups: Vec<LookupOp>,
+    /// required range_checks
+    pub required_range_checks: Vec<Range>,
     /// check mode
     pub check_mode: CheckMode,
     /// ezkl version used
@@ -639,7 +641,7 @@ impl GraphCircuit {
         }
 
         // dummy module settings, must load from GraphData after
-        let mut settings = model.gen_params(run_args, CheckMode::UNSAFE)?;
+        let mut settings = model.gen_params(run_args, run_args.check_mode)?;
 
         let mut num_params = 0;
         if !model.const_shapes().is_empty() {
@@ -960,7 +962,7 @@ impl GraphCircuit {
         min_lookup_inputs: i128,
         max_lookup_inputs: i128,
         lookup_safety_margin: i128,
-    ) -> (i128, i128) {
+    ) -> Range {
         let mut margin = (
             lookup_safety_margin * min_lookup_inputs,
             lookup_safety_margin * max_lookup_inputs,
@@ -973,7 +975,7 @@ impl GraphCircuit {
         margin
     }
 
-    fn calc_num_cols(safe_range: (i128, i128), max_logrows: u32) -> usize {
+    fn calc_num_cols(safe_range: Range, max_logrows: u32) -> usize {
         let max_col_size = Table::<Fp>::cal_col_size(
             max_logrows as usize,
             Self::reserved_blinding_rows() as usize,
@@ -1457,6 +1459,7 @@ impl Circuit<Fp> for GraphCircuit {
             params.run_args.lookup_range,
             params.run_args.logrows as usize,
             params.required_lookups,
+            params.required_range_checks,
             params.check_mode,
         )
         .unwrap();

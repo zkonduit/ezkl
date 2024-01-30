@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 use crate::{
-    circuit::{layouts, utils},
+    circuit::{layouts, table::Range, utils},
     fieldutils::{felt_to_i128, i128_to_felt},
     graph::{multiplier_to_scale, scale_to_multiplier},
     tensor::{self, Tensor, TensorError, TensorType},
@@ -57,7 +57,7 @@ pub enum LookupOp {
 
 impl LookupOp {
     /// Returns the range of values that can be represented by the table
-    pub fn bit_range(max_len: usize) -> (i128, i128) {
+    pub fn bit_range(max_len: usize) -> Range {
         let range = (max_len - 1) as f64 / 2_f64;
         let range = range as i128;
         (-range, range)

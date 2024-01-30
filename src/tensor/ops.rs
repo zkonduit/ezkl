@@ -5,8 +5,11 @@ use maybe_rayon::{
     iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
     prelude::IntoParallelRefIterator,
 };
-use std::collections::{HashMap, HashSet};
 pub use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Rem,
+};
 
 /// IFF operation.
 /// # Arguments
@@ -1027,6 +1030,43 @@ pub fn div<
     for e in t[1..].iter() {
         output = (output / e.clone())?;
     }
+
+    Ok(output)
+}
+
+/// Remainder op over 2 tensors.
+/// # Arguments
+/// * `t` - Tensors
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::rem;
+/// let x = Tensor::<i128>::new(
+///   Some(&[2, 1, 2, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let k = Tensor::<i128>::new(
+///  Some(&[2, 3, 2, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = rem(&[x, k]).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0, 0]), &[2, 3]).unwrap();
+/// ```
+pub fn rem<
+    T: TensorType
+        + Rem<Output = T>
+        + Mul<Output = T>
+        + From<u64>
+        + std::marker::Send
+        + std::marker::Sync,
+>(
+    a: &Tensor<T>,
+    b: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    // calculate value of output
+    let mut output: Tensor<T> = a.clone();
+
+    output = (output % b.clone())?;
 
     Ok(output)
 }

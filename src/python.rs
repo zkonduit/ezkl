@@ -146,7 +146,7 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub scale_rebase_multiplier: u32,
     #[pyo3(get, set)]
-    pub lookup_range: (i128, i128),
+    pub lookup_range: Range,
     #[pyo3(get, set)]
     pub logrows: u32,
     #[pyo3(get, set)]
@@ -160,7 +160,9 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub variables: Vec<(String, usize)>,
     #[pyo3(get, set)]
-    pub multiplicative_rebasing: bool,
+    pub div_rebasing: bool,
+    #[pyo3(get, set)]
+    pub check_mode: CheckMode,
 }
 
 /// default instantiation of PyRunArgs
@@ -187,7 +189,8 @@ impl From<PyRunArgs> for RunArgs {
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
             variables: py_run_args.variables,
-            multiplicative_rebasing: py_run_args.multiplicative_rebasing,
+            div_rebasing: py_run_args.div_rebasing,
+            check_mode: py_run_args.check_mode,
         }
     }
 }
@@ -206,7 +209,8 @@ impl Into<PyRunArgs> for RunArgs {
             output_visibility: self.output_visibility,
             param_visibility: self.param_visibility,
             variables: self.variables,
-            multiplicative_rebasing: self.multiplicative_rebasing,
+            div_rebasing: self.div_rebasing,
+            check_mode: self.check_mode,
         }
     }
 }

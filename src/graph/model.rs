@@ -6,6 +6,7 @@ use super::GraphError;
 use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::RegionCtx;
+use crate::circuit::table::Range;
 use crate::circuit::Input;
 use crate::circuit::InputType;
 use crate::circuit::Unknown;
@@ -240,6 +241,13 @@ impl NodeType {
             NodeType::SubGraph { model, .. } => model.required_lookups(),
         }
     }
+    /// Returns the lookups required by a graph
+    pub fn required_range_checks(&self) -> Vec<Range> {
+        match self {
+            NodeType::Node(n) => n.opkind.required_range_checks(),
+            NodeType::SubGraph { model, .. } => model.required_range_checks(),
+        }
+    }
     /// Returns the scales of the node's output.
     pub fn out_scales(&self) -> Vec<crate::Scale> {
         match self {
@@ -432,6 +440,15 @@ impl Model {
             .collect_vec()
     }
 
+    ///
+    fn required_range_checks(&self) -> Vec<Range> {
+        self.graph
+            .nodes
+            .values()
+            .flat_map(|n| n.required_range_checks())
+            .collect_vec()
+    }
+
     /// Creates a `Model` from a specified path to an Onnx file.
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
@@ -489,6 +506,8 @@ impl Model {
 
         // extract the requisite lookup ops from the model
         let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
+        // extract the requisite lookup ops from the model
+        let range_checks: Vec<Range> = self.required_range_checks();
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
 
@@ -511,6 +530,7 @@ impl Model {
             num_rows,
             total_assignments: linear_coord,
             required_lookups: lookup_ops,
+            required_range_checks: range_checks,
             model_output_scales: self.graph.get_output_scales()?,
             model_input_scales: self.graph.get_input_scales(),
             total_const_size,
@@ -1042,7 +1062,7 @@ impl Model {
                         &run_args.param_visibility,
                         i,
                         symbol_values,
-                        run_args.multiplicative_rebasing,
+                        run_args.div_rebasing,
                     )?;
                     if let Some(ref scales) = override_input_scales {
                         if let Some(inp) = n.opkind.get_input() {
@@ -1064,14 +1084,14 @@ impl Model {
                                     scales[&i],
                                     n.out_scale,
                                     1,
-                                    run_args.multiplicative_rebasing,
+                                    run_args.div_rebasing,
                                 )
                             } else {
                                 RebaseScale::rebase_up(
                                     n.opkind,
                                     scales[&i],
                                     n.out_scale,
-                                    run_args.multiplicative_rebasing,
+                                    run_args.div_rebasing,
                                 )
                             };
                             n.out_scale = scales[&i];
@@ -1167,9 +1187,10 @@ impl Model {
     pub fn configure(
         meta: &mut ConstraintSystem<Fp>,
         vars: &ModelVars<Fp>,
-        lookup_range: (i128, i128),
+        lookup_range: Range,
         logrows: usize,
         required_lookups: Vec<LookupOp>,
+        required_range_checks: Vec<Range>,
         check_mode: CheckMode,
     ) -> Result<PolyConfig<Fp>, Box<dyn Error>> {
         info!("configuring model");
@@ -1186,6 +1207,10 @@ impl Model {
         let index = &vars.advices[2];
         for op in required_lookups {
             base_gate.configure_lookup(meta, input, output, index, lookup_range, logrows, &op)?;
+        }
+
+        for range in required_range_checks {
+            base_gate.configure_range_check(meta, input, range)?;
         }
 
         Ok(base_gate)

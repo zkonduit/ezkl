@@ -133,7 +133,7 @@ pub struct RebaseScale {
     /// The original scale of the operation's inputs.
     pub original_scale: i32,
     /// if true then the operation is a multiplicative division
-    pub multiplicative_rebasing: bool,
+    pub div_rebasing: bool,
 }
 
 impl RebaseScale {
@@ -143,7 +143,7 @@ impl RebaseScale {
         global_scale: crate::Scale,
         op_out_scale: crate::Scale,
         scale_rebase_multiplier: u32,
-        multiplicative_rebasing: bool,
+        div_rebasing: bool,
     ) -> SupportedOp {
         if (op_out_scale > (global_scale * scale_rebase_multiplier as i32))
             && !inner.is_constant()
@@ -157,7 +157,7 @@ impl RebaseScale {
                     target_scale: op.target_scale,
                     multiplier: op.multiplier * multiplier,
                     original_scale: op.original_scale,
-                    multiplicative_rebasing,
+                    div_rebasing,
                 })
             } else {
                 SupportedOp::RebaseScale(RebaseScale {
@@ -165,7 +165,7 @@ impl RebaseScale {
                     target_scale: global_scale * scale_rebase_multiplier as i32,
                     multiplier,
                     original_scale: op_out_scale,
-                    multiplicative_rebasing,
+                    div_rebasing,
                 })
             }
         } else {
@@ -178,7 +178,7 @@ impl RebaseScale {
         inner: SupportedOp,
         target_scale: crate::Scale,
         op_out_scale: crate::Scale,
-        multiplicative_rebasing: bool,
+        div_rebasing: bool,
     ) -> SupportedOp {
         if (op_out_scale < (target_scale)) && !inner.is_constant() && !inner.is_input() {
             let multiplier = scale_to_multiplier(op_out_scale - target_scale);
@@ -188,7 +188,7 @@ impl RebaseScale {
                     target_scale: op.target_scale,
                     multiplier: op.multiplier * multiplier,
                     original_scale: op.original_scale,
-                    multiplicative_rebasing,
+                    div_rebasing,
                 })
             } else {
                 SupportedOp::RebaseScale(RebaseScale {
@@ -196,7 +196,7 @@ impl RebaseScale {
                     target_scale,
                     multiplier,
                     original_scale: op_out_scale,
-                    multiplicative_rebasing,
+                    div_rebasing,
                 })
             }
         } else {
@@ -212,18 +212,20 @@ impl Op<Fp> for RebaseScale {
     fn f(&self, x: &[Tensor<Fp>]) -> Result<crate::circuit::ForwardResult<Fp>, TensorError> {
         let mut res = Op::<Fp>::f(&*self.inner, x)?;
 
-        if !self.multiplicative_rebasing {
+        if self.div_rebasing {
             let ri = res.output.map(felt_to_i128);
             let rescaled = crate::tensor::ops::nonlinearities::const_div(&ri, self.multiplier);
             res.output = rescaled.map(i128_to_felt);
             res.intermediate_lookups.push(ri);
         } else {
             let ri = res.output.map(felt_to_i128);
+            let divisor = Tensor::from(vec![self.multiplier as i128].into_iter());
             let rescaled = crate::tensor::ops::div(&[
                 ri,
                 Tensor::from(vec![self.multiplier as i128].into_iter()),
             ])?;
             res.output = rescaled.map(i128_to_felt);
+            res.intermediate_lookups.extend([-divisor.clone(), divisor]);
         }
 
         Ok(res)
@@ -231,9 +233,9 @@ impl Op<Fp> for RebaseScale {
 
     fn as_string(&self) -> String {
         format!(
-            "REBASED (div={:?}, mult_div={}) ({})",
+            "REBASED (div={:?}, div_r={}) ({})",
             self.multiplier,
-            self.multiplicative_rebasing,
+            self.div_rebasing,
             self.inner.as_string()
         )
     }
@@ -243,13 +245,21 @@ impl Op<Fp> for RebaseScale {
     }
 
     fn required_lookups(&self) -> Vec<LookupOp> {
-        let mut lookups = self.inner.required_lookups();
-        if !self.multiplicative_rebasing {
+        let mut lookups: Vec<LookupOp> = self.inner.required_lookups();
+        if self.div_rebasing {
             lookups.push(LookupOp::Div {
                 denom: crate::circuit::utils::F32(self.multiplier as f32),
             });
         }
         lookups
+    }
+
+    fn required_range_checks(&self) -> Vec<crate::circuit::table::Range> {
+        let mut range_checks = self.inner.required_range_checks();
+        if !self.div_rebasing {
+            range_checks.push((-self.multiplier as i128, self.multiplier as i128));
+        }
+        range_checks
     }
 
     fn layout(
@@ -263,7 +273,7 @@ impl Op<Fp> for RebaseScale {
             .layout(config, region, values)?
             .ok_or("no layout")?;
 
-        if self.multiplicative_rebasing {
+        if !self.div_rebasing {
             Ok(Some(crate::circuit::layouts::div(
                 config,
                 region,
@@ -466,6 +476,10 @@ impl Op<Fp> for SupportedOp {
         self.as_op().required_lookups()
     }
 
+    fn required_range_checks(&self) -> Vec<crate::circuit::table::Range> {
+        self.as_op().required_range_checks()
+    }
+
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         self.as_op().out_scale(in_scales)
     }
@@ -506,6 +520,7 @@ impl Tabled for Node {
             "inputs",
             "out_dims",
             "required_lookups",
+            "required_range_checks",
         ] {
             headers.push(std::borrow::Cow::Borrowed(i));
         }
@@ -526,6 +541,10 @@ impl Tabled for Node {
                 .iter()
                 .map(<LookupOp as Op<Fp>>::as_string)
                 .collect_vec()
+        )));
+        fields.push(std::borrow::Cow::Owned(format!(
+            "{:?}",
+            self.opkind.required_range_checks()
         )));
         fields
     }
@@ -556,7 +575,7 @@ impl Node {
         param_visibility: &Visibility,
         idx: usize,
         symbol_values: &SymbolValues,
-        multiplicative_rebasing: bool,
+        div_rebasing: bool,
     ) -> Result<Self, Box<dyn Error>> {
         use log::warn;
 
@@ -666,7 +685,7 @@ impl Node {
             global_scale,
             out_scale,
             scales.rebase_multiplier,
-            multiplicative_rebasing,
+            div_rebasing,
         );
 
         out_scale = opkind.out_scale(in_scales)?;
