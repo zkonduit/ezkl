@@ -83,6 +83,8 @@ pub const DEFAULT_RENDER_VK_SEPERATELY: &str = "false";
 pub const DEFAULT_VK_SOL: &str = "vk.sol";
 /// Default VK abi path
 pub const DEFAULT_VK_ABI: &str = "vk.abi";
+/// Default scale rebase multipliers for calibration
+pub const DEFAULT_SCALE_REBASE_MULTIPLIERS: &str = "1,2,10";
 
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -323,6 +325,14 @@ pub enum Commands {
         /// Optional scales to specifically try for calibration. Example, --scales 0,4
         #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
         scales: Option<Vec<crate::Scale>>,
+        /// Optional scale rebase multipliers to specifically try for calibration. This is the multiplier at which we divide to return to the input scale. Example, --scale-rebase-multipliers 0,4
+        #[arg(
+            long,
+            value_delimiter = ',',
+            allow_hyphen_values = true,
+            default_value = DEFAULT_SCALE_REBASE_MULTIPLIERS
+        )]
+        scale_rebase_multiplier: Vec<u32>,
         /// max logrows to use for calibration, 26 is the max public SRS size
         #[arg(long)]
         max_logrows: Option<u32>,

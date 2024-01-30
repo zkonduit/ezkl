@@ -19,6 +19,9 @@ use crate::circuit::lookup::LookupOp;
 
 use super::Op;
 
+/// The range of the lookup table.
+pub type Range = (i128, i128);
+
 /// The safety factor for the range of the lookup table.
 pub const RANGE_MULTIPLIER: i128 = 2;
 /// The safety factor offset for the number of rows in the lookup table.
@@ -91,7 +94,7 @@ pub struct Table<F: PrimeField> {
     /// Flags if table has been previously assigned to.
     pub is_assigned: bool,
     /// Number of bits used in lookup table.
-    pub range: (i128, i128),
+    pub range: Range,
     _marker: PhantomData<F>,
 }
 
@@ -129,7 +132,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     }
 
     ///
-    pub fn num_cols_required(range: (i128, i128), col_size: usize) -> usize {
+    pub fn num_cols_required(range: Range, col_size: usize) -> usize {
         // double it to be safe
         let range_len = range.1 - range.0;
         // number of cols needed to store the range
@@ -141,7 +144,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     /// Configures the table.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
-        range: (i128, i128),
+        range: Range,
         logrows: usize,
         nonlinearity: &LookupOp,
         preexisting_inputs: Option<Vec<TableColumn>>,
@@ -254,6 +257,89 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
                 )
             })
             .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
+        Ok(())
+    }
+}
+
+/// Halo2 range check column
+#[derive(Clone, Debug)]
+pub struct RangeCheck<F: PrimeField> {
+    /// Input to table.
+    pub input: TableColumn,
+    /// selector cn
+    pub selector_constructor: SelectorConstructor<F>,
+    /// Flags if table has been previously assigned to.
+    pub is_assigned: bool,
+    /// Number of bits used in lookup table.
+    pub range: Range,
+    _marker: PhantomData<F>,
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
+    /// get first_element of column
+    pub fn get_first_element(&self) -> F {
+        i128_to_felt(self.range.0)
+    }
+
+    ///
+    pub fn cal_col_size(logrows: usize, reserved_blinding_rows: usize) -> usize {
+        2usize.pow(logrows as u32) - reserved_blinding_rows
+    }
+
+    ///
+    pub fn cal_bit_range(bits: usize, reserved_blinding_rows: usize) -> usize {
+        2usize.pow(bits as u32) - reserved_blinding_rows
+    }
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
+    /// Configures the table.
+    pub fn configure(cs: &mut ConstraintSystem<F>, range: Range) -> RangeCheck<F> {
+        log::debug!("range check range: {:?}", range);
+
+        let inputs = cs.lookup_table_column();
+
+        RangeCheck {
+            input: inputs,
+            is_assigned: false,
+            selector_constructor: SelectorConstructor::new(2),
+            range,
+            _marker: PhantomData,
+        }
+    }
+
+    /// Assigns values to the constraints generated when calling `configure`.
+    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
+        if self.is_assigned {
+            return Err(Box::new(CircuitError::TableAlreadyAssigned));
+        }
+
+        let smallest = self.range.0;
+        let largest = self.range.1;
+
+        let inputs: Tensor<F> = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+
+        self.is_assigned = true;
+
+        layouter.assign_table(
+            || "range check table",
+            |mut table| {
+                let _ = inputs
+                    .iter()
+                    .enumerate()
+                    .map(|(row_offset, input)| {
+                        table.assign_cell(
+                            || format!("rc_i_col row {}", row_offset),
+                            self.input,
+                            row_offset,
+                            || Value::known(*input),
+                        )?;
+                        Ok(())
+                    })
+                    .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
+                Ok(())
+            },
+        )?;
         Ok(())
     }
 }

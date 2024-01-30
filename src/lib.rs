@@ -29,7 +29,7 @@
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
 
-use circuit::Tolerance;
+use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
 use graph::Visibility;
 use serde::{Deserialize, Serialize};
@@ -91,7 +91,7 @@ pub struct RunArgs {
     pub scale_rebase_multiplier: u32,
     /// The min and max elements in the lookup table input column
     #[arg(short = 'B', long, value_parser = parse_tuple::<i128>, default_value = "(-32768,32768)")]
-    pub lookup_range: (i128, i128),
+    pub lookup_range: Range,
     /// The log_2 number of rows
     #[arg(short = 'K', long, default_value = "17")]
     pub logrows: u32,
@@ -110,6 +110,12 @@ pub struct RunArgs {
     /// Flags whether params are public, private, hashed
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
+    #[arg(long, default_value = "false")]
+    /// Multiplicative division
+    pub div_rebasing: bool,
+    /// check mode (safe, unsafe, etc)
+    #[arg(long, default_value = "unsafe")]
+    pub check_mode: CheckMode,
 }
 
 impl Default for RunArgs {
@@ -126,6 +132,8 @@ impl Default for RunArgs {
             input_visibility: Visibility::Private,
             output_visibility: Visibility::Public,
             param_visibility: Visibility::Private,
+            div_rebasing: false,
+            check_mode: CheckMode::UNSAFE,
         }
     }
 }

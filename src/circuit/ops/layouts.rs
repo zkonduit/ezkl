@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
     circuit::{ops::base::BaseOp, utils},
-    fieldutils::i128_to_felt,
+    fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{
         get_broadcasted_shape,
         ops::{accumulated, add, mult, sub},
@@ -49,6 +49,66 @@ pub fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usi
         total_len += 1;
     }
     total_len
+}
+
+/// Div accumulated layout
+pub fn div<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    value: &[ValTensor<F>; 1],
+    div: F,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let input = value[0].clone();
+    let input_dims = input.dims();
+
+    let range_check_bracket = felt_to_i128(div) - 1;
+
+    let mut divisor = Tensor::from(vec![ValType::Constant(div)].into_iter());
+    divisor.set_visibility(&crate::graph::Visibility::Fixed);
+    let divisor = region.assign(&config.inputs[1], &divisor.into())?;
+    region.increment(divisor.len());
+
+    let is_assigned = !input.any_unknowns()? && !divisor.any_unknowns()?;
+
+    let mut claimed_output: ValTensor<F> = if is_assigned {
+        let input_evals = input.get_int_evals()?;
+        let divisor_evals = divisor.get_int_evals()?;
+        tensor::ops::div(&[input_evals.clone(), divisor_evals.clone()])?
+            .iter()
+            .map(|x| Ok(Value::known(i128_to_felt(*x))))
+            .collect::<Result<Tensor<Value<F>>, Box<dyn Error>>>()?
+            .into()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); input.len()]),
+            &[input.len()],
+        )?
+        .into()
+    };
+    claimed_output.reshape(input_dims)?;
+
+    let product = pairwise(
+        config,
+        region,
+        &[claimed_output.clone(), divisor.clone()],
+        BaseOp::Mult,
+    )?;
+
+    let diff_with_input = pairwise(
+        config,
+        region,
+        &[product.clone(), input.clone()],
+        BaseOp::Sub,
+    )?;
+
+    range_check(
+        config,
+        region,
+        &[diff_with_input],
+        &(-range_check_bracket, range_check_bracket),
+    )?;
+
+    Ok(claimed_output)
 }
 
 /// Dot product accumulated layout
@@ -2302,6 +2362,50 @@ pub fn enforce_equality<F: PrimeField + TensorType + PartialOrd>(
     region.increment(output.len());
 
     Ok(output)
+}
+
+/// layout for range check.
+pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    range: &crate::circuit::table::Range,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // time the entire operation
+    let timer = instant::Instant::now();
+
+    let x = values[0].clone();
+
+    let w = region.assign(&config.lookup_input, &x)?;
+
+    let assigned_len = x.len();
+
+    let is_dummy = region.is_dummy();
+
+    if !is_dummy {
+        (0..assigned_len)
+            .map(|i| {
+                let (x, y, z) = config
+                    .lookup_input
+                    .cartesian_coord(region.linear_coord() + i);
+                let selector = config.range_check_selectors.get(&(range.clone(), x, y));
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    }
+
+    region.increment(assigned_len);
+
+    let elapsed = timer.elapsed();
+    trace!(
+        "range check {:?} layout took {:?}, row: {:?}",
+        range,
+        elapsed,
+        region.row()
+    );
+
+    Ok(w)
 }
 
 /// layout for nonlinearity check.

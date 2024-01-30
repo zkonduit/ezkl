@@ -176,6 +176,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             target,
             lookup_safety_margin,
             scales,
+            scale_rebase_multiplier,
             max_logrows,
         } => calibrate(
             model,
@@ -184,6 +185,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             target,
             lookup_safety_margin,
             scales,
+            scale_rebase_multiplier,
             max_logrows,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
@@ -715,8 +717,7 @@ impl AccuracyResults {
             let error = (original.clone() - calibrated.clone())?;
             let abs_error = error.map(|x| x.abs());
             let squared_error = error.map(|x| x.powi(2));
-            let percentage_error =
-                error.enum_map(|i, x| Ok::<_, TensorError>(x / original[i]))?;
+            let percentage_error = error.enum_map(|i, x| Ok::<_, TensorError>(x / original[i]))?;
             let abs_percentage_error = percentage_error.map(|x| x.abs());
 
             errors.extend(error.into_iter());
@@ -780,6 +781,7 @@ pub(crate) fn calibrate(
     target: CalibrationTarget,
     lookup_safety_margin: i128,
     scales: Option<Vec<crate::Scale>>,
+    scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
 ) -> Result<GraphSettings, Box<dyn Error>> {
     use std::collections::HashMap;
@@ -824,8 +826,6 @@ pub(crate) fn calibrate(
     };
 
     let mut found_params: Vec<GraphSettings> = vec![];
-
-    let scale_rebase_multiplier = [1, 2, 10];
 
     // 2 x 2 grid
     let range_grid = range
@@ -973,6 +973,7 @@ pub(crate) fn calibrate(
             let found_settings = GraphSettings {
                 run_args: found_run_args,
                 required_lookups: new_settings.required_lookups,
+                required_range_checks: new_settings.required_range_checks,
                 model_output_scales: new_settings.model_output_scales,
                 model_input_scales: new_settings.model_input_scales,
                 num_rows: new_settings.num_rows,

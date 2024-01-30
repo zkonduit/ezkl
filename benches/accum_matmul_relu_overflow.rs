@@ -3,6 +3,7 @@ use ezkl::circuit::*;
 
 use ezkl::circuit::lookup::LookupOp;
 use ezkl::circuit::poly::PolyOp;
+use ezkl::circuit::table::Range;
 use ezkl::pfsys::create_proof_circuit_kzg;
 use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
@@ -16,7 +17,7 @@ use halo2_proofs::{
 use halo2curves::bn256::{Bn256, Fr};
 use std::marker::PhantomData;
 
-const BITS: (i128, i128) = (-8180, 8180);
+const BITS: Range = (-8180, 8180);
 static mut LEN: usize = 4;
 static mut K: usize = 16;
 

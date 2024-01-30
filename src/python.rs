@@ -146,7 +146,7 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub scale_rebase_multiplier: u32,
     #[pyo3(get, set)]
-    pub lookup_range: (i128, i128),
+    pub lookup_range: crate::circuit::table::Range,
     #[pyo3(get, set)]
     pub logrows: u32,
     #[pyo3(get, set)]
@@ -159,6 +159,10 @@ struct PyRunArgs {
     pub param_visibility: Visibility,
     #[pyo3(get, set)]
     pub variables: Vec<(String, usize)>,
+    #[pyo3(get, set)]
+    pub div_rebasing: bool,
+    #[pyo3(get, set)]
+    pub check_mode: CheckMode,
 }
 
 /// default instantiation of PyRunArgs
@@ -185,6 +189,8 @@ impl From<PyRunArgs> for RunArgs {
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
             variables: py_run_args.variables,
+            div_rebasing: py_run_args.div_rebasing,
+            check_mode: py_run_args.check_mode,
         }
     }
 }
@@ -203,6 +209,8 @@ impl Into<PyRunArgs> for RunArgs {
             output_visibility: self.output_visibility,
             param_visibility: self.param_visibility,
             variables: self.variables,
+            div_rebasing: self.div_rebasing,
+            check_mode: self.check_mode,
         }
     }
 }
@@ -511,6 +519,7 @@ fn gen_settings(
     target = CalibrationTarget::default(), // default is "resources
     lookup_safety_margin = DEFAULT_LOOKUP_SAFETY_MARGIN.parse().unwrap(),
     scales = None,
+    scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.split(",").map(|x| x.parse().unwrap()).collect(),
     max_logrows = None,
 ))]
 fn calibrate_settings(
@@ -520,6 +529,7 @@ fn calibrate_settings(
     target: CalibrationTarget,
     lookup_safety_margin: i128,
     scales: Option<Vec<crate::Scale>>,
+    scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
 ) -> Result<bool, PyErr> {
     crate::execute::calibrate(
@@ -529,6 +539,7 @@ fn calibrate_settings(
         target,
         lookup_safety_margin,
         scales,
+        scale_rebase_multiplier,
         max_logrows,
     )
     .map_err(|e| {

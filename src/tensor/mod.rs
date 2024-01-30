@@ -30,11 +30,11 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
-use std::cmp::max;
 use std::error::Error;
 use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::{Add, Deref, DerefMut, Div, Mul, Neg, Range, Sub};
+use std::{cmp::max, ops::Rem};
 use thiserror::Error;
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
@@ -1446,6 +1446,43 @@ impl<T: TensorType + Div<Output = T> + std::marker::Send + std::marker::Sync> Di
 
         lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
             *o = o.clone() / r;
+        });
+
+        Ok(lhs)
+    }
+}
+
+// implement remainder
+impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync> Rem for Tensor<T> {
+    type Output = Result<Tensor<T>, TensorError>;
+
+    /// Elementwise remainder of a tensor with another tensor.
+    /// # Arguments
+    /// * `self` - Tensor
+    /// * `rhs` - Tensor
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use std::ops::Rem;
+    /// let x = Tensor::<i32>::new(
+    ///    Some(&[4, 1, 4, 1, 1, 4]),
+    ///   &[2, 3],
+    /// ).unwrap();
+    /// let y = Tensor::<i32>::new(
+    ///    Some(&[2, 1, 2, 1, 1, 1]),
+    ///  &[2, 3],
+    /// ).unwrap();
+    /// let result = x.rem(y).unwrap();
+    /// let expected = Tensor::<i32>::new(Some(&[0, 0, 0, 0, 0, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    fn rem(self, rhs: Self) -> Self::Output {
+        let broadcasted_shape = get_broadcasted_shape(self.dims(), rhs.dims()).unwrap();
+        let mut lhs = self.expand(&broadcasted_shape).unwrap();
+        let rhs = rhs.expand(&broadcasted_shape).unwrap();
+
+        lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
+            *o = o.clone() % r;
         });
 
         Ok(lhs)
