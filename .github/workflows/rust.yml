@@ -427,21 +427,21 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: KZG prove and verify tests (kzg outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output --features icicle --test-threads 2
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output --features icicle --test-threads 1
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w --features icicle  --test-threads 2
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w --features icicle  --test-threads 1
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features icicle  --test-threads 2
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features icicle  --test-threads 1
       - name: KZG prove and verify tests (public outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 2
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 2
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
       - name: KZG prove and verify tests (public inputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input --features icicle  --test-threads 2
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input --features icicle  --test-threads 1
       - name: KZG prove and verify tests (fixed params)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params --features icicle  --test-threads 2
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params --features icicle  --test-threads 1
       - name: KZG prove and verify tests (hashed outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 2
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 1
 
   fuzz-tests:
     runs-on: ubuntu-latest-32-cores
