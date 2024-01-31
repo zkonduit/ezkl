@@ -336,6 +336,9 @@ pub enum Commands {
         /// max logrows to use for calibration, 26 is the max public SRS size
         #[arg(long)]
         max_logrows: Option<u32>,
+        // whether to fix the div_rebasing value truthiness during calibration. this changes how we rebase
+        #[arg(long)]
+        div_rebasing: Option<bool>,
     },
 
     /// Generates a dummy SRS
