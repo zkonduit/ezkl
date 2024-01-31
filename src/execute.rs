@@ -980,6 +980,7 @@ pub(crate) fn calibrate(
             let found_run_args = RunArgs {
                 input_scale: new_settings.run_args.input_scale,
                 param_scale: new_settings.run_args.param_scale,
+                div_rebasing: new_settings.run_args.div_rebasing,
                 lookup_range: new_settings.run_args.lookup_range,
                 logrows: new_settings.run_args.logrows,
                 scale_rebase_multiplier: new_settings.run_args.scale_rebase_multiplier,
