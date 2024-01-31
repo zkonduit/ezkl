@@ -86,6 +86,8 @@ seq-macro = "0.3.1"
 test-case = "2.2.2"
 tempdir = "0.3.7"
 shellexpand = "3.1.0"
+serial_test = "2.0.0"
+
 
 [target.wasm32-unknown-unknown]
 runner = 'wasm-bindgen-test-runner'
