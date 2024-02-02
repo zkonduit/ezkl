@@ -282,8 +282,9 @@ pub fn new_op_from_onnx(
                         "shift left".to_string(),
                     )));
                 }
-                SupportedOp::Nonlinear(LookupOp::Div {
+                SupportedOp::Hybrid(HybridOp::Div {
                     denom: crate::circuit::utils::F32(1.0 / 2.0f32.powf(raw_values[0])),
+                    use_range_check_for_int: true,
                 })
             } else {
                 return Err(Box::new(GraphError::OpMismatch(
@@ -304,8 +305,9 @@ pub fn new_op_from_onnx(
                         "shift right".to_string(),
                     )));
                 }
-                SupportedOp::Nonlinear(LookupOp::Div {
+                SupportedOp::Hybrid(HybridOp::Div {
                     denom: crate::circuit::utils::F32(2.0f32.powf(raw_values[0])),
+                    use_range_check_for_int: true,
                 })
             } else {
                 return Err(Box::new(GraphError::OpMismatch(
@@ -544,7 +546,7 @@ pub fn new_op_from_onnx(
             // Raw values are always f32
             let raw_value = extract_tensor_value(op.0)?;
             // If bool or a tensor dimension then don't scale
-            let constant_scale = match dt {
+            let mut constant_scale = match dt {
                 DatumType::Bool
                 | DatumType::TDim
                 | DatumType::I64
@@ -558,6 +560,12 @@ pub fn new_op_from_onnx(
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => scales.params,
                 _ => return Err(Box::new(GraphError::UnsupportedDataType)),
             };
+
+            // if all raw_values are round then set scale to 0
+            let all_round = raw_value.iter().all(|x| x.fract() == 0.0);
+            if all_round {
+                constant_scale = 0;
+            }
 
             // Quantize the raw value
             let quantized_value =
@@ -868,7 +876,7 @@ pub fn new_op_from_onnx(
         "Add" => SupportedOp::Linear(PolyOp::Add),
         "Sub" => SupportedOp::Linear(PolyOp::Sub),
         "Mul" => {
-            let mut op = SupportedOp::Linear(PolyOp::Mult);
+            let op = SupportedOp::Linear(PolyOp::Mult);
 
             let const_idx = inputs
                 .iter()
@@ -881,19 +889,20 @@ pub fn new_op_from_onnx(
                 return Err(Box::new(GraphError::InvalidDims(idx, "mul".to_string())));
             }
 
-            if const_idx.len() == 1 {
-                let const_idx = const_idx[0];
-                if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
-                    if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
-                        inputs[const_idx].decrement_use();
-                        deleted_indices.push(const_idx);
-                        op = SupportedOp::Nonlinear(LookupOp::Div {
-                            // we invert the constant for division
-                            denom: crate::circuit::utils::F32(1. / c.raw_values[0]),
-                        })
-                    }
-                }
-            }
+            // if const_idx.len() == 1 {
+            //     let const_idx = const_idx[0];
+            //     if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
+            //         if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
+            //             inputs[const_idx].decrement_use();
+            //             deleted_indices.push(const_idx);
+            //             op = SupportedOp::Hybrid(HybridOp::Div {
+            //                 // we invert the constant for division
+            //                 denom: crate::circuit::utils::F32(1. / c.raw_values[0]),
+            //                 use_range_check_for_int: true,
+            //             })
+            //         }
+            //     }
+            // }
             op
         }
         "Iff" => SupportedOp::Linear(PolyOp::Iff),

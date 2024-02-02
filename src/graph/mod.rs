@@ -968,8 +968,8 @@ impl GraphCircuit {
             lookup_safety_margin * max_lookup_inputs,
         );
         if lookup_safety_margin == 1 {
-            margin.0 += 1;
-            margin.1 += 1;
+            margin.0 += 4;
+            margin.1 += 4;
         }
 
         margin

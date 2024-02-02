@@ -13,6 +13,10 @@ use serde::{Deserialize, Serialize};
 /// An enum representing the operations that consist of both lookups and arithmetic operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HybridOp {
+    Div {
+        denom: utils::F32,
+        use_range_check_for_int: bool,
+    },
     ReduceMax {
         axes: Vec<usize>,
     },
@@ -112,6 +116,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 let inter_2 = (unit
                     - tensor::ops::sum(&tensor::ops::nonlinearities::leakyrelu(&inter_1, 0.0))?)?;
                 (res.clone(), vec![inter_1, inter_2])
+            }
+            HybridOp::Div {
+                denom,
+                use_range_check_for_int,
+            } => {
+                // if denom is a round number and use_range_check_for_int is true, use range check check
+                if denom.0.fract() == 0.0 && *use_range_check_for_int {
+                    let divisor = Tensor::from(vec![denom.0 as i128].into_iter());
+                    let res = crate::tensor::ops::div(&[x, divisor.clone()])?;
+                    (res, vec![-divisor.clone(), divisor])
+                } else {
+                    let res = crate::tensor::ops::nonlinearities::const_div(&x, denom.0 as f64);
+                    (res, vec![x])
+                }
             }
             HybridOp::ReduceArgMax { dim } => {
                 let res = tensor::ops::argmax_axes(&x, *dim)?;
@@ -272,6 +290,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn as_string(&self) -> String {
         match self {
+            HybridOp::Div {
+                denom,
+                use_range_check_for_int,
+            } => format!(
+                "DIV (denom={}, use_range_check_for_int={})",
+                denom, use_range_check_for_int
+            ),
             HybridOp::SumPool {
                 padding,
                 stride,
@@ -335,6 +360,28 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 *kernel_shape,
                 *normalized,
             )?,
+            HybridOp::Div {
+                denom,
+                use_range_check_for_int,
+            } => {
+                if denom.0.fract() == 0.0 && *use_range_check_for_int {
+                    layouts::div(
+                        config,
+                        region,
+                        values[..].try_into()?,
+                        i128_to_felt(denom.0 as i128),
+                    )?
+                } else {
+                    layouts::nonlinearity(
+                        config,
+                        region,
+                        values.try_into()?,
+                        &LookupOp::Div {
+                            denom: denom.clone(),
+                        },
+                    )?
+                }
+            }
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
                     tensor::ops::gather(values[0].get_inner_tensor()?, idx, *dim)?.into()
@@ -427,11 +474,39 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         Ok(scale)
     }
 
+    fn required_range_checks(&self) -> Vec<Range> {
+        match self {
+            HybridOp::Div {
+                denom,
+                use_range_check_for_int,
+            } => {
+                if denom.0.fract() == 0.0 && *use_range_check_for_int {
+                    vec![(-denom.0 as i128 + 1, denom.0 as i128 - 1)]
+                } else {
+                    vec![]
+                }
+            }
+            _ => vec![],
+        }
+    }
+
     fn required_lookups(&self) -> Vec<LookupOp> {
         match self {
             HybridOp::ReduceMax { .. }
             | HybridOp::ReduceMin { .. }
             | HybridOp::MaxPool2d { .. } => Op::<F>::required_lookups(&LookupOp::ReLU),
+            HybridOp::Div {
+                denom,
+                use_range_check_for_int,
+            } => {
+                if denom.0.fract() == 0.0 && *use_range_check_for_int {
+                    vec![]
+                } else {
+                    vec![LookupOp::Div {
+                        denom: denom.clone(),
+                    }]
+                }
+            }
             HybridOp::Softmax { scale, .. } => {
                 vec![
                     LookupOp::Exp { scale: *scale },
