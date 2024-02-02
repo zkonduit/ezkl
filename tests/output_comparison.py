@@ -84,8 +84,13 @@ def compare_outputs(zk_output, onnx_output):
         else:
             diff = list1_i - list2_i
             res.append(100 * (diff) / (list2_i))
+            # iterate and print the diffs  if they are greater than 0.0
+            if abs(diff) > 0.0:
+                print("diff: ", diff)
+                print("------- zk_output: ", list1_i)
+                print("------- onnx_output: ", list2_i)
 
-    print("res: ", res)
+
 
     return np.mean(np.abs(res))
 
