@@ -737,22 +737,22 @@ impl AccuracyResults {
         let median_error = errors[errors.len() / 2];
         let max_error = *errors
             .iter()
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap();
         let min_error = *errors
             .iter()
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap();
 
         let mean_abs_error = abs_errors.iter().sum::<f32>() / abs_errors.len() as f32;
         let median_abs_error = abs_errors[abs_errors.len() / 2];
         let max_abs_error = *abs_errors
             .iter()
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap();
         let min_abs_error = *abs_errors
             .iter()
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap();
 
         let mean_squared_error = squared_errors.iter().sum::<f32>() / squared_errors.len() as f32;
