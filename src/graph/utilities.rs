@@ -874,7 +874,7 @@ pub fn new_op_from_onnx(
         "Add" => SupportedOp::Linear(PolyOp::Add),
         "Sub" => SupportedOp::Linear(PolyOp::Sub),
         "Mul" => {
-            let mut op = SupportedOp::Linear(PolyOp::Mult);
+            let op = SupportedOp::Linear(PolyOp::Mult);
 
             let const_idx = inputs
                 .iter()
@@ -887,28 +887,28 @@ pub fn new_op_from_onnx(
                 return Err(Box::new(GraphError::InvalidDims(idx, "mul".to_string())));
             }
 
-            if const_idx.len() == 1 {
-                let const_idx = const_idx[0];
-                if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
-                    if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
-                        inputs[const_idx].decrement_use();
-                        deleted_indices.push(const_idx);
-                        // if not divisible by 2 then we need to add a range check
-                        let raw_values = 1.0 / c.raw_values[0];
-                        if raw_values.log2().fract() != 0.0 {
-                            op = SupportedOp::Hybrid(HybridOp::Div {
-                                // we invert the constant for division
-                                denom: crate::circuit::utils::F32(raw_values),
-                                use_range_check_for_int: true,
-                            })
-                        } else {
-                            op = SupportedOp::Linear(PolyOp::Identity {
-                                out_scale: Some(input_scales[0] + raw_values.log2() as i32),
-                            });
-                        }
-                    }
-                }
-            }
+            // if const_idx.len() == 1 {
+            //     let const_idx = const_idx[0];
+            //     if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
+            //         if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
+            //             inputs[const_idx].decrement_use();
+            //             deleted_indices.push(const_idx);
+            //             // if not divisible by 2 then we need to add a range check
+            //             let raw_values = 1.0 / c.raw_values[0];
+            //             if raw_values.log2().fract() != 0.0 {
+            //                 op = SupportedOp::Hybrid(HybridOp::Div {
+            //                     // we invert the constant for division
+            //                     denom: crate::circuit::utils::F32(raw_values),
+            //                     use_range_check_for_int: true,
+            //                 })
+            //             } else {
+            //                 op = SupportedOp::Linear(PolyOp::Identity {
+            //                     out_scale: Some(input_scales[0] + raw_values.log2() as i32),
+            //                 });
+            //             }
+            //         }
+            //     }
+            // }
             op
         }
         "Iff" => SupportedOp::Linear(PolyOp::Iff),
