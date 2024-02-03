@@ -2033,7 +2033,7 @@ mod native_tests {
             1,
             "resources",
             // we need the accuracy
-            None,
+            Some(vec![4]),
             1,
             false,
         );
