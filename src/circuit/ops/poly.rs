@@ -326,9 +326,8 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 output_scale
             }
             PolyOp::Add => {
-                let mut scale_a = 0;
-                let scale_b = in_scales[0];
-                scale_a += in_scales[1];
+                let scale_a = in_scales[0];
+                let scale_b = in_scales[1];
                 assert_eq!(scale_a, scale_b);
                 scale_a
             }

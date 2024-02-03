@@ -546,7 +546,7 @@ pub fn new_op_from_onnx(
             // Raw values are always f32
             let raw_value = extract_tensor_value(op.0)?;
             // If bool or a tensor dimension then don't scale
-            let mut constant_scale = match dt {
+            let constant_scale = match dt {
                 DatumType::Bool
                 | DatumType::TDim
                 | DatumType::I64
@@ -562,10 +562,6 @@ pub fn new_op_from_onnx(
             };
 
             // if all raw_values are round then set scale to 0
-            let all_round = raw_value.iter().all(|x| x.fract() == 0.0);
-            if all_round {
-                constant_scale = 0;
-            }
 
             // Quantize the raw value
             let quantized_value =
