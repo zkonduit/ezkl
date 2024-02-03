@@ -554,8 +554,6 @@ impl Node {
         symbol_values: &SymbolValues,
         div_rebasing: bool,
     ) -> Result<Self, Box<dyn Error>> {
-        use log::warn;
-
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
 
