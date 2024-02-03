@@ -648,8 +648,6 @@ impl Node {
                     input_node.bump_scale(out_scale);
                     in_scales[input] = out_scale;
                 }
-            } else {
-                warn!("input {} not found for rescaling, skipping ...", input);
             }
         }
 
