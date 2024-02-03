@@ -342,13 +342,12 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     }
 
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
-        if matches!(
-            self,
-            PolyOp::Add { .. } | PolyOp::Sub | PolyOp::Concat { .. }
-        ) {
+        if matches!(self, PolyOp::Add { .. } | PolyOp::Sub) {
             vec![0, 1]
         } else if matches!(self, PolyOp::Iff) {
             vec![1, 2]
+        } else if matches!(self, PolyOp::Concat { .. }) {
+            (0..100).collect()
         } else {
             vec![]
         }
