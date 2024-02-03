@@ -146,6 +146,8 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub scale_rebase_multiplier: u32,
     #[pyo3(get, set)]
+    pub div_scale_offset: crate::Scale,
+    #[pyo3(get, set)]
     pub lookup_range: crate::circuit::table::Range,
     #[pyo3(get, set)]
     pub logrows: u32,
@@ -183,6 +185,7 @@ impl From<PyRunArgs> for RunArgs {
             param_scale: py_run_args.param_scale,
             num_inner_cols: py_run_args.num_inner_cols,
             scale_rebase_multiplier: py_run_args.scale_rebase_multiplier,
+            div_scale_offset: py_run_args.div_scale_offset,
             lookup_range: py_run_args.lookup_range,
             logrows: py_run_args.logrows,
             input_visibility: py_run_args.input_visibility,
@@ -203,6 +206,7 @@ impl Into<PyRunArgs> for RunArgs {
             param_scale: self.param_scale,
             num_inner_cols: self.num_inner_cols,
             scale_rebase_multiplier: self.scale_rebase_multiplier,
+            div_scale_offset: self.div_scale_offset,
             lookup_range: self.lookup_range,
             logrows: self.logrows,
             input_visibility: self.input_visibility,

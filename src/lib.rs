@@ -89,6 +89,9 @@ pub struct RunArgs {
     /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
     #[arg(long, default_value = "1")]
     pub scale_rebase_multiplier: u32,
+    #[arg(long, default_value = "0")]
+    /// this can be used to increase the scale at the output of a division, to avoid losing precision for larger divisors
+    pub div_scale_offset: i32,
     /// The min and max elements in the lookup table input column
     #[arg(short = 'B', long, value_parser = parse_tuple::<i128>, default_value = "(-32768,32768)")]
     pub lookup_range: Range,
@@ -126,6 +129,7 @@ impl Default for RunArgs {
             param_scale: 7,
             scale_rebase_multiplier: 1,
             lookup_range: (-32768, 32768),
+            div_scale_offset: 0,
             logrows: 17,
             num_inner_cols: 2,
             variables: vec![("batch_size".to_string(), 1)],

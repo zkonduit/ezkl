@@ -158,6 +158,7 @@ impl RebaseScale {
                     rebase_op: HybridOp::Div {
                         denom: crate::circuit::utils::F32((multiplier) as f32),
                         use_range_check_for_int: !div_rebasing,
+                        out_scale: None,
                     },
                     original_scale: op.original_scale,
                 })
@@ -169,6 +170,7 @@ impl RebaseScale {
                     rebase_op: HybridOp::Div {
                         denom: crate::circuit::utils::F32(multiplier as f32),
                         use_range_check_for_int: !div_rebasing,
+                        out_scale: None,
                     },
                     original_scale: op_out_scale,
                 })
@@ -197,6 +199,7 @@ impl RebaseScale {
                     rebase_op: HybridOp::Div {
                         denom: crate::circuit::utils::F32((multiplier) as f32),
                         use_range_check_for_int: !div_rebasing,
+                        out_scale: None,
                     },
                 })
             } else {
@@ -208,6 +211,7 @@ impl RebaseScale {
                     rebase_op: HybridOp::Div {
                         denom: crate::circuit::utils::F32(multiplier as f32),
                         use_range_check_for_int: !div_rebasing,
+                        out_scale: None,
                     },
                 })
             }

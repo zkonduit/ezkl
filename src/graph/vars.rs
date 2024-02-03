@@ -223,6 +223,8 @@ pub struct VarScales {
     pub params: crate::Scale,
     ///
     pub rebase_multiplier: u32,
+    /// a parameter to be used in the div operation to compensate for small values
+    pub div_offset: crate::Scale,
 }
 
 impl std::fmt::Display for VarScales {
@@ -237,12 +239,18 @@ impl VarScales {
         std::cmp::max(self.input, self.params)
     }
 
+    ///
+    pub fn get_min(&self) -> crate::Scale {
+        std::cmp::min(self.input, self.params)
+    }
+
     /// Place in [VarScales] struct.
     pub fn from_args(args: &RunArgs) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             input: args.input_scale,
             params: args.param_scale,
             rebase_multiplier: args.scale_rebase_multiplier,
+            div_offset: args.div_scale_offset,
         })
     }
 }

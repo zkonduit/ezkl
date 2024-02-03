@@ -16,6 +16,7 @@ pub enum HybridOp {
     Div {
         denom: utils::F32,
         use_range_check_for_int: bool,
+        out_scale: Option<crate::Scale>,
     },
     ReduceMax {
         axes: Vec<usize>,
@@ -120,6 +121,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Div {
                 denom,
                 use_range_check_for_int,
+                ..
             } => {
                 // if denom is a round number and use_range_check_for_int is true, use range check check
                 if denom.0.fract() == 0.0 && *use_range_check_for_int {
@@ -293,9 +295,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Div {
                 denom,
                 use_range_check_for_int,
+                out_scale,
             } => format!(
-                "DIV (denom={}, use_range_check_for_int={})",
-                denom, use_range_check_for_int
+                "DIV (denom={}, use_range_check_for_int={}, out_scale={:?})",
+                denom, use_range_check_for_int, out_scale
             ),
             HybridOp::SumPool {
                 padding,
@@ -363,6 +366,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Div {
                 denom,
                 use_range_check_for_int,
+                ..
             } => {
                 if denom.0.fract() == 0.0 && *use_range_check_for_int {
                     layouts::div(
@@ -469,6 +473,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::OneHot { .. }
             | HybridOp::ReduceArgMin { .. } => 0,
             HybridOp::Softmax { .. } => 2 * in_scales[0],
+            HybridOp::Div { out_scale, .. } => out_scale.unwrap_or(in_scales[0]),
             _ => in_scales[0],
         };
         Ok(scale)
@@ -479,6 +484,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Div {
                 denom,
                 use_range_check_for_int,
+                ..
             } => {
                 if denom.0.fract() == 0.0 && *use_range_check_for_int {
                     vec![(-denom.0 as i128 + 1, denom.0 as i128 - 1)]
@@ -498,6 +504,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::Div {
                 denom,
                 use_range_check_for_int,
+                ..
             } => {
                 if denom.0.fract() == 0.0 && *use_range_check_for_int {
                     vec![]

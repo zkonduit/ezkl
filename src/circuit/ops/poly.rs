@@ -33,7 +33,9 @@ pub enum PolyOp {
     Sub,
     Neg,
     Mult,
-    Identity,
+    Identity {
+        out_scale: Option<crate::Scale>,
+    },
     Reshape(Vec<usize>),
     MoveAxis {
         source: usize,
@@ -85,7 +87,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Resize { .. } => "RESIZE".into(),
             PolyOp::Iff => "IFF".into(),
             PolyOp::Einsum { equation, .. } => format!("EINSUM {}", equation),
-            PolyOp::Identity => "IDENTITY".into(),
+            PolyOp::Identity { out_scale } => {
+                format!("IDENTITY (out_scale={:?})", out_scale)
+            }
             PolyOp::Reshape(shape) => format!("RESHAPE (shape={:?})", shape),
             PolyOp::Flatten(_) => "FLATTEN".into(),
             PolyOp::Pad(_) => "PAD".into(),
@@ -135,7 +139,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Resize { scale_factor } => tensor::ops::resize(&inputs[0], scale_factor),
             PolyOp::Iff => tensor::ops::iff(&inputs[0], &inputs[1], &inputs[2]),
             PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
-            PolyOp::Identity => Ok(inputs[0].clone()),
+            PolyOp::Identity { .. } => Ok(inputs[0].clone()),
             PolyOp::Reshape(new_dims) => {
                 let mut t = inputs[0].clone();
                 t.reshape(new_dims)?;
@@ -264,7 +268,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Mult => {
                 layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Mult)?
             }
-            PolyOp::Identity => layouts::identity(config, region, values[..].try_into()?)?,
+            PolyOp::Identity { .. } => layouts::identity(config, region, values[..].try_into()?)?,
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
             PolyOp::Pad(p) => {
                 if values.len() != 1 {
@@ -336,6 +340,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             }
             PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow as crate::Scale),
+            PolyOp::Identity { out_scale } => out_scale.unwrap_or(in_scales[0]),
             _ => in_scales[0],
         };
         Ok(scale)

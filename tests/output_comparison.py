@@ -78,7 +78,7 @@ def compare_outputs(zk_output, onnx_output):
 
     zip_object = zip(np.array(zk_output).flatten(),
                      np.array(onnx_output).flatten())
-    for list1_i, list2_i in zip_object:
+    for (i, (list1_i, list2_i)) in enumerate(zip_object):
         if list1_i == 0.0 and list2_i == 0.0:
             res.append(0)
         else:
@@ -86,7 +86,8 @@ def compare_outputs(zk_output, onnx_output):
             res.append(100 * (diff) / (list2_i))
             # iterate and print the diffs  if they are greater than 0.0
             if abs(diff) > 0.0:
-                print("diff: ", diff)
+                print("------- index: ", i)
+                print("------- diff: ", diff)
                 print("------- zk_output: ", list1_i)
                 print("------- onnx_output: ", list2_i)
 
