@@ -669,8 +669,10 @@ pub fn new_op_from_onnx(
                 if unit == 0. {
                     SupportedOp::Nonlinear(LookupOp::ReLU)
                 } else {
+                    // get the non-constant index
+                    let non_const_idx = if const_idx == 0 { 1 } else { 0 };
                     SupportedOp::Nonlinear(LookupOp::Max {
-                        scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                        scale: scale_to_multiplier(inputs[non_const_idx].out_scales()[0]).into(),
                         a: crate::circuit::utils::F32(unit),
                     })
                 }
@@ -711,8 +713,11 @@ pub fn new_op_from_onnx(
                     deleted_indices.push(const_idx);
                 }
 
+                // get the non-constant index
+                let non_const_idx = if const_idx == 0 { 1 } else { 0 };
+
                 SupportedOp::Nonlinear(LookupOp::Min {
-                    scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                    scale: scale_to_multiplier(inputs[non_const_idx].out_scales()[0]).into(),
                     a: crate::circuit::utils::F32(unit),
                 })
             } else {
