@@ -896,13 +896,10 @@ pub fn new_op_from_onnx(
                         // if not divisible by 2 then we need to add a range check
                         let raw_values = 1.0 / c.raw_values[0];
                         if raw_values.log2().fract() != 0.0 {
-                            let scaled_raw =
-                                raw_values / scale_to_multiplier(scales.div_offset) as f32;
                             op = SupportedOp::Hybrid(HybridOp::Div {
                                 // we invert the constant for division
-                                denom: crate::circuit::utils::F32(scaled_raw),
+                                denom: crate::circuit::utils::F32(raw_values),
                                 use_range_check_for_int: true,
-                                out_scale: Some(input_scales[0] + scales.div_offset),
                             })
                         } else {
                             op = SupportedOp::Linear(PolyOp::Identity {
