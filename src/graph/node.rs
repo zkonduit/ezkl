@@ -464,15 +464,7 @@ impl Tabled for Node {
 
     fn headers() -> Vec<std::borrow::Cow<'static, str>> {
         let mut headers = Vec::with_capacity(Self::LENGTH);
-        for i in [
-            "idx",
-            "opkind",
-            "out_scale",
-            "inputs",
-            "out_dims",
-            "required_lookups",
-            "required_range_checks",
-        ] {
+        for i in ["idx", "opkind", "out_scale", "inputs", "out_dims"] {
             headers.push(std::borrow::Cow::Borrowed(i));
         }
         headers
