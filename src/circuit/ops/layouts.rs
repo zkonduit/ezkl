@@ -64,7 +64,7 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(div) - 1;
+    let range_check_bracket = felt_to_i128(div) / 2 - 1;
 
     let mut divisor = Tensor::from(vec![ValType::Constant(div)].into_iter());
     divisor.set_visibility(&crate::graph::Visibility::Fixed);
@@ -103,6 +103,9 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub,
     )?;
 
+    // debug print the diff
+    log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
+
     range_check(
         config,
         region,
@@ -124,10 +127,10 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(input_scale);
+    let range_check_bracket = felt_to_i128(output_scale) / 2 - 1;
 
     let mut scaled_unit =
-        Tensor::from(vec![ValType::Constant(output_scale + input_scale)].into_iter());
+        Tensor::from(vec![ValType::Constant(output_scale * input_scale)].into_iter());
     scaled_unit.set_visibility(&crate::graph::Visibility::Fixed);
     let scaled_unit = region.assign(&config.inputs[1], &scaled_unit.into())?;
     region.increment(scaled_unit.len());
@@ -170,12 +173,15 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub,
     )?;
 
+    // debug print the diff
+    log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
+
     // at most the error should be in the original unit scale's range
     range_check(
         config,
         region,
         &[diff_with_input],
-        &(0, range_check_bracket),
+        &(-range_check_bracket, range_check_bracket),
     )?;
 
     Ok(claimed_output)
@@ -2441,6 +2447,8 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     range: &crate::circuit::table::Range,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.add_used_range_check(*range);
+
     // time the entire operation
     let timer = instant::Instant::now();
 
@@ -2485,6 +2493,8 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     nl: &LookupOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.add_used_lookup(nl.clone());
+
     // time the entire operation
     let timer = instant::Instant::now();
 

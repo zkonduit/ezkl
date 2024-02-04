@@ -1,7 +1,8 @@
 use super::*;
 use crate::{
-    circuit::{self, layouts, utils, Tolerance},
+    circuit::{layouts, utils, Tolerance},
     fieldutils::{felt_to_i128, i128_to_felt},
+    graph::multiplier_to_scale,
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
@@ -130,7 +131,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 let res = crate::tensor::ops::nonlinearities::const_div(&x, denom.0 as f64);
                 // if denom is a round number and use_range_check_for_int is true, use range check check
                 if denom.0.fract() == 0.0 && *use_range_check_for_int {
-                    let divisor = Tensor::from(vec![denom.0 as i128].into_iter());
+                    let divisor = Tensor::from(vec![denom.0 as i128 / 2 - 1].into_iter());
                     (res, vec![-divisor.clone(), divisor])
                 } else {
                     (res, vec![x])
@@ -148,8 +149,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 );
                 // if scale is a round number and use_range_check_for_int is true, use range check check
                 if input_scale.0.fract() == 0.0 && *use_range_check_for_int {
-                    let err_tol = Tensor::from(vec![input_scale.0 as i128].into_iter());
-                    (res, vec![err_tol])
+                    let err_tol = Tensor::from(vec![output_scale.0 as i128 / 2 - 1].into_iter());
+                    (res, vec![-err_tol.clone(), err_tol])
                 } else {
                     (res, vec![x])
                 }
@@ -529,147 +530,10 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::OneHot { .. }
             | HybridOp::ReduceArgMin { .. } => 0,
             HybridOp::Softmax { .. } => 2 * in_scales[0],
+            HybridOp::Recip { output_scale, .. } => multiplier_to_scale(output_scale.0 as f64),
             _ => in_scales[0],
         };
         Ok(scale)
-    }
-
-    fn required_range_checks(&self) -> Vec<Range> {
-        match self {
-            HybridOp::Div {
-                denom,
-                use_range_check_for_int,
-                ..
-            } => {
-                if denom.0.fract() == 0.0 && *use_range_check_for_int {
-                    vec![(-denom.0 as i128 + 1, denom.0 as i128 - 1)]
-                } else {
-                    vec![]
-                }
-            }
-            HybridOp::Recip {
-                input_scale,
-                output_scale,
-                use_range_check_for_int,
-            } => {
-                if input_scale.0.fract() == 0.0
-                    && output_scale.0.fract() == 0.0
-                    && *use_range_check_for_int
-                {
-                    vec![(0, input_scale.0 as i128 - 1)]
-                } else {
-                    vec![]
-                }
-            }
-            _ => vec![],
-        }
-    }
-
-    fn required_lookups(&self) -> Vec<LookupOp> {
-        match self {
-            HybridOp::ReduceMax { .. }
-            | HybridOp::ReduceMin { .. }
-            | HybridOp::MaxPool2d { .. } => Op::<F>::required_lookups(&LookupOp::ReLU),
-            HybridOp::Div {
-                denom,
-                use_range_check_for_int,
-                ..
-            } => {
-                if denom.0.fract() == 0.0 && *use_range_check_for_int {
-                    vec![]
-                } else {
-                    vec![LookupOp::Div {
-                        denom: denom.clone(),
-                    }]
-                }
-            }
-            HybridOp::Recip {
-                input_scale,
-                output_scale,
-                use_range_check_for_int,
-            } => {
-                if input_scale.0.fract() == 0.0
-                    && output_scale.0.fract() == 0.0
-                    && *use_range_check_for_int
-                {
-                    vec![]
-                } else {
-                    vec![LookupOp::Recip {
-                        input_scale: *input_scale,
-                        output_scale: *output_scale,
-                    }]
-                }
-            }
-            HybridOp::Softmax { scale, .. } => {
-                vec![
-                    LookupOp::Exp { scale: *scale },
-                    LookupOp::Recip {
-                        input_scale: *scale,
-                        output_scale: *scale,
-                    },
-                ]
-            }
-            HybridOp::RangeCheck(tol) => {
-                let mut lookups = vec![];
-                let scale_squared = tol.scale.0 * tol.scale.0;
-                if tol.val > 0.0 {
-                    lookups.extend([
-                        LookupOp::Recip {
-                            input_scale: tol.scale,
-                            output_scale: tol.scale,
-                        },
-                        LookupOp::GreaterThan {
-                            a: circuit::utils::F32((tol.val * scale_squared) / 100.0),
-                        },
-                    ]);
-                }
-                lookups
-            }
-            HybridOp::Greater { .. } | HybridOp::Less { .. } => {
-                vec![LookupOp::GreaterThan {
-                    a: circuit::utils::F32(0.),
-                }]
-            }
-            HybridOp::GreaterEqual { .. } | HybridOp::LessEqual { .. } => {
-                vec![LookupOp::GreaterThanEqual {
-                    a: circuit::utils::F32(0.),
-                }]
-            }
-            HybridOp::TopK { .. } => {
-                vec![
-                    LookupOp::GreaterThan {
-                        a: circuit::utils::F32(0.),
-                    },
-                    LookupOp::KroneckerDelta,
-                ]
-            }
-            HybridOp::Gather {
-                constant_idx: None, ..
-            }
-            | HybridOp::OneHot { .. }
-            | HybridOp::GatherElements {
-                constant_idx: None, ..
-            }
-            | HybridOp::ScatterElements {
-                constant_idx: None, ..
-            }
-            | HybridOp::Equals { .. } => {
-                vec![LookupOp::KroneckerDelta]
-            }
-            HybridOp::ReduceArgMax { .. } | HybridOp::ReduceArgMin { .. } => {
-                vec![LookupOp::ReLU, LookupOp::KroneckerDelta]
-            }
-            HybridOp::SumPool {
-                kernel_shape,
-                normalized: true,
-                ..
-            } => {
-                vec![LookupOp::Div {
-                    denom: utils::F32((kernel_shape.0 * kernel_shape.1) as f32),
-                }]
-            }
-            _ => vec![],
-        }
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {

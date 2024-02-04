@@ -315,10 +315,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
         Ok(scale)
     }
 
-    fn required_lookups(&self) -> Vec<LookupOp> {
-        vec![self.clone()]
-    }
-
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
         Box::new(self.clone()) // Forward to the derive(Clone) impl
     }

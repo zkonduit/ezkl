@@ -82,6 +82,21 @@ pub type NodeGraph = BTreeMap<usize, NodeType>;
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct DummyPassRes {
+    /// number of rows use
+    pub num_rows: usize,
+    /// linear coordinate
+    pub linear_coord: usize,
+    /// total const size
+    pub total_const_size: usize,
+    /// lookup ops
+    pub lookup_ops: HashSet<LookupOp>,
+    /// range checks
+    pub range_checks: HashSet<Range>,
+}
+
+/// A struct for loading from an Onnx file and converting a computational graph to a circuit.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 pub struct Model {
     /// input indices
     pub graph: ParsedNodes,
@@ -234,20 +249,7 @@ impl NodeType {
             NodeType::SubGraph { out_dims, .. } => out_dims.clone(),
         }
     }
-    /// Returns the lookups required by a graph
-    pub fn required_lookups(&self) -> Vec<LookupOp> {
-        match self {
-            NodeType::Node(n) => n.opkind.required_lookups(),
-            NodeType::SubGraph { model, .. } => model.required_lookups(),
-        }
-    }
-    /// Returns the lookups required by a graph
-    pub fn required_range_checks(&self) -> Vec<Range> {
-        match self {
-            NodeType::Node(n) => n.opkind.required_range_checks(),
-            NodeType::SubGraph { model, .. } => model.required_range_checks(),
-        }
-    }
+
     /// Returns the scales of the node's output.
     pub fn out_scales(&self) -> Vec<crate::Scale> {
         match self {
@@ -432,23 +434,6 @@ impl ParsedNodes {
 }
 
 impl Model {
-    fn required_lookups(&self) -> Vec<LookupOp> {
-        self.graph
-            .nodes
-            .values()
-            .flat_map(|n| n.required_lookups())
-            .collect_vec()
-    }
-
-    ///
-    fn required_range_checks(&self) -> Vec<Range> {
-        self.graph
-            .nodes
-            .values()
-            .flat_map(|n| n.required_range_checks())
-            .collect_vec()
-    }
-
     /// Creates a `Model` from a specified path to an Onnx file.
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
@@ -501,42 +486,21 @@ impl Model {
         );
         // this is the total number of variables we will need to allocate
         // for the circuit
-        let (num_rows, linear_coord, total_const_size) =
-            self.dummy_layout(run_args, &self.graph.input_shapes()?)?;
-
-        // extract the requisite lookup ops from the model
-        let mut lookup_ops: Vec<LookupOp> = self.required_lookups();
-        // extract the requisite lookup ops from the model
-        let mut range_checks: Vec<Range> = self.required_range_checks();
+        let res = self.dummy_layout(run_args, &self.graph.input_shapes()?)?;
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
-
-        if run_args.tolerance.val > 0.0 {
-            for scale in self.graph.get_output_scales()? {
-                let mut tolerance = run_args.tolerance;
-                tolerance.scale = scale_to_multiplier(scale).into();
-                let opkind: Box<dyn Op<Fp>> = Box::new(HybridOp::RangeCheck(tolerance));
-                lookup_ops.extend(opkind.required_lookups());
-            }
-        }
-
-        let set: HashSet<_> = lookup_ops.drain(..).collect(); // dedup
-        lookup_ops.extend(set.into_iter().sorted());
-
-        let set: HashSet<_> = range_checks.drain(..).collect(); // dedup
-        range_checks.extend(set.into_iter().sorted());
 
         Ok(GraphSettings {
             run_args: run_args.clone(),
             model_instance_shapes: instance_shapes,
             module_sizes: crate::graph::modules::ModuleSizes::default(),
-            num_rows,
-            total_assignments: linear_coord,
-            required_lookups: lookup_ops,
-            required_range_checks: range_checks,
+            num_rows: res.num_rows,
+            total_assignments: res.linear_coord,
+            required_lookups: res.lookup_ops.into_iter().collect(),
+            required_range_checks: res.range_checks.into_iter().collect(),
             model_output_scales: self.graph.get_output_scales()?,
             model_input_scales: self.graph.get_input_scales(),
-            total_const_size,
+            total_const_size: res.total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
             num_blinding_factors: None,
@@ -1525,7 +1489,7 @@ impl Model {
         &self,
         run_args: &RunArgs,
         input_shapes: &[Vec<usize>],
-    ) -> Result<(usize, usize, usize), Box<dyn Error>> {
+    ) -> Result<DummyPassRes, Box<dyn Error>> {
         info!("calculating num of constraints using dummy model layout...");
 
         let start_time = instant::Instant::now();
@@ -1610,11 +1574,15 @@ impl Model {
             region.total_constants().to_string().red()
         );
 
-        Ok((
-            region.row(),
-            region.linear_coord(),
-            region.total_constants(),
-        ))
+        let res = DummyPassRes {
+            num_rows: region.row(),
+            linear_coord: region.linear_coord(),
+            total_const_size: region.total_constants(),
+            lookup_ops: region.used_lookups(),
+            range_checks: region.used_range_checks(),
+        };
+
+        Ok(res)
     }
 
     /// Retrieves all constants from the model.

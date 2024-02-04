@@ -1,4 +1,7 @@
-use crate::tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor};
+use crate::{
+    circuit::table::Range,
+    tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor},
+};
 use halo2_proofs::{
     circuit::Region,
     plonk::{Error, Selector},
@@ -7,8 +10,13 @@ use halo2curves::ff::PrimeField;
 use std::{
     cell::RefCell,
     collections::HashSet,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
 };
+
+use super::lookup::LookupOp;
 
 /// Region error
 #[derive(Debug, thiserror::Error)]
@@ -56,6 +64,8 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
     linear_coord: usize,
     num_inner_cols: usize,
     total_constants: usize,
+    used_lookups: HashSet<LookupOp>,
+    used_range_checks: HashSet<Range>,
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
@@ -75,6 +85,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             row,
             linear_coord,
             total_constants: 0,
+            used_lookups: HashSet::new(),
+            used_range_checks: HashSet::new(),
         }
     }
     /// Create a new region context from a wrapped region
@@ -90,6 +102,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             linear_coord,
             row,
             total_constants: 0,
+            used_lookups: HashSet::new(),
+            used_range_checks: HashSet::new(),
         }
     }
 
@@ -104,6 +118,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             linear_coord,
             row,
             total_constants: 0,
+            used_lookups: HashSet::new(),
+            used_range_checks: HashSet::new(),
         }
     }
 
@@ -111,8 +127,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     pub fn new_dummy_with_constants(
         row: usize,
         linear_coord: usize,
-        constants: usize,
+        total_constants: usize,
         num_inner_cols: usize,
+        used_lookups: HashSet<LookupOp>,
+        used_range_checks: HashSet<Range>,
     ) -> RegionCtx<'a, F> {
         let region = None;
         RegionCtx {
@@ -120,7 +138,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             num_inner_cols,
             linear_coord,
             row,
-            total_constants: constants,
+            total_constants,
+            used_lookups,
+            used_range_checks,
         }
     }
 
@@ -170,6 +190,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         let row = AtomicUsize::new(self.row());
         let linear_coord = AtomicUsize::new(self.linear_coord());
         let constants = AtomicUsize::new(self.total_constants());
+        let lookups = Arc::new(Mutex::new(self.used_lookups.clone()));
+        let range_checks = Arc::new(Mutex::new(self.used_range_checks.clone()));
 
         *output = output
             .par_enum_map(|idx, _| {
@@ -177,12 +199,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                 let starting_offset = row.load(Ordering::SeqCst);
                 let starting_linear_coord = linear_coord.load(Ordering::SeqCst);
                 let starting_constants = constants.load(Ordering::SeqCst);
+                // get inner value of the locked lookups
+
                 // we need to make sure that the region is not shared between threads
                 let mut local_reg = Self::new_dummy_with_constants(
                     starting_offset,
                     starting_linear_coord,
                     starting_constants,
                     self.num_inner_cols,
+                    HashSet::new(),
+                    HashSet::new(),
                 );
                 let res = inner_loop_function(idx, &mut local_reg);
                 // we update the offset and constants
@@ -195,6 +221,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                     local_reg.total_constants() - starting_constants,
                     Ordering::SeqCst,
                 );
+                // update the lookups
+                let mut lookups = lookups.lock().unwrap();
+                lookups.extend(local_reg.used_lookups());
+                let mut range_checks = range_checks.lock().unwrap();
+                range_checks.extend(local_reg.used_range_checks());
                 res
             })
             .map_err(|e| {
@@ -204,6 +235,21 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         self.total_constants = constants.into_inner();
         self.linear_coord = linear_coord.into_inner();
         self.row = row.into_inner();
+        self.used_lookups = Arc::try_unwrap(lookups)
+            .map_err(|e| RegionError::from(format!("dummy_loop: failed to get lookups: {:?}", e)))?
+            .into_inner()
+            .map_err(|e| {
+                RegionError::from(format!("dummy_loop: failed to get lookups: {:?}", e))
+            })?;
+        self.used_range_checks = Arc::try_unwrap(range_checks)
+            .map_err(|e| {
+                RegionError::from(format!("dummy_loop: failed to get range checks: {:?}", e))
+            })?
+            .into_inner()
+            .map_err(|e| {
+                RegionError::from(format!("dummy_loop: failed to get range checks: {:?}", e))
+            })?;
+
         Ok(())
     }
 
@@ -212,15 +258,14 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         self.region.is_none()
     }
 
-    /// duplicate_dummy
-    pub fn duplicate_dummy(&self) -> Self {
-        Self {
-            region: None,
-            linear_coord: self.linear_coord,
-            num_inner_cols: self.num_inner_cols,
-            row: self.row,
-            total_constants: self.total_constants,
-        }
+    /// add used lookup
+    pub fn add_used_lookup(&mut self, lookup: LookupOp) {
+        self.used_lookups.insert(lookup);
+    }
+
+    /// add used range check
+    pub fn add_used_range_check(&mut self, range: Range) {
+        self.used_range_checks.insert(range);
     }
 
     /// Get the offset
@@ -236,6 +281,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     /// Get the total number of constants
     pub fn total_constants(&self) -> usize {
         self.total_constants
+    }
+
+    /// get used lookups
+    pub fn used_lookups(&self) -> HashSet<LookupOp> {
+        self.used_lookups.clone()
+    }
+
+    /// get used range checks
+    pub fn used_range_checks(&self) -> HashSet<Range> {
+        self.used_range_checks.clone()
     }
 
     /// Assign a constant value

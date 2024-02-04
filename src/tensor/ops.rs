@@ -3773,7 +3773,7 @@ pub mod nonlinearities {
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2_f64;
-    /// let result = recip(&x, k);
+    /// let result = recip(&x, 1.0, k);
     /// let expected = Tensor::<i128>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
