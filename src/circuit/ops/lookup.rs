@@ -5,7 +5,7 @@ use std::error::Error;
 use crate::{
     circuit::{layouts, table::Range, utils},
     fieldutils::{felt_to_i128, i128_to_felt},
-    graph::{multiplier_to_scale, scale_to_multiplier},
+    graph::multiplier_to_scale,
     tensor::{self, Tensor, TensorError, TensorType},
 };
 
@@ -17,42 +17,112 @@ use halo2curves::ff::PrimeField;
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum LookupOp {
     Abs,
-    Div { denom: utils::F32 },
-    Cast { scale: utils::F32 },
+    Div {
+        denom: utils::F32,
+    },
+    Cast {
+        scale: utils::F32,
+    },
     ReLU,
-    Max { scale: utils::F32, a: utils::F32 },
-    Min { scale: utils::F32, a: utils::F32 },
-    Ceil { scale: utils::F32 },
-    Floor { scale: utils::F32 },
-    Round { scale: utils::F32 },
-    RoundHalfToEven { scale: utils::F32 },
-    Sqrt { scale: utils::F32 },
-    Rsqrt { scale: utils::F32 },
-    Recip { scale: utils::F32 },
-    LeakyReLU { slope: utils::F32 },
-    Sigmoid { scale: utils::F32 },
-    Ln { scale: utils::F32 },
-    Exp { scale: utils::F32 },
-    Cos { scale: utils::F32 },
-    ACos { scale: utils::F32 },
-    Cosh { scale: utils::F32 },
-    ACosh { scale: utils::F32 },
-    Sin { scale: utils::F32 },
-    ASin { scale: utils::F32 },
-    Sinh { scale: utils::F32 },
-    ASinh { scale: utils::F32 },
-    Tan { scale: utils::F32 },
-    ATan { scale: utils::F32 },
-    Tanh { scale: utils::F32 },
-    ATanh { scale: utils::F32 },
-    Erf { scale: utils::F32 },
-    GreaterThan { a: utils::F32 },
-    LessThan { a: utils::F32 },
-    GreaterThanEqual { a: utils::F32 },
-    LessThanEqual { a: utils::F32 },
+    Max {
+        scale: utils::F32,
+        a: utils::F32,
+    },
+    Min {
+        scale: utils::F32,
+        a: utils::F32,
+    },
+    Ceil {
+        scale: utils::F32,
+    },
+    Floor {
+        scale: utils::F32,
+    },
+    Round {
+        scale: utils::F32,
+    },
+    RoundHalfToEven {
+        scale: utils::F32,
+    },
+    Sqrt {
+        scale: utils::F32,
+    },
+    Rsqrt {
+        scale: utils::F32,
+    },
+    Recip {
+        input_scale: utils::F32,
+        output_scale: utils::F32,
+    },
+    LeakyReLU {
+        slope: utils::F32,
+    },
+    Sigmoid {
+        scale: utils::F32,
+    },
+    Ln {
+        scale: utils::F32,
+    },
+    Exp {
+        scale: utils::F32,
+    },
+    Cos {
+        scale: utils::F32,
+    },
+    ACos {
+        scale: utils::F32,
+    },
+    Cosh {
+        scale: utils::F32,
+    },
+    ACosh {
+        scale: utils::F32,
+    },
+    Sin {
+        scale: utils::F32,
+    },
+    ASin {
+        scale: utils::F32,
+    },
+    Sinh {
+        scale: utils::F32,
+    },
+    ASinh {
+        scale: utils::F32,
+    },
+    Tan {
+        scale: utils::F32,
+    },
+    ATan {
+        scale: utils::F32,
+    },
+    Tanh {
+        scale: utils::F32,
+    },
+    ATanh {
+        scale: utils::F32,
+    },
+    Erf {
+        scale: utils::F32,
+    },
+    GreaterThan {
+        a: utils::F32,
+    },
+    LessThan {
+        a: utils::F32,
+    },
+    GreaterThanEqual {
+        a: utils::F32,
+    },
+    LessThanEqual {
+        a: utils::F32,
+    },
     Sign,
     KroneckerDelta,
-    Pow { scale: utils::F32, a: utils::F32 },
+    Pow {
+        scale: utils::F32,
+        a: utils::F32,
+    },
 }
 
 impl LookupOp {
@@ -120,7 +190,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 &x,
                 f32::from(*scale).into(),
             )),
-            LookupOp::Recip { scale } => Ok(tensor::ops::nonlinearities::recip(&x, scale.into())),
+            LookupOp::Recip {
+                input_scale,
+                output_scale,
+            } => Ok(tensor::ops::nonlinearities::recip(
+                &x,
+                input_scale.into(),
+                output_scale.into(),
+            )),
             LookupOp::ReLU => Ok(tensor::ops::nonlinearities::leakyrelu(&x, 0_f64)),
 
             LookupOp::LeakyReLU { slope: a } => {
@@ -173,7 +250,13 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::GreaterThanEqual { .. } => "GREATER_THAN_EQUAL".into(),
             LookupOp::LessThan { .. } => "LESS_THAN".into(),
             LookupOp::LessThanEqual { .. } => "LESS_THAN_EQUAL".into(),
-            LookupOp::Recip { scale, .. } => format!("RECIP(scale={})", scale),
+            LookupOp::Recip {
+                input_scale,
+                output_scale,
+            } => format!(
+                "RECIP(input_scale={}, output_scale={})",
+                input_scale, output_scale
+            ),
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
             LookupOp::Cast { scale } => format!("CAST(scale={})", scale),
             LookupOp::Ln { scale } => format!("LN(scale={})", scale),
@@ -220,12 +303,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
                 let in_scale = inputs_scale[0];
                 in_scale + multiplier_to_scale(1. / scale.0 as f64)
             }
-            LookupOp::Recip { scale } => {
-                let mut out_scale = inputs_scale[0];
-                out_scale +=
-                    multiplier_to_scale(scale.0 as f64 / scale_to_multiplier(out_scale).powf(2.0));
-                out_scale
-            }
+            LookupOp::Recip { output_scale, .. } => multiplier_to_scale(output_scale.into()),
             LookupOp::Sign
             | LookupOp::GreaterThan { .. }
             | LookupOp::LessThan { .. }

@@ -2175,7 +2175,10 @@ mod rangecheckpercent {
                     &a,
                     (-32768, 32768),
                     K,
-                    &LookupOp::Recip { scale },
+                    &LookupOp::Recip {
+                        input_scale: scale,
+                        output_scale: scale,
+                    },
                 )
                 .unwrap();
             config
@@ -2511,7 +2514,8 @@ mod softmax {
                     (-32768, 32768),
                     K,
                     &LookupOp::Recip {
-                        scale: SCALE.powf(2.0).into(),
+                        input_scale: SCALE.into(),
+                        output_scale: SCALE.into(),
                     },
                 )
                 .unwrap();

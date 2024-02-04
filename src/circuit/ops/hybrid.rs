@@ -13,6 +13,11 @@ use serde::{Deserialize, Serialize};
 /// An enum representing the operations that consist of both lookups and arithmetic operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HybridOp {
+    Recip {
+        input_scale: utils::F32,
+        output_scale: utils::F32,
+        use_range_check_for_int: bool,
+    },
     Div {
         denom: utils::F32,
         use_range_check_for_int: bool,
@@ -122,13 +127,30 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 use_range_check_for_int,
                 ..
             } => {
+                let res = crate::tensor::ops::nonlinearities::const_div(&x, denom.0 as f64);
                 // if denom is a round number and use_range_check_for_int is true, use range check check
                 if denom.0.fract() == 0.0 && *use_range_check_for_int {
                     let divisor = Tensor::from(vec![denom.0 as i128].into_iter());
-                    let res = crate::tensor::ops::div(&[x, divisor.clone()])?;
                     (res, vec![-divisor.clone(), divisor])
                 } else {
-                    let res = crate::tensor::ops::nonlinearities::const_div(&x, denom.0 as f64);
+                    (res, vec![x])
+                }
+            }
+            HybridOp::Recip {
+                input_scale,
+                output_scale,
+                use_range_check_for_int,
+            } => {
+                let res = crate::tensor::ops::nonlinearities::recip(
+                    &x,
+                    input_scale.0 as f64,
+                    output_scale.0 as f64,
+                );
+                // if scale is a round number and use_range_check_for_int is true, use range check check
+                if input_scale.0.fract() == 0.0 && *use_range_check_for_int {
+                    let err_tol = Tensor::from(vec![input_scale.0 as i128].into_iter());
+                    (res, vec![err_tol])
+                } else {
                     (res, vec![x])
                 }
             }
@@ -291,6 +313,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
 
     fn as_string(&self) -> String {
         match self {
+            HybridOp::Recip {
+                input_scale,
+                output_scale,
+                use_range_check_for_int,
+            } => format!(
+                "RECIP (input_scale={}, output_scale={}, use_range_check_for_int={})",
+                input_scale, output_scale, use_range_check_for_int
+            ),
             HybridOp::Div {
                 denom,
                 use_range_check_for_int,
@@ -361,6 +391,34 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 *kernel_shape,
                 *normalized,
             )?,
+            HybridOp::Recip {
+                input_scale,
+                output_scale,
+                use_range_check_for_int,
+            } => {
+                if input_scale.0.fract() == 0.0
+                    && output_scale.0.fract() == 0.0
+                    && *use_range_check_for_int
+                {
+                    layouts::recip(
+                        config,
+                        region,
+                        values[..].try_into()?,
+                        i128_to_felt(input_scale.0 as i128),
+                        i128_to_felt(output_scale.0 as i128),
+                    )?
+                } else {
+                    layouts::nonlinearity(
+                        config,
+                        region,
+                        values.try_into()?,
+                        &LookupOp::Recip {
+                            input_scale: *input_scale,
+                            output_scale: *output_scale,
+                        },
+                    )?
+                }
+            }
             HybridOp::Div {
                 denom,
                 use_range_check_for_int,
@@ -489,6 +547,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     vec![]
                 }
             }
+            HybridOp::Recip {
+                input_scale,
+                output_scale,
+                use_range_check_for_int,
+            } => {
+                if input_scale.0.fract() == 0.0
+                    && output_scale.0.fract() == 0.0
+                    && *use_range_check_for_int
+                {
+                    vec![(0, input_scale.0 as i128 - 1)]
+                } else {
+                    vec![]
+                }
+            }
             _ => vec![],
         }
     }
@@ -511,21 +583,40 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     }]
                 }
             }
+            HybridOp::Recip {
+                input_scale,
+                output_scale,
+                use_range_check_for_int,
+            } => {
+                if input_scale.0.fract() == 0.0
+                    && output_scale.0.fract() == 0.0
+                    && *use_range_check_for_int
+                {
+                    vec![]
+                } else {
+                    vec![LookupOp::Recip {
+                        input_scale: *input_scale,
+                        output_scale: *output_scale,
+                    }]
+                }
+            }
             HybridOp::Softmax { scale, .. } => {
                 vec![
                     LookupOp::Exp { scale: *scale },
                     LookupOp::Recip {
-                        scale: scale.0.powf(2.0).into(),
+                        input_scale: *scale,
+                        output_scale: *scale,
                     },
                 ]
             }
             HybridOp::RangeCheck(tol) => {
                 let mut lookups = vec![];
+                let scale_squared = tol.scale.0 * tol.scale.0;
                 if tol.val > 0.0 {
-                    let scale_squared = tol.scale.0.powf(2.0);
                     lookups.extend([
                         LookupOp::Recip {
-                            scale: scale_squared.into(),
+                            input_scale: tol.scale,
+                            output_scale: tol.scale,
                         },
                         LookupOp::GreaterThan {
                             a: circuit::utils::F32((tol.val * scale_squared) / 100.0),

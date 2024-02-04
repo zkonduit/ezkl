@@ -727,15 +727,10 @@ pub fn new_op_from_onnx(
         "Recip" => {
             let in_scale = inputs[0].out_scales()[0];
             // If the input scale is larger than the params scale
-            let scale_diff = scales.get_max() - inputs[0].out_scales()[0];
-            let additional_scale = if scale_diff > 0 {
-                scale_to_multiplier(scale_diff)
-            } else {
-                1.0
-            };
-
-            SupportedOp::Nonlinear(LookupOp::Recip {
-                scale: (scale_to_multiplier(in_scale).powf(2.0) * additional_scale).into(),
+            SupportedOp::Hybrid(HybridOp::Recip {
+                input_scale: (scale_to_multiplier(in_scale) as f32).into(),
+                output_scale: (scale_to_multiplier(scales.get_max())).into(),
+                use_range_check_for_int: true,
             })
         }
 
