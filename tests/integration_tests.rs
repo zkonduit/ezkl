@@ -580,7 +580,7 @@ mod native_tests {
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                 let large_batch_dir = &format!("large_batches_{}", test);
                 crate::native_tests::mk_data_batches_(path, test, &large_batch_dir, 10);
-                mock(path, large_batch_dir.to_string(), "private", "private", "public", 10, "resources", None);
+                mock(path, large_batch_dir.to_string(), "private", "private", "public", 10, "accuracy", None);
                 test_dir.close().unwrap();
             }
 

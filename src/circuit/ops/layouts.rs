@@ -174,7 +174,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub,
     )?;
 
-    log::debug!("diff_with_input: {:?}", scaled_unit.get_int_evals()?);
+    log::debug!("scaled_unit: {:?}", scaled_unit.get_int_evals()?);
 
     // debug print the diff
     log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
