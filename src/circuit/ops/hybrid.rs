@@ -85,6 +85,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         match self {
             HybridOp::Greater | HybridOp::Less | HybridOp::Equals => vec![0, 1],
             HybridOp::ScatterElements { .. } => vec![0, 2],
+            HybridOp::GreaterEqual | HybridOp::LessEqual => vec![0, 1],
             _ => vec![],
         }
     }
