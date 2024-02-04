@@ -12,8 +12,6 @@ use crate::circuit::Constant;
 use crate::circuit::Input;
 use crate::circuit::Op;
 use crate::circuit::Unknown;
-use crate::fieldutils::felt_to_i128;
-use crate::fieldutils::i128_to_felt;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::new_op_from_onnx;
 use crate::tensor::Tensor;
@@ -126,14 +124,14 @@ impl Op<Fp> for Rescaled {
 pub struct RebaseScale {
     /// The operation that has to be rescaled.
     pub inner: Box<SupportedOp>,
-    /// the multiplier applied to the node output
-    pub multiplier: f64,
+    /// rebase op
+    pub rebase_op: HybridOp,
     /// scale being rebased to
     pub target_scale: i32,
     /// The original scale of the operation's inputs.
     pub original_scale: i32,
-    /// if true then the operation is a multiplicative division
-    pub div_rebasing: bool,
+    /// multiplier
+    pub multiplier: f64,
 }
 
 impl RebaseScale {
@@ -152,20 +150,27 @@ impl RebaseScale {
             let multiplier =
                 scale_to_multiplier(op_out_scale - global_scale * scale_rebase_multiplier as i32);
             if let Some(op) = inner.get_rebased() {
+                let multiplier = op.multiplier * multiplier;
                 SupportedOp::RebaseScale(RebaseScale {
                     inner: op.inner.clone(),
                     target_scale: op.target_scale,
-                    multiplier: op.multiplier * multiplier,
+                    multiplier: multiplier,
+                    rebase_op: HybridOp::Div {
+                        denom: crate::circuit::utils::F32((multiplier) as f32),
+                        use_range_check_for_int: !div_rebasing,
+                    },
                     original_scale: op.original_scale,
-                    div_rebasing,
                 })
             } else {
                 SupportedOp::RebaseScale(RebaseScale {
                     inner: Box::new(inner),
                     target_scale: global_scale * scale_rebase_multiplier as i32,
                     multiplier,
+                    rebase_op: HybridOp::Div {
+                        denom: crate::circuit::utils::F32(multiplier as f32),
+                        use_range_check_for_int: !div_rebasing,
+                    },
                     original_scale: op_out_scale,
-                    div_rebasing,
                 })
             }
         } else {
@@ -183,12 +188,16 @@ impl RebaseScale {
         if (op_out_scale < (target_scale)) && !inner.is_constant() && !inner.is_input() {
             let multiplier = scale_to_multiplier(op_out_scale - target_scale);
             if let Some(op) = inner.get_rebased() {
+                let multiplier = op.multiplier * multiplier;
                 SupportedOp::RebaseScale(RebaseScale {
                     inner: op.inner.clone(),
                     target_scale: op.target_scale,
-                    multiplier: op.multiplier * multiplier,
+                    multiplier,
                     original_scale: op.original_scale,
-                    div_rebasing,
+                    rebase_op: HybridOp::Div {
+                        denom: crate::circuit::utils::F32((multiplier) as f32),
+                        use_range_check_for_int: !div_rebasing,
+                    },
                 })
             } else {
                 SupportedOp::RebaseScale(RebaseScale {
@@ -196,20 +205,14 @@ impl RebaseScale {
                     target_scale,
                     multiplier,
                     original_scale: op_out_scale,
-                    div_rebasing,
+                    rebase_op: HybridOp::Div {
+                        denom: crate::circuit::utils::F32(multiplier as f32),
+                        use_range_check_for_int: !div_rebasing,
+                    },
                 })
             }
         } else {
             inner
-        }
-    }
-
-    /// Calculate the require range bracket for the operation
-    fn range_bracket(&self) -> i128 {
-        if self.div_rebasing {
-            0
-        } else {
-            self.multiplier as i128 - 1
         }
     }
 }
@@ -220,28 +223,19 @@ impl Op<Fp> for RebaseScale {
     }
     fn f(&self, x: &[Tensor<Fp>]) -> Result<crate::circuit::ForwardResult<Fp>, TensorError> {
         let mut res = Op::<Fp>::f(&*self.inner, x)?;
-
-        if self.div_rebasing {
-            let ri = res.output.map(felt_to_i128);
-            let rescaled = crate::tensor::ops::nonlinearities::const_div(&ri, self.multiplier);
-            res.output = rescaled.map(i128_to_felt);
-            res.intermediate_lookups.push(ri);
-        } else {
-            let ri = res.output.map(felt_to_i128);
-            let divisor = Tensor::from(vec![self.multiplier as i128].into_iter());
-            let rescaled = crate::tensor::ops::div(&[ri, divisor.clone()])?;
-            res.output = rescaled.map(i128_to_felt);
-            res.intermediate_lookups.extend([-divisor.clone(), divisor]);
-        }
+        let rebase_res = Op::<Fp>::f(&self.rebase_op, &[res.output])?;
+        res.output = rebase_res.output;
+        res.intermediate_lookups
+            .extend(rebase_res.intermediate_lookups);
 
         Ok(res)
     }
 
     fn as_string(&self) -> String {
         format!(
-            "REBASED (div={:?}, div_r={}) ({})",
+            "REBASED (div={:?}, rebasing_op={}) ({})",
             self.multiplier,
-            self.div_rebasing,
+            <HybridOp as Op<Fp>>::as_string(&self.rebase_op),
             self.inner.as_string()
         )
     }
@@ -252,20 +246,13 @@ impl Op<Fp> for RebaseScale {
 
     fn required_lookups(&self) -> Vec<LookupOp> {
         let mut lookups: Vec<LookupOp> = self.inner.required_lookups();
-        if self.div_rebasing {
-            lookups.push(LookupOp::Div {
-                denom: crate::circuit::utils::F32(self.multiplier as f32),
-            });
-        }
+        lookups.extend(Op::<Fp>::required_lookups(&self.rebase_op));
         lookups
     }
 
     fn required_range_checks(&self) -> Vec<crate::circuit::table::Range> {
         let mut range_checks = self.inner.required_range_checks();
-        if !self.div_rebasing {
-            let bracket = self.range_bracket();
-            range_checks.push((-bracket, bracket));
-        }
+        range_checks.extend(Op::<Fp>::required_range_checks(&self.rebase_op));
         range_checks
     }
 
@@ -278,25 +265,8 @@ impl Op<Fp> for RebaseScale {
         let original_res = self
             .inner
             .layout(config, region, values)?
-            .ok_or("no layout")?;
-
-        if !self.div_rebasing {
-            Ok(Some(crate::circuit::layouts::div(
-                config,
-                region,
-                &[original_res],
-                Fp::from(self.multiplier as u64),
-            )?))
-        } else {
-            Ok(Some(crate::circuit::layouts::nonlinearity(
-                config,
-                region,
-                &[original_res],
-                &LookupOp::Div {
-                    denom: crate::circuit::utils::F32(self.multiplier as f32),
-                },
-            )?))
-        }
+            .ok_or("no inner layout")?;
+        self.rebase_op.layout(config, region, &[original_res])
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<Fp>> {
@@ -584,8 +554,6 @@ impl Node {
         symbol_values: &SymbolValues,
         div_rebasing: bool,
     ) -> Result<Self, Box<dyn Error>> {
-        use log::warn;
-
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
 
@@ -678,8 +646,6 @@ impl Node {
                     input_node.bump_scale(out_scale);
                     in_scales[input] = out_scale;
                 }
-            } else {
-                warn!("input {} not found for rescaling, skipping ...", input);
             }
         }
 

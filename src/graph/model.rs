@@ -591,6 +591,8 @@ impl Model {
                 inputs.iter().map(|x| x.dims()).collect::<Vec<_>>()
             );
 
+            debug!("input nodes: {:?}", n.inputs());
+
             if n.is_lookup() {
                 let (mut min, mut max) = (0, 0);
                 for i in &inputs {

@@ -237,6 +237,11 @@ impl VarScales {
         std::cmp::max(self.input, self.params)
     }
 
+    ///
+    pub fn get_min(&self) -> crate::Scale {
+        std::cmp::min(self.input, self.params)
+    }
+
     /// Place in [VarScales] struct.
     pub fn from_args(args: &RunArgs) -> Result<Self, Box<dyn Error>> {
         Ok(Self {

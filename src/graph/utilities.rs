@@ -261,7 +261,9 @@ pub fn new_op_from_onnx(
             inputs[index].bump_scale(scale);
             c.rebase_scale(scale)?;
             inputs[index].replace_opkind(SupportedOp::Constant(c.clone()));
-            Ok(SupportedOp::Linear(PolyOp::Identity))
+            Ok(SupportedOp::Linear(PolyOp::Identity {
+                out_scale: Some(scale),
+            }))
         } else {
             Ok(default_op)
         }
@@ -282,8 +284,8 @@ pub fn new_op_from_onnx(
                         "shift left".to_string(),
                     )));
                 }
-                SupportedOp::Nonlinear(LookupOp::Div {
-                    denom: crate::circuit::utils::F32(1.0 / 2.0f32.powf(raw_values[0])),
+                SupportedOp::Linear(PolyOp::Identity {
+                    out_scale: Some(input_scales[0] - raw_values[0] as i32),
                 })
             } else {
                 return Err(Box::new(GraphError::OpMismatch(
@@ -304,8 +306,8 @@ pub fn new_op_from_onnx(
                         "shift right".to_string(),
                     )));
                 }
-                SupportedOp::Nonlinear(LookupOp::Div {
-                    denom: crate::circuit::utils::F32(2.0f32.powf(raw_values[0])),
+                SupportedOp::Linear(PolyOp::Identity {
+                    out_scale: Some(input_scales[0] + raw_values[0] as i32),
                 })
             } else {
                 return Err(Box::new(GraphError::OpMismatch(
@@ -559,6 +561,8 @@ pub fn new_op_from_onnx(
                 _ => return Err(Box::new(GraphError::UnsupportedDataType)),
             };
 
+            // if all raw_values are round then set scale to 0
+
             // Quantize the raw value
             let quantized_value =
                 quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
@@ -665,8 +669,10 @@ pub fn new_op_from_onnx(
                 if unit == 0. {
                     SupportedOp::Nonlinear(LookupOp::ReLU)
                 } else {
+                    // get the non-constant index
+                    let non_const_idx = if const_idx == 0 { 1 } else { 0 };
                     SupportedOp::Nonlinear(LookupOp::Max {
-                        scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                        scale: scale_to_multiplier(inputs[non_const_idx].out_scales()[0]).into(),
                         a: crate::circuit::utils::F32(unit),
                     })
                 }
@@ -707,8 +713,11 @@ pub fn new_op_from_onnx(
                     deleted_indices.push(const_idx);
                 }
 
+                // get the non-constant index
+                let non_const_idx = if const_idx == 0 { 1 } else { 0 };
+
                 SupportedOp::Nonlinear(LookupOp::Min {
-                    scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                    scale: scale_to_multiplier(inputs[non_const_idx].out_scales()[0]).into(),
                     a: crate::circuit::utils::F32(unit),
                 })
             } else {
@@ -718,7 +727,7 @@ pub fn new_op_from_onnx(
         "Recip" => {
             let in_scale = inputs[0].out_scales()[0];
             // If the input scale is larger than the params scale
-            let scale_diff = std::cmp::max(scales.input, scales.params) - inputs[0].out_scales()[0];
+            let scale_diff = scales.get_max() - inputs[0].out_scales()[0];
             let additional_scale = if scale_diff > 0 {
                 scale_to_multiplier(scale_diff)
             } else {
@@ -751,7 +760,9 @@ pub fn new_op_from_onnx(
         "Scan" => {
             return Err("scan should never be analyzed explicitly".into());
         }
-        "QuantizeLinearU8" | "DequantizeLinearF32" => SupportedOp::Linear(PolyOp::Identity),
+        "QuantizeLinearU8" | "DequantizeLinearF32" => {
+            SupportedOp::Linear(PolyOp::Identity { out_scale: None })
+        }
         "Abs" => SupportedOp::Nonlinear(LookupOp::Abs),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
         "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
@@ -856,11 +867,11 @@ pub fn new_op_from_onnx(
                             }),
                         )?
                     } else {
-                        SupportedOp::Linear(PolyOp::Identity)
+                        SupportedOp::Linear(PolyOp::Identity { out_scale: None })
                     }
                 }
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => {
-                    SupportedOp::Linear(PolyOp::Identity)
+                    SupportedOp::Linear(PolyOp::Identity { out_scale: None })
                 }
                 _ => return Err(Box::new(GraphError::UnsupportedDataType)),
             }
@@ -885,12 +896,15 @@ pub fn new_op_from_onnx(
                 let const_idx = const_idx[0];
                 if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
                     if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
-                        inputs[const_idx].decrement_use();
-                        deleted_indices.push(const_idx);
-                        op = SupportedOp::Nonlinear(LookupOp::Div {
-                            // we invert the constant for division
-                            denom: crate::circuit::utils::F32(1. / c.raw_values[0]),
-                        })
+                        // if not divisible by 2 then we need to add a range check
+                        let raw_values = 1.0 / c.raw_values[0];
+                        if raw_values.log2().fract() == 0.0 {
+                            inputs[const_idx].decrement_use();
+                            deleted_indices.push(const_idx);
+                            op = SupportedOp::Linear(PolyOp::Identity {
+                                out_scale: Some(input_scales[0] + raw_values.log2() as i32),
+                            });
+                        }
                     }
                 }
             }
