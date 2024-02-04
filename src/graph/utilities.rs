@@ -736,7 +736,7 @@ pub fn new_op_from_onnx(
             SupportedOp::Hybrid(HybridOp::Recip {
                 input_scale: (scale_to_multiplier(in_scale) as f32).into(),
                 output_scale: (scale_to_multiplier(max_scale) as f32).into(),
-                use_range_check_for_int: true,
+                use_range_check_for_int: false,
             })
         }
 
