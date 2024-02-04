@@ -64,7 +64,7 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(div) / 2 - 1;
+    let range_check_bracket = felt_to_i128(div) / 2;
 
     let mut divisor = Tensor::from(vec![ValType::Constant(div)].into_iter());
     divisor.set_visibility(&crate::graph::Visibility::Fixed);
@@ -96,15 +96,14 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
     )?;
 
+    log::debug!("product: {:?}", product.get_int_evals()?);
+
     let diff_with_input = pairwise(
         config,
         region,
         &[product.clone(), input.clone()],
         BaseOp::Sub,
     )?;
-
-    // debug print the diff
-    log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
 
     range_check(
         config,
@@ -127,7 +126,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(output_scale) / 2 - 1;
+    let range_check_bracket = felt_to_i128(output_scale) / 2;
 
     let mut scaled_unit =
         Tensor::from(vec![ValType::Constant(output_scale * input_scale)].into_iter());
