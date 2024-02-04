@@ -126,7 +126,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(output_scale) / 2;
+    let range_check_bracket = felt_to_i128(output_scale * input_scale) / 2;
 
     let mut scaled_unit =
         Tensor::from(vec![ValType::Constant(output_scale * input_scale)].into_iter());
@@ -164,6 +164,8 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
     )?;
 
+    log::debug!("product: {:?}", product.get_int_evals()?);
+
     // this is now of scale 2 * scale hence why we rescaled the unit scale
     let diff_with_input = pairwise(
         config,
@@ -172,8 +174,12 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub,
     )?;
 
+    log::debug!("diff_with_input: {:?}", scaled_unit.get_int_evals()?);
+
     // debug print the diff
     log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
+
+    log::debug!("range_check_bracket: {:?}", range_check_bracket);
 
     // at most the error should be in the original unit scale's range
     range_check(

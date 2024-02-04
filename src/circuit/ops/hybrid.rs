@@ -131,7 +131,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 let res = crate::tensor::ops::nonlinearities::const_div(&x, denom.0 as f64);
                 // if denom is a round number and use_range_check_for_int is true, use range check check
                 if denom.0.fract() == 0.0 && *use_range_check_for_int {
-                    let divisor = Tensor::from(vec![denom.0 as i128 / 2 - 1].into_iter());
+                    let divisor = Tensor::from(vec![denom.0 as i128 / 2].into_iter());
                     (res, vec![-divisor.clone(), divisor])
                 } else {
                     (res, vec![x])
@@ -149,7 +149,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 );
                 // if scale is a round number and use_range_check_for_int is true, use range check check
                 if input_scale.0.fract() == 0.0 && *use_range_check_for_int {
-                    let err_tol = Tensor::from(vec![output_scale.0 as i128 / 2 - 1].into_iter());
+                    let err_tol = Tensor::from(
+                        vec![(output_scale.0 * input_scale.0) as i128 / 2].into_iter(),
+                    );
                     (res, vec![-err_tol.clone(), err_tol])
                 } else {
                     (res, vec![x])
