@@ -3002,6 +3002,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
             output_scale: scale,
         },
     )?;
+
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
 
