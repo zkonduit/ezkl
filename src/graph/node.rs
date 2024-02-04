@@ -507,6 +507,7 @@ impl Node {
         idx: usize,
         symbol_values: &SymbolValues,
         div_rebasing: bool,
+        rebase_frac_zero_constants: bool,
     ) -> Result<Self, Box<dyn Error>> {
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
@@ -545,6 +546,7 @@ impl Node {
             node.clone(),
             &mut inputs,
             symbol_values,
+            rebase_frac_zero_constants,
         )?; // parses the op name
 
         // we can only take the inputs as mutable once -- so we need to collect them first

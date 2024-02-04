@@ -162,6 +162,8 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     pub div_rebasing: bool,
     #[pyo3(get, set)]
+    pub rebase_frac_zero_constants: bool,
+    #[pyo3(get, set)]
     pub check_mode: CheckMode,
 }
 
@@ -190,6 +192,7 @@ impl From<PyRunArgs> for RunArgs {
             param_visibility: py_run_args.param_visibility,
             variables: py_run_args.variables,
             div_rebasing: py_run_args.div_rebasing,
+            rebase_frac_zero_constants: py_run_args.rebase_frac_zero_constants,
             check_mode: py_run_args.check_mode,
         }
     }
@@ -210,6 +213,7 @@ impl Into<PyRunArgs> for RunArgs {
             param_visibility: self.param_visibility,
             variables: self.variables,
             div_rebasing: self.div_rebasing,
+            rebase_frac_zero_constants: self.rebase_frac_zero_constants,
             check_mode: self.check_mode,
         }
     }

@@ -1032,6 +1032,7 @@ impl Model {
                         i,
                         symbol_values,
                         run_args.div_rebasing,
+                        run_args.rebase_frac_zero_constants,
                     )?;
                     if let Some(ref scales) = override_input_scales {
                         if let Some(inp) = n.opkind.get_input() {
