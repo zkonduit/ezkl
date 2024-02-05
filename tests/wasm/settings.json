@@ -23,6 +23,7 @@
         "output_visibility": "Public",
         "param_visibility": "Private",
         "div_rebasing": false,
+        "rebase_frac_zero_constants": false,
         "check_mode": "UNSAFE"
     },
     "num_rows": 16,

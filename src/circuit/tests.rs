@@ -2154,7 +2154,7 @@ mod rangecheckpercent {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let scale = utils::F32(SCALE.pow(2) as f32);
+            let scale = utils::F32(SCALE as f32);
             let a = VarTensor::new_advice(cs, K, 1, LEN);
             let b = VarTensor::new_advice(cs, K, 1, LEN);
             let output = VarTensor::new_advice(cs, K, 1, LEN);
@@ -2162,11 +2162,12 @@ mod rangecheckpercent {
                 Self::Config::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // set up a new GreaterThan and Recip tables
             let nl = &LookupOp::GreaterThan {
-                a: circuit::utils::F32((RANGE * scale.0) / 100.0),
+                a: circuit::utils::F32((RANGE * SCALE.pow(2) as f32) / 100.0),
             };
             config
                 .configure_lookup(cs, &b, &output, &a, (-32768, 32768), K, nl)
                 .unwrap();
+
             config
                 .configure_lookup(
                     cs,
@@ -2175,7 +2176,10 @@ mod rangecheckpercent {
                     &a,
                     (-32768, 32768),
                     K,
-                    &LookupOp::Recip { scale },
+                    &LookupOp::Recip {
+                        input_scale: scale,
+                        output_scale: scale,
+                    },
                 )
                 .unwrap();
             config
@@ -2511,7 +2515,8 @@ mod softmax {
                     (-32768, 32768),
                     K,
                     &LookupOp::Recip {
-                        scale: SCALE.powf(2.0).into(),
+                        input_scale: SCALE.into(),
+                        output_scale: SCALE.into(),
                     },
                 )
                 .unwrap();

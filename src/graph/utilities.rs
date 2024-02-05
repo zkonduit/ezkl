@@ -243,6 +243,7 @@ pub fn new_op_from_onnx(
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut [super::NodeType],
     symbol_values: &SymbolValues,
+    rebase_frac_zero_constants: bool,
 ) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
     use crate::circuit::InputType;
 
@@ -546,7 +547,7 @@ pub fn new_op_from_onnx(
             // Raw values are always f32
             let raw_value = extract_tensor_value(op.0)?;
             // If bool or a tensor dimension then don't scale
-            let constant_scale = match dt {
+            let mut constant_scale = match dt {
                 DatumType::Bool
                 | DatumType::TDim
                 | DatumType::I64
@@ -562,6 +563,10 @@ pub fn new_op_from_onnx(
             };
 
             // if all raw_values are round then set scale to 0
+            let all_round = raw_value.iter().all(|x| (x).fract() == 0.0);
+            if all_round && rebase_frac_zero_constants {
+                constant_scale = 0;
+            }
 
             // Quantize the raw value
             let quantized_value =
@@ -726,16 +731,12 @@ pub fn new_op_from_onnx(
         }
         "Recip" => {
             let in_scale = inputs[0].out_scales()[0];
+            let max_scale = std::cmp::max(scales.get_max(), in_scale);
             // If the input scale is larger than the params scale
-            let scale_diff = scales.get_max() - inputs[0].out_scales()[0];
-            let additional_scale = if scale_diff > 0 {
-                scale_to_multiplier(scale_diff)
-            } else {
-                1.0
-            };
-
-            SupportedOp::Nonlinear(LookupOp::Recip {
-                scale: (scale_to_multiplier(in_scale).powf(2.0) * additional_scale).into(),
+            SupportedOp::Hybrid(HybridOp::Recip {
+                input_scale: (scale_to_multiplier(in_scale) as f32).into(),
+                output_scale: (scale_to_multiplier(max_scale) as f32).into(),
+                use_range_check_for_int: false,
             })
         }
 
