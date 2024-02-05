@@ -111,8 +111,11 @@ pub struct RunArgs {
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
     #[arg(long, default_value = "false")]
-    /// Multiplicative division
+    /// Rebase the scale using lookup table for division instead of using a range check
     pub div_rebasing: bool,
+    /// Should constants with 0.0 fraction be rebased to scale 0
+    #[arg(long, default_value = "false")]
+    pub rebase_frac_zero_constants: bool,
     /// check mode (safe, unsafe, etc)
     #[arg(long, default_value = "unsafe")]
     pub check_mode: CheckMode,
@@ -133,6 +136,7 @@ impl Default for RunArgs {
             output_visibility: Visibility::Public,
             param_visibility: Visibility::Private,
             div_rebasing: false,
+            rebase_frac_zero_constants: false,
             check_mode: CheckMode::UNSAFE,
         }
     }

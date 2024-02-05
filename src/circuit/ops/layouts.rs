@@ -18,7 +18,10 @@ use super::{
     region::RegionCtx,
 };
 use crate::{
-    circuit::{ops::base::BaseOp, utils},
+    circuit::{
+        ops::base::BaseOp,
+        utils::{self},
+    },
     fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{
         get_broadcasted_shape,
@@ -61,7 +64,7 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(div) - 1;
+    let range_check_bracket = felt_to_i128(div) / 2;
 
     let mut divisor = Tensor::from(vec![ValType::Constant(div)].into_iter());
     divisor.set_visibility(&crate::graph::Visibility::Fixed);
@@ -72,8 +75,7 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
 
     let mut claimed_output: ValTensor<F> = if is_assigned {
         let input_evals = input.get_int_evals()?;
-        let divisor_evals = divisor.get_int_evals()?;
-        tensor::ops::div(&[input_evals.clone(), divisor_evals.clone()])?
+        tensor::ops::nonlinearities::const_div(&input_evals.clone(), felt_to_i128(div) as f64)
             .iter()
             .map(|x| Ok(Value::known(i128_to_felt(*x))))
             .collect::<Result<Tensor<Value<F>>, Box<dyn Error>>>()?
@@ -94,6 +96,8 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
     )?;
 
+    log::debug!("product: {:?}", product.get_int_evals()?);
+
     let diff_with_input = pairwise(
         config,
         region,
@@ -101,6 +105,83 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub,
     )?;
 
+    range_check(
+        config,
+        region,
+        &[diff_with_input],
+        &(-range_check_bracket, range_check_bracket),
+    )?;
+
+    Ok(claimed_output)
+}
+
+/// recip accumulated layout
+pub fn recip<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    value: &[ValTensor<F>; 1],
+    input_scale: F,
+    output_scale: F,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let input = value[0].clone();
+    let input_dims = input.dims();
+
+    let range_check_bracket = felt_to_i128(output_scale * input_scale) / 2;
+
+    let mut scaled_unit =
+        Tensor::from(vec![ValType::Constant(output_scale * input_scale)].into_iter());
+    scaled_unit.set_visibility(&crate::graph::Visibility::Fixed);
+    let scaled_unit = region.assign(&config.inputs[1], &scaled_unit.into())?;
+    region.increment(scaled_unit.len());
+
+    let is_assigned = !input.any_unknowns()? && !scaled_unit.any_unknowns()?;
+
+    let mut claimed_output: ValTensor<F> = if is_assigned {
+        let input_evals = input.get_int_evals()?;
+        tensor::ops::nonlinearities::recip(
+            &input_evals,
+            felt_to_i128(input_scale) as f64,
+            felt_to_i128(output_scale) as f64,
+        )
+        .iter()
+        .map(|x| Ok(Value::known(i128_to_felt(*x))))
+        .collect::<Result<Tensor<Value<F>>, Box<dyn Error>>>()?
+        .into()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); input.len()]),
+            &[input.len()],
+        )?
+        .into()
+    };
+    claimed_output.reshape(input_dims)?;
+
+    // this is now of scale 2 * scale
+    let product = pairwise(
+        config,
+        region,
+        &[claimed_output.clone(), input.clone()],
+        BaseOp::Mult,
+    )?;
+
+    log::debug!("product: {:?}", product.get_int_evals()?);
+
+    // this is now of scale 2 * scale hence why we rescaled the unit scale
+    let diff_with_input = pairwise(
+        config,
+        region,
+        &[product.clone(), scaled_unit.clone()],
+        BaseOp::Sub,
+    )?;
+
+    log::debug!("scaled_unit: {:?}", scaled_unit.get_int_evals()?);
+
+    // debug print the diff
+    log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
+
+    log::debug!("range_check_bracket: {:?}", range_check_bracket);
+
+    // at most the error should be in the original unit scale's range
     range_check(
         config,
         region,
@@ -2371,6 +2452,8 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     range: &crate::circuit::table::Range,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.add_used_range_check(*range);
+
     // time the entire operation
     let timer = instant::Instant::now();
 
@@ -2415,6 +2498,8 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     nl: &LookupOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    region.add_used_lookup(nl.clone());
+
     // time the entire operation
     let timer = instant::Instant::now();
 
@@ -2884,7 +2969,8 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
         &[denom],
         // we set to input scale + output_scale so the output scale is output)scale
         &LookupOp::Recip {
-            scale: scale.0.powf(2.0).into(),
+            input_scale: scale,
+            output_scale: scale,
         },
     )?;
 
@@ -2912,18 +2998,21 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
 
-    let scale_squared = scale.0.powf(2.0);
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
     let recip = nonlinearity(
         config,
         region,
         &[values[0].clone()],
         &LookupOp::Recip {
-            scale: scale_squared.into(),
+            input_scale: scale,
+            output_scale: scale,
         },
     )?;
+
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
+
+    let scale_squared = scale.0 * scale.0;
 
     // Use the greater than look up table to check if the percent error is within the tolerance for upper bound
     let tol = tol / 100.0;

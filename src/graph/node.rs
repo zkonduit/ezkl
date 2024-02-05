@@ -18,8 +18,6 @@ use crate::tensor::Tensor;
 use crate::tensor::TensorError;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(not(target_arch = "wasm32"))]
-use itertools::Itertools;
-#[cfg(not(target_arch = "wasm32"))]
 use log::trace;
 use serde::Deserialize;
 use serde::Serialize;
@@ -90,10 +88,6 @@ impl Op<Fp> for Rescaled {
             .collect();
 
         Op::<Fp>::out_scale(&*self.inner, in_scales)
-    }
-
-    fn required_lookups(&self) -> Vec<LookupOp> {
-        self.inner.required_lookups()
     }
 
     fn layout(
@@ -242,18 +236,6 @@ impl Op<Fp> for RebaseScale {
 
     fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         Ok(self.target_scale)
-    }
-
-    fn required_lookups(&self) -> Vec<LookupOp> {
-        let mut lookups: Vec<LookupOp> = self.inner.required_lookups();
-        lookups.extend(Op::<Fp>::required_lookups(&self.rebase_op));
-        lookups
-    }
-
-    fn required_range_checks(&self) -> Vec<crate::circuit::table::Range> {
-        let mut range_checks = self.inner.required_range_checks();
-        range_checks.extend(Op::<Fp>::required_range_checks(&self.rebase_op));
-        range_checks
     }
 
     fn layout(
@@ -449,14 +431,6 @@ impl Op<Fp> for SupportedOp {
         self
     }
 
-    fn required_lookups(&self) -> Vec<LookupOp> {
-        self.as_op().required_lookups()
-    }
-
-    fn required_range_checks(&self) -> Vec<crate::circuit::table::Range> {
-        self.as_op().required_range_checks()
-    }
-
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         self.as_op().out_scale(in_scales)
     }
@@ -490,15 +464,7 @@ impl Tabled for Node {
 
     fn headers() -> Vec<std::borrow::Cow<'static, str>> {
         let mut headers = Vec::with_capacity(Self::LENGTH);
-        for i in [
-            "idx",
-            "opkind",
-            "out_scale",
-            "inputs",
-            "out_dims",
-            "required_lookups",
-            "required_range_checks",
-        ] {
+        for i in ["idx", "opkind", "out_scale", "inputs", "out_dims"] {
             headers.push(std::borrow::Cow::Borrowed(i));
         }
         headers
@@ -511,18 +477,6 @@ impl Tabled for Node {
         fields.push(std::borrow::Cow::Owned(self.out_scale.to_string()));
         fields.push(std::borrow::Cow::Owned(display_vector(&self.inputs)));
         fields.push(std::borrow::Cow::Owned(display_vector(&self.out_dims)));
-        fields.push(std::borrow::Cow::Owned(format!(
-            "{:?}",
-            self.opkind
-                .required_lookups()
-                .iter()
-                .map(<LookupOp as Op<Fp>>::as_string)
-                .collect_vec()
-        )));
-        fields.push(std::borrow::Cow::Owned(format!(
-            "{:?}",
-            self.opkind.required_range_checks()
-        )));
         fields
     }
 }
@@ -553,6 +507,7 @@ impl Node {
         idx: usize,
         symbol_values: &SymbolValues,
         div_rebasing: bool,
+        rebase_frac_zero_constants: bool,
     ) -> Result<Self, Box<dyn Error>> {
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
@@ -591,6 +546,7 @@ impl Node {
             node.clone(),
             &mut inputs,
             symbol_values,
+            rebase_frac_zero_constants,
         )?; // parses the op name
 
         // we can only take the inputs as mutable once -- so we need to collect them first

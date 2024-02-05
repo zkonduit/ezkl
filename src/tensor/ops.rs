@@ -992,45 +992,6 @@ pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::S
     Ok(output)
 }
 
-/// Divides multiple tensors.
-/// # Arguments
-/// * `t` - Tensors
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::div;
-/// let x = Tensor::<i128>::new(
-///    Some(&[2, 1, 2, 1, 1, 1]),
-/// &[2, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///   Some(&[2, 3, 2, 1, 1, 1]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = div(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 1, 1, 1]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn div<
-    T: TensorType
-        + Div<Output = T>
-        + Mul<Output = T>
-        + From<u64>
-        + std::marker::Send
-        + std::marker::Sync,
->(
-    t: &[Tensor<T>],
-) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-    let mut output: Tensor<T> = t[0].clone();
-
-    for e in t[1..].iter() {
-        output = (output / e.clone())?;
-    }
-
-    Ok(output)
-}
-
 /// Rescale a tensor with a const integer (similar to const_mult).
 /// # Arguments
 ///
@@ -3164,7 +3125,7 @@ pub mod nonlinearities {
 
         let sum = sum(&exp).unwrap();
         intermediate_values.push(sum.clone());
-        let inv_denom = recip(&sum, scale.powf(2.0));
+        let inv_denom = recip(&sum, scale, scale);
 
         ((exp * inv_denom).unwrap(), intermediate_values)
     }
@@ -3201,7 +3162,7 @@ pub mod nonlinearities {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
         let scale = input_scale * output_scale;
         let diff: Tensor<i128> = sub(t).unwrap();
-        let recip = recip(&t[0], scale as f64);
+        let recip = recip(&t[0], input_scale as f64, output_scale as f64);
         let product = mult(&[diff, recip]).unwrap();
         let _tol = ((tol / 100.0) * scale as f32).round() as f64;
         let upper_bound = greater_than(&product, _tol);
@@ -3812,14 +3773,15 @@ pub mod nonlinearities {
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2_f64;
-    /// let result = recip(&x, k);
+    /// let result = recip(&x, 1.0, k);
     /// let expected = Tensor::<i128>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn recip(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn recip(a: &Tensor<i128>, input_scale: f64, out_scale: f64) -> Tensor<i128> {
         a.par_enum_map(|_, a_i| {
-            let denom = (1_f64) / (a_i as f64 + f64::EPSILON);
-            let d_inv_x = scale * denom;
+            let rescaled = (a_i as f64) / input_scale;
+            let denom = (1_f64) / (rescaled + f64::EPSILON);
+            let d_inv_x = out_scale * denom;
             Ok::<_, TensorError>(d_inv_x.round() as i128)
         })
         .unwrap()

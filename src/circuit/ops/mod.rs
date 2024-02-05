@@ -10,8 +10,6 @@ use halo2curves::ff::PrimeField;
 
 use self::{lookup::LookupOp, region::RegionCtx};
 
-use super::table::Range;
-
 ///
 pub mod base;
 ///
@@ -54,16 +52,6 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
 
     /// Do any of the inputs to this op require homogenous input scales?
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
-        vec![]
-    }
-
-    /// Returns the lookups required by the operation.
-    fn required_lookups(&self) -> Vec<LookupOp> {
-        vec![]
-    }
-
-    /// Returns the range checks required by the operation.
-    fn required_range_checks(&self) -> Vec<Range> {
         vec![]
     }
 
