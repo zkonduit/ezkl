@@ -881,19 +881,14 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                let res: Result<Tensor<ValType<F>>, TensorError> = v
-                    .iter()
-                    .map(|x| match x {
-                        ValType::AssignedValue(v) => Ok(ValType::AssignedValue(v.invert())),
-                        ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
-                            Ok(ValType::AssignedValue(v.value_field().invert()))
-                        }
-                        _ => {
-                            return Err(TensorError::WrongMethod);
-                        }
-                    })
-                    .collect();
-                *v = res?;
+                *v = v.map(|x| match x {
+                    ValType::AssignedValue(v) => ValType::AssignedValue(v.invert()),
+                    ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                        ValType::AssignedValue(v.value_field().invert())
+                    }
+                    ValType::Value(v) => ValType::Value(v.map(|x| x.invert().unwrap_or(F::ZERO))),
+                    ValType::Constant(v) => ValType::Constant(v.invert().unwrap_or(F::ZERO)),
+                });
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

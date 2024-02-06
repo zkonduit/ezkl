@@ -192,86 +192,86 @@ mod native_tests {
     ];
 
     const TESTS: [&str; 77] = [
-        "1l_mlp",
+        "1l_mlp", //0
         "1l_slice",
         "1l_concat",
         "1l_flatten",
         // "1l_average",
         "1l_div",
-        "1l_pad",
+        "1l_pad", // 5
         "1l_reshape",
         "1l_eltwise_div",
         "1l_sigmoid",
         "1l_sqrt",
-        "1l_softmax",
+        "1l_softmax", //10
         // "1l_instance_norm",
         "1l_batch_norm",
         "1l_prelu",
         "1l_leakyrelu",
         "1l_gelu_noappx",
         // "1l_gelu_tanh_appx",
-        "1l_relu",
+        "1l_relu", //15
         "1l_downsample",
         "1l_tanh",
         "2l_relu_sigmoid_small",
         "2l_relu_fc",
-        "2l_relu_small",
+        "2l_relu_small", //20
         "2l_relu_sigmoid",
         "1l_conv",
         "2l_sigmoid_small",
         "2l_relu_sigmoid_conv",
-        "3l_relu_conv_fc",
+        "3l_relu_conv_fc", //25
         "4l_relu_conv_fc",
         "1l_erf",
         "1l_var",
-        "1l_elu", //30
-        "min",
+        "1l_elu",
+        "min", //30
         "max",
         "1l_max_pool",
         "1l_conv_transpose",
-        "1l_upsample", //35
-        "1l_identity",
+        "1l_upsample",
+        "1l_identity", //35
         "idolmodel",
         "trig",
         "prelu_gmm",
-        "lstm", //40
-        "rnn",
+        "lstm",
+        "rnn", //40
         "quantize_dequantize",
         "1l_where",
         "boolean",
         "boolean_identity",
-        "decision_tree", // "variable_cnn",
+        "decision_tree", // 45
         "random_forest",
         "gradient_boosted_trees",
         "1l_topk",
-        "xgboost", //50
-        "lightgbm",
+        "xgboost",
+        "lightgbm", //50
         "hummingbird_decision_tree",
         "oh_decision_tree",
         "linear_svc",
         "gather_elements",
-        "less",
+        "less", //55
         "xgboost_reg",
         "1l_powf",
         "scatter_elements",
-        "1l_linear", //60
-        "linear_regression",
+        "1l_linear",
+        "linear_regression", //60
         "sklearn_mlp",
         "1l_mean",
         "rounding_ops",
         // "mean_as_constrain",
         "arange",
-        "layernorm",
+        "layernorm", //65
         "bitwise_ops",
         "blackman_window",
-        "softsign", //70
+        "softsign", //68
         "softplus",
-        "selu",
+        "selu", //70
         "hard_sigmoid",
         "log_softmax",
         "eye",
         "ltsf",
-        "remainder",
+        "remainder", //75
         "bitshift",
     ];
 
