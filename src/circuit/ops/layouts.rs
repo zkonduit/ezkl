@@ -2387,7 +2387,7 @@ pub fn is_zero_identity<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     assign: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let output = if assign {
+    let output = if assign || !values[0].get_const_indices()?.is_empty() {
         let output = region.assign(&config.output, &values[0])?;
         region.increment(output.len());
         output
@@ -2419,7 +2419,8 @@ pub fn boolean_identity<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     assign: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let output = if assign {
+    let output = if assign || !values[0].get_const_indices()?.is_empty() {
+        // get zero constants indices
         let output = region.assign(&config.output, &values[0])?;
         region.increment(output.len());
         output
