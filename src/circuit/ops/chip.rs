@@ -276,9 +276,20 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
                 let constraints = match base_op {
                     BaseOp::IsBoolean => {
-                        vec![(qis[1].clone()) * (qis[1].clone() - Expression::Constant(F::from(1)))]
+                        let expected_output: Tensor<Expression<F>> = output
+                            .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
+                            .expect("non accum: output query failed");
+
+                        let output = expected_output[base_op.constraint_idx()].clone();
+
+                        vec![(output.clone()) * (output.clone() - Expression::Constant(F::from(1)))]
                     }
-                    BaseOp::IsZero => vec![qis[1].clone()],
+                    BaseOp::IsZero => {
+                        let expected_output: Tensor<Expression<F>> = output
+                            .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
+                            .expect("non accum: output query failed");
+                        vec![expected_output[base_op.constraint_idx()].clone()]
+                    }
                     _ => {
                         let expected_output: Tensor<Expression<F>> = output
                             .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
