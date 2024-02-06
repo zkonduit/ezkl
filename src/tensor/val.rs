@@ -871,3 +871,35 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         }
     }
 }
+
+impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
+    /// inverts the inner values
+    pub fn inverse(&self) -> Result<ValTensor<F>, Box<dyn Error>> {
+        let mut cloned_self = self.clone();
+
+        match &mut cloned_self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                let res: Result<Tensor<ValType<F>>, TensorError> = v
+                    .iter()
+                    .map(|x| match x {
+                        ValType::AssignedValue(v) => Ok(ValType::AssignedValue(v.invert())),
+                        ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                            Ok(ValType::AssignedValue(v.value_field().invert()))
+                        }
+                        _ => {
+                            return Err(TensorError::WrongMethod);
+                        }
+                    })
+                    .collect();
+                *v = res?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(cloned_self)
+    }
+}

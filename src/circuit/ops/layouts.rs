@@ -1701,10 +1701,43 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
+    let diff_inverse = diff.inverse()?;
+    let product_diff_and_invert =
+        pairwise(config, region, &[diff.clone(), diff_inverse], BaseOp::Mult)?;
 
-    let res = nonlinearity(config, region, &[diff], &LookupOp::KroneckerDelta)?;
+    // constant of 1
+    let mut ones = Tensor::from(vec![ValType::Constant(F::from(1))].into_iter());
+    ones.set_visibility(&crate::graph::Visibility::Fixed);
 
-    Ok(res)
+    // subtract
+    let output = pairwise(
+        config,
+        region,
+        &[ones.into(), product_diff_and_invert],
+        BaseOp::Sub,
+    )?;
+
+    // take the product of diff and output
+    let res = pairwise(config, region, &[diff, output.clone()], BaseOp::Mult)?;
+
+    // assign the output
+    let assigned_prod = region.assign(&config.inputs[1], &res)?;
+
+    // Enable the selectors (it should be 0)
+    if !region.is_dummy() {
+        (0..assigned_prod.len())
+            .map(|i| {
+                let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() + i);
+                let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    }
+
+    region.increment(assigned_prod.len());
+
+    Ok(output)
 }
 
 /// Xor boolean operation
