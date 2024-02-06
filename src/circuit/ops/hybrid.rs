@@ -158,8 +158,20 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res, vec![x])
                 }
             }
-            HybridOp::ReduceArgMax { dim } => (tensor::ops::argmax_axes(&x, *dim)?, vec![]),
-            HybridOp::ReduceArgMin { dim } => (tensor::ops::argmin_axes(&x, *dim)?, vec![]),
+            HybridOp::ReduceArgMax { dim } => {
+                let res = tensor::ops::argmax_axes(&x, *dim)?;
+                let inter =
+                    Op::f(&HybridOp::ReduceMax { axes: vec![*dim] }, inputs)?.intermediate_lookups;
+
+                (res, inter)
+            }
+            HybridOp::ReduceArgMin { dim } => {
+                let res = tensor::ops::argmin_axes(&x, *dim)?;
+                let inter =
+                    Op::f(&HybridOp::ReduceMin { axes: vec![*dim] }, inputs)?.intermediate_lookups;
+
+                (res, inter)
+            }
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
                     log::debug!("idx: {}", idx.show());
@@ -415,7 +427,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                         region,
                         values.try_into()?,
                         &LookupOp::Div {
-                            denom: denom.clone(),
+                            denom: *denom,
                         },
                     )?
                 }

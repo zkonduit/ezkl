@@ -789,7 +789,7 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
     let assigned_input = region.assign(&config.inputs[0], &input)?;
 
     // now assert all elems are 0 or 1
-    let assigned_output = boolean_identity(config, region, &[output.clone()])?;
+    let assigned_output = boolean_identity(config, region, &[output.clone()], true)?;
     region.increment(std::cmp::max(assigned_output.len(), assigned_input.len()));
 
     let sum = sum(config, region, &[assigned_output.clone()])?;
@@ -1711,19 +1711,9 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // take the product of diff and output
-    let res = pairwise(config, region, &[diff, output.clone()], BaseOp::Mult)?;
+    let prod_check = pairwise(config, region, &[diff, output.clone()], BaseOp::Mult)?;
 
-    // Enable the selectors (it should be 0)
-    if !region.is_dummy() {
-        (0..res.len())
-            .map(|i| {
-                let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() - i);
-                let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
-                region.enable(selector, z)?;
-                Ok(())
-            })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    }
+    is_zero_identity(config, region, &[prod_check], false)?;
 
     Ok(output)
 }
@@ -1789,7 +1779,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
             .into();
 
     // make sure mask is boolean
-    let assigned_mask = boolean_identity(config, region, &[mask.clone()])?;
+    let assigned_mask = boolean_identity(config, region, &[mask.clone()], true)?;
 
     let one_minus_mask = pairwise(config, region, &[unit, assigned_mask.clone()], BaseOp::Sub)?;
 
@@ -2390,18 +2380,59 @@ pub fn identity<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
+/// is zero identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
+pub fn is_zero_identity<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    assign: bool,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let output = if assign {
+        let output = region.assign(&config.output, &values[0])?;
+        region.increment(output.len());
+        output
+    } else {
+        values[0].clone()
+    };
+    // Enable the selectors
+    if !region.is_dummy() {
+        (0..output.len())
+            .map(|j| {
+                let index = region.linear_coord() - j - 1;
+
+                let (x, y, z) = config.output.cartesian_coord(index);
+                let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
+
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    }
+
+    Ok(output)
+}
+
 /// Boolean identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
 pub fn boolean_identity<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
+    assign: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let output = region.assign(&config.output, &values[0])?;
+    let output = if assign {
+        let output = region.assign(&config.output, &values[0])?;
+        region.increment(output.len());
+        output
+    } else {
+        values[0].clone()
+    };
     // Enable the selectors
     if !region.is_dummy() {
         (0..output.len())
             .map(|j| {
-                let (x, y, z) = config.output.cartesian_coord(region.linear_coord() + j);
+                let index = region.linear_coord() - j - 1;
+
+                let (x, y, z) = config.output.cartesian_coord(index);
                 let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
 
                 region.enable(selector, z)?;
@@ -2409,7 +2440,6 @@ pub fn boolean_identity<F: PrimeField + TensorType + PartialOrd>(
             })
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
-    region.increment(output.len());
 
     Ok(output)
 }
@@ -2478,7 +2508,7 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
                 let (x, y, z) = config
                     .lookup_input
                     .cartesian_coord(region.linear_coord() + i);
-                let selector = config.range_check_selectors.get(&(range.clone(), x, y));
+                let selector = config.range_check_selectors.get(&(*range, x, y));
                 region.enable(selector, z)?;
                 Ok(())
             })
@@ -2717,20 +2747,18 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     // relu(x - max(x - 1))
     let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
     // constraining relu(x - max(x - 1)) = 0/1
-    boolean_identity(config, region, &[relu.clone()])?;
+    boolean_identity(config, region, &[relu.clone()], false)?;
 
     // sum(relu(x - max(x - 1)))
     let sum_relu = sum(config, region, &[relu])?;
     // 1 - sum(relu(x - max(x - 1)))
     let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
     // relu(1 - sum(relu(x - max(x - 1))))
-    let _relu_one_minus_sum_relu =
+    let relu_one_minus_sum_relu =
         nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
 
     // constraining 1 - sum(relu(x - max(x - 1))) = 0
-    let (x, y, z) = config.output.cartesian_coord(region.linear_coord() - 1);
-    let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
-    region.enable(selector, z)?;
+    is_zero_identity(config, region, &[relu_one_minus_sum_relu], false)?;
 
     Ok(assigned_max_val)
 }
@@ -2776,7 +2804,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     // relu(min(x + 1)  - x)
     let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
     // constraining relu(min(x + 1) - x) = 0/1
-    boolean_identity(config, region, &[relu.clone()])?;
+    boolean_identity(config, region, &[relu.clone()], false)?;
 
     // sum(relu(min(x + 1) - x))
     let sum_relu = sum(config, region, &[relu])?;
@@ -2784,13 +2812,11 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
     // relu(1 - sum(relu(min(x + 1) - x)))
 
-    let _relu_one_minus_sum_relu =
+    let relu_one_minus_sum_relu =
         nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
 
     // constraining product to 0
-    let (x, y, z) = config.output.cartesian_coord(region.linear_coord() - 1);
-    let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
-    region.enable(selector, z)?;
+    is_zero_identity(config, region, &[relu_one_minus_sum_relu], false)?;
 
     Ok(assigned_min_val)
 }
@@ -3010,9 +3036,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     let sum = pairwise(config, region, &[lower_bound, upper_bound], BaseOp::Add)?;
 
     // Constrain the sum to be all zeros
-    let (x, y, z) = config.output.cartesian_coord(region.linear_coord() - 1);
-    let selector = config.selectors.get(&(BaseOp::IsZero, x, y));
-    region.enable(selector, z)?;
+    is_zero_identity(config, region, &[sum.clone()], false)?;
 
     Ok(sum)
 }

@@ -201,6 +201,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
                         config,
                         region,
                         values[..].try_into()?,
+                        true,
                     )?))
                 }
                 _ => Ok(Some(super::layouts::identity(

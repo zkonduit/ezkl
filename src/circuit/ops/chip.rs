@@ -523,10 +523,10 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
         // we borrow mutably twice so we need to do this dance
 
-        let range_check = if !self.range_checks.contains_key(&range) {
+        let range_check = if let std::collections::btree_map::Entry::Vacant(e) = self.range_checks.entry(range) {
             // as all tables have the same input we see if there's another table who's input we can reuse
             let range_check = RangeCheck::<F>::configure(cs, range);
-            self.range_checks.insert(range, range_check.clone());
+            e.insert(range_check.clone());
             range_check
         } else {
             return Ok(());

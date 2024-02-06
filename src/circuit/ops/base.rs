@@ -125,8 +125,8 @@ impl BaseOp {
             BaseOp::Sum => 1,
             BaseOp::SumInit => 1,
             BaseOp::Range { .. } => 1,
-            BaseOp::IsZero => 1,
-            BaseOp::IsBoolean => 1,
+            BaseOp::IsZero => 0,
+            BaseOp::IsBoolean => 0,
         }
     }
 

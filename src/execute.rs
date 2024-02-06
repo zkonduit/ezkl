@@ -726,11 +726,11 @@ impl AccuracyResults {
             let percentage_error = error.enum_map(|i, x| Ok::<_, TensorError>(x / original[i]))?;
             let abs_percentage_error = percentage_error.map(|x| x.abs());
 
-            errors.extend(error.into_iter());
-            abs_errors.extend(abs_error.into_iter());
-            squared_errors.extend(squared_error.into_iter());
-            percentage_errors.extend(percentage_error.into_iter());
-            abs_percentage_errors.extend(abs_percentage_error.into_iter());
+            errors.extend(error);
+            abs_errors.extend(abs_error);
+            squared_errors.extend(squared_error);
+            percentage_errors.extend(percentage_error);
+            abs_percentage_errors.extend(abs_percentage_error);
         }
 
         let mean_percent_error =
