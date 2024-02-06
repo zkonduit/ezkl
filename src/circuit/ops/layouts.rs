@@ -789,14 +789,7 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
     let assigned_input = region.assign(&config.inputs[0], &input)?;
 
     // now assert all elems are 0 or 1
-    let assigned_output = region.assign(&config.output, &output)?;
-    if !region.is_dummy() {
-        for i in 0..assigned_output.len() {
-            let (x, y, z) = config.output.cartesian_coord(region.linear_coord() + i);
-            let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
-            region.enable(selector, z)?;
-        }
-    }
+    let assigned_output = boolean_identity(config, region, &[output.clone()])?;
     region.increment(std::cmp::max(assigned_output.len(), assigned_input.len()));
 
     let sum = sum(config, region, &[assigned_output.clone()])?;
@@ -1796,21 +1789,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd>(
             .into();
 
     // make sure mask is boolean
-    let assigned_mask = region.assign(&config.output, mask)?;
-
-    // Enable the selectors
-    if !region.is_dummy() {
-        (0..assigned_mask.len())
-            .map(|i| {
-                let (x, y, z) = config.output.cartesian_coord(region.linear_coord() + i);
-                let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
-                region.enable(selector, z)?;
-                Ok(())
-            })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    }
-
-    region.increment(assigned_mask.len());
+    let assigned_mask = boolean_identity(config, region, &[mask.clone()])?;
 
     let one_minus_mask = pairwise(config, region, &[unit, assigned_mask.clone()], BaseOp::Sub)?;
 
@@ -2737,18 +2716,8 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     )?;
     // relu(x - max(x - 1))
     let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
-    let len = relu.dims().iter().product();
-
-    if !region.is_dummy() {
-        (0..len)
-            .map(|i| {
-                let (x, y, z) = config.output.cartesian_coord(region.linear_coord() - i);
-                let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
-                region.enable(selector, z)?;
-                Ok(())
-            })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    }
+    // constraining relu(x - max(x - 1)) = 0/1
+    boolean_identity(config, region, &[relu.clone()])?;
 
     // sum(relu(x - max(x - 1)))
     let sum_relu = sum(config, region, &[relu])?;
@@ -2806,20 +2775,8 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
 
     // relu(min(x + 1)  - x)
     let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
-
-    let len = relu.dims().iter().product();
-
-    // y_i*(1 - y_i) =0 // assert the values are either 0 or 1
-    if !region.is_dummy() {
-        (0..len)
-            .map(|i| {
-                let (x, y, z) = config.inputs[1].cartesian_coord(region.linear_coord() - i);
-                let selector = config.selectors.get(&(BaseOp::IsBoolean, x, y));
-                region.enable(selector, z)?;
-                Ok(())
-            })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    }
+    // constraining relu(min(x + 1) - x) = 0/1
+    boolean_identity(config, region, &[relu.clone()])?;
 
     // sum(relu(min(x + 1) - x))
     let sum_relu = sum(config, region, &[relu])?;
