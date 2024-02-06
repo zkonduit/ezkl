@@ -198,8 +198,6 @@ jobs:
         #   chromedriver-version: "115.0.5790.102"
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
-      - name: Install wasm runner
-        run: cargo install wasm-server-runner
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
       - name: Run wasm verifier tests
@@ -351,9 +349,6 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - name: Add wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
-
-      - name: Install wasm-server-runner
-        run: cargo install wasm-server-runner
 
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
