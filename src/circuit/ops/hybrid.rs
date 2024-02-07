@@ -160,23 +160,17 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::ReduceArgMax { dim } => {
                 let res = tensor::ops::argmax_axes(&x, *dim)?;
-                let indices = Tensor::from(0..x.dims()[*dim] as i128);
-                let mut inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                 let inter =
                     Op::f(&HybridOp::ReduceMax { axes: vec![*dim] }, inputs)?.intermediate_lookups;
-                inter_equals.extend(inter);
 
-                (res.clone(), inter_equals)
+                (res, inter)
             }
             HybridOp::ReduceArgMin { dim } => {
                 let res = tensor::ops::argmin_axes(&x, *dim)?;
-                let indices = Tensor::from(0..x.dims()[*dim] as i128);
-                let mut inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                 let inter =
                     Op::f(&HybridOp::ReduceMin { axes: vec![*dim] }, inputs)?.intermediate_lookups;
-                inter_equals.extend(inter);
 
-                (res.clone(), inter_equals)
+                (res, inter)
             }
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
@@ -185,18 +179,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res.clone(), vec![])
                 } else {
                     let y = inputs[1].clone().map(|x| felt_to_i128(x));
-                    let indices = Tensor::from(0..x.dims()[*dim] as i128);
-                    let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                     let res = tensor::ops::gather(&x, &y.map(|x| x as usize), *dim)?;
-                    (res.clone(), inter_equals)
+                    (res.clone(), vec![])
                 }
             }
-            HybridOp::OneHot { dim, num_classes } => {
-                let indices = Tensor::from(0..x.dims()[*dim] as i128);
-                let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
-                let res = tensor::ops::one_hot(&x, *num_classes, *dim)?;
-                (res.clone(), inter_equals)
-            }
+            HybridOp::OneHot { dim, num_classes } => (
+                tensor::ops::one_hot(&x, *num_classes, *dim)?.clone(),
+                vec![],
+            ),
             HybridOp::TopK { dim, k, largest } => {
                 let res = tensor::ops::topk_axes(&x, *k, *dim, *largest)?;
 
@@ -228,10 +218,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     (res.clone(), vec![])
                 } else {
                     let y = inputs[1].clone().map(|x| felt_to_i128(x));
-                    let indices = Tensor::from(0..x.dims()[*dim] as i128);
-                    let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                     let res = tensor::ops::gather_elements(&x, &y.map(|x| x as usize), *dim)?;
-                    (res.clone(), inter_equals)
+                    (res.clone(), vec![])
                 }
             }
             HybridOp::ScatterElements { dim, constant_idx } => {
@@ -243,10 +231,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 } else {
                     let idx = inputs[1].clone().map(|x| felt_to_i128(x) as usize);
                     let src = inputs[2].clone().map(|x| felt_to_i128(x));
-                    let indices = Tensor::from(0..x.dims()[*dim] as i128);
-                    let inter_equals: Vec<Tensor<i128>> = vec![indices.clone(), -indices];
                     let res = tensor::ops::scatter(&x, &idx, &src, *dim)?;
-                    (res.clone(), inter_equals)
+                    (res.clone(), vec![])
                 }
             }
             HybridOp::MaxPool2d {
@@ -441,7 +427,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                         region,
                         values.try_into()?,
                         &LookupOp::Div {
-                            denom: denom.clone(),
+                            denom: *denom,
                         },
                     )?
                 }

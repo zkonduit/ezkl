@@ -29,9 +29,6 @@ jobs:
       - name: Add wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
 
-      - name: Install wasm-server-runner
-        run: cargo install wasm-server-runner
-
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
       - name: Install binaryen

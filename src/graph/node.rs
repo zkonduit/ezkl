@@ -148,7 +148,7 @@ impl RebaseScale {
                 SupportedOp::RebaseScale(RebaseScale {
                     inner: op.inner.clone(),
                     target_scale: op.target_scale,
-                    multiplier: multiplier,
+                    multiplier,
                     rebase_op: HybridOp::Div {
                         denom: crate::circuit::utils::F32((multiplier) as f32),
                         use_range_check_for_int: !div_rebasing,
