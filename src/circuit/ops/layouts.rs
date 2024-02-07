@@ -1877,13 +1877,11 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     if normalized {
-        last_elem = nonlinearity(
+        last_elem = div(
             config,
             region,
             &[last_elem],
-            &LookupOp::Div {
-                denom: utils::F32((kernel_shape.0 * kernel_shape.1) as f32),
-            },
+            F::from((kernel_shape.0 * kernel_shape.1) as u64),
         )?;
     }
     Ok(last_elem)
@@ -2617,22 +2615,6 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
 
     // constrain the calculated output to a column
     Ok(output)
-}
-
-/// mean function layout
-pub fn mean<F: PrimeField + TensorType + PartialOrd>(
-    config: &BaseConfig<F>,
-    region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
-    scale: usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let x = &values[0];
-
-    let sum_x = sum(config, region, &[x.clone()])?;
-    let nl = LookupOp::Div {
-        denom: utils::F32((scale * x.len()) as f32),
-    };
-    nonlinearity(config, region, &[sum_x], &nl)
 }
 
 /// Argmax
