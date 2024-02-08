@@ -233,7 +233,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     let mut assigned_len = 0;
     for (i, input) in values.iter_mut().enumerate() {
-        input.pad_to_zero_rem(block_width)?;
+        input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
         let inp = {
             let (res, len) = region.assign_with_duplication(
                 &config.inputs[i],
@@ -1161,7 +1161,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd>(
     let assigned_len: usize;
     let input = {
         let mut input = values[0].clone();
-        input.pad_to_zero_rem(block_width)?;
+        input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
         let (res, len) =
             region.assign_with_duplication(&config.inputs[1], &input, &config.check_mode, false)?;
         assigned_len = len;
@@ -1230,7 +1230,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd>(
     let assigned_len: usize;
     let input = {
         let mut input = values[0].clone();
-        input.pad_to_zero_rem(block_width)?;
+        input.pad_to_zero_rem(block_width, ValType::Constant(F::ONE))?;
         let (res, len) =
             region.assign_with_duplication(&config.inputs[1], &input, &config.check_mode, false)?;
         assigned_len = len;

@@ -585,11 +585,11 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0, 0]), &[9]).unwrap();
     /// assert_eq!(a.pad_to_zero_rem(9).unwrap(), expected);
     /// ```
-    pub fn pad_to_zero_rem(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+    pub fn pad_to_zero_rem(&self, n: usize, pad: T) -> Result<Tensor<T>, TensorError> {
         let mut inner = self.inner.clone();
         let remainder = self.len() % n;
         if remainder != 0 {
-            inner.resize(self.len() + n - remainder, T::zero().unwrap());
+            inner.resize(self.len() + n - remainder, pad);
         }
         Tensor::new(Some(&inner), &[inner.len()])
     }

@@ -131,7 +131,7 @@ mod py_tests {
         "simple_demo_aggregated_proofs.ipynb",
         "ezkl_demo.ipynb", // 10
         "lstm.ipynb",
-        "set_membership.ipynb",
+        "set_membership.ipynb", // 12
         "decision_tree.ipynb",
         "random_forest.ipynb",
         "gradient_boosted_trees.ipynb", // 15
