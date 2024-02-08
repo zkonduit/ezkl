@@ -38,7 +38,7 @@ portable-atomic = "1.6.0"
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ethers = { version = "2.0.7", default_features = false, features = ["ethers-solc"] }
+ethers = { version = "2.0.11", default_features = false, features = ["ethers-solc"] }
 indicatif = {version = "0.17.5", features = ["rayon"]}
 gag =  { version = "1.0.0", default_features = false}
 instant = { version = "0.1" }
