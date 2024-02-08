@@ -260,7 +260,7 @@ pub fn equals<
 >(
     a: &Tensor<T>,
     b: &Tensor<T>,
-) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+) -> Result<Tensor<T>, TensorError> {
     let a = a.clone();
     let b = b.clone();
 
@@ -268,7 +268,7 @@ pub fn equals<
 
     let result = nonlinearities::kronecker_delta(&diff);
 
-    Ok((result, vec![diff]))
+    Ok(result)
 }
 
 /// Greater than operation.
@@ -302,7 +302,7 @@ pub fn greater<
 >(
     a: &Tensor<T>,
     b: &Tensor<T>,
-) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+) -> Result<Tensor<T>, TensorError> {
     let mask_inter = (a.clone() - b.clone())?;
     let mask = mask_inter.map(|x| {
         if x > T::zero().ok_or(TensorError::Unsupported).unwrap() {
@@ -311,7 +311,7 @@ pub fn greater<
             T::zero().ok_or(TensorError::Unsupported).unwrap()
         }
     });
-    Ok((mask, vec![mask_inter]))
+    Ok(mask)
 }
 
 /// Greater equals than operation.
@@ -345,7 +345,7 @@ pub fn greater_equal<
 >(
     a: &Tensor<T>,
     b: &Tensor<T>,
-) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+) -> Result<Tensor<T>, TensorError> {
     let mask_inter = (a.clone() - b.clone())?;
     let mask = mask_inter.map(|x| {
         if x >= T::zero().ok_or(TensorError::Unsupported).unwrap() {
@@ -354,7 +354,7 @@ pub fn greater_equal<
             T::zero().ok_or(TensorError::Unsupported).unwrap()
         }
     });
-    Ok((mask, vec![mask_inter]))
+    Ok(mask)
 }
 
 /// Less than to operation.
@@ -389,7 +389,7 @@ pub fn less<
 >(
     a: &Tensor<T>,
     b: &Tensor<T>,
-) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+) -> Result<Tensor<T>, TensorError> {
     // a < b <=> b > a
     greater(b, a)
 }
@@ -426,7 +426,7 @@ pub fn less_equal<
 >(
     a: &Tensor<T>,
     b: &Tensor<T>,
-) -> Result<(Tensor<T>, Vec<Tensor<T>>), TensorError> {
+) -> Result<Tensor<T>, TensorError> {
     // a < b <=> b > a
     greater_equal(b, a)
 }
@@ -2315,7 +2315,7 @@ pub fn sumpool(
     stride: (usize, usize),
     kernel_shape: (usize, usize),
     normalize: bool,
-) -> Result<(Tensor<i128>, Vec<Tensor<i128>>), TensorError> {
+) -> Result<Tensor<i128>, TensorError> {
     let image_dims = image.dims();
     let batch_size = image_dims[0];
     let image_channels = image_dims[1];
@@ -2345,15 +2345,12 @@ pub fn sumpool(
     let mut combined = res.combine()?;
     combined.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
-    let mut inter = vec![];
-
     if normalize {
-        inter.push(combined.clone());
         let norm = kernel.len();
         combined = nonlinearities::const_div(&combined, norm as f64);
     }
 
-    Ok((combined, inter))
+    Ok(combined)
 }
 
 /// Applies 2D max pooling over a 4D tensor of shape B x C x H x W.
@@ -3048,19 +3045,13 @@ pub mod nonlinearities {
     }
 
     /// softmax layout
-    pub fn softmax_axes(
-        a: &Tensor<i128>,
-        scale: f64,
-        axes: &[usize],
-    ) -> (Tensor<i128>, Vec<Tensor<i128>>) {
+    pub fn softmax_axes(a: &Tensor<i128>, scale: f64, axes: &[usize]) -> Tensor<i128> {
         // we want this to be as small as possible so we set the output scale to 1
         let dims = a.dims();
 
         if dims.len() == 1 {
             return softmax(a, scale);
         }
-
-        let mut intermediate_values = vec![];
 
         let cartesian_coord = dims[..dims.len() - 1]
             .iter()
@@ -3084,8 +3075,7 @@ pub mod nonlinearities {
 
             let res = softmax(&softmax_input, scale);
 
-            outputs.push(res.0);
-            intermediate_values.extend(res.1);
+            outputs.push(res);
         }
 
         let mut res = Tensor::new(Some(&outputs), &[outputs.len()])
@@ -3093,7 +3083,7 @@ pub mod nonlinearities {
             .combine()
             .unwrap();
         res.reshape(dims).unwrap();
-        (res, intermediate_values)
+        res
     }
 
     /// Applies softmax
@@ -3115,19 +3105,15 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[2730, 2730, 2751, 2730, 2730, 2688]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn softmax(a: &Tensor<i128>, scale: f64) -> (Tensor<i128>, Vec<Tensor<i128>>) {
+    pub fn softmax(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
-        let mut intermediate_values = vec![];
-
-        intermediate_values.push(a.clone());
 
         let exp = exp(a, scale);
 
         let sum = sum(&exp).unwrap();
-        intermediate_values.push(sum.clone());
         let inv_denom = recip(&sum, scale, scale);
 
-        ((exp * inv_denom).unwrap(), intermediate_values)
+        (exp * inv_denom).unwrap()
     }
 
     /// Applies range_check_percent

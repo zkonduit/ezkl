@@ -1,5 +1,6 @@
 use crate::{
     circuit::layouts,
+    fieldutils::felt_to_i128,
     tensor::{self, Tensor, TensorError},
 };
 
@@ -9,6 +10,14 @@ use super::{base::BaseOp, *};
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PolyOp {
+    GatherElements {
+        dim: usize,
+        constant_idx: Option<Tensor<usize>>,
+    },
+    ScatterElements {
+        dim: usize,
+        constant_idx: Option<Tensor<usize>>,
+    },
     MultiBroadcastTo {
         shape: Vec<usize>,
     },
@@ -81,6 +90,8 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
 
     fn as_string(&self) -> String {
         match &self {
+            PolyOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
+            PolyOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
             PolyOp::MultiBroadcastTo { shape } => format!("MULTIBROADCASTTO (shape={:?})", shape),
             PolyOp::MoveAxis { .. } => "MOVEAXIS".into(),
             PolyOp::Downsample { .. } => "DOWNSAMPLE".into(),
@@ -203,14 +214,36 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("slice inputs".to_string()));
                 }
-                Ok(tensor::ops::slice(&inputs[0], axis, start, end)?)
+                tensor::ops::slice(&inputs[0], axis, start, end)
+            }
+            PolyOp::GatherElements { dim, constant_idx } => {
+                let x = inputs[0].clone();
+                let y = if let Some(idx) = constant_idx {
+                    idx.clone()
+                } else {
+                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
+                };
+                tensor::ops::gather_elements(&x, &y, *dim)
+            }
+            PolyOp::ScatterElements { dim, constant_idx } => {
+                let x = inputs[0].clone();
+
+                let idx = if let Some(idx) = constant_idx {
+                    idx.clone()
+                } else {
+                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
+                };
+
+                let src = if let Some(_) = constant_idx {
+                    inputs[1].clone()
+                } else {
+                    inputs[2].clone()
+                };
+                tensor::ops::scatter(&x, &idx, &src, *dim)
             }
         }?;
 
-        Ok(ForwardResult {
-            output: res,
-            intermediate_lookups: vec![],
-        })
+        Ok(ForwardResult { output: res })
     }
 
     fn layout(
@@ -250,6 +283,26 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             }
             PolyOp::Conv { padding, stride } => {
                 layouts::conv(config, region, values[..].try_into()?, *padding, *stride)?
+            }
+            PolyOp::GatherElements { dim, constant_idx } => {
+                if let Some(idx) = constant_idx {
+                    tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
+                } else {
+                    layouts::gather_elements(config, region, values[..].try_into()?, *dim)?
+                }
+            }
+            PolyOp::ScatterElements { dim, constant_idx } => {
+                if let Some(idx) = constant_idx {
+                    tensor::ops::scatter(
+                        values[0].get_inner_tensor()?,
+                        idx,
+                        values[1].get_inner_tensor()?,
+                        *dim,
+                    )?
+                    .into()
+                } else {
+                    layouts::scatter_elements(config, region, values[..].try_into()?, *dim)?
+                }
             }
             PolyOp::DeConv {
                 padding,
@@ -352,6 +405,8 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             vec![1, 2]
         } else if matches!(self, PolyOp::Concat { .. }) {
             (0..100).collect()
+        } else if matches!(self, PolyOp::ScatterElements { .. }) {
+            vec![0, 2]
         } else {
             vec![]
         }

@@ -227,10 +227,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
 
         let output = res.map(|x| i128_to_felt(x));
 
-        Ok(ForwardResult {
-            output,
-            intermediate_lookups: vec![],
-        })
+        Ok(ForwardResult { output })
     }
 
     /// Returns the name of the operation

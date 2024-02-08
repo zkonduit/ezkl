@@ -11,7 +11,7 @@ use std::{
     cell::RefCell,
     collections::HashSet,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicI128, AtomicUsize, Ordering},
         Arc, Mutex,
     },
 };
@@ -66,6 +66,8 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
     total_constants: usize,
     used_lookups: HashSet<LookupOp>,
     used_range_checks: HashSet<Range>,
+    max_lookup_inputs: i128,
+    min_lookup_inputs: i128,
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
@@ -87,6 +89,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             total_constants: 0,
             used_lookups: HashSet::new(),
             used_range_checks: HashSet::new(),
+            max_lookup_inputs: 0,
+            min_lookup_inputs: 0,
         }
     }
     /// Create a new region context from a wrapped region
@@ -104,6 +108,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             total_constants: 0,
             used_lookups: HashSet::new(),
             used_range_checks: HashSet::new(),
+            max_lookup_inputs: 0,
+            min_lookup_inputs: 0,
         }
     }
 
@@ -120,6 +126,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             total_constants: 0,
             used_lookups: HashSet::new(),
             used_range_checks: HashSet::new(),
+            max_lookup_inputs: 0,
+            min_lookup_inputs: 0,
         }
     }
 
@@ -141,6 +149,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             total_constants,
             used_lookups,
             used_range_checks,
+            max_lookup_inputs: 0,
+            min_lookup_inputs: 0,
         }
     }
 
@@ -190,6 +200,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         let row = AtomicUsize::new(self.row());
         let linear_coord = AtomicUsize::new(self.linear_coord());
         let constants = AtomicUsize::new(self.total_constants());
+        let max_lookup_inputs = AtomicI128::new(self.max_lookup_inputs());
+        let min_lookup_inputs = AtomicI128::new(self.min_lookup_inputs());
         let lookups = Arc::new(Mutex::new(self.used_lookups.clone()));
         let range_checks = Arc::new(Mutex::new(self.used_range_checks.clone()));
 
@@ -221,6 +233,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                     local_reg.total_constants() - starting_constants,
                     Ordering::SeqCst,
                 );
+
+                max_lookup_inputs.fetch_max(local_reg.max_lookup_inputs(), Ordering::SeqCst);
+                min_lookup_inputs.fetch_min(local_reg.min_lookup_inputs(), Ordering::SeqCst);
                 // update the lookups
                 let mut lookups = lookups.lock().unwrap();
                 lookups.extend(local_reg.used_lookups());
@@ -234,6 +249,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             })?;
         self.total_constants = constants.into_inner();
         self.linear_coord = linear_coord.into_inner();
+        self.max_lookup_inputs = max_lookup_inputs.into_inner();
+        self.min_lookup_inputs = min_lookup_inputs.into_inner();
         self.row = row.into_inner();
         self.used_lookups = Arc::try_unwrap(lookups)
             .map_err(|e| RegionError::from(format!("dummy_loop: failed to get lookups: {:?}", e)))?
@@ -253,19 +270,54 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         Ok(())
     }
 
+    /// Update the max and min from inputs
+    pub fn update_max_min_lookup_inputs(
+        &mut self,
+        inputs: &[ValTensor<F>],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (mut min, mut max) = (0, 0);
+        for i in inputs {
+            max = max.max(i.get_int_evals()?.into_iter().max().unwrap_or_default());
+            min = min.min(i.get_int_evals()?.into_iter().min().unwrap_or_default());
+        }
+        self.max_lookup_inputs = self.max_lookup_inputs.max(max);
+        self.min_lookup_inputs = self.min_lookup_inputs.min(min);
+        Ok(())
+    }
+
+    /// Update the max and min from inputs
+    pub fn update_max_min_lookup_range(
+        &mut self,
+        range: Range,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if range.0 > range.1 {
+            return Err("update_max_min_lookup_range: invalid range".into());
+        }
+
+        self.max_lookup_inputs = self.max_lookup_inputs.max(range.1);
+        self.min_lookup_inputs = self.min_lookup_inputs.min(range.0);
+        Ok(())
+    }
+
     /// Check if the region is dummy
     pub fn is_dummy(&self) -> bool {
         self.region.is_none()
     }
 
     /// add used lookup
-    pub fn add_used_lookup(&mut self, lookup: LookupOp) {
+    pub fn add_used_lookup(
+        &mut self,
+        lookup: LookupOp,
+        inputs: &[ValTensor<F>],
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.used_lookups.insert(lookup);
+        self.update_max_min_lookup_inputs(inputs)
     }
 
     /// add used range check
-    pub fn add_used_range_check(&mut self, range: Range) {
+    pub fn add_used_range_check(&mut self, range: Range) -> Result<(), Box<dyn std::error::Error>> {
         self.used_range_checks.insert(range);
+        self.update_max_min_lookup_range(range)
     }
 
     /// Get the offset
@@ -291,6 +343,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     /// get used range checks
     pub fn used_range_checks(&self) -> HashSet<Range> {
         self.used_range_checks.clone()
+    }
+
+    /// max lookup inputs
+    pub fn max_lookup_inputs(&self) -> i128 {
+        self.max_lookup_inputs
+    }
+
+    /// min lookup inputs
+    pub fn min_lookup_inputs(&self) -> i128 {
+        self.min_lookup_inputs
     }
 
     /// Assign a constant value

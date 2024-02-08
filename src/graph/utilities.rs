@@ -439,17 +439,16 @@ pub fn new_op_from_onnx(
             let op = load_op::<ScatterElements>(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
 
-            let mut op =
-                SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::ScatterElements {
-                    dim: axis,
-                    constant_idx: None,
-                });
+            let mut op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::ScatterElements {
+                dim: axis,
+                constant_idx: None,
+            });
 
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
                 inputs[1].decrement_use();
                 deleted_indices.push(1);
-                op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::ScatterElements {
+                op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::ScatterElements {
                     dim: axis,
                     constant_idx: Some(c.raw_values.map(|x| x as usize)),
                 })
@@ -478,17 +477,16 @@ pub fn new_op_from_onnx(
             let op = load_op::<GatherElements>(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
 
-            let mut op =
-                SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::GatherElements {
-                    dim: axis,
-                    constant_idx: None,
-                });
+            let mut op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::GatherElements {
+                dim: axis,
+                constant_idx: None,
+            });
 
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
                 inputs[1].decrement_use();
                 deleted_indices.push(inputs.len() - 1);
-                op = SupportedOp::Hybrid(crate::circuit::ops::hybrid::HybridOp::GatherElements {
+                op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::GatherElements {
                     dim: axis,
                     constant_idx: Some(c.raw_values.map(|x| x as usize)),
                 })

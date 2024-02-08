@@ -10,7 +10,6 @@ use crate::circuit::table::Range;
 use crate::circuit::Input;
 use crate::circuit::InputType;
 use crate::circuit::Unknown;
-use crate::fieldutils::felt_to_i128;
 use crate::tensor::ValType;
 use crate::{
     circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
@@ -68,6 +67,16 @@ pub struct ForwardResult {
     pub min_lookup_inputs: i128,
 }
 
+impl From<DummyPassRes> for ForwardResult {
+    fn from(res: DummyPassRes) -> Self {
+        Self {
+            outputs: res.outputs,
+            max_lookup_inputs: res.max_lookup_inputs,
+            min_lookup_inputs: res.min_lookup_inputs,
+        }
+    }
+}
+
 /// A circuit configuration for the entirety of a model loaded from an Onnx file.
 #[derive(Clone, Debug)]
 pub struct ModelConfig {
@@ -93,6 +102,12 @@ pub struct DummyPassRes {
     pub lookup_ops: HashSet<LookupOp>,
     /// range checks
     pub range_checks: HashSet<Range>,
+    /// max lookup inputs
+    pub max_lookup_inputs: i128,
+    /// min lookup inputs
+    pub min_lookup_inputs: i128,
+    /// outputs
+    pub outputs: Vec<Tensor<Fp>>,
 }
 
 /// A struct for loading from an Onnx file and converting a computational graph to a circuit.
@@ -486,7 +501,25 @@ impl Model {
         );
         // this is the total number of variables we will need to allocate
         // for the circuit
-        let res = self.dummy_layout(run_args, &self.graph.input_shapes()?)?;
+        let default_value = if !self.visibility.input.is_fixed() {
+            ValType::Value(Value::<Fp>::unknown())
+        } else {
+            ValType::Constant(Fp::ONE)
+        };
+
+        let inputs: Vec<ValTensor<Fp>> = self
+            .graph
+            .input_shapes()?
+            .iter()
+            .map(|shape| {
+                let mut t: ValTensor<Fp> =
+                    vec![default_value.clone(); shape.iter().product()].into();
+                t.reshape(shape)?;
+                Ok(t)
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+
+        let res = self.dummy_layout(run_args, &inputs)?;
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
 
@@ -522,206 +555,12 @@ impl Model {
     /// * `model_inputs` - A vector of [Tensor]s to use as inputs to the model.
     /// * `run_args` - [RunArgs]
     pub fn forward(&self, model_inputs: &[Tensor<Fp>]) -> Result<ForwardResult, Box<dyn Error>> {
-        let mut results: BTreeMap<&usize, Vec<Tensor<Fp>>> = BTreeMap::new();
-        let mut max_lookup_inputs = 0;
-        let mut min_lookup_inputs = 0;
-
-        let input_shapes = self.graph.input_shapes()?;
-
-        for (i, input_idx) in self.graph.inputs.iter().enumerate() {
-            let mut input = model_inputs[i].clone();
-            input.reshape(&input_shapes[i])?;
-            results.insert(input_idx, vec![input]);
-        }
-
-        for (idx, n) in self.graph.nodes.iter() {
-            let mut inputs = vec![];
-            if n.is_input() {
-                let t = results.get(idx).ok_or(GraphError::MissingResults)?[0].clone();
-                inputs.push(t);
-            } else {
-                for (idx, outlet) in n.inputs().iter() {
-                    match results.get(&idx) {
-                        Some(value) => inputs.push(value[*outlet].clone()),
-                        None => return Err(Box::new(GraphError::MissingNode(*idx))),
-                    }
-                }
-            };
-
-            debug!("executing {}: {}", idx, n.as_str());
-            debug!("dims: {:?}", n.out_dims());
-            debug!(
-                "input_dims: {:?}",
-                inputs.iter().map(|x| x.dims()).collect::<Vec<_>>()
-            );
-
-            debug!("input nodes: {:?}", n.inputs());
-
-            if n.is_lookup() {
-                let (mut min, mut max) = (0, 0);
-                for i in &inputs {
-                    max = max.max(
-                        i.iter()
-                            .map(|x| felt_to_i128(*x))
-                            .max()
-                            .ok_or("missing max")?,
-                    );
-                    min = min.min(
-                        i.iter()
-                            .map(|x| felt_to_i128(*x))
-                            .min()
-                            .ok_or("missing min")?,
-                    );
-                }
-                max_lookup_inputs = max_lookup_inputs.max(max);
-                min_lookup_inputs = min_lookup_inputs.min(min);
-                debug!("max lookup inputs: {}", max);
-                debug!("min lookup inputs: {}", min);
-            }
-
-            match n {
-                NodeType::Node(n) => {
-                    // execute the op
-                    let start = instant::Instant::now();
-                    let mut res = Op::<Fp>::f(&n.opkind, &inputs)?;
-                    res.output.reshape(&n.out_dims)?;
-                    let elapsed = start.elapsed();
-                    trace!("op took: {:?}", elapsed);
-                    // see if any of the intermediate lookup calcs are the max
-                    if !res.intermediate_lookups.is_empty() {
-                        let (mut min, mut max) = (0, 0);
-                        for i in &res.intermediate_lookups {
-                            max = max.max(i.clone().into_iter().max().ok_or("missing max")?);
-                            min = min.min(i.clone().into_iter().min().ok_or("missing min")?);
-                        }
-                        max_lookup_inputs = max_lookup_inputs.max(max);
-                        min_lookup_inputs = min_lookup_inputs.min(min);
-                        debug!("intermediate max lookup inputs: {}", max);
-                        debug!("intermediate min lookup inputs: {}", min);
-                    }
-                    debug!(
-                        "------------ output node int {}: {} \n ------------ float: {} \n ------------ max: {} \n ------------ min: {} \n ------------ scale: {}",
-                        idx,
-                        res.output.map(crate::fieldutils::felt_to_i32).show(),
-                        res.output
-                            .map(|x| crate::fieldutils::felt_to_f64(x)
-                                / scale_to_multiplier(n.out_scale))
-                            .show(),
-                        res.output.clone().into_iter().map(crate::fieldutils::felt_to_i128).max().unwrap_or(0),
-                        res.output.clone().into_iter().map(crate::fieldutils::felt_to_i128).min().unwrap_or(0),
-                        n.out_scale
-                    );
-                    results.insert(idx, vec![res.output]);
-                }
-                NodeType::SubGraph {
-                    model,
-                    output_mappings,
-                    input_mappings,
-                    inputs: input_tuple,
-                    ..
-                } => {
-                    let orig_inputs = inputs.clone();
-                    let input_mappings = input_mappings.clone();
-
-                    let input_dims = inputs.iter().map(|inp| inp.dims());
-                    let num_iter = number_of_iterations(&input_mappings, input_dims.collect());
-
-                    debug!(
-                        "{} iteration(s) in a subgraph with inputs {:?} and sources {:?}",
-                        num_iter, input_tuple, model.graph.inputs
-                    );
-
-                    debug!("input_mappings: {:?}", input_mappings);
-
-                    let mut full_results: Vec<Tensor<Fp>> = vec![];
-
-                    for i in 0..num_iter {
-                        // replace the Stacked input with the current chunk iter
-                        for ((mapping, inp), og_input) in
-                            input_mappings.iter().zip(&mut inputs).zip(&orig_inputs)
-                        {
-                            if let InputMapping::Stacked { axis, chunk } = mapping {
-                                let start = i * chunk;
-                                let end = (i + 1) * chunk;
-                                let t = crate::tensor::ops::slice(og_input, axis, &start, &end)?;
-                                *inp = t;
-                            }
-                        }
-
-                        let res = model.forward(&inputs)?;
-                        // recursively get the max lookup inputs for subgraphs
-                        max_lookup_inputs = max_lookup_inputs.max(res.max_lookup_inputs);
-                        min_lookup_inputs = min_lookup_inputs.min(res.min_lookup_inputs);
-
-                        let mut outlets = BTreeMap::new();
-                        for (mappings, outlet_res) in output_mappings.iter().zip(res.outputs) {
-                            for mapping in mappings {
-                                match mapping {
-                                    OutputMapping::Single { outlet, .. } => {
-                                        outlets.insert(outlet, outlet_res.clone());
-                                    }
-                                    OutputMapping::Stacked { outlet, axis, .. } => {
-                                        if !full_results.is_empty() {
-                                            let stacked_res = crate::tensor::ops::concat(
-                                                &[&full_results[*outlet], &outlet_res],
-                                                *axis,
-                                            )?;
-
-                                            outlets.insert(outlet, stacked_res);
-                                        } else {
-                                            outlets.insert(outlet, outlet_res.clone());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        full_results = outlets.into_values().collect_vec();
-
-                        let output_states = output_state_idx(output_mappings);
-                        let input_states = input_state_idx(&input_mappings);
-
-                        assert_eq!(input_states.len(), output_states.len());
-
-                        for (input_idx, output_idx) in input_states.iter().zip(output_states) {
-                            inputs[*input_idx] = full_results[output_idx].clone();
-                        }
-                    }
-
-                    trace!(
-                        "------------ output subgraph node {}: {:?}",
-                        idx,
-                        full_results
-                            .iter()
-                            .map(|x|
-                            // convert to tensor i32
-                            x.map(crate::fieldutils::felt_to_i32).show())
-                            .collect_vec()
-                    );
-
-                    results.insert(idx, full_results);
-                }
-            }
-        }
-
-        let output_nodes = self.graph.outputs.iter();
-        debug!(
-            "model outputs are nodes: {:?}",
-            output_nodes.clone().collect_vec()
-        );
-        let outputs = output_nodes
-            .map(|(idx, outlet)| {
-                Ok(results.get(&idx).ok_or(GraphError::MissingResults)?[*outlet].clone())
-            })
-            .collect::<Result<Vec<_>, GraphError>>()?;
-
-        let res = ForwardResult {
-            outputs,
-            max_lookup_inputs,
-            min_lookup_inputs,
-        };
-
-        Ok(res)
+        let valtensor_inputs: Vec<ValTensor<Fp>> = model_inputs
+            .iter()
+            .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
+            .collect();
+        let res = self.dummy_layout(&RunArgs::default(), &valtensor_inputs)?;
+        Ok(res.into())
     }
 
     /// Loads an Onnx model from a specified path.
@@ -1489,28 +1328,13 @@ impl Model {
     pub fn dummy_layout(
         &self,
         run_args: &RunArgs,
-        input_shapes: &[Vec<usize>],
+        inputs: &[ValTensor<Fp>],
     ) -> Result<DummyPassRes, Box<dyn Error>> {
         info!("calculating num of constraints using dummy model layout...");
 
         let start_time = instant::Instant::now();
 
         let mut results = BTreeMap::<usize, Vec<ValTensor<Fp>>>::new();
-        let default_value = if !self.visibility.input.is_fixed() {
-            ValType::Value(Value::<Fp>::unknown())
-        } else {
-            ValType::Constant(Fp::ONE)
-        };
-
-        let inputs: Vec<ValTensor<Fp>> = input_shapes
-            .iter()
-            .map(|shape| {
-                let mut t: ValTensor<Fp> =
-                    vec![default_value.clone(); shape.iter().product()].into();
-                t.reshape(shape)?;
-                Ok(t)
-            })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             results.insert(*input_idx, vec![inputs[i].clone()]);
@@ -1545,12 +1369,12 @@ impl Model {
                 .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
             let _ = outputs
-                .into_iter()
+                .iter()
                 .zip(comparator)
                 .map(|(o, c)| {
                     dummy_config.layout(
                         &mut region,
-                        &[o, c],
+                        &[o.clone(), c],
                         Box::new(HybridOp::RangeCheck(run_args.tolerance)),
                     )
                 })
@@ -1575,12 +1399,23 @@ impl Model {
             region.total_constants().to_string().red()
         );
 
+        let outputs = outputs
+            .iter()
+            .map(|x| {
+                x.get_felt_evals()
+                    .unwrap_or(Tensor::new(Some(&[Fp::ZERO]), &[1]).unwrap())
+            })
+            .collect();
+
         let res = DummyPassRes {
             num_rows: region.row(),
             linear_coord: region.linear_coord(),
             total_const_size: region.total_constants(),
             lookup_ops: region.used_lookups(),
             range_checks: region.used_range_checks(),
+            max_lookup_inputs: region.max_lookup_inputs(),
+            min_lookup_inputs: region.min_lookup_inputs(),
+            outputs,
         };
 
         Ok(res)

@@ -2488,7 +2488,7 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     range: &crate::circuit::table::Range,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    region.add_used_range_check(*range);
+    region.add_used_range_check(*range)?;
 
     // time the entire operation
     let timer = instant::Instant::now();
@@ -2534,7 +2534,7 @@ pub fn nonlinearity<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 1],
     nl: &LookupOp,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    region.add_used_lookup(nl.clone());
+    region.add_used_lookup(nl.clone(), values)?;
 
     // time the entire operation
     let timer = instant::Instant::now();
