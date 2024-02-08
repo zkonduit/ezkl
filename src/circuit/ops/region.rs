@@ -16,12 +16,7 @@ use std::{
     },
 };
 
-// if wasm
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-use std::sync::atomic::AtomicI32 as AtomicInt;
-
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-use std::sync::atomic::AtomicI128 as AtomicInt;
+use portable_atomic::AtomicI128 as AtomicInt;
 
 use super::lookup::LookupOp;
 

@@ -24,7 +24,6 @@
 // we allow this for our dynamic range based indexing scheme
 #![allow(clippy::single_range_in_vec_init)]
 #![feature(round_ties_even)]
-#![feature(integer_atomics)]
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
