@@ -219,8 +219,6 @@ impl Op<Fp> for RebaseScale {
         let mut res = Op::<Fp>::f(&*self.inner, x)?;
         let rebase_res = Op::<Fp>::f(&self.rebase_op, &[res.output])?;
         res.output = rebase_res.output;
-        res.intermediate_lookups
-            .extend(rebase_res.intermediate_lookups);
 
         Ok(res)
     }

@@ -6,7 +6,6 @@ use crate::{
     tensor::{self, Tensor, TensorError, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 // import run args from model
 
@@ -69,14 +68,6 @@ pub enum HybridOp {
         dim: usize,
         num_classes: usize,
     },
-    GatherElements {
-        dim: usize,
-        constant_idx: Option<Tensor<usize>>,
-    },
-    ScatterElements {
-        dim: usize,
-        constant_idx: Option<Tensor<usize>>,
-    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
@@ -84,7 +75,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         match self {
             HybridOp::Greater | HybridOp::Less | HybridOp::Equals => vec![0, 1],
-            HybridOp::ScatterElements { .. } => vec![0, 2],
             HybridOp::GreaterEqual | HybridOp::LessEqual => vec![0, 1],
             _ => vec![],
         }
@@ -98,162 +88,42 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
     fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let x = inputs[0].clone().map(|x| felt_to_i128(x));
 
-        let (res, intermediate_lookups) = match &self {
-            HybridOp::ReduceMax { axes, .. } => {
-                let res = tensor::ops::max_axes(&x, axes)?;
-                let max_minus_one =
-                    Tensor::from(vec![x.clone().into_iter().max().unwrap() - 1].into_iter());
-                let unit = Tensor::from(vec![1].into_iter());
-                // relu(x - max(x - 1)
-                let inter_1 = (x.clone() - max_minus_one)?;
-                // relu(1 - sum(relu(inter_1)))
-                let inter_2 = (unit
-                    - tensor::ops::sum(&tensor::ops::nonlinearities::leakyrelu(&inter_1, 0.0))?)?;
-
-                (res.clone(), vec![inter_1, inter_2])
-            }
-            HybridOp::ReduceMin { axes, .. } => {
-                let res = tensor::ops::min_axes(&x, axes)?;
-                let min_plus_one =
-                    Tensor::from(vec![x.clone().into_iter().min().unwrap() + 1].into_iter());
-                let unit = Tensor::from(vec![1].into_iter());
-                // relu(min(x + 1) - x)
-                let inter_1 = (min_plus_one - x.clone())?;
-                // relu(1 - sum(relu(inter_1)))
-                let inter_2 = (unit
-                    - tensor::ops::sum(&tensor::ops::nonlinearities::leakyrelu(&inter_1, 0.0))?)?;
-                (res.clone(), vec![inter_1, inter_2])
-            }
-            HybridOp::Div {
-                denom,
-                use_range_check_for_int,
-                ..
-            } => {
-                let res = crate::tensor::ops::nonlinearities::const_div(&x, denom.0 as f64);
-                // if denom is a round number and use_range_check_for_int is true, use range check check
-                if denom.0.fract() == 0.0 && *use_range_check_for_int {
-                    let divisor = Tensor::from(vec![denom.0 as i128 / 2].into_iter());
-                    (res, vec![-divisor.clone(), divisor])
-                } else {
-                    (res, vec![x])
-                }
+        let res = match &self {
+            HybridOp::ReduceMax { axes, .. } => tensor::ops::max_axes(&x, axes)?,
+            HybridOp::ReduceMin { axes, .. } => tensor::ops::min_axes(&x, axes)?,
+            HybridOp::Div { denom, .. } => {
+                crate::tensor::ops::nonlinearities::const_div(&x, denom.0 as f64)
             }
             HybridOp::Recip {
                 input_scale,
                 output_scale,
-                use_range_check_for_int,
-            } => {
-                let res = crate::tensor::ops::nonlinearities::recip(
-                    &x,
-                    input_scale.0 as f64,
-                    output_scale.0 as f64,
-                );
-                // if scale is a round number and use_range_check_for_int is true, use range check check
-                if input_scale.0.fract() == 0.0 && *use_range_check_for_int {
-                    let err_tol = Tensor::from(
-                        vec![(output_scale.0 * input_scale.0) as i128 / 2].into_iter(),
-                    );
-                    (res, vec![-err_tol.clone(), err_tol])
-                } else {
-                    (res, vec![x])
-                }
-            }
-            HybridOp::ReduceArgMax { dim } => {
-                let res = tensor::ops::argmax_axes(&x, *dim)?;
-                let inter =
-                    Op::f(&HybridOp::ReduceMax { axes: vec![*dim] }, inputs)?.intermediate_lookups;
-
-                (res, inter)
-            }
-            HybridOp::ReduceArgMin { dim } => {
-                let res = tensor::ops::argmin_axes(&x, *dim)?;
-                let inter =
-                    Op::f(&HybridOp::ReduceMin { axes: vec![*dim] }, inputs)?.intermediate_lookups;
-
-                (res, inter)
-            }
+                ..
+            } => crate::tensor::ops::nonlinearities::recip(
+                &x,
+                input_scale.0 as f64,
+                output_scale.0 as f64,
+            ),
+            HybridOp::ReduceArgMax { dim } => tensor::ops::argmax_axes(&x, *dim)?,
+            HybridOp::ReduceArgMin { dim } => tensor::ops::argmin_axes(&x, *dim)?,
             HybridOp::Gather { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
-                    log::debug!("idx: {}", idx.show());
-                    let res = tensor::ops::gather(&x, idx, *dim)?;
-                    (res.clone(), vec![])
+                    tensor::ops::gather(&x, idx, *dim)?
                 } else {
                     let y = inputs[1].clone().map(|x| felt_to_i128(x));
-                    let res = tensor::ops::gather(&x, &y.map(|x| x as usize), *dim)?;
-                    (res.clone(), vec![])
+                    tensor::ops::gather(&x, &y.map(|x| x as usize), *dim)?
                 }
             }
-            HybridOp::OneHot { dim, num_classes } => (
-                tensor::ops::one_hot(&x, *num_classes, *dim)?.clone(),
-                vec![],
-            ),
-            HybridOp::TopK { dim, k, largest } => {
-                let res = tensor::ops::topk_axes(&x, *k, *dim, *largest)?;
-
-                let mut inter_equals = x
-                    .clone()
-                    .into_iter()
-                    .flat_map(|elem| {
-                        tensor::ops::equals(&res, &vec![elem].into_iter().into())
-                            .unwrap()
-                            .1
-                    })
-                    .collect::<Vec<_>>();
-
-                // sort in descending order and take pairwise differences
-                inter_equals.push(
-                    x.into_iter()
-                        .sorted()
-                        .tuple_windows()
-                        .map(|(a, b)| b - a)
-                        .into(),
-                );
-
-                (res.clone(), inter_equals)
+            HybridOp::OneHot { dim, num_classes } => {
+                tensor::ops::one_hot(&x, *num_classes, *dim)?.clone()
             }
-            HybridOp::GatherElements { dim, constant_idx } => {
-                if let Some(idx) = constant_idx {
-                    log::debug!("idx: {}", idx.show());
-                    let res = tensor::ops::gather_elements(&x, idx, *dim)?;
-                    (res.clone(), vec![])
-                } else {
-                    let y = inputs[1].clone().map(|x| felt_to_i128(x));
-                    let res = tensor::ops::gather_elements(&x, &y.map(|x| x as usize), *dim)?;
-                    (res.clone(), vec![])
-                }
-            }
-            HybridOp::ScatterElements { dim, constant_idx } => {
-                if let Some(idx) = constant_idx {
-                    log::debug!("idx: {}", idx.show());
-                    let src = inputs[1].clone().map(|x| felt_to_i128(x));
-                    let res = tensor::ops::scatter(&x, idx, &src, *dim)?;
-                    (res.clone(), vec![])
-                } else {
-                    let idx = inputs[1].clone().map(|x| felt_to_i128(x) as usize);
-                    let src = inputs[2].clone().map(|x| felt_to_i128(x));
-                    let res = tensor::ops::scatter(&x, &idx, &src, *dim)?;
-                    (res.clone(), vec![])
-                }
-            }
+
+            HybridOp::TopK { dim, k, largest } => tensor::ops::topk_axes(&x, *k, *dim, *largest)?,
             HybridOp::MaxPool2d {
                 padding,
                 stride,
                 pool_dims,
                 ..
-            } => {
-                let max_minus_one =
-                    Tensor::from(vec![x.clone().into_iter().max().unwrap() - 1].into_iter());
-                let unit = Tensor::from(vec![1].into_iter());
-                // relu(x - max(x - 1)
-                let inter_1 = (x.clone() - max_minus_one)?;
-                // relu(1 - sum(relu(inter_1)))
-                let inter_2 = (unit
-                    - tensor::ops::sum(&tensor::ops::nonlinearities::leakyrelu(&inter_1, 0.0))?)?;
-                (
-                    tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
-                    vec![inter_1, inter_2],
-                )
-            }
+            } => tensor::ops::max_pool2d(&x, padding, stride, pool_dims)?,
             HybridOp::SumPool {
                 padding,
                 stride,
@@ -265,10 +135,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             }
             HybridOp::RangeCheck(tol) => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
-                (
-                    tensor::ops::nonlinearities::range_check_percent(&[x, y], 128, 128, tol.val),
-                    vec![],
-                )
+                tensor::ops::nonlinearities::range_check_percent(&[x, y], 128, 128, tol.val)
             }
             HybridOp::Greater => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
@@ -295,10 +162,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
         // convert back to felt
         let output = res.map(|x| i128_to_felt(x));
 
-        Ok(ForwardResult {
-            output,
-            intermediate_lookups,
-        })
+        Ok(ForwardResult { output })
     }
 
     fn as_string(&self) -> String {
@@ -352,8 +216,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::TopK { k, dim, largest } => {
                 format!("TOPK (k={}, dim={}, largest={})", k, dim, largest)
             }
-            HybridOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
-            HybridOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
             HybridOp::OneHot { dim, num_classes } => {
                 format!("ONEHOT (dim={}, num_classes={})", dim, num_classes)
             }
@@ -426,9 +288,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                         config,
                         region,
                         values.try_into()?,
-                        &LookupOp::Div {
-                            denom: *denom,
-                        },
+                        &LookupOp::Div { denom: *denom },
                     )?
                 }
             }
@@ -439,26 +299,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                     layouts::gather(config, region, values[..].try_into()?, *dim)?
                 }
             }
-            HybridOp::GatherElements { dim, constant_idx } => {
-                if let Some(idx) = constant_idx {
-                    tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
-                } else {
-                    layouts::gather_elements(config, region, values[..].try_into()?, *dim)?
-                }
-            }
-            HybridOp::ScatterElements { dim, constant_idx } => {
-                if let Some(idx) = constant_idx {
-                    tensor::ops::scatter(
-                        values[0].get_inner_tensor()?,
-                        idx,
-                        values[1].get_inner_tensor()?,
-                        *dim,
-                    )?
-                    .into()
-                } else {
-                    layouts::scatter_elements(config, region, values[..].try_into()?, *dim)?
-                }
-            }
+
             HybridOp::MaxPool2d {
                 padding,
                 stride,

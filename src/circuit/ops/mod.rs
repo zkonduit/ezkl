@@ -29,7 +29,6 @@ pub mod region;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd> {
     pub(crate) output: Tensor<F>,
-    pub(crate) intermediate_lookups: Vec<Tensor<i128>>,
 }
 
 /// A trait representing operations that can be represented as constraints in a circuit.
@@ -178,7 +177,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         Ok(ForwardResult {
             output: x[0].clone(),
-            intermediate_lookups: vec![],
         })
     }
 
@@ -304,10 +302,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     fn f(&self, _: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let output = self.quantized_values.clone();
 
-        Ok(ForwardResult {
-            output,
-            intermediate_lookups: vec![],
-        })
+        Ok(ForwardResult { output })
     }
 
     fn as_string(&self) -> String {

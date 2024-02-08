@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - name: Build
@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - name: Docs
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -73,7 +73,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -139,7 +139,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -172,7 +172,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -189,7 +189,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -199,7 +199,7 @@ jobs:
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-01-04-x86_64-unknown-linux-gnu
       - name: Run wasm verifier tests
         # on mac:
         #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
@@ -212,7 +212,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -229,7 +229,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -284,7 +284,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -310,7 +310,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
       - name: KZG prove and verify tests (EVM + VK rendered seperately)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify_render_seperately_ --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg all)
@@ -343,7 +343,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -351,7 +351,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-01-04-x86_64-unknown-linux-gnu
       - uses: actions/checkout@v3
       - name: Use pnpm 8
         uses: pnpm/action-setup@v2
@@ -411,11 +411,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2023-08-24-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-01-04-x86_64-unknown-linux-gnu
       - uses: actions/checkout@v3
       - uses: baptiste0928/cargo-install@v1
         with:
@@ -445,7 +445,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -455,7 +455,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
       - name: fuzz tests (EVM)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_fuzz_ --test-threads 2
       # - name: fuzz tests
@@ -468,7 +468,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -486,7 +486,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -503,7 +503,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -520,7 +520,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -530,7 +530,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
       - name: KZG prove and verify aggr tests
         run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 4 -- --include-ignored
 
@@ -541,7 +541,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -563,7 +563,7 @@ jobs:
           python-version: "3.7"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - name: Install solc
@@ -571,7 +571,7 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
       - name: Build python ezkl
         run: source .env/bin/activate; maturin develop --features python-bindings --release
       - name: Run pytest
@@ -587,7 +587,7 @@ jobs:
           python-version: "3.7"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -618,7 +618,7 @@ jobs:
           python-version: "3.9"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2023-08-24
+          toolchain: nightly-2024-01-04
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -628,7 +628,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev 95a93cd397f25f3f8d49d2851eb52bc2d52dd983 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl

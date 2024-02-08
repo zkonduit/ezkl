@@ -454,12 +454,12 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Calls `pad_to_zero_rem` on the inner tensor.
-    pub fn pad_to_zero_rem(&mut self, n: usize) -> Result<(), Box<dyn Error>> {
+    pub fn pad_to_zero_rem(&mut self, n: usize, pad: ValType<F>) -> Result<(), Box<dyn Error>> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = v.pad_to_zero_rem(n)?;
+                *v = v.pad_to_zero_rem(n, pad)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
