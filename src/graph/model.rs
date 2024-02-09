@@ -1174,17 +1174,28 @@ impl Model {
             };
 
             debug!(
-                "laying out {}: {}, row:{}, coord:{}, total_constants: {}",
+                "laying out {}: {}, row:{}, coord:{}, total_constants: {}, max_lookup_inputs: {}, min_lookup_inputs: {}",
                 idx,
                 node.as_str(),
                 region.row(),
                 region.linear_coord(),
-                region.total_constants()
+                region.total_constants(),
+                region.max_lookup_inputs(),
+                region.min_lookup_inputs()
             );
             debug!("dims: {:?}", node.out_dims());
             debug!(
                 "input_dims {:?}",
                 values.iter().map(|v| v.dims()).collect_vec()
+            );
+            debug!("output scales: {:?}", node.out_scales());
+            debug!("input indices: {:?}", node.inputs());
+            debug!(
+                "input scales: {:?}",
+                node.inputs()
+                    .iter()
+                    .map(|(idx, outlet)| self.graph.nodes[idx].out_scales()[*outlet])
+                    .collect_vec()
             );
 
             match &node {
