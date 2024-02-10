@@ -560,7 +560,7 @@ mod native_tests {
                 crate::native_tests::setup_py_env();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "resources", 18.0, false);
+                accuracy_measurement(path, test.to_string(), "private", "private", "public", 1, "resources", 3.1, false);
                 test_dir.close().unwrap();
             }
 
