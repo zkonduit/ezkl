@@ -1867,7 +1867,7 @@ dependencies = [
  "halo2_gadgets",
  "halo2_proofs",
  "halo2_solidity_verifier",
- "halo2curves 0.6.0",
+ "halo2curves 0.6.1",
  "hex",
  "indicatif",
  "instant",
@@ -2262,7 +2262,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=main#6a2b9ada9804807ddba03bbadaf6e63822cec275"
+source = "git+https://github.com/zkonduit/halo2?branch=main#ca603c14eb57030739b252e580a979023fa59040"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec 1.0.1",
@@ -2279,13 +2279,13 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2?branch=main#6a2b9ada9804807ddba03bbadaf6e63822cec275"
+source = "git+https://github.com/zkonduit/halo2?branch=main#ca603c14eb57030739b252e580a979023fa59040"
 dependencies = [
  "blake2b_simd",
  "env_logger",
  "ff",
  "group",
- "halo2curves 0.6.0",
+ "halo2curves 0.6.1",
  "icicle",
  "log",
  "maybe-rayon",
@@ -2373,6 +2373,28 @@ dependencies = [
  "serde_arrays",
  "static_assertions",
  "subtle",
+]
+
+[[package]]
+name = "halo2curves"
+version = "0.6.1"
+source = "git+https://github.com/privacy-scaling-explorations/halo2curves?rev=9fff22c#9fff22c5f72cc54fac1ef3a844e1072b08cfecdf"
+dependencies = [
+ "blake2b_simd",
+ "ff",
+ "group",
+ "lazy_static",
+ "num-bigint",
+ "num-traits",
+ "pairing",
+ "pasta_curves",
+ "paste",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "rayon",
+ "static_assertions",
+ "subtle",
+ "unroll",
 ]
 
 [[package]]
@@ -5685,6 +5707,16 @@ name = "unindent"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7de7d73e1754487cb58364ee906a499937a0dfabd86bcb980fa99ec8c8fa2ce"
+
+[[package]]
+name = "unroll"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ad948c1cb799b1a70f836077721a92a35ac177d4daddf4c20a633786d4cf618"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "untrusted"

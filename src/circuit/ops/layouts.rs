@@ -128,13 +128,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
 
     let range_check_bracket = felt_to_i128(output_scale * input_scale) / 2;
 
-    let mut scaled_unit =
-        Tensor::from(vec![ValType::Constant(output_scale * input_scale)].into_iter());
-    scaled_unit.set_visibility(&crate::graph::Visibility::Fixed);
-    let scaled_unit = region.assign(&config.inputs[1], &scaled_unit.into())?;
-    region.increment(scaled_unit.len());
-
-    let is_assigned = !input.any_unknowns()? && !scaled_unit.any_unknowns()?;
+    let is_assigned = !input.any_unknowns()?;
 
     let mut claimed_output: ValTensor<F> = if is_assigned {
         let input_evals = input.get_int_evals()?;
@@ -166,27 +160,14 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
 
     log::debug!("product: {:?}", product.get_int_evals()?);
 
-    // this is now of scale 2 * scale hence why we rescaled the unit scale
-    let diff_with_input = pairwise(
-        config,
-        region,
-        &[product.clone(), scaled_unit.clone()],
-        BaseOp::Sub,
-    )?;
-
-    log::debug!("scaled_unit: {:?}", scaled_unit.get_int_evals()?);
-
-    // debug print the diff
-    log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
-
     log::debug!("range_check_bracket: {:?}", range_check_bracket);
 
     // at most the error should be in the original unit scale's range
     range_check(
         config,
         region,
-        &[diff_with_input],
-        &(-range_check_bracket, range_check_bracket),
+        &[product],
+        &(range_check_bracket, 3 * range_check_bracket),
     )?;
 
     Ok(claimed_output)
