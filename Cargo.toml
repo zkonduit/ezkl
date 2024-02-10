@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "main" }
 halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "main"  }
-halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev="9fff22c", default-features = false }
+halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev="9fff22c", features=["derive_serde"] }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
 clap = { version = "4.3.3", features = ["derive"]}
