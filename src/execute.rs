@@ -826,10 +826,7 @@ pub(crate) fn calibrate(
     let range = if let Some(scales) = scales {
         scales
     } else {
-        match target {
-            CalibrationTarget::Resources { .. } => (8..10).collect::<Vec<crate::Scale>>(),
-            CalibrationTarget::Accuracy => (10..14).collect::<Vec<crate::Scale>>(),
-        }
+        (10..14).collect::<Vec<crate::Scale>>()
     };
 
     let div_rebasing = if let Some(div_rebasing) = div_rebasing {
