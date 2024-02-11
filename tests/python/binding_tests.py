@@ -113,13 +113,13 @@ def test_calibrate_over_user_range():
     data_path = os.path.join(
         examples_path,
         'onnx',
-        '1l_average',
+        '1l_relu',
         'input.json'
     )
     model_path = os.path.join(
         examples_path,
         'onnx',
-        '1l_average',
+        '1l_relu',
         'network.onnx'
     )
     output_path = os.path.join(
@@ -147,13 +147,13 @@ def test_calibrate():
     data_path = os.path.join(
         examples_path,
         'onnx',
-        '1l_average',
+        '1l_relu',
         'input.json'
     )
     model_path = os.path.join(
         examples_path,
         'onnx',
-        '1l_average',
+        '1l_relu',
         'network.onnx'
     )
     output_path = os.path.join(
@@ -183,7 +183,7 @@ def test_model_compile():
     model_path = os.path.join(
         examples_path,
         'onnx',
-        '1l_average',
+        '1l_relu',
         'network.onnx'
     )
     compiled_model_path = os.path.join(
@@ -205,7 +205,7 @@ def test_forward():
     data_path = os.path.join(
         examples_path,
         'onnx',
-        '1l_average',
+        '1l_relu',
         'input.json'
     )
     model_path = os.path.join(
