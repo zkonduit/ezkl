@@ -35,6 +35,8 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{self, Bn256, Fr as Fp, G1Affine};
 use halo2curves::ff::PrimeField;
+#[cfg(not(target_arch = "wasm32"))]
+use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use model::*;
@@ -60,6 +62,20 @@ pub const RANGE_MULTIPLIER: i128 = 2;
 
 /// Max representation of a lookup table input
 pub const MAX_LOOKUP_ABS: i128 = 8 * 2_i128.pow(MAX_PUBLIC_SRS);
+
+#[cfg(not(target_arch = "wasm32"))]
+lazy_static! {
+    /// Max circuit area
+    pub static ref EZKL_MAX_CIRCUIT_AREA: Option<usize> =
+        if let Ok(max_circuit_area) = std::env::var("EZKL_MAX_CIRCUIT_AREA") {
+            Some(max_circuit_area.parse().unwrap_or(0))
+        } else {
+            None
+        };
+}
+
+#[cfg(target_arch = "wasm32")]
+const EZKL_MAX_CIRCUIT_AREA: Option<usize> = None;
 
 /// circuit related errors.
 #[derive(Debug, Error)]
@@ -530,6 +546,7 @@ impl GraphSettings {
 pub struct GraphConfig {
     model_config: ModelConfig,
     module_configs: ModuleConfigs,
+    circuit_size: CircuitSize,
 }
 
 /// Defines the circuit for a computational graph / model loaded from a `.onnx` file.
@@ -1366,7 +1383,6 @@ impl GraphCircuit {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct CircuitSize {
     num_instances: usize,
@@ -1374,20 +1390,22 @@ struct CircuitSize {
     num_fixed: usize,
     num_challenges: usize,
     num_selectors: usize,
+    logrows: u32,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl CircuitSize {
-    pub fn from_cs(cs: &ConstraintSystem<Fp>) -> Self {
+    pub fn from_cs(cs: &ConstraintSystem<Fp>, logrows: u32) -> Self {
         CircuitSize {
             num_instances: cs.num_instance_columns(),
             num_advice_columns: cs.num_advice_columns(),
             num_fixed: cs.num_fixed_columns(),
             num_challenges: cs.num_challenges(),
             num_selectors: cs.num_selectors(),
+            logrows,
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Export the ezkl configuration as json
     pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
         let serialized = match serde_json::to_string(&self) {
@@ -1397,6 +1415,25 @@ impl CircuitSize {
             }
         };
         Ok(serialized)
+    }
+
+    /// number of columns
+    pub fn num_columns(&self) -> usize {
+        self.num_instances + self.num_advice_columns + self.num_fixed
+    }
+
+    /// area of the circuit
+    pub fn area(&self) -> usize {
+        self.num_columns() * (1 << self.logrows)
+    }
+
+    /// area less than max
+    pub fn area_less_than_max(&self) -> bool {
+        if EZKL_MAX_CIRCUIT_AREA.is_some() {
+            self.area() < EZKL_MAX_CIRCUIT_AREA.unwrap()
+        } else {
+            true
+        }
     }
 }
 
@@ -1472,10 +1509,12 @@ impl Circuit<Fp> for GraphCircuit {
             (cs.degree() as f32).log2().ceil()
         );
 
+        let circuit_size = CircuitSize::from_cs(cs, params.run_args.logrows);
+
         #[cfg(not(target_arch = "wasm32"))]
         info!(
             "circuit size: \n {}",
-            CircuitSize::from_cs(cs)
+            circuit_size
                 .as_json()
                 .unwrap()
                 .to_colored_json_auto()
@@ -1485,6 +1524,7 @@ impl Circuit<Fp> for GraphCircuit {
         GraphConfig {
             model_config,
             module_configs,
+            circuit_size,
         }
     }
 
@@ -1497,6 +1537,16 @@ impl Circuit<Fp> for GraphCircuit {
         config: Self::Config,
         mut layouter: impl Layouter<Fp>,
     ) -> Result<(), PlonkError> {
+        // check if the circuit area is less than the max
+        if !config.circuit_size.area_less_than_max() {
+            error!(
+                "circuit area {} is larger than the max allowed area {}",
+                config.circuit_size.area(),
+                EZKL_MAX_CIRCUIT_AREA.unwrap()
+            );
+            return Err(PlonkError::Synthesis);
+        }
+
         trace!("Setting input in synthesize");
         let input_vis = &self.settings().run_args.input_visibility;
         let output_vis = &self.settings().run_args.output_visibility;
