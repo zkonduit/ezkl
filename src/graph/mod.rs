@@ -35,6 +35,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{self, Bn256, Fr as Fp, G1Affine};
 use halo2curves::ff::PrimeField;
+#[cfg(not(target_arch = "wasm32"))]
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace, warn};
 use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -62,6 +63,7 @@ pub const RANGE_MULTIPLIER: i128 = 2;
 /// Max representation of a lookup table input
 pub const MAX_LOOKUP_ABS: i128 = 8 * 2_i128.pow(MAX_PUBLIC_SRS);
 
+#[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
     /// Max circuit area
     pub static ref EZKL_MAX_CIRCUIT_AREA: Option<usize> =
@@ -71,6 +73,9 @@ lazy_static! {
             None
         };
 }
+
+#[cfg(target_arch = "wasm32")]
+const EZKL_MAX_CIRCUIT_AREA: Option<usize> = None;
 
 /// circuit related errors.
 #[derive(Debug, Error)]
@@ -1378,7 +1383,6 @@ impl GraphCircuit {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct CircuitSize {
     num_instances: usize,
@@ -1389,7 +1393,6 @@ struct CircuitSize {
     logrows: u32,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl CircuitSize {
     pub fn from_cs(cs: &ConstraintSystem<Fp>, logrows: u32) -> Self {
         CircuitSize {
@@ -1402,6 +1405,7 @@ impl CircuitSize {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     /// Export the ezkl configuration as json
     pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
         let serialized = match serde_json::to_string(&self) {
