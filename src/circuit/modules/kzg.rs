@@ -41,7 +41,7 @@ pub struct KZGChip {
 }
 
 impl KZGChip {
-    /// Returns the number of inputs to the hash function
+    /// Commit to the message using the KZG commitment scheme
     pub fn commit(
         message: Vec<Fp>,
         degree: u32,
