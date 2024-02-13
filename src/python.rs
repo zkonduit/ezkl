@@ -15,7 +15,7 @@ use crate::graph::{
 use crate::pfsys::evm::aggregation::AggregationCircuit;
 use crate::pfsys::{
     load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs, ProofType,
-    Snark, TranscriptType,
+    TranscriptType,
 };
 use crate::RunArgs;
 use ethers::types::H160;
