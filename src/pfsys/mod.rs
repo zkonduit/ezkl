@@ -40,7 +40,23 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use thiserror::Error as thisError;
 
+// not wasm
+#[cfg(not(target_arch = "wasm32"))]
+use lazy_static::lazy_static;
+
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
+
+#[cfg(not(target_arch = "wasm32"))]
+// Buf writer capacity
+lazy_static! {
+    static ref EZKL_BUF_CAPACITY: usize = std::env::var("EZKL_BUF_CAPACITY")
+        .unwrap_or("8000".to_string())
+        .parse()
+        .unwrap();
+}
+
+#[cfg(target_arch = "wasm32")]
+const EZKL_BUF_CAPACITY: &usize = &8000;
 
 #[allow(missing_docs)]
 #[derive(
@@ -315,7 +331,7 @@ where
     /// Saves the Proof to a specified `proof_path`.
     pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let file = std::fs::File::create(proof_path)?;
-        let mut writer = BufWriter::new(file);
+        let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, file);
         serde_json::to_writer(&mut writer, &self)?;
         Ok(())
     }
@@ -678,7 +694,7 @@ where
     info!("loading verification key from {:?}", path);
     let f =
         File::open(path.clone()).map_err(|_| format!("failed to load vk at {}", path.display()))?;
-    let mut reader = BufReader::new(f);
+    let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     VerifyingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
         halo2_proofs::SerdeFormat::RawBytes,
@@ -700,7 +716,7 @@ where
     info!("loading proving key from {:?}", path);
     let f =
         File::open(path.clone()).map_err(|_| format!("failed to load pk at {}", path.display()))?;
-    let mut reader = BufReader::new(f);
+    let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     ProvingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
         halo2_proofs::SerdeFormat::RawBytes,
@@ -720,7 +736,7 @@ where
 {
     info!("saving proving key 💾");
     let f = File::create(path)?;
-    let mut writer = BufWriter::new(f);
+    let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     vk.write(&mut writer, halo2_proofs::SerdeFormat::RawBytes)?;
     writer.flush()?;
     Ok(())
@@ -737,7 +753,7 @@ where
 {
     info!("saving verification key 💾");
     let f = File::create(path)?;
-    let mut writer = BufWriter::new(f);
+    let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     vk.write(&mut writer, halo2_proofs::SerdeFormat::RawBytes)?;
     writer.flush()?;
     Ok(())
@@ -750,7 +766,7 @@ pub fn save_params<Scheme: CommitmentScheme>(
 ) -> Result<(), io::Error> {
     info!("saving parameters 💾");
     let f = File::create(path)?;
-    let mut writer = BufWriter::new(f);
+    let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     params.write(&mut writer)?;
     writer.flush()?;
     Ok(())
