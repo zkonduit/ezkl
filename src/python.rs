@@ -1097,16 +1097,6 @@ fn create_evm_verifier_aggr(
     Ok(true)
 }
 
-/// print hex representation of a proof
-#[pyfunction(signature = (proof_path))]
-fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)
-        .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
-
-    let hex_str = hex::encode(proof.proof);
-    Ok(format!("0x{}", hex_str))
-}
-
 // Python Module
 #[pymodule]
 fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
@@ -1145,7 +1135,6 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(deploy_vk_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
-    m.add_function(wrap_pyfunction!(print_proof_hex, m)?)?;
     m.add_function(wrap_pyfunction!(setup_test_evm_witness, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;

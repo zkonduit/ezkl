@@ -259,15 +259,6 @@ mod wasm32 {
     }
 
     #[wasm_bindgen_test]
-    async fn print_proof_hex_test() {
-        let proof = printProofHex(wasm_bindgen::Clamped(PROOF.to_vec()))
-            .map_err(|_| "failed")
-            .unwrap();
-
-        assert!(proof.len() > 0);
-    }
-
-    #[wasm_bindgen_test]
     async fn verify_validations() {
         // Run witness validation on network (should fail)
         let witness = witnessValidation(wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()));
