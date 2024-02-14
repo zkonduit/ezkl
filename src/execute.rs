@@ -440,7 +440,6 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             addr_da,
             addr_vk,
         } => verify_evm(proof_path, addr_verifier, rpc_url, addr_da, addr_vk).await,
-        Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
     }
 }
 
@@ -1167,16 +1166,6 @@ pub(crate) fn mock(
         .verify()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
     Ok(String::new())
-}
-
-pub(crate) fn print_proof_hex(proof_path: PathBuf) -> Result<String, Box<dyn Error>> {
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
-    for instance in proof.instances {
-        println!("{:?}", instance);
-    }
-    let hex_str = hex::encode(proof.proof);
-    info!("0x{}", hex_str);
-    Ok(format!("0x{}", hex_str))
 }
 
 #[cfg(feature = "render")]

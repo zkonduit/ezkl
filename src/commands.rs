@@ -795,12 +795,4 @@ pub enum Commands {
         #[arg(long)]
         addr_vk: Option<H160>,
     },
-
-    /// Print the proof in hexadecimal
-    #[command(name = "print-proof-hex")]
-    PrintProofHex {
-        /// The path to the proof file
-        #[arg(long, default_value = DEFAULT_PROOF)]
-        proof_path: PathBuf,
-    },
 }
