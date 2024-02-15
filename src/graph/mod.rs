@@ -826,7 +826,7 @@ impl GraphCircuit {
         let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
-        info!("input scales: {:?}", scales);
+        debug!("input scales: {:?}", scales);
 
         match &data.input_data {
             DataSource::File(file_data) => {
@@ -845,7 +845,7 @@ impl GraphCircuit {
         let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
-        info!("input scales: {:?}", scales);
+        debug!("input scales: {:?}", scales);
 
         self.process_data_source(&data.input_data, shapes, scales, input_types)
             .await
@@ -1045,7 +1045,7 @@ impl GraphCircuit {
                 "extended k is too large to accommodate the quotient polynomial with logrows {}",
                 min_logrows
             );
-            error!("{}", err_string);
+            debug!("{}", err_string);
             return Err(err_string.into());
         }
 
@@ -1065,7 +1065,7 @@ impl GraphCircuit {
                 "extended k is too large to accommodate the quotient polynomial with logrows {}",
                 max_logrows
             );
-            error!("{}", err_string);
+            debug!("{}", err_string);
             return Err(err_string.into());
         }
 
@@ -1131,7 +1131,7 @@ impl GraphCircuit {
 
         settings_mut.run_args.logrows = std::cmp::min(max_logrows, settings_mut.run_args.logrows);
 
-        info!(
+        debug!(
             "setting lookup_range to: {:?}, setting logrows to: {}",
             self.settings().run_args.lookup_range,
             self.settings().run_args.logrows
