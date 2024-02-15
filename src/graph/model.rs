@@ -493,7 +493,7 @@ impl Model {
     ) -> Result<GraphSettings, Box<dyn Error>> {
         let instance_shapes = self.instance_shapes()?;
         #[cfg(not(target_arch = "wasm32"))]
-        info!(
+        debug!(
             "{} {} {}",
             "model has".blue(),
             instance_shapes.len().to_string().blue(),
@@ -1132,7 +1132,7 @@ impl Model {
 
         // Then number of columns in the circuits
         #[cfg(not(target_arch = "wasm32"))]
-        info!(
+        debug!(
             "{} {} {} (coord={}, constants={})",
             "model uses".blue(),
             num_rows.to_string().blue(),
@@ -1341,7 +1341,7 @@ impl Model {
         run_args: &RunArgs,
         inputs: &[ValTensor<Fp>],
     ) -> Result<DummyPassRes, Box<dyn Error>> {
-        info!("calculating num of constraints using dummy model layout...");
+        debug!("calculating num of constraints using dummy model layout...");
 
         let start_time = instant::Instant::now();
 
