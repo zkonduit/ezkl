@@ -2043,7 +2043,7 @@ pub(crate) fn verify(
 
     let params = if let Some(reduced_srs) = reduced_srs {
         if reduced_srs {
-            load_params_cmd(srs_path, circuit_settings.total_instances()[0] as u32)?
+            load_params_cmd(srs_path, circuit_settings.total_instances()[0].ilog2() + 1)?
         } else {
             load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
         }
