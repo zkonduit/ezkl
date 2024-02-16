@@ -29,6 +29,7 @@ use crate::fieldutils::felt_to_f64;
 use crate::pfsys::PrettyElements;
 use crate::tensor::{Tensor, ValTensor};
 use crate::{RunArgs, EZKL_BUF_CAPACITY};
+
 use halo2_proofs::{
     circuit::Layouter,
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},

@@ -39,6 +39,7 @@ use lazy_static::lazy_static;
 
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
+#[cfg(not(target_arch = "wasm32"))]
 /// CLI commands.
 pub mod commands;
 #[cfg(not(target_arch = "wasm32"))]
@@ -85,6 +86,9 @@ lazy_static! {
         .parse()
         .unwrap();
 }
+
+#[cfg(target_arch = "wasm32")]
+const EZKL_BUF_CAPACITY: &usize = &8000;
 
 /// Parameters specific to a proving run
 #[derive(Debug, Args, Deserialize, Serialize, Clone, PartialEq, PartialOrd)]

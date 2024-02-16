@@ -43,9 +43,6 @@ use thiserror::Error as thisError;
 
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
-#[cfg(target_arch = "wasm32")]
-const EZKL_BUF_CAPACITY: &usize = &8000;
-
 #[allow(missing_docs)]
 #[derive(
     ValueEnum, Copy, Clone, Default, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd,
