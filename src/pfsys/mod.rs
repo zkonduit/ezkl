@@ -571,6 +571,7 @@ where
             verifier_params,
             pk.get_vk(),
             strategy,
+            verifier_params.n(),
         )?;
     }
     let elapsed = now.elapsed();
@@ -658,6 +659,7 @@ pub fn verify_proof_circuit<
     params: &'params Scheme::ParamsVerifier,
     vk: &VerifyingKey<Scheme::Curve>,
     strategy: Strategy,
+    orig_n: u64,
 ) -> Result<Strategy::Output, halo2_proofs::plonk::Error>
 where
     Scheme::Scalar: SerdeObject
@@ -678,7 +680,7 @@ where
     trace!("instances {:?}", instances);
 
     let mut transcript = TranscriptReadBuffer::init(Cursor::new(snark.proof.clone()));
-    verify_proof::<Scheme, V, _, TR, _>(params, vk, strategy, instances, &mut transcript)
+    verify_proof::<Scheme, V, _, TR, _>(params, vk, strategy, instances, &mut transcript, orig_n)
 }
 
 /// Loads a [VerifyingKey] at `path`.
@@ -856,6 +858,7 @@ pub(crate) fn verify_proof_circuit_kzg<
     proof: Snark<Fr, G1Affine>,
     vk: &VerifyingKey<G1Affine>,
     strategy: Strategy,
+    orig_n: u64,
 ) -> Result<Strategy::Output, halo2_proofs::plonk::Error> {
     match proof.transcript_type {
         TranscriptType::EVM => verify_proof_circuit::<
@@ -865,7 +868,7 @@ pub(crate) fn verify_proof_circuit_kzg<
             _,
             _,
             EvmTranscript<G1Affine, _, _, _>,
-        >(&proof, params, vk, strategy),
+        >(&proof, params, vk, strategy, orig_n),
         TranscriptType::Poseidon => verify_proof_circuit::<
             Fr,
             VerifierSHPLONK<'_, Bn256>,
@@ -873,7 +876,7 @@ pub(crate) fn verify_proof_circuit_kzg<
             _,
             _,
             PoseidonTranscript<NativeLoader, _>,
-        >(&proof, params, vk, strategy),
+        >(&proof, params, vk, strategy, orig_n),
     }
 }
 
