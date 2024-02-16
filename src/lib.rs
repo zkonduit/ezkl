@@ -31,12 +31,15 @@
 use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
 use graph::Visibility;
+
 use serde::{Deserialize, Serialize};
+
+#[cfg(not(target_arch = "wasm32"))]
+use lazy_static::lazy_static;
 
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
 /// CLI commands.
-#[cfg(not(target_arch = "wasm32"))]
 pub mod commands;
 #[cfg(not(target_arch = "wasm32"))]
 // abigen doesn't generate docs for this module
@@ -72,6 +75,16 @@ pub mod wasm;
 
 /// The denominator in the fixed point representation used when quantizing inputs
 pub type Scale = i32;
+
+#[cfg(not(target_arch = "wasm32"))]
+// Buf writer capacity
+lazy_static! {
+    /// The capacity of the buffer used for writing to disk
+    pub static ref EZKL_BUF_CAPACITY: usize = std::env::var("EZKL_BUF_CAPACITY")
+        .unwrap_or("8000".to_string())
+        .parse()
+        .unwrap();
+}
 
 /// Parameters specific to a proving run
 #[derive(Debug, Args, Deserialize, Serialize, Clone, PartialEq, PartialOrd)]

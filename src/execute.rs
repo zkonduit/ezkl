@@ -628,7 +628,7 @@ pub(crate) async fn gen_witness(
     );
 
     if let Some(output_path) = output {
-        serde_json::to_writer(&File::create(output_path)?, &witness)?;
+        witness.save(output_path)?;
     }
 
     // print the witness in debug

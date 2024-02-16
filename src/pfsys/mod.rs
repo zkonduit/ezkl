@@ -8,6 +8,7 @@ use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
 use crate::pfsys::evm::aggregation::PoseidonTranscript;
 use crate::tensor::TensorType;
+use crate::EZKL_BUF_CAPACITY;
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
@@ -40,20 +41,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use thiserror::Error as thisError;
 
-// not wasm
-#[cfg(not(target_arch = "wasm32"))]
-use lazy_static::lazy_static;
-
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
-
-#[cfg(not(target_arch = "wasm32"))]
-// Buf writer capacity
-lazy_static! {
-    static ref EZKL_BUF_CAPACITY: usize = std::env::var("EZKL_BUF_CAPACITY")
-        .unwrap_or("8000".to_string())
-        .parse()
-        .unwrap();
-}
 
 #[cfg(target_arch = "wasm32")]
 const EZKL_BUF_CAPACITY: &usize = &8000;
@@ -344,8 +332,10 @@ where
         <C as CurveAffine>::ScalarExt: FromUniformBytes<64>,
     {
         trace!("reading proof");
-        let data = std::fs::read_to_string(proof_path)?;
-        serde_json::from_str(&data).map_err(|e| e.into())
+        let file = std::fs::File::open(proof_path)?;
+        let reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
+        let proof: Self = serde_json::from_reader(reader)?;
+        Ok(proof)
     }
 }
 
