@@ -86,7 +86,7 @@ pub const DEFAULT_VK_ABI: &str = "vk.abi";
 /// Default scale rebase multipliers for calibration
 pub const DEFAULT_SCALE_REBASE_MULTIPLIERS: &str = "1,2,10";
 /// Default use reduced srs for verification
-pub const DEFAULT_USE_NON_REDUCED_SRS_FOR_VERIFICATION: &str = "false";
+pub const DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION: &str = "false";
 
 impl std::fmt::Display for TranscriptType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -698,8 +698,8 @@ pub enum Commands {
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// Reduce SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
-        #[arg(long, default_value = DEFAULT_USE_NON_REDUCED_SRS_FOR_VERIFICATION)]
-        non_reduced_srs: Option<bool>,
+        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION)]
+        reduced_srs: Option<bool>,
     },
     /// Verifies an aggregate proof, returning accept or reject
     VerifyAggr {

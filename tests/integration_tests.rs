@@ -1745,6 +1745,20 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "verify",
+                format!("--settings-path={}", settings_path).as_str(),
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+                "--vk-path",
+                &format!("{}/{}/key.vk", test_dir, example_name),
+                "--reduced_srs=true",
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
     }
 
     // prove-serialize-verify, the usual full path

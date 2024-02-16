@@ -366,15 +366,9 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             settings_path,
             vk_path,
             srs_path,
-            non_reduced_srs,
-        } => verify(
-            proof_path,
-            settings_path,
-            vk_path,
-            srs_path,
-            non_reduced_srs,
-        )
-        .map(|e| serde_json::to_string(&e).unwrap()),
+            reduced_srs,
+        } => verify(proof_path, settings_path, vk_path, srs_path, reduced_srs)
+            .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::VerifyAggr {
             proof_path,
             vk_path,
@@ -2043,15 +2037,15 @@ pub(crate) fn verify(
     settings_path: PathBuf,
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
-    non_reduced_srs: Option<bool>,
+    reduced_srs: Option<bool>,
 ) -> Result<bool, Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
 
-    let params = if let Some(non_reduced_srs) = non_reduced_srs {
-        if non_reduced_srs {
-            load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
-        } else {
+    let params = if let Some(reduced_srs) = reduced_srs {
+        if reduced_srs {
             load_params_cmd(srs_path, circuit_settings.total_instances()[0] as u32)?
+        } else {
+            load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
         }
     } else {
         load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
