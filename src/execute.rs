@@ -2043,9 +2043,7 @@ pub(crate) fn verify(
 
     let params = if let Some(reduced_srs) = reduced_srs {
         if reduced_srs {
-            let total_instances =
-                std::cmp::max(circuit_settings.total_instances().iter().sum(), 1) as u32;
-            load_params_cmd(srs_path, total_instances + 1)?
+            load_params_cmd(srs_path, circuit_settings.log2_total_instances())?
         } else {
             load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
         }

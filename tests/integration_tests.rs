@@ -1753,9 +1753,8 @@ mod native_tests {
         let graph_settings = serde_json::from_str::<GraphSettings>(&settings)
             .expect("failed to parse settings file");
 
-        let total_instances = std::cmp::max(graph_settings.total_instances().iter().sum(), 1);
         // get_srs for the graph_settings_num_instances
-        let _ = download_srs(total_instances.ilog2() + 1);
+        let _ = download_srs(graph_settings.log2_total_instances());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([

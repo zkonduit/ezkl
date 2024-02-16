@@ -472,6 +472,18 @@ impl GraphSettings {
         instances
     }
 
+    /// calculate the log2 of the total number of instances
+    pub fn log2_total_instances(&self) -> u32 {
+        let sum = self.total_instances().iter().sum::<usize>();
+
+        // max between 1 and the log2 of the sums
+        if sum == 0 {
+            1
+        } else {
+            (sum as f64).log2().ceil() as u32
+        }
+    }
+
     /// save params to file
     pub fn save(&self, path: &std::path::PathBuf) -> Result<(), std::io::Error> {
         let encoded = serde_json::to_string(&self)?;
