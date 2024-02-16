@@ -203,7 +203,7 @@ impl<'source> FromPyObject<'source> for CalibrationTarget {
         }
     }
 }
-
+// not wasm
 use lazy_static::lazy_static;
 
 // if CARGO VERSION is 0.0.0 replace with "source - no compatibility guaranteed"
