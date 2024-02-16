@@ -246,7 +246,7 @@ mod matmul_col_overflow {
 #[cfg(test)]
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod matmul_col_ultra_overflow_double_col {
-    use halo2_proofs::poly::commitment::ParamsProver;
+    use halo2_proofs::poly::commitment::{Params, ParamsProver};
 
     use super::*;
 
@@ -349,8 +349,13 @@ mod matmul_col_ultra_overflow_double_col {
         let strategy =
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
         let vk = pk.get_vk();
-        let result =
-            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
+        let result = crate::pfsys::verify_proof_circuit_kzg(
+            params.verifier_params(),
+            proof,
+            vk,
+            strategy,
+            params.n(),
+        );
 
         assert!(result.is_ok());
 
@@ -361,7 +366,7 @@ mod matmul_col_ultra_overflow_double_col {
 #[cfg(test)]
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod matmul_col_ultra_overflow {
-    use halo2_proofs::poly::commitment::ParamsProver;
+    use halo2_proofs::poly::commitment::{Params, ParamsProver};
 
     use super::*;
 
@@ -463,8 +468,13 @@ mod matmul_col_ultra_overflow {
         let strategy =
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
         let vk = pk.get_vk();
-        let result =
-            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
+        let result = crate::pfsys::verify_proof_circuit_kzg(
+            params.verifier_params(),
+            proof,
+            vk,
+            strategy,
+            params.n(),
+        );
 
         assert!(result.is_ok());
 
@@ -1140,7 +1150,7 @@ mod conv {
 #[cfg(test)]
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod conv_col_ultra_overflow {
-    use halo2_proofs::poly::commitment::ParamsProver;
+    use halo2_proofs::poly::commitment::{Params, ParamsProver};
 
     use super::*;
 
@@ -1262,8 +1272,13 @@ mod conv_col_ultra_overflow {
         let strategy =
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
         let vk = pk.get_vk();
-        let result =
-            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
+        let result = crate::pfsys::verify_proof_circuit_kzg(
+            params.verifier_params(),
+            proof,
+            vk,
+            strategy,
+            params.n(),
+        );
 
         assert!(result.is_ok());
 
@@ -1275,7 +1290,7 @@ mod conv_col_ultra_overflow {
 // not wasm 32 unknown
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod conv_relu_col_ultra_overflow {
-    use halo2_proofs::poly::commitment::ParamsProver;
+    use halo2_proofs::poly::commitment::{Params, ParamsProver};
 
     use super::*;
 
@@ -1412,8 +1427,13 @@ mod conv_relu_col_ultra_overflow {
         let strategy =
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
         let vk = pk.get_vk();
-        let result =
-            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
+        let result = crate::pfsys::verify_proof_circuit_kzg(
+            params.verifier_params(),
+            proof,
+            vk,
+            strategy,
+            params.n(),
+        );
 
         assert!(result.is_ok());
 
@@ -2343,7 +2363,7 @@ mod lookup_ultra_overflow {
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner, Value},
         plonk::{Circuit, ConstraintSystem, Error},
-        poly::commitment::ParamsProver,
+        poly::commitment::{Params, ParamsProver},
     };
 
     #[derive(Clone)]
@@ -2447,8 +2467,13 @@ mod lookup_ultra_overflow {
         let strategy =
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
         let vk = pk.get_vk();
-        let result =
-            crate::pfsys::verify_proof_circuit_kzg(params.verifier_params(), proof, vk, strategy);
+        let result = crate::pfsys::verify_proof_circuit_kzg(
+            params.verifier_params(),
+            proof,
+            vk,
+            strategy,
+            params.n(),
+        );
 
         assert!(result.is_ok());
 

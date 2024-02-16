@@ -689,14 +689,23 @@ fn prove(
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     vk_path=PathBuf::from(DEFAULT_VK),
     srs_path=None,
+    non_reduced_srs=Some(DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse::<bool>().unwrap()),
 ))]
 fn verify(
     proof_path: PathBuf,
     settings_path: PathBuf,
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
+    non_reduced_srs: Option<bool>,
 ) -> Result<bool, PyErr> {
-    crate::execute::verify(proof_path, settings_path, vk_path, srs_path).map_err(|e| {
+    crate::execute::verify(
+        proof_path,
+        settings_path,
+        vk_path,
+        srs_path,
+        non_reduced_srs,
+    )
+    .map_err(|e| {
         let err_str = format!("Failed to run verify: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;

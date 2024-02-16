@@ -611,7 +611,7 @@ impl Model {
         for (symbol, value) in run_args.variables.iter() {
             let symbol = model.symbol_table.sym(symbol);
             symbol_values = symbol_values.with(&symbol, *value as i64);
-            info!("set {} to {}", symbol, value);
+            debug!("set {} to {}", symbol, value);
         }
 
         // Note: do not optimize the model, as the layout will depend on underlying hardware
@@ -1401,7 +1401,7 @@ impl Model {
 
         // Then number of columns in the circuits
         #[cfg(not(target_arch = "wasm32"))]
-        info!(
+        debug!(
             "{} {} {} (coord={}, constants={})",
             "model uses".blue(),
             region.row().to_string().blue(),

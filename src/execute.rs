@@ -366,7 +366,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             settings_path,
             vk_path,
             srs_path,
-        } => verify(proof_path, settings_path, vk_path, srs_path)
+            reduced_srs,
+        } => verify(proof_path, settings_path, vk_path, srs_path, reduced_srs)
             .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::VerifyAggr {
             proof_path,
@@ -1714,6 +1715,7 @@ pub(crate) fn fuzz(
             bad_proof,
             pk.get_vk(),
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -1744,6 +1746,7 @@ pub(crate) fn fuzz(
             bad_proof,
             pk.get_vk(),
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -1780,6 +1783,7 @@ pub(crate) fn fuzz(
             proof.clone(),
             bad_vk,
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -1811,6 +1815,7 @@ pub(crate) fn fuzz(
             bad_proof,
             pk.get_vk(),
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -1846,6 +1851,7 @@ pub(crate) fn fuzz(
             bad_proof,
             pk.get_vk(),
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -2031,15 +2037,33 @@ pub(crate) fn verify(
     settings_path: PathBuf,
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
+    reduced_srs: Option<bool>,
 ) -> Result<bool, Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
-    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
+
+    let params = if let Some(reduced_srs) = reduced_srs {
+        if reduced_srs {
+            load_params_cmd(srs_path, circuit_settings.log2_total_instances())?
+        } else {
+            load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
+        }
+    } else {
+        load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
+    };
+
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
+    let vk =
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings.clone())?;
     let now = Instant::now();
-    let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
+    let result = verify_proof_circuit_kzg(
+        params.verifier_params(),
+        proof,
+        &vk,
+        strategy,
+        1 << circuit_settings.run_args.logrows,
+    );
     let elapsed = now.elapsed();
     info!(
         "verify took {}.{}",
@@ -2063,7 +2087,7 @@ pub(crate) fn verify_aggr(
     let strategy = AccumulatorStrategy::new(params.verifier_params());
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
     let now = Instant::now();
-    let result = verify_proof_circuit_kzg(&params, proof, &vk, strategy);
+    let result = verify_proof_circuit_kzg(&params, proof, &vk, strategy, 1 << logrows);
 
     let elapsed = now.elapsed();
     info!(
