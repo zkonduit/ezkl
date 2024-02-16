@@ -477,11 +477,7 @@ impl GraphSettings {
         let sum = self.total_instances().iter().sum::<usize>();
 
         // max between 1 and the log2 of the sums
-        if sum == 0 {
-            1
-        } else {
-            (sum as f64).log2().ceil() as u32
-        }
+        std::cmp::max((sum as f64).log2().ceil() as u32, 1)
     }
 
     /// save params to file
