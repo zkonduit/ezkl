@@ -4,6 +4,7 @@ use crate::circuit::InputType;
 use crate::fieldutils::i128_to_felt;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::tensor::Tensor;
+use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(not(target_arch = "wasm32"))]
 use postgres::{Client, NoTls};
@@ -15,6 +16,8 @@ use pyo3::types::PyDict;
 use pyo3::ToPyObject;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::io::BufReader;
+use std::io::BufWriter;
 use std::io::Read;
 use std::panic::UnwindSafe;
 #[cfg(not(target_arch = "wasm32"))]
@@ -490,16 +493,20 @@ impl GraphData {
 
     /// Load the model input from a file
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut file = std::fs::File::open(path.clone())
-            .map_err(|_| format!("failed to open input at {}", path.display()))?;
-        let mut data = String::new();
-        file.read_to_string(&mut data)?;
-        serde_json::from_str(&data).map_err(|e| e.into())
+        let reader = std::fs::File::open(path)?;
+        let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, reader);
+        let mut buf = String::new();
+        reader.read_to_string(&mut buf)?;
+        let graph_input = serde_json::from_str(&buf)?;
+        Ok(graph_input)
     }
 
     /// Save the model input to a file
     pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        serde_json::to_writer(std::fs::File::create(path)?, &self).map_err(|e| e.into())
+        // buf writer
+        let writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::create(path)?);
+        serde_json::to_writer(writer, self)?;
+        Ok(())
     }
 
     ///
