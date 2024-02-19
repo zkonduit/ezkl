@@ -38,7 +38,7 @@ use halo2curves::bn256::{self, Bn256, Fr as Fp, G1Affine};
 use halo2curves::ff::PrimeField;
 #[cfg(not(target_arch = "wasm32"))]
 use lazy_static::lazy_static;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, trace, warn};
 use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use model::*;
 pub use node::*;
@@ -1526,7 +1526,7 @@ impl Circuit<Fp> for GraphCircuit {
         let circuit_size = CircuitSize::from_cs(cs, params.run_args.logrows);
 
         #[cfg(not(target_arch = "wasm32"))]
-        info!(
+        debug!(
             "circuit size: \n {}",
             circuit_size
                 .as_json()
