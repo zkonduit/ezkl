@@ -91,7 +91,7 @@ lazy_static! {
 }
 
 #[cfg(target_arch = "wasm32")]
-const EZKL_KEY_FORMAT: &usize = &"raw-bytes".to_string();
+const EZKL_KEY_FORMAT: &str = "raw-bytes";
 
 #[cfg(target_arch = "wasm32")]
 const EZKL_BUF_CAPACITY: &usize = &8000;
