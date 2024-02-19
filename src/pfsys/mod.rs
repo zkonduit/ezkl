@@ -8,7 +8,7 @@ use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
 use crate::pfsys::evm::aggregation::PoseidonTranscript;
 use crate::tensor::TensorType;
-use crate::EZKL_BUF_CAPACITY;
+use crate::{EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
@@ -42,6 +42,15 @@ use std::path::PathBuf;
 use thiserror::Error as thisError;
 
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
+
+fn serde_format_from_str(s: &str) -> halo2_proofs::SerdeFormat {
+    match s {
+        "processed" => halo2_proofs::SerdeFormat::Processed,
+        "raw-bytes-unchecked" => halo2_proofs::SerdeFormat::RawBytesUnchecked,
+        "raw-bytes" => halo2_proofs::SerdeFormat::RawBytes,
+        _ => panic!("invalid serde format"),
+    }
+}
 
 #[allow(missing_docs)]
 #[derive(
@@ -686,7 +695,7 @@ where
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     VerifyingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        serde_format_from_str(&EZKL_KEY_FORMAT),
         params,
     )
     .map_err(Box::<dyn Error>::from)
@@ -708,7 +717,7 @@ where
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     ProvingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        serde_format_from_str(&EZKL_KEY_FORMAT),
         params,
     )
     .map_err(Box::<dyn Error>::from)
@@ -717,7 +726,7 @@ where
 /// Saves a [ProvingKey] to `path`.
 pub fn save_pk<Scheme: CommitmentScheme>(
     path: &PathBuf,
-    vk: &ProvingKey<Scheme::Curve>,
+    pk: &ProvingKey<Scheme::Curve>,
 ) -> Result<(), io::Error>
 where
     Scheme::Curve: SerdeObject + CurveAffine,
@@ -726,7 +735,7 @@ where
     info!("saving proving key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
-    vk.write(&mut writer, halo2_proofs::SerdeFormat::RawBytes)?;
+    pk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
     Ok(())
 }
@@ -743,7 +752,7 @@ where
     info!("saving verification key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
-    vk.write(&mut writer, halo2_proofs::SerdeFormat::RawBytes)?;
+    vk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
     Ok(())
 }

@@ -31,16 +31,12 @@
 use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
 use graph::Visibility;
-
 use serde::{Deserialize, Serialize};
-
-#[cfg(not(target_arch = "wasm32"))]
-use lazy_static::lazy_static;
 
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
-#[cfg(not(target_arch = "wasm32"))]
 /// CLI commands.
+#[cfg(not(target_arch = "wasm32"))]
 pub mod commands;
 #[cfg(not(target_arch = "wasm32"))]
 // abigen doesn't generate docs for this module
@@ -74,6 +70,9 @@ pub mod tensor;
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 pub mod wasm;
 
+#[cfg(not(target_arch = "wasm32"))]
+use lazy_static::lazy_static;
+
 /// The denominator in the fixed point representation used when quantizing inputs
 pub type Scale = i32;
 
@@ -85,7 +84,14 @@ lazy_static! {
         .unwrap_or("8000".to_string())
         .parse()
         .unwrap();
+
+    /// The serialization format for the keys
+    pub static ref EZKL_KEY_FORMAT: String = std::env::var("EZKL_KEY_FORMAT")
+        .unwrap_or("raw-bytes".to_string());
 }
+
+#[cfg(target_arch = "wasm32")]
+const EZKL_KEY_FORMAT: &usize = &"raw-bytes".to_string();
 
 #[cfg(target_arch = "wasm32")]
 const EZKL_BUF_CAPACITY: &usize = &8000;
