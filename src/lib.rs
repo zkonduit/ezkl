@@ -234,13 +234,15 @@ fn parse_key_val<T, U>(
     s: &str,
 ) -> Result<(T, U), Box<dyn std::error::Error + Send + Sync + 'static>>
 where
-    T: std::str::FromStr,
+    T: std::str::FromStr + std::fmt::Debug,
     T::Err: std::error::Error + Send + Sync + 'static,
-    U: std::str::FromStr,
+    U: std::str::FromStr + std::fmt::Debug,
     U::Err: std::error::Error + Send + Sync + 'static,
 {
     let pos = s
         .find("->")
         .ok_or_else(|| format!("invalid x->y: no `->` found in `{s}`"))?;
-    Ok((s[..pos].parse()?, s[pos + 2..].parse()?))
+    let a = s[..pos].parse()?;
+    let b = s[pos + 2..].parse()?;
+    Ok((a, b))
 }

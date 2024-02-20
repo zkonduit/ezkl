@@ -76,7 +76,11 @@ impl std::fmt::Display for ProofType {
     }
 }
 
-impl ToFlags for ProofType {}
+impl ToFlags for ProofType {
+    fn to_flags(&self) -> Vec<String> {
+        vec![format!("{}", self)]
+    }
+}
 
 impl From<ProofType> for TranscriptType {
     fn from(val: ProofType) -> Self {

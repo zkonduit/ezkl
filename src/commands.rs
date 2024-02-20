@@ -191,7 +191,7 @@ impl Into<H160> for H160Flag {
 #[cfg(not(target_arch = "wasm32"))]
 impl ToFlags for H160Flag {
     fn to_flags(&self) -> Vec<String> {
-        vec![self.inner.to_string()]
+        vec![format!("{:#x}", self.inner)]
     }
 }
 
