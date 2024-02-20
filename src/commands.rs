@@ -95,7 +95,7 @@ impl IntoPy<PyObject> for TranscriptType {
     fn into_py(self, py: Python) -> PyObject {
         match self {
             TranscriptType::Poseidon => "poseidon".to_object(py),
-            TranscriptType::Evm => "evm".to_object(py),
+            TranscriptType::EVM => "evm".to_object(py),
         }
     }
 }
@@ -107,7 +107,7 @@ impl<'source> FromPyObject<'source> for TranscriptType {
         let strval = trystr.to_string();
         match strval.to_lowercase().as_str() {
             "poseidon" => Ok(TranscriptType::Poseidon),
-            "evm" => Ok(TranscriptType::Evm),
+            "evm" => Ok(TranscriptType::EVM),
             _ => Err(PyValueError::new_err("Invalid value for TranscriptType")),
         }
     }

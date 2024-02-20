@@ -18,7 +18,6 @@ use crate::pfsys::{
     TranscriptType,
 };
 use crate::RunArgs;
-use ethers::types::H160;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
@@ -26,7 +25,6 @@ use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
 use snark_verifier::util::arithmetic::PrimeField;
-use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
 
@@ -1031,24 +1029,15 @@ fn verify_evm(
     addr_da: Option<&str>,
     addr_vk: Option<&str>,
 ) -> Result<bool, PyErr> {
-    let addr_verifier = H160::from_str(addr_verifier).map_err(|e| {
-        let err_str = format!("address is invalid: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+    let addr_verifier = H160Flag::from(addr_verifier);
     let addr_da = if let Some(addr_da) = addr_da {
-        let addr_da = H160::from_str(addr_da).map_err(|e| {
-            let err_str = format!("address is invalid: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+        let addr_da = H160Flag::from(addr_da);
         Some(addr_da)
     } else {
         None
     };
     let addr_vk = if let Some(addr_vk) = addr_vk {
-        let addr_vk = H160::from_str(addr_vk).map_err(|e| {
-            let err_str = format!("address is invalid: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+        let addr_vk = H160Flag::from(addr_vk);
         Some(addr_vk)
     } else {
         None
