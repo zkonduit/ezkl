@@ -40,6 +40,7 @@ use std::io::{self, BufReader, BufWriter, Cursor, Write};
 use std::ops::Deref;
 use std::path::PathBuf;
 use thiserror::Error as thisError;
+use tosubcommand::ToFlags;
 
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
@@ -61,6 +62,21 @@ pub enum ProofType {
     Single,
     ForAggr,
 }
+
+impl std::fmt::Display for ProofType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ProofType::Single => "single",
+                ProofType::ForAggr => "for-aggr",
+            }
+        )
+    }
+}
+
+impl ToFlags for ProofType {}
 
 impl From<ProofType> for TranscriptType {
     fn from(val: ProofType) -> Self {
@@ -163,6 +179,21 @@ pub enum TranscriptType {
     #[default]
     EVM,
 }
+
+impl std::fmt::Display for TranscriptType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                TranscriptType::Poseidon => "poseidon",
+                TranscriptType::EVM => "evm",
+            }
+        )
+    }
+}
+
+impl ToFlags for TranscriptType {}
 
 #[cfg(feature = "python-bindings")]
 impl ToPyObject for TranscriptType {

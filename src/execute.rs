@@ -3,6 +3,8 @@ use crate::circuit::CheckMode;
 use crate::commands::CalibrationTarget;
 use crate::commands::Commands;
 #[cfg(not(target_arch = "wasm32"))]
+use crate::commands::H160Flag;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(unused_imports)]
@@ -21,8 +23,6 @@ use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
 use crate::RunArgs;
-#[cfg(not(target_arch = "wasm32"))]
-use ethers::types::H160;
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::poly::commitment::Params;
@@ -202,7 +202,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::Mock { model, witness } => mock(model, witness),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::CreateEVMVerifier {
+        Commands::CreateEvmVerifier {
             vk_path,
             srs_path,
             settings_path,
@@ -217,7 +217,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             abi_path,
             render_vk_seperately,
         ),
-        Commands::CreateEVMVK {
+        Commands::CreateEvmVK {
             vk_path,
             srs_path,
             settings_path,
@@ -225,14 +225,14 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             abi_path,
         } => create_evm_vk(vk_path, srs_path, settings_path, sol_code_path, abi_path),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::CreateEVMDataAttestation {
+        Commands::CreateEvmDataAttestation {
             settings_path,
             sol_code_path,
             abi_path,
             data,
         } => create_evm_data_attestation(settings_path, sol_code_path, abi_path, data),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::CreateEVMVerifierAggr {
+        Commands::CreateEvmVerifierAggr {
             vk_path,
             srs_path,
             sol_code_path,
@@ -270,7 +270,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             compress_selectors,
         ),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::SetupTestEVMData {
+        Commands::SetupTestEvmData {
             data,
             compiled_circuit,
             test_data,
@@ -434,7 +434,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             .await
         }
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::VerifyEVM {
+        Commands::VerifyEvm {
             proof_path,
             addr_verifier,
             rpc_url,
@@ -1387,10 +1387,10 @@ pub(crate) async fn deploy_evm(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn verify_evm(
     proof_path: PathBuf,
-    addr_verifier: H160,
+    addr_verifier: H160Flag,
     rpc_url: Option<String>,
-    addr_da: Option<H160>,
-    addr_vk: Option<H160>,
+    addr_da: Option<H160Flag>,
+    addr_vk: Option<H160Flag>,
 ) -> Result<String, Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
     check_solc_requirement();
@@ -1400,14 +1400,20 @@ pub(crate) async fn verify_evm(
     let result = if let Some(addr_da) = addr_da {
         verify_proof_with_data_attestation(
             proof.clone(),
-            addr_verifier,
-            addr_da,
-            addr_vk,
+            addr_verifier.into(),
+            addr_da.into(),
+            addr_vk.map(|s| s.into()),
             rpc_url.as_deref(),
         )
         .await?
     } else {
-        verify_proof_via_solidity(proof.clone(), addr_verifier, addr_vk, rpc_url.as_deref()).await?
+        verify_proof_via_solidity(
+            proof.clone(),
+            addr_verifier.into(),
+            addr_vk.map(|s| s.into()),
+            rpc_url.as_deref(),
+        )
+        .await?
     };
 
     info!("Solidity verification result: {}", result);
@@ -1563,14 +1569,14 @@ pub(crate) async fn setup_test_evm_witness(
 use crate::pfsys::ProofType;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn test_update_account_calls(
-    addr: H160,
+    addr: H160Flag,
     data: PathBuf,
     rpc_url: Option<String>,
 ) -> Result<String, Box<dyn Error>> {
     use crate::eth::update_account_calls;
 
     check_solc_requirement();
-    update_account_calls(addr, data, rpc_url.as_deref()).await?;
+    update_account_calls(addr.into(), data, rpc_url.as_deref()).await?;
 
     Ok(String::new())
 }

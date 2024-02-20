@@ -16,6 +16,7 @@ use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 pub use input::DataSource;
 use itertools::Itertools;
+use tosubcommand::ToFlags;
 
 #[cfg(not(target_arch = "wasm32"))]
 use self::input::OnChainSource;
@@ -623,6 +624,17 @@ pub enum TestDataSource {
     #[default]
     OnChain,
 }
+
+impl std::fmt::Display for TestDataSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TestDataSource::File => write!(f, "file"),
+            TestDataSource::OnChain => write!(f, "on-chain"),
+        }
+    }
+}
+
+impl ToFlags for TestDataSource {}
 
 impl From<String> for TestDataSource {
     fn from(value: String) -> Self {

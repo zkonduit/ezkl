@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 #[cfg(not(target_arch = "wasm32"))]
 use ethers::types::H160;
 #[cfg(feature = "python-bindings")]
@@ -9,8 +9,9 @@ use pyo3::{
     types::PyString,
 };
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::path::PathBuf;
+use std::{error::Error, str::FromStr};
+use tosubcommand::{ToFlags, ToSubcommand};
 
 use crate::{pfsys::ProofType, RunArgs};
 
@@ -88,21 +89,13 @@ pub const DEFAULT_SCALE_REBASE_MULTIPLIERS: &str = "1,2,10";
 /// Default use reduced srs for verification
 pub const DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION: &str = "false";
 
-impl std::fmt::Display for TranscriptType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_possible_value()
-            .expect("no values are skipped")
-            .get_name()
-            .fmt(f)
-    }
-}
 #[cfg(feature = "python-bindings")]
 /// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
 impl IntoPy<PyObject> for TranscriptType {
     fn into_py(self, py: Python) -> PyObject {
         match self {
             TranscriptType::Poseidon => "poseidon".to_object(py),
-            TranscriptType::EVM => "evm".to_object(py),
+            TranscriptType::Evm => "evm".to_object(py),
         }
     }
 }
@@ -114,7 +107,7 @@ impl<'source> FromPyObject<'source> for TranscriptType {
         let strval = trystr.to_string();
         match strval.to_lowercase().as_str() {
             "poseidon" => Ok(TranscriptType::Poseidon),
-            "evm" => Ok(TranscriptType::EVM),
+            "evm" => Ok(TranscriptType::Evm),
             _ => Err(PyValueError::new_err("Invalid value for TranscriptType")),
         }
     }
@@ -140,17 +133,27 @@ impl Default for CalibrationTarget {
     }
 }
 
-impl ToString for CalibrationTarget {
-    fn to_string(&self) -> String {
-        match self {
-            CalibrationTarget::Resources { col_overflow: true } => {
-                "resources/col-overflow".to_string()
+impl std::fmt::Display for CalibrationTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                CalibrationTarget::Resources { col_overflow: true } => {
+                    "resources/col-overflow".to_string()
+                }
+                CalibrationTarget::Resources {
+                    col_overflow: false,
+                } => "resources".to_string(),
+                CalibrationTarget::Accuracy => "accuracy".to_string(),
             }
-            CalibrationTarget::Resources {
-                col_overflow: false,
-            } => "resources".to_string(),
-            CalibrationTarget::Accuracy => "accuracy".to_string(),
-        }
+        )
+    }
+}
+
+impl ToFlags for CalibrationTarget {
+    fn to_flags(&self) -> Vec<String> {
+        vec![format!("{}", self)]
     }
 }
 
@@ -167,6 +170,36 @@ impl From<&str> for CalibrationTarget {
                 log::warn!("Defaulting to resources");
                 CalibrationTarget::default()
             }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
+/// wrapper for H160 to make it easy to parse into flag vals
+pub struct H160Flag {
+    inner: H160,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Into<H160> for H160Flag {
+    fn into(self) -> H160 {
+        self.inner.clone()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ToFlags for H160Flag {
+    fn to_flags(&self) -> Vec<String> {
+        vec![self.inner.to_string()]
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl From<&str> for H160Flag {
+    fn from(s: &str) -> Self {
+        Self {
+            inner: H160::from_str(s).unwrap(),
         }
     }
 }
@@ -244,7 +277,7 @@ impl Cli {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, Subcommand, Clone, Deserialize, Serialize, PartialEq, PartialOrd)]
+#[derive(Debug, Subcommand, Clone, Deserialize, Serialize, PartialEq, PartialOrd, ToSubcommand)]
 pub enum Commands {
     #[cfg(feature = "empty-cmd")]
     /// Creates an empty buffer
@@ -511,7 +544,7 @@ pub enum Commands {
     #[cfg(not(target_arch = "wasm32"))]
     /// Deploys a test contact that the data attester reads from and creates a data attestation formatted input.json file that contains call data information
     #[command(arg_required_else_help = true)]
-    SetupTestEVMData {
+    SetupTestEvmData {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
         data: PathBuf,
@@ -539,7 +572,7 @@ pub enum Commands {
     TestUpdateAccountCalls {
         /// The path to the verifier contract's address
         #[arg(long)]
-        addr: H160,
+        addr: H160Flag,
         /// The path to the .json data file.
         #[arg(short = 'D', long)]
         data: PathBuf,
@@ -589,9 +622,9 @@ pub enum Commands {
         check_mode: CheckMode,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    /// Creates an EVM verifier for a single proof
+    /// Creates an Evm verifier for a single proof
     #[command(name = "create-evm-verifier")]
-    CreateEVMVerifier {
+    CreateEvmVerifier {
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
@@ -614,9 +647,9 @@ pub enum Commands {
         render_vk_seperately: bool,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    /// Creates an EVM verifier for a single proof
+    /// Creates an Evm verifier for a single proof
     #[command(name = "create-evm-vk")]
-    CreateEVMVK {
+    CreateEvmVK {
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
@@ -634,9 +667,9 @@ pub enum Commands {
         abi_path: PathBuf,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    /// Creates an EVM verifier that attests to on-chain inputs for a single proof
+    /// Creates an Evm verifier that attests to on-chain inputs for a single proof
     #[command(name = "create-evm-da")]
-    CreateEVMDataAttestation {
+    CreateEvmDataAttestation {
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
         settings_path: PathBuf,
@@ -656,9 +689,9 @@ pub enum Commands {
     },
 
     #[cfg(not(target_arch = "wasm32"))]
-    /// Creates an EVM verifier for an aggregate proof
+    /// Creates an Evm verifier for an aggregate proof
     #[command(name = "create-evm-verifier-aggr")]
-    CreateEVMVerifierAggr {
+    CreateEvmVerifierAggr {
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
@@ -781,23 +814,23 @@ pub enum Commands {
         private_key: Option<String>,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    /// Verifies a proof using a local EVM executor, returning accept or reject
+    /// Verifies a proof using a local Evm executor, returning accept or reject
     #[command(name = "verify-evm")]
-    VerifyEVM {
+    VerifyEvm {
         /// The path to the proof file (generated using the prove command)
         #[arg(long, default_value = DEFAULT_PROOF)]
         proof_path: PathBuf,
         /// The path to verifier contract's address
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS)]
-        addr_verifier: H160,
+        addr_verifier: H160Flag,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
         /// does the verifier use data attestation ?
         #[arg(long)]
-        addr_da: Option<H160>,
+        addr_da: Option<H160Flag>,
         // is the vk rendered seperately, if so specify an address
         #[arg(long)]
-        addr_vk: Option<H160>,
+        addr_vk: Option<H160Flag>,
     },
 }
