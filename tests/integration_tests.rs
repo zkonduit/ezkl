@@ -1321,7 +1321,7 @@ mod native_tests {
                 "--settings-path={}/{}/settings.json",
                 test_dir, example_name
             ),
-            format!("--variables=batch_size={}", batch_size),
+            format!("--variables=batch_size->{}", batch_size),
             format!("--input-visibility={}", input_visibility),
             format!("--param-visibility={}", param_visibility),
             format!("--output-visibility={}", output_visibility),
@@ -1402,6 +1402,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
+    #[allow(clippy::too_many_arguments)]
     fn accuracy_measurement(
         test_dir: &str,
         example_name: String,
@@ -1455,7 +1456,7 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "-O",
                 format!("{}/{}/render.png", test_dir, example_name).as_str(),
-                "--lookup-range=(-32768,32768)",
+                "--lookup-range=-32768->32768",
                 "-K=17",
             ])
             .status()
@@ -1754,7 +1755,7 @@ mod native_tests {
             .expect("failed to parse settings file");
 
         // get_srs for the graph_settings_num_instances
-        let _ = download_srs(graph_settings.log2_total_instances());
+        download_srs(graph_settings.log2_total_instances());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([

@@ -56,6 +56,8 @@ use unzip_n::unzip_n;
 
 unzip_n!(pub 3);
 
+#[cfg(not(target_arch = "wasm32"))]
+type TractResult = (Graph<TypedFact, Box<dyn TypedOp>>, SymbolValues);
 /// The result of a forward pass.
 #[derive(Clone, Debug)]
 pub struct ForwardResult {
@@ -572,7 +574,7 @@ impl Model {
     fn load_onnx_using_tract(
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
-    ) -> Result<(Graph<TypedFact, Box<dyn TypedOp>>, SymbolValues), Box<dyn Error>> {
+    ) -> Result<TractResult, Box<dyn Error>> {
         use tract_onnx::{
             tract_core::internal::IntoArcTensor, tract_hir::internal::GenericFactoid,
         };

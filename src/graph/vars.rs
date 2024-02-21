@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fmt::Display;
 
 use crate::tensor::TensorType;
 use crate::tensor::{ValTensor, VarTensor};
@@ -14,6 +15,7 @@ use pyo3::{
 };
 
 use serde::{Deserialize, Serialize};
+use tosubcommand::ToFlags;
 
 use super::*;
 
@@ -38,6 +40,33 @@ pub enum Visibility {
     KZGCommit,
     /// assigned as a constant in the circuit
     Fixed,
+}
+
+impl Display for Visibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Visibility::KZGCommit => write!(f, "kzgcommit"),
+            Visibility::Private => write!(f, "private"),
+            Visibility::Public => write!(f, "public"),
+            Visibility::Fixed => write!(f, "fixed"),
+            Visibility::Hashed {
+                hash_is_public,
+                outlets,
+            } => {
+                if *hash_is_public {
+                    write!(f, "hashed/public")
+                } else {
+                    write!(f, "hashed/private/{}", outlets.iter().join(","))
+                }
+            }
+        }
+    }
+}
+
+impl ToFlags for Visibility {
+    fn to_flags(&self) -> Vec<String> {
+        vec![format!("{}", self)]
+    }
 }
 
 impl<'a> From<&'a str> for Visibility {
@@ -200,17 +229,6 @@ impl Visibility {
             return outlets.clone();
         }
         vec![]
-    }
-}
-impl std::fmt::Display for Visibility {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Visibility::KZGCommit => write!(f, "kzgcommit"),
-            Visibility::Private => write!(f, "private"),
-            Visibility::Public => write!(f, "public"),
-            Visibility::Fixed => write!(f, "fixed"),
-            Visibility::Hashed { .. } => write!(f, "hashed"),
-        }
     }
 }
 

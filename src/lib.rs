@@ -32,6 +32,7 @@ use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
 use graph::Visibility;
 use serde::{Deserialize, Serialize};
+use tosubcommand::ToFlags;
 
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
@@ -97,7 +98,7 @@ const EZKL_KEY_FORMAT: &str = "raw-bytes";
 const EZKL_BUF_CAPACITY: &usize = &8000;
 
 /// Parameters specific to a proving run
-#[derive(Debug, Args, Deserialize, Serialize, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Args, Deserialize, Serialize, Clone, PartialEq, PartialOrd, ToFlags)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[arg(short = 'T', long, default_value = "0")]
@@ -112,7 +113,7 @@ pub struct RunArgs {
     #[arg(long, default_value = "1")]
     pub scale_rebase_multiplier: u32,
     /// The min and max elements in the lookup table input column
-    #[arg(short = 'B', long, value_parser = parse_tuple::<i128>, default_value = "(-32768,32768)")]
+    #[arg(short = 'B', long, value_parser = parse_key_val::<i128, i128>, default_value = "-32768->32768")]
     pub lookup_range: Range,
     /// The log_2 number of rows
     #[arg(short = 'K', long, default_value = "17")]
@@ -121,7 +122,7 @@ pub struct RunArgs {
     #[arg(short = 'N', long, default_value = "2")]
     pub num_inner_cols: usize,
     /// Hand-written parser for graph variables, eg. batch_size=1
-    #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size=1", value_delimiter = ',')]
+    #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size->1", value_delimiter = ',')]
     pub variables: Vec<(String, usize)>,
     /// Flags whether inputs are public, private, hashed
     #[arg(long, default_value = "private")]
@@ -203,34 +204,15 @@ fn parse_key_val<T, U>(
     s: &str,
 ) -> Result<(T, U), Box<dyn std::error::Error + Send + Sync + 'static>>
 where
-    T: std::str::FromStr,
+    T: std::str::FromStr + std::fmt::Debug,
     T::Err: std::error::Error + Send + Sync + 'static,
-    U: std::str::FromStr,
+    U: std::str::FromStr + std::fmt::Debug,
     U::Err: std::error::Error + Send + Sync + 'static,
 {
     let pos = s
-        .find('=')
-        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{s}`"))?;
-    Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
-}
-
-/// Parse a tuple
-fn parse_tuple<T>(s: &str) -> Result<(T, T), Box<dyn std::error::Error + Send + Sync + 'static>>
-where
-    T: std::str::FromStr + Clone,
-    T::Err: std::error::Error + Send + Sync + 'static,
-{
-    let res = s.trim_matches(|p| p == '(' || p == ')').split(',');
-
-    let res = res
-        .map(|x| {
-            // remove blank space
-            let x = x.trim();
-            x.parse::<T>()
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    if res.len() != 2 {
-        return Err("invalid tuple".into());
-    }
-    Ok((res[0].clone(), res[1].clone()))
+        .find("->")
+        .ok_or_else(|| format!("invalid x->y: no `->` found in `{s}`"))?;
+    let a = s[..pos].parse()?;
+    let b = s[pos + 2..].parse()?;
+    Ok((a, b))
 }
