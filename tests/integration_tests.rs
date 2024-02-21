@@ -1765,7 +1765,7 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
-                "--reduced-srs=true",
+                "--reduced-srs",
             ])
             .status()
             .expect("failed to execute process");
