@@ -780,6 +780,7 @@ impl AccuracyResults {
 /// Calibrate the circuit parameters to a given a dataset
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(trivial_casts)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn calibrate(
     model_path: PathBuf,
     data: PathBuf,

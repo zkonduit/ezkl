@@ -208,42 +208,41 @@ impl GraphWitness {
         output_scales: Vec<crate::Scale>,
         visibility: VarVisibility,
     ) {
-        let mut pretty_elements = PrettyElements::default();
-        pretty_elements.rescaled_inputs = self
-            .inputs
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                let scale = input_scales[i];
-                t.iter()
-                    .map(|x| dequantize(*x, scale, 0.).to_string())
-                    .collect()
-            })
-            .collect();
-
-        pretty_elements.inputs = self
-            .inputs
-            .iter()
-            .map(|t| t.iter().map(|x| format!("{:?}", x)).collect())
-            .collect();
-
-        pretty_elements.rescaled_outputs = self
-            .outputs
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                let scale = output_scales[i];
-                t.iter()
-                    .map(|x| dequantize(*x, scale, 0.).to_string())
-                    .collect()
-            })
-            .collect();
-
-        pretty_elements.outputs = self
-            .outputs
-            .iter()
-            .map(|t| t.iter().map(|x| format!("{:?}", x)).collect())
-            .collect();
+        let mut pretty_elements = PrettyElements {
+            rescaled_inputs: self
+                .inputs
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    let scale = input_scales[i];
+                    t.iter()
+                        .map(|x| dequantize(*x, scale, 0.).to_string())
+                        .collect()
+                })
+                .collect(),
+            inputs: self
+                .inputs
+                .iter()
+                .map(|t| t.iter().map(|x| format!("{:?}", x)).collect())
+                .collect(),
+            rescaled_outputs: self
+                .outputs
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    let scale = output_scales[i];
+                    t.iter()
+                        .map(|x| dequantize(*x, scale, 0.).to_string())
+                        .collect()
+                })
+                .collect(),
+            outputs: self
+                .outputs
+                .iter()
+                .map(|t| t.iter().map(|x| format!("{:?}", x)).collect())
+                .collect(),
+            ..Default::default()
+        };
 
         if let Some(processed_inputs) = self.processed_inputs.clone() {
             pretty_elements.processed_inputs = processed_inputs
@@ -607,7 +606,7 @@ impl GraphCircuit {
     ///
     pub fn load(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         // read bytes from file
-        let f = std::fs::File::open(&path)?;
+        let f = std::fs::File::open(path)?;
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
         let result: GraphCircuit = bincode::deserialize_from(reader)?;
 

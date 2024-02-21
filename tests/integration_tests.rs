@@ -1402,6 +1402,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
+    #[allow(clippy::too_many_arguments)]
     fn accuracy_measurement(
         test_dir: &str,
         example_name: String,
@@ -1754,7 +1755,7 @@ mod native_tests {
             .expect("failed to parse settings file");
 
         // get_srs for the graph_settings_num_instances
-        let _ = download_srs(graph_settings.log2_total_instances());
+        download_srs(graph_settings.log2_total_instances());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([

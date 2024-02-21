@@ -182,9 +182,9 @@ pub struct H160Flag {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl Into<H160> for H160Flag {
-    fn into(self) -> H160 {
-        self.inner.clone()
+impl From<H160Flag> for H160 {
+    fn from(val: H160Flag) -> H160 {
+        val.inner
     }
 }
 

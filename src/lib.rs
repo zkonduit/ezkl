@@ -144,36 +144,6 @@ pub struct RunArgs {
     pub check_mode: CheckMode,
 }
 
-impl std::fmt::Display for RunArgs {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut s = String::new();
-        s.push_str(&format!("tolerance: {}\n", self.tolerance));
-        s.push_str(&format!("input_scale: {}\n", self.input_scale));
-        s.push_str(&format!("param_scale: {}\n", self.param_scale));
-        s.push_str(&format!(
-            "scale_rebase_multiplier: {}\n",
-            self.scale_rebase_multiplier
-        ));
-        s.push_str(&format!("lookup_range: {:?}\n", self.lookup_range));
-        s.push_str(&format!("logrows: {}\n", self.logrows));
-        s.push_str(&format!("num_inner_cols: {}\n", self.num_inner_cols));
-        s.push_str(&format!("variables: {:?}\n", self.variables));
-        s.push_str(&format!("input_visibility: {:?}\n", self.input_visibility));
-        s.push_str(&format!(
-            "output_visibility: {:?}\n",
-            self.output_visibility
-        ));
-        s.push_str(&format!("param_visibility: {:?}\n", self.param_visibility));
-        s.push_str(&format!("div_rebasing: {}\n", self.div_rebasing));
-        s.push_str(&format!(
-            "rebase_frac_zero_constants: {}\n",
-            self.rebase_frac_zero_constants
-        ));
-        s.push_str(&format!("check_mode: {:?}\n", self.check_mode));
-        write!(f, "{}", s)
-    }
-}
-
 impl Default for RunArgs {
     fn default() -> Self {
         Self {
