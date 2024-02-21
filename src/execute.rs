@@ -178,7 +178,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             scales,
             scale_rebase_multiplier,
             max_logrows,
-            div_rebasing,
+            only_range_check_rebase,
         } => calibrate(
             model,
             data,
@@ -187,7 +187,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             lookup_safety_margin,
             scales,
             scale_rebase_multiplier,
-            div_rebasing,
+            only_range_check_rebase,
             max_logrows,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
@@ -789,7 +789,7 @@ pub(crate) fn calibrate(
     lookup_safety_margin: i128,
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
-    div_rebasing: Option<bool>,
+    only_range_check_rebase: bool,
     max_logrows: Option<u32>,
 ) -> Result<GraphSettings, Box<dyn Error>> {
     use std::collections::HashMap;
@@ -830,8 +830,8 @@ pub(crate) fn calibrate(
         (10..14).collect::<Vec<crate::Scale>>()
     };
 
-    let div_rebasing = if let Some(div_rebasing) = div_rebasing {
-        vec![div_rebasing]
+    let div_rebasing = if only_range_check_rebase {
+        vec![false]
     } else {
         vec![true, false]
     };
@@ -2044,16 +2044,12 @@ pub(crate) fn verify(
     settings_path: PathBuf,
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
-    reduced_srs: Option<bool>,
+    reduced_srs: bool,
 ) -> Result<bool, Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
 
-    let params = if let Some(reduced_srs) = reduced_srs {
-        if reduced_srs {
-            load_params_cmd(srs_path, circuit_settings.log2_total_instances())?
-        } else {
-            load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
-        }
+    let params = if reduced_srs {
+        load_params_cmd(srs_path, circuit_settings.log2_total_instances())?
     } else {
         load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
     };

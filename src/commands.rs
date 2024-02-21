@@ -88,6 +88,8 @@ pub const DEFAULT_VK_ABI: &str = "vk.abi";
 pub const DEFAULT_SCALE_REBASE_MULTIPLIERS: &str = "1,2,10";
 /// Default use reduced srs for verification
 pub const DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION: &str = "false";
+/// Default only check for range check rebase
+pub const DEFAULT_ONLY_RANGE_CHECK_REBASE: &str = "false";
 
 #[cfg(feature = "python-bindings")]
 /// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
@@ -371,9 +373,9 @@ pub enum Commands {
         /// max logrows to use for calibration, 26 is the max public SRS size
         #[arg(long)]
         max_logrows: Option<u32>,
-        // whether to fix the div_rebasing value truthiness during calibration. this changes how we rebase
-        #[arg(long)]
-        div_rebasing: Option<bool>,
+        // whether to only range check rebases (instead of trying both range check and lookup)
+        #[arg(long, default_value = DEFAULT_ONLY_RANGE_CHECK_REBASE)]
+        only_range_check_rebase: bool,
     },
 
     /// Generates a dummy SRS
@@ -732,7 +734,7 @@ pub enum Commands {
         srs_path: Option<PathBuf>,
         /// Reduce SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
         #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION)]
-        reduced_srs: Option<bool>,
+        reduced_srs: bool,
     },
     /// Verifies an aggregate proof, returning accept or reject
     VerifyAggr {
