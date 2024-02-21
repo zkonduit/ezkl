@@ -523,7 +523,7 @@ fn gen_settings(
     scales = None,
     scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.split(",").map(|x| x.parse().unwrap()).collect(),
     max_logrows = None,
-    div_rebasing = None,
+    only_range_check_rebase = DEFAULT_ONLY_RANGE_CHECK_REBASE.parse().unwrap(),
 ))]
 fn calibrate_settings(
     data: PathBuf,
@@ -534,7 +534,7 @@ fn calibrate_settings(
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
-    div_rebasing: Option<bool>,
+    only_range_check_rebase: bool,
 ) -> Result<bool, PyErr> {
     crate::execute::calibrate(
         model,
@@ -544,7 +544,7 @@ fn calibrate_settings(
         lookup_safety_margin,
         scales,
         scale_rebase_multiplier,
-        div_rebasing,
+        only_range_check_rebase,
         max_logrows,
     )
     .map_err(|e| {
@@ -687,14 +687,14 @@ fn prove(
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     vk_path=PathBuf::from(DEFAULT_VK),
     srs_path=None,
-    non_reduced_srs=Some(DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse::<bool>().unwrap()),
+    non_reduced_srs=DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse::<bool>().unwrap(),
 ))]
 fn verify(
     proof_path: PathBuf,
     settings_path: PathBuf,
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
-    non_reduced_srs: Option<bool>,
+    non_reduced_srs: bool,
 ) -> Result<bool, PyErr> {
     crate::execute::verify(
         proof_path,
