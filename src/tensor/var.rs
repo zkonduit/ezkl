@@ -33,10 +33,7 @@ pub enum VarTensor {
 impl VarTensor {
     ///
     pub fn is_advice(&self) -> bool {
-        match self {
-            VarTensor::Advice { .. } => true,
-            _ => false,
-        }
+        matches!(self, VarTensor::Advice { .. })
     }
 
     ///

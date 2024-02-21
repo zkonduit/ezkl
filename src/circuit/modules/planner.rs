@@ -15,7 +15,7 @@ use halo2_proofs::{
         Instance, Selector, TableColumn,
     },
 };
-use log::{trace, warn};
+use log::{debug, trace};
 
 /// A simple [`FloorPlanner`] that performs minimal optimizations.
 #[derive(Debug)]
@@ -119,7 +119,7 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
                 Error::Synthesis
             })?;
             if !self.regions.contains_key(&index) {
-                warn!("spawning module {}", index)
+                debug!("spawning module {}", index)
             };
             self.current_module = index;
         }

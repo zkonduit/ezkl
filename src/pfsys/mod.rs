@@ -8,6 +8,7 @@ use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
 use crate::pfsys::evm::aggregation::PoseidonTranscript;
 use crate::tensor::TensorType;
+use crate::{EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
@@ -39,24 +40,18 @@ use std::io::{self, BufReader, BufWriter, Cursor, Write};
 use std::ops::Deref;
 use std::path::PathBuf;
 use thiserror::Error as thisError;
-
-// not wasm
-#[cfg(not(target_arch = "wasm32"))]
-use lazy_static::lazy_static;
+use tosubcommand::ToFlags;
 
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
-#[cfg(not(target_arch = "wasm32"))]
-// Buf writer capacity
-lazy_static! {
-    static ref EZKL_BUF_CAPACITY: usize = std::env::var("EZKL_BUF_CAPACITY")
-        .unwrap_or("8000".to_string())
-        .parse()
-        .unwrap();
+fn serde_format_from_str(s: &str) -> halo2_proofs::SerdeFormat {
+    match s {
+        "processed" => halo2_proofs::SerdeFormat::Processed,
+        "raw-bytes-unchecked" => halo2_proofs::SerdeFormat::RawBytesUnchecked,
+        "raw-bytes" => halo2_proofs::SerdeFormat::RawBytes,
+        _ => panic!("invalid serde format"),
+    }
 }
-
-#[cfg(target_arch = "wasm32")]
-const EZKL_BUF_CAPACITY: &usize = &8000;
 
 #[allow(missing_docs)]
 #[derive(
@@ -66,6 +61,25 @@ pub enum ProofType {
     #[default]
     Single,
     ForAggr,
+}
+
+impl std::fmt::Display for ProofType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ProofType::Single => "single",
+                ProofType::ForAggr => "for-aggr",
+            }
+        )
+    }
+}
+
+impl ToFlags for ProofType {
+    fn to_flags(&self) -> Vec<String> {
+        vec![format!("{}", self)]
+    }
 }
 
 impl From<ProofType> for TranscriptType {
@@ -169,6 +183,21 @@ pub enum TranscriptType {
     #[default]
     EVM,
 }
+
+impl std::fmt::Display for TranscriptType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                TranscriptType::Poseidon => "poseidon",
+                TranscriptType::EVM => "evm",
+            }
+        )
+    }
+}
+
+impl ToFlags for TranscriptType {}
 
 #[cfg(feature = "python-bindings")]
 impl ToPyObject for TranscriptType {
@@ -344,8 +373,10 @@ where
         <C as CurveAffine>::ScalarExt: FromUniformBytes<64>,
     {
         trace!("reading proof");
-        let data = std::fs::read_to_string(proof_path)?;
-        serde_json::from_str(&data).map_err(|e| e.into())
+        let file = std::fs::File::open(proof_path)?;
+        let reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
+        let proof: Self = serde_json::from_reader(reader)?;
+        Ok(proof)
     }
 }
 
@@ -571,6 +602,7 @@ where
             verifier_params,
             pk.get_vk(),
             strategy,
+            verifier_params.n(),
         )?;
     }
     let elapsed = now.elapsed();
@@ -658,6 +690,7 @@ pub fn verify_proof_circuit<
     params: &'params Scheme::ParamsVerifier,
     vk: &VerifyingKey<Scheme::Curve>,
     strategy: Strategy,
+    orig_n: u64,
 ) -> Result<Strategy::Output, halo2_proofs::plonk::Error>
 where
     Scheme::Scalar: SerdeObject
@@ -678,7 +711,7 @@ where
     trace!("instances {:?}", instances);
 
     let mut transcript = TranscriptReadBuffer::init(Cursor::new(snark.proof.clone()));
-    verify_proof::<Scheme, V, _, TR, _>(params, vk, strategy, instances, &mut transcript)
+    verify_proof::<Scheme, V, _, TR, _>(params, vk, strategy, instances, &mut transcript, orig_n)
 }
 
 /// Loads a [VerifyingKey] at `path`.
@@ -697,7 +730,7 @@ where
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     VerifyingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        serde_format_from_str(&EZKL_KEY_FORMAT),
         params,
     )
     .map_err(Box::<dyn Error>::from)
@@ -719,7 +752,7 @@ where
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     ProvingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        serde_format_from_str(&EZKL_KEY_FORMAT),
         params,
     )
     .map_err(Box::<dyn Error>::from)
@@ -728,7 +761,7 @@ where
 /// Saves a [ProvingKey] to `path`.
 pub fn save_pk<Scheme: CommitmentScheme>(
     path: &PathBuf,
-    vk: &ProvingKey<Scheme::Curve>,
+    pk: &ProvingKey<Scheme::Curve>,
 ) -> Result<(), io::Error>
 where
     Scheme::Curve: SerdeObject + CurveAffine,
@@ -737,7 +770,7 @@ where
     info!("saving proving key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
-    vk.write(&mut writer, halo2_proofs::SerdeFormat::RawBytes)?;
+    pk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
     Ok(())
 }
@@ -754,7 +787,7 @@ where
     info!("saving verification key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
-    vk.write(&mut writer, halo2_proofs::SerdeFormat::RawBytes)?;
+    vk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
     Ok(())
 }
@@ -856,6 +889,7 @@ pub(crate) fn verify_proof_circuit_kzg<
     proof: Snark<Fr, G1Affine>,
     vk: &VerifyingKey<G1Affine>,
     strategy: Strategy,
+    orig_n: u64,
 ) -> Result<Strategy::Output, halo2_proofs::plonk::Error> {
     match proof.transcript_type {
         TranscriptType::EVM => verify_proof_circuit::<
@@ -865,7 +899,7 @@ pub(crate) fn verify_proof_circuit_kzg<
             _,
             _,
             EvmTranscript<G1Affine, _, _, _>,
-        >(&proof, params, vk, strategy),
+        >(&proof, params, vk, strategy, orig_n),
         TranscriptType::Poseidon => verify_proof_circuit::<
             Fr,
             VerifierSHPLONK<'_, Bn256>,
@@ -873,7 +907,7 @@ pub(crate) fn verify_proof_circuit_kzg<
             _,
             _,
             PoseidonTranscript<NativeLoader, _>,
-        >(&proof, params, vk, strategy),
+        >(&proof, params, vk, strategy, orig_n),
     }
 }
 

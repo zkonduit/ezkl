@@ -9,8 +9,8 @@ mod wasm32 {
     use ezkl::pfsys;
     use ezkl::wasm::{
         bufferToVecOfstring, compiledCircuitValidation, encodeVerifierCalldata, genPk, genVk,
-        genWitness, inputValidation, pkValidation, poseidonHash, printProofHex, proofValidation,
-        prove, settingsValidation, srsValidation, stringToFelt, stringToFloat, stringToInt,
+        genWitness, inputValidation, pkValidation, poseidonHash, proofValidation, prove,
+        settingsValidation, srsValidation, stringToFelt, stringToFloat, stringToInt,
         u8_array_to_u128_le, verify, vkValidation, witnessValidation,
     };
     use halo2_solidity_verifier::encode_calldata;
@@ -256,15 +256,6 @@ mod wasm32 {
 
         // should not fail
         assert!(value);
-    }
-
-    #[wasm_bindgen_test]
-    async fn print_proof_hex_test() {
-        let proof = printProofHex(wasm_bindgen::Clamped(PROOF.to_vec()))
-            .map_err(|_| "failed")
-            .unwrap();
-
-        assert!(proof.len() > 0);
     }
 
     #[wasm_bindgen_test]

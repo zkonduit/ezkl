@@ -234,7 +234,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                     inputs[1].clone().map(|x| felt_to_i128(x) as usize)
                 };
 
-                let src = if let Some(_) = constant_idx {
+                let src = if constant_idx.is_some() {
                     inputs[1].clone()
                 } else {
                     inputs[2].clone()

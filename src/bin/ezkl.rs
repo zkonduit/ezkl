@@ -11,8 +11,8 @@ use ezkl::execute::run;
 #[cfg(not(target_arch = "wasm32"))]
 use ezkl::logger::init_logger;
 #[cfg(not(target_arch = "wasm32"))]
-use log::{error, info};
-#[cfg(not(target_arch = "wasm32"))]
+use log::{debug, error, info};
+#[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
 use rand::prelude::SliceRandom;
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "icicle")]
@@ -25,6 +25,7 @@ use std::error::Error;
 pub async fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::parse();
     init_logger();
+    #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
     banner();
     #[cfg(feature = "icicle")]
     if env::var("ENABLE_ICICLE_GPU").is_ok() {
@@ -32,7 +33,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     } else {
         info!("Running with CPU");
     }
-    info!("command: \n {}", &args.as_json()?.to_colored_json_auto()?);
+    debug!("command: \n {}", &args.as_json()?.to_colored_json_auto()?);
     let res = run(args.command).await;
     match &res {
         Ok(_) => info!("succeeded"),
@@ -44,7 +45,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
 #[cfg(target_arch = "wasm32")]
 pub fn main() {}
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
 fn banner() {
     let ell: Vec<&str> = vec![
         "for Neural Networks",

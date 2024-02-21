@@ -3,6 +3,8 @@ use crate::circuit::CheckMode;
 use crate::commands::CalibrationTarget;
 use crate::commands::Commands;
 #[cfg(not(target_arch = "wasm32"))]
+use crate::commands::H160Flag;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(unused_imports)]
@@ -21,8 +23,6 @@ use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
 use crate::RunArgs;
-#[cfg(not(target_arch = "wasm32"))]
-use ethers::types::H160;
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::poly::commitment::Params;
@@ -178,7 +178,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             scales,
             scale_rebase_multiplier,
             max_logrows,
-            div_rebasing,
+            only_range_check_rebase,
         } => calibrate(
             model,
             data,
@@ -187,7 +187,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             lookup_safety_margin,
             scales,
             scale_rebase_multiplier,
-            div_rebasing,
+            only_range_check_rebase,
             max_logrows,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
@@ -202,7 +202,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::Mock { model, witness } => mock(model, witness),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::CreateEVMVerifier {
+        Commands::CreateEvmVerifier {
             vk_path,
             srs_path,
             settings_path,
@@ -217,7 +217,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             abi_path,
             render_vk_seperately,
         ),
-        Commands::CreateEVMVK {
+        Commands::CreateEvmVK {
             vk_path,
             srs_path,
             settings_path,
@@ -225,14 +225,14 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             abi_path,
         } => create_evm_vk(vk_path, srs_path, settings_path, sol_code_path, abi_path),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::CreateEVMDataAttestation {
+        Commands::CreateEvmDataAttestation {
             settings_path,
             sol_code_path,
             abi_path,
             data,
         } => create_evm_data_attestation(settings_path, sol_code_path, abi_path, data),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::CreateEVMVerifierAggr {
+        Commands::CreateEvmVerifierAggr {
             vk_path,
             srs_path,
             sol_code_path,
@@ -270,7 +270,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             compress_selectors,
         ),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::SetupTestEVMData {
+        Commands::SetupTestEvmData {
             data,
             compiled_circuit,
             test_data,
@@ -366,7 +366,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             settings_path,
             vk_path,
             srs_path,
-        } => verify(proof_path, settings_path, vk_path, srs_path)
+            reduced_srs,
+        } => verify(proof_path, settings_path, vk_path, srs_path, reduced_srs)
             .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::VerifyAggr {
             proof_path,
@@ -433,14 +434,13 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             .await
         }
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::VerifyEVM {
+        Commands::VerifyEvm {
             proof_path,
             addr_verifier,
             rpc_url,
             addr_da,
             addr_vk,
         } => verify_evm(proof_path, addr_verifier, rpc_url, addr_da, addr_vk).await,
-        Commands::PrintProofHex { proof_path } => print_proof_hex(proof_path),
     }
 }
 
@@ -628,7 +628,7 @@ pub(crate) async fn gen_witness(
     );
 
     if let Some(output_path) = output {
-        serde_json::to_writer(&File::create(output_path)?, &witness)?;
+        witness.save(output_path)?;
     }
 
     // print the witness in debug
@@ -780,6 +780,7 @@ impl AccuracyResults {
 /// Calibrate the circuit parameters to a given a dataset
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(trivial_casts)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn calibrate(
     model_path: PathBuf,
     data: PathBuf,
@@ -788,7 +789,7 @@ pub(crate) fn calibrate(
     lookup_safety_margin: i128,
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
-    div_rebasing: Option<bool>,
+    only_range_check_rebase: bool,
     max_logrows: Option<u32>,
 ) -> Result<GraphSettings, Box<dyn Error>> {
     use std::collections::HashMap;
@@ -829,8 +830,8 @@ pub(crate) fn calibrate(
         (10..14).collect::<Vec<crate::Scale>>()
     };
 
-    let div_rebasing = if let Some(div_rebasing) = div_rebasing {
-        vec![div_rebasing]
+    let div_rebasing = if only_range_check_rebase {
+        vec![false]
     } else {
         vec![true, false]
     };
@@ -1169,16 +1170,6 @@ pub(crate) fn mock(
     Ok(String::new())
 }
 
-pub(crate) fn print_proof_hex(proof_path: PathBuf) -> Result<String, Box<dyn Error>> {
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
-    for instance in proof.instances {
-        println!("{:?}", instance);
-    }
-    let hex_str = hex::encode(proof.proof);
-    info!("0x{}", hex_str);
-    Ok(format!("0x{}", hex_str))
-}
-
 #[cfg(feature = "render")]
 pub(crate) fn render(
     model: PathBuf,
@@ -1397,10 +1388,10 @@ pub(crate) async fn deploy_evm(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn verify_evm(
     proof_path: PathBuf,
-    addr_verifier: H160,
+    addr_verifier: H160Flag,
     rpc_url: Option<String>,
-    addr_da: Option<H160>,
-    addr_vk: Option<H160>,
+    addr_da: Option<H160Flag>,
+    addr_vk: Option<H160Flag>,
 ) -> Result<String, Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
     check_solc_requirement();
@@ -1410,14 +1401,20 @@ pub(crate) async fn verify_evm(
     let result = if let Some(addr_da) = addr_da {
         verify_proof_with_data_attestation(
             proof.clone(),
-            addr_verifier,
-            addr_da,
-            addr_vk,
+            addr_verifier.into(),
+            addr_da.into(),
+            addr_vk.map(|s| s.into()),
             rpc_url.as_deref(),
         )
         .await?
     } else {
-        verify_proof_via_solidity(proof.clone(), addr_verifier, addr_vk, rpc_url.as_deref()).await?
+        verify_proof_via_solidity(
+            proof.clone(),
+            addr_verifier.into(),
+            addr_vk.map(|s| s.into()),
+            rpc_url.as_deref(),
+        )
+        .await?
     };
 
     info!("Solidity verification result: {}", result);
@@ -1573,14 +1570,14 @@ pub(crate) async fn setup_test_evm_witness(
 use crate::pfsys::ProofType;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn test_update_account_calls(
-    addr: H160,
+    addr: H160Flag,
     data: PathBuf,
     rpc_url: Option<String>,
 ) -> Result<String, Box<dyn Error>> {
     use crate::eth::update_account_calls;
 
     check_solc_requirement();
-    update_account_calls(addr, data, rpc_url.as_deref()).await?;
+    update_account_calls(addr.into(), data, rpc_url.as_deref()).await?;
 
     Ok(String::new())
 }
@@ -1725,6 +1722,7 @@ pub(crate) fn fuzz(
             bad_proof,
             pk.get_vk(),
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -1755,6 +1753,7 @@ pub(crate) fn fuzz(
             bad_proof,
             pk.get_vk(),
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -1791,6 +1790,7 @@ pub(crate) fn fuzz(
             proof.clone(),
             bad_vk,
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -1822,6 +1822,7 @@ pub(crate) fn fuzz(
             bad_proof,
             pk.get_vk(),
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -1857,6 +1858,7 @@ pub(crate) fn fuzz(
             bad_proof,
             pk.get_vk(),
             strategy.clone(),
+            params.n(),
         )
         .map_err(|_| ())
     };
@@ -2042,15 +2044,29 @@ pub(crate) fn verify(
     settings_path: PathBuf,
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
+    reduced_srs: bool,
 ) -> Result<bool, Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
-    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
+
+    let params = if reduced_srs {
+        load_params_cmd(srs_path, circuit_settings.log2_total_instances())?
+    } else {
+        load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
+    };
+
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
+    let vk =
+        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings.clone())?;
     let now = Instant::now();
-    let result = verify_proof_circuit_kzg(params.verifier_params(), proof, &vk, strategy);
+    let result = verify_proof_circuit_kzg(
+        params.verifier_params(),
+        proof,
+        &vk,
+        strategy,
+        1 << circuit_settings.run_args.logrows,
+    );
     let elapsed = now.elapsed();
     info!(
         "verify took {}.{}",
@@ -2074,7 +2090,7 @@ pub(crate) fn verify_aggr(
     let strategy = AccumulatorStrategy::new(params.verifier_params());
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
     let now = Instant::now();
-    let result = verify_proof_circuit_kzg(&params, proof, &vk, strategy);
+    let result = verify_proof_circuit_kzg(&params, proof, &vk, strategy, 1 << logrows);
 
     let elapsed = now.elapsed();
     info!(

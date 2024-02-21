@@ -311,13 +311,19 @@ pub fn verify(
     let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
         halo2_proofs::SerdeFormat::RawBytes,
-        circuit_settings,
+        circuit_settings.clone(),
     )
     .map_err(|e| JsError::new(&format!("Failed to deserialize vk: {}", e)))?;
 
     let strategy = KZGSingleStrategy::new(params.verifier_params());
 
-    let result = verify_proof_circuit_kzg(params.verifier_params(), snark, &vk, strategy);
+    let result = verify_proof_circuit_kzg(
+        params.verifier_params(),
+        snark,
+        &vk,
+        strategy,
+        1 << circuit_settings.run_args.logrows,
+    );
 
     match result {
         Ok(_) => Ok(true),
@@ -387,15 +393,6 @@ pub fn prove(
         .into_bytes())
 }
 
-/// print hex representation of a proof
-#[wasm_bindgen]
-#[allow(non_snake_case)]
-pub fn printProofHex(proof: wasm_bindgen::Clamped<Vec<u8>>) -> Result<String, JsError> {
-    let proof: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize proof: {}", e)))?;
-    let hex_str = hex::encode(proof.proof);
-    Ok(format!("0x{}", hex_str))
-}
 // VALIDATION FUNCTIONS
 
 /// Witness file validation

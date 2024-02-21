@@ -392,9 +392,7 @@ def test_prove_evm():
     assert res['transcript_type'] == 'EVM'
     assert os.path.isfile(proof_path)
 
-    res = ezkl.print_proof_hex(proof_path)
-    # to figure out a better way of testing print_proof_hex
-    assert type(res) == str
+
 
 
 def test_create_evm_verifier():

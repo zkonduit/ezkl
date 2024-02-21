@@ -497,6 +497,7 @@ impl Node {
     /// * `public_params` - flag if parameters of model are public
     /// * `idx` - The node's unique identifier.
     #[cfg(not(target_arch = "wasm32"))]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
         other_nodes: &mut BTreeMap<usize, super::NodeType>,
