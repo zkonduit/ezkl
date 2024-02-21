@@ -56,6 +56,7 @@ use unzip_n::unzip_n;
 
 unzip_n!(pub 3);
 
+#[cfg(not(target_arch = "wasm32"))]
 type TractResult = (Graph<TypedFact, Box<dyn TypedOp>>, SymbolValues);
 /// The result of a forward pass.
 #[derive(Clone, Debug)]
