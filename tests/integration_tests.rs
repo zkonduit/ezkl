@@ -477,6 +477,7 @@ mod native_tests {
             use crate::native_tests::kzg_fuzz;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
+            use rand::Rng;
             use tempdir::TempDir;
 
             #[test]
@@ -496,7 +497,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "fixed", "public", 1, "accuracy", None);
+                mock(path, test.to_string(), "public", "fixed", "public", 1, "accuracy", None, 0.0);
                 test_dir.close().unwrap();
             }
         });
@@ -569,7 +570,18 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None);
+                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None, 0.0);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_tolerance_public_outputs_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                // gen random number between 0.0 and 1.0
+                let tolerance = rand::thread_rng().gen_range(0.0..1.0) * 100.0;
+                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None, tolerance);
                 test_dir.close().unwrap();
             }
 
@@ -580,7 +592,7 @@ mod native_tests {
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                 let large_batch_dir = &format!("large_batches_{}", test);
                 crate::native_tests::mk_data_batches_(path, test, &large_batch_dir, 10);
-                mock(path, large_batch_dir.to_string(), "private", "private", "public", 10, "resources", None);
+                mock(path, large_batch_dir.to_string(), "private", "private", "public", 10, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -589,7 +601,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "private", "private", 1, "resources", None);
+                mock(path, test.to_string(), "public", "private", "private", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -598,7 +610,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "fixed", "private", "private", 1, "resources", None);
+                mock(path, test.to_string(), "fixed", "private", "private", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -607,7 +619,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "private", "fixed", 1, "resources", None);
+                mock(path, test.to_string(), "private", "private", "fixed", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -616,7 +628,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "fixed", "private", 1, "resources", None);
+                mock(path, test.to_string(), "private", "fixed", "private", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -625,7 +637,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "hashed", "private", "public", 1, "resources", None);
+                mock(path, test.to_string(), "hashed", "private", "public", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -634,7 +646,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "kzgcommit", "private", "public", 1, "resources", None);
+                mock(path, test.to_string(), "kzgcommit", "private", "public", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -644,7 +656,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "hashed", "public", 1, "resources", None);
+                mock(path, test.to_string(), "private", "hashed", "public", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -654,7 +666,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "kzgcommit", "public", 1, "resources", None);
+                mock(path, test.to_string(), "private", "kzgcommit", "public", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -663,7 +675,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "private", "hashed", 1, "resources", None);
+                mock(path, test.to_string(), "public", "private", "hashed", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -673,7 +685,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "private", "kzgcommit", 1, "resources", None);
+                mock(path, test.to_string(), "public", "private", "kzgcommit", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -682,7 +694,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "fixed", "hashed", 1, "resources", None);
+                mock(path, test.to_string(), "public", "fixed", "hashed", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -692,7 +704,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "kzgcommit", "hashed", 1, "resources", None);
+                mock(path, test.to_string(), "public", "kzgcommit", "hashed", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -702,7 +714,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "kzgcommit", "kzgcommit", "kzgcommit", 1, "resources", None);
+                mock(path, test.to_string(), "kzgcommit", "kzgcommit", "kzgcommit", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -712,7 +724,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "hashed", "private", "hashed", 1, "resources", None);
+                mock(path, test.to_string(), "hashed", "private", "hashed", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -722,7 +734,7 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                 // needs an extra row for the large model
-                mock(path, test.to_string(),"hashed", "hashed", "public", 1, "resources", None);
+                mock(path, test.to_string(),"hashed", "hashed", "public", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -732,7 +744,7 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                 // needs an extra row for the large model
-                mock(path, test.to_string(),"hashed", "hashed", "hashed", 1, "resources", None);
+                mock(path, test.to_string(),"hashed", "hashed", "hashed", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -876,7 +888,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "fixed", "public", 1, "resources", None);
+                mock(path, test.to_string(), "private", "fixed", "public", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
         });
@@ -1273,6 +1285,7 @@ mod native_tests {
         batch_size: usize,
         cal_target: &str,
         scales_to_use: Option<Vec<u32>>,
+        tolerance: f32,
     ) {
         gen_circuit_settings_and_witness(
             test_dir,
@@ -1285,6 +1298,7 @@ mod native_tests {
             scales_to_use,
             2,
             false,
+            tolerance,
         );
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -1312,6 +1326,7 @@ mod native_tests {
         scales_to_use: Option<Vec<u32>>,
         num_inner_columns: usize,
         div_rebasing: bool,
+        tolerance: f32,
     ) {
         let mut args = vec![
             "gen-settings".to_string(),
@@ -1326,6 +1341,7 @@ mod native_tests {
             format!("--param-visibility={}", param_visibility),
             format!("--output-visibility={}", output_visibility),
             format!("--num-inner-cols={}", num_inner_columns),
+            format!("--tolerance={}", tolerance),
         ];
 
         if div_rebasing {
@@ -1425,6 +1441,7 @@ mod native_tests {
             None,
             2,
             div_rebasing,
+            0.0,
         );
 
         println!(
@@ -1684,6 +1701,7 @@ mod native_tests {
             scales_to_use,
             num_inner_columns,
             false,
+            0.0,
         );
 
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
@@ -1785,6 +1803,7 @@ mod native_tests {
             None,
             2,
             false,
+            0.0,
         );
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2061,6 +2080,7 @@ mod native_tests {
             Some(vec![4]),
             1,
             false,
+            0.0,
         );
 
         let model_path = format!("{}/{}/network.compiled", test_dir, example_name);

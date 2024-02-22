@@ -2948,13 +2948,26 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     scale: utils::F32,
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if values[0].dims() != values[1].dims() {
+        return Err(Box::new(TensorError::DimMismatch(
+            "range_check_percent".to_string(),
+        )));
+    }
+
     if tol == 0.0 {
         // regular equality constraint
         return enforce_equality(config, region, values);
     }
 
+    let mut values = [values[0].clone(), values[1].clone()];
+
+    values[0] = region.assign(&config.inputs[0], &values[0])?;
+    values[1] = region.assign(&config.inputs[1], &values[1])?;
+    let total_assigned = values[0].len();
+    region.increment(total_assigned);
+
     // Calculate the difference between the expected output and actual output
-    let diff = pairwise(config, region, values, BaseOp::Sub)?;
+    let diff = pairwise(config, region, &values, BaseOp::Sub)?;
 
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
     let recip = nonlinearity(

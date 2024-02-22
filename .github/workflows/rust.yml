@@ -236,6 +236,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: public outputs and tolerance > 0
+        run: cargo nextest run --release --verbose tests::mock_tolerance_public_outputs_ --test-threads 32
       - name: public outputs + batch size == 10
         run: cargo nextest run --release --verbose tests::mock_large_batch_public_outputs_ --test-threads 32
       - name: kzg inputs
