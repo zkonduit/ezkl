@@ -2957,7 +2957,9 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     values[0] = region.assign(&config.inputs[0], &values[0])?;
     values[1] = region.assign(&config.inputs[1], &values[1])?;
-    let total_assigned = values[0].len();
+    let total_assigned_0 = values[0].len();
+    let total_assigned_1 = values[1].len();
+    let total_assigned = std::cmp::max(total_assigned_0, total_assigned_1);
     region.increment(total_assigned);
 
     // Calculate the difference between the expected output and actual output
