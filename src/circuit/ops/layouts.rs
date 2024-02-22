@@ -2948,12 +2948,6 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     scale: utils::F32,
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if values[0].dims() != values[1].dims() {
-        return Err(Box::new(TensorError::DimMismatch(
-            "range_check_percent".to_string(),
-        )));
-    }
-
     if tol == 0.0 {
         // regular equality constraint
         return enforce_equality(config, region, values);
