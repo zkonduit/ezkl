@@ -1325,15 +1325,21 @@ mod native_tests {
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
-                                0.0
+                                halo2curves::bn256::Fr::zero()
                             } else {
-                                felt_to_i128(v.clone()) as f32
-                                    + (rand::thread_rng().gen_range(-0.9..0.9) * tolerance) / 100.0
+                                i128_to_felt(
+                                    felt_to_i128(v.clone())
+                                        + (rand::thread_rng().gen_range(-0.01..0.01) * tolerance)
+                                            as i128,
+                                )
                             };
-                            println!("perturbation: {}, tolerance {}", perturbation, tolerance);
+                            println!(
+                                "perturbation: {}, tolerance {}",
+                                felt_to_i128(perturbation),
+                                tolerance
+                            );
                             let old_value = felt_to_i128(v.clone()) as f32;
-                            let new_value = v.clone()
-                                + i128_to_felt::<halo2curves::bn256::Fr>(perturbation as i128);
+                            let new_value = v.clone() + perturbation;
                             println!(
                                 "old_value: {}, new_value: {}",
                                 old_value,
@@ -1353,12 +1359,15 @@ mod native_tests {
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
-                                2.0
+                                halo2curves::bn256::Fr::from(2)
                             } else {
-                                felt_to_i128(v.clone()) as f32
-                                    + (rand::thread_rng().gen_range(1.0..2.) * tolerance) / 100.0
+                                i128_to_felt(
+                                    felt_to_i128(v.clone())
+                                        + (rand::thread_rng().gen_range(0.01..0.02) * tolerance)
+                                            as i128,
+                                )
                             };
-                            v.clone() + i128_to_felt::<halo2curves::bn256::Fr>(perturbation as i128)
+                            v.clone() + perturbation
                         })
                         .collect::<Vec<_>>()
                 })
