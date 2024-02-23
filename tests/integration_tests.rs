@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod native_tests {
 
-    use ezkl::fieldutils::felt_to_i128;
+    use ezkl::fieldutils::{felt_to_i128, i128_to_felt};
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
@@ -1304,10 +1304,11 @@ mod native_tests {
 
         if tolerance > 0.0 {
             // load witness and shift the output by a small amount that is less than tolerance percent
-            let witness =
-                GraphWitness::load(&format!("{}/{}/witness.json", test_dir, example_name).into())
-                    .unwrap();
-            let mut witness = witness.clone();
+            let witness = GraphWitness::from_path(
+                format!("{}/{}/witness.json", test_dir, example_name).into(),
+            )
+            .unwrap();
+            let witness = witness.clone();
             let outputs = witness.outputs.clone();
 
             // get values as i128
@@ -1319,7 +1320,7 @@ mod native_tests {
                             // randomly perturb by a small amount less than tolerance
                             let perturbation = 1.0
                                 + (rand::thread_rng().gen_range(-1..1) as f32 * tolerance) / 100.0;
-                            perturbation * felt_to_i128(v)
+                            i128_to_felt((perturbation * felt_to_i128(v.clone()) as f32) as i128)
                         })
                         .collect::<Vec<_>>()
                 })
@@ -1334,7 +1335,7 @@ mod native_tests {
                             // randomly perturb by a small amount less than tolerance
                             let perturbation = 1.0
                                 + (rand::thread_rng().gen_range(1..2) as f32 * tolerance) / 100.0;
-                            perturbation * felt_to_i128(v)
+                            i128_to_felt((perturbation * felt_to_i128(v.clone()) as f32) as i128)
                         })
                         .collect::<Vec<_>>()
                 })
@@ -1347,7 +1348,7 @@ mod native_tests {
 
             // save
             good_witness
-                .save(&format!("{}/{}/witness_ok.json", test_dir, example_name).into())
+                .save(format!("{}/{}/witness_ok.json", test_dir, example_name).into())
                 .unwrap();
 
             let bad_witness = GraphWitness {
@@ -1357,7 +1358,7 @@ mod native_tests {
 
             // save
             bad_witness
-                .save(&format!("{}/{}/witness_bad.json", test_dir, example_name).into())
+                .save(format!("{}/{}/witness_bad.json", test_dir, example_name).into())
                 .unwrap();
 
             let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
