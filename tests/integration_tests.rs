@@ -1320,7 +1320,17 @@ mod native_tests {
                             // randomly perturb by a small amount less than tolerance
                             let perturbation = 1.0
                                 + (rand::thread_rng().gen_range(-1..1) as f32 * tolerance) / 100.0;
-                            i128_to_felt((perturbation * felt_to_i128(v.clone()) as f32) as i128)
+                            println!("perturbation: {}", perturbation);
+                            let old_value = felt_to_i128(v.clone()) as f32;
+                            let new_value = i128_to_felt(
+                                (perturbation * felt_to_i128(v.clone()) as f32) as i128,
+                            );
+                            println!(
+                                "old_value: {}, new_value: {}",
+                                old_value,
+                                felt_to_i128(new_value) as f32
+                            );
+                            new_value
                         })
                         .collect::<Vec<_>>()
                 })
