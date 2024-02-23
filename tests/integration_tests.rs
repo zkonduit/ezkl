@@ -1322,16 +1322,15 @@ mod native_tests {
                 .iter()
                 .zip(settings.model_output_scales.iter())
                 .map(|(sv, scale)| {
-                    let mut scaled_tolerance = tolerance / 100.0;
+                    let scaled_tolerance = tolerance / 100.0;
                     let multiplier = scale_to_multiplier(*scale) as f32;
                     let scaled_tol = scaled_tolerance * multiplier * multiplier;
 
                     sv.iter()
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
-                            let perturbation = scaled_tol
-                                * (rand::thread_rng().gen_range(-0.9999..1.0) * tolerance)
-                                / 100.0;
+                            let perturbation =
+                                scaled_tol * rand::thread_rng().gen_range(-0.9999..1.0);
 
                             println!("perturbation: {}, tolerance {}", perturbation, tolerance);
                             let old_value = felt_to_i128(v.clone()) as f32;
@@ -1353,16 +1352,14 @@ mod native_tests {
                 .iter()
                 .zip(settings.model_output_scales.iter())
                 .map(|(sv, scale)| {
-                    let mut scaled_tolerance = tolerance / 100.0;
+                    let scaled_tolerance = tolerance / 100.0;
                     let multiplier = scale_to_multiplier(*scale) as f32;
                     let scaled_tol = scaled_tolerance * multiplier * multiplier;
 
                     sv.iter()
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
-                            let perturbation = scaled_tol
-                                * (rand::thread_rng().gen_range(1.0..2.0) as f32 * tolerance)
-                                / 100.0;
+                            let perturbation = scaled_tol * rand::thread_rng().gen_range(1.0..2.0);
 
                             println!("perturbation: {}, tolerance {}", perturbation, tolerance);
 
