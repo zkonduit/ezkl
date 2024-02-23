@@ -2989,7 +2989,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     // Use the greater than look up table to check if the percent error is within the tolerance for upper bound
     let tol = tol / 100.0;
-    let scaled_tol = tol * scale_squared;
+    let scaled_tol = (tol * scale_squared).ceil();
 
     println!("scaled_tol: {}", scaled_tol);
 
