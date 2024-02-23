@@ -1326,6 +1326,8 @@ mod native_tests {
                     let multiplier = scale_to_multiplier(*scale) as f32;
                     let scaled_tol = scaled_tolerance * multiplier * multiplier;
 
+                    println!("scaled_tol: {}", scaled_tol);
+
                     sv.iter()
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
