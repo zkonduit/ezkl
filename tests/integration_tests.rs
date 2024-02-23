@@ -1324,7 +1324,7 @@ mod native_tests {
                     sv.iter()
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
-                            let perturbation = if v == &Fr::zero() {
+                            let perturbation = if v == &halo2curves::bn256::Fr::zero() {
                                 0.0
                             } else {
                                 1.0 + (rand::thread_rng().gen_range(-0.9999..1.0) * tolerance)
