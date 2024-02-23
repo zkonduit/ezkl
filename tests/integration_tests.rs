@@ -1363,7 +1363,7 @@ mod native_tests {
                             } else {
                                 i128_to_felt(
                                     (felt_to_i128(v.clone()) as f32
-                                        * (rand::thread_rng().gen_range(0.01..0.1) * tolerance))
+                                        * (rand::thread_rng().gen_range(0.02..0.1) * tolerance))
                                         as i128,
                                 )
                             };
