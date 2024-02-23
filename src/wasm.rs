@@ -69,19 +69,10 @@ pub fn encodeVerifierCalldata(
     Ok(encoded)
 }
 
-/// Converts 4 u64s to a field element
+/// Converts a hex string to a byte array
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn stringToFelt(array: wasm_bindgen::Clamped<Vec<u8>>) -> Result<String, JsError> {
-    let felt: Fr = serde_json::from_slice(&array[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize field element: {}", e)))?;
-    Ok(format!("{:?}", felt))
-}
-
-/// Converts 4 u64s representing a field element directly to an integer
-#[wasm_bindgen]
-#[allow(non_snake_case)]
-pub fn stringToInt(
+pub fn feltToInt(
     array: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
     let felt: Fr = serde_json::from_slice(&array[..])
@@ -92,10 +83,10 @@ pub fn stringToInt(
     ))
 }
 
-/// Converts 4 u64s representing a field element directly to a (rescaled from fixed point scaling) floating point
+/// Converts felts to a floating point element
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn stringToFloat(
+pub fn feltToFloat(
     array: wasm_bindgen::Clamped<Vec<u8>>,
     scale: crate::Scale,
 ) -> Result<f64, JsError> {
@@ -106,17 +97,17 @@ pub fn stringToFloat(
     Ok(int_rep as f64 / multiplier)
 }
 
-/// Converts a floating point element to 4 u64s representing a fixed point field element
+/// Converts a floating point number to a hex string representing a fixed point field element
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn floatTostring(
+pub fn floatToFelt(
     input: f64,
     scale: crate::Scale,
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
     let int_rep =
         quantize_float(&input, 0.0, scale).map_err(|e| JsError::new(&format!("{}", e)))?;
     let felt = i128_to_felt(int_rep);
-    let vec = crate::pfsys::field_to_string_montgomery::<halo2curves::bn256::Fr>(&felt);
+    let vec = crate::pfsys::field_to_string::<halo2curves::bn256::Fr>(&felt);
     Ok(wasm_bindgen::Clamped(serde_json::to_vec(&vec).map_err(
         |e| JsError::new(&format!("Failed to serialize string_montgomery{}", e)),
     )?))
@@ -125,7 +116,7 @@ pub fn floatTostring(
 /// Converts a buffer to vector of 4 u64s representing a fixed point field element
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-pub fn bufferToVecOfstring(
+pub fn bufferToVecOfFelt(
     buffer: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
     // Convert the buffer to a slice

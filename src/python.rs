@@ -63,9 +63,9 @@ struct PyG1 {
 impl From<G1> for PyG1 {
     fn from(g1: G1) -> Self {
         PyG1 {
-            x: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.x),
-            y: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.y),
-            z: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.z),
+            x: crate::pfsys::field_to_string::<Fq>(&g1.x),
+            y: crate::pfsys::field_to_string::<Fq>(&g1.y),
+            z: crate::pfsys::field_to_string::<Fq>(&g1.z),
         }
     }
 }
@@ -73,9 +73,9 @@ impl From<G1> for PyG1 {
 impl From<PyG1> for G1 {
     fn from(val: PyG1) -> Self {
         G1 {
-            x: crate::pfsys::string_to_field_montgomery::<Fq>(&val.x),
-            y: crate::pfsys::string_to_field_montgomery::<Fq>(&val.y),
-            z: crate::pfsys::string_to_field_montgomery::<Fq>(&val.z),
+            x: crate::pfsys::string_to_field::<Fq>(&val.x),
+            y: crate::pfsys::string_to_field::<Fq>(&val.y),
+            z: crate::pfsys::string_to_field::<Fq>(&val.z),
         }
     }
 }
@@ -106,8 +106,8 @@ pub struct PyG1Affine {
 impl From<G1Affine> for PyG1Affine {
     fn from(g1: G1Affine) -> Self {
         PyG1Affine {
-            x: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.x),
-            y: crate::pfsys::field_to_string_montgomery::<Fq>(&g1.y),
+            x: crate::pfsys::field_to_string::<Fq>(&g1.x),
+            y: crate::pfsys::field_to_string::<Fq>(&g1.y),
         }
     }
 }
@@ -115,8 +115,8 @@ impl From<G1Affine> for PyG1Affine {
 impl From<PyG1Affine> for G1Affine {
     fn from(val: PyG1Affine) -> Self {
         G1Affine {
-            x: crate::pfsys::string_to_field_montgomery::<Fq>(&val.x),
-            y: crate::pfsys::string_to_field_montgomery::<Fq>(&val.y),
+            x: crate::pfsys::string_to_field::<Fq>(&val.x),
+            y: crate::pfsys::string_to_field::<Fq>(&val.y),
         }
     }
 }
@@ -217,41 +217,30 @@ impl Into<PyRunArgs> for RunArgs {
     }
 }
 
-/// Converts 4 u64s to a field element
+/// Converts a field element hex string to an integer
 #[pyfunction(signature = (
     array,
 ))]
-fn string_to_felt(array: PyFelt) -> PyResult<String> {
-    Ok(format!(
-        "{:?}",
-        crate::pfsys::string_to_field_montgomery::<Fr>(&array)
-    ))
-}
-
-/// Converts 4 u64s representing a field element directly to an integer
-#[pyfunction(signature = (
-    array,
-))]
-fn string_to_int(array: PyFelt) -> PyResult<i128> {
-    let felt = crate::pfsys::string_to_field_montgomery::<Fr>(&array);
+fn felt_to_int(array: PyFelt) -> PyResult<i128> {
+    let felt = crate::pfsys::string_to_field::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     Ok(int_rep)
 }
 
-/// Converts 4 u64s representing a field element directly to a (rescaled from fixed point scaling) floating point
+/// Converts a field eleement hex string to a floating point number
 #[pyfunction(signature = (
     array,
     scale
 ))]
-fn string_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
-    let felt = crate::pfsys::string_to_field_montgomery::<Fr>(&array);
+fn felt_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
+    let felt = crate::pfsys::string_to_field::<Fr>(&array);
     let int_rep = felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
     let float_rep = int_rep as f64 / multiplier;
     Ok(float_rep)
 }
 
-/// Converts a floating point element to 4 u64s representing a fixed point field element
+/// Converts a floating point element to a field element hex string
 #[pyfunction(signature = (
 input,
 scale
@@ -260,10 +249,10 @@ fn float_to_string(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = i128_to_felt(int_rep);
-    Ok(crate::pfsys::field_to_string_montgomery::<Fr>(&felt))
+    Ok(crate::pfsys::field_to_string::<Fr>(&felt))
 }
 
-/// Converts a buffer to vector of 4 u64s representing a fixed point field element
+/// Converts a buffer to vector of field elements
 #[pyfunction(signature = (
     buffer
     ))]
@@ -328,7 +317,7 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
 fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
     let message: Vec<Fr> = message
         .iter()
-        .map(crate::pfsys::string_to_field_montgomery::<Fr>)
+        .map(crate::pfsys::string_to_field::<Fr>)
         .collect::<Vec<_>>();
 
     let output =
@@ -339,7 +328,7 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
 
     let hash = output[0]
         .iter()
-        .map(crate::pfsys::field_to_string_montgomery::<Fr>)
+        .map(crate::pfsys::field_to_string::<Fr>)
         .collect::<Vec<_>>();
     Ok(hash)
 }
@@ -359,7 +348,7 @@ fn kzg_commit(
 ) -> PyResult<Vec<PyG1Affine>> {
     let message: Vec<Fr> = message
         .iter()
-        .map(crate::pfsys::string_to_field_montgomery::<Fr>)
+        .map(crate::pfsys::string_to_field::<Fr>)
         .collect::<Vec<_>>();
 
     let settings = GraphSettings::load(&settings_path)

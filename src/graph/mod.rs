@@ -56,7 +56,7 @@ pub use utilities::*;
 pub use vars::*;
 
 #[cfg(feature = "python-bindings")]
-use crate::pfsys::field_to_string_montgomery;
+use crate::pfsys::field_to_string;
 
 /// The safety factor for the range of the lookup table.
 pub const RANGE_MULTIPLIER: i128 = 2;
@@ -355,13 +355,13 @@ impl ToPyObject for GraphWitness {
         let inputs: Vec<Vec<String>> = self
             .inputs
             .iter()
-            .map(|x| x.iter().map(field_to_string_montgomery).collect())
+            .map(|x| x.iter().map(field_to_string).collect())
             .collect();
 
         let outputs: Vec<Vec<String>> = self
             .outputs
             .iter()
-            .map(|x| x.iter().map(field_to_string_montgomery).collect())
+            .map(|x| x.iter().map(field_to_string).collect())
             .collect();
 
         dict.set_item("inputs", inputs).unwrap();
@@ -409,10 +409,7 @@ impl ToPyObject for GraphWitness {
 
 #[cfg(feature = "python-bindings")]
 fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) -> Result<(), PyErr> {
-    let poseidon_hash: Vec<String> = poseidon_hash
-        .iter()
-        .map(field_to_string_montgomery)
-        .collect();
+    let poseidon_hash: Vec<String> = poseidon_hash.iter().map(field_to_string).collect();
     pydict.set_item("poseidon_hash", poseidon_hash)?;
 
     Ok(())

@@ -8,10 +8,10 @@ mod wasm32 {
     use ezkl::graph::GraphWitness;
     use ezkl::pfsys;
     use ezkl::wasm::{
-        bufferToVecOfstring, compiledCircuitValidation, encodeVerifierCalldata, genPk, genVk,
-        genWitness, inputValidation, pkValidation, poseidonHash, proofValidation, prove,
-        settingsValidation, srsValidation, stringToFelt, stringToFloat, stringToInt,
-        u8_array_to_u128_le, verify, vkValidation, witnessValidation,
+        bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToFloat,
+        feltToInt, genPk, genVk, genWitness, inputValidation, pkValidation, poseidonHash,
+        proofValidation, prove, settingsValidation, srsValidation, u8_array_to_u128_le, verify,
+        vkValidation, witnessValidation,
     };
     use halo2_solidity_verifier::encode_calldata;
     use halo2curves::bn256::{Fr, G1Affine};
@@ -76,21 +76,21 @@ mod wasm32 {
         for i in 0..32 {
             let field_element = Fr::from(i);
             let serialized = serde_json::to_vec(&field_element).unwrap();
+
             let clamped = wasm_bindgen::Clamped(serialized);
             let scale = 2;
-            let floating_point = stringToFloat(clamped.clone(), scale)
+            let floating_point = feltToFloat(clamped.clone(), scale)
                 .map_err(|_| "failed")
                 .unwrap();
             assert_eq!(floating_point, (i as f64) / 4.0);
 
-            let integer: i128 = serde_json::from_slice(
-                &stringToInt(clamped.clone()).map_err(|_| "failed").unwrap(),
-            )
-            .unwrap();
+            let integer: i128 =
+                serde_json::from_slice(&feltToInt(clamped.clone()).map_err(|_| "failed").unwrap())
+                    .unwrap();
             assert_eq!(integer, i as i128);
 
             let hex_string = format!("{:?}", field_element);
-            let returned_string = stringToFelt(clamped).map_err(|_| "failed").unwrap();
+            let returned_string = serde_json::to_string(&fp).unwrap();
             assert_eq!(hex_string, returned_string);
         }
     }
@@ -101,7 +101,7 @@ mod wasm32 {
         let mut buffer = string_high.clone().into_bytes();
         let clamped = wasm_bindgen::Clamped(buffer.clone());
 
-        let field_elements_ser = bufferToVecOfstring(clamped).map_err(|_| "failed").unwrap();
+        let field_elements_ser = bufferToVecOfFelt(clamped).map_err(|_| "failed").unwrap();
 
         let field_elements: Vec<Fr> = serde_json::from_slice(&field_elements_ser[..]).unwrap();
 
@@ -118,7 +118,7 @@ mod wasm32 {
         let buffer = string_sample.clone().into_bytes();
         let clamped = wasm_bindgen::Clamped(buffer.clone());
 
-        let field_elements_ser = bufferToVecOfstring(clamped).map_err(|_| "failed").unwrap();
+        let field_elements_ser = bufferToVecOfFelt(clamped).map_err(|_| "failed").unwrap();
 
         let field_elements: Vec<Fr> = serde_json::from_slice(&field_elements_ser[..]).unwrap();
 
@@ -133,7 +133,7 @@ mod wasm32 {
         let buffer = string_concat.into_bytes();
         let clamped = wasm_bindgen::Clamped(buffer.clone());
 
-        let field_elements_ser = bufferToVecOfstring(clamped).map_err(|_| "failed").unwrap();
+        let field_elements_ser = bufferToVecOfFelt(clamped).map_err(|_| "failed").unwrap();
 
         let field_elements: Vec<Fr> = serde_json::from_slice(&field_elements_ser[..]).unwrap();
 
