@@ -1303,7 +1303,9 @@ mod native_tests {
         );
 
         let settings =
-            GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())?;
+            GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())
+                .uj()
+                .unwrap();
 
         let any_output_scales_0 = settings.model_output_scales.iter().any(|s| *s == 0);
 
