@@ -2965,6 +2965,8 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, &values, BaseOp::Sub)?;
 
+    println!("diff: {:?}", diff.get_int_evals()?);
+
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
     let recip = nonlinearity(
         config,
@@ -2975,6 +2977,8 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
             output_scale: scale,
         },
     )?;
+
+    println!("recip: {:?}", recip.get_int_evals()?);
 
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
