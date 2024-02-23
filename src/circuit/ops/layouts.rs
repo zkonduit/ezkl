@@ -2983,33 +2983,9 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     // Use the greater than look up table to check if the percent error is within the tolerance for upper bound
     let tol = tol / 100.0;
-    let upper_bound = nonlinearity(
-        config,
-        region,
-        &[product.clone()],
-        &LookupOp::GreaterThan {
-            a: utils::F32(tol * scale_squared),
-        },
-    )?;
-
-    // Negate the product
-    let neg_product = neg(config, region, &[product])?;
-
-    // Use the greater than look up table to check if the percent error is within the tolerance for lower bound
-    let lower_bound = nonlinearity(
-        config,
-        region,
-        &[neg_product],
-        &LookupOp::GreaterThan {
-            a: utils::F32(tol * scale_squared),
-        },
-    )?;
-
-    // Add the lower_bound and upper_bound
-    let sum = pairwise(config, region, &[lower_bound, upper_bound], BaseOp::Add)?;
-
-    // Constrain the sum to be all zeros
-    is_zero_identity(config, region, &[sum.clone()], false)?;
-
-    Ok(sum)
+    let scaled_tol = tol * scale_squared;
+    // convert into i128
+    let scaled_tol = scaled_tol as i128;
+    // check that it is within the tolerance range
+    range_check(config, region, &[product], &(-scaled_tol, scaled_tol))
 }

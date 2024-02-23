@@ -2,6 +2,7 @@
 #[cfg(test)]
 mod native_tests {
 
+    use ezkl::fieldutils::felt_to_i128;
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
@@ -1301,17 +1302,112 @@ mod native_tests {
             tolerance,
         );
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "mock",
-                "-W",
-                format!("{}/{}/witness.json", test_dir, example_name).as_str(),
-                "-M",
-                format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
+        if tolerance > 0.0 {
+            // load witness and shift the output by a small amount that is less than tolerance percent
+            let witness =
+                GraphWitness::load(&format!("{}/{}/witness.json", test_dir, example_name).into())
+                    .unwrap();
+            let mut witness = witness.clone();
+            let outputs = witness.outputs.clone();
+
+            // get values as i128
+            let output_perturbed_safe: Vec<Vec<halo2curves::bn256::Fr>> = outputs
+                .iter()
+                .map(|sv| {
+                    sv.iter()
+                        .map(|v| {
+                            // randomly perturb by a small amount less than tolerance
+                            let perturbation = 1.0
+                                + (rand::thread_rng().gen_range(-1..1) as f32 * tolerance) / 100.0;
+                            perturbation * felt_to_i128(v)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+
+            // get values as i128
+            let output_perturbed_bad: Vec<Vec<halo2curves::bn256::Fr>> = outputs
+                .iter()
+                .map(|sv| {
+                    sv.iter()
+                        .map(|v| {
+                            // randomly perturb by a small amount less than tolerance
+                            let perturbation = 1.0
+                                + (rand::thread_rng().gen_range(1..2) as f32 * tolerance) / 100.0;
+                            perturbation * felt_to_i128(v)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+
+            let good_witness = GraphWitness {
+                outputs: output_perturbed_safe,
+                ..witness.clone()
+            };
+
+            // save
+            good_witness
+                .save(&format!("{}/{}/witness_ok.json", test_dir, example_name).into())
+                .unwrap();
+
+            let bad_witness = GraphWitness {
+                outputs: output_perturbed_bad,
+                ..witness.clone()
+            };
+
+            // save
+            bad_witness
+                .save(&format!("{}/{}/witness_bad.json", test_dir, example_name).into())
+                .unwrap();
+
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "mock",
+                    "-W",
+                    format!("{}/{}/witness.json", test_dir, example_name).as_str(),
+                    "-M",
+                    format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "mock",
+                    "-W",
+                    format!("{}/{}/witness_ok.json", test_dir, example_name).as_str(),
+                    "-M",
+                    format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "mock",
+                    "-W",
+                    format!("{}/{}/witness_bad.json", test_dir, example_name).as_str(),
+                    "-M",
+                    format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(!status.success());
+        } else {
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "mock",
+                    "-W",
+                    format!("{}/{}/witness.json", test_dir, example_name).as_str(),
+                    "-M",
+                    format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
