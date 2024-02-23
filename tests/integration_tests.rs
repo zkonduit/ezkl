@@ -1324,8 +1324,8 @@ mod native_tests {
                     sv.iter()
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
-                            let perturbation =
-                                (rand::thread_rng().gen_range(-0.9999..1.0) * tolerance) / 100.0;
+                            let perturbation = 1.0
+                                + (rand::thread_rng().gen_range(-0.9999..1.0) * tolerance) / 100.0;
 
                             println!("perturbation: {}, tolerance {}", perturbation, tolerance);
                             let old_value = felt_to_i128(v.clone()) as f32;
