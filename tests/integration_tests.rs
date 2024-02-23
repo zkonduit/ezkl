@@ -1327,9 +1327,8 @@ mod native_tests {
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
                                 0.0
                             } else {
-                                1.0 + (rand::thread_rng().gen_range(-0.9..0.9) * tolerance) / 100.0
+                                1.0 + (rand::thread_rng().gen_range(-0.999..1.) * tolerance) / 100.0
                             };
-
                             println!("perturbation: {}, tolerance {}", perturbation, tolerance);
                             let old_value = felt_to_i128(v.clone()) as f32;
                             let new_value = i128_to_felt(
@@ -1353,9 +1352,11 @@ mod native_tests {
                     sv.iter()
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
-                            let perturbation = 1.0
-                                + (rand::thread_rng().gen_range(1.0..2.0) as f32 * tolerance)
-                                    / 100.0;
+                            let perturbation = if v == &halo2curves::bn256::Fr::zero() {
+                                2.0
+                            } else {
+                                1.0 + (rand::thread_rng().gen_range(1.0..2.) * tolerance) / 100.0
+                            };
                             i128_to_felt((perturbation * felt_to_i128(v.clone()) as f32) as i128)
                         })
                         .collect::<Vec<_>>()
