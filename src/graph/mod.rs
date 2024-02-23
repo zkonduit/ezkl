@@ -1248,7 +1248,7 @@ impl GraphCircuit {
             }
         }
 
-        let mut model_results = self.model().forward(inputs)?;
+        let mut model_results = self.model().forward(inputs, &self.settings().run_args)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();
