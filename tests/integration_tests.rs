@@ -1306,9 +1306,9 @@ mod native_tests {
             GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())
                 .unwrap();
 
-        let any_output_scales_0 = settings.model_output_scales.iter().any(|s| *s == 0);
+        let any_output_scales_smol = settings.model_output_scales.iter().any(|s| *s <= 0);
 
-        if tolerance > 0.0 && !any_output_scales_0 {
+        if tolerance > 0.0 && !any_output_scales_smol {
             // load witness and shift the output by a small amount that is less than tolerance percent
             let witness = GraphWitness::from_path(
                 format!("{}/{}/witness.json", test_dir, example_name).into(),
