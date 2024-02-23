@@ -1303,7 +1303,8 @@ mod native_tests {
         );
 
         let settings =
-            GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())?;
+            GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())
+                .unwrap();
 
         let any_output_scales_0 = settings.model_output_scales.iter().any(|s| *s == 0);
 
@@ -1323,8 +1324,7 @@ mod native_tests {
                 .map(|(sv, scale)| {
                     let mut scaled_tolerance = tolerance / 100.0;
                     let multiplier = scale_to_multiplier(*scale) as f32;
-                    let tol = tol / 100.0;
-                    let scaled_tol = (tol * multiplier * multiplier);
+                    let scaled_tol = scaled_tolerance * multiplier * multiplier;
 
                     sv.iter()
                         .map(|v| {
@@ -1335,7 +1335,8 @@ mod native_tests {
 
                             println!("perturbation: {}, tolerance {}", perturbation, tolerance);
                             let old_value = felt_to_i128(v.clone()) as f32;
-                            let new_value = old_value + i128_to_felt(perturbation as i128);
+                            let new_value = v.clone()
+                                + i128_to_felt::<halo2curves::bn256::Fr>(perturbation as i128);
                             println!(
                                 "old_value: {}, new_value: {}",
                                 old_value,
@@ -1354,8 +1355,7 @@ mod native_tests {
                 .map(|(sv, scale)| {
                     let mut scaled_tolerance = tolerance / 100.0;
                     let multiplier = scale_to_multiplier(*scale) as f32;
-                    let tol = tol / 100.0;
-                    let scaled_tol = (tol * multiplier * multiplier);
+                    let scaled_tol = scaled_tolerance * multiplier * multiplier;
 
                     sv.iter()
                         .map(|v| {
@@ -1367,7 +1367,8 @@ mod native_tests {
                             println!("perturbation: {}, tolerance {}", perturbation, tolerance);
 
                             let old_value = felt_to_i128(v.clone()) as f32;
-                            let new_value = old_value + i128_to_felt(perturbation as i128);
+                            let new_value = v.clone()
+                                + i128_to_felt::<halo2curves::bn256::Fr>(perturbation as i128);
                             println!(
                                 "old_value: {}, new_value: {}",
                                 old_value,
