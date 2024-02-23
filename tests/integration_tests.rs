@@ -1373,6 +1373,7 @@ mod native_tests {
                                 old_value,
                                 felt_to_i128(new_value) as f32
                             );
+                            new_value
                         })
                         .collect::<Vec<_>>()
                 })
