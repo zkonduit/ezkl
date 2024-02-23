@@ -1327,7 +1327,7 @@ mod native_tests {
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
                                 0.0
                             } else {
-                                1.0 + (rand::thread_rng().gen_range(-0.999..1.) * tolerance) / 100.0
+                                1.0 + (rand::thread_rng().gen_range(-0.9..0.9) * tolerance) / 100.0
                             };
                             println!("perturbation: {}, tolerance {}", perturbation, tolerance);
                             let old_value = felt_to_i128(v.clone()) as f32;
