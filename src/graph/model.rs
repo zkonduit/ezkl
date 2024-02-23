@@ -556,12 +556,16 @@ impl Model {
     /// * `reader` - A reader for an Onnx file.
     /// * `model_inputs` - A vector of [Tensor]s to use as inputs to the model.
     /// * `run_args` - [RunArgs]
-    pub fn forward(&self, model_inputs: &[Tensor<Fp>]) -> Result<ForwardResult, Box<dyn Error>> {
+    pub fn forward(
+        &self,
+        model_inputs: &[Tensor<Fp>],
+        run_args: &RunArgs,
+    ) -> Result<ForwardResult, Box<dyn Error>> {
         let valtensor_inputs: Vec<ValTensor<Fp>> = model_inputs
             .iter()
             .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
             .collect();
-        let res = self.dummy_layout(&RunArgs::default(), &valtensor_inputs)?;
+        let res = self.dummy_layout(&run_args, &valtensor_inputs)?;
         Ok(res.into())
     }
 
@@ -1371,27 +1375,26 @@ impl Model {
                 ValType::Constant(Fp::ONE)
             };
 
-            let comparator = outputs
+            let output_scales = self.graph.get_output_scales()?;
+            let res = outputs
                 .iter()
-                .map(|x| {
-                    let mut v: ValTensor<Fp> =
-                        vec![default_value.clone(); x.dims().iter().product::<usize>()].into();
-                    v.reshape(x.dims())?;
-                    Ok(v)
-                })
-                .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+                .enumerate()
+                .map(|(i, output)| {
+                    let mut tolerance = run_args.tolerance;
+                    tolerance.scale = scale_to_multiplier(output_scales[i]).into();
 
-            let _ = outputs
-                .iter()
-                .zip(comparator)
-                .map(|(o, c)| {
+                    let mut comparator: ValTensor<Fp> =
+                        vec![default_value.clone(); output.dims().iter().product::<usize>()].into();
+                    comparator.reshape(output.dims())?;
+
                     dummy_config.layout(
                         &mut region,
-                        &[o.clone(), c],
-                        Box::new(HybridOp::RangeCheck(run_args.tolerance)),
+                        &[output.clone(), comparator],
+                        Box::new(HybridOp::RangeCheck(tolerance)),
                     )
                 })
-                .collect::<Result<Vec<_>, _>>()?;
+                .collect::<Result<Vec<_>, _>>();
+            res?;
         } else if !self.visibility.output.is_private() {
             for output in &outputs {
                 region.increment_total_constants(output.num_constants());

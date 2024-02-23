@@ -728,12 +728,13 @@ where
     let f =
         File::open(path.clone()).map_err(|_| format!("failed to load vk at {}", path.display()))?;
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
-    VerifyingKey::<Scheme::Curve>::read::<_, C>(
+    let vk = VerifyingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
         serde_format_from_str(&EZKL_KEY_FORMAT),
         params,
-    )
-    .map_err(Box::<dyn Error>::from)
+    )?;
+    info!("done loading verification key ✅");
+    Ok(vk)
 }
 
 /// Loads a [ProvingKey] at `path`.
@@ -750,12 +751,13 @@ where
     let f =
         File::open(path.clone()).map_err(|_| format!("failed to load pk at {}", path.display()))?;
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
-    ProvingKey::<Scheme::Curve>::read::<_, C>(
+    let pk = ProvingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
         serde_format_from_str(&EZKL_KEY_FORMAT),
         params,
-    )
-    .map_err(Box::<dyn Error>::from)
+    )?;
+    info!("done loading proving key ✅");
+    Ok(pk)
 }
 
 /// Saves a [ProvingKey] to `path`.
@@ -772,6 +774,7 @@ where
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     pk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
+    info!("done saving proving key ✅");
     Ok(())
 }
 
@@ -789,6 +792,7 @@ where
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     vk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
+    info!("done saving verification key ✅");
     Ok(())
 }
 
