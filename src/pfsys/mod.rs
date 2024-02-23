@@ -233,14 +233,18 @@ pub fn g1_to_pydict(g1_dict: &PyDict, g1: &G1) {
 
 /// converts fp into a little endian Hex string
 pub fn field_to_string<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> String {
-    serde_json::to_string(&fp).unwrap()
+    let repr = serde_json::to_string(&fp).unwrap();
+    let b: String = serde_json::from_str(&repr).unwrap();
+    b
 }
 
 /// converts a little endian Hex string into a field element
 pub fn string_to_field<F: PrimeField + SerdeObject + Serialize + DeserializeOwned>(
     b: &String,
 ) -> F {
-    serde_json::from_str(&b).unwrap()
+    let repr = serde_json::to_string(&b).unwrap();
+    let fp: F = serde_json::from_str(&repr).unwrap();
+    fp
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]

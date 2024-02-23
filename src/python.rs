@@ -217,6 +217,15 @@ impl Into<PyRunArgs> for RunArgs {
     }
 }
 
+/// Converts a felt to big endian
+#[pyfunction(signature = (
+    felt,
+))]
+fn felt_to_big_endian(felt: PyFelt) -> PyResult<String> {
+    let felt = crate::pfsys::string_to_field::<Fr>(&felt);
+    Ok(format!("{:?}", felt))
+}
+
 /// Converts a field element hex string to an integer
 #[pyfunction(signature = (
     array,
@@ -245,7 +254,7 @@ fn felt_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
 input,
 scale
 ))]
-fn float_to_string(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
+fn float_to_felt(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = i128_to_felt(int_rep);
@@ -305,7 +314,10 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
         .map(|x| PrimeField::from_u128(u8_array_to_u128_le(*x)))
         .collect();
 
-    let field_elements: Vec<String> = field_elements.iter().map(|x| format!("{:?}", x)).collect();
+    let field_elements: Vec<String> = field_elements
+        .iter()
+        .map(|x| crate::pfsys::field_to_string::<Fr>(x))
+        .collect();
 
     Ok(field_elements)
 }
@@ -1092,13 +1104,13 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
-    m.add_function(wrap_pyfunction!(string_to_felt, m)?)?;
-    m.add_function(wrap_pyfunction!(string_to_int, m)?)?;
-    m.add_function(wrap_pyfunction!(string_to_float, m)?)?;
+    m.add_function(wrap_pyfunction!(felt_to_big_endian, m)?)?;
+    m.add_function(wrap_pyfunction!(felt_to_int, m)?)?;
+    m.add_function(wrap_pyfunction!(felt_to_float, m)?)?;
     m.add_function(wrap_pyfunction!(kzg_commit, m)?)?;
     m.add_function(wrap_pyfunction!(swap_proof_commitments, m)?)?;
     m.add_function(wrap_pyfunction!(poseidon_hash, m)?)?;
-    m.add_function(wrap_pyfunction!(float_to_string, m)?)?;
+    m.add_function(wrap_pyfunction!(float_to_felt, m)?)?;
     m.add_function(wrap_pyfunction!(buffer_to_felts, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(gen_vk_from_pk_single, m)?)?;

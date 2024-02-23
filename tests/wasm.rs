@@ -8,10 +8,10 @@ mod wasm32 {
     use ezkl::graph::GraphWitness;
     use ezkl::pfsys;
     use ezkl::wasm::{
-        bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToFloat,
-        feltToInt, genPk, genVk, genWitness, inputValidation, pkValidation, poseidonHash,
-        proofValidation, prove, settingsValidation, srsValidation, u8_array_to_u128_le, verify,
-        vkValidation, witnessValidation,
+        bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
+        feltToFloat, feltToInt, genPk, genVk, genWitness, inputValidation, pkValidation,
+        poseidonHash, proofValidation, prove, settingsValidation, srsValidation,
+        u8_array_to_u128_le, verify, vkValidation, witnessValidation,
     };
     use halo2_solidity_verifier::encode_calldata;
     use halo2curves::bn256::{Fr, G1Affine};
@@ -90,7 +90,7 @@ mod wasm32 {
             assert_eq!(integer, i as i128);
 
             let hex_string = format!("{:?}", field_element);
-            let returned_string = serde_json::to_string(&fp).unwrap();
+            let returned_string: String = feltToBigEndian(clamped).map_err(|_| "failed").unwrap();
             assert_eq!(hex_string, returned_string);
         }
     }

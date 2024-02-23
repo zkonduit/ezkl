@@ -72,6 +72,15 @@ pub fn encodeVerifierCalldata(
 /// Converts a hex string to a byte array
 #[wasm_bindgen]
 #[allow(non_snake_case)]
+pub fn feltToBigEndian(array: wasm_bindgen::Clamped<Vec<u8>>) -> Result<String, JsError> {
+    let felt: Fr = serde_json::from_slice(&array[..])
+        .map_err(|e| JsError::new(&format!("Failed to deserialize field element: {}", e)))?;
+    Ok(format!("{:?}", felt))
+}
+
+/// Converts a hex string to a byte array
+#[wasm_bindgen]
+#[allow(non_snake_case)]
 pub fn feltToInt(
     array: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
@@ -109,7 +118,7 @@ pub fn floatToFelt(
     let felt = i128_to_felt(int_rep);
     let vec = crate::pfsys::field_to_string::<halo2curves::bn256::Fr>(&felt);
     Ok(wasm_bindgen::Clamped(serde_json::to_vec(&vec).map_err(
-        |e| JsError::new(&format!("Failed to serialize string_montgomery{}", e)),
+        |e| JsError::new(&format!("Failed to serialize a float to felt{}", e)),
     )?))
 }
 
