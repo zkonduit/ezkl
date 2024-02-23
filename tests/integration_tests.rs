@@ -5,7 +5,7 @@ mod native_tests {
     use ezkl::fieldutils::{felt_to_i128, i128_to_felt};
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
-    use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
+    use ezkl::graph::{scale_to_multiplier, DataSource, GraphSettings, GraphWitness};
     use lazy_static::lazy_static;
     use rand::Rng;
     use std::env::var;
@@ -1302,7 +1302,12 @@ mod native_tests {
             tolerance,
         );
 
-        if tolerance > 0.0 {
+        let settings =
+            GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())?;
+
+        let any_output_scales_0 = settings.model_output_scales.iter().any(|s| *s == 0);
+
+        if tolerance > 0.0 && !any_output_scales_0 {
             // load witness and shift the output by a small amount that is less than tolerance percent
             let witness = GraphWitness::from_path(
                 format!("{}/{}/witness.json", test_dir, example_name).into(),
@@ -1314,17 +1319,23 @@ mod native_tests {
             // get values as i128
             let output_perturbed_safe: Vec<Vec<halo2curves::bn256::Fr>> = outputs
                 .iter()
-                .map(|sv| {
+                .zip(settings.model_output_scales.iter())
+                .map(|(sv, scale)| {
+                    let mut scaled_tolerance = tolerance / 100.0;
+                    let multiplier = scale_to_multiplier(*scale) as f32;
+                    let tol = tol / 100.0;
+                    let scaled_tol = (tol * multiplier * multiplier);
+
                     sv.iter()
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
-                            let perturbation = 1.0
-                                + (rand::thread_rng().gen_range(-0.9999..1.0) * tolerance) / 100.0;
+                            let perturbation = scaled_tol
+                                * (rand::thread_rng().gen_range(-0.9999..1.0) * tolerance)
+                                / 100.0;
+
                             println!("perturbation: {}, tolerance {}", perturbation, tolerance);
                             let old_value = felt_to_i128(v.clone()) as f32;
-                            let new_value = i128_to_felt(
-                                (perturbation * felt_to_i128(v.clone()) as f32) as i128,
-                            );
+                            let new_value = old_value + i128_to_felt(perturbation as i128);
                             println!(
                                 "old_value: {}, new_value: {}",
                                 old_value,
@@ -1339,14 +1350,29 @@ mod native_tests {
             // get values as i128
             let output_perturbed_bad: Vec<Vec<halo2curves::bn256::Fr>> = outputs
                 .iter()
-                .map(|sv| {
+                .zip(settings.model_output_scales.iter())
+                .map(|(sv, scale)| {
+                    let mut scaled_tolerance = tolerance / 100.0;
+                    let multiplier = scale_to_multiplier(*scale) as f32;
+                    let tol = tol / 100.0;
+                    let scaled_tol = (tol * multiplier * multiplier);
+
                     sv.iter()
                         .map(|v| {
                             // randomly perturb by a small amount less than tolerance
-                            let perturbation = 1.0
-                                + (rand::thread_rng().gen_range(1.0..2.0) as f32 * tolerance)
-                                    / 100.0;
-                            i128_to_felt((perturbation * felt_to_i128(v.clone()) as f32) as i128)
+                            let perturbation = scaled_tol
+                                * (rand::thread_rng().gen_range(1.0..2.0) as f32 * tolerance)
+                                / 100.0;
+
+                            println!("perturbation: {}, tolerance {}", perturbation, tolerance);
+
+                            let old_value = felt_to_i128(v.clone()) as f32;
+                            let new_value = old_value + i128_to_felt(perturbation as i128);
+                            println!(
+                                "old_value: {}, new_value: {}",
+                                old_value,
+                                felt_to_i128(new_value) as f32
+                            );
                         })
                         .collect::<Vec<_>>()
                 })
