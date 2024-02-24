@@ -599,11 +599,11 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 .selector_constructor
                                 .get_expr_at_idx(col_idx, synthetic_sel);
 
-                        let not_sel = Expression::Constant(F::ONE) - sel.clone();
+                        let not_expr = Expression::Constant(F::ONE) - col_expr.clone();
 
                         res.extend([(
                             col_expr.clone() * input_query.clone()
-                                + not_sel.clone() * Expression::Constant(default_x),
+                                + not_expr.clone() * Expression::Constant(default_x),
                             input_col.clone(),
                         )]);
 
