@@ -599,8 +599,9 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                                 .selector_constructor
                                 .get_expr_at_idx(col_idx, synthetic_sel);
 
-                        let multiplier =
-                            table.selector_constructor.get_selector_val_at_idx(col_idx);
+                        let multiplier = range_check
+                            .selector_constructor
+                            .get_selector_val_at_idx(col_idx);
 
                         let not_expr = Expression::Constant(multiplier) - col_expr.clone();
 
