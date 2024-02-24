@@ -1009,17 +1009,10 @@ impl GraphCircuit {
         (ASSUMED_BLINDING_FACTORS + RESERVED_BLINDING_ROWS_PAD) as f64
     }
 
-    fn calc_safe_lookup_range(
-        min_max_lookup: Range,
-        min_max_range_checks: Range,
-        lookup_safety_margin: i128,
-    ) -> Range {
-        let max_overall = std::cmp::max(min_max_lookup.1, min_max_range_checks.1);
-        let min_overall = std::cmp::min(min_max_lookup.0, min_max_range_checks.0);
-
+    fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i128) -> Range {
         let mut margin = (
-            lookup_safety_margin * min_overall,
-            lookup_safety_margin * max_overall,
+            lookup_safety_margin * min_max_lookup.0,
+            lookup_safety_margin * min_max_lookup.1,
         );
         if lookup_safety_margin == 1 {
             margin.0 += 4;
@@ -1069,11 +1062,15 @@ impl GraphCircuit {
             return Err(err_string.into());
         }
 
-        let safe_range = Self::calc_safe_lookup_range(
-            min_max_lookup,
-            min_max_range_checks,
-            lookup_safety_margin,
-        );
+        let safe_lookup_range = Self::calc_safe_lookup_range(min_max_lookup, lookup_safety_margin);
+        // pick the range with the largest absolute size between safe_lookup_range and min_max_range_checks
+        let safe_range = if (safe_lookup_range.1 - safe_lookup_range.0)
+            > (min_max_range_checks.1 - min_max_range_checks.0)
+        {
+            safe_lookup_range
+        } else {
+            min_max_range_checks
+        };
 
         // degrade the max logrows until the extended k is small enough
         while min_logrows < max_logrows
@@ -1157,7 +1154,7 @@ impl GraphCircuit {
 
         let model = self.model().clone();
         let settings_mut = self.settings_mut();
-        settings_mut.run_args.lookup_range = safe_range;
+        settings_mut.run_args.lookup_range = safe_lookup_range;
         settings_mut.run_args.logrows = logrows as u32;
 
         *settings_mut = GraphCircuit::new(model, &settings_mut.run_args)?

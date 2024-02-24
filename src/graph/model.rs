@@ -79,8 +79,8 @@ impl From<DummyPassRes> for ForwardResult {
             outputs: res.outputs,
             max_lookup_inputs: res.max_lookup_inputs,
             min_lookup_inputs: res.min_lookup_inputs,
-            min_range_check: res.min_lookup_inputs,
-            max_range_check: res.max_lookup_inputs,
+            min_range_check: res.min_range_check,
+            max_range_check: res.max_range_check,
         }
     }
 }

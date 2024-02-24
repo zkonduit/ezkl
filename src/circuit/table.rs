@@ -326,7 +326,7 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         let num_cols = inputs.len();
 
         if num_cols > 1 {
-            warn!("Using {} columns for non-linearity table.", num_cols);
+            warn!("Using {} columns for range-check.", num_cols);
         }
 
         RangeCheck {
