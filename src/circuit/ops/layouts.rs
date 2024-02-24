@@ -20,7 +20,7 @@ use super::{
 use crate::{
     circuit::{
         ops::base::BaseOp,
-        utils::{self},
+        utils::{self, F32},
     },
     fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{
@@ -2996,21 +2996,22 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         &[values[0].clone()],
         &LookupOp::Recip {
             input_scale: scale,
-            output_scale: scale,
+            // multiply by 100 to get the percent error
+            output_scale: F32(scale.0 * 100.0),
         },
     )?;
 
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
+    let rebased_product = div(config, region, &[product], F::from(scale.0 as u64))?;
 
-    let scale_squared = scale.0 * scale.0;
+    let scaled_tol = (tol * scale.0) as i128;
 
-    // Use the greater than look up table to check if the percent error is within the tolerance for upper bound
-    let tol = tol / 100.0;
-    let scaled_tol = tol * scale_squared;
-
-    // convert into i128
-    let scaled_tol = scaled_tol as i128;
     // check that it is within the tolerance range
-    range_check(config, region, &[product], &(-scaled_tol, scaled_tol))
+    range_check(
+        config,
+        region,
+        &[rebased_product],
+        &(-scaled_tol, scaled_tol),
+    )
 }
