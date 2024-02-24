@@ -608,7 +608,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                         res.extend([(
                             col_expr.clone() * input_query.clone()
                                 + not_expr.clone() * Expression::Constant(default_x),
-                            input_col.clone(),
+                            *input_col,
                         )]);
 
                         log::trace!("---------------- col {:?} ------------------", col_idx,);

@@ -1328,13 +1328,13 @@ mod native_tests {
                                 halo2curves::bn256::Fr::zero()
                             } else {
                                 i128_to_felt(
-                                    (felt_to_i128(v.clone()) as f32
+                                    (felt_to_i128(*v) as f32
                                         * (rand::thread_rng().gen_range(-0.01..0.01) * tolerance))
                                         as i128,
                                 )
                             };
-                            let new_value = v.clone() + perturbation;
-                            new_value
+                            
+                            *v + perturbation
                         })
                         .collect::<Vec<_>>()
                 })
@@ -1351,12 +1351,12 @@ mod native_tests {
                                 halo2curves::bn256::Fr::from(2)
                             } else {
                                 i128_to_felt(
-                                    (felt_to_i128(v.clone()) as f32
+                                    (felt_to_i128(*v) as f32
                                         * (rand::thread_rng().gen_range(0.02..0.1) * tolerance))
                                         as i128,
                                 )
                             };
-                            v.clone() + perturbation
+                            *v + perturbation
                         })
                         .collect::<Vec<_>>()
                 })

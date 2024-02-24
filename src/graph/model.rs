@@ -575,7 +575,7 @@ impl Model {
             .iter()
             .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
             .collect();
-        let res = self.dummy_layout(&run_args, &valtensor_inputs)?;
+        let res = self.dummy_layout(run_args, &valtensor_inputs)?;
         Ok(res.into())
     }
 

@@ -890,16 +890,16 @@ pub(crate) fn calibrate(
             input_scale, param_scale, scale_rebase_multiplier, div_rebasing
         ));
 
-        // #[cfg(unix)]
-        // let _r = match Gag::stdout() {
-        //     Ok(r) => Some(r),
-        //     Err(_) => None,
-        // };
-        // #[cfg(unix)]
-        // let _q = match Gag::stderr() {
-        //     Ok(r) => Some(r),
-        //     Err(_) => None,
-        // };
+        #[cfg(unix)]
+        let _r = match Gag::stdout() {
+            Ok(r) => Some(r),
+            Err(_) => None,
+        };
+        #[cfg(unix)]
+        let _q = match Gag::stderr() {
+            Ok(r) => Some(r),
+            Err(_) => None,
+        };
         let key = (input_scale, param_scale, scale_rebase_multiplier);
         forward_pass_res.insert(key, vec![]);
 
@@ -915,10 +915,10 @@ pub(crate) fn calibrate(
             Ok(c) => c,
             Err(e) => {
                 // drop the gag
-                // #[cfg(unix)]
-                // std::mem::drop(_r);
-                // #[cfg(unix)]
-                // std::mem::drop(_q);
+                #[cfg(unix)]
+                std::mem::drop(_r);
+                #[cfg(unix)]
+                std::mem::drop(_q);
                 debug!("circuit creation from run args failed: {:?}", e);
                 continue;
             }

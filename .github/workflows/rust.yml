@@ -500,7 +500,7 @@ jobs:
 
   prove-and-verify-aggr-tests:
     runs-on: large-self-hosted
-    needs: [build, library-tests, python-tests]
+    needs: [build, library-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -517,7 +517,7 @@ jobs:
 
   prove-and-verify-aggr-evm-tests:
     runs-on: large-self-hosted
-    needs: [build, library-tests, python-tests]
+    needs: [build, library-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
