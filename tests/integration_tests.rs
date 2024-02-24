@@ -1333,18 +1333,8 @@ mod native_tests {
                                         as i128,
                                 )
                             };
-                            println!(
-                                "perturbation: {}, tolerance {}",
-                                felt_to_i128(perturbation),
-                                tolerance
-                            );
                             let old_value = felt_to_i128(v.clone()) as f32;
                             let new_value = v.clone() + perturbation;
-                            println!(
-                                "old_value: {}, new_value: {}",
-                                old_value,
-                                felt_to_i128(new_value) as f32
-                            );
                             new_value
                         })
                         .collect::<Vec<_>>()
