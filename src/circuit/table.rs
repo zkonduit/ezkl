@@ -371,6 +371,7 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
             layouter.assign_table(
                 || "range check table",
                 |mut table| {
+                    println!("inputs: {:?}", inputs);
                     let _ = inputs
                         .iter()
                         .enumerate()
