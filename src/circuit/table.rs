@@ -363,19 +363,21 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         println!("inputs[0]: {:?}", inputs[0]);
         let chunked_inputs = inputs.chunks(self.col_size);
 
+        let collected: Vec<_> = chunked_inputs.collect();
+
         println!("col_size: {:?}", self.col_size);
-        println!("chunked_inputs len: {:?}", chunked_inputs.len());
+        println!("chunked_inputs len: {:?}", collected.len());
+        println!("collected: {:?}", collected);
 
         self.is_assigned = true;
 
-        let col_multipliers: Vec<F> = (0..chunked_inputs.len())
+        let col_multipliers: Vec<F> = (0..collected.len())
             .map(|x| self.selector_constructor.get_selector_val_at_idx(x))
             .collect();
 
         println!("col_multipliers: {:?}", col_multipliers);
-        println!("chunked_inputs: {:?}", chunked_inputs.collect::<Vec<_>>());
 
-        let _ = chunked_inputs.enumerate().map(|(chunk_idx, inputs)| {
+        let _ = collected.iter().enumerate().map(|(chunk_idx, inputs)| {
             println!("chunk_idx: {}", chunk_idx);
             println!("inputs: {:?}", inputs);
             layouter.assign_table(
