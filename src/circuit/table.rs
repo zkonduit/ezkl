@@ -211,8 +211,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
         let chunked_inputs = inputs.chunks(self.col_size);
 
-        println!("col_size: {:?}", self.col_size);
-
         self.is_assigned = true;
 
         let col_multipliers: Vec<F> = (0..chunked_inputs.len())
@@ -222,8 +220,6 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let _ = chunked_inputs
             .enumerate()
             .map(|(chunk_idx, inputs)| {
-                println!("chunk_idx: {}", chunk_idx);
-                println!("inputs: {:?}", inputs);
                 layouter.assign_table(
                     || "nl table",
                     |mut table| {
