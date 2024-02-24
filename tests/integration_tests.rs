@@ -1333,7 +1333,6 @@ mod native_tests {
                                         as i128,
                                 )
                             };
-                            let old_value = felt_to_i128(v.clone()) as f32;
                             let new_value = v.clone() + perturbation;
                             new_value
                         })
