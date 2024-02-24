@@ -364,6 +364,7 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         let chunked_inputs = inputs.chunks(self.col_size);
 
         println!("col_size: {:?}", self.col_size);
+        println!("chunked_inputs len: {:?}", chunked_inputs.len());
 
         self.is_assigned = true;
 
