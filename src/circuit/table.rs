@@ -368,10 +368,11 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         println!("col_multipliers: {:?}", col_multipliers);
 
         let _ = chunked_inputs.enumerate().map(|(chunk_idx, inputs)| {
+            println!("chunk_idx: {}", chunk_idx);
+            println!("inputs: {:?}", inputs);
             layouter.assign_table(
                 || "range check table",
                 |mut table| {
-                    println!("inputs: {:?}", inputs);
                     let _ = inputs
                         .iter()
                         .enumerate()
