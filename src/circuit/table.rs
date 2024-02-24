@@ -315,8 +315,6 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         // number of cols needed to store the range
         let num_cols = num_cols_required(range, col_size);
 
-        log::debug!("range check range: {:?}", range);
-
         let inputs = {
             let mut cols = vec![];
             for _ in 0..num_cols {
@@ -358,6 +356,7 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         let largest = self.range.1;
 
         let inputs: Tensor<F> = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+        println!("inputs[0]: {:?}", inputs[0]);
         let chunked_inputs = inputs.chunks(self.col_size);
 
         self.is_assigned = true;
@@ -365,6 +364,8 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         let col_multipliers: Vec<F> = (0..chunked_inputs.len())
             .map(|x| self.selector_constructor.get_selector_val_at_idx(x))
             .collect();
+
+        println!("col_multipliers: {:?}", col_multipliers);
 
         let _ = chunked_inputs.enumerate().map(|(chunk_idx, inputs)| {
             layouter.assign_table(
@@ -374,7 +375,9 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
                         .iter()
                         .enumerate()
                         .map(|(mut row_offset, input)| {
+                            println!("row_offset: {}", row_offset);
                             let col_multiplier = col_multipliers[chunk_idx];
+                            println!("col_multiplier: {:?}", col_multiplier);
 
                             row_offset += chunk_idx * self.col_size;
                             let (x, y) = self.cartesian_coord(row_offset);
