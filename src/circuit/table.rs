@@ -363,6 +363,8 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         println!("inputs[0]: {:?}", inputs[0]);
         let chunked_inputs = inputs.chunks(self.col_size);
 
+        println!("col_size: {:?}", self.col_size);
+
         self.is_assigned = true;
 
         let col_multipliers: Vec<F> = (0..chunked_inputs.len())
