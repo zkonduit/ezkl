@@ -1045,15 +1045,15 @@ impl GraphCircuit {
 
         let reserved_blinding_rows = Self::reserved_blinding_rows();
         // check if has overflowed max lookup input
-        if min_max_lookup.0 > MAX_LOOKUP_ABS / lookup_safety_margin
-            || min_max_lookup.1 < -MAX_LOOKUP_ABS / lookup_safety_margin
+        if min_max_lookup.1.abs() > MAX_LOOKUP_ABS / lookup_safety_margin
+            || min_max_lookup.0.abs() > MAX_LOOKUP_ABS / lookup_safety_margin
         {
             let err_string = format!("max lookup input {:?} is too large", min_max_lookup);
             return Err(err_string.into());
         }
 
-        if min_max_range_checks.0 > MAX_LOOKUP_ABS / lookup_safety_margin
-            || min_max_range_checks.1 < -MAX_LOOKUP_ABS / lookup_safety_margin
+        if min_max_range_checks.1.abs() > MAX_LOOKUP_ABS
+            || min_max_range_checks.1.abs() > MAX_LOOKUP_ABS
         {
             let err_string = format!(
                 "max range check input {:?} is too large",
