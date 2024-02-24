@@ -629,6 +629,12 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             debug!("assigning lookup input");
             self.lookup_input = input.clone();
         }
+
+        if let VarTensor::Empty = self.lookup_index {
+            debug!("assigning lookup index");
+            self.lookup_index = index.clone();
+        }
+
         Ok(())
     }
 

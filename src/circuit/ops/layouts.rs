@@ -105,6 +105,8 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub,
     )?;
 
+    log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
+
     range_check(
         config,
         region,
