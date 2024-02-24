@@ -592,7 +592,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                             _ => unreachable!(),
                         };
 
-                        let default_x = range_check.get_first_element(col_idx);
+                        let _default_x = range_check.get_first_element(col_idx);
 
                         let col_expr = sel.clone()
                             * range_check
@@ -607,7 +607,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
                         res.extend([(
                             col_expr.clone() * input_query.clone()
-                                + not_expr.clone() * Expression::Constant(default_x),
+                                + not_expr.clone() * Expression::Constant(F::ONE),
                             input_col.clone(),
                         )]);
 
@@ -615,7 +615,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                         log::trace!("expr: {:?}", col_expr,);
                         log::trace!("multiplier: {:?}", multiplier);
                         log::trace!("not_expr: {:?}", not_expr);
-                        log::trace!("default x: {:?}", default_x);
+                        log::trace!("default x: {:?}", _default_x);
 
                         res
                     });
