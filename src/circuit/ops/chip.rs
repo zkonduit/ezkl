@@ -611,6 +611,12 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                             input_col.clone(),
                         )]);
 
+                        log::trace!("---------------- col {:?} ------------------", col_idx,);
+                        log::trace!("expr: {:?}", col_expr,);
+                        log::trace!("multiplier: {:?}", multiplier);
+                        log::trace!("not_expr: {:?}", not_expr);
+                        log::trace!("default x: {:?}", default_x);
+
                         res
                     });
                 }
