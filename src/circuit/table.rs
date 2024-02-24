@@ -220,6 +220,8 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let _ = chunked_inputs
             .enumerate()
             .map(|(chunk_idx, inputs)| {
+                println!("chunk_idx: {}", chunk_idx);
+                println!("inputs: {:?}", inputs);
                 layouter.assign_table(
                     || "nl table",
                     |mut table| {
