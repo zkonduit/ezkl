@@ -373,10 +373,7 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
             .collect();
 
         println!("col_multipliers: {:?}", col_multipliers);
-        println!(
-            "chunked_inputs: {:?}",
-            chunked_inputs.iter().collect::<Vec<_>>()
-        );
+        println!("chunked_inputs: {:?}", chunked_inputs.collect::<Vec<_>>());
 
         let _ = chunked_inputs.enumerate().map(|(chunk_idx, inputs)| {
             println!("chunk_idx: {}", chunk_idx);
