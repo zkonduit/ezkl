@@ -827,7 +827,7 @@ pub(crate) fn calibrate(
     let range = if let Some(scales) = scales {
         scales
     } else {
-        (11..14).collect::<Vec<crate::Scale>>()
+        (10..14).collect::<Vec<crate::Scale>>()
     };
 
     let div_rebasing = if only_range_check_rebase {
@@ -963,9 +963,25 @@ pub(crate) fn calibrate(
             .max()
             .unwrap_or(0);
 
+        let min_range_check = forward_pass_res
+            .get(&key)
+            .unwrap()
+            .iter()
+            .map(|x| x.min_range_check)
+            .min()
+            .unwrap_or(0);
+
+        let max_range_check = forward_pass_res
+            .get(&key)
+            .unwrap()
+            .iter()
+            .map(|x| x.max_range_check)
+            .max()
+            .unwrap_or(0);
+
         let res = circuit.calibrate_from_min_max(
-            min_lookup_range,
-            max_lookup_range,
+            (min_lookup_range, max_lookup_range),
+            (min_range_check, max_range_check),
             max_logrows,
             lookup_safety_margin,
         );

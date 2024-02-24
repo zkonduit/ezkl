@@ -2482,6 +2482,28 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
 
     let is_dummy = region.is_dummy();
 
+    let table_index: ValTensor<F> = w
+        .get_inner_tensor()?
+        .par_enum_map(|_, e| {
+            Ok::<ValType<F>, TensorError>(if let Some(f) = e.get_felt_eval() {
+                let col_idx = if !is_dummy {
+                    let table = config
+                        .range_checks
+                        .get(range)
+                        .ok_or(TensorError::TableLookupError)?;
+                    table.get_col_index(f)
+                } else {
+                    F::ZERO
+                };
+                Value::known(col_idx).into()
+            } else {
+                Value::<F>::unknown().into()
+            })
+        })?
+        .into();
+
+    region.assign(&config.lookup_index, &table_index)?;
+
     if !is_dummy {
         (0..assigned_len)
             .map(|i| {

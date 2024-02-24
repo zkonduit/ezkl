@@ -19,8 +19,8 @@ use serde::{Deserialize, Serialize};
 use tosubcommand::ToFlags;
 
 use crate::{
-    circuit::ops::base::BaseOp,
     circuit::{
+        ops::base::BaseOp,
         table::{Range, RangeCheck, Table},
         utils,
     },
@@ -540,7 +540,9 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         &mut self,
         cs: &mut ConstraintSystem<F>,
         input: &VarTensor,
+        index: &VarTensor,
         range: Range,
+        logrows: usize,
     ) -> Result<(), Box<dyn Error>>
     where
         F: Field,
@@ -556,7 +558,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         let range_check =
             if let std::collections::btree_map::Entry::Vacant(e) = self.range_checks.entry(range) {
                 // as all tables have the same input we see if there's another table who's input we can reuse
-                let range_check = RangeCheck::<F>::configure(cs, range);
+                let range_check = RangeCheck::<F>::configure(cs, range, logrows);
                 e.insert(range_check.clone());
                 range_check
             } else {
@@ -565,32 +567,50 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
         for x in 0..input.num_blocks() {
             for y in 0..input.num_inner_cols() {
-                let single_col_sel = cs.complex_selector();
+                let len = range_check.selector_constructor.degree;
+                let multi_col_selector = cs.complex_selector();
 
-                cs.lookup("", |cs| {
-                    let mut res = vec![];
-                    let sel = cs.query_selector(single_col_sel);
+                for (col_idx, input_col) in range_check.inputs.iter().enumerate() {
+                    cs.lookup("", |cs| {
+                        let mut res = vec![];
+                        let sel = cs.query_selector(multi_col_selector);
 
-                    let input_query = match &input {
-                        VarTensor::Advice { inner: advices, .. } => {
-                            cs.query_advice(advices[x][y], Rotation(0))
-                        }
-                        _ => unreachable!(),
-                    };
+                        let synthetic_sel = match len {
+                            1 => Expression::Constant(F::from(1)),
+                            _ => match index {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    cs.query_advice(advices[x][y], Rotation(0))
+                                }
+                                _ => unreachable!(),
+                            },
+                        };
 
-                    let default_x = range_check.get_first_element();
+                        let input_query = match &input {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                cs.query_advice(advices[x][y], Rotation(0))
+                            }
+                            _ => unreachable!(),
+                        };
 
-                    let not_sel = Expression::Constant(F::ONE) - sel.clone();
+                        let default_x = range_check.get_first_element(col_idx);
 
-                    res.extend([(
-                        sel.clone() * input_query.clone()
-                            + not_sel.clone() * Expression::Constant(default_x),
-                        range_check.input,
-                    )]);
+                        let col_expr = sel.clone()
+                            * range_check
+                                .selector_constructor
+                                .get_expr_at_idx(col_idx, synthetic_sel);
 
-                    res
-                });
-                selectors.insert((range, x, y), single_col_sel);
+                        let not_sel = Expression::Constant(F::ONE) - sel.clone();
+
+                        res.extend([(
+                            col_expr.clone() * input_query.clone()
+                                + not_sel.clone() * Expression::Constant(default_x),
+                            input_col.clone(),
+                        )]);
+
+                        res
+                    });
+                }
+                selectors.insert((range, x, y), multi_col_selector);
             }
         }
         self.range_check_selectors.extend(selectors);
@@ -599,7 +619,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             debug!("assigning lookup input");
             self.lookup_input = input.clone();
         }
-
         Ok(())
     }
 
