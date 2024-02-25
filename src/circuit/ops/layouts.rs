@@ -121,7 +121,6 @@ fn recip_boolean<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     input: &[ValTensor<F>; 1],
-    output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assert is boolean
     let boolean_input = boolean_identity(config, region, input, true)?;
@@ -160,10 +159,9 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     value: &[ValTensor<F>; 1],
     input_scale: F,
-    output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     if output_scale == F::ONE {
-        return recip_boolean(config, region, value, output_scale);
+        return recip_boolean(config, region, value);
     }
 
     let input = value[0].clone();
