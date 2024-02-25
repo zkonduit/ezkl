@@ -165,12 +165,15 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     input_scale: F,
     output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    println!("input_scale: {:?}", input_scale);
+    println!("output_scale: {:?}", output_scale);
+
     if output_scale == F::ONE {
         return recip_int(config, region, value);
     }
 
     let input = value[0].clone();
-    print!("input: {:?}", input.get_int_evals()?);
+    println!("input: {:?}", input.get_int_evals()?);
     let input_dims = input.dims();
 
     let range_check_bracket = felt_to_i128(output_scale) / 2;
@@ -219,6 +222,8 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
 
     println!("equal_zero_mask: {:?}", equal_zero_mask.get_int_evals()?);
+
+    println!("claimed_output: {:?}", claimed_output.get_int_evals()?);
 
     let equal_inverse_mask = equals(
         config,
@@ -3088,7 +3093,16 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, &values, BaseOp::Sub)?;
 
-    println!("diff {:?}", diff.get_int_evals()?);
+    // multiply diff by 100 to get the percent error
+    let diff = pairwise(
+        config,
+        region,
+        &[
+            diff,
+            ValTensor::from(Tensor::from([ValType::Constant(F::from(100))].into_iter())),
+        ],
+        BaseOp::Mult,
+    )?;
 
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
     let felt_scale = F::from(scale.0 as u64);
@@ -3104,11 +3118,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     let rebased_product = div(config, region, &[product], F::from(scale.0 as u64))?;
 
-    println!("rebased_product {:?}", rebased_product.get_int_evals()?);
-
-    let scaled_tol = (tol * scale.0 / 100.) as i128;
-
-    println!("scaled_tol {:?}", scaled_tol);
+    let scaled_tol = (tol * scale.0) as i128;
 
     // check that it is within the tolerance range
     range_check(
