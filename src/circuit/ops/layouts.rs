@@ -162,7 +162,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     input_scale: F,
     output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if input_scale == F::ONE {
+    if output_scale == F::ONE {
         return recip_boolean(config, region, value, output_scale);
     }
 
