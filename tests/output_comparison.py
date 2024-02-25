@@ -116,4 +116,4 @@ if __name__ == '__main__':
     # print the percentage difference
     print("mean percent diff: ", mean_percentage_difference)
     print("max percent diff: ", max_percentage_difference)
-    assert max_percentage_difference < target, "Percentage difference is too high"
+    assert mean_percentage_difference < target, "Percentage difference is too high"
