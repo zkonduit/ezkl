@@ -117,31 +117,31 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
     Ok(claimed_output)
 }
 
-fn recip_boolean<F: PrimeField + TensorType + PartialOrd>(
+fn recip_int<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     input: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assert is boolean
-    let boolean_input = boolean_identity(config, region, input, true)?;
     let zero_inverse_val = tensor::ops::nonlinearities::zero_recip(1.0)[0];
+    // get values where input is 0
+    let zero_mask = equals_zero(config, region, input)?;
 
-    // now the inverse is boolean_input + (1 - boolean_input) * zero_inverse_val
-    let one_minus_boolean_input = pairwise(
+    let one_minus_zero_mask = pairwise(
         config,
         region,
         &[
+            zero_mask.clone(),
             ValTensor::from(Tensor::from([ValType::Constant(F::ONE)].into_iter())),
-            boolean_input.clone(),
         ],
         BaseOp::Sub,
     )?;
 
-    let prod = pairwise(
+    let zero_inverse_val = pairwise(
         config,
         region,
         &[
-            one_minus_boolean_input,
+            zero_mask,
             ValTensor::from(Tensor::from(
                 [ValType::Constant(i128_to_felt(zero_inverse_val))].into_iter(),
             )),
@@ -149,7 +149,12 @@ fn recip_boolean<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
     )?;
 
-    pairwise(config, region, &[boolean_input, prod], BaseOp::Add)
+    pairwise(
+        config,
+        region,
+        &[one_minus_zero_mask, zero_inverse_val],
+        BaseOp::Add,
+    )
 }
 
 /// recip accumulated layout
@@ -161,7 +166,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     if output_scale == F::ONE {
-        return recip_boolean(config, region, value);
+        return recip_int(config, region, value);
     }
 
     let input = value[0].clone();
