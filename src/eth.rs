@@ -32,7 +32,6 @@ use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use log::{debug, info, warn};
 use std::error::Error;
-use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
@@ -411,8 +410,7 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
     // save the abi to a tmp file
     let mut sol_path = std::env::temp_dir();
     sol_path.push("testreads.sol");
-    let mut buf_writer = BufWriter::new(std::fs::File::create(&sol_path)?);
-    buf_writer.write_all(TESTREADS_SOL.as_bytes())?;
+    std::fs::write(&sol_path, TESTREADS_SOL)?;
 
     // Compile the contract
     let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_path, "TestReads", 0)?;
@@ -609,8 +607,7 @@ pub async fn evm_quantize<M: 'static + Middleware>(
     // save the sol to a tmp file
     let mut sol_path = std::env::temp_dir();
     sol_path.push("quantizedata.sol");
-    let mut buf_writer = BufWriter::new(std::fs::File::create(&sol_path)?);
-    buf_writer.write_all(QUANTIZE_DATA_SOL.as_bytes())?;
+    std::fs::write(&sol_path, QUANTIZE_DATA_SOL)?;
 
     let (abi, bytecode, runtime_bytecode) = get_contract_artifacts(sol_path, "QuantizeData", 0)?;
     let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone())?;
