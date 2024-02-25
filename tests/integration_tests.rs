@@ -277,7 +277,7 @@ mod native_tests {
         "bitshift",
     ];
 
-    const WASM_TESTS: [&str; 45] = [
+    const WASM_TESTS: [&str; 46] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
