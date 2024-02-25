@@ -20,7 +20,7 @@ use super::{
 use crate::{
     circuit::{
         ops::base::BaseOp,
-        utils::{self, F32},
+        utils::{self},
     },
     fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{
@@ -128,7 +128,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(output_scale * input_scale) / 2;
+    let range_check_bracket = felt_to_i128(output_scale) / 2;
 
     let is_assigned = !input.any_unknowns()?;
 
@@ -160,7 +160,10 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
     )?;
 
-    log::debug!("product: {:?}", product.get_int_evals()?);
+    // divide by input_scale
+    let rebased_div = div(config, region, &[product], input_scale)?;
+
+    log::debug!("product: {:?}", rebased_div.get_int_evals()?);
 
     log::debug!("range_check_bracket: {:?}", range_check_bracket);
 
@@ -168,7 +171,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     range_check(
         config,
         region,
-        &[product],
+        &[rebased_div],
         &(range_check_bracket, 3 * range_check_bracket),
     )?;
 
@@ -2945,16 +2948,8 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     let denom = sum(config, region, &[ex.clone()])?;
     // get the inverse
 
-    let inv_denom = nonlinearity(
-        config,
-        region,
-        &[denom],
-        // we set to input scale + output_scale so the output scale is output)scale
-        &LookupOp::Recip {
-            input_scale: scale,
-            output_scale: scale,
-        },
-    )?;
+    let felt_scale = F::from(scale.0 as u64);
+    let inv_denom = recip(config, region, &[denom], felt_scale, felt_scale)?;
 
     // product of num * (1 / denom) = 2*output_scale
     let softmax = pairwise(config, region, &[ex, inv_denom], BaseOp::Mult)?;
@@ -2990,22 +2985,15 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     let diff = pairwise(config, region, &values, BaseOp::Sub)?;
 
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
-    let recip = nonlinearity(
-        config,
-        region,
-        &[values[0].clone()],
-        &LookupOp::Recip {
-            input_scale: scale,
-            // multiply by 100 to get the percent error
-            output_scale: F32(scale.0 * 100.0),
-        },
-    )?;
+    let felt_scale = F::from(scale.0 as u64);
+
+    let recip = recip(config, region, &[values[0].clone()], felt_scale, felt_scale)?;
 
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
     let rebased_product = div(config, region, &[product], F::from(scale.0 as u64))?;
 
-    let scaled_tol = (tol * scale.0) as i128;
+    let scaled_tol = (tol * scale.0 / 100.0) as i128;
 
     // check that it is within the tolerance range
     range_check(
