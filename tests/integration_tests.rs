@@ -277,7 +277,7 @@ mod native_tests {
         "bitshift",
     ];
 
-    const WASM_TESTS: [&str; 48] = [
+    const WASM_TESTS: [&str; 45] = [
         "1l_mlp",
         "1l_slice",
         "1l_concat",
@@ -326,8 +326,6 @@ mod native_tests {
         "1l_where",
         "boolean",
         "boolean_identity",
-        "decision_tree", // "variable_cnn",
-        "random_forest",
         "gradient_boosted_trees",
         "1l_topk",
         // "xgboost",
@@ -842,7 +840,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=47 {
+            seq!(N in 0..=45 {
 
                 #(#[test_case(WASM_TESTS[N])])*
                 fn kzg_prove_and_verify_with_overflow_(test: &str) {

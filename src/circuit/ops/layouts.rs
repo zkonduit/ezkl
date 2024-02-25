@@ -165,15 +165,11 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     input_scale: F,
     output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    println!("input_scale: {:?}", input_scale);
-    println!("output_scale: {:?}", output_scale);
-
     if output_scale == F::ONE {
         return recip_int(config, region, value);
     }
 
     let input = value[0].clone();
-    println!("input: {:?}", input.get_int_evals()?);
     let input_dims = input.dims();
 
     let range_check_bracket = felt_to_i128(output_scale) / 2;
@@ -221,20 +217,11 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
 
     let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
 
-    println!("equal_zero_mask: {:?}", equal_zero_mask.get_int_evals()?);
-
-    println!("claimed_output: {:?}", claimed_output.get_int_evals()?);
-
     let equal_inverse_mask = equals(
         config,
         region,
         &[claimed_output.clone(), zero_inverse.into()],
     )?;
-
-    println!(
-        "equal_inverse_mask: {:?}",
-        equal_inverse_mask.get_int_evals()?
-    );
 
     // assert the two masks are equal
     enforce_equality(
@@ -252,14 +239,8 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
     )?;
 
-    println!("unit_mask: {:?}", unit_mask.get_int_evals()?);
-
     // now add the unit mask to the rebased_div
     let rebased_offset_div = pairwise(config, region, &[rebased_div, unit_mask], BaseOp::Add)?;
-
-    println!("product: {:?}", rebased_offset_div.get_int_evals()?);
-
-    println!("range_check_bracket: {:?}", range_check_bracket);
 
     // at most the error should be in the original unit scale's range
     range_check(
@@ -3075,8 +3056,6 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     scale: utils::F32,
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    println!("tol {:?}", tol);
-    println!("scale {:?}", scale);
     if tol == 0.0 {
         // regular equality constraint
         return enforce_equality(config, region, values);
@@ -3098,12 +3077,8 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     let recip = recip(config, region, &[values[0].clone()], felt_scale, felt_scale)?;
 
-    println!("recip {:?}", recip.get_int_evals()?);
-
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
-
-    println!("product {:?}", product.get_int_evals()?);
 
     let rebased_product = div(config, region, &[product], F::from(scale.0 as u64))?;
 
