@@ -165,18 +165,26 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
 
     // divide by input_scale
     let rebased_div = div(config, region, &[product], input_scale)?;
-    let zero_constant = Tensor::from([ValType::Constant(F::ZERO)].into_iter());
+
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_i128(output_scale) as f64)[0];
     let zero_inverse =
         Tensor::from([ValType::Constant(i128_to_felt::<F>(zero_inverse_val))].into_iter());
 
-    let equal_zero_mask = equals(config, region, &[input.clone(), zero_constant.into()])?;
+    let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
+
+    println!("equal_zero_mask: {:?}", equal_zero_mask.get_int_evals()?);
+
     let equal_inverse_mask = equals(
         config,
         region,
         &[claimed_output.clone(), zero_inverse.into()],
     )?;
+
+    println!(
+        "equal_inverse_mask: {:?}",
+        equal_inverse_mask.get_int_evals()?
+    );
 
     // assert the two masks are equal
     enforce_equality(
@@ -186,14 +194,17 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     let unit_scale = Tensor::from([ValType::Constant(output_scale)].into_iter());
+
     let unit_mask = equals(config, region, &[equal_zero_mask, unit_scale.into()])?;
+
+    println!("unit_mask: {:?}", unit_mask.get_int_evals()?);
 
     // now add the unit mask to the rebased_div
     let rebased_offset_div = pairwise(config, region, &[rebased_div, unit_mask], BaseOp::Add)?;
 
-    log::debug!("product: {:?}", rebased_offset_div.get_int_evals()?);
+    println!("product: {:?}", rebased_offset_div.get_int_evals()?);
 
-    log::debug!("range_check_bracket: {:?}", range_check_bracket);
+    println!("range_check_bracket: {:?}", range_check_bracket);
 
     // at most the error should be in the original unit scale's range
     range_check(
@@ -1726,6 +1737,41 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
 
     // take the product of diff and output
     let prod_check = pairwise(config, region, &[diff, output.clone()], BaseOp::Mult)?;
+
+    is_zero_identity(config, region, &[prod_check], false)?;
+
+    Ok(output)
+}
+
+/// Equality boolean operation
+pub fn equals_zero<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let values = values[0].clone();
+    let values_inverse = values.inverse()?;
+    let product_values_and_invert = pairwise(
+        config,
+        region,
+        &[values.clone(), values_inverse],
+        BaseOp::Mult,
+    )?;
+
+    // constant of 1
+    let mut ones = Tensor::from(vec![ValType::Constant(F::from(1))].into_iter());
+    ones.set_visibility(&crate::graph::Visibility::Fixed);
+
+    // subtract
+    let output = pairwise(
+        config,
+        region,
+        &[ones.into(), product_values_and_invert],
+        BaseOp::Sub,
+    )?;
+
+    // take the product of diff and output
+    let prod_check = pairwise(config, region, &[values, output.clone()], BaseOp::Mult)?;
 
     is_zero_identity(config, region, &[prod_check], false)?;
 
