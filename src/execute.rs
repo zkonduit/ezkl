@@ -488,8 +488,14 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box<dyn Error>> {
+    use std::io::Read;
+
     let path = get_srs_path(logrows, srs_path);
-    let hash = sha256::digest(std::fs::read(path.clone())?);
+    let file = std::fs::File::open(path.clone())?;
+    let mut buffer = vec![];
+    let bytes_read = std::io::BufReader::new(file).read_to_end(&mut buffer)?;
+    debug!("read {} bytes from SRS file", bytes_read);
+    let hash = sha256::digest(buffer);
     info!("SRS hash: {}", hash);
 
     let predefined_hash = match { crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) } {
@@ -963,18 +969,34 @@ pub(crate) fn calibrate(
             .max()
             .unwrap_or(0);
 
+        let min_range_check = forward_pass_res
+            .get(&key)
+            .unwrap()
+            .iter()
+            .map(|x| x.min_range_check)
+            .min()
+            .unwrap_or(0);
+
+        let max_range_check = forward_pass_res
+            .get(&key)
+            .unwrap()
+            .iter()
+            .map(|x| x.max_range_check)
+            .max()
+            .unwrap_or(0);
+
         let res = circuit.calibrate_from_min_max(
-            min_lookup_range,
-            max_lookup_range,
+            (min_lookup_range, max_lookup_range),
+            (min_range_check, max_range_check),
             max_logrows,
             lookup_safety_margin,
         );
 
-        // drop the gag
-        #[cfg(unix)]
-        std::mem::drop(_r);
-        #[cfg(unix)]
-        std::mem::drop(_q);
+        // // drop the gag
+        // #[cfg(unix)]
+        // std::mem::drop(_r);
+        // #[cfg(unix)]
+        // std::mem::drop(_q);
 
         if res.is_ok() {
             let new_settings = circuit.settings().clone();

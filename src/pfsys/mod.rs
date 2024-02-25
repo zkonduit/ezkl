@@ -212,8 +212,8 @@ impl ToPyObject for TranscriptType {
 #[cfg(feature = "python-bindings")]
 ///
 pub fn g1affine_to_pydict(g1affine_dict: &PyDict, g1affine: &G1Affine) {
-    let g1affine_x = field_to_string_montgomery(&g1affine.x);
-    let g1affine_y = field_to_string_montgomery(&g1affine.y);
+    let g1affine_x = field_to_string(&g1affine.x);
+    let g1affine_y = field_to_string(&g1affine.y);
     g1affine_dict.set_item("x", g1affine_x).unwrap();
     g1affine_dict.set_item("y", g1affine_y).unwrap();
 }
@@ -223,23 +223,23 @@ use halo2curves::bn256::G1;
 #[cfg(feature = "python-bindings")]
 ///
 pub fn g1_to_pydict(g1_dict: &PyDict, g1: &G1) {
-    let g1_x = field_to_string_montgomery(&g1.x);
-    let g1_y = field_to_string_montgomery(&g1.y);
-    let g1_z = field_to_string_montgomery(&g1.z);
+    let g1_x = field_to_string(&g1.x);
+    let g1_y = field_to_string(&g1.y);
+    let g1_z = field_to_string(&g1.z);
     g1_dict.set_item("x", g1_x).unwrap();
     g1_dict.set_item("y", g1_y).unwrap();
     g1_dict.set_item("z", g1_z).unwrap();
 }
 
-/// converts fp into `Vec<u64>` in Montgomery form
-pub fn field_to_string_montgomery<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> String {
+/// converts fp into a little endian Hex string
+pub fn field_to_string<F: PrimeField + SerdeObject + Serialize>(fp: &F) -> String {
     let repr = serde_json::to_string(&fp).unwrap();
     let b: String = serde_json::from_str(&repr).unwrap();
     b
 }
 
-/// converts `Vec<u64>` in Montgomery form into fp
-pub fn string_to_field_montgomery<F: PrimeField + SerdeObject + Serialize + DeserializeOwned>(
+/// converts a little endian Hex string into a field element
+pub fn string_to_field<F: PrimeField + SerdeObject + Serialize + DeserializeOwned>(
     b: &String,
 ) -> F {
     let repr = serde_json::to_string(&b).unwrap();
@@ -304,7 +304,7 @@ where
         let field_elems: Vec<Vec<String>> = self
             .instances
             .iter()
-            .map(|x| x.iter().map(|fp| field_to_string_montgomery(fp)).collect())
+            .map(|x| x.iter().map(|fp| field_to_string(fp)).collect())
             .collect::<Vec<_>>();
         dict.set_item("instances", field_elems).unwrap();
         let hex_proof = hex::encode(&self.proof);

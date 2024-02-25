@@ -67,6 +67,10 @@ pub struct ForwardResult {
     pub max_lookup_inputs: i128,
     /// The minimum value of any input to a lookup operation.
     pub min_lookup_inputs: i128,
+    /// The max range check value
+    pub max_range_check: i128,
+    /// The min range check value
+    pub min_range_check: i128,
 }
 
 impl From<DummyPassRes> for ForwardResult {
@@ -75,6 +79,8 @@ impl From<DummyPassRes> for ForwardResult {
             outputs: res.outputs,
             max_lookup_inputs: res.max_lookup_inputs,
             min_lookup_inputs: res.min_lookup_inputs,
+            min_range_check: res.min_range_check,
+            max_range_check: res.max_range_check,
         }
     }
 }
@@ -108,6 +114,10 @@ pub struct DummyPassRes {
     pub max_lookup_inputs: i128,
     /// min lookup inputs
     pub min_lookup_inputs: i128,
+    /// min range check
+    pub min_range_check: i128,
+    /// max range check
+    pub max_range_check: i128,
     /// outputs
     pub outputs: Vec<Tensor<Fp>>,
 }
@@ -565,7 +575,7 @@ impl Model {
             .iter()
             .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
             .collect();
-        let res = self.dummy_layout(&run_args, &valtensor_inputs)?;
+        let res = self.dummy_layout(run_args, &valtensor_inputs)?;
         Ok(res.into())
     }
 
@@ -1025,7 +1035,7 @@ impl Model {
         }
 
         for range in required_range_checks {
-            base_gate.configure_range_check(meta, input, range)?;
+            base_gate.configure_range_check(meta, input, index, range, logrows)?;
         }
 
         Ok(base_gate)
@@ -1431,6 +1441,8 @@ impl Model {
             range_checks: region.used_range_checks(),
             max_lookup_inputs: region.max_lookup_inputs(),
             min_lookup_inputs: region.min_lookup_inputs(),
+            min_range_check: region.min_range_check(),
+            max_range_check: region.max_range_check(),
             outputs,
         };
 

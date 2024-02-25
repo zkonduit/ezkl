@@ -56,9 +56,9 @@ def test_poseidon_hash():
     Test for poseidon_hash
     """
     message = [1.0, 2.0, 3.0, 4.0]
-    message = [ezkl.float_to_string(x, 7) for x in message]
+    message = [ezkl.float_to_felt(x, 7) for x in message]
     res = ezkl.poseidon_hash(message)
-    assert ezkl.string_to_felt(
+    assert ezkl.felt_to_big_endian(
         res[0]) == "0x0da7e5e5c8877242fa699f586baf770d731defd54f952d4adeb85047a0e32f45"
 
 
@@ -70,14 +70,14 @@ def test_field_serialization():
 
     input = 890
     scale = 7
-    felt = ezkl.float_to_string(input, scale)
-    roundtrip_input = ezkl.string_to_float(felt, scale)
+    felt = ezkl.float_to_felt(input, scale)
+    roundtrip_input = ezkl.felt_to_float(felt, scale)
     assert input == roundtrip_input
 
     input = -700
     scale = 7
-    felt = ezkl.float_to_string(input, scale)
-    roundtrip_input = ezkl.string_to_float(felt, scale)
+    felt = ezkl.float_to_felt(input, scale)
+    roundtrip_input = ezkl.felt_to_float(felt, scale)
     assert input == roundtrip_input
 
 
@@ -88,12 +88,12 @@ def test_buffer_to_felts():
     buffer = bytearray("a sample string!", 'utf-8')
     felts = ezkl.buffer_to_felts(buffer)
     ref_felt_1 = "0x0000000000000000000000000000000021676e6972747320656c706d61732061"
-    assert felts == [ref_felt_1]
+    assert ezkl.felt_to_big_endian(felts[0]) == ref_felt_1
 
     buffer = bytearray("a sample string!"+"high", 'utf-8')
     felts = ezkl.buffer_to_felts(buffer)
     ref_felt_2 = "0x0000000000000000000000000000000000000000000000000000000068676968"
-    assert felts == [ref_felt_1, ref_felt_2]
+    assert [ezkl.felt_to_big_endian(felts[0]),  ezkl.felt_to_big_endian(felts[1])] == [ref_felt_1, ref_felt_2]
 
 
 def test_gen_srs():
