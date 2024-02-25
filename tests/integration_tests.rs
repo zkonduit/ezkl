@@ -1316,7 +1316,7 @@ mod native_tests {
                 scale: 0.0.into(),
             };
             settings
-                .save(format!("{}/{}/settings.json", test_dir, example_name).into())
+                .save(&format!("{}/{}/settings.json", test_dir, example_name).into())
                 .unwrap();
         }
 
