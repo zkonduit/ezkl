@@ -2,6 +2,7 @@
 #[cfg(test)]
 mod native_tests {
 
+    use ezkl::circuit::Tolerance;
     use ezkl::fieldutils::{felt_to_i128, i128_to_felt};
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
@@ -1302,11 +1303,22 @@ mod native_tests {
             tolerance,
         );
 
-        let settings =
+        let mut settings =
             GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())
                 .unwrap();
 
         let any_output_scales_smol = settings.model_output_scales.iter().any(|s| *s <= 0);
+
+        if any_output_scales_smol {
+            // set the tolerance to 0.0
+            settings.run_args.tolerance = Tolerance {
+                val: 0.0.into(),
+                scale: 0.0.into(),
+            };
+            settings
+                .save(format!("{}/{}/settings.json", test_dir, example_name).into())
+                .unwrap();
+        }
 
         if tolerance > 0.0 && !any_output_scales_smol {
             // load witness and shift the output by a small amount that is less than tolerance percent
@@ -1333,7 +1345,7 @@ mod native_tests {
                                         as i128,
                                 )
                             };
-                            
+
                             *v + perturbation
                         })
                         .collect::<Vec<_>>()
