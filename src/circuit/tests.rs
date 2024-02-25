@@ -1,4 +1,3 @@
-use crate::circuit::ops::hybrid::HybridOp;
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::*;
 use crate::tensor::{Tensor, TensorType, ValTensor, VarTensor};
