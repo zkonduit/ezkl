@@ -124,8 +124,7 @@ fn recip_boolean<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assert is boolean
     let boolean_input = boolean_identity(config, region, input, true)?;
-    let zero_inverse_val =
-        tensor::ops::nonlinearities::zero_recip(felt_to_i128(output_scale) as f64)[0];
+    let zero_inverse_val = tensor::ops::nonlinearities::zero_recip(1.0)[0];
 
     // now the inverse is boolean_input + (1 - boolean_input) * zero_inverse_val
     let one_minus_boolean_input = pairwise(
@@ -159,6 +158,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     value: &[ValTensor<F>; 1],
     input_scale: F,
+    output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     if output_scale == F::ONE {
         return recip_boolean(config, region, value);
