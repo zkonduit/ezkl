@@ -170,6 +170,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     }
 
     let input = value[0].clone();
+    print!("input: {:?}", input.get_int_evals()?);
     let input_dims = input.dims();
 
     let range_check_bracket = felt_to_i128(output_scale) / 2;
