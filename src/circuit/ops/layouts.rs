@@ -195,7 +195,12 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
 
     let unit_scale = Tensor::from([ValType::Constant(output_scale)].into_iter());
 
-    let unit_mask = equals(config, region, &[equal_zero_mask, unit_scale.into()])?;
+    let unit_mask = pairwise(
+        config,
+        region,
+        &[equal_zero_mask, unit_scale.into()],
+        BaseOp::Mult,
+    )?;
 
     println!("unit_mask: {:?}", unit_mask.get_int_evals()?);
 
@@ -1719,28 +1724,7 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
-    let diff_inverse = diff.inverse()?;
-    let product_diff_and_invert =
-        pairwise(config, region, &[diff.clone(), diff_inverse], BaseOp::Mult)?;
-
-    // constant of 1
-    let mut ones = Tensor::from(vec![ValType::Constant(F::from(1))].into_iter());
-    ones.set_visibility(&crate::graph::Visibility::Fixed);
-
-    // subtract
-    let output = pairwise(
-        config,
-        region,
-        &[ones.into(), product_diff_and_invert],
-        BaseOp::Sub,
-    )?;
-
-    // take the product of diff and output
-    let prod_check = pairwise(config, region, &[diff, output.clone()], BaseOp::Mult)?;
-
-    is_zero_identity(config, region, &[prod_check], false)?;
-
-    Ok(output)
+    equals_zero(config, region, &[diff])
 }
 
 /// Equality boolean operation
