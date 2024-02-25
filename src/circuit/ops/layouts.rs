@@ -152,6 +152,9 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     };
     claimed_output.reshape(input_dims)?;
 
+    let claimed_output = region.assign(&config.output, &claimed_output)?;
+    region.increment(claimed_output.len());
+
     // this is now of scale 2 * scale
     let product = pairwise(
         config,
@@ -162,8 +165,33 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
 
     // divide by input_scale
     let rebased_div = div(config, region, &[product], input_scale)?;
+    let zero_constant = Tensor::from([ValType::Constant(F::ZERO)].into_iter());
+    let zero_inverse_val =
+        tensor::ops::nonlinearities::zero_recip(felt_to_i128(output_scale) as f64)[0];
+    let zero_inverse =
+        Tensor::from([ValType::Constant(i128_to_felt::<F>(zero_inverse_val))].into_iter());
 
-    log::debug!("product: {:?}", rebased_div.get_int_evals()?);
+    let equal_zero_mask = equals(config, region, &[input.clone(), zero_constant.into()])?;
+    let equal_inverse_mask = equals(
+        config,
+        region,
+        &[claimed_output.clone(), zero_inverse.into()],
+    )?;
+
+    // assert the two masks are equal
+    enforce_equality(
+        config,
+        region,
+        &[equal_zero_mask.clone(), equal_inverse_mask],
+    )?;
+
+    let unit_scale = Tensor::from([ValType::Constant(output_scale)].into_iter());
+    let unit_mask = equals(config, region, &[equal_zero_mask, unit_scale.into()])?;
+
+    // now add the unit mask to the rebased_div
+    let rebased_offset_div = pairwise(config, region, &[rebased_div, unit_mask], BaseOp::Add)?;
+
+    log::debug!("product: {:?}", rebased_offset_div.get_int_evals()?);
 
     log::debug!("range_check_bracket: {:?}", range_check_bracket);
 
@@ -171,7 +199,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     range_check(
         config,
         region,
-        &[rebased_div],
+        &[rebased_offset_div],
         &(range_check_bracket, 3 * range_check_bracket),
     )?;
 
@@ -2967,6 +2995,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     scale: utils::F32,
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    println!("tol {:?}", tol);
     if tol == 0.0 {
         // regular equality constraint
         return enforce_equality(config, region, values);
@@ -2984,16 +3013,27 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, &values, BaseOp::Sub)?;
 
+    println!("diff {:?}", diff.get_int_evals()?);
+
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
     let felt_scale = F::from(scale.0 as u64);
 
     let recip = recip(config, region, &[values[0].clone()], felt_scale, felt_scale)?;
 
+    println!("recip {:?}", recip.get_int_evals()?);
+
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
+
+    println!("product {:?}", product.get_int_evals()?);
+
     let rebased_product = div(config, region, &[product], F::from(scale.0 as u64))?;
 
-    let scaled_tol = (tol * scale.0 / 100.0) as i128;
+    println!("rebased_product {:?}", rebased_product.get_int_evals()?);
+
+    let scaled_tol = (tol * scale.0 / 100.) as i128;
+
+    println!("scaled_tol {:?}", scaled_tol);
 
     // check that it is within the tolerance range
     range_check(
