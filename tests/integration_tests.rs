@@ -1289,6 +1289,7 @@ mod native_tests {
         scales_to_use: Option<Vec<u32>>,
         tolerance: f32,
     ) {
+        let mut tolerance = tolerance;
         gen_circuit_settings_and_witness(
             test_dir,
             example_name.clone(),
@@ -1300,27 +1301,10 @@ mod native_tests {
             scales_to_use,
             2,
             false,
-            tolerance,
+            &mut tolerance,
         );
 
-        let mut settings =
-            GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())
-                .unwrap();
-
-        let any_output_scales_smol = settings.model_output_scales.iter().any(|s| *s <= 0);
-
-        if any_output_scales_smol {
-            // set the tolerance to 0.0
-            settings.run_args.tolerance = Tolerance {
-                val: 0.0.into(),
-                scale: 0.0.into(),
-            };
-            settings
-                .save(&format!("{}/{}/settings.json", test_dir, example_name).into())
-                .unwrap();
-        }
-
-        if tolerance > 0.0 && !any_output_scales_smol {
+        if tolerance > 0.0 {
             // load witness and shift the output by a small amount that is less than tolerance percent
             let witness = GraphWitness::from_path(
                 format!("{}/{}/witness.json", test_dir, example_name).into(),
@@ -1456,7 +1440,7 @@ mod native_tests {
         scales_to_use: Option<Vec<u32>>,
         num_inner_columns: usize,
         div_rebasing: bool,
-        tolerance: f32,
+        tolerance: &mut f32,
     ) {
         let mut args = vec![
             "gen-settings".to_string(),
@@ -1513,6 +1497,24 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        let mut settings =
+            GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())
+                .unwrap();
+
+        let any_output_scales_smol = settings.model_output_scales.iter().any(|s| *s <= 0);
+
+        if any_output_scales_smol {
+            // set the tolerance to 0.0
+            settings.run_args.tolerance = Tolerance {
+                val: 0.0.into(),
+                scale: 0.0.into(),
+            };
+            settings
+                .save(&format!("{}/{}/settings.json", test_dir, example_name).into())
+                .unwrap();
+            *tolerance = 0.0;
+        }
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1571,7 +1573,7 @@ mod native_tests {
             None,
             2,
             div_rebasing,
-            0.0,
+            &mut 0.0,
         );
 
         println!(
@@ -1831,7 +1833,7 @@ mod native_tests {
             scales_to_use,
             num_inner_columns,
             false,
-            0.0,
+            &mut 0.0,
         );
 
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
@@ -1933,7 +1935,7 @@ mod native_tests {
             None,
             2,
             false,
-            0.0,
+            &mut 0.0,
         );
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2210,7 +2212,7 @@ mod native_tests {
             Some(vec![4]),
             1,
             false,
-            0.0,
+            &mut 0.0,
         );
 
         let model_path = format!("{}/{}/network.compiled", test_dir, example_name);

@@ -3094,19 +3094,6 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, &values, BaseOp::Sub)?;
 
-    // multiply diff by 100 to get the percent error
-    let diff = pairwise(
-        config,
-        region,
-        &[
-            diff,
-            ValTensor::from(Tensor::from([ValType::Constant(F::from(100))].into_iter())),
-        ],
-        BaseOp::Mult,
-    )?;
-
-    // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
-
     let felt_scale = F::from(scale.0 as u64);
 
     let recip = recip(config, region, &[values[0].clone()], felt_scale, felt_scale)?;
@@ -3120,7 +3107,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     let rebased_product = div(config, region, &[product], F::from(scale.0 as u64))?;
 
-    let scaled_tol = (tol * scale.0) as i128;
+    let scaled_tol = (tol * scale.0 / 100.0) as i128;
 
     // check that it is within the tolerance range
     range_check(
