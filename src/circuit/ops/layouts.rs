@@ -3076,6 +3076,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     tol: f32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     println!("tol {:?}", tol);
+    println!("scale {:?}", scale);
     if tol == 0.0 {
         // regular equality constraint
         return enforce_equality(config, region, values);
@@ -3105,6 +3106,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
+
     let felt_scale = F::from(scale.0 as u64);
 
     let recip = recip(config, region, &[values[0].clone()], felt_scale, felt_scale)?;
