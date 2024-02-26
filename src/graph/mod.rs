@@ -62,7 +62,7 @@ use crate::pfsys::field_to_string;
 pub const RANGE_MULTIPLIER: i128 = 2;
 
 /// Max representation of a lookup table input
-pub const MAX_LOOKUP_ABS: i128 = 8 * 2_i128.pow(MAX_PUBLIC_SRS);
+pub const MAX_LOOKUP_ABS: i128 = 16 * 2_i128.pow(MAX_PUBLIC_SRS);
 
 #[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
@@ -1157,8 +1157,10 @@ impl GraphCircuit {
     }
 
     fn extended_k_is_small_enough(&self, k: u32) -> bool {
-        let max_degree = self.settings().run_args.num_inner_cols + 2;
+        let mut cs = ConstraintSystem::default();
+        Self::configure_with_params(&mut cs, self.settings().clone());
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
+        let max_degree = cs.degree();
         let quotient_poly_degree = (max_degree - 1) as u64;
         // n = 2^k
         let n = 1u64 << k;
