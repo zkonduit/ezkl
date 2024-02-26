@@ -373,9 +373,7 @@ impl ToPyObject for GraphWitness {
             .unwrap();
         dict.set_item("min_lookup_inputs", self.min_lookup_inputs)
             .unwrap();
-        dict.set_item("max_range_check", self.max_range_check)
-            .unwrap();
-        dict.set_item("min_range_check", self.min_range_check)
+        dict.set_item("max_range_size", self.max_range_size)
             .unwrap();
 
         if let Some(processed_inputs) = &self.processed_inputs {
@@ -1019,12 +1017,12 @@ impl GraphCircuit {
         margin
     }
 
-    fn calc_num_cols(safe_range: Range, max_logrows: u32) -> usize {
+    fn calc_num_cols(range_len: i128, max_logrows: u32) -> usize {
         let max_col_size = Table::<Fp>::cal_col_size(
             max_logrows as usize,
             Self::reserved_blinding_rows() as usize,
         );
-        num_cols_required(safe_range, max_col_size)
+        num_cols_required(range_len, max_col_size)
     }
 
     fn calc_min_logrows(
@@ -1042,9 +1040,7 @@ impl GraphCircuit {
 
         let reserved_blinding_rows = Self::reserved_blinding_rows();
         // check if has overflowed max lookup input
-        if min_max_lookup.1.abs() > MAX_LOOKUP_ABS / lookup_safety_margin
-            || min_max_lookup.0.abs() > MAX_LOOKUP_ABS / lookup_safety_margin
-        {
+        if (min_max_lookup.1 - min_max_lookup.0).abs() > MAX_LOOKUP_ABS / lookup_safety_margin {
             let err_string = format!("max lookup input {:?} is too large", min_max_lookup);
             return Err(err_string.into());
         }
@@ -1056,11 +1052,10 @@ impl GraphCircuit {
 
         let safe_lookup_range = Self::calc_safe_lookup_range(min_max_lookup, lookup_safety_margin);
         // pick the range with the largest absolute size between safe_lookup_range and min_max_range_checks
-        let safe_range = if (safe_lookup_range.1 - safe_lookup_range.0) > max_range_size {
-            safe_lookup_range
-        } else {
-            (0, max_range_size)
-        };
+        let safe_range = std::cmp::max(
+            (safe_lookup_range.1 - safe_lookup_range.0).abs(),
+            max_range_size,
+        );
 
         // degrade the max logrows until the extended k is small enough
         while min_logrows < max_logrows
@@ -1103,7 +1098,7 @@ impl GraphCircuit {
             return Err(err_string.into());
         }
 
-        let min_bits = ((safe_range.1 - safe_range.0) as f64 + reserved_blinding_rows + 1.)
+        let min_bits = (safe_range as f64 + reserved_blinding_rows + 1.)
             .log2()
             .ceil() as usize;
 
