@@ -70,8 +70,7 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
     used_range_checks: HashSet<Range>,
     max_lookup_inputs: i128,
     min_lookup_inputs: i128,
-    min_range_check: i128,
-    max_range_check: i128,
+    max_range_size: i128,
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
@@ -95,8 +94,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
-            max_range_check: 0,
-            min_range_check: 0,
+            max_range_size: 0,
         }
     }
     /// Create a new region context from a wrapped region
@@ -116,8 +114,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
-            max_range_check: 0,
-            min_range_check: 0,
+            max_range_size: 0,
         }
     }
 
@@ -136,8 +133,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
-            max_range_check: 0,
-            min_range_check: 0,
+            max_range_size: 0,
         }
     }
 
@@ -161,8 +157,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             used_range_checks,
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
-            max_range_check: 0,
-            min_range_check: 0,
+            max_range_size: 0,
         }
     }
 
@@ -310,8 +305,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             return Err("update_max_min_lookup_range: invalid range".into());
         }
 
-        self.max_range_check = self.max_range_check.max(range.1);
-        self.min_range_check = self.min_range_check.min(range.0);
+        let range_size = (range.1 - range.0).abs();
+
+        self.max_range_size = self.max_range_size.max(range_size);
         Ok(())
     }
 
@@ -371,14 +367,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         self.min_lookup_inputs
     }
 
-    /// min range check
-    pub fn min_range_check(&self) -> i128 {
-        self.min_range_check
-    }
-
     /// max range check
-    pub fn max_range_check(&self) -> i128 {
-        self.max_range_check
+    pub fn max_range_size(&self) -> i128 {
+        self.max_range_size
     }
 
     /// Assign a constant value

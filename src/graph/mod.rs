@@ -171,10 +171,8 @@ pub struct GraphWitness {
     pub max_lookup_inputs: i128,
     /// max lookup input
     pub min_lookup_inputs: i128,
-    /// max range check input
-    pub max_range_check: i128,
-    /// max range check input
-    pub min_range_check: i128,
+    /// max range check size
+    pub max_range_size: i128,
 }
 
 impl GraphWitness {
@@ -202,8 +200,7 @@ impl GraphWitness {
             processed_outputs: None,
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
-            max_range_check: 0,
-            min_range_check: 0,
+            max_range_size: 0,
         }
     }
 
@@ -1033,7 +1030,7 @@ impl GraphCircuit {
     fn calc_min_logrows(
         &mut self,
         min_max_lookup: Range,
-        min_max_range_checks: Range,
+        max_range_size: i128,
         max_logrows: Option<u32>,
         lookup_safety_margin: i128,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1052,24 +1049,17 @@ impl GraphCircuit {
             return Err(err_string.into());
         }
 
-        if min_max_range_checks.1.abs() > MAX_LOOKUP_ABS
-            || min_max_range_checks.1.abs() > MAX_LOOKUP_ABS
-        {
-            let err_string = format!(
-                "max range check input {:?} is too large",
-                min_max_range_checks
-            );
+        if max_range_size.abs() > MAX_LOOKUP_ABS {
+            let err_string = format!("max range check size {:?} is too large", max_range_size);
             return Err(err_string.into());
         }
 
         let safe_lookup_range = Self::calc_safe_lookup_range(min_max_lookup, lookup_safety_margin);
         // pick the range with the largest absolute size between safe_lookup_range and min_max_range_checks
-        let safe_range = if (safe_lookup_range.1 - safe_lookup_range.0)
-            > (min_max_range_checks.1 - min_max_range_checks.0)
-        {
+        let safe_range = if (safe_lookup_range.1 - safe_lookup_range.0) > max_range_size {
             safe_lookup_range
         } else {
-            min_max_range_checks
+            (0, max_range_size)
         };
 
         // degrade the max logrows until the extended k is small enough
@@ -1208,13 +1198,13 @@ impl GraphCircuit {
     pub fn calibrate_from_min_max(
         &mut self,
         min_max_lookup: Range,
-        min_max_range_checks: Range,
+        max_range_size: i128,
         max_logrows: Option<u32>,
         lookup_safety_margin: i128,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.calc_min_logrows(
             min_max_lookup,
-            min_max_range_checks,
+            max_range_size,
             max_logrows,
             lookup_safety_margin,
         )?;
@@ -1310,8 +1300,7 @@ impl GraphCircuit {
             processed_outputs,
             max_lookup_inputs: model_results.max_lookup_inputs,
             min_lookup_inputs: model_results.min_lookup_inputs,
-            max_range_check: model_results.max_range_check,
-            min_range_check: model_results.min_range_check,
+            max_range_size: model_results.max_range_size,
         };
 
         witness.generate_rescaled_elements(

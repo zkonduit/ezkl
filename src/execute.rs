@@ -808,16 +808,7 @@ pub(crate) fn calibrate(
     // we load the model to get the input and output shapes
     // check if gag already exists
 
-    #[cfg(unix)]
-    let _r = match Gag::stdout() {
-        Ok(r) => Some(r),
-        Err(_) => None,
-    };
-
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
-    // drop the gag
-    #[cfg(unix)]
-    std::mem::drop(_r);
 
     let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
     info!("num of calibration batches: {}", chunks.len());
@@ -896,16 +887,6 @@ pub(crate) fn calibrate(
             input_scale, param_scale, scale_rebase_multiplier, div_rebasing
         ));
 
-        #[cfg(unix)]
-        let _r = match Gag::stdout() {
-            Ok(r) => Some(r),
-            Err(_) => None,
-        };
-        #[cfg(unix)]
-        let _q = match Gag::stderr() {
-            Ok(r) => Some(r),
-            Err(_) => None,
-        };
         let key = (input_scale, param_scale, scale_rebase_multiplier);
         forward_pass_res.insert(key, vec![]);
 
@@ -920,11 +901,6 @@ pub(crate) fn calibrate(
         let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
             Ok(c) => c,
             Err(e) => {
-                // drop the gag
-                #[cfg(unix)]
-                std::mem::drop(_r);
-                #[cfg(unix)]
-                std::mem::drop(_q);
                 debug!("circuit creation from run args failed: {:?}", e);
                 continue;
             }
@@ -969,34 +945,20 @@ pub(crate) fn calibrate(
             .max()
             .unwrap_or(0);
 
-        let min_range_check = forward_pass_res
+        let max_range_size = forward_pass_res
             .get(&key)
             .unwrap()
             .iter()
-            .map(|x| x.min_range_check)
-            .min()
-            .unwrap_or(0);
-
-        let max_range_check = forward_pass_res
-            .get(&key)
-            .unwrap()
-            .iter()
-            .map(|x| x.max_range_check)
+            .map(|x| x.max_range_size)
             .max()
             .unwrap_or(0);
 
         let res = circuit.calibrate_from_min_max(
             (min_lookup_range, max_lookup_range),
-            (min_range_check, max_range_check),
+            max_range_size,
             max_logrows,
             lookup_safety_margin,
         );
-
-        // // drop the gag
-        // #[cfg(unix)]
-        // std::mem::drop(_r);
-        // #[cfg(unix)]
-        // std::mem::drop(_q);
 
         if res.is_ok() {
             let new_settings = circuit.settings().clone();
