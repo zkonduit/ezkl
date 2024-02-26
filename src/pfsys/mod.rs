@@ -197,7 +197,11 @@ impl std::fmt::Display for TranscriptType {
     }
 }
 
-impl ToFlags for TranscriptType {}
+impl ToFlags for TranscriptType {
+    fn to_flags(&self) -> Vec<String> {
+        vec![format!("{}", self)]
+    }
+}
 
 #[cfg(feature = "python-bindings")]
 impl ToPyObject for TranscriptType {

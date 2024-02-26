@@ -471,7 +471,7 @@ pub enum Commands {
             long,
             require_equals = true,
             num_args = 0..=1,
-            default_value_t = TranscriptType::EVM,
+            default_value_t = TranscriptType::default(),
             value_enum
         )]
         transcript: TranscriptType,
@@ -526,13 +526,13 @@ pub enum Commands {
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
         witness: PathBuf,
         /// The path to the compiled model file (generated using the compile-circuit command)
-        #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
+        #[arg(short = 'M', long)]
         compiled_circuit: PathBuf,
         #[arg(
             long,
             require_equals = true,
             num_args = 0..=1,
-            default_value_t = TranscriptType::EVM,
+            default_value_t = TranscriptType::default(),
             value_enum
         )]
         transcript: TranscriptType,
