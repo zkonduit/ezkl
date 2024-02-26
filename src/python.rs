@@ -493,6 +493,11 @@ fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult
 }
 
 /// Displays the table as a string in python
+/// 
+/// Arguments
+/// ---------
+/// model: str
+///   path to the net
 #[pyfunction(signature = (
     model = PathBuf::from(DEFAULT_MODEL),
     py_run_args = None

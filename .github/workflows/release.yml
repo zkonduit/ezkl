@@ -91,7 +91,6 @@ jobs:
           asset_name: ${{ env.ASSET }}
           asset_content_type: application/octet-stream
 
-
   build-release:
     name: build-release
     needs: ["create-release"]
