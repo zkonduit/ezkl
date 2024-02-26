@@ -1056,11 +1056,11 @@ impl GraphCircuit {
         );
 
         // degrade the max logrows until the extended k is small enough
-        while min_logrows < max_logrows && !self.extended_k_is_small_enough(min_logrows) {
+        while min_logrows < max_logrows && !self.extended_k_is_small_enough(min_logrows, safe_lookup_range, max_range_size) {
             min_logrows += 1;
         }
 
-        if !self.extended_k_is_small_enough(min_logrows) {
+        if !self.extended_k_is_small_enough(min_logrows, safe_lookup_range, max_range_size) {
             let err_string = format!(
                 "extended k is too large to accommodate the quotient polynomial with logrows {}",
                 min_logrows
@@ -1069,11 +1069,11 @@ impl GraphCircuit {
             return Err(err_string.into());
         }
 
-        while min_logrows < max_logrows && !self.extended_k_is_small_enough(max_logrows) {
+        while min_logrows < max_logrows && !self.extended_k_is_small_enough(max_logrows, safe_lookup_range, max_range_size) {
             max_logrows -= 1;
         }
 
-        if !self.extended_k_is_small_enough(max_logrows) {
+        if !self.extended_k_is_small_enough(max_logrows, safe_lookup_range, max_range_size) {
             let err_string = format!(
                 "extended k is too large to accommodate the quotient polynomial with logrows {}",
                 max_logrows
@@ -1153,9 +1153,13 @@ impl GraphCircuit {
         Ok(())
     }
 
-    fn extended_k_is_small_enough(&self, k: u32) -> bool {
+    fn extended_k_is_small_enough(&self, k: u32, safe_lookup_range: Range, max_range_size: i128) -> bool {
+        let mut settings = self.settings().clone();
+        settings.run_args.lookup_range = safe_lookup_range;
+        settings.run_args.logrows = k;
+        settings.required_range_checks = vec![(0, max_range_size)];
         let mut cs = ConstraintSystem::default();
-        Self::configure_with_params(&mut cs, self.settings().clone());
+        Self::configure_with_params(&mut cs, settings);
         #[cfg(feature = "mv-lookup")]
         let cs = cs.chunk_lookups();
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
