@@ -137,7 +137,8 @@ pub enum GraphError {
     MissingResults,
 }
 
-const ASSUMED_BLINDING_FACTORS: usize = 5;
+///
+pub const ASSUMED_BLINDING_FACTORS: usize = 5;
 /// The minimum number of rows in the grid
 pub const MIN_LOGROWS: u32 = 6;
 

@@ -65,7 +65,9 @@ pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
     let mut divisor = divisor;
 
     let mut num_parts = 1;
-    while felt_to_i128(divisor) % 2 == 0 && felt_to_i128(divisor) > 2_i128.pow(F::S) {
+    while felt_to_i128(divisor) % 2 == 0
+        && felt_to_i128(divisor) > (2_i128.pow(F::S) - ASSUMED_BLINDING_FACTORS)
+    {
         divisor = i128_to_felt(felt_to_i128(divisor) / 2);
         num_parts *= 2;
     }
