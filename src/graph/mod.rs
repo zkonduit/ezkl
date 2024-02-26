@@ -61,8 +61,11 @@ use crate::pfsys::field_to_string;
 /// The safety factor for the range of the lookup table.
 pub const RANGE_MULTIPLIER: i128 = 2;
 
+/// The maximum number of columns in a lookup table.
+pub const MAX_NUM_LOOKUP_COLS: usize = 16;
+
 /// Max representation of a lookup table input
-pub const MAX_LOOKUP_ABS: i128 = 16 * 2_i128.pow(MAX_PUBLIC_SRS);
+pub const MAX_LOOKUP_ABS: i128 = MAX_NUM_LOOKUP_COLS * 2_i128.pow(MAX_PUBLIC_SRS);
 
 #[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
@@ -1014,7 +1017,6 @@ impl GraphCircuit {
         margin
     }
 
-    #[allow(unused)]
     fn calc_num_cols(range_len: i128, max_logrows: u32) -> usize {
         let max_col_size = Table::<Fp>::cal_col_size(
             max_logrows as usize,
@@ -1056,7 +1058,9 @@ impl GraphCircuit {
         );
 
         // degrade the max logrows until the extended k is small enough
-        while min_logrows < max_logrows && !self.extended_k_is_small_enough(min_logrows, safe_lookup_range, max_range_size) {
+        while min_logrows < max_logrows
+            && !self.extended_k_is_small_enough(min_logrows, safe_lookup_range, max_range_size)
+        {
             min_logrows += 1;
         }
 
@@ -1069,7 +1073,9 @@ impl GraphCircuit {
             return Err(err_string.into());
         }
 
-        while min_logrows < max_logrows && !self.extended_k_is_small_enough(max_logrows, safe_lookup_range, max_range_size) {
+        while min_logrows < max_logrows
+            && !self.extended_k_is_small_enough(max_logrows, safe_lookup_range, max_range_size)
+        {
             max_logrows -= 1;
         }
 
@@ -1153,7 +1159,19 @@ impl GraphCircuit {
         Ok(())
     }
 
-    fn extended_k_is_small_enough(&self, k: u32, safe_lookup_range: Range, max_range_size: i128) -> bool {
+    fn extended_k_is_small_enough(
+        &self,
+        k: u32,
+        safe_lookup_range: Range,
+        max_range_size: i128,
+    ) -> bool {
+        // if num cols is too large then the extended k is too large
+        if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS {
+            return false;
+        } else if Self::calc_num_cols(max_range_size, k) > MAX_NUM_LOOKUP_COLS {
+            return false;
+        }
+
         let mut settings = self.settings().clone();
         settings.run_args.lookup_range = safe_lookup_range;
         settings.run_args.logrows = k;
