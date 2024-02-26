@@ -20,7 +20,6 @@ use super::{
 use crate::{
     circuit::{ops::base::BaseOp, utils},
     fieldutils::{felt_to_i128, i128_to_felt},
-    graph::ASSUMED_BLINDING_FACTORS,
     tensor::{
         get_broadcasted_shape,
         ops::{accumulated, add, mult, sub},
@@ -63,9 +62,7 @@ pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
     let mut divisor = divisor;
 
     let mut num_parts = 1;
-    while felt_to_i128(divisor) % 2 == 0
-        && felt_to_i128(divisor) > (2_i128.pow(F::S - 2) - ASSUMED_BLINDING_FACTORS as i128)
-    {
+    while felt_to_i128(divisor) % 2 == 0 && felt_to_i128(divisor) > (2_i128.pow(F::S - 3)) {
         divisor = i128_to_felt(felt_to_i128(divisor) / 2);
         num_parts *= 2;
     }
@@ -200,10 +197,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     let integer_output_scale = felt_to_i128(output_scale);
 
     // range_check_bracket is min of output_scale and 2^F::S - ASSUMED_BLINDING_FACTORS
-    let range_check_len = std::cmp::min(
-        integer_output_scale,
-        2_i128.pow(F::S - 2) - ASSUMED_BLINDING_FACTORS as i128,
-    );
+    let range_check_len = std::cmp::min(integer_output_scale, 2_i128.pow(F::S - 3));
 
     let input_scale_diff =
         i128_to_felt(integer_input_scale * integer_output_scale / range_check_len);
