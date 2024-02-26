@@ -65,7 +65,7 @@ pub const RANGE_MULTIPLIER: i128 = 2;
 pub const MAX_NUM_LOOKUP_COLS: usize = 16;
 
 /// Max representation of a lookup table input
-pub const MAX_LOOKUP_ABS: i128 = MAX_NUM_LOOKUP_COLS * 2_i128.pow(MAX_PUBLIC_SRS);
+pub const MAX_LOOKUP_ABS: i128 = (MAX_NUM_LOOKUP_COLS as i128) * 2_i128.pow(MAX_PUBLIC_SRS);
 
 #[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
