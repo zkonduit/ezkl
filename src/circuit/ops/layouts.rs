@@ -202,7 +202,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     // range_check_bracket is min of output_scale and 2^F::S - ASSUMED_BLINDING_FACTORS
     let range_check_len = std::cmp::min(
         integer_output_scale,
-        2_i128.pow(F::S) - ASSUMED_BLINDING_FACTORS as i128,
+        2_i128.pow(F::S - 2) - ASSUMED_BLINDING_FACTORS as i128,
     );
 
     let input_scale_diff =
