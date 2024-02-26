@@ -1854,7 +1854,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     let shape = &res[0].dims()[2..];
     let mut last_elem = res[1..]
         .iter()
-        .fold(Ok(res[0].clone()), |acc, elem| acc?.concat(elem.clone()))?;
+        .try_fold(res[0].clone(), |acc, elem| acc.concat(elem.clone()))?;
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     if normalized {

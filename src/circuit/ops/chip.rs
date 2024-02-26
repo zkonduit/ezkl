@@ -16,6 +16,7 @@ use pyo3::{
     types::PyString,
 };
 use serde::{Deserialize, Serialize};
+use tosubcommand::ToFlags;
 
 use crate::{
     circuit::ops::base::BaseOp,
@@ -61,6 +62,22 @@ pub enum CheckMode {
     UNSAFE,
 }
 
+impl std::fmt::Display for CheckMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CheckMode::SAFE => write!(f, "safe"),
+            CheckMode::UNSAFE => write!(f, "unsafe"),
+        }
+    }
+}
+
+impl ToFlags for CheckMode {
+    /// Convert the struct to a subcommand string
+    fn to_flags(&self) -> Vec<String> {
+        vec![format!("{}", self)]
+    }
+}
+
 impl From<String> for CheckMode {
     fn from(value: String) -> Self {
         match value.to_lowercase().as_str() {
@@ -81,6 +98,19 @@ impl From<String> for CheckMode {
 pub struct Tolerance {
     pub val: f32,
     pub scale: utils::F32,
+}
+
+impl std::fmt::Display for Tolerance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:.2}", self.val)
+    }
+}
+
+impl ToFlags for Tolerance {
+    /// Convert the struct to a subcommand string
+    fn to_flags(&self) -> Vec<String> {
+        vec![format!("{}", self)]
+    }
 }
 
 impl FromStr for Tolerance {
@@ -523,14 +553,15 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
         // we borrow mutably twice so we need to do this dance
 
-        let range_check = if let std::collections::btree_map::Entry::Vacant(e) = self.range_checks.entry(range) {
-            // as all tables have the same input we see if there's another table who's input we can reuse
-            let range_check = RangeCheck::<F>::configure(cs, range);
-            e.insert(range_check.clone());
-            range_check
-        } else {
-            return Ok(());
-        };
+        let range_check =
+            if let std::collections::btree_map::Entry::Vacant(e) = self.range_checks.entry(range) {
+                // as all tables have the same input we see if there's another table who's input we can reuse
+                let range_check = RangeCheck::<F>::configure(cs, range);
+                e.insert(range_check.clone());
+                range_check
+            } else {
+                return Ok(());
+            };
 
         for x in 0..input.num_blocks() {
             for y in 0..input.num_inner_cols() {

@@ -203,10 +203,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         let row = AtomicUsize::new(self.row());
         let linear_coord = AtomicUsize::new(self.linear_coord());
         let constants = AtomicUsize::new(self.total_constants());
-        let max_lookup_inputs =
-            AtomicInt::new(self.max_lookup_inputs().try_into().unwrap_or_default());
-        let min_lookup_inputs =
-            AtomicInt::new(self.min_lookup_inputs().try_into().unwrap_or_default());
+        let max_lookup_inputs = AtomicInt::new(self.max_lookup_inputs());
+        let min_lookup_inputs = AtomicInt::new(self.min_lookup_inputs());
         let lookups = Arc::new(Mutex::new(self.used_lookups.clone()));
         let range_checks = Arc::new(Mutex::new(self.used_range_checks.clone()));
 
@@ -239,13 +237,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                     Ordering::SeqCst,
                 );
 
-                let local_max_lookup_inputs =
-                    local_reg.max_lookup_inputs().try_into().unwrap_or_default();
-                let local_min_lookup_inputs =
-                    local_reg.min_lookup_inputs().try_into().unwrap_or_default();
-
-                max_lookup_inputs.fetch_max(local_max_lookup_inputs, Ordering::SeqCst);
-                min_lookup_inputs.fetch_min(local_min_lookup_inputs, Ordering::SeqCst);
+                max_lookup_inputs.fetch_max(local_reg.max_lookup_inputs(), Ordering::SeqCst);
+                min_lookup_inputs.fetch_min(local_reg.min_lookup_inputs(), Ordering::SeqCst);
                 // update the lookups
                 let mut lookups = lookups.lock().unwrap();
                 lookups.extend(local_reg.used_lookups());
@@ -261,8 +254,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         self.linear_coord = linear_coord.into_inner();
         #[allow(trivial_numeric_casts)]
         {
-            self.max_lookup_inputs = max_lookup_inputs.into_inner() as i128;
-            self.min_lookup_inputs = min_lookup_inputs.into_inner() as i128;
+            self.max_lookup_inputs = max_lookup_inputs.into_inner();
+            self.min_lookup_inputs = min_lookup_inputs.into_inner();
         }
         self.row = row.into_inner();
         self.used_lookups = Arc::try_unwrap(lookups)

@@ -15,10 +15,9 @@ use crate::graph::{
 use crate::pfsys::evm::aggregation::AggregationCircuit;
 use crate::pfsys::{
     load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs, ProofType,
-    Snark, TranscriptType,
+    TranscriptType,
 };
 use crate::RunArgs;
-use ethers::types::H160;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
@@ -26,7 +25,6 @@ use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
 use snark_verifier::util::arithmetic::PrimeField;
-use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
 
@@ -581,7 +579,7 @@ fn gen_settings(
     scales = None,
     scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.split(",").map(|x| x.parse().unwrap()).collect(),
     max_logrows = None,
-    div_rebasing = None,
+    only_range_check_rebase = DEFAULT_ONLY_RANGE_CHECK_REBASE.parse().unwrap(),
 ))]
 fn calibrate_settings(
     data: PathBuf,
@@ -592,7 +590,7 @@ fn calibrate_settings(
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
-    div_rebasing: Option<bool>,
+    only_range_check_rebase: bool,
 ) -> Result<bool, PyErr> {
     crate::execute::calibrate(
         model,
@@ -602,7 +600,7 @@ fn calibrate_settings(
         lookup_safety_margin,
         scales,
         scale_rebase_multiplier,
-        div_rebasing,
+        only_range_check_rebase,
         max_logrows,
     )
     .map_err(|e| {
@@ -745,14 +743,23 @@ fn prove(
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     vk_path=PathBuf::from(DEFAULT_VK),
     srs_path=None,
+    non_reduced_srs=DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse::<bool>().unwrap(),
 ))]
 fn verify(
     proof_path: PathBuf,
     settings_path: PathBuf,
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
+    non_reduced_srs: bool,
 ) -> Result<bool, PyErr> {
-    crate::execute::verify(proof_path, settings_path, vk_path, srs_path).map_err(|e| {
+    crate::execute::verify(
+        proof_path,
+        settings_path,
+        vk_path,
+        srs_path,
+        non_reduced_srs,
+    )
+    .map_err(|e| {
         let err_str = format!("Failed to run verify: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
@@ -1078,24 +1085,15 @@ fn verify_evm(
     addr_da: Option<&str>,
     addr_vk: Option<&str>,
 ) -> Result<bool, PyErr> {
-    let addr_verifier = H160::from_str(addr_verifier).map_err(|e| {
-        let err_str = format!("address is invalid: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+    let addr_verifier = H160Flag::from(addr_verifier);
     let addr_da = if let Some(addr_da) = addr_da {
-        let addr_da = H160::from_str(addr_da).map_err(|e| {
-            let err_str = format!("address is invalid: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+        let addr_da = H160Flag::from(addr_da);
         Some(addr_da)
     } else {
         None
     };
     let addr_vk = if let Some(addr_vk) = addr_vk {
-        let addr_vk = H160::from_str(addr_vk).map_err(|e| {
-            let err_str = format!("address is invalid: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+        let addr_vk = H160Flag::from(addr_vk);
         Some(addr_vk)
     } else {
         None
@@ -1153,16 +1151,6 @@ fn create_evm_verifier_aggr(
     Ok(true)
 }
 
-/// print hex representation of a proof
-#[pyfunction(signature = (proof_path))]
-fn print_proof_hex(proof_path: PathBuf) -> Result<String, PyErr> {
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)
-        .map_err(|_| PyIOError::new_err("Failed to load proof"))?;
-
-    let hex_str = hex::encode(proof.proof);
-    Ok(format!("0x{}", hex_str))
-}
-
 // Python Module
 #[pymodule]
 fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
@@ -1201,7 +1189,6 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(deploy_vk_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
-    m.add_function(wrap_pyfunction!(print_proof_hex, m)?)?;
     m.add_function(wrap_pyfunction!(setup_test_evm_witness, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;

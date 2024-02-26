@@ -35,6 +35,8 @@ ark-std = { version = "^0.3.0", default-features = false }
 unzip-n = "0.1.2"
 num = "0.4.1"
 portable-atomic = "1.6.0"
+tosubcommand = { git =  "https://github.com/zkonduit/enum_to_subcommand", package = "tosubcommand" }
+
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -159,6 +161,7 @@ mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup", "halo2_solidi
 det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
 empty-cmd = []
+no-banner = []
 
 # icicle patch to 0.1.0 if feature icicle is enabled
 [patch.'https://github.com/ingonyama-zk/icicle']

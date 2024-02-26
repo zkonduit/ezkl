@@ -6,6 +6,7 @@ use ezkl::fieldutils;
 use ezkl::fieldutils::i32_to_felt;
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
+use halo2_proofs::poly::commitment::Params;
 use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -489,6 +490,7 @@ pub fn runconv() {
         strategy,
         pi_for_real_prover,
         &mut transcript,
+        params.n(),
     );
     assert!(verify.is_ok());
 

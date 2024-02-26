@@ -1321,7 +1321,7 @@ mod native_tests {
                 "--settings-path={}/{}/settings.json",
                 test_dir, example_name
             ),
-            format!("--variables=batch_size={}", batch_size),
+            format!("--variables=batch_size->{}", batch_size),
             format!("--input-visibility={}", input_visibility),
             format!("--param-visibility={}", param_visibility),
             format!("--output-visibility={}", output_visibility),
@@ -1402,6 +1402,7 @@ mod native_tests {
     }
 
     // Mock prove (fast, but does not cover some potential issues)
+    #[allow(clippy::too_many_arguments)]
     fn accuracy_measurement(
         test_dir: &str,
         example_name: String,
@@ -1455,7 +1456,7 @@ mod native_tests {
                 format!("{}/{}/network.onnx", test_dir, example_name).as_str(),
                 "-O",
                 format!("{}/{}/render.png", test_dir, example_name).as_str(),
-                "--lookup-range=(-32768,32768)",
+                "--lookup-range=-32768->32768",
                 "-K=17",
             ])
             .status()
@@ -1741,6 +1742,30 @@ mod native_tests {
                 &format!("{}/{}/proof.pf", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // load settings file
+        let settings =
+            std::fs::read_to_string(settings_path.clone()).expect("failed to read settings file");
+
+        let graph_settings = serde_json::from_str::<GraphSettings>(&settings)
+            .expect("failed to parse settings file");
+
+        // get_srs for the graph_settings_num_instances
+        download_srs(graph_settings.log2_total_instances());
+
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "verify",
+                format!("--settings-path={}", settings_path).as_str(),
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+                "--vk-path",
+                &format!("{}/{}/key.vk", test_dir, example_name),
+                "--reduced-srs",
             ])
             .status()
             .expect("failed to execute process");
