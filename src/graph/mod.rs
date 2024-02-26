@@ -1017,6 +1017,7 @@ impl GraphCircuit {
         margin
     }
 
+    #[allow(unused)]
     fn calc_num_cols(range_len: i128, max_logrows: u32) -> usize {
         let max_col_size = Table::<Fp>::cal_col_size(
             max_logrows as usize,
