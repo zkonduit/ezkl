@@ -1156,6 +1156,8 @@ impl GraphCircuit {
     fn extended_k_is_small_enough(&self, k: u32) -> bool {
         let mut cs = ConstraintSystem::default();
         Self::configure_with_params(&mut cs, self.settings().clone());
+        #[cfg(feature = "mv-lookup")]
+        let cs = cs.chunk_lookups();
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
         let max_degree = cs.degree();
         let quotient_poly_degree = (max_degree - 1) as u64;
