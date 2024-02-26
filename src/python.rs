@@ -32,6 +32,7 @@ use tokio::runtime::Runtime;
 
 type PyFelt = String;
 
+/// pyclass for setup evm witness
 #[pyclass]
 #[derive(Debug, Clone)]
 enum PyTestDataSource {
@@ -50,11 +51,12 @@ impl From<PyTestDataSource> for TestDataSource {
     }
 }
 
-/// pyclass containing the struct used for G1
+/// pyclass containing the struct used for G1, this is mostly a helper class
 #[pyclass]
 #[derive(Debug, Clone)]
 struct PyG1 {
     #[pyo3(get, set)]
+    /// x for the gr
     x: PyFelt,
     #[pyo3(get, set)]
     y: PyFelt,
@@ -133,7 +135,56 @@ impl pyo3::ToPyObject for PyG1Affine {
     }
 }
 
-/// pyclass containing the struct used for run_args
+/// Python class containing the struct used for run_args
+///
+/// Arguments
+/// ---------
+/// tolerance: float
+///    The tolerance for error on model outputs
+///
+/// input_scale: int
+///   The denominator in the fixed point representation used when quantizing inputs
+///
+/// param_scale: int
+///   The denominator in the fixed point representation used when quantizing parameters
+///
+/// scale_rebase_multiplier: int
+///   If the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
+///
+/// lookup_range: list[int]
+///   The min and max elements in the lookup table input column
+///
+/// logrows: int
+///   The log_2 number of rows
+///
+/// num_inner_cols: int
+///   The log_2 number of rows
+///
+/// input_visibility: str
+///   Flags whether inputs are public, private, hashed
+///
+/// output_visibility: str
+///   Flags whether outputs are public, private, hashed
+///
+/// param_visibility: str
+///   Flags whether params are public, private, hashed
+///
+/// variables: list[tuple[str, int]]
+///   Hand-written parser for graph variables, eg. batch_size=1
+///
+/// div_rebasing: bool
+///   Rebase the scale using lookup table for division instead of using a range check
+///
+/// rebase_frac_zero_constants: bool
+///   Should constants with 0.0 fraction be rebased to scale 0
+///
+/// check_mode: str
+///   check mode (safe, unsafe)
+///
+/// Returns
+/// -------
+/// PyRunArgs
+///
 #[pyclass]
 #[derive(Clone)]
 struct PyRunArgs {
