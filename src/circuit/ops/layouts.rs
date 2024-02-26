@@ -20,7 +20,7 @@ use super::{
 use crate::{
     circuit::{
         ops::base::BaseOp,
-        utils::{self},
+        utils::{self, F32},
     },
     fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{
@@ -104,6 +104,8 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         &[product.clone(), input.clone()],
         BaseOp::Sub,
     )?;
+
+    log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
 
     range_check(
         config,
@@ -2482,6 +2484,28 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
 
     let is_dummy = region.is_dummy();
 
+    let table_index: ValTensor<F> = w
+        .get_inner_tensor()?
+        .par_enum_map(|_, e| {
+            Ok::<ValType<F>, TensorError>(if let Some(f) = e.get_felt_eval() {
+                let col_idx = if !is_dummy {
+                    let table = config
+                        .range_checks
+                        .get(range)
+                        .ok_or(TensorError::TableLookupError)?;
+                    table.get_col_index(f)
+                } else {
+                    F::ZERO
+                };
+                Value::known(col_idx).into()
+            } else {
+                Value::<F>::unknown().into()
+            })
+        })?
+        .into();
+
+    region.assign(&config.lookup_index, &table_index)?;
+
     if !is_dummy {
         (0..assigned_len)
             .map(|i| {
@@ -2953,8 +2977,17 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         return enforce_equality(config, region, values);
     }
 
+    let mut values = [values[0].clone(), values[1].clone()];
+
+    values[0] = region.assign(&config.inputs[0], &values[0])?;
+    values[1] = region.assign(&config.inputs[1], &values[1])?;
+    let total_assigned_0 = values[0].len();
+    let total_assigned_1 = values[1].len();
+    let total_assigned = std::cmp::max(total_assigned_0, total_assigned_1);
+    region.increment(total_assigned);
+
     // Calculate the difference between the expected output and actual output
-    let diff = pairwise(config, region, values, BaseOp::Sub)?;
+    let diff = pairwise(config, region, &values, BaseOp::Sub)?;
 
     // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
     let recip = nonlinearity(
@@ -2963,44 +2996,22 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         &[values[0].clone()],
         &LookupOp::Recip {
             input_scale: scale,
-            output_scale: scale,
+            // multiply by 100 to get the percent error
+            output_scale: F32(scale.0 * 100.0),
         },
     )?;
 
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
+    let rebased_product = div(config, region, &[product], F::from(scale.0 as u64))?;
 
-    let scale_squared = scale.0 * scale.0;
+    let scaled_tol = (tol * scale.0) as i128;
 
-    // Use the greater than look up table to check if the percent error is within the tolerance for upper bound
-    let tol = tol / 100.0;
-    let upper_bound = nonlinearity(
+    // check that it is within the tolerance range
+    range_check(
         config,
         region,
-        &[product.clone()],
-        &LookupOp::GreaterThan {
-            a: utils::F32(tol * scale_squared),
-        },
-    )?;
-
-    // Negate the product
-    let neg_product = neg(config, region, &[product])?;
-
-    // Use the greater than look up table to check if the percent error is within the tolerance for lower bound
-    let lower_bound = nonlinearity(
-        config,
-        region,
-        &[neg_product],
-        &LookupOp::GreaterThan {
-            a: utils::F32(tol * scale_squared),
-        },
-    )?;
-
-    // Add the lower_bound and upper_bound
-    let sum = pairwise(config, region, &[lower_bound, upper_bound], BaseOp::Add)?;
-
-    // Constrain the sum to be all zeros
-    is_zero_identity(config, region, &[sum.clone()], false)?;
-
-    Ok(sum)
+        &[rebased_product],
+        &(-scaled_tol, scaled_tol),
+    )
 }

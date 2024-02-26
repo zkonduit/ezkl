@@ -67,6 +67,10 @@ pub struct ForwardResult {
     pub max_lookup_inputs: i128,
     /// The minimum value of any input to a lookup operation.
     pub min_lookup_inputs: i128,
+    /// The max range check value
+    pub max_range_check: i128,
+    /// The min range check value
+    pub min_range_check: i128,
 }
 
 impl From<DummyPassRes> for ForwardResult {
@@ -75,6 +79,8 @@ impl From<DummyPassRes> for ForwardResult {
             outputs: res.outputs,
             max_lookup_inputs: res.max_lookup_inputs,
             min_lookup_inputs: res.min_lookup_inputs,
+            min_range_check: res.min_range_check,
+            max_range_check: res.max_range_check,
         }
     }
 }
@@ -108,6 +114,10 @@ pub struct DummyPassRes {
     pub max_lookup_inputs: i128,
     /// min lookup inputs
     pub min_lookup_inputs: i128,
+    /// min range check
+    pub min_range_check: i128,
+    /// max range check
+    pub max_range_check: i128,
     /// outputs
     pub outputs: Vec<Tensor<Fp>>,
 }
@@ -556,12 +566,16 @@ impl Model {
     /// * `reader` - A reader for an Onnx file.
     /// * `model_inputs` - A vector of [Tensor]s to use as inputs to the model.
     /// * `run_args` - [RunArgs]
-    pub fn forward(&self, model_inputs: &[Tensor<Fp>]) -> Result<ForwardResult, Box<dyn Error>> {
+    pub fn forward(
+        &self,
+        model_inputs: &[Tensor<Fp>],
+        run_args: &RunArgs,
+    ) -> Result<ForwardResult, Box<dyn Error>> {
         let valtensor_inputs: Vec<ValTensor<Fp>> = model_inputs
             .iter()
             .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
             .collect();
-        let res = self.dummy_layout(&RunArgs::default(), &valtensor_inputs)?;
+        let res = self.dummy_layout(run_args, &valtensor_inputs)?;
         Ok(res.into())
     }
 
@@ -1021,7 +1035,7 @@ impl Model {
         }
 
         for range in required_range_checks {
-            base_gate.configure_range_check(meta, input, range)?;
+            base_gate.configure_range_check(meta, input, index, range, logrows)?;
         }
 
         Ok(base_gate)
@@ -1371,27 +1385,26 @@ impl Model {
                 ValType::Constant(Fp::ONE)
             };
 
-            let comparator = outputs
+            let output_scales = self.graph.get_output_scales()?;
+            let res = outputs
                 .iter()
-                .map(|x| {
-                    let mut v: ValTensor<Fp> =
-                        vec![default_value.clone(); x.dims().iter().product::<usize>()].into();
-                    v.reshape(x.dims())?;
-                    Ok(v)
-                })
-                .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+                .enumerate()
+                .map(|(i, output)| {
+                    let mut tolerance = run_args.tolerance;
+                    tolerance.scale = scale_to_multiplier(output_scales[i]).into();
 
-            let _ = outputs
-                .iter()
-                .zip(comparator)
-                .map(|(o, c)| {
+                    let mut comparator: ValTensor<Fp> =
+                        vec![default_value.clone(); output.dims().iter().product::<usize>()].into();
+                    comparator.reshape(output.dims())?;
+
                     dummy_config.layout(
                         &mut region,
-                        &[o.clone(), c],
-                        Box::new(HybridOp::RangeCheck(run_args.tolerance)),
+                        &[output.clone(), comparator],
+                        Box::new(HybridOp::RangeCheck(tolerance)),
                     )
                 })
-                .collect::<Result<Vec<_>, _>>()?;
+                .collect::<Result<Vec<_>, _>>();
+            res?;
         } else if !self.visibility.output.is_private() {
             for output in &outputs {
                 region.increment_total_constants(output.num_constants());
@@ -1428,6 +1441,8 @@ impl Model {
             range_checks: region.used_range_checks(),
             max_lookup_inputs: region.max_lookup_inputs(),
             min_lookup_inputs: region.min_lookup_inputs(),
+            min_range_check: region.min_range_check(),
+            max_range_check: region.max_range_check(),
             outputs,
         };
 

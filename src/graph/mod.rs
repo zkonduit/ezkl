@@ -24,7 +24,7 @@ use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::table::{Range, Table, RESERVED_BLINDING_ROWS_PAD};
+use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::fieldutils::felt_to_f64;
 use crate::pfsys::PrettyElements;
@@ -56,7 +56,7 @@ pub use utilities::*;
 pub use vars::*;
 
 #[cfg(feature = "python-bindings")]
-use crate::pfsys::field_to_string_montgomery;
+use crate::pfsys::field_to_string;
 
 /// The safety factor for the range of the lookup table.
 pub const RANGE_MULTIPLIER: i128 = 2;
@@ -171,6 +171,10 @@ pub struct GraphWitness {
     pub max_lookup_inputs: i128,
     /// max lookup input
     pub min_lookup_inputs: i128,
+    /// max range check input
+    pub max_range_check: i128,
+    /// max range check input
+    pub min_range_check: i128,
 }
 
 impl GraphWitness {
@@ -198,6 +202,8 @@ impl GraphWitness {
             processed_outputs: None,
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
+            max_range_check: 0,
+            min_range_check: 0,
         }
     }
 
@@ -355,18 +361,24 @@ impl ToPyObject for GraphWitness {
         let inputs: Vec<Vec<String>> = self
             .inputs
             .iter()
-            .map(|x| x.iter().map(field_to_string_montgomery).collect())
+            .map(|x| x.iter().map(field_to_string).collect())
             .collect();
 
         let outputs: Vec<Vec<String>> = self
             .outputs
             .iter()
-            .map(|x| x.iter().map(field_to_string_montgomery).collect())
+            .map(|x| x.iter().map(field_to_string).collect())
             .collect();
 
         dict.set_item("inputs", inputs).unwrap();
         dict.set_item("outputs", outputs).unwrap();
         dict.set_item("max_lookup_inputs", self.max_lookup_inputs)
+            .unwrap();
+        dict.set_item("min_lookup_inputs", self.min_lookup_inputs)
+            .unwrap();
+        dict.set_item("max_range_check", self.max_range_check)
+            .unwrap();
+        dict.set_item("min_range_check", self.min_range_check)
             .unwrap();
 
         if let Some(processed_inputs) = &self.processed_inputs {
@@ -409,10 +421,7 @@ impl ToPyObject for GraphWitness {
 
 #[cfg(feature = "python-bindings")]
 fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) -> Result<(), PyErr> {
-    let poseidon_hash: Vec<String> = poseidon_hash
-        .iter()
-        .map(field_to_string_montgomery)
-        .collect();
+    let poseidon_hash: Vec<String> = poseidon_hash.iter().map(field_to_string).collect();
     pydict.set_item("poseidon_hash", poseidon_hash)?;
 
     Ok(())
@@ -1000,14 +1009,10 @@ impl GraphCircuit {
         (ASSUMED_BLINDING_FACTORS + RESERVED_BLINDING_ROWS_PAD) as f64
     }
 
-    fn calc_safe_lookup_range(
-        min_lookup_inputs: i128,
-        max_lookup_inputs: i128,
-        lookup_safety_margin: i128,
-    ) -> Range {
+    fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i128) -> Range {
         let mut margin = (
-            lookup_safety_margin * min_lookup_inputs,
-            lookup_safety_margin * max_lookup_inputs,
+            lookup_safety_margin * min_max_lookup.0,
+            lookup_safety_margin * min_max_lookup.1,
         );
         if lookup_safety_margin == 1 {
             margin.0 += 4;
@@ -1022,13 +1027,13 @@ impl GraphCircuit {
             max_logrows as usize,
             Self::reserved_blinding_rows() as usize,
         );
-        Table::<Fp>::num_cols_required(safe_range, max_col_size)
+        num_cols_required(safe_range, max_col_size)
     }
 
     fn calc_min_logrows(
         &mut self,
-        min_lookup_inputs: i128,
-        max_lookup_inputs: i128,
+        min_max_lookup: Range,
+        min_max_range_checks: Range,
         max_logrows: Option<u32>,
         lookup_safety_margin: i128,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1040,18 +1045,32 @@ impl GraphCircuit {
 
         let reserved_blinding_rows = Self::reserved_blinding_rows();
         // check if has overflowed max lookup input
-        if max_lookup_inputs > MAX_LOOKUP_ABS / lookup_safety_margin
-            || min_lookup_inputs < -MAX_LOOKUP_ABS / lookup_safety_margin
+        if min_max_lookup.1.abs() > MAX_LOOKUP_ABS / lookup_safety_margin
+            || min_max_lookup.0.abs() > MAX_LOOKUP_ABS / lookup_safety_margin
         {
-            let err_string = format!("max lookup input ({}) is too large", max_lookup_inputs);
+            let err_string = format!("max lookup input {:?} is too large", min_max_lookup);
             return Err(err_string.into());
         }
 
-        let safe_range = Self::calc_safe_lookup_range(
-            min_lookup_inputs,
-            max_lookup_inputs,
-            lookup_safety_margin,
-        );
+        if min_max_range_checks.1.abs() > MAX_LOOKUP_ABS
+            || min_max_range_checks.1.abs() > MAX_LOOKUP_ABS
+        {
+            let err_string = format!(
+                "max range check input {:?} is too large",
+                min_max_range_checks
+            );
+            return Err(err_string.into());
+        }
+
+        let safe_lookup_range = Self::calc_safe_lookup_range(min_max_lookup, lookup_safety_margin);
+        // pick the range with the largest absolute size between safe_lookup_range and min_max_range_checks
+        let safe_range = if (safe_lookup_range.1 - safe_lookup_range.0)
+            > (min_max_range_checks.1 - min_max_range_checks.0)
+        {
+            safe_lookup_range
+        } else {
+            min_max_range_checks
+        };
 
         // degrade the max logrows until the extended k is small enough
         while min_logrows < max_logrows
@@ -1135,7 +1154,7 @@ impl GraphCircuit {
 
         let model = self.model().clone();
         let settings_mut = self.settings_mut();
-        settings_mut.run_args.lookup_range = safe_range;
+        settings_mut.run_args.lookup_range = safe_lookup_range;
         settings_mut.run_args.logrows = logrows as u32;
 
         *settings_mut = GraphCircuit::new(model, &settings_mut.run_args)?
@@ -1188,14 +1207,14 @@ impl GraphCircuit {
     /// Calibrate the circuit to the supplied data.
     pub fn calibrate_from_min_max(
         &mut self,
-        min_lookup_inputs: i128,
-        max_lookup_inputs: i128,
+        min_max_lookup: Range,
+        min_max_range_checks: Range,
         max_logrows: Option<u32>,
         lookup_safety_margin: i128,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.calc_min_logrows(
-            min_lookup_inputs,
-            max_lookup_inputs,
+            min_max_lookup,
+            min_max_range_checks,
             max_logrows,
             lookup_safety_margin,
         )?;
@@ -1248,7 +1267,7 @@ impl GraphCircuit {
             }
         }
 
-        let mut model_results = self.model().forward(inputs)?;
+        let mut model_results = self.model().forward(inputs, &self.settings().run_args)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();
@@ -1291,6 +1310,8 @@ impl GraphCircuit {
             processed_outputs,
             max_lookup_inputs: model_results.max_lookup_inputs,
             min_lookup_inputs: model_results.min_lookup_inputs,
+            max_range_check: model_results.max_range_check,
+            min_range_check: model_results.min_range_check,
         };
 
         witness.generate_rescaled_elements(

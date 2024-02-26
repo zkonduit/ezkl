@@ -130,14 +130,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
     pub fn cal_bit_range(bits: usize, reserved_blinding_rows: usize) -> usize {
         2usize.pow(bits as u32) - reserved_blinding_rows
     }
+}
 
-    ///
-    pub fn num_cols_required(range: Range, col_size: usize) -> usize {
-        // double it to be safe
-        let range_len = range.1 - range.0;
-        // number of cols needed to store the range
-        (range_len / (col_size as i128)) as usize + 1
-    }
+///
+pub fn num_cols_required(range: Range, col_size: usize) -> usize {
+    // double it to be safe
+    let range_len = range.1 - range.0;
+    // number of cols needed to store the range
+    (range_len / (col_size as i128)) as usize + 1
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
@@ -152,7 +152,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let factors = cs.blinding_factors() + RESERVED_BLINDING_ROWS_PAD;
         let col_size = Self::cal_col_size(logrows, factors);
         // number of cols needed to store the range
-        let num_cols = Self::num_cols_required(range, col_size);
+        let num_cols = num_cols_required(range, col_size);
 
         log::debug!("table range: {:?}", range);
 
@@ -265,7 +265,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
 #[derive(Clone, Debug)]
 pub struct RangeCheck<F: PrimeField> {
     /// Input to table.
-    pub input: TableColumn,
+    pub inputs: Vec<TableColumn>,
+    /// col size
+    pub col_size: usize,
     /// selector cn
     pub selector_constructor: SelectorConstructor<F>,
     /// Flags if table has been previously assigned to.
@@ -277,8 +279,10 @@ pub struct RangeCheck<F: PrimeField> {
 
 impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
     /// get first_element of column
-    pub fn get_first_element(&self) -> F {
-        i128_to_felt(self.range.0)
+    pub fn get_first_element(&self, chunk: usize) -> F {
+        let chunk = chunk as i128;
+        // we index from 1 to prevent soundness issues
+        i128_to_felt(chunk * (self.col_size as i128) + self.range.0)
     }
 
     ///
@@ -290,22 +294,56 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
     pub fn cal_bit_range(bits: usize, reserved_blinding_rows: usize) -> usize {
         2usize.pow(bits as u32) - reserved_blinding_rows
     }
+
+    /// get column index given input
+    pub fn get_col_index(&self, input: F) -> F {
+        //    range is split up into chunks of size col_size, find the chunk that input is in
+        let chunk =
+            (crate::fieldutils::felt_to_i128(input) - self.range.0).abs() / (self.col_size as i128);
+
+        i128_to_felt(chunk)
+    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
     /// Configures the table.
-    pub fn configure(cs: &mut ConstraintSystem<F>, range: Range) -> RangeCheck<F> {
+    pub fn configure(cs: &mut ConstraintSystem<F>, range: Range, logrows: usize) -> RangeCheck<F> {
         log::debug!("range check range: {:?}", range);
 
-        let inputs = cs.lookup_table_column();
+        let factors = cs.blinding_factors() + RESERVED_BLINDING_ROWS_PAD;
+        let col_size = Self::cal_col_size(logrows, factors);
+        // number of cols needed to store the range
+        let num_cols = num_cols_required(range, col_size);
+
+        let inputs = {
+            let mut cols = vec![];
+            for _ in 0..num_cols {
+                cols.push(cs.lookup_table_column());
+            }
+            cols
+        };
+
+        let num_cols = inputs.len();
+
+        if num_cols > 1 {
+            warn!("Using {} columns for range-check.", num_cols);
+        }
 
         RangeCheck {
-            input: inputs,
+            inputs,
+            col_size,
             is_assigned: false,
-            selector_constructor: SelectorConstructor::new(2),
+            selector_constructor: SelectorConstructor::new(num_cols),
             range,
             _marker: PhantomData,
         }
+    }
+
+    /// Take a linear coordinate and output the (column, row) position in the storage block.
+    pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize) {
+        let x = linear_coord / self.col_size;
+        let y = linear_coord % self.col_size;
+        (x, y)
     }
 
     /// Assigns values to the constraints generated when calling `configure`.
@@ -318,28 +356,43 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         let largest = self.range.1;
 
         let inputs: Tensor<F> = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+        let chunked_inputs = inputs.chunks(self.col_size);
 
         self.is_assigned = true;
 
-        layouter.assign_table(
-            || "range check table",
-            |mut table| {
-                let _ = inputs
-                    .iter()
-                    .enumerate()
-                    .map(|(row_offset, input)| {
-                        table.assign_cell(
-                            || format!("rc_i_col row {}", row_offset),
-                            self.input,
-                            row_offset,
-                            || Value::known(*input),
-                        )?;
+        let col_multipliers: Vec<F> = (0..chunked_inputs.len())
+            .map(|x| self.selector_constructor.get_selector_val_at_idx(x))
+            .collect();
+
+        let _ = chunked_inputs
+            .enumerate()
+            .map(|(chunk_idx, inputs)| {
+                layouter.assign_table(
+                    || "range check table",
+                    |mut table| {
+                        let _ = inputs
+                            .iter()
+                            .enumerate()
+                            .map(|(mut row_offset, input)| {
+                                let col_multiplier = col_multipliers[chunk_idx];
+
+                                row_offset += chunk_idx * self.col_size;
+                                let (x, y) = self.cartesian_coord(row_offset);
+                                table.assign_cell(
+                                    || format!("rc_i_col row {}", row_offset),
+                                    self.inputs[x],
+                                    y,
+                                    || Value::known(*input * col_multiplier),
+                                )?;
+
+                                Ok(())
+                            })
+                            .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
                         Ok(())
-                    })
-                    .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
-                Ok(())
-            },
-        )?;
+                    },
+                )
+            })
+            .collect::<Result<Vec<()>, halo2_proofs::plonk::Error>>()?;
         Ok(())
     }
 }

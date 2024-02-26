@@ -70,6 +70,8 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
     used_range_checks: HashSet<Range>,
     max_lookup_inputs: i128,
     min_lookup_inputs: i128,
+    min_range_check: i128,
+    max_range_check: i128,
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
@@ -93,6 +95,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
+            max_range_check: 0,
+            min_range_check: 0,
         }
     }
     /// Create a new region context from a wrapped region
@@ -112,6 +116,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
+            max_range_check: 0,
+            min_range_check: 0,
         }
     }
 
@@ -130,6 +136,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
+            max_range_check: 0,
+            min_range_check: 0,
         }
     }
 
@@ -153,6 +161,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             used_range_checks,
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
+            max_range_check: 0,
+            min_range_check: 0,
         }
     }
 
@@ -300,8 +310,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             return Err("update_max_min_lookup_range: invalid range".into());
         }
 
-        self.max_lookup_inputs = self.max_lookup_inputs.max(range.1);
-        self.min_lookup_inputs = self.min_lookup_inputs.min(range.0);
+        self.max_range_check = self.max_range_check.max(range.1);
+        self.min_range_check = self.min_range_check.min(range.0);
         Ok(())
     }
 
@@ -359,6 +369,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     /// min lookup inputs
     pub fn min_lookup_inputs(&self) -> i128 {
         self.min_lookup_inputs
+    }
+
+    /// min range check
+    pub fn min_range_check(&self) -> i128 {
+        self.min_range_check
+    }
+
+    /// max range check
+    pub fn max_range_check(&self) -> i128 {
+        self.max_range_check
     }
 
     /// Assign a constant value

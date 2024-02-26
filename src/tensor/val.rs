@@ -672,7 +672,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 }
                 Ok(indices)
             }
-            ValTensor::Instance { .. } => Err(TensorError::WrongMethod),
+            ValTensor::Instance { .. } => Ok(vec![]),
         }
     }
 
@@ -690,7 +690,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 }
                 Ok(indices)
             }
-            ValTensor::Instance { .. } => Err(TensorError::WrongMethod),
+            ValTensor::Instance { .. } => Ok(vec![]),
         }
     }
 
@@ -709,7 +709,11 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
-                return Err(TensorError::WrongMethod);
+                if indices.is_empty() {
+                    return Ok(());
+                } else {
+                    return Err(TensorError::WrongMethod);
+                }
             }
         }
         Ok(())
