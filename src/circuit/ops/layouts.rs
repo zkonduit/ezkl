@@ -64,7 +64,7 @@ pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
 
     let mut num_parts = 1;
     while felt_to_i128(divisor) % 2 == 0
-        && felt_to_i128(divisor) > (2_i128.pow(F::S) - ASSUMED_BLINDING_FACTORS)
+        && felt_to_i128(divisor) > (2_i128.pow(F::S) - ASSUMED_BLINDING_FACTORS as i128)
     {
         divisor = i128_to_felt(felt_to_i128(divisor) / 2);
         num_parts *= 2;
@@ -196,7 +196,18 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(output_scale) / 2;
+    let integer_input_scale = felt_to_i128(input_scale);
+    let integer_output_scale = felt_to_i128(output_scale);
+
+    // range_check_bracket is min of output_scale and 2^F::S - ASSUMED_BLINDING_FACTORS
+    let range_check_len = std::cmp::min(
+        integer_output_scale,
+        2_i128.pow(F::S) - ASSUMED_BLINDING_FACTORS as i128,
+    );
+
+    let input_scale_diff = integer_input_scale * integer_output_scale / range_check_len;
+
+    let range_check_bracket = range_check_len / 2;
 
     let is_assigned = !input.any_unknowns()?;
 
@@ -231,7 +242,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // divide by input_scale
-    let rebased_div = loop_div(config, region, &[product], input_scale)?;
+    let rebased_div = loop_div(config, region, &[product], input_scale_diff)?;
 
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_i128(output_scale) as f64)[0];
