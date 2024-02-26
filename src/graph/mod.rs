@@ -1159,11 +1159,20 @@ impl GraphCircuit {
         settings.run_args.logrows = k;
         settings.required_range_checks = vec![(0, max_range_size)];
         let mut cs = ConstraintSystem::default();
+        // fetch gag
+        #[cfg(unix)]
+        let _r = match gag::Gag::stdout() {
+            Ok(r) => Some(r),
+            Err(_) => None,
+        };
         Self::configure_with_params(&mut cs, settings);
         #[cfg(feature = "mv-lookup")]
         let cs = cs.chunk_lookups();
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
         let max_degree = cs.degree();
+        #[cfg(unix)]
+        std::mem::drop(_r);
+        println!("max_degree: {}", max_degree);
         let quotient_poly_degree = (max_degree - 1) as u64;
         // n = 2^k
         let n = 1u64 << k;
