@@ -18,11 +18,9 @@ use super::{
     region::RegionCtx,
 };
 use crate::{
-    circuit::{
-        ops::base::BaseOp,
-        utils::{self},
-    },
+    circuit::{ops::base::BaseOp, utils},
     fieldutils::{felt_to_i128, i128_to_felt},
+    graph::ASSUMED_BLINDING_FACTORS,
     tensor::{
         get_broadcasted_shape,
         ops::{accumulated, add, mult, sub},
