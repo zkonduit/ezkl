@@ -54,6 +54,28 @@ pub fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usi
     total_len
 }
 
+/// Same as div but splits the division into N parts
+pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    value: &[ValTensor<F>; 1],
+    divisor: F,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // if integer val is divisible by 2, we can use a faster method and div > F::S
+    let mut divisor = divisor;
+
+    let mut num_parts = 1;
+    while felt_to_i128(divisor) % 2 == 0 && felt_to_i128(divisor) > 2_i128.pow(F::S) {
+        divisor = i128_to_felt(felt_to_i128(divisor) / 2);
+        num_parts *= 2;
+    }
+    let mut output = div(config, region, value, divisor)?;
+    for _ in 0..(num_parts - 1) {
+        output = div(config, region, &[output], divisor)?;
+    }
+    Ok(output)
+}
+
 /// Div accumulated layout
 pub fn div<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
@@ -88,6 +110,8 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         .into()
     };
     claimed_output.reshape(input_dims)?;
+    region.assign(&config.output, &claimed_output)?;
+    region.increment(claimed_output.len());
 
     let product = pairwise(
         config,
@@ -195,7 +219,6 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         .into()
     };
     claimed_output.reshape(input_dims)?;
-
     let claimed_output = region.assign(&config.output, &claimed_output)?;
     region.increment(claimed_output.len());
 
@@ -208,7 +231,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // divide by input_scale
-    let rebased_div = div(config, region, &[product], input_scale)?;
+    let rebased_div = loop_div(config, region, &[product], input_scale)?;
 
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_i128(output_scale) as f64)[0];
@@ -1952,7 +1975,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     if normalized {
-        last_elem = div(
+        last_elem = loop_div(
             config,
             region,
             &[last_elem],
@@ -3080,7 +3103,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
 
-    let rebased_product = div(config, region, &[product], F::from(scale.0 as u64))?;
+    let rebased_product = loop_div(config, region, &[product], F::from(scale.0 as u64))?;
 
     let scaled_tol = (tol * scale.0 / 100.0) as i128;
 
