@@ -141,9 +141,6 @@ pub const MIN_LOGROWS: u32 = 6;
 /// 26
 pub const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
 
-/// Lookup deg
-pub const LOOKUP_DEG: usize = 5;
-
 use std::cell::RefCell;
 
 thread_local!(
