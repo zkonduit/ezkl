@@ -205,7 +205,8 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         2_i128.pow(F::S) - ASSUMED_BLINDING_FACTORS as i128,
     );
 
-    let input_scale_diff = integer_input_scale * integer_output_scale / range_check_len;
+    let input_scale_diff =
+        i128_to_felt(integer_input_scale * integer_output_scale / range_check_len);
 
     let range_check_bracket = range_check_len / 2;
 
