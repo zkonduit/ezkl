@@ -212,7 +212,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     // range_check_bracket is min of input_scale * output_scale and 2^F::S - 3
     let range_check_len = std::cmp::min(
         integer_output_scale * integer_input_scale,
-        2_i128.pow(F::S - 3),
+        2_i128.pow(F::S - 4),
     );
 
     let input_scale_ratio =
