@@ -3142,14 +3142,14 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         felt_scale * F::from(100),
     )?;
 
-    log::debug!("recip: {:?}", recip.get_int_evals()?);
+    log::debug!("recip: {}", recip.show());
 
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
 
-    log::debug!("product: {:?}", product.get_int_evals()?);
+    log::debug!("product: {}", product.show());
     let rebased_product = loop_div(config, region, &[product], i128_to_felt(input_scale_ratio))?;
-    log::debug!("rebased_product: {:?}", rebased_product.get_int_evals()?);
+    log::debug!("rebased_product: {}", rebased_product.show());
 
     // check that it is within the tolerance range
     range_check(

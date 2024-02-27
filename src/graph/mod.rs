@@ -24,7 +24,7 @@ use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
+use crate::circuit::table::{Range, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::fieldutils::felt_to_f64;
 use crate::pfsys::PrettyElements;
@@ -60,12 +60,6 @@ use crate::pfsys::field_to_string;
 
 /// The safety factor for the range of the lookup table.
 pub const RANGE_MULTIPLIER: i128 = 2;
-
-/// The maximum number of columns in a lookup table.
-pub const MAX_NUM_LOOKUP_COLS: usize = 16;
-
-/// Max representation of a lookup table input
-pub const MAX_LOOKUP_ABS: i128 = (MAX_NUM_LOOKUP_COLS as i128) * 2_i128.pow(MAX_PUBLIC_SRS);
 
 #[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
@@ -1018,14 +1012,6 @@ impl GraphCircuit {
         margin
     }
 
-    fn calc_num_cols(range_len: i128, max_logrows: u32) -> usize {
-        let max_col_size = Table::<Fp>::cal_col_size(
-            max_logrows as usize,
-            Self::reserved_blinding_rows() as usize,
-        );
-        num_cols_required(range_len, max_col_size)
-    }
-
     fn calc_min_logrows(
         &mut self,
         min_max_lookup: Range,
@@ -1040,23 +1026,8 @@ impl GraphCircuit {
         let mut min_logrows = MIN_LOGROWS;
 
         let reserved_blinding_rows = Self::reserved_blinding_rows();
-        // check if has overflowed max lookup input
-        if (min_max_lookup.1 - min_max_lookup.0).abs() > MAX_LOOKUP_ABS / lookup_safety_margin {
-            let err_string = format!("max lookup input {:?} is too large", min_max_lookup);
-            return Err(err_string.into());
-        }
-
-        if max_range_size.abs() > MAX_LOOKUP_ABS {
-            let err_string = format!("max range check size {:?} is too large", max_range_size);
-            return Err(err_string.into());
-        }
 
         let safe_lookup_range = Self::calc_safe_lookup_range(min_max_lookup, lookup_safety_margin);
-        // pick the range with the largest absolute size between safe_lookup_range and min_max_range_checks
-        let safe_range = std::cmp::max(
-            (safe_lookup_range.1 - safe_lookup_range.0).abs(),
-            max_range_size,
-        );
 
         // degrade the max logrows until the extended k is small enough
         while min_logrows < max_logrows
@@ -1088,6 +1059,12 @@ impl GraphCircuit {
             debug!("{}", err_string);
             return Err(err_string.into());
         }
+
+        // pick the range with the largest absolute size between safe_lookup_range and min_max_range_checks
+        let safe_range = std::cmp::max(
+            (safe_lookup_range.1 - safe_lookup_range.0).abs(),
+            max_range_size,
+        );
 
         let min_bits = (safe_range as f64 + reserved_blinding_rows + 1.)
             .log2()
@@ -1166,13 +1143,6 @@ impl GraphCircuit {
         safe_lookup_range: Range,
         max_range_size: i128,
     ) -> bool {
-        // if num cols is too large then the extended k is too large
-        if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS {
-            return false;
-        } else if Self::calc_num_cols(max_range_size, k) > MAX_NUM_LOOKUP_COLS {
-            return false;
-        }
-
         let mut settings = self.settings().clone();
         settings.run_args.lookup_range = safe_lookup_range;
         settings.run_args.logrows = k;
