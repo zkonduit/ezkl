@@ -58,6 +58,10 @@ pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
     value: &[ValTensor<F>; 1],
     divisor: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if divisor == F::ONE {
+        return Ok(value[0].clone());
+    }
+
     // if integer val is divisible by 2, we can use a faster method and div > F::S
     let mut divisor = divisor;
     let mut num_parts = 1;
@@ -89,6 +93,10 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
     value: &[ValTensor<F>; 1],
     div: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if div == F::ONE {
+        return Ok(value[0].clone());
+    }
+
     let input = value[0].clone();
     let input_dims = input.dims();
 
@@ -201,8 +209,11 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     let integer_input_scale = felt_to_i128(input_scale);
     let integer_output_scale = felt_to_i128(output_scale);
 
-    // range_check_bracket is min of output_scale and 2^F::S - ASSUMED_BLINDING_FACTORS
-    let range_check_len = std::cmp::min(integer_output_scale, 2_i128.pow(F::S - 3));
+    // range_check_bracket is min of input_scale * output_scale and 2^F::S - 3
+    let range_check_len = std::cmp::min(
+        integer_output_scale * integer_input_scale,
+        2_i128.pow(F::S - 3),
+    );
 
     let input_scale_ratio =
         i128_to_felt(integer_input_scale * integer_output_scale / range_check_len);
@@ -3124,7 +3135,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     let felt_scale = i128_to_felt(int_scale);
     // range check len capped at 2^(S-3) and make it divisible 2
     let range_check_bracket = std::cmp::min(
-        utils::F32(scale.0),
+        utils::F32(scale.0.powf(2.0)),
         utils::F32(2_f32.powf((F::S - 4) as f32)),
     )
     .0;
