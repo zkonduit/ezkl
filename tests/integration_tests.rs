@@ -586,6 +586,17 @@ mod native_tests {
             }
 
             #(#[test_case(TESTS[N])])*
+            fn mock_tolerance_public_outputs_high_scale_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                // gen random number between 0.0 and 1.0
+                let tolerance = rand::thread_rng().gen_range(0.0..1.0) * 100.0;
+                mock(path, test.to_string(), "private", "private", "public", 1, "accuracy", Some(vec![22, 27, 30]), tolerance);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
             fn mock_large_batch_public_outputs_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();

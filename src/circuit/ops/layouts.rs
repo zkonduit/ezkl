@@ -61,10 +61,12 @@ pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
     // if integer val is divisible by 2, we can use a faster method and div > F::S
     let mut divisor = divisor;
     let mut num_parts = 1;
+
     while felt_to_i128(divisor) % 2 == 0 && felt_to_i128(divisor) > (2_i128.pow(F::S - 3)) {
         divisor = i128_to_felt(felt_to_i128(divisor) / 2);
         num_parts += 1;
     }
+
     let output = div(config, region, value, divisor)?;
     if num_parts == 1 {
         return Ok(output);
@@ -3121,18 +3123,24 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // felt scale
     let felt_scale = i128_to_felt(int_scale);
     // range check len capped at 2^(S-3) and make it divisible 2
-    let range_check_len = std::cmp::min(
+    let range_check_bracket = std::cmp::min(
         utils::F32(scale.0),
-        utils::F32(2_f32.powf((F::S - 3) as f32)),
+        utils::F32(2_f32.powf((F::S - 4) as f32)),
     )
     .0;
 
-    let range_check_len_int = range_check_len as i128;
+    let range_check_bracket_int = range_check_bracket as i128;
 
-    // input scale ratio we multiply by tol and divide by 100 such that in the new scale range_check_len represents tol percent
-    let input_scale_ratio = ((scale.0.powf(2.0) / range_check_len) * tol / 100.0) as i128 / 2 * 2;
+    // input scale ratio we multiply by tol such that in the new scale range_check_len represents tol percent
+    let input_scale_ratio = ((scale.0.powf(2.0) / range_check_bracket) * tol) as i128 / 2 * 2;
 
-    let recip = recip(config, region, &[values[0].clone()], felt_scale, felt_scale)?;
+    let recip = recip(
+        config,
+        region,
+        &[values[0].clone()],
+        felt_scale,
+        felt_scale * F::from(100),
+    )?;
 
     log::debug!("recip: {:?}", recip.get_int_evals()?);
 
@@ -3148,6 +3156,6 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
         config,
         region,
         &[rebased_product],
-        &(-range_check_len_int, range_check_len_int),
+        &(-range_check_bracket_int, range_check_bracket_int),
     )
 }
