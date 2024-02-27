@@ -62,7 +62,7 @@ use crate::pfsys::field_to_string;
 pub const RANGE_MULTIPLIER: i128 = 2;
 
 /// The maximum number of columns in a lookup table.
-pub const MAX_NUM_LOOKUP_COLS: usize = 16;
+pub const MAX_NUM_LOOKUP_COLS: usize = 12;
 
 /// Max representation of a lookup table input
 pub const MAX_LOOKUP_ABS: i128 = (MAX_NUM_LOOKUP_COLS as i128) * 2_i128.pow(MAX_PUBLIC_SRS);
