@@ -1191,7 +1191,6 @@ impl GraphCircuit {
         let max_degree = cs.degree();
         #[cfg(unix)]
         std::mem::drop(_r);
-        println!("max_degree: {}", max_degree);
         let quotient_poly_degree = (max_degree - 1) as u64;
         // n = 2^k
         let n = 1u64 << k;
