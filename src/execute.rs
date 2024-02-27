@@ -618,7 +618,7 @@ pub(crate) async fn gen_witness(
 
     let start_time = Instant::now();
 
-    let witness = circuit.forward(&mut input, vk.as_ref(), srs.as_ref())?;
+    let witness = circuit.forward(&mut input, vk.as_ref(), srs.as_ref(), false)?;
 
     // print each variable tuple (symbol, value) as symbol=value
     trace!(
@@ -906,7 +906,7 @@ pub(crate) fn calibrate(
             }
         };
 
-        chunks
+        let forward_res = chunks
             .iter()
             .map(|chunk| {
                 let chunk = chunk.clone();
@@ -916,7 +916,7 @@ pub(crate) fn calibrate(
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                 let forward_res = circuit
-                    .forward(&mut data.clone(), None, None)
+                    .forward(&mut data.clone(), None, None, true)
                     .map_err(|e| format!("failed to forward: {}", e))?;
 
                 // push result to the hashmap
@@ -927,7 +927,16 @@ pub(crate) fn calibrate(
 
                 Ok(()) as Result<(), String>
             })
-            .collect::<Result<Vec<()>, String>>()?;
+            .collect::<Result<Vec<()>, String>>();
+
+        match forward_res {
+            Ok(_) => (),
+            // typically errors will be due to the circuit overflowing the i128 limit
+            Err(e) => {
+                debug!("forward pass failed: {:?}", e);
+                continue;
+            }
+        }
 
         let min_lookup_range = forward_pass_res
             .get(&key)

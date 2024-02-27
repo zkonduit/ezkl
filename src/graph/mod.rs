@@ -1229,6 +1229,7 @@ impl GraphCircuit {
         inputs: &mut [Tensor<Fp>],
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&ParamsKZG<Bn256>>,
+        throw_range_check_error: bool,
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let original_inputs = inputs.to_vec();
 
@@ -1269,7 +1270,9 @@ impl GraphCircuit {
             }
         }
 
-        let mut model_results = self.model().forward(inputs, &self.settings().run_args)?;
+        let mut model_results =
+            self.model()
+                .forward(inputs, &self.settings().run_args, throw_range_check_error)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();

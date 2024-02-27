@@ -71,12 +71,18 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
     max_lookup_inputs: i128,
     min_lookup_inputs: i128,
     max_range_size: i128,
+    throw_range_check_error: bool,
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     ///
     pub fn increment_total_constants(&mut self, n: usize) {
         self.total_constants += n;
+    }
+
+    ///
+    pub fn throw_range_check_error(&self) -> bool {
+        self.throw_range_check_error
     }
 
     /// Create a new region context
@@ -95,6 +101,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
+            throw_range_check_error: false,
         }
     }
     /// Create a new region context from a wrapped region
@@ -115,11 +122,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
+            throw_range_check_error: false,
         }
     }
 
     /// Create a new region context
-    pub fn new_dummy(row: usize, num_inner_cols: usize) -> RegionCtx<'a, F> {
+    pub fn new_dummy(
+        row: usize,
+        num_inner_cols: usize,
+        throw_range_check_error: bool,
+    ) -> RegionCtx<'a, F> {
         let region = None;
         let linear_coord = row * num_inner_cols;
 
@@ -134,6 +146,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
+            throw_range_check_error,
         }
     }
 
@@ -145,6 +158,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         num_inner_cols: usize,
         used_lookups: HashSet<LookupOp>,
         used_range_checks: HashSet<Range>,
+        throw_range_check_error: bool,
     ) -> RegionCtx<'a, F> {
         let region = None;
         RegionCtx {
@@ -158,6 +172,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
+            throw_range_check_error,
         }
     }
 
@@ -229,6 +244,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                     self.num_inner_cols,
                     HashSet::new(),
                     HashSet::new(),
+                    self.throw_range_check_error,
                 );
                 let res = inner_loop_function(idx, &mut local_reg);
                 // we update the offset and constants

@@ -526,7 +526,7 @@ impl Model {
             })
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
-        let res = self.dummy_layout(run_args, &inputs)?;
+        let res = self.dummy_layout(run_args, &inputs, false)?;
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
 
@@ -565,12 +565,13 @@ impl Model {
         &self,
         model_inputs: &[Tensor<Fp>],
         run_args: &RunArgs,
+        throw_range_check_error: bool,
     ) -> Result<ForwardResult, Box<dyn Error>> {
         let valtensor_inputs: Vec<ValTensor<Fp>> = model_inputs
             .iter()
             .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
             .collect();
-        let res = self.dummy_layout(run_args, &valtensor_inputs)?;
+        let res = self.dummy_layout(run_args, &valtensor_inputs, throw_range_check_error)?;
         Ok(res.into())
     }
 
@@ -1351,6 +1352,7 @@ impl Model {
         &self,
         run_args: &RunArgs,
         inputs: &[ValTensor<Fp>],
+        throw_range_check_error: bool,
     ) -> Result<DummyPassRes, Box<dyn Error>> {
         debug!("calculating num of constraints using dummy model layout...");
 
@@ -1369,7 +1371,7 @@ impl Model {
             vars: ModelVars::new_dummy(),
         };
 
-        let mut region = RegionCtx::new_dummy(0, run_args.num_inner_cols);
+        let mut region = RegionCtx::new_dummy(0, run_args.num_inner_cols, throw_range_check_error);
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 

@@ -60,19 +60,24 @@ pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // if integer val is divisible by 2, we can use a faster method and div > F::S
     let mut divisor = divisor;
-    println!("divisor: {}", felt_to_i128(divisor));
     let mut num_parts = 1;
     while felt_to_i128(divisor) % 2 == 0 && felt_to_i128(divisor) > (2_i128.pow(F::S - 3)) {
         divisor = i128_to_felt(felt_to_i128(divisor) / 2);
-        num_parts *= 2;
+        num_parts += 1;
     }
-    println!("num_parts: {}", num_parts);
-    println!("divisor: {}", felt_to_i128(divisor));
-    let mut output = div(config, region, value, divisor)?;
-    for _ in 0..(num_parts - 1) {
-        output = div(config, region, &[output], divisor)?;
+    let output = div(config, region, value, divisor)?;
+    if num_parts == 1 {
+        return Ok(output);
     }
-    Ok(output)
+
+    let divisor_int = 2_i128.pow(num_parts - 1);
+    let divisor_felt = i128_to_felt(divisor_int);
+    if divisor_int <= 2_i128.pow(F::S - 3) {
+        div(config, region, &[output], divisor_felt)
+    } else {
+        // keep splitting the divisor until it satisfies the condition
+        loop_div(config, region, &[output], divisor_felt)
+    }
 }
 
 /// Div accumulated layout
@@ -184,7 +189,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     input_scale: F,
     output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if output_scale == F::ONE {
+    if output_scale == F::ONE || output_scale == F::ZERO {
         return recip_int(config, region, value);
     }
 
@@ -197,7 +202,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     // range_check_bracket is min of output_scale and 2^F::S - ASSUMED_BLINDING_FACTORS
     let range_check_len = std::cmp::min(integer_output_scale, 2_i128.pow(F::S - 3));
 
-    let input_scale_diff =
+    let input_scale_ratio =
         i128_to_felt(integer_input_scale * integer_output_scale / range_check_len);
 
     let range_check_bracket = range_check_len / 2;
@@ -235,7 +240,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // divide by input_scale
-    let rebased_div = loop_div(config, region, &[product], input_scale_diff)?;
+    let rebased_div = loop_div(config, region, &[product], input_scale_ratio)?;
 
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_i128(output_scale) as f64)[0];
@@ -257,7 +262,7 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         &[equal_zero_mask.clone(), equal_inverse_mask],
     )?;
 
-    let unit_scale = Tensor::from([ValType::Constant(output_scale)].into_iter());
+    let unit_scale = Tensor::from([ValType::Constant(i128_to_felt(range_check_len))].into_iter());
 
     let unit_mask = pairwise(
         config,
@@ -2638,6 +2643,17 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
+    if region.throw_range_check_error() {
+        // assert is within range
+        let int_values = w.get_int_evals()?;
+        for v in int_values {
+            if v < range.0 || v > range.1 {
+                log::debug!("Value ({:?}) out of range: {:?}", v, range);
+                return Err(Box::new(TensorError::TableLookupError));
+            }
+        }
+    }
+
     region.increment(assigned_len);
 
     let elapsed = timer.elapsed();
@@ -3100,7 +3116,21 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, &values, BaseOp::Sub)?;
 
-    let felt_scale = F::from(scale.0 as u64);
+    // integer scale
+    let int_scale = scale.0 as i128;
+    // felt scale
+    let felt_scale = i128_to_felt(int_scale);
+    // range check len capped at 2^(S-3) and make it divisible 2
+    let range_check_len = std::cmp::min(
+        utils::F32(scale.0),
+        utils::F32(2_f32.powf((F::S - 3) as f32)),
+    )
+    .0;
+
+    let range_check_len_int = range_check_len as i128;
+
+    // input scale ratio we multiply by tol and divide by 100 such that in the new scale range_check_len represents tol percent
+    let input_scale_ratio = ((scale.0.powf(2.0) / range_check_len) * tol / 100.0) as i128 / 2 * 2;
 
     let recip = recip(config, region, &[values[0].clone()], felt_scale, felt_scale)?;
 
@@ -3110,18 +3140,14 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
 
     log::debug!("product: {:?}", product.get_int_evals()?);
-
-    let rebased_product = loop_div(config, region, &[product], felt_scale)?;
-
+    let rebased_product = loop_div(config, region, &[product], i128_to_felt(input_scale_ratio))?;
     log::debug!("rebased_product: {:?}", rebased_product.get_int_evals()?);
-
-    let scaled_tol = (tol * scale.0 / 100.0) as i128;
 
     // check that it is within the tolerance range
     range_check(
         config,
         region,
         &[rebased_product],
-        &(-scaled_tol, scaled_tol),
+        &(-range_check_len_int, range_check_len_int),
     )
 }
