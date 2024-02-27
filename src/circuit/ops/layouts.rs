@@ -66,7 +66,7 @@ pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
     let mut divisor = divisor;
     let mut num_parts = 1;
 
-    while felt_to_i128(divisor) % 2 == 0 && felt_to_i128(divisor) > (2_i128.pow(F::S - 3)) {
+    while felt_to_i128(divisor) % 2 == 0 && felt_to_i128(divisor) > (2_i128.pow(F::S - 4)) {
         divisor = i128_to_felt(felt_to_i128(divisor) / 2);
         num_parts += 1;
     }
@@ -3135,8 +3135,8 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     let felt_scale = i128_to_felt(int_scale);
     // range check len capped at 2^(S-3) and make it divisible 2
     let range_check_bracket = std::cmp::min(
-        utils::F32(scale.0.powf(2.0)),
-        utils::F32(2_f32.powf((F::S - 4) as f32)),
+        utils::F32(scale.0),
+        utils::F32(2_f32.powf((F::S - 5) as f32)),
     )
     .0;
 
