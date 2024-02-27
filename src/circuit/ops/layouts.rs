@@ -60,12 +60,14 @@ pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // if integer val is divisible by 2, we can use a faster method and div > F::S
     let mut divisor = divisor;
-
+    println!("divisor: {}", felt_to_i128(divisor));
     let mut num_parts = 1;
     while felt_to_i128(divisor) % 2 == 0 && felt_to_i128(divisor) > (2_i128.pow(F::S - 3)) {
         divisor = i128_to_felt(felt_to_i128(divisor) / 2);
         num_parts *= 2;
     }
+    println!("num_parts: {}", num_parts);
+    println!("divisor: {}", felt_to_i128(divisor));
     let mut output = div(config, region, value, divisor)?;
     for _ in 0..(num_parts - 1) {
         output = div(config, region, &[output], divisor)?;
@@ -117,16 +119,12 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
     )?;
 
-    log::debug!("product: {:?}", product.get_int_evals()?);
-
     let diff_with_input = pairwise(
         config,
         region,
         &[product.clone(), input.clone()],
         BaseOp::Sub,
     )?;
-
-    log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
 
     range_check(
         config,
@@ -3106,10 +3104,16 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
 
     let recip = recip(config, region, &[values[0].clone()], felt_scale, felt_scale)?;
 
+    log::debug!("recip: {:?}", recip.get_int_evals()?);
+
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
 
-    let rebased_product = loop_div(config, region, &[product], F::from(scale.0 as u64))?;
+    log::debug!("product: {:?}", product.get_int_evals()?);
+
+    let rebased_product = loop_div(config, region, &[product], felt_scale)?;
+
+    log::debug!("rebased_product: {:?}", rebased_product.get_int_evals()?);
 
     let scaled_tol = (tol * scale.0 / 100.0) as i128;
 
