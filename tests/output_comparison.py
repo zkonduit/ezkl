@@ -91,9 +91,7 @@ def compare_outputs(zk_output, onnx_output):
                 print("------- zk_output: ", list1_i)
                 print("------- onnx_output: ", list2_i)
 
-
-
-    return np.mean(np.abs(res))
+    return res
 
 
 if __name__ == '__main__':
@@ -113,6 +111,9 @@ if __name__ == '__main__':
     onnx_output = get_onnx_output(model_file, input_file)
     # compare the outputs
     percentage_difference = compare_outputs(ezkl_output, onnx_output)
+    mean_percentage_difference = np.mean(np.abs(percentage_difference))
+    max_percentage_difference = np.max(np.abs(percentage_difference))
     # print the percentage difference
-    print("mean percent diff: ", percentage_difference)
-    assert percentage_difference < target, "Percentage difference is too high"
+    print("mean percent diff: ", mean_percentage_difference)
+    print("max percent diff: ", max_percentage_difference)
+    assert mean_percentage_difference < target, "Percentage difference is too high"

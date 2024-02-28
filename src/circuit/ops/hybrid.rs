@@ -277,7 +277,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 ..
             } => {
                 if denom.0.fract() == 0.0 && *use_range_check_for_int {
-                    layouts::div(
+                    layouts::loop_div(
                         config,
                         region,
                         values[..].try_into()?,

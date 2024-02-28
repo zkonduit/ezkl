@@ -61,8 +61,11 @@ use crate::pfsys::field_to_string;
 /// The safety factor for the range of the lookup table.
 pub const RANGE_MULTIPLIER: i128 = 2;
 
+/// The maximum number of columns in a lookup table.
+pub const MAX_NUM_LOOKUP_COLS: usize = 12;
+
 /// Max representation of a lookup table input
-pub const MAX_LOOKUP_ABS: i128 = 8 * 2_i128.pow(MAX_PUBLIC_SRS);
+pub const MAX_LOOKUP_ABS: i128 = (MAX_NUM_LOOKUP_COLS as i128) * 2_i128.pow(MAX_PUBLIC_SRS);
 
 #[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
@@ -134,15 +137,16 @@ pub enum GraphError {
     MissingResults,
 }
 
-const ASSUMED_BLINDING_FACTORS: usize = 5;
+///
+pub const ASSUMED_BLINDING_FACTORS: usize = 5;
 /// The minimum number of rows in the grid
 pub const MIN_LOGROWS: u32 = 6;
 
 /// 26
 pub const MAX_PUBLIC_SRS: u32 = bn256::Fr::S - 2;
 
-/// Lookup deg
-pub const LOOKUP_DEG: usize = 5;
+///
+pub const RESERVED_BLINDING_ROWS: usize = ASSUMED_BLINDING_FACTORS + RESERVED_BLINDING_ROWS_PAD;
 
 use std::cell::RefCell;
 
@@ -171,10 +175,8 @@ pub struct GraphWitness {
     pub max_lookup_inputs: i128,
     /// max lookup input
     pub min_lookup_inputs: i128,
-    /// max range check input
-    pub max_range_check: i128,
-    /// max range check input
-    pub min_range_check: i128,
+    /// max range check size
+    pub max_range_size: i128,
 }
 
 impl GraphWitness {
@@ -202,8 +204,7 @@ impl GraphWitness {
             processed_outputs: None,
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
-            max_range_check: 0,
-            min_range_check: 0,
+            max_range_size: 0,
         }
     }
 
@@ -376,9 +377,7 @@ impl ToPyObject for GraphWitness {
             .unwrap();
         dict.set_item("min_lookup_inputs", self.min_lookup_inputs)
             .unwrap();
-        dict.set_item("max_range_check", self.max_range_check)
-            .unwrap();
-        dict.set_item("min_range_check", self.min_range_check)
+        dict.set_item("max_range_size", self.max_range_size)
             .unwrap();
 
         if let Some(processed_inputs) = &self.processed_inputs {
@@ -473,6 +472,20 @@ pub struct GraphSettings {
 }
 
 impl GraphSettings {
+    fn model_constraint_logrows(&self) -> u32 {
+        (self.num_rows as f64 + RESERVED_BLINDING_ROWS as f64)
+            .log2()
+            .ceil() as u32
+    }
+
+    fn module_constraint_logrows(&self) -> u32 {
+        (self.module_sizes.max_constraints() as f64).log2().ceil() as u32
+    }
+
+    fn constants_logrows(&self) -> u32 {
+        (self.total_const_size as f64).log2().ceil() as u32
+    }
+
     /// calculate the total number of instances
     pub fn total_instances(&self) -> Vec<usize> {
         let mut instances: Vec<usize> = self
@@ -1005,10 +1018,6 @@ impl GraphCircuit {
         Ok(data)
     }
 
-    fn reserved_blinding_rows() -> f64 {
-        (ASSUMED_BLINDING_FACTORS + RESERVED_BLINDING_ROWS_PAD) as f64
-    }
-
     fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i128) -> Range {
         let mut margin = (
             lookup_safety_margin * min_max_lookup.0,
@@ -1022,18 +1031,33 @@ impl GraphCircuit {
         margin
     }
 
-    fn calc_num_cols(safe_range: Range, max_logrows: u32) -> usize {
-        let max_col_size = Table::<Fp>::cal_col_size(
-            max_logrows as usize,
-            Self::reserved_blinding_rows() as usize,
+    fn calc_num_cols(range_len: i128, max_logrows: u32) -> usize {
+        let max_col_size = Table::<Fp>::cal_col_size(max_logrows as usize, RESERVED_BLINDING_ROWS);
+        num_cols_required(range_len, max_col_size)
+    }
+
+    fn table_size_logrows(
+        &self,
+        safe_lookup_range: Range,
+        max_range_size: i128,
+    ) -> Result<u32, Box<dyn std::error::Error>> {
+        // pick the range with the largest absolute size safe_lookup_range or max_range_size
+        let safe_range = std::cmp::max(
+            (safe_lookup_range.1 - safe_lookup_range.0).abs(),
+            max_range_size,
         );
-        num_cols_required(safe_range, max_col_size)
+
+        let min_bits = (safe_range as f64 + RESERVED_BLINDING_ROWS as f64 + 1.)
+            .log2()
+            .ceil() as u32;
+
+        Ok(min_bits)
     }
 
     fn calc_min_logrows(
         &mut self,
         min_max_lookup: Range,
-        min_max_range_checks: Range,
+        max_range_size: i128,
         max_logrows: Option<u32>,
         lookup_safety_margin: i128,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1043,68 +1067,57 @@ impl GraphCircuit {
         let mut max_logrows = std::cmp::max(max_logrows, MIN_LOGROWS);
         let mut min_logrows = MIN_LOGROWS;
 
-        let reserved_blinding_rows = Self::reserved_blinding_rows();
+        let safe_lookup_range = Self::calc_safe_lookup_range(min_max_lookup, lookup_safety_margin);
+
         // check if has overflowed max lookup input
-        if min_max_lookup.1.abs() > MAX_LOOKUP_ABS / lookup_safety_margin
-            || min_max_lookup.0.abs() > MAX_LOOKUP_ABS / lookup_safety_margin
-        {
+        if (min_max_lookup.1 - min_max_lookup.0).abs() > MAX_LOOKUP_ABS / lookup_safety_margin {
             let err_string = format!("max lookup input {:?} is too large", min_max_lookup);
             return Err(err_string.into());
         }
 
-        if min_max_range_checks.1.abs() > MAX_LOOKUP_ABS
-            || min_max_range_checks.1.abs() > MAX_LOOKUP_ABS
-        {
-            let err_string = format!(
-                "max range check input {:?} is too large",
-                min_max_range_checks
-            );
+        if max_range_size.abs() > MAX_LOOKUP_ABS {
+            let err_string = format!("max range check size {:?} is too large", max_range_size);
             return Err(err_string.into());
         }
 
-        let safe_lookup_range = Self::calc_safe_lookup_range(min_max_lookup, lookup_safety_margin);
-        // pick the range with the largest absolute size between safe_lookup_range and min_max_range_checks
-        let safe_range = if (safe_lookup_range.1 - safe_lookup_range.0)
-            > (min_max_range_checks.1 - min_max_range_checks.0)
-        {
-            safe_lookup_range
-        } else {
-            min_max_range_checks
-        };
+        // These are hard lower limits, we can't overflow instances or modules constraints
+        let instance_logrows = self.settings().log2_total_instances();
+        let module_constraint_logrows = self.settings().module_constraint_logrows();
+        min_logrows = std::cmp::max(
+            min_logrows,
+            // max of the instance logrows and the module constraint logrows is the lower limit
+            [instance_logrows, module_constraint_logrows]
+                .iter()
+                .max()
+                .unwrap()
+                .clone(),
+        );
+
+        // These are upper limits, going above these is wasteful, but they are not hard limits
+        let model_constraint_logrows = self.settings().model_constraint_logrows();
+        let min_bits = self.table_size_logrows(safe_lookup_range, max_range_size)?;
+        let constants_logrows = self.settings().constants_logrows();
+        max_logrows = std::cmp::min(
+            max_logrows,
+            // max of the model constraint logrows, min_bits, and the constants logrows is the upper limit
+            [model_constraint_logrows, min_bits, constants_logrows]
+                .iter()
+                .max()
+                .unwrap()
+                .clone(),
+        );
+
+        // we now have a min and max logrows
+        max_logrows = std::cmp::max(min_logrows, max_logrows);
 
         // degrade the max logrows until the extended k is small enough
         while min_logrows < max_logrows
-            && !self.extended_k_is_small_enough(
-                min_logrows,
-                Self::calc_num_cols(safe_range, min_logrows),
-            )
-        {
-            min_logrows += 1;
-        }
-
-        if !self
-            .extended_k_is_small_enough(min_logrows, Self::calc_num_cols(safe_range, min_logrows))
-        {
-            let err_string = format!(
-                "extended k is too large to accommodate the quotient polynomial with logrows {}",
-                min_logrows
-            );
-            debug!("{}", err_string);
-            return Err(err_string.into());
-        }
-
-        while min_logrows < max_logrows
-            && !self.extended_k_is_small_enough(
-                max_logrows,
-                Self::calc_num_cols(safe_range, max_logrows),
-            )
+            && !self.extended_k_is_small_enough(max_logrows, safe_lookup_range, max_range_size)
         {
             max_logrows -= 1;
         }
 
-        if !self
-            .extended_k_is_small_enough(max_logrows, Self::calc_num_cols(safe_range, max_logrows))
-        {
+        if !self.extended_k_is_small_enough(max_logrows, safe_lookup_range, max_range_size) {
             let err_string = format!(
                 "extended k is too large to accommodate the quotient polynomial with logrows {}",
                 max_logrows
@@ -1113,67 +1126,27 @@ impl GraphCircuit {
             return Err(err_string.into());
         }
 
-        let min_bits = ((safe_range.1 - safe_range.0) as f64 + reserved_blinding_rows + 1.)
-            .log2()
-            .ceil() as usize;
-
-        let min_rows_from_constraints = (self.settings().num_rows as f64 + reserved_blinding_rows)
-            .log2()
-            .ceil() as usize;
-
-        let mut logrows = std::cmp::max(min_bits, min_rows_from_constraints);
-
-        // if public input then public inputs col will have public inputs len
-        if self.settings().run_args.input_visibility.is_public()
-            || self.settings().run_args.output_visibility.is_public()
-        {
-            let mut max_instance_len = self
-                .model()
-                .instance_shapes()?
-                .iter()
-                .fold(0, |acc, x| std::cmp::max(acc, x.iter().product::<usize>()))
-                as f64
-                + reserved_blinding_rows;
-            // if there are modules then we need to add the max module size
-            if self.settings().uses_modules() {
-                max_instance_len += self
-                    .settings()
-                    .module_sizes
-                    .num_instances()
-                    .iter()
-                    .sum::<usize>() as f64;
-            }
-            let instance_len_logrows = (max_instance_len).log2().ceil() as usize;
-            logrows = std::cmp::max(logrows, instance_len_logrows);
-            // this is for fixed const columns
-        }
-
-        // ensure logrows is at least 4
-        logrows = std::cmp::max(logrows, min_logrows as usize);
-        logrows = std::cmp::min(logrows, max_logrows as usize);
+        let logrows = max_logrows;
 
         let model = self.model().clone();
         let settings_mut = self.settings_mut();
         settings_mut.run_args.lookup_range = safe_lookup_range;
-        settings_mut.run_args.logrows = logrows as u32;
+        settings_mut.run_args.logrows = logrows;
 
         *settings_mut = GraphCircuit::new(model, &settings_mut.run_args)?
             .settings()
             .clone();
 
-        // recalculate the total const size give nthe new logrows
-        let total_const_len = settings_mut.total_const_size;
-        let const_len_logrows = (total_const_len as f64).log2().ceil() as u32;
-        settings_mut.run_args.logrows =
-            std::cmp::max(settings_mut.run_args.logrows, const_len_logrows);
-        // recalculate the total number of constraints given the new logrows
-        let min_rows_from_constraints = (settings_mut.num_rows as f64 + reserved_blinding_rows)
-            .log2()
-            .ceil() as u32;
-        settings_mut.run_args.logrows =
-            std::cmp::max(settings_mut.run_args.logrows, min_rows_from_constraints);
-
-        settings_mut.run_args.logrows = std::cmp::min(max_logrows, settings_mut.run_args.logrows);
+        // recalculate the logrows if there has been overflow on the constants
+        settings_mut.run_args.logrows = std::cmp::max(
+            settings_mut.run_args.logrows,
+            settings_mut.constants_logrows(),
+        );
+        // recalculate the logrows if there has been overflow for the model constraints
+        settings_mut.run_args.logrows = std::cmp::max(
+            settings_mut.run_args.logrows,
+            settings_mut.model_constraint_logrows(),
+        );
 
         debug!(
             "setting lookup_range to: {:?}, setting logrows to: {}",
@@ -1184,12 +1157,37 @@ impl GraphCircuit {
         Ok(())
     }
 
-    fn extended_k_is_small_enough(&self, k: u32, num_lookup_cols: usize) -> bool {
-        let max_degree = self.settings().run_args.num_inner_cols + 2;
-        let max_lookup_degree = LOOKUP_DEG + num_lookup_cols - 1; // num_lookup_cols - 1 is the degree of the lookup synthetic selector
+    fn extended_k_is_small_enough(
+        &self,
+        k: u32,
+        safe_lookup_range: Range,
+        max_range_size: i128,
+    ) -> bool {
+        // if num cols is too large then the extended k is too large
+        if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS {
+            return false;
+        } else if Self::calc_num_cols(max_range_size, k) > MAX_NUM_LOOKUP_COLS {
+            return false;
+        }
 
-        let max_degree = std::cmp::max(max_degree, max_lookup_degree);
+        let mut settings = self.settings().clone();
+        settings.run_args.lookup_range = safe_lookup_range;
+        settings.run_args.logrows = k;
+        settings.required_range_checks = vec![(0, max_range_size)];
+        let mut cs = ConstraintSystem::default();
+        // fetch gag
+        #[cfg(unix)]
+        let _r = match gag::Gag::stdout() {
+            Ok(r) => Some(r),
+            Err(_) => None,
+        };
+        Self::configure_with_params(&mut cs, settings);
+        #[cfg(feature = "mv-lookup")]
+        let cs = cs.chunk_lookups();
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
+        let max_degree = cs.degree();
+        #[cfg(unix)]
+        std::mem::drop(_r);
         let quotient_poly_degree = (max_degree - 1) as u64;
         // n = 2^k
         let n = 1u64 << k;
@@ -1208,13 +1206,13 @@ impl GraphCircuit {
     pub fn calibrate_from_min_max(
         &mut self,
         min_max_lookup: Range,
-        min_max_range_checks: Range,
+        max_range_size: i128,
         max_logrows: Option<u32>,
         lookup_safety_margin: i128,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.calc_min_logrows(
             min_max_lookup,
-            min_max_range_checks,
+            max_range_size,
             max_logrows,
             lookup_safety_margin,
         )?;
@@ -1227,6 +1225,7 @@ impl GraphCircuit {
         inputs: &mut [Tensor<Fp>],
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&ParamsKZG<Bn256>>,
+        throw_range_check_error: bool,
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let original_inputs = inputs.to_vec();
 
@@ -1267,7 +1266,9 @@ impl GraphCircuit {
             }
         }
 
-        let mut model_results = self.model().forward(inputs, &self.settings().run_args)?;
+        let mut model_results =
+            self.model()
+                .forward(inputs, &self.settings().run_args, throw_range_check_error)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();
@@ -1310,8 +1311,7 @@ impl GraphCircuit {
             processed_outputs,
             max_lookup_inputs: model_results.max_lookup_inputs,
             min_lookup_inputs: model_results.min_lookup_inputs,
-            max_range_check: model_results.max_range_check,
-            min_range_check: model_results.min_range_check,
+            max_range_size: model_results.max_range_size,
         };
 
         witness.generate_rescaled_elements(

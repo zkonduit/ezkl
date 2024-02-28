@@ -18,10 +18,7 @@ use super::{
     region::RegionCtx,
 };
 use crate::{
-    circuit::{
-        ops::base::BaseOp,
-        utils::{self, F32},
-    },
+    circuit::{ops::base::BaseOp, utils},
     fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{
         get_broadcasted_shape,
@@ -54,6 +51,41 @@ pub fn overflowed_len(starting_idx: usize, mut total_len: usize, column_len: usi
     total_len
 }
 
+/// Same as div but splits the division into N parts
+pub fn loop_div<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    value: &[ValTensor<F>; 1],
+    divisor: F,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if divisor == F::ONE {
+        return Ok(value[0].clone());
+    }
+
+    // if integer val is divisible by 2, we can use a faster method and div > F::S
+    let mut divisor = divisor;
+    let mut num_parts = 1;
+
+    while felt_to_i128(divisor) % 2 == 0 && felt_to_i128(divisor) > (2_i128.pow(F::S - 4)) {
+        divisor = i128_to_felt(felt_to_i128(divisor) / 2);
+        num_parts += 1;
+    }
+
+    let output = div(config, region, value, divisor)?;
+    if num_parts == 1 {
+        return Ok(output);
+    }
+
+    let divisor_int = 2_i128.pow(num_parts - 1);
+    let divisor_felt = i128_to_felt(divisor_int);
+    if divisor_int <= 2_i128.pow(F::S - 3) {
+        div(config, region, &[output], divisor_felt)
+    } else {
+        // keep splitting the divisor until it satisfies the condition
+        loop_div(config, region, &[output], divisor_felt)
+    }
+}
+
 /// Div accumulated layout
 pub fn div<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
@@ -61,6 +93,10 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
     value: &[ValTensor<F>; 1],
     div: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if div == F::ONE {
+        return Ok(value[0].clone());
+    }
+
     let input = value[0].clone();
     let input_dims = input.dims();
 
@@ -88,6 +124,8 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         .into()
     };
     claimed_output.reshape(input_dims)?;
+    region.assign(&config.output, &claimed_output)?;
+    region.increment(claimed_output.len());
 
     let product = pairwise(
         config,
@@ -96,16 +134,12 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
     )?;
 
-    log::debug!("product: {:?}", product.get_int_evals()?);
-
     let diff_with_input = pairwise(
         config,
         region,
         &[product.clone(), input.clone()],
         BaseOp::Sub,
     )?;
-
-    log::debug!("diff_with_input: {:?}", diff_with_input.get_int_evals()?);
 
     range_check(
         config,
@@ -117,6 +151,46 @@ pub fn div<F: PrimeField + TensorType + PartialOrd>(
     Ok(claimed_output)
 }
 
+fn recip_int<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    input: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // assert is boolean
+    let zero_inverse_val = tensor::ops::nonlinearities::zero_recip(1.0)[0];
+    // get values where input is 0
+    let zero_mask = equals_zero(config, region, input)?;
+
+    let one_minus_zero_mask = pairwise(
+        config,
+        region,
+        &[
+            zero_mask.clone(),
+            ValTensor::from(Tensor::from([ValType::Constant(F::ONE)].into_iter())),
+        ],
+        BaseOp::Sub,
+    )?;
+
+    let zero_inverse_val = pairwise(
+        config,
+        region,
+        &[
+            zero_mask,
+            ValTensor::from(Tensor::from(
+                [ValType::Constant(i128_to_felt(zero_inverse_val))].into_iter(),
+            )),
+        ],
+        BaseOp::Mult,
+    )?;
+
+    pairwise(
+        config,
+        region,
+        &[one_minus_zero_mask, zero_inverse_val],
+        BaseOp::Add,
+    )
+}
+
 /// recip accumulated layout
 pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
@@ -125,10 +199,23 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
     input_scale: F,
     output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    if output_scale == F::ONE || output_scale == F::ZERO {
+        return recip_int(config, region, value);
+    }
+
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_i128(output_scale * input_scale) / 2;
+    let integer_input_scale = felt_to_i128(input_scale);
+    let integer_output_scale = felt_to_i128(output_scale);
+
+    // range_check_bracket is min of input_scale * output_scale and 2^F::S - 3
+    let range_check_len = std::cmp::min(integer_output_scale, 2_i128.pow(F::S - 4));
+
+    let input_scale_ratio =
+        i128_to_felt(integer_input_scale * integer_output_scale / range_check_len);
+
+    let range_check_bracket = range_check_len / 2;
 
     let is_assigned = !input.any_unknowns()?;
 
@@ -151,6 +238,8 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         .into()
     };
     claimed_output.reshape(input_dims)?;
+    let claimed_output = region.assign(&config.output, &claimed_output)?;
+    region.increment(claimed_output.len());
 
     // this is now of scale 2 * scale
     let product = pairwise(
@@ -160,15 +249,46 @@ pub fn recip<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Mult,
     )?;
 
-    log::debug!("product: {:?}", product.get_int_evals()?);
+    // divide by input_scale
+    let rebased_div = loop_div(config, region, &[product], input_scale_ratio)?;
 
-    log::debug!("range_check_bracket: {:?}", range_check_bracket);
+    let zero_inverse_val =
+        tensor::ops::nonlinearities::zero_recip(felt_to_i128(output_scale) as f64)[0];
+    let zero_inverse =
+        Tensor::from([ValType::Constant(i128_to_felt::<F>(zero_inverse_val))].into_iter());
+
+    let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
+
+    let equal_inverse_mask = equals(
+        config,
+        region,
+        &[claimed_output.clone(), zero_inverse.into()],
+    )?;
+
+    // assert the two masks are equal
+    enforce_equality(
+        config,
+        region,
+        &[equal_zero_mask.clone(), equal_inverse_mask],
+    )?;
+
+    let unit_scale = Tensor::from([ValType::Constant(i128_to_felt(range_check_len))].into_iter());
+
+    let unit_mask = pairwise(
+        config,
+        region,
+        &[equal_zero_mask, unit_scale.into()],
+        BaseOp::Mult,
+    )?;
+
+    // now add the unit mask to the rebased_div
+    let rebased_offset_div = pairwise(config, region, &[rebased_div, unit_mask], BaseOp::Add)?;
 
     // at most the error should be in the original unit scale's range
     range_check(
         config,
         region,
-        &[product],
+        &[rebased_offset_div],
         &(range_check_bracket, 3 * range_check_bracket),
     )?;
 
@@ -1677,9 +1797,23 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
-    let diff_inverse = diff.inverse()?;
-    let product_diff_and_invert =
-        pairwise(config, region, &[diff.clone(), diff_inverse], BaseOp::Mult)?;
+    equals_zero(config, region, &[diff])
+}
+
+/// Equality boolean operation
+pub fn equals_zero<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let values = values[0].clone();
+    let values_inverse = values.inverse()?;
+    let product_values_and_invert = pairwise(
+        config,
+        region,
+        &[values.clone(), values_inverse],
+        BaseOp::Mult,
+    )?;
 
     // constant of 1
     let mut ones = Tensor::from(vec![ValType::Constant(F::from(1))].into_iter());
@@ -1689,12 +1823,12 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd>(
     let output = pairwise(
         config,
         region,
-        &[ones.into(), product_diff_and_invert],
+        &[ones.into(), product_values_and_invert],
         BaseOp::Sub,
     )?;
 
     // take the product of diff and output
-    let prod_check = pairwise(config, region, &[diff, output.clone()], BaseOp::Mult)?;
+    let prod_check = pairwise(config, region, &[values, output.clone()], BaseOp::Mult)?;
 
     is_zero_identity(config, region, &[prod_check], false)?;
 
@@ -1860,7 +1994,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     if normalized {
-        last_elem = div(
+        last_elem = loop_div(
             config,
             region,
             &[last_elem],
@@ -2519,6 +2653,17 @@ pub fn range_check<F: PrimeField + TensorType + PartialOrd>(
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
+    if region.throw_range_check_error() {
+        // assert is within range
+        let int_values = w.get_int_evals()?;
+        for v in int_values {
+            if v < range.0 || v > range.1 {
+                log::debug!("Value ({:?}) out of range: {:?}", v, range);
+                return Err(Box::new(TensorError::TableLookupError));
+            }
+        }
+    }
+
     region.increment(assigned_len);
 
     let elapsed = timer.elapsed();
@@ -2945,16 +3090,8 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd>(
     let denom = sum(config, region, &[ex.clone()])?;
     // get the inverse
 
-    let inv_denom = nonlinearity(
-        config,
-        region,
-        &[denom],
-        // we set to input scale + output_scale so the output scale is output)scale
-        &LookupOp::Recip {
-            input_scale: scale,
-            output_scale: scale,
-        },
-    )?;
+    let felt_scale = F::from(scale.0 as u64);
+    let inv_denom = recip(config, region, &[denom], felt_scale, felt_scale)?;
 
     // product of num * (1 / denom) = 2*output_scale
     let softmax = pairwise(config, region, &[ex, inv_denom], BaseOp::Mult)?;
@@ -2989,29 +3126,44 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, &values, BaseOp::Sub)?;
 
-    // Calculate the reciprocal of the expected output tensor, scaling by double the scaling factor
-    let recip = nonlinearity(
+    // integer scale
+    let int_scale = scale.0 as i128;
+    // felt scale
+    let felt_scale = i128_to_felt(int_scale);
+    // range check len capped at 2^(S-3) and make it divisible 2
+    let range_check_bracket = std::cmp::min(
+        utils::F32(scale.0),
+        utils::F32(2_f32.powf((F::S - 5) as f32)),
+    )
+    .0;
+
+    let range_check_bracket_int = range_check_bracket as i128;
+
+    // input scale ratio we multiply by tol such that in the new scale range_check_len represents tol percent
+    let input_scale_ratio = ((scale.0.powf(2.0) / range_check_bracket) * tol) as i128 / 2 * 2;
+
+    let recip = recip(
         config,
         region,
         &[values[0].clone()],
-        &LookupOp::Recip {
-            input_scale: scale,
-            // multiply by 100 to get the percent error
-            output_scale: F32(scale.0 * 100.0),
-        },
+        felt_scale,
+        felt_scale * F::from(100),
     )?;
+
+    log::debug!("recip: {}", recip.show());
 
     // Multiply the difference by the recip
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
-    let rebased_product = div(config, region, &[product], F::from(scale.0 as u64))?;
 
-    let scaled_tol = (tol * scale.0) as i128;
+    log::debug!("product: {}", product.show());
+    let rebased_product = loop_div(config, region, &[product], i128_to_felt(input_scale_ratio))?;
+    log::debug!("rebased_product: {}", rebased_product.show());
 
     // check that it is within the tolerance range
     range_check(
         config,
         region,
         &[rebased_product],
-        &(-scaled_tol, scaled_tol),
+        &(-range_check_bracket_int, range_check_bracket_int),
     )
 }

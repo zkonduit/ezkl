@@ -180,6 +180,11 @@ impl RunArgs {
         if self.num_inner_cols < 1 {
             return Err("num_inner_cols must be >= 1".into());
         }
+        if self.tolerance.val > 0.0 {
+            if self.output_visibility != Visibility::Public {
+                return Err("tolerance > 0.0 requires output_visibility to be public".into());
+            }
+        }
         Ok(())
     }
 
