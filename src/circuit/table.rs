@@ -133,9 +133,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
 }
 
 ///
-pub fn num_cols_required(range: Range, col_size: usize) -> usize {
-    // double it to be safe
-    let range_len = range.1 - range.0;
+pub fn num_cols_required(range_len: i128, col_size: usize) -> usize {
     // number of cols needed to store the range
     (range_len / (col_size as i128)) as usize + 1
 }
@@ -152,7 +150,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let factors = cs.blinding_factors() + RESERVED_BLINDING_ROWS_PAD;
         let col_size = Self::cal_col_size(logrows, factors);
         // number of cols needed to store the range
-        let num_cols = num_cols_required(range, col_size);
+        let num_cols = num_cols_required((range.1 - range.0).abs(), col_size);
 
         log::debug!("table range: {:?}", range);
 
@@ -313,7 +311,7 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
         let factors = cs.blinding_factors() + RESERVED_BLINDING_ROWS_PAD;
         let col_size = Self::cal_col_size(logrows, factors);
         // number of cols needed to store the range
-        let num_cols = num_cols_required(range, col_size);
+        let num_cols = num_cols_required((range.1 - range.0).abs(), col_size);
 
         let inputs = {
             let mut cols = vec![];

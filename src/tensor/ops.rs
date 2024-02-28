@@ -3773,6 +3773,30 @@ pub mod nonlinearities {
         .unwrap()
     }
 
+    /// Elementwise inverse.
+    /// # Arguments
+    /// * `out_scale` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::zero_recip;
+    /// let k = 2_f64;
+    /// let result = zero_recip(1.0);
+    /// let expected = Tensor::<i128>::new(Some(&[4503599627370496]), &[1]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn zero_recip(out_scale: f64) -> Tensor<i128> {
+        let a = Tensor::<i128>::new(Some(&[0]), &[1]).unwrap();
+
+        a.par_enum_map(|_, a_i| {
+            let rescaled = a_i as f64;
+            let denom = (1_f64) / (rescaled + f64::EPSILON);
+            let d_inv_x = out_scale * denom;
+            Ok::<_, TensorError>(d_inv_x.round() as i128)
+        })
+        .unwrap()
+    }
+
     /// Elementwise greater than
     /// # Arguments
     ///
