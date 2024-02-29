@@ -828,6 +828,11 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     let (mut input, index) = (values[0].clone(), values[1].clone());
     input.flatten();
 
+    // assert we have a single index
+    if index.dims().iter().product::<usize>() != 1 {
+        return Err("index must be a single element".into());
+    }
+
     if !(dim_indices.all_prev_assigned() || region.is_dummy()) {
         return Err("dim_indices must be assigned".into());
     }
@@ -848,8 +853,11 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     }
     .into();
 
-    let (_, assigned_output) =
-        dynamic_lookup(config, region, &[index, output], &[dim_indices, input])?;
+    let local_mask = equals(config, region, &[dim_indices.clone(), index])?;
+
+    let dot = dot(config, region, &[input.clone(), local_mask.clone()])?;
+
+    let assigned_output = enforce_equality(config, region, &[dot, output.clone()])?;
 
     Ok(assigned_output)
 }
@@ -1072,19 +1080,19 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     let indices = region.assign(&config.inputs[1], &indices.try_into()?)?;
     region.increment(indices.len());
 
-    let mut iteration_dims = output_size.clone();
-    iteration_dims[dim] = 1;
-
     // Allocate memory for the output tensor
-    let cartesian_coord = iteration_dims
+    let cartesian_coord = output_size
         .iter()
         .map(|x| 0..*x)
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    let mut results = HashMap::new();
+    let mut output: Tensor<ValType<F>> = Tensor::new(None, &output_size)?;
 
-    for coord in cartesian_coord {
+    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
+        let coord = cartesian_coord[i].clone();
+        let index_val = index_clone.get_single_elem(coord[dim])?;
+
         let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
         slice[dim] = 0..input_dims[dim];
 
@@ -1094,28 +1102,16 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
         let res = select(
             config,
             region,
-            &[sliced_input, index_clone.clone()],
+            &[sliced_input, index_val.clone()],
             indices.clone(),
         )?;
 
-        results.insert(coord, res);
-    }
+        let res = res.get_inner_tensor()?;
 
-    // Allocate memory for the output tensor
-    let cartesian_coord = output_size
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
+        Ok(res[0].clone())
+    };
 
-    let mut output = Tensor::new(None, &output_size)?.par_enum_map(|i, _: ValType<F>| {
-        let coord = cartesian_coord[i].clone();
-        let mut key = coord.clone();
-        key[dim] = 0;
-        let result = &results.get(&key).ok_or("missing result")?;
-        let o = result.get_inner_tensor().map_err(|_| "missing tensor")?[coord[dim]].clone();
-        Ok::<ValType<F>, region::RegionError>(o)
-    })?;
+    region.apply_in_loop(&mut output, inner_loop_function)?;
 
     // Reshape the output tensor
     if index_clone.is_singleton() {
