@@ -20,6 +20,33 @@ use portable_atomic::AtomicI128 as AtomicInt;
 
 use super::lookup::LookupOp;
 
+/// Dynamic lookup index
+#[derive(Clone, Debug, Default)]
+pub struct DynamicLookupIndex {
+    lookup_index: usize,
+    col_coord: usize,
+}
+
+impl DynamicLookupIndex {
+    /// Create a new dynamic lookup index
+    pub fn new(lookup_index: usize, col_coord: usize) -> DynamicLookupIndex {
+        DynamicLookupIndex {
+            lookup_index,
+            col_coord,
+        }
+    }
+
+    /// Get the lookup index
+    pub fn lookup_index(&self) -> usize {
+        self.lookup_index
+    }
+
+    /// Get the column coord
+    pub fn col_coord(&self) -> usize {
+        self.col_coord
+    }
+}
+
 /// Region error
 #[derive(Debug, thiserror::Error)]
 pub enum RegionError {
@@ -66,6 +93,7 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
     linear_coord: usize,
     num_inner_cols: usize,
     total_constants: usize,
+    dynamic_lookup_index: DynamicLookupIndex,
     used_lookups: HashSet<LookupOp>,
     used_range_checks: HashSet<Range>,
     max_lookup_inputs: i128,
@@ -78,6 +106,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     ///
     pub fn increment_total_constants(&mut self, n: usize) {
         self.total_constants += n;
+    }
+
+    ///
+    pub fn increment_dynamic_lookup_index(&mut self, n: usize) {
+        self.dynamic_lookup_index.lookup_index += n;
+    }
+
+    ///
+    pub fn increment_dynamic_lookup_col_coord(&mut self, n: usize) {
+        self.dynamic_lookup_index.col_coord += n;
     }
 
     ///
@@ -96,6 +134,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             row,
             linear_coord,
             total_constants: 0,
+            dynamic_lookup_index: DynamicLookupIndex::default(),
             used_lookups: HashSet::new(),
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
@@ -109,6 +148,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         region: Option<RefCell<Region<'a, F>>>,
         row: usize,
         num_inner_cols: usize,
+        dynamic_lookup_index: DynamicLookupIndex,
     ) -> RegionCtx<'a, F> {
         let linear_coord = row * num_inner_cols;
         RegionCtx {
@@ -117,6 +157,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             linear_coord,
             row,
             total_constants: 0,
+            dynamic_lookup_index,
             used_lookups: HashSet::new(),
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
@@ -141,6 +182,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             linear_coord,
             row,
             total_constants: 0,
+            dynamic_lookup_index: DynamicLookupIndex::default(),
             used_lookups: HashSet::new(),
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
@@ -156,6 +198,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         linear_coord: usize,
         total_constants: usize,
         num_inner_cols: usize,
+        dynamic_lookup_index: DynamicLookupIndex,
         used_lookups: HashSet<LookupOp>,
         used_range_checks: HashSet<Range>,
         throw_range_check_error: bool,
@@ -167,6 +210,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             linear_coord,
             row,
             total_constants,
+            dynamic_lookup_index,
             used_lookups,
             used_range_checks,
             max_lookup_inputs: 0,
@@ -227,6 +271,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         let min_lookup_inputs = AtomicInt::new(self.min_lookup_inputs());
         let lookups = Arc::new(Mutex::new(self.used_lookups.clone()));
         let range_checks = Arc::new(Mutex::new(self.used_range_checks.clone()));
+        let dynamic_lookup_index = Arc::new(Mutex::new(self.dynamic_lookup_index.clone()));
 
         *output = output
             .par_enum_map(|idx, _| {
@@ -242,6 +287,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                     starting_linear_coord,
                     starting_constants,
                     self.num_inner_cols,
+                    DynamicLookupIndex::default(),
                     HashSet::new(),
                     HashSet::new(),
                     self.throw_range_check_error,
@@ -265,6 +311,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                 lookups.extend(local_reg.used_lookups());
                 let mut range_checks = range_checks.lock().unwrap();
                 range_checks.extend(local_reg.used_range_checks());
+                let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
+                dynamic_lookup_index.lookup_index += local_reg.dynamic_lookup_index.lookup_index;
+                dynamic_lookup_index.col_coord += local_reg.dynamic_lookup_index.col_coord;
+
                 res
             })
             .map_err(|e| {
@@ -292,6 +342,20 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             .into_inner()
             .map_err(|e| {
                 RegionError::from(format!("dummy_loop: failed to get range checks: {:?}", e))
+            })?;
+        self.dynamic_lookup_index = Arc::try_unwrap(dynamic_lookup_index)
+            .map_err(|e| {
+                RegionError::from(format!(
+                    "dummy_loop: failed to get dynamic lookup index: {:?}",
+                    e
+                ))
+            })?
+            .into_inner()
+            .map_err(|e| {
+                RegionError::from(format!(
+                    "dummy_loop: failed to get dynamic lookup index: {:?}",
+                    e
+                ))
             })?;
 
         Ok(())
@@ -363,6 +427,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         self.total_constants
     }
 
+    /// Get the dynamic lookup index
+    pub fn dynamic_lookup_index(&self) -> usize {
+        self.dynamic_lookup_index.lookup_index
+    }
+
+    /// Get the dynamic lookup column coordinate
+    pub fn dynamic_lookup_col_coord(&self) -> usize {
+        self.dynamic_lookup_index.col_coord
+    }
+
     /// get used lookups
     pub fn used_lookups(&self) -> HashSet<LookupOp> {
         self.used_lookups.clone()
@@ -407,6 +481,24 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         self.total_constants += values.num_constants();
         if let Some(region) = &self.region {
             var.assign(&mut region.borrow_mut(), self.linear_coord, values)
+        } else {
+            Ok(values.clone())
+        }
+    }
+
+    /// Assign a valtensor to a vartensor
+    pub fn assign_dynamic_lookup(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+    ) -> Result<ValTensor<F>, Error> {
+        self.total_constants += values.num_constants();
+        if let Some(region) = &self.region {
+            var.assign(
+                &mut region.borrow_mut(),
+                self.dynamic_lookup_col_coord(),
+                values,
+            )
         } else {
             Ok(values.clone())
         }

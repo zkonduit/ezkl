@@ -1575,6 +1575,142 @@ mod add {
 }
 
 #[cfg(test)]
+mod dynamic_lookup {
+    use super::*;
+
+    const K: usize = 6;
+    const LEN: usize = 4;
+    const NUM_LOOP: usize = 5;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
+        tables: [[ValTensor<F>; 2]; NUM_LOOP],
+        lookups: [[ValTensor<F>; 2]; NUM_LOOP],
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, 2, LEN);
+            let b = VarTensor::new_advice(cs, K, 2, LEN);
+            let c: VarTensor = VarTensor::new_advice(cs, K, 2, LEN);
+
+            let d = VarTensor::new_advice(cs, K, 1, LEN);
+            let e = VarTensor::new_advice(cs, K, 1, LEN);
+
+            let mut config =
+                Self::Config::configure(cs, &[a.clone(), b.clone()], &c, CheckMode::SAFE);
+            for _ in 0..NUM_LOOP {
+                config
+                    .configure_dynamic_lookup(cs, &[a.clone(), b.clone()], &[d.clone(), e.clone()])
+                    .unwrap();
+            }
+
+            config
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0, 1);
+                        for i in 0..NUM_LOOP {
+                            layouts::dynamic_lookup(
+                                &config,
+                                &mut region,
+                                &self.lookups[i],
+                                &self.tables[i],
+                            )
+                            .map_err(|_| Error::Synthesis)?;
+                        }
+                        assert_eq!(
+                            region.dynamic_lookup_col_coord(),
+                            NUM_LOOP * self.tables[0][0].len()
+                        );
+                        assert_eq!(region.dynamic_lookup_index(), NUM_LOOP);
+
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn dynamiclookupcircuit() {
+        // parameters
+        let tables = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                [
+                    ValTensor::from(Tensor::from(
+                        (0..LEN).map(|i| Value::known(F::from((i * loop_idx) as u64 + 1))),
+                    )),
+                    ValTensor::from(Tensor::from(
+                        (0..LEN).map(|i| Value::known(F::from((loop_idx * i * i) as u64 + 1))),
+                    )),
+                ]
+            })
+            .collect::<Vec<_>>();
+
+        let lookups = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                [
+                    ValTensor::from(Tensor::from(
+                        (0..3).map(|i| Value::known(F::from((i * loop_idx) as u64 + 1))),
+                    )),
+                    ValTensor::from(Tensor::from(
+                        (0..3).map(|i| Value::known(F::from((loop_idx * i * i) as u64 + 1))),
+                    )),
+                ]
+            })
+            .collect::<Vec<_>>();
+
+        let circuit = MyCircuit::<F> {
+            tables: tables.clone().try_into().unwrap(),
+            lookups: lookups.try_into().unwrap(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+
+        let lookups = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                [
+                    ValTensor::from(Tensor::from(
+                        (0..2).map(|i| Value::known(F::from((i * loop_idx) as u64 + 1))),
+                    )),
+                    ValTensor::from(Tensor::from((0..2).map(|_| Value::known(F::from(10000))))),
+                ]
+            })
+            .collect::<Vec<_>>();
+
+        let circuit = MyCircuit::<F> {
+            tables: tables.try_into().unwrap(),
+            lookups: lookups.try_into().unwrap(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        assert!(prover.verify().is_err());
+    }
+}
+
+#[cfg(test)]
 mod add_with_overflow {
     use super::*;
 

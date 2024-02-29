@@ -449,6 +449,10 @@ pub struct GraphSettings {
     pub total_assignments: usize,
     /// total const size
     pub total_const_size: usize,
+    /// total dynamic column size
+    pub total_dynamic_col_size: usize,
+    /// number of dynamic lookups
+    pub num_dynamic_lookups: usize,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
@@ -476,6 +480,10 @@ impl GraphSettings {
         (self.num_rows as f64 + RESERVED_BLINDING_ROWS as f64)
             .log2()
             .ceil() as u32
+    }
+
+    fn dynamic_lookup_logrows(&self) -> u32 {
+        (self.total_dynamic_col_size as f64).log2().ceil() as u32
     }
 
     fn module_constraint_logrows(&self) -> u32 {
@@ -568,6 +576,11 @@ impl GraphSettings {
         self.run_args.input_visibility.is_hashed()
             || self.run_args.output_visibility.is_hashed()
             || self.run_args.param_visibility.is_hashed()
+    }
+
+    /// requires dynamic lookup  
+    pub fn requires_dynamic_lookup(&self) -> bool {
+        self.num_dynamic_lookups > 0
     }
 
     /// any kzg visibility
@@ -1054,7 +1067,8 @@ impl GraphCircuit {
         Ok(min_bits)
     }
 
-    fn calc_min_logrows(
+    /// calculate the minimum logrows required for the circuit
+    pub fn calc_min_logrows(
         &mut self,
         min_max_lookup: Range,
         max_range_size: i128,
@@ -1083,14 +1097,19 @@ impl GraphCircuit {
         // These are hard lower limits, we can't overflow instances or modules constraints
         let instance_logrows = self.settings().log2_total_instances();
         let module_constraint_logrows = self.settings().module_constraint_logrows();
+        let dynamic_lookup_logrows = self.settings().dynamic_lookup_logrows();
         min_logrows = std::cmp::max(
             min_logrows,
-            // max of the instance logrows and the module constraint logrows is the lower limit
-            [instance_logrows, module_constraint_logrows]
-                .iter()
-                .max()
-                .unwrap()
-                .clone(),
+            // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit
+            [
+                instance_logrows,
+                module_constraint_logrows,
+                dynamic_lookup_logrows,
+            ]
+            .iter()
+            .max()
+            .unwrap()
+            .clone(),
         );
 
         // These are upper limits, going above these is wasteful, but they are not hard limits
@@ -1175,19 +1194,11 @@ impl GraphCircuit {
         settings.run_args.logrows = k;
         settings.required_range_checks = vec![(0, max_range_size)];
         let mut cs = ConstraintSystem::default();
-        // fetch gag
-        #[cfg(unix)]
-        let _r = match gag::Gag::stdout() {
-            Ok(r) => Some(r),
-            Err(_) => None,
-        };
         Self::configure_with_params(&mut cs, settings);
         #[cfg(feature = "mv-lookup")]
         let cs = cs.chunk_lookups();
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
         let max_degree = cs.degree();
-        #[cfg(unix)]
-        std::mem::drop(_r);
         let quotient_poly_degree = (max_degree - 1) as u64;
         // n = 2^k
         let n = 1u64 << k;
@@ -1200,23 +1211,6 @@ impl GraphCircuit {
             }
         }
         true
-    }
-
-    /// Calibrate the circuit to the supplied data.
-    pub fn calibrate_from_min_max(
-        &mut self,
-        min_max_lookup: Range,
-        max_range_size: i128,
-        max_logrows: Option<u32>,
-        lookup_safety_margin: i128,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.calc_min_logrows(
-            min_max_lookup,
-            max_range_size,
-            max_logrows,
-            lookup_safety_margin,
-        )?;
-        Ok(())
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
@@ -1518,34 +1512,18 @@ impl Circuit<Fp> for GraphCircuit {
             params.run_args.logrows as usize,
         );
 
-        let mut vars = ModelVars::new(
-            cs,
-            params.run_args.logrows as usize,
-            params.total_assignments,
-            params.run_args.num_inner_cols,
-            params.total_const_size,
-            params.module_requires_fixed(),
-        );
+        let mut vars = ModelVars::new(cs, &params);
 
         module_configs.configure_complex_modules(cs, visibility, params.module_sizes.clone());
 
         vars.instantiate_instance(
             cs,
-            params.model_instance_shapes,
-            params.run_args.input_scale,
+            params.model_instance_shapes.clone(),
+            params.run_args.input_scale.clone(),
             module_configs.instance,
         );
 
-        let base = Model::configure(
-            cs,
-            &vars,
-            params.run_args.lookup_range,
-            params.run_args.logrows as usize,
-            params.required_lookups,
-            params.required_range_checks,
-            params.check_mode,
-        )
-        .unwrap();
+        let base = Model::configure(cs, &vars, &params).unwrap();
 
         let model_config = ModelConfig { base, vars };
 

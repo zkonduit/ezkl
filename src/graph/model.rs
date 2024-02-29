@@ -99,6 +99,10 @@ pub type NodeGraph = BTreeMap<usize, NodeType>;
 pub struct DummyPassRes {
     /// number of rows use
     pub num_rows: usize,
+    /// num dynamic lookups
+    pub num_dynamic_lookups: usize,
+    /// dynamic lookup col size
+    pub dynamic_lookup_col_coord: usize,
     /// linear coordinate
     pub linear_coord: usize,
     /// total const size
@@ -540,6 +544,8 @@ impl Model {
             required_range_checks: res.range_checks.into_iter().collect(),
             model_output_scales: self.graph.get_output_scales()?,
             model_input_scales: self.graph.get_input_scales(),
+            num_dynamic_lookups: res.num_dynamic_lookups,
+            total_dynamic_col_size: res.dynamic_lookup_col_coord,
             total_const_size: res.total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -1003,24 +1009,25 @@ impl Model {
     /// # Arguments
     /// * `meta` - The constraint system.
     /// * `vars` - The variables for the circuit.
-    /// * `run_args` - [RunArgs]
-    /// * `required_lookups` - The required lookup operations for the circuit.
+    /// * `settings` - [GraphSettings]
     pub fn configure(
         meta: &mut ConstraintSystem<Fp>,
         vars: &ModelVars<Fp>,
-        lookup_range: Range,
-        logrows: usize,
-        required_lookups: Vec<LookupOp>,
-        required_range_checks: Vec<Range>,
-        check_mode: CheckMode,
+        settings: &GraphSettings,
     ) -> Result<PolyConfig<Fp>, Box<dyn Error>> {
-        info!("configuring model");
+        debug!("configuring model");
+
+        let lookup_range = settings.run_args.lookup_range;
+        let logrows = settings.run_args.logrows as usize;
+        let num_dynamic_lookups = settings.num_dynamic_lookups;
+        let required_lookups = settings.required_lookups.clone();
+        let required_range_checks = settings.required_range_checks.clone();
 
         let mut base_gate = PolyConfig::configure(
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
-            check_mode,
+            settings.check_mode,
         );
         // set scale for HybridOp::RangeCheck and call self.conf_lookup on that op for percentage tolerance case
         let input = &vars.advices[0];
@@ -1032,6 +1039,14 @@ impl Model {
 
         for range in required_range_checks {
             base_gate.configure_range_check(meta, input, index, range, logrows)?;
+        }
+
+        for _ in 0..num_dynamic_lookups {
+            base_gate.configure_dynamic_lookup(
+                meta,
+                vars.advices[0..2].try_into()?,
+                vars.advices[3..5].try_into()?,
+            )?;
         }
 
         Ok(base_gate)
@@ -1439,6 +1454,8 @@ impl Model {
             max_lookup_inputs: region.max_lookup_inputs(),
             min_lookup_inputs: region.min_lookup_inputs(),
             max_range_size: region.max_range_size(),
+            num_dynamic_lookups: region.dynamic_lookup_index(),
+            dynamic_lookup_col_coord: region.dynamic_lookup_col_coord(),
             outputs,
         };
 
