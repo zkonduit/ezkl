@@ -38,6 +38,8 @@ describe('Generate witness, prove and verify', () => {
         let pk = await readEzklArtifactsFile(path, example, 'key.pk');
         let circuit_ser = await readEzklArtifactsFile(path, example, 'network.compiled');
         circuit_settings_ser = await readEzklArtifactsFile(path, example, 'settings.json');
+
+
         params_ser = await readEzklSrsFile(path, example);
         const startTimeProve = Date.now();
         result = wasmFunctions.prove(witness, pk, circuit_ser, params_ser);

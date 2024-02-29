@@ -16,15 +16,7 @@ export async function readEzklArtifactsFile(path: string, example: string, filen
   return new Uint8ClampedArray(buffer.buffer);
 }
 
-export async function readEzklSrsFile(path: string, example: string): Promise<Uint8ClampedArray> {
-  // const settingsPath = path.join(__dirname, '..', '..', 'ezkl', 'examples', 'onnx', example, 'settings.json');
-
-  const settingsPath = `${path}/${example}/settings.json`
-  const settingsBuffer = await fs.readFile(settingsPath, { encoding: 'utf-8' });
-  const settings = JSONBig.parse(settingsBuffer);
-  const logrows = settings.run_args.logrows;
-  // const filePath = path.join(__dirname, '..', '..', 'ezkl', 'examples', 'onnx', `kzg${logrows}.srs`);
-  // srs path is at $HOME/.ezkl/srs
+export async function readEzklSrsFile(logrows: string): Promise<Uint8ClampedArray> {
   const filePath = `${userHomeDir}/.ezkl/srs/kzg${logrows}.srs`
   const buffer = await fs.readFile(filePath);
   return new Uint8ClampedArray(buffer.buffer);
