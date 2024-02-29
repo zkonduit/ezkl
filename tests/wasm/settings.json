@@ -27,6 +27,8 @@
         "check_mode": "UNSAFE"
     },
     "num_rows": 16,
+    "total_dynamic_col_size": 0,
+    "num_dynamic_lookups": 0,
     "total_assignments": 32,
     "total_const_size": 8,
     "model_instance_shapes": [
