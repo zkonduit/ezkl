@@ -38,9 +38,10 @@ describe('Generate witness, prove and verify', () => {
         let pk = await readEzklArtifactsFile(path, example, 'key.pk');
         let circuit_ser = await readEzklArtifactsFile(path, example, 'network.compiled');
         circuit_settings_ser = await readEzklArtifactsFile(path, example, 'settings.json');
-
-
-        params_ser = await readEzklSrsFile(path, example);
+        // get the log rows from the circuit settings
+        const circuit_settings = deserialize(circuit_settings_ser) as any;
+        const logrows = circuit_settings.run_args.logrows as string;
+        params_ser = await readEzklSrsFile(logrows);
         const startTimeProve = Date.now();
         result = wasmFunctions.prove(witness, pk, circuit_ser, params_ser);
         const endTimeProve = Date.now();
@@ -56,6 +57,7 @@ describe('Generate witness, prove and verify', () => {
         let result
         const vk = await readEzklArtifactsFile(path, example, 'key.vk');
         const startTimeVerify = Date.now();
+        params_ser = await readEzklSrsFile("1");
         result = wasmFunctions.verify(proof_ser, vk, circuit_settings_ser, params_ser);
         const result_ref = wasmFunctions.verify(proof_ser_ref, vk, circuit_settings_ser, params_ser);
         const endTimeVerify = Date.now();
