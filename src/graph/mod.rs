@@ -1101,15 +1101,14 @@ impl GraphCircuit {
         min_logrows = std::cmp::max(
             min_logrows,
             // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit
-            [
+            *[
                 instance_logrows,
                 module_constraint_logrows,
                 dynamic_lookup_logrows,
             ]
             .iter()
             .max()
-            .unwrap()
-            .clone(),
+            .unwrap(),
         );
 
         // These are upper limits, going above these is wasteful, but they are not hard limits
@@ -1119,11 +1118,10 @@ impl GraphCircuit {
         max_logrows = std::cmp::min(
             max_logrows,
             // max of the model constraint logrows, min_bits, and the constants logrows is the upper limit
-            [model_constraint_logrows, min_bits, constants_logrows]
+            *[model_constraint_logrows, min_bits, constants_logrows]
                 .iter()
                 .max()
-                .unwrap()
-                .clone(),
+                .unwrap(),
         );
 
         // we now have a min and max logrows
@@ -1519,7 +1517,7 @@ impl Circuit<Fp> for GraphCircuit {
         vars.instantiate_instance(
             cs,
             params.model_instance_shapes.clone(),
-            params.run_args.input_scale.clone(),
+            params.run_args.input_scale,
             module_configs.instance,
         );
 

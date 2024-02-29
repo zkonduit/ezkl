@@ -609,7 +609,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                 });
                 self.dynamic_lookup_selectors
                     .entry((x, y))
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(s_lookup);
             }
         }
