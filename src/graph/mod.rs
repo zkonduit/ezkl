@@ -12,6 +12,7 @@ pub mod utilities;
 pub mod vars;
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
+use gag::Gag;
 use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 pub use input::DataSource;
@@ -1192,7 +1193,26 @@ impl GraphCircuit {
         settings.run_args.logrows = k;
         settings.required_range_checks = vec![(0, max_range_size)];
         let mut cs = ConstraintSystem::default();
+        // if unix get a gag
+        #[cfg(unix)]
+        let _r = match Gag::stdout() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+        #[cfg(unix)]
+        let _g = match Gag::stderr() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+
         Self::configure_with_params(&mut cs, settings);
+
+        // drop the gag
+        #[cfg(unix)]
+        drop(_r);
+        #[cfg(unix)]
+        drop(_g);
+
         #[cfg(feature = "mv-lookup")]
         let cs = cs.chunk_lookups();
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial

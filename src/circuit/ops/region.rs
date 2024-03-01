@@ -317,10 +317,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
 
                 res
             })
-            .map_err(|e| {
-                log::error!("dummy_loop: {:?}", e);
-                Error::Synthesis
-            })?;
+            .map_err(|e| RegionError::from(format!("dummy_loop: {:?}", e)))?;
         self.total_constants = constants.into_inner();
         self.linear_coord = linear_coord.into_inner();
         #[allow(trivial_numeric_casts)]

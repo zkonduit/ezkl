@@ -897,6 +897,18 @@ pub(crate) fn calibrate(
             ..settings.run_args.clone()
         };
 
+        // if unix get a gag
+        #[cfg(unix)]
+        let _r = match Gag::stdout() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+        #[cfg(unix)]
+        let _g = match Gag::stderr() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+
         let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
             Ok(c) => c,
             Err(e) => {
@@ -936,6 +948,12 @@ pub(crate) fn calibrate(
                 continue;
             }
         }
+
+        // drop the gag
+        #[cfg(unix)]
+        drop(_r);
+        #[cfg(unix)]
+        drop(_g);
 
         let min_lookup_range = forward_pass_res
             .get(&key)
