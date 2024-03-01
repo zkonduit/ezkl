@@ -1507,7 +1507,7 @@ mod native_tests {
         if any_output_scales_smol {
             // set the tolerance to 0.0
             settings.run_args.tolerance = Tolerance {
-                val: 0.0.into(),
+                val: 0.0,
                 scale: 0.0.into(),
             };
             settings

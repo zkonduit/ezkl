@@ -198,6 +198,9 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     pub lookup_input: VarTensor,
     /// the (currently singular) output of the accumulated operations.
     pub output: VarTensor,
+    /// The VarTensor reserved for dynamic lookup operations (could be an element of inputs or the same as output)
+    /// Note that you should be careful to ensure that the lookup_output is not simultaneously assigned to by other non-lookup operations eg. in the case of composite ops.
+    pub dynamic_lookup_tables: Vec<VarTensor>,
     /// the VarTensor reserved for lookup operations (could be an element of inputs or the same as output)
     /// Note that you should be careful to ensure that the lookup_output is not simultaneously assigned to by other non-lookup operations eg. in the case of composite ops.
     pub lookup_output: VarTensor,
@@ -207,6 +210,10 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     pub selectors: BTreeMap<(BaseOp, usize, usize), Selector>,
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
     pub lookup_selectors: BTreeMap<(LookupOp, usize, usize), Selector>,
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
+    pub dynamic_lookup_selectors: BTreeMap<(usize, usize), Vec<Selector>>,
+    ///
+    pub dynamic_table_selectors: Vec<Selector>,
     ///
     pub tables: BTreeMap<LookupOp, Table<F>>,
     ///
@@ -228,9 +235,12 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             lookup_input: dummy_var.clone(),
             output: dummy_var.clone(),
             lookup_output: dummy_var.clone(),
+            dynamic_lookup_tables: vec![VarTensor::dummy(col_size, 2), dummy_var.clone()],
             lookup_index: dummy_var,
             selectors: BTreeMap::new(),
             lookup_selectors: BTreeMap::new(),
+            dynamic_lookup_selectors: BTreeMap::new(),
+            dynamic_table_selectors: vec![],
             range_check_selectors: BTreeMap::new(),
             tables: BTreeMap::new(),
             range_checks: BTreeMap::new(),
@@ -376,10 +386,13 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             selectors,
             lookup_selectors: BTreeMap::new(),
             range_check_selectors: BTreeMap::new(),
+            dynamic_lookup_selectors: BTreeMap::new(),
             inputs: inputs.to_vec(),
             lookup_input: VarTensor::Empty,
             lookup_output: VarTensor::Empty,
             lookup_index: VarTensor::Empty,
+            dynamic_table_selectors: vec![],
+            dynamic_lookup_tables: vec![],
             tables: BTreeMap::new(),
             range_checks: BTreeMap::new(),
             output: output.clone(),
@@ -403,8 +416,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     where
         F: Field,
     {
-        let mut selectors = BTreeMap::new();
-
         if !index.is_advice() {
             return Err("wrong input type for lookup index".into());
         }
@@ -514,10 +525,10 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                         res
                     });
                 }
-                selectors.insert((nl.clone(), x, y), multi_col_selector);
+                self.lookup_selectors
+                    .insert((nl.clone(), x, y), multi_col_selector);
             }
         }
-        self.lookup_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now
         if let VarTensor::Empty = self.lookup_input {
             debug!("assigning lookup input");
@@ -536,6 +547,85 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
     /// Configures and creates lookup selectors
     #[allow(clippy::too_many_arguments)]
+    pub fn configure_dynamic_lookup(
+        &mut self,
+        cs: &mut ConstraintSystem<F>,
+        lookups: &[VarTensor; 2],
+        tables: &[VarTensor; 2],
+    ) -> Result<(), Box<dyn Error>>
+    where
+        F: Field,
+    {
+        for l in lookups.iter() {
+            if !l.is_advice() {
+                return Err("wrong input type for dynamic lookup".into());
+            }
+        }
+
+        for t in tables.iter() {
+            if !t.is_advice() || t.num_blocks() > 1 || t.num_inner_cols() > 1 {
+                return Err("wrong table type for dynamic lookup".into());
+            }
+        }
+
+        let one = Expression::Constant(F::ONE);
+
+        let s_ltable = cs.complex_selector();
+
+        for x in 0..lookups[0].num_blocks() {
+            for y in 0..lookups[0].num_inner_cols() {
+                let s_lookup = cs.complex_selector();
+
+                cs.lookup_any("lookup", |cs| {
+                    let s_lookupq = cs.query_selector(s_lookup);
+                    let mut expression = vec![];
+                    let s_ltableq = cs.query_selector(s_ltable);
+                    let mut lookup_queries = vec![one.clone()];
+
+                    for lookup in lookups {
+                        lookup_queries.push(match lookup {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                cs.query_advice(advices[x][y], Rotation(0))
+                            }
+                            _ => unreachable!(),
+                        });
+                    }
+
+                    let mut table_queries = vec![one.clone()];
+                    for table in tables {
+                        table_queries.push(match table {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                cs.query_advice(advices[0][0], Rotation(0))
+                            }
+                            _ => unreachable!(),
+                        });
+                    }
+
+                    let lhs = lookup_queries.into_iter().map(|c| c * s_lookupq.clone());
+                    let rhs = table_queries.into_iter().map(|c| c * s_ltableq.clone());
+                    expression.extend(lhs.zip(rhs));
+
+                    expression
+                });
+                self.dynamic_lookup_selectors
+                    .entry((x, y))
+                    .or_default()
+                    .push(s_lookup);
+            }
+        }
+        self.dynamic_table_selectors.push(s_ltable);
+
+        // if we haven't previously initialized the input/output, do so now
+        if self.dynamic_lookup_tables.is_empty() {
+            debug!("assigning dynamic lookup table");
+            self.dynamic_lookup_tables = tables.to_vec();
+        }
+
+        Ok(())
+    }
+
+    /// Configures and creates lookup selectors
+    #[allow(clippy::too_many_arguments)]
     pub fn configure_range_check(
         &mut self,
         cs: &mut ConstraintSystem<F>,
@@ -547,8 +637,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     where
         F: Field,
     {
-        let mut selectors = BTreeMap::new();
-
         if !input.is_advice() {
             return Err("wrong input type for lookup input".into());
         }
@@ -620,10 +708,10 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                         res
                     });
                 }
-                selectors.insert((range, x, y), multi_col_selector);
+                self.range_check_selectors
+                    .insert((range, x, y), multi_col_selector);
             }
         }
-        self.range_check_selectors.extend(selectors);
         // if we haven't previously initialized the input/output, do so now
         if let VarTensor::Empty = self.lookup_input {
             debug!("assigning lookup input");

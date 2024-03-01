@@ -962,7 +962,7 @@ pub(crate) fn calibrate(
             .max()
             .unwrap_or(0);
 
-        let res = circuit.calibrate_from_min_max(
+        let res = circuit.calc_min_logrows(
             (min_lookup_range, max_lookup_range),
             max_range_size,
             max_logrows,

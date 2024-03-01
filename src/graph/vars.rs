@@ -420,19 +420,30 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
     }
 
     /// Allocate all columns that will be assigned to by a model.
-    pub fn new(
-        cs: &mut ConstraintSystem<F>,
-        logrows: usize,
-        var_len: usize,
-        num_inner_cols: usize,
-        num_constants: usize,
-        module_requires_fixed: bool,
-    ) -> Self {
+    pub fn new(cs: &mut ConstraintSystem<F>, params: &GraphSettings) -> Self {
         debug!("number of blinding factors: {}", cs.blinding_factors());
 
-        let advices = (0..3)
+        let logrows = params.run_args.logrows as usize;
+        let var_len = params.total_assignments;
+        let num_inner_cols = params.run_args.num_inner_cols;
+        let num_constants = params.total_const_size;
+        let module_requires_fixed = params.module_requires_fixed();
+        let requires_dynamic_lookup = params.requires_dynamic_lookup();
+        let dynamic_lookup_size = params.total_dynamic_col_size;
+
+        let mut advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, num_inner_cols, var_len))
             .collect_vec();
+
+        if requires_dynamic_lookup {
+            for _ in 0..2 {
+                let dynamic_lookup = VarTensor::new_advice(cs, logrows, 1, dynamic_lookup_size);
+                if dynamic_lookup.num_blocks() > 1 {
+                    panic!("dynamic lookup should only have one block");
+                };
+                advices.push(dynamic_lookup);
+            }
+        }
 
         debug!(
             "model uses {} advice blocks (size={})",

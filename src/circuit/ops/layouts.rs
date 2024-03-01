@@ -915,6 +915,78 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
     Ok(assigned_output)
 }
 
+/// Dynamic lookup
+pub fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    lookups: &[ValTensor<F>; 2],
+    tables: &[ValTensor<F>; 2],
+) -> Result<(ValTensor<F>, ValTensor<F>), Box<dyn Error>> {
+    // if not all lookups same length err
+    if lookups[0].len() != lookups[1].len() {
+        return Err("lookups must be same length".into());
+    }
+
+    // if not all inputs same length err
+    if tables[0].len() != tables[1].len() {
+        return Err("inputs must be same length".into());
+    }
+
+    // now assert the inputs of a smaller length than the lookups
+    if tables[0].len() > tables[0].len() {
+        return Err("inputs must be smaller length than dynamic lookups".into());
+    }
+
+    let (lookup_0, lookup_1) = (lookups[0].clone(), lookups[1].clone());
+    let (table_0, table_1) = (tables[0].clone(), tables[1].clone());
+
+    let table_0 = region.assign_dynamic_lookup(&config.dynamic_lookup_tables[0], &table_0)?;
+    let _table_1 = region.assign_dynamic_lookup(&config.dynamic_lookup_tables[1], &table_1)?;
+    let table_len = table_0.len();
+
+    let lookup_0 = region.assign(&config.inputs[0], &lookup_0)?;
+    let lookup_1 = region.assign(&config.inputs[1], &lookup_1)?;
+
+    let lookup_len = lookup_0.len();
+
+    if !region.is_dummy() {
+        (0..table_len)
+            .map(|i| {
+                let dynamic_lookup_index = region.dynamic_lookup_index();
+                let table_selector = config.dynamic_table_selectors[dynamic_lookup_index];
+                let (_, _, z) = config.dynamic_lookup_tables[0]
+                    .cartesian_coord(region.dynamic_lookup_col_coord() + i);
+                region.enable(Some(&table_selector), z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    }
+
+    if !region.is_dummy() {
+        // Enable the selectors
+        (0..lookup_len)
+            .map(|i| {
+                let (x, y, z) = config.inputs[0].cartesian_coord(region.linear_coord() + i);
+                let dynamic_lookup_index = region.dynamic_lookup_index();
+                let lookup_selector = config
+                    .dynamic_lookup_selectors
+                    .get(&(x, y))
+                    .ok_or("missing selectors")?[dynamic_lookup_index];
+
+                region.enable(Some(&lookup_selector), z)?;
+
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    }
+
+    region.increment_dynamic_lookup_col_coord(table_len);
+    region.increment_dynamic_lookup_index(1);
+    region.increment(lookup_len);
+
+    Ok((lookup_0, lookup_1))
+}
+
 /// One hot accumulated layout
 pub fn one_hot_axis<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
