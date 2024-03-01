@@ -78,6 +78,17 @@ pub fn feltToBigEndian(array: wasm_bindgen::Clamped<Vec<u8>>) -> Result<String, 
     Ok(format!("{:?}", felt))
 }
 
+/// Converts a felt to a little endian string
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn feltToLittleEndian(array: wasm_bindgen::Clamped<Vec<u8>>) -> Result<String, JsError> {
+    let felt: Fr = serde_json::from_slice(&array[..])
+        .map_err(|e| JsError::new(&format!("Failed to deserialize field element: {}", e)))?;
+    let repr = serde_json::to_string(&felt).unwrap();
+    let b: String = serde_json::from_str(&repr).unwrap();
+    Ok(b)
+}
+
 /// Converts a hex string to a byte array
 #[wasm_bindgen]
 #[allow(non_snake_case)]
