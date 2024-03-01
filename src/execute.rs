@@ -23,6 +23,7 @@ use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
 use crate::RunArgs;
+#[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::poly::commitment::Params;

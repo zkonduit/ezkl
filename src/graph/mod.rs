@@ -12,6 +12,7 @@ pub mod utilities;
 pub mod vars;
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
+#[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
