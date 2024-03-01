@@ -90,7 +90,9 @@ mod wasm32 {
             assert_eq!(integer, i as i128);
 
             let hex_string = format!("{:?}", field_element.clone());
-            let returned_string: String = feltToBigEndian(clamped).map_err(|_| "failed").unwrap();
+            let returned_string: String = feltToBigEndian(clamped.clone())
+                .map_err(|_| "failed")
+                .unwrap();
             assert_eq!(hex_string, returned_string);
             let repr = serde_json::to_string(&field_element).unwrap();
             let little_endian_string: String = serde_json::from_str(&repr).unwrap();
