@@ -575,7 +575,7 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
       - name: Build python ezkl
-        run: source .env/bin/activate; maturin develop --features python-bindings --release
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       - name: Run pytest
         run: source .env/bin/activate; pytest -vv
 
@@ -599,7 +599,7 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl
-        run: source .env/bin/activate; maturin develop --features python-bindings --release
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       - name: Div rebase
         run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_div_rebase_
       - name: Public inputs
@@ -634,7 +634,7 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl
-        run: source .env/bin/activate; maturin develop --features python-bindings --release
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       # - name: authenticate-kaggle-cli
       #   shell: bash
       #   env:
