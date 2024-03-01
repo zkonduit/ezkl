@@ -632,79 +632,6 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
-fn _sort_descending<F: PrimeField + TensorType + PartialOrd>(
-    config: &BaseConfig<F>,
-    region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let input = values[0].clone();
-
-    // assert input is flat
-    assert_eq!(input.dims().len(), 1);
-
-    let is_assigned = !input.any_unknowns()?;
-
-    let sorted = if is_assigned {
-        input
-            .get_int_evals()?
-            .iter()
-            .sorted_by(|a, b| b.cmp(a))
-            .map(|x| Value::known(i128_to_felt(*x)))
-            .collect::<Tensor<_>>()
-    } else {
-        Tensor::new(
-            Some(&vec![Value::<F>::unknown(); input.len()]),
-            &[input.len()],
-        )?
-    };
-
-    let assigned_sort = region.assign(&config.inputs[0], &sorted.into())?;
-    let input = region.assign(&config.inputs[1], &input)?;
-
-    let mut unit = Tensor::from(vec![F::from(1)].into_iter());
-    unit.set_visibility(&crate::graph::Visibility::Fixed);
-    let unit = region.assign(&config.output, &unit.try_into()?)?;
-
-    region.increment(assigned_sort.len());
-
-    for i in 0..assigned_sort.len() - 1 {
-        // assert that each thing in turn is larger than the next
-        let window_a = assigned_sort.get_slice(&[i..i + 1])?;
-        let window_b = assigned_sort.get_slice(&[i + 1..i + 2])?;
-
-        let window_b_minus_1 = pairwise(config, region, &[window_b, unit.clone()], BaseOp::Sub)?;
-
-        let diff = pairwise(
-            config,
-            region,
-            &[window_a.clone(), window_b_minus_1.clone()],
-            BaseOp::Sub,
-        )?;
-        let greater_than = nonlinearity(
-            config,
-            region,
-            &[diff],
-            &LookupOp::GreaterThan { a: 0.0.into() },
-        )?;
-
-        enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
-
-        // now assert that the elem is in the original vector
-        let is_present = equals(config, region, &[window_a, input.clone()])?;
-        let sum_equals = sum(config, region, &[is_present])?;
-        let greater_than = nonlinearity(
-            config,
-            region,
-            &[sum_equals],
-            &LookupOp::GreaterThan { a: 0.0.into() },
-        )?;
-
-        enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
-    }
-
-    Ok(assigned_sort)
-}
-
 fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -765,19 +692,19 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
         )?;
 
         enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
-
-        // now assert that the elem is in the original vector
-        let is_present = equals(config, region, &[window_a, input.clone()])?;
-        let sum_equals = sum(config, region, &[is_present])?;
-        let greater_than = nonlinearity(
-            config,
-            region,
-            &[sum_equals],
-            &LookupOp::GreaterThan { a: 0.0.into() },
-        )?;
-
-        enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
     }
+
+    let mut zero_tensor = Tensor::from(vec![ValType::Constant(F::ZERO); input.len()].into_iter());
+    zero_tensor.set_visibility(&crate::graph::Visibility::Fixed);
+    let zero_tensor: ValTensor<F> = zero_tensor.try_into()?;
+
+    // assert that this is a permutation
+    dynamic_lookup(
+        config,
+        region,
+        &[assigned_sort.clone(), zero_tensor.clone()],
+        &[input.clone(), zero_tensor],
+    )?;
 
     Ok(assigned_sort)
 }
@@ -790,12 +717,11 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd>(
     k: usize,
     largest: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let sorted = if largest {
-        _sort_descending(config, region, values)?.get_slice(&[0..k])?
-    } else {
-        _sort_ascending(config, region, values)?.get_slice(&[0..k])?
-    };
-    Ok(sorted)
+    let mut sorted = _sort_ascending(config, region, values)?;
+    if largest {
+        sorted.reverse()?;
+    }
+    Ok(sorted.get_slice(&[0..k])?)
 }
 
 /// Select top k elements
@@ -828,11 +754,6 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     let (mut input, index) = (values[0].clone(), values[1].clone());
     input.flatten();
 
-    // assert we have a single index
-    if index.dims().iter().product::<usize>() != 1 {
-        return Err("index must be a single element".into());
-    }
-
     if !(dim_indices.all_prev_assigned() || region.is_dummy()) {
         return Err("dim_indices must be assigned".into());
     }
@@ -853,11 +774,8 @@ fn select<F: PrimeField + TensorType + PartialOrd>(
     }
     .into();
 
-    let local_mask = equals(config, region, &[dim_indices.clone(), index])?;
-
-    let dot = dot(config, region, &[input.clone(), local_mask.clone()])?;
-
-    let assigned_output = enforce_equality(config, region, &[dot, output.clone()])?;
+    let (_, assigned_output) =
+        dynamic_lookup(config, region, &[index, output], &[dim_indices, input])?;
 
     Ok(assigned_output)
 }
@@ -929,13 +847,10 @@ pub fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
 
     // if not all inputs same length err
     if tables[0].len() != tables[1].len() {
-        return Err("inputs must be same length".into());
+        return Err("tables must be same length".into());
     }
 
-    // now assert the inputs of a smaller length than the lookups
-    if tables[0].len() > tables[0].len() {
-        return Err("inputs must be smaller length than dynamic lookups".into());
-    }
+    let dynamic_lookup_index = region.dynamic_lookup_index();
 
     let (lookup_0, lookup_1) = (lookups[0].clone(), lookups[1].clone());
     let (table_0, table_1) = (tables[0].clone(), tables[1].clone());
@@ -944,16 +859,29 @@ pub fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
     let _table_1 = region.assign_dynamic_lookup(&config.dynamic_lookup_tables[1], &table_1)?;
     let table_len = table_0.len();
 
+    // now create a vartensor of constants for the dynamic lookup index
+    let mut table_index = Tensor::from(
+        vec![ValType::Constant(F::from(dynamic_lookup_index as u64)); table_len].into_iter(),
+    );
+    table_index.set_visibility(&crate::graph::Visibility::Fixed);
+    let _table_index =
+        region.assign_dynamic_lookup(&config.dynamic_lookup_tables[2], &table_index.into())?;
+
     let lookup_0 = region.assign(&config.inputs[0], &lookup_0)?;
     let lookup_1 = region.assign(&config.inputs[1], &lookup_1)?;
-
     let lookup_len = lookup_0.len();
+
+    // now set the lookup index
+    let mut lookup_index = Tensor::from(
+        vec![ValType::Constant(F::from(dynamic_lookup_index as u64)); lookup_len].into_iter(),
+    );
+    lookup_index.set_visibility(&crate::graph::Visibility::Fixed);
+    let _lookup_index = region.assign(&config.output, &lookup_index.into())?;
 
     if !region.is_dummy() {
         (0..table_len)
             .map(|i| {
-                let dynamic_lookup_index = region.dynamic_lookup_index();
-                let table_selector = config.dynamic_table_selectors[dynamic_lookup_index];
+                let table_selector = config.dynamic_table_selectors[0];
                 let (_, _, z) = config.dynamic_lookup_tables[0]
                     .cartesian_coord(region.dynamic_lookup_col_coord() + i);
                 region.enable(Some(&table_selector), z)?;
@@ -967,11 +895,10 @@ pub fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
         (0..lookup_len)
             .map(|i| {
                 let (x, y, z) = config.inputs[0].cartesian_coord(region.linear_coord() + i);
-                let dynamic_lookup_index = region.dynamic_lookup_index();
                 let lookup_selector = config
                     .dynamic_lookup_selectors
                     .get(&(x, y))
-                    .ok_or("missing selectors")?[dynamic_lookup_index];
+                    .ok_or("missing selectors")?;
 
                 region.enable(Some(&lookup_selector), z)?;
 
@@ -1080,19 +1007,19 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
     let indices = region.assign(&config.inputs[1], &indices.try_into()?)?;
     region.increment(indices.len());
 
+    let mut iteration_dims = output_size.clone();
+    iteration_dims[dim] = 1;
+
     // Allocate memory for the output tensor
-    let cartesian_coord = output_size
+    let cartesian_coord = iteration_dims
         .iter()
         .map(|x| 0..*x)
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    let mut output: Tensor<ValType<F>> = Tensor::new(None, &output_size)?;
+    let mut results = HashMap::new();
 
-    let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
-        let coord = cartesian_coord[i].clone();
-        let index_val = index_clone.get_single_elem(coord[dim])?;
-
+    for coord in cartesian_coord {
         let mut slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
         slice[dim] = 0..input_dims[dim];
 
@@ -1102,16 +1029,28 @@ pub fn gather<F: PrimeField + TensorType + PartialOrd>(
         let res = select(
             config,
             region,
-            &[sliced_input, index_val.clone()],
+            &[sliced_input, index_clone.clone()],
             indices.clone(),
         )?;
 
-        let res = res.get_inner_tensor()?;
+        results.insert(coord, res);
+    }
 
-        Ok(res[0].clone())
-    };
+    // Allocate memory for the output tensor
+    let cartesian_coord = output_size
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
 
-    region.apply_in_loop(&mut output, inner_loop_function)?;
+    let mut output = Tensor::new(None, &output_size)?.par_enum_map(|i, _: ValType<F>| {
+        let coord = cartesian_coord[i].clone();
+        let mut key = coord.clone();
+        key[dim] = 0;
+        let result = &results.get(&key).ok_or("missing result")?;
+        let o = result.get_inner_tensor().map_err(|_| "missing tensor")?[coord[dim]].clone();
+        Ok::<ValType<F>, region::RegionError>(o)
+    })?;
 
     // Reshape the output tensor
     if index_clone.is_singleton() {

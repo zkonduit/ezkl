@@ -211,7 +211,7 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
     pub lookup_selectors: BTreeMap<(LookupOp, usize, usize), Selector>,
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
-    pub dynamic_lookup_selectors: BTreeMap<(usize, usize), Vec<Selector>>,
+    pub dynamic_lookup_selectors: BTreeMap<(usize, usize), Selector>,
     ///
     pub dynamic_table_selectors: Vec<Selector>,
     ///
@@ -229,13 +229,18 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// Returns a new [BaseConfig] with no inputs, no selectors, and no tables.
     pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
         let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
+        let single_col_dummy_var = VarTensor::dummy(col_size, 1);
 
         Self {
             inputs: vec![dummy_var.clone(), dummy_var.clone()],
             lookup_input: dummy_var.clone(),
             output: dummy_var.clone(),
             lookup_output: dummy_var.clone(),
-            dynamic_lookup_tables: vec![VarTensor::dummy(col_size, 2), dummy_var.clone()],
+            dynamic_lookup_tables: vec![
+                single_col_dummy_var.clone(),
+                single_col_dummy_var.clone(),
+                single_col_dummy_var.clone(),
+            ],
             lookup_index: dummy_var,
             selectors: BTreeMap::new(),
             lookup_selectors: BTreeMap::new(),
@@ -550,8 +555,8 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     pub fn configure_dynamic_lookup(
         &mut self,
         cs: &mut ConstraintSystem<F>,
-        lookups: &[VarTensor; 2],
-        tables: &[VarTensor; 2],
+        lookups: &[VarTensor; 3],
+        tables: &[VarTensor; 3],
     ) -> Result<(), Box<dyn Error>>
     where
         F: Field,
@@ -609,8 +614,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                 });
                 self.dynamic_lookup_selectors
                     .entry((x, y))
-                    .or_default()
-                    .push(s_lookup);
+                    .or_insert(s_lookup);
             }
         }
         self.dynamic_table_selectors.push(s_ltable);

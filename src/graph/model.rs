@@ -1041,11 +1041,11 @@ impl Model {
             base_gate.configure_range_check(meta, input, index, range, logrows)?;
         }
 
-        for _ in 0..num_dynamic_lookups {
+        if num_dynamic_lookups > 0 {
             base_gate.configure_dynamic_lookup(
                 meta,
-                vars.advices[0..2].try_into()?,
-                vars.advices[3..5].try_into()?,
+                vars.advices[0..3].try_into()?,
+                vars.advices[3..6].try_into()?,
             )?;
         }
 

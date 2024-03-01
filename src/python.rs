@@ -622,7 +622,7 @@ fn mock_aggregate(
     pk_path=PathBuf::from(DEFAULT_PK),
     srs_path=None,
     witness_path = None,
-    compress_selectors=DEFAULT_COMPRESS_SELECTORS.parse().unwrap(),
+    disable_selector_compression=DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap(),
 ))]
 fn setup(
     model: PathBuf,
@@ -630,7 +630,7 @@ fn setup(
     pk_path: PathBuf,
     srs_path: Option<PathBuf>,
     witness_path: Option<PathBuf>,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<bool, PyErr> {
     crate::execute::setup(
         model,
@@ -638,7 +638,7 @@ fn setup(
         vk_path,
         pk_path,
         witness_path,
-        compress_selectors,
+        disable_selector_compression,
     )
     .map_err(|e| {
         let err_str = format!("Failed to run setup: {}", e);
@@ -719,7 +719,7 @@ fn verify(
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     split_proofs = false,
     srs_path = None,
-    compress_selectors=DEFAULT_COMPRESS_SELECTORS.parse().unwrap(),
+    disable_selector_compression=DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap(),
 ))]
 fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
@@ -728,7 +728,7 @@ fn setup_aggregate(
     logrows: u32,
     split_proofs: bool,
     srs_path: Option<PathBuf>,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<bool, PyErr> {
     crate::execute::setup_aggregate(
         sample_snarks,
@@ -737,7 +737,7 @@ fn setup_aggregate(
         srs_path,
         logrows,
         split_proofs,
-        compress_selectors,
+        disable_selector_compression,
     )
     .map_err(|e| {
         let err_str = format!("Failed to setup aggregate: {}", e);

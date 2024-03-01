@@ -1605,15 +1605,19 @@ mod dynamic_lookup {
 
             let d = VarTensor::new_advice(cs, K, 1, LEN);
             let e = VarTensor::new_advice(cs, K, 1, LEN);
+            let f: VarTensor = VarTensor::new_advice(cs, K, 1, LEN);
+
+            let _constant = VarTensor::constant_cols(cs, K, LEN * NUM_LOOP, false);
 
             let mut config =
                 Self::Config::configure(cs, &[a.clone(), b.clone()], &c, CheckMode::SAFE);
-            for _ in 0..NUM_LOOP {
-                config
-                    .configure_dynamic_lookup(cs, &[a.clone(), b.clone()], &[d.clone(), e.clone()])
-                    .unwrap();
-            }
-
+            config
+                .configure_dynamic_lookup(
+                    cs,
+                    &[a.clone(), b.clone(), c.clone()],
+                    &[d.clone(), e.clone(), f.clone()],
+                )
+                .unwrap();
             config
         }
 
@@ -1690,11 +1694,18 @@ mod dynamic_lookup {
 
         let lookups = (0..NUM_LOOP)
             .map(|loop_idx| {
+                let prev_idx = if loop_idx == 0 {
+                    NUM_LOOP - 1
+                } else {
+                    loop_idx - 1
+                };
                 [
                     ValTensor::from(Tensor::from(
-                        (0..2).map(|i| Value::known(F::from((i * loop_idx) as u64 + 1))),
+                        (0..3).map(|i| Value::known(F::from((i * prev_idx) as u64 + 1))),
                     )),
-                    ValTensor::from(Tensor::from((0..2).map(|_| Value::known(F::from(10000))))),
+                    ValTensor::from(Tensor::from(
+                        (0..3).map(|i| Value::known(F::from((prev_idx * i * i) as u64 + 1))),
+                    )),
                 ]
             })
             .collect::<Vec<_>>();

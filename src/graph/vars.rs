@@ -436,7 +436,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
             .collect_vec();
 
         if requires_dynamic_lookup {
-            for _ in 0..2 {
+            for _ in 0..3 {
                 let dynamic_lookup = VarTensor::new_advice(cs, logrows, 1, dynamic_lookup_size);
                 if dynamic_lookup.num_blocks() > 1 {
                     panic!("dynamic lookup should only have one block");

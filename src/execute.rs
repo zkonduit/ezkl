@@ -140,13 +140,13 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             compiled_circuit,
             transcript,
             num_runs,
-            compress_selectors,
+            disable_selector_compression,
         } => fuzz(
             compiled_circuit,
             witness,
             transcript,
             num_runs,
-            compress_selectors,
+            disable_selector_compression,
         ),
         Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
         #[cfg(not(target_arch = "wasm32"))]
@@ -260,14 +260,14 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             vk_path,
             pk_path,
             witness,
-            compress_selectors,
+            disable_selector_compression,
         } => setup(
             compiled_circuit,
             srs_path,
             vk_path,
             pk_path,
             witness,
-            compress_selectors,
+            disable_selector_compression,
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::SetupTestEvmData {
@@ -331,7 +331,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             split_proofs,
-            compress_selectors,
+            disable_selector_compression,
         } => setup_aggregate(
             sample_snarks,
             vk_path,
@@ -339,7 +339,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             split_proofs,
-            compress_selectors,
+            disable_selector_compression,
         ),
         Commands::Aggregate {
             proof_path,
@@ -806,7 +806,6 @@ pub(crate) fn calibrate(
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
     // we load the model to get the input and output shapes
-    // check if gag already exists
 
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
 
@@ -1499,7 +1498,7 @@ pub(crate) fn setup(
     vk_path: PathBuf,
     pk_path: PathBuf,
     witness: Option<PathBuf>,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<String, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
     let mut circuit = GraphCircuit::load(compiled_circuit)?;
@@ -1513,7 +1512,7 @@ pub(crate) fn setup(
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
         &circuit,
         &params,
-        compress_selectors,
+        disable_selector_compression,
     )
     .map_err(Box::<dyn Error>::from)?;
 
@@ -1654,7 +1653,7 @@ pub(crate) fn fuzz(
     data_path: PathBuf,
     transcript: TranscriptType,
     num_runs: usize,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let passed = AtomicBool::new(true);
@@ -1673,7 +1672,7 @@ pub(crate) fn fuzz(
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
         &circuit,
         &params,
-        compress_selectors,
+        disable_selector_compression,
     )
     .map_err(Box::<dyn Error>::from)?;
 
@@ -1694,7 +1693,7 @@ pub(crate) fn fuzz(
         let bad_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
             &circuit,
             &new_params,
-            compress_selectors,
+            disable_selector_compression,
         )
         .map_err(|_| ())?;
 
@@ -1772,7 +1771,7 @@ pub(crate) fn fuzz(
         let bad_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
             &circuit,
             &new_params,
-            compress_selectors,
+            disable_selector_compression,
         )
         .map_err(|_| ())?;
 
@@ -1951,7 +1950,7 @@ pub(crate) fn setup_aggregate(
     srs_path: Option<PathBuf>,
     logrows: u32,
     split_proofs: bool,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<String, Box<dyn Error>> {
     // the K used for the aggregation circuit
     let params = load_params_cmd(srs_path, logrows)?;
@@ -1965,7 +1964,7 @@ pub(crate) fn setup_aggregate(
     let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
         &agg_circuit,
         &params,
-        compress_selectors,
+        disable_selector_compression,
     )?;
 
     let agg_vk = agg_pk.get_vk();
@@ -2042,7 +2041,8 @@ pub(crate) fn verify(
     let circuit_settings = GraphSettings::load(&settings_path)?;
 
     let params = if reduced_srs {
-        load_params_cmd(srs_path, circuit_settings.log2_total_instances())?
+        // only need G_0 for the verification with shplonk
+        load_params_cmd(srs_path, 1)?
     } else {
         load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
     };
