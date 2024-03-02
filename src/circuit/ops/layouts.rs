@@ -638,10 +638,8 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let input = values[0].clone();
-
-    // assert input is flat
-    assert_eq!(input.dims().len(), 1);
+    let mut input = values[0].clone();
+    input.flatten();
 
     let is_assigned = !input.any_unknowns()?;
 
