@@ -355,7 +355,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             for j in 0..output.num_inner_cols() {
                 nonaccum_selectors.insert((BaseOp::Add, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::Sub, i, j), meta.selector());
-                nonaccum_selectors.insert((BaseOp::Neg, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::Mult, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::IsZero, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::IsBoolean, i, j), meta.selector());

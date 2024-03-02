@@ -17,7 +17,6 @@ pub enum BaseOp {
     Sub,
     SumInit,
     Sum,
-    Neg,
     IsZero,
     IsBoolean,
 }
@@ -34,7 +33,6 @@ impl BaseOp {
         let (a, b) = inputs;
         match &self {
             BaseOp::Add => a + b,
-            BaseOp::Neg => -b,
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
             BaseOp::IsZero => b,
@@ -74,7 +72,6 @@ impl BaseOp {
             BaseOp::CumProdInit => "CUMPRODINIT",
             BaseOp::CumProd => "CUMPROD",
             BaseOp::Add => "ADD",
-            BaseOp::Neg => "NEG",
             BaseOp::Sub => "SUB",
             BaseOp::Mult => "MULT",
             BaseOp::Sum => "SUM",
@@ -87,7 +84,6 @@ impl BaseOp {
     /// Returns the range of the query offset for this operation.
     pub fn query_offset_rng(&self) -> (i32, usize) {
         match self {
-            BaseOp::Neg => (0, 1),
             BaseOp::DotInit => (0, 1),
             BaseOp::Dot => (-1, 2),
             BaseOp::CumProd => (-1, 2),
@@ -105,7 +101,6 @@ impl BaseOp {
     /// Returns the number of inputs for this operation.
     pub fn num_inputs(&self) -> usize {
         match self {
-            BaseOp::Neg => 1,
             BaseOp::DotInit => 2,
             BaseOp::Dot => 2,
             BaseOp::CumProdInit => 1,
@@ -123,7 +118,6 @@ impl BaseOp {
     /// Returns the number of outputs for this operation.
     pub fn constraint_idx(&self) -> usize {
         match self {
-            BaseOp::Neg => 0,
             BaseOp::DotInit => 0,
             BaseOp::Dot => 1,
             BaseOp::Add => 0,

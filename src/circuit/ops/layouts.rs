@@ -1951,33 +1951,14 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let input = {
-        let res = region.assign(&config.custom_gates.inputs[1], &values[0])?;
-
-        res.get_inner()?
-    };
-
-    let neg = input.map(|e| -e);
-
-    let output = region.assign(&config.custom_gates.output, &neg.into())?;
-
-    // Enable the selectors
-    if !region.is_dummy() {
-        (0..values[0].len())
-            .map(|i| {
-                let (x, y, z) =
-                    config.custom_gates.inputs[1].cartesian_coord(region.linear_coord() + i);
-                let selector = config.custom_gates.selectors.get(&(BaseOp::Neg, x, y));
-
-                region.enable(selector, z)?;
-                Ok(())
-            })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
-    }
-
-    region.increment(output.len());
-
-    Ok(output)
+    let mut nil = Tensor::from(vec![ValType::Constant(F::from(0))].into_iter());
+    nil.set_visibility(&crate::graph::Visibility::Fixed);
+    pairwise(
+        config,
+        region,
+        &[nil.into(), values[0].clone()],
+        BaseOp::Sub,
+    )
 }
 
 /// Sumpool accumulated layout
