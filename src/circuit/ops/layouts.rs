@@ -1852,16 +1852,21 @@ pub fn equals_zero<F: PrimeField + TensorType + PartialOrd>(
         BaseOp::Sub,
     )?;
 
-    // take the product of diff and output
-    let prod_check = pairwise(config, region, &[values, output.clone()], BaseOp::Mult)?;
-    let prod_len = prod_check.len();
+    let current_increment = region.linear_coord();
 
-    let mut zero_tensor = Tensor::from(vec![ValType::Constant(F::from(0)); prod_len].into_iter());
+    // take the product of diff and output
+    let _prod_check = pairwise(config, region, &[values, output.clone()], BaseOp::Mult)?;
+
+    let new_increment = region.linear_coord();
+    let increment_diff = new_increment - current_increment;
+
+    let mut zero_tensor =
+        Tensor::from(vec![ValType::Constant(F::from(0)); increment_diff].into_iter());
     zero_tensor.set_visibility(&crate::graph::Visibility::Fixed);
     // we overwrite the output tensor with the result
-    region.decrement(prod_len);
+    region.decrement(increment_diff);
     region.assign(&config.custom_gates.output, &zero_tensor.into())?;
-    region.increment(prod_len);
+    region.increment(increment_diff);
 
     Ok(output)
 }
