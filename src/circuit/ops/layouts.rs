@@ -690,7 +690,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
     zero_tensor.set_visibility(&crate::graph::Visibility::Fixed);
     let zero_tensor: ValTensor<F> = zero_tensor.try_into()?;
 
-    // assert that this is a permutation
+    // assert that this is a permutation/shuffle
     dynamic_lookup(
         config,
         region,
