@@ -12,14 +12,12 @@ pub enum BaseOp {
     DotInit,
     CumProdInit,
     CumProd,
-    Identity,
     Add,
     Mult,
     Sub,
     SumInit,
     Sum,
     Neg,
-    Range { tol: i32 },
     IsZero,
     IsBoolean,
 }
@@ -36,11 +34,9 @@ impl BaseOp {
         let (a, b) = inputs;
         match &self {
             BaseOp::Add => a + b,
-            BaseOp::Identity => b,
             BaseOp::Neg => -b,
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
-            BaseOp::Range { .. } => b,
             BaseOp::IsZero => b,
             BaseOp::IsBoolean => b,
             _ => panic!("nonaccum_f called on accumulating operation"),
@@ -73,7 +69,6 @@ impl BaseOp {
     /// display func
     pub fn as_str(&self) -> &'static str {
         match self {
-            BaseOp::Identity => "IDENTITY",
             BaseOp::Dot => "DOT",
             BaseOp::DotInit => "DOTINIT",
             BaseOp::CumProdInit => "CUMPRODINIT",
@@ -84,7 +79,6 @@ impl BaseOp {
             BaseOp::Mult => "MULT",
             BaseOp::Sum => "SUM",
             BaseOp::SumInit => "SUMINIT",
-            BaseOp::Range { .. } => "RANGE",
             BaseOp::IsZero => "ISZERO",
             BaseOp::IsBoolean => "ISBOOLEAN",
         }
@@ -93,7 +87,6 @@ impl BaseOp {
     /// Returns the range of the query offset for this operation.
     pub fn query_offset_rng(&self) -> (i32, usize) {
         match self {
-            BaseOp::Identity => (0, 1),
             BaseOp::Neg => (0, 1),
             BaseOp::DotInit => (0, 1),
             BaseOp::Dot => (-1, 2),
@@ -104,7 +97,6 @@ impl BaseOp {
             BaseOp::Mult => (0, 1),
             BaseOp::Sum => (-1, 2),
             BaseOp::SumInit => (0, 1),
-            BaseOp::Range { .. } => (0, 1),
             BaseOp::IsZero => (0, 1),
             BaseOp::IsBoolean => (0, 1),
         }
@@ -113,7 +105,6 @@ impl BaseOp {
     /// Returns the number of inputs for this operation.
     pub fn num_inputs(&self) -> usize {
         match self {
-            BaseOp::Identity => 1,
             BaseOp::Neg => 1,
             BaseOp::DotInit => 2,
             BaseOp::Dot => 2,
@@ -124,7 +115,6 @@ impl BaseOp {
             BaseOp::Mult => 2,
             BaseOp::Sum => 1,
             BaseOp::SumInit => 1,
-            BaseOp::Range { .. } => 1,
             BaseOp::IsZero => 0,
             BaseOp::IsBoolean => 0,
         }
@@ -133,14 +123,12 @@ impl BaseOp {
     /// Returns the number of outputs for this operation.
     pub fn constraint_idx(&self) -> usize {
         match self {
-            BaseOp::Identity => 0,
             BaseOp::Neg => 0,
             BaseOp::DotInit => 0,
             BaseOp::Dot => 1,
             BaseOp::Add => 0,
             BaseOp::Sub => 0,
             BaseOp::Mult => 0,
-            BaseOp::Range { .. } => 0,
             BaseOp::Sum => 1,
             BaseOp::SumInit => 0,
             BaseOp::CumProd => 1,

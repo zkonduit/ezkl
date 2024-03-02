@@ -188,38 +188,128 @@ impl<'source> FromPyObject<'source> for Tolerance {
     }
 }
 
+/// A struct representing the selectors for the dynamic lookup tables
+#[derive(Clone, Debug, Default)]
+pub struct DynamicLookups {
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
+    pub lookup_selectors: BTreeMap<(usize, usize), Selector>,
+    /// Selectors for the dynamic lookup tables
+    pub table_selectors: Vec<Selector>,
+    /// Inputs:
+    pub inputs: Vec<VarTensor>,
+    /// tables
+    pub tables: Vec<VarTensor>,
+}
+
+impl DynamicLookups {
+    /// Returns a new [DynamicLookups] with no inputs, no selectors, and no tables.
+    pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
+        let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
+        let single_col_dummy_var = VarTensor::dummy(col_size, 1);
+
+        Self {
+            lookup_selectors: BTreeMap::new(),
+            table_selectors: vec![],
+            inputs: vec![dummy_var.clone(), dummy_var.clone(), dummy_var.clone()],
+            tables: vec![
+                single_col_dummy_var.clone(),
+                single_col_dummy_var.clone(),
+                single_col_dummy_var.clone(),
+            ],
+        }
+    }
+}
+
+/// A struct representing the selectors for the static lookup tables
+#[derive(Clone, Debug, Default)]
+pub struct StaticLookups<F: PrimeField + TensorType + PartialOrd> {
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
+    pub selectors: BTreeMap<(LookupOp, usize, usize), Selector>,
+    /// Selectors for the dynamic lookup tables
+    pub tables: BTreeMap<LookupOp, Table<F>>,
+    ///
+    pub index: VarTensor,
+    ///
+    pub output: VarTensor,
+    ///
+    pub input: VarTensor,
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> StaticLookups<F> {
+    /// Returns a new [StaticLookups] with no inputs, no selectors, and no tables.
+    pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
+        let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
+
+        Self {
+            selectors: BTreeMap::new(),
+            tables: BTreeMap::new(),
+            index: dummy_var.clone(),
+            output: dummy_var.clone(),
+            input: dummy_var,
+        }
+    }
+}
+
+/// A struct representing the selectors for custom gates
+#[derive(Clone, Debug, Default)]
+pub struct CustomGates {
+    /// the inputs to the accumulated operations.
+    pub inputs: Vec<VarTensor>,
+    /// the (currently singular) output of the accumulated operations.
+    pub output: VarTensor,
+    /// selector
+    pub selectors: BTreeMap<(BaseOp, usize, usize), Selector>,
+}
+
+impl CustomGates {
+    /// Returns a new [CustomGates] with no inputs, no selectors, and no tables.
+    pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
+        let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
+        Self {
+            inputs: vec![dummy_var.clone(), dummy_var.clone()],
+            output: dummy_var,
+            selectors: BTreeMap::new(),
+        }
+    }
+}
+
+/// A struct representing the selectors for the range checks
+#[derive(Clone, Debug, Default)]
+pub struct RangeChecks<F: PrimeField + TensorType + PartialOrd> {
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
+    pub selectors: BTreeMap<(Range, usize, usize), Selector>,
+    /// Selectors for the dynamic lookup tables
+    pub ranges: BTreeMap<Range, RangeCheck<F>>,
+    ///
+    pub index: VarTensor,
+    ///
+    pub input: VarTensor,
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> RangeChecks<F> {
+    /// Returns a new [RangeChecks] with no inputs, no selectors, and no tables.
+    pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
+        let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
+        Self {
+            selectors: BTreeMap::new(),
+            ranges: BTreeMap::new(),
+            index: dummy_var.clone(),
+            input: dummy_var,
+        }
+    }
+}
+
 /// Configuration for an accumulated arg.
 #[derive(Clone, Debug, Default)]
 pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
-    /// the inputs to the accumulated operations.
-    pub inputs: Vec<VarTensor>,
-    /// the VarTensor reserved for lookup operations (could be an element of inputs)
-    /// Note that you should be careful to ensure that the lookup_input is not simultaneously assigned to by other non-lookup operations eg. in the case of composite ops.
-    pub lookup_input: VarTensor,
-    /// the (currently singular) output of the accumulated operations.
-    pub output: VarTensor,
-    /// The VarTensor reserved for dynamic lookup operations (could be an element of inputs or the same as output)
-    /// Note that you should be careful to ensure that the lookup_output is not simultaneously assigned to by other non-lookup operations eg. in the case of composite ops.
-    pub dynamic_lookup_tables: Vec<VarTensor>,
-    /// the VarTensor reserved for lookup operations (could be an element of inputs or the same as output)
-    /// Note that you should be careful to ensure that the lookup_output is not simultaneously assigned to by other non-lookup operations eg. in the case of composite ops.
-    pub lookup_output: VarTensor,
-    ///
-    pub lookup_index: VarTensor,
-    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure [BaseOp].
-    pub selectors: BTreeMap<(BaseOp, usize, usize), Selector>,
-    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
-    pub lookup_selectors: BTreeMap<(LookupOp, usize, usize), Selector>,
-    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
-    pub dynamic_lookup_selectors: BTreeMap<(usize, usize), Selector>,
-    ///
-    pub dynamic_table_selectors: Vec<Selector>,
-    ///
-    pub tables: BTreeMap<LookupOp, Table<F>>,
-    ///
-    pub range_checks: BTreeMap<Range, RangeCheck<F>>,
-    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many lookup ops.
-    pub range_check_selectors: BTreeMap<(Range, usize, usize), Selector>,
+    /// Custom gates
+    pub custom_gates: CustomGates,
+    /// StaticLookups
+    pub static_lookups: StaticLookups<F>,
+    /// [Selector]s for the dynamic lookup tables
+    pub dynamic_lookups: DynamicLookups,
+    /// [Selector]s for the range checks
+    pub range_checks: RangeChecks<F>,
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
@@ -228,27 +318,11 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
 impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
     /// Returns a new [BaseConfig] with no inputs, no selectors, and no tables.
     pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
-        let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
-        let single_col_dummy_var = VarTensor::dummy(col_size, 1);
-
         Self {
-            inputs: vec![dummy_var.clone(), dummy_var.clone()],
-            lookup_input: dummy_var.clone(),
-            output: dummy_var.clone(),
-            lookup_output: dummy_var.clone(),
-            dynamic_lookup_tables: vec![
-                single_col_dummy_var.clone(),
-                single_col_dummy_var.clone(),
-                single_col_dummy_var.clone(),
-            ],
-            lookup_index: dummy_var,
-            selectors: BTreeMap::new(),
-            lookup_selectors: BTreeMap::new(),
-            dynamic_lookup_selectors: BTreeMap::new(),
-            dynamic_table_selectors: vec![],
-            range_check_selectors: BTreeMap::new(),
-            tables: BTreeMap::new(),
-            range_checks: BTreeMap::new(),
+            custom_gates: CustomGates::dummy(col_size, num_inner_cols),
+            static_lookups: StaticLookups::dummy(col_size, num_inner_cols),
+            dynamic_lookups: DynamicLookups::dummy(col_size, num_inner_cols),
+            range_checks: RangeChecks::dummy(col_size, num_inner_cols),
             check_mode: CheckMode::SAFE,
             _marker: PhantomData,
         }
@@ -284,13 +358,11 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                 nonaccum_selectors.insert((BaseOp::Neg, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::Mult, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::IsZero, i, j), meta.selector());
-                nonaccum_selectors.insert((BaseOp::Identity, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::IsBoolean, i, j), meta.selector());
             }
         }
 
         for i in 0..output.num_blocks() {
-            accum_selectors.insert((BaseOp::DotInit, i, 0), meta.selector());
             accum_selectors.insert((BaseOp::Dot, i, 0), meta.selector());
             accum_selectors.insert((BaseOp::CumProd, i, 0), meta.selector());
             accum_selectors.insert((BaseOp::CumProdInit, i, 0), meta.selector());
@@ -388,19 +460,14 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             .collect();
 
         Self {
-            selectors,
-            lookup_selectors: BTreeMap::new(),
-            range_check_selectors: BTreeMap::new(),
-            dynamic_lookup_selectors: BTreeMap::new(),
-            inputs: inputs.to_vec(),
-            lookup_input: VarTensor::Empty,
-            lookup_output: VarTensor::Empty,
-            lookup_index: VarTensor::Empty,
-            dynamic_table_selectors: vec![],
-            dynamic_lookup_tables: vec![],
-            tables: BTreeMap::new(),
-            range_checks: BTreeMap::new(),
-            output: output.clone(),
+            custom_gates: CustomGates {
+                inputs: inputs.to_vec(),
+                output: output.clone(),
+                selectors,
+            },
+            static_lookups: StaticLookups::default(),
+            dynamic_lookups: DynamicLookups::default(),
+            range_checks: RangeChecks::default(),
             check_mode,
             _marker: PhantomData,
         }
@@ -433,9 +500,9 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
         // we borrow mutably twice so we need to do this dance
 
-        let table = if !self.tables.contains_key(nl) {
+        let table = if !self.static_lookups.tables.contains_key(nl) {
             // as all tables have the same input we see if there's another table who's input we can reuse
-            let table = if let Some(table) = self.tables.values().next() {
+            let table = if let Some(table) = self.static_lookups.tables.values().next() {
                 Table::<F>::configure(
                     cs,
                     lookup_range,
@@ -446,7 +513,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             } else {
                 Table::<F>::configure(cs, lookup_range, logrows, nl, None)
             };
-            self.tables.insert(nl.clone(), table.clone());
+            self.static_lookups.tables.insert(nl.clone(), table.clone());
             table
         } else {
             return Ok(());
@@ -530,22 +597,23 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                         res
                     });
                 }
-                self.lookup_selectors
+                self.static_lookups
+                    .selectors
                     .insert((nl.clone(), x, y), multi_col_selector);
             }
         }
         // if we haven't previously initialized the input/output, do so now
-        if let VarTensor::Empty = self.lookup_input {
+        if let VarTensor::Empty = self.static_lookups.input {
             debug!("assigning lookup input");
-            self.lookup_input = input.clone();
+            self.static_lookups.input = input.clone();
         }
-        if let VarTensor::Empty = self.lookup_output {
+        if let VarTensor::Empty = self.static_lookups.output {
             debug!("assigning lookup output");
-            self.lookup_output = output.clone();
+            self.static_lookups.output = output.clone();
         }
-        if let VarTensor::Empty = self.lookup_index {
+        if let VarTensor::Empty = self.static_lookups.index {
             debug!("assigning lookup index");
-            self.lookup_index = index.clone();
+            self.static_lookups.index = index.clone();
         }
         Ok(())
     }
@@ -612,17 +680,18 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
                     expression
                 });
-                self.dynamic_lookup_selectors
+                self.dynamic_lookups
+                    .lookup_selectors
                     .entry((x, y))
                     .or_insert(s_lookup);
             }
         }
-        self.dynamic_table_selectors.push(s_ltable);
+        self.dynamic_lookups.table_selectors.push(s_ltable);
 
         // if we haven't previously initialized the input/output, do so now
-        if self.dynamic_lookup_tables.is_empty() {
+        if self.dynamic_lookups.tables.is_empty() {
             debug!("assigning dynamic lookup table");
-            self.dynamic_lookup_tables = tables.to_vec();
+            self.dynamic_lookups.tables = tables.to_vec();
         }
 
         Ok(())
@@ -647,15 +716,16 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
         // we borrow mutably twice so we need to do this dance
 
-        let range_check =
-            if let std::collections::btree_map::Entry::Vacant(e) = self.range_checks.entry(range) {
-                // as all tables have the same input we see if there's another table who's input we can reuse
-                let range_check = RangeCheck::<F>::configure(cs, range, logrows);
-                e.insert(range_check.clone());
-                range_check
-            } else {
-                return Ok(());
-            };
+        let range_check = if let std::collections::btree_map::Entry::Vacant(e) =
+            self.range_checks.ranges.entry(range)
+        {
+            // as all tables have the same input we see if there's another table who's input we can reuse
+            let range_check = RangeCheck::<F>::configure(cs, range, logrows);
+            e.insert(range_check.clone());
+            range_check
+        } else {
+            return Ok(());
+        };
 
         for x in 0..input.num_blocks() {
             for y in 0..input.num_inner_cols() {
@@ -712,19 +782,20 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                         res
                     });
                 }
-                self.range_check_selectors
+                self.range_checks
+                    .selectors
                     .insert((range, x, y), multi_col_selector);
             }
         }
         // if we haven't previously initialized the input/output, do so now
-        if let VarTensor::Empty = self.lookup_input {
-            debug!("assigning lookup input");
-            self.lookup_input = input.clone();
+        if let VarTensor::Empty = self.range_checks.input {
+            debug!("assigning range check input");
+            self.range_checks.input = input.clone();
         }
 
-        if let VarTensor::Empty = self.lookup_index {
-            debug!("assigning lookup index");
-            self.lookup_index = index.clone();
+        if let VarTensor::Empty = self.range_checks.index {
+            debug!("assigning range check index");
+            self.range_checks.index = index.clone();
         }
 
         Ok(())
@@ -732,7 +803,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
 
     /// layout_tables must be called before layout.
     pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
-        for (i, table) in self.tables.values_mut().enumerate() {
+        for (i, table) in self.static_lookups.tables.values_mut().enumerate() {
             if !table.is_assigned {
                 debug!(
                     "laying out table for {}",
@@ -753,7 +824,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         &mut self,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Box<dyn Error>> {
-        for range_check in self.range_checks.values_mut() {
+        for range_check in self.range_checks.ranges.values_mut() {
             if !range_check.is_assigned {
                 debug!("laying out range check for {:?}", range_check.range);
                 range_check.layout(layouter)?;
