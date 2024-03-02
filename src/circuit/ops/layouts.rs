@@ -672,24 +672,17 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
         let window_a = assigned_sort.get_slice(&[i..i + 1])?;
         let window_b = assigned_sort.get_slice(&[i + 1..i + 2])?;
 
-        let window_a_minus_1 = pairwise(
-            config,
-            region,
-            &[window_a.clone(), unit.clone()],
-            BaseOp::Sub,
-        )?;
-
         let diff = pairwise(
             config,
             region,
-            &[window_b.clone(), window_a_minus_1.clone()],
+            &[window_b.clone(), window_a.clone()],
             BaseOp::Sub,
         )?;
         let greater_than = nonlinearity(
             config,
             region,
             &[diff],
-            &LookupOp::GreaterThan { a: 0.0.into() },
+            &LookupOp::GreaterThanEqual { a: 0.0.into() },
         )?;
 
         enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
@@ -2513,7 +2506,7 @@ pub fn identity<F: PrimeField + TensorType + PartialOrd>(
     Ok(output)
 }
 
-/// is zero identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
+/// is zero identity constraint.
 pub fn is_zero_identity<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -2884,54 +2877,8 @@ pub fn max<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    // this is safe because we later constrain it
-    let max_int = values[0].get_int_evals()?.into_par_iter().max();
-    let max_val: ValTensor<F> = match max_int {
-        None => Tensor::new(Some(&[Value::<F>::unknown()]), &[1])?.into(),
-        Some(i) => Tensor::new(Some(&[Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
-    };
-
-    let assigned_max_val: ValTensor<F> = region.assign(&config.custom_gates.inputs[1], &max_val)?;
-    region.increment(assigned_max_val.len());
-
-    let unit: ValTensor<F> = Tensor::from(
-        vec![region.assign_constant(&config.custom_gates.inputs[1], F::from(1))?].into_iter(),
-    )
-    .into();
-    region.next();
-
-    // max(x - 1)
-    let max_minus_1 = pairwise(
-        config,
-        region,
-        &[assigned_max_val.clone(), unit.clone()],
-        BaseOp::Sub,
-    )?;
-
-    // x - max(x - 1)
-    let diff = pairwise(
-        config,
-        region,
-        &[values[0].clone(), max_minus_1],
-        BaseOp::Sub,
-    )?;
-    // relu(x - max(x - 1))
-    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
-    // constraining relu(x - max(x - 1)) = 0/1
-    boolean_identity(config, region, &[relu.clone()], false)?;
-
-    // sum(relu(x - max(x - 1)))
-    let sum_relu = sum(config, region, &[relu])?;
-    // 1 - sum(relu(x - max(x - 1)))
-    let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
-    // relu(1 - sum(relu(x - max(x - 1))))
-    let relu_one_minus_sum_relu =
-        nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
-
-    // constraining 1 - sum(relu(x - max(x - 1))) = 0
-    is_zero_identity(config, region, &[relu_one_minus_sum_relu], false)?;
-
-    Ok(assigned_max_val)
+    let input_len = values[0].len();
+    _sort_ascending(config, region, values)?.get_slice(&[input_len - 1..input_len])
 }
 
 /// min layout
@@ -2940,57 +2887,7 @@ pub fn min<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    // this is safe because we later constrain it
-
-    let min_int = values[0].get_int_evals()?.into_par_iter().min();
-    let min_val: ValTensor<F> = match min_int {
-        None => Tensor::new(Some(&[Value::<F>::unknown()]), &[1])?.into(),
-        Some(i) => Tensor::new(Some(&[Value::known(i128_to_felt::<F>(i))]), &[1])?.into(),
-    };
-
-    let assigned_min_val = region.assign(&config.custom_gates.inputs[1], &min_val)?;
-    region.increment(assigned_min_val.len());
-
-    let unit: ValTensor<F> = Tensor::from(
-        vec![region.assign_constant(&config.custom_gates.inputs[1], F::from(1))?].into_iter(),
-    )
-    .into();
-    region.next();
-
-    // min(x + 1)
-    let min_plus_1 = pairwise(
-        config,
-        region,
-        &[assigned_min_val.clone(), unit.clone()],
-        BaseOp::Add,
-    )?;
-
-    // min(x + 1)  - x
-    let diff = pairwise(
-        config,
-        region,
-        &[min_plus_1, values[0].clone()],
-        BaseOp::Sub,
-    )?;
-
-    // relu(min(x + 1)  - x)
-    let relu = nonlinearity(config, region, &[diff], &LookupOp::ReLU)?;
-    // constraining relu(min(x + 1) - x) = 0/1
-    boolean_identity(config, region, &[relu.clone()], false)?;
-
-    // sum(relu(min(x + 1) - x))
-    let sum_relu = sum(config, region, &[relu])?;
-    // 1 - sum(relu(min(x + 1) - x))
-    let one_minus_sum_relu = pairwise(config, region, &[unit, sum_relu], BaseOp::Sub)?;
-    // relu(1 - sum(relu(min(x + 1) - x)))
-
-    let relu_one_minus_sum_relu =
-        nonlinearity(config, region, &[one_minus_sum_relu], &LookupOp::ReLU)?;
-
-    // constraining product to 0
-    is_zero_identity(config, region, &[relu_one_minus_sum_relu], false)?;
-
-    Ok(assigned_min_val)
+    _sort_ascending(config, region, values)?.get_slice(&[0..1])
 }
 
 fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd>(
