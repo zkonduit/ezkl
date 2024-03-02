@@ -638,8 +638,10 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let mut input = values[0].clone();
-    input.flatten();
+    let input = values[0].clone();
+
+    // assert input is flat
+    assert_eq!(input.dims().len(), 1);
 
     let is_assigned = !input.any_unknowns()?;
 
@@ -1854,14 +1856,8 @@ pub fn equals_zero<F: PrimeField + TensorType + PartialOrd>(
 
     // take the product of diff and output
     let prod_check = pairwise(config, region, &[values, output.clone()], BaseOp::Mult)?;
-    let prod_len = prod_check.len();
 
-    let mut zero_tensor = Tensor::from(vec![ValType::Constant(F::from(0)); prod_len].into_iter());
-    zero_tensor.set_visibility(&crate::graph::Visibility::Fixed);
-    // we overwrite the output tensor with the result
-    region.decrement(prod_len);
-    region.assign(&config.custom_gates.output, &zero_tensor.into())?;
-    region.increment(prod_len);
+    is_zero_identity(config, region, &[prod_check], false)?;
 
     Ok(output)
 }
@@ -2505,6 +2501,38 @@ pub fn identity<F: PrimeField + TensorType + PartialOrd>(
     if !output.all_prev_assigned() {
         output = region.assign(&config.custom_gates.output, &values[0])?;
         region.increment(output.len());
+    }
+
+    Ok(output)
+}
+
+/// is zero identity constraint.
+pub fn is_zero_identity<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    assign: bool,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let output = if assign || !values[0].get_const_indices()?.is_empty() {
+        let output = region.assign(&config.custom_gates.output, &values[0])?;
+        region.increment(output.len());
+        output
+    } else {
+        values[0].clone()
+    };
+    // Enable the selectors
+    if !region.is_dummy() {
+        (0..output.len())
+            .map(|j| {
+                let index = region.linear_coord() - j - 1;
+
+                let (x, y, z) = config.custom_gates.output.cartesian_coord(index);
+                let selector = config.custom_gates.selectors.get(&(BaseOp::IsZero, x, y));
+
+                region.enable(selector, z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
     Ok(output)

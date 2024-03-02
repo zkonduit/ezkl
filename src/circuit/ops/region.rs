@@ -599,25 +599,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         }
     }
 
-    /// Decrement the offset by 1
-    pub fn prev(&mut self) {
-        self.linear_coord -= 1;
-        if self.linear_coord % self.num_inner_cols == 0 {
-            self.row -= 1;
-        }
-    }
-
     /// Increment the offset
     pub fn increment(&mut self, n: usize) {
         for _ in 0..n {
             self.next()
-        }
-    }
-
-    /// Decrement the offset
-    pub fn decrement(&mut self, n: usize) {
-        for _ in 0..n {
-            self.prev()
         }
     }
 
