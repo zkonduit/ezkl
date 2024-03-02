@@ -363,6 +363,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         }
 
         for i in 0..output.num_blocks() {
+            accum_selectors.insert((BaseOp::DotInit, i, 0), meta.selector());
             accum_selectors.insert((BaseOp::Dot, i, 0), meta.selector());
             accum_selectors.insert((BaseOp::CumProd, i, 0), meta.selector());
             accum_selectors.insert((BaseOp::CumProdInit, i, 0), meta.selector());
