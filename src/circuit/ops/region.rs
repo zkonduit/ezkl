@@ -42,6 +42,12 @@ impl DynamicLookupIndex {
     pub fn col_coord(&self) -> usize {
         self.col_coord
     }
+
+    /// update with another dynamic lookup index
+    pub fn update(&mut self, other: &DynamicLookupIndex) {
+        self.index += other.index;
+        self.col_coord += other.col_coord;
+    }
 }
 
 /// Dynamic lookup index
@@ -65,6 +71,12 @@ impl ShuffleIndex {
     /// Get the column coord
     pub fn col_coord(&self) -> usize {
         self.col_coord
+    }
+
+    /// update with another shuffle index
+    pub fn update(&mut self, other: &ShuffleIndex) {
+        self.index += other.index;
+        self.col_coord += other.col_coord;
     }
 }
 
@@ -234,10 +246,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         linear_coord: usize,
         total_constants: usize,
         num_inner_cols: usize,
-        dynamic_lookup_index: DynamicLookupIndex,
-        shuffle_index: ShuffleIndex,
-        used_lookups: HashSet<LookupOp>,
-        used_range_checks: HashSet<Range>,
         throw_range_check_error: bool,
     ) -> RegionCtx<'a, F> {
         let region = None;
@@ -247,10 +255,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             linear_coord,
             row,
             total_constants,
-            dynamic_lookup_index,
-            shuffle_index,
-            used_lookups,
-            used_range_checks,
+            dynamic_lookup_index: DynamicLookupIndex::default(),
+            shuffle_index: ShuffleIndex::default(),
+            used_lookups: HashSet::new(),
+            used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
@@ -326,10 +334,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                     starting_linear_coord,
                     starting_constants,
                     self.num_inner_cols,
-                    DynamicLookupIndex::default(),
-                    ShuffleIndex::default(),
-                    HashSet::new(),
-                    HashSet::new(),
                     self.throw_range_check_error,
                 );
                 let res = inner_loop_function(idx, &mut local_reg);
@@ -349,14 +353,15 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                 // update the lookups
                 let mut lookups = lookups.lock().unwrap();
                 lookups.extend(local_reg.used_lookups());
+                // update the range checks
                 let mut range_checks = range_checks.lock().unwrap();
                 range_checks.extend(local_reg.used_range_checks());
+                // update the dynamic lookup index
                 let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
-                dynamic_lookup_index.index += local_reg.dynamic_lookup_index.index;
-                dynamic_lookup_index.col_coord += local_reg.dynamic_lookup_index.col_coord;
+                dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
+                // update the shuffle index
                 let mut shuffle_index = shuffle_index.lock().unwrap();
-                shuffle_index.index += local_reg.shuffle_index.index;
-                shuffle_index.col_coord += local_reg.shuffle_index.col_coord;
+                shuffle_index.update(&local_reg.shuffle_index);
 
                 res
             })

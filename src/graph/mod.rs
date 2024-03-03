@@ -1198,9 +1198,9 @@ impl GraphCircuit {
         max_range_size: i128,
     ) -> bool {
         // if num cols is too large then the extended k is too large
-        if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS {
-            return false;
-        } else if Self::calc_num_cols(max_range_size, k) > MAX_NUM_LOOKUP_COLS {
+        if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS
+            || Self::calc_num_cols(max_range_size, k) > MAX_NUM_LOOKUP_COLS
+        {
             return false;
         }
 

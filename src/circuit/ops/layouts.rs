@@ -704,7 +704,7 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd>(
     if largest {
         sorted.reverse()?;
     }
-    Ok(sorted.get_slice(&[0..k])?)
+    sorted.get_slice(&[0..k])
 }
 
 /// Select top k elements
@@ -885,7 +885,7 @@ pub fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
                     .get(&(x, y))
                     .ok_or("missing selectors")?;
 
-                region.enable(Some(&lookup_selector), z)?;
+                region.enable(Some(lookup_selector), z)?;
 
                 Ok(())
             })
@@ -953,7 +953,7 @@ pub fn shuffles<F: PrimeField + TensorType + PartialOrd>(
                     .get(&(x, y))
                     .ok_or("missing selectors")?;
 
-                region.enable(Some(&input_selector), z)?;
+                region.enable(Some(input_selector), z)?;
 
                 Ok(())
             })
