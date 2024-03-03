@@ -498,9 +498,15 @@ fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box
     let path = get_srs_path(logrows, srs_path);
     let file = std::fs::File::open(path.clone())?;
     let mut buffer = vec![];
-    let bytes_read =
-        std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file).read_to_end(&mut buffer)?;
-    info!("read {} bytes from SRS file", bytes_read);
+    let mut reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
+    let bytes_read = reader.read_to_end(&mut buffer)?;
+
+    info!(
+        "read {} bytes from SRS file (vector of len = {})",
+        bytes_read,
+        buffer.len()
+    );
+
     let hash = sha256::digest(buffer);
     info!("SRS hash: {}", hash);
 
@@ -569,8 +575,7 @@ pub(crate) async fn get_srs_cmd(
         let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
         buffer.write_all(reader.get_ref())?;
         buffer.flush()?;
-        // small timeout
-        std::thread::sleep(Duration::from_millis(100));
+
         info!("SRS downloaded");
     } else {
         info!("SRS already exists at that path");
