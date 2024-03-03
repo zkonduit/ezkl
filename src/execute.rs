@@ -568,7 +568,9 @@ pub(crate) async fn get_srs_cmd(
 
         let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
         buffer.write_all(reader.get_ref())?;
-
+        buffer.flush()?;
+        // small timeout
+        std::thread::sleep(Duration::from_millis(100));
         info!("SRS downloaded");
     } else {
         info!("SRS already exists at that path");
