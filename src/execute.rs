@@ -525,6 +525,10 @@ pub(crate) async fn get_srs_cmd(
 ) -> Result<String, Box<dyn Error>> {
     // logrows overrides settings
 
+    use std::io::BufWriter;
+
+    use crate::EZKL_BUF_CAPACITY;
+
     let k = if let Some(k) = logrows {
         k
     } else if let Some(settings_p) = settings_path {
@@ -560,7 +564,10 @@ pub(crate) async fn get_srs_cmd(
         }
 
         let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone()))?;
-        file.write_all(reader.get_ref())?;
+
+        let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
+        buffer.write_all(reader.get_ref())?;
+
         info!("SRS downloaded");
     } else {
         info!("SRS already exists at that path");
