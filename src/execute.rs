@@ -64,7 +64,11 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
+
 #[cfg(not(target_arch = "wasm32"))]
+use crate::EZKL_BUF_CAPACITY;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::BufWriter;
 use std::time::Duration;
 use tabled::Tabled;
 use thiserror::Error;
@@ -494,7 +498,8 @@ fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box
     let path = get_srs_path(logrows, srs_path);
     let file = std::fs::File::open(path.clone())?;
     let mut buffer = vec![];
-    let bytes_read = std::io::BufReader::new(file).read_to_end(&mut buffer)?;
+    let bytes_read =
+        std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file).read_to_end(&mut buffer)?;
     info!("read {} bytes from SRS file", bytes_read);
     let hash = sha256::digest(buffer);
     info!("SRS hash: {}", hash);
@@ -524,10 +529,6 @@ pub(crate) async fn get_srs_cmd(
     check_mode: CheckMode,
 ) -> Result<String, Box<dyn Error>> {
     // logrows overrides settings
-
-    use std::io::BufWriter;
-
-    use crate::EZKL_BUF_CAPACITY;
 
     let k = if let Some(k) = logrows {
         k
