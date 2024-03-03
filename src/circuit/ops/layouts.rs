@@ -907,8 +907,6 @@ pub fn shuffles<F: PrimeField + TensorType + PartialOrd>(
     reference: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let shuffle_index = region.shuffle_index();
-    println!("shuffle index: {}", shuffle_index);
-
     let (input, reference) = (input[0].clone(), reference[0].clone());
 
     // assert input and reference are same length
