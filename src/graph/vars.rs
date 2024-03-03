@@ -429,17 +429,20 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
         let num_constants = params.total_const_size;
         let module_requires_fixed = params.module_requires_fixed();
         let requires_dynamic_lookup = params.requires_dynamic_lookup();
-        let dynamic_lookup_size = params.total_dynamic_col_size;
+        let requires_shuffle = params.requires_shuffle();
+        let dynamic_lookup_and_shuffle_size = params.dynamic_lookup_and_shuffle_col_size();
 
         let mut advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, num_inner_cols, var_len))
             .collect_vec();
 
-        if requires_dynamic_lookup {
-            for _ in 0..3 {
-                let dynamic_lookup = VarTensor::new_advice(cs, logrows, 1, dynamic_lookup_size);
+        if requires_dynamic_lookup || requires_shuffle {
+            let num_cols = if requires_dynamic_lookup { 3 } else { 2 };
+            for _ in 0..num_cols {
+                let dynamic_lookup =
+                    VarTensor::new_advice(cs, logrows, 1, dynamic_lookup_and_shuffle_size);
                 if dynamic_lookup.num_blocks() > 1 {
-                    panic!("dynamic lookup should only have one block");
+                    panic!("dynamic lookup or shuffle should only have one block");
                 };
                 advices.push(dynamic_lookup);
             }

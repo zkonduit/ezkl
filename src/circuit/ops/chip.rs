@@ -220,6 +220,34 @@ impl DynamicLookups {
     }
 }
 
+/// A struct representing the selectors for the dynamic lookup tables
+#[derive(Clone, Debug, Default)]
+pub struct Shuffles {
+    /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
+    pub input_selectors: BTreeMap<(usize, usize), Selector>,
+    /// Selectors for the dynamic lookup tables
+    pub reference_selectors: Vec<Selector>,
+    /// Inputs:
+    pub inputs: Vec<VarTensor>,
+    /// tables
+    pub references: Vec<VarTensor>,
+}
+
+impl Shuffles {
+    /// Returns a new [DynamicLookups] with no inputs, no selectors, and no tables.
+    pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
+        let dummy_var = VarTensor::dummy(col_size, num_inner_cols);
+        let single_col_dummy_var = VarTensor::dummy(col_size, 1);
+
+        Self {
+            input_selectors: BTreeMap::new(),
+            reference_selectors: vec![],
+            inputs: vec![dummy_var.clone(), dummy_var.clone()],
+            references: vec![single_col_dummy_var.clone(), single_col_dummy_var.clone()],
+        }
+    }
+}
+
 /// A struct representing the selectors for the static lookup tables
 #[derive(Clone, Debug, Default)]
 pub struct StaticLookups<F: PrimeField + TensorType + PartialOrd> {
@@ -310,6 +338,8 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     pub dynamic_lookups: DynamicLookups,
     /// [Selector]s for the range checks
     pub range_checks: RangeChecks<F>,
+    /// [Selector]s for the shuffles
+    pub shuffles: Shuffles,
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
@@ -322,6 +352,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             custom_gates: CustomGates::dummy(col_size, num_inner_cols),
             static_lookups: StaticLookups::dummy(col_size, num_inner_cols),
             dynamic_lookups: DynamicLookups::dummy(col_size, num_inner_cols),
+            shuffles: Shuffles::dummy(col_size, num_inner_cols),
             range_checks: RangeChecks::dummy(col_size, num_inner_cols),
             check_mode: CheckMode::SAFE,
             _marker: PhantomData,
@@ -467,6 +498,7 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
             },
             static_lookups: StaticLookups::default(),
             dynamic_lookups: DynamicLookups::default(),
+            shuffles: Shuffles::default(),
             range_checks: RangeChecks::default(),
             check_mode,
             _marker: PhantomData,
@@ -692,6 +724,93 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
         if self.dynamic_lookups.tables.is_empty() {
             debug!("assigning dynamic lookup table");
             self.dynamic_lookups.tables = tables.to_vec();
+        }
+        if self.dynamic_lookups.inputs.is_empty() {
+            debug!("assigning dynamic lookup input");
+            self.dynamic_lookups.inputs = lookups.to_vec();
+        }
+
+        Ok(())
+    }
+
+    /// Configures and creates lookup selectors
+    #[allow(clippy::too_many_arguments)]
+    pub fn configure_shuffles(
+        &mut self,
+        cs: &mut ConstraintSystem<F>,
+        inputs: &[VarTensor; 2],
+        references: &[VarTensor; 2],
+    ) -> Result<(), Box<dyn Error>>
+    where
+        F: Field,
+    {
+        for l in inputs.iter() {
+            if !l.is_advice() {
+                return Err("wrong input type for dynamic lookup".into());
+            }
+        }
+
+        for t in references.iter() {
+            if !t.is_advice() || t.num_blocks() > 1 || t.num_inner_cols() > 1 {
+                return Err("wrong table type for dynamic lookup".into());
+            }
+        }
+
+        let one = Expression::Constant(F::ONE);
+
+        let s_reference = cs.complex_selector();
+
+        for x in 0..inputs[0].num_blocks() {
+            for y in 0..inputs[0].num_inner_cols() {
+                let s_input = cs.complex_selector();
+
+                cs.lookup_any("lookup", |cs| {
+                    let s_inputq = cs.query_selector(s_input);
+                    let mut expression = vec![];
+                    let s_referenceq = cs.query_selector(s_reference);
+                    let mut input_queries = vec![one.clone()];
+
+                    for input in inputs {
+                        input_queries.push(match input {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                cs.query_advice(advices[x][y], Rotation(0))
+                            }
+                            _ => unreachable!(),
+                        });
+                    }
+
+                    let mut ref_queries = vec![one.clone()];
+                    for reference in references {
+                        ref_queries.push(match reference {
+                            VarTensor::Advice { inner: advices, .. } => {
+                                cs.query_advice(advices[0][0], Rotation(0))
+                            }
+                            _ => unreachable!(),
+                        });
+                    }
+
+                    let lhs = input_queries.into_iter().map(|c| c * s_inputq.clone());
+                    let rhs = ref_queries.into_iter().map(|c| c * s_referenceq.clone());
+                    expression.extend(lhs.zip(rhs));
+
+                    expression
+                });
+                self.shuffles
+                    .input_selectors
+                    .entry((x, y))
+                    .or_insert(s_input);
+            }
+        }
+        self.shuffles.reference_selectors.push(s_reference);
+
+        // if we haven't previously initialized the input/output, do so now
+        if self.shuffles.references.is_empty() {
+            debug!("assigning shuffles reference");
+            self.shuffles.references = references.to_vec();
+        }
+        if self.shuffles.inputs.is_empty() {
+            debug!("assigning shuffles input");
+            self.shuffles.inputs = inputs.to_vec();
         }
 
         Ok(())

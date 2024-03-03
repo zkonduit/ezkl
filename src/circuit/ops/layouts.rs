@@ -686,17 +686,8 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
         enforce_equality(config, region, &[unit.clone(), greater_than.clone()])?;
     }
 
-    let mut zero_tensor = Tensor::from(vec![ValType::Constant(F::ZERO); input.len()].into_iter());
-    zero_tensor.set_visibility(&crate::graph::Visibility::Fixed);
-    let zero_tensor: ValTensor<F> = zero_tensor.try_into()?;
-
     // assert that this is a permutation/shuffle
-    dynamic_lookup(
-        config,
-        region,
-        &[assigned_sort.clone(), zero_tensor.clone()],
-        &[input.clone(), zero_tensor],
-    )?;
+    shuffles(config, region, &[assigned_sort.clone()], &[input.clone()])?;
 
     Ok(assigned_sort)
 }
@@ -859,8 +850,8 @@ pub fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
     let _table_index =
         region.assign_dynamic_lookup(&config.dynamic_lookups.tables[2], &table_index.into())?;
 
-    let lookup_0 = region.assign(&config.custom_gates.inputs[0], &lookup_0)?;
-    let lookup_1 = region.assign(&config.custom_gates.inputs[1], &lookup_1)?;
+    let lookup_0 = region.assign(&config.dynamic_lookups.inputs[0], &lookup_0)?;
+    let lookup_1 = region.assign(&config.dynamic_lookups.inputs[1], &lookup_1)?;
     let lookup_len = lookup_0.len();
 
     // now set the lookup index
@@ -868,14 +859,14 @@ pub fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
         vec![ValType::Constant(F::from(dynamic_lookup_index as u64)); lookup_len].into_iter(),
     );
     lookup_index.set_visibility(&crate::graph::Visibility::Fixed);
-    let _lookup_index = region.assign(&config.custom_gates.output, &lookup_index.into())?;
+    let _lookup_index = region.assign(&config.dynamic_lookups.inputs[2], &lookup_index.into())?;
 
     if !region.is_dummy() {
         (0..table_len)
             .map(|i| {
                 let table_selector = config.dynamic_lookups.table_selectors[0];
                 let (_, _, z) = config.dynamic_lookups.tables[0]
-                    .cartesian_coord(region.dynamic_lookup_col_coord() + i);
+                    .cartesian_coord(region.combined_dynamic_shuffle_coord() + i);
                 region.enable(Some(&table_selector), z)?;
                 Ok(())
             })
@@ -887,7 +878,7 @@ pub fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
         (0..lookup_len)
             .map(|i| {
                 let (x, y, z) =
-                    config.custom_gates.inputs[0].cartesian_coord(region.linear_coord() + i);
+                    config.dynamic_lookups.inputs[0].cartesian_coord(region.linear_coord() + i);
                 let lookup_selector = config
                     .dynamic_lookups
                     .lookup_selectors
@@ -906,6 +897,74 @@ pub fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
     region.increment(lookup_len);
 
     Ok((lookup_0, lookup_1))
+}
+
+/// Shuffle arg
+pub fn shuffles<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    input: &[ValTensor<F>; 1],
+    reference: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let shuffle_index = region.shuffle_index();
+    println!("shuffle index: {}", shuffle_index);
+
+    let (input, reference) = (input[0].clone(), reference[0].clone());
+
+    // assert input and reference are same length
+    if input.len() != reference.len() {
+        return Err("input and reference must be same length".into());
+    }
+
+    let reference = region.assign_shuffle(&config.shuffles.references[0], &reference)?;
+    let reference_len = reference.len();
+
+    // now create a vartensor of constants for the shuffle index
+    let mut index = Tensor::from(
+        vec![ValType::Constant(F::from(shuffle_index as u64)); reference_len].into_iter(),
+    );
+    index.set_visibility(&crate::graph::Visibility::Fixed);
+    let index = region.assign_shuffle(&config.shuffles.references[1], &index.into())?;
+
+    let input = region.assign(&config.shuffles.inputs[0], &input)?;
+    region.assign(&config.shuffles.inputs[1], &index)?;
+
+    if !region.is_dummy() {
+        (0..reference_len)
+            .map(|i| {
+                let ref_selector = config.shuffles.reference_selectors[0];
+                let (_, _, z) = config.shuffles.references[0]
+                    .cartesian_coord(region.combined_dynamic_shuffle_coord() + i);
+                region.enable(Some(&ref_selector), z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    }
+
+    if !region.is_dummy() {
+        // Enable the selectors
+        (0..reference_len)
+            .map(|i| {
+                let (x, y, z) =
+                    config.custom_gates.inputs[0].cartesian_coord(region.linear_coord() + i);
+                let input_selector = config
+                    .shuffles
+                    .input_selectors
+                    .get(&(x, y))
+                    .ok_or("missing selectors")?;
+
+                region.enable(Some(&input_selector), z)?;
+
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+    }
+
+    region.increment_shuffle_col_coord(reference_len);
+    region.increment_shuffle_index(1);
+    region.increment(reference_len);
+
+    Ok(input)
 }
 
 /// One hot accumulated layout

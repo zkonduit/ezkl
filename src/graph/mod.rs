@@ -455,6 +455,10 @@ pub struct GraphSettings {
     pub total_dynamic_col_size: usize,
     /// number of dynamic lookups
     pub num_dynamic_lookups: usize,
+    /// number of shuffles
+    pub num_shuffles: usize,
+    /// total shuffle column size
+    pub total_shuffle_col_size: usize,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
@@ -484,8 +488,14 @@ impl GraphSettings {
             .ceil() as u32
     }
 
-    fn dynamic_lookup_logrows(&self) -> u32 {
-        (self.total_dynamic_col_size as f64).log2().ceil() as u32
+    fn dynamic_lookup_and_shuffle_logrows(&self) -> u32 {
+        (self.total_dynamic_col_size as f64 + self.total_shuffle_col_size as f64)
+            .log2()
+            .ceil() as u32
+    }
+
+    fn dynamic_lookup_and_shuffle_col_size(&self) -> usize {
+        self.total_dynamic_col_size + self.total_shuffle_col_size
     }
 
     fn module_constraint_logrows(&self) -> u32 {
@@ -583,6 +593,11 @@ impl GraphSettings {
     /// requires dynamic lookup  
     pub fn requires_dynamic_lookup(&self) -> bool {
         self.num_dynamic_lookups > 0
+    }
+
+    /// requires dynamic shuffle
+    pub fn requires_shuffle(&self) -> bool {
+        self.num_shuffles > 0
     }
 
     /// any kzg visibility
@@ -1099,7 +1114,7 @@ impl GraphCircuit {
         // These are hard lower limits, we can't overflow instances or modules constraints
         let instance_logrows = self.settings().log2_total_instances();
         let module_constraint_logrows = self.settings().module_constraint_logrows();
-        let dynamic_lookup_logrows = self.settings().dynamic_lookup_logrows();
+        let dynamic_lookup_logrows = self.settings().dynamic_lookup_and_shuffle_logrows();
         min_logrows = std::cmp::max(
             min_logrows,
             // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit

@@ -357,8 +357,6 @@ mod matmul_col_ultra_overflow_double_col {
         );
 
         assert!(result.is_ok());
-
-        println!("done.");
     }
 }
 
@@ -476,8 +474,6 @@ mod matmul_col_ultra_overflow {
         );
 
         assert!(result.is_ok());
-
-        println!("done.");
     }
 }
 
@@ -1280,8 +1276,6 @@ mod conv_col_ultra_overflow {
         );
 
         assert!(result.is_ok());
-
-        println!("done.");
     }
 }
 
@@ -1435,8 +1429,6 @@ mod conv_relu_col_ultra_overflow {
         );
 
         assert!(result.is_ok());
-
-        println!("done.");
     }
 }
 
@@ -1713,6 +1705,133 @@ mod dynamic_lookup {
         let circuit = MyCircuit::<F> {
             tables: tables.try_into().unwrap(),
             lookups: lookups.try_into().unwrap(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        assert!(prover.verify().is_err());
+    }
+}
+
+#[cfg(test)]
+mod shuffle {
+    use super::*;
+
+    const K: usize = 6;
+    const LEN: usize = 4;
+    const NUM_LOOP: usize = 5;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
+        inputs: [[ValTensor<F>; 1]; NUM_LOOP],
+        references: [[ValTensor<F>; 1]; NUM_LOOP],
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, 2, LEN);
+            let b = VarTensor::new_advice(cs, K, 2, LEN);
+            let c: VarTensor = VarTensor::new_advice(cs, K, 2, LEN);
+
+            let d = VarTensor::new_advice(cs, K, 1, LEN);
+            let e = VarTensor::new_advice(cs, K, 1, LEN);
+
+            let _constant = VarTensor::constant_cols(cs, K, LEN * NUM_LOOP, false);
+
+            let mut config =
+                Self::Config::configure(cs, &[a.clone(), b.clone()], &c, CheckMode::SAFE);
+            config
+                .configure_shuffles(cs, &[a.clone(), b.clone()], &[d.clone(), e.clone()])
+                .unwrap();
+            config
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0, 1);
+                        for i in 0..NUM_LOOP {
+                            layouts::shuffles(
+                                &config,
+                                &mut region,
+                                &self.inputs[i],
+                                &self.references[i],
+                            )
+                            .map_err(|_| Error::Synthesis)?;
+                        }
+                        assert_eq!(
+                            region.shuffle_col_coord(),
+                            NUM_LOOP * self.references[0][0].len()
+                        );
+                        assert_eq!(region.shuffle_index(), NUM_LOOP);
+
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn shufflecircuit() {
+        // parameters
+        let references = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                [ValTensor::from(Tensor::from((0..LEN).map(|i| {
+                    Value::known(F::from((i * loop_idx) as u64 + 1))
+                })))]
+            })
+            .collect::<Vec<_>>();
+
+        let inputs = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                [ValTensor::from(Tensor::from((0..LEN).rev().map(|i| {
+                    Value::known(F::from((i * loop_idx) as u64 + 1))
+                })))]
+            })
+            .collect::<Vec<_>>();
+
+        let circuit = MyCircuit::<F> {
+            references: references.clone().try_into().unwrap(),
+            inputs: inputs.try_into().unwrap(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+
+        let inputs = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                let prev_idx = if loop_idx == 0 {
+                    NUM_LOOP - 1
+                } else {
+                    loop_idx - 1
+                };
+                [ValTensor::from(Tensor::from((0..LEN).rev().map(|i| {
+                    Value::known(F::from((i * prev_idx) as u64 + 1))
+                })))]
+            })
+            .collect::<Vec<_>>();
+
+        let circuit = MyCircuit::<F> {
+            references: references.try_into().unwrap(),
+            inputs: inputs.try_into().unwrap(),
             _marker: PhantomData,
         };
 
@@ -2480,7 +2599,5 @@ mod lookup_ultra_overflow {
         );
 
         assert!(result.is_ok());
-
-        println!("done.");
     }
 }
