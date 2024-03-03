@@ -495,7 +495,7 @@ fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box
     let file = std::fs::File::open(path.clone())?;
     let mut buffer = vec![];
     let bytes_read = std::io::BufReader::new(file).read_to_end(&mut buffer)?;
-    debug!("read {} bytes from SRS file", bytes_read);
+    info!("read {} bytes from SRS file", bytes_read);
     let hash = sha256::digest(buffer);
     info!("SRS hash: {}", hash);
 
