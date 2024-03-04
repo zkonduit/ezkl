@@ -77,7 +77,7 @@ pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
 /// Default lookup safety margin
 pub const DEFAULT_LOOKUP_SAFETY_MARGIN: &str = "2";
 /// Default Compress selectors
-pub const DEFAULT_COMPRESS_SELECTORS: &str = "false";
+pub const DEFAULT_DISABLE_SELECTOR_COMPRESSION: &str = "false";
 /// Default render vk seperately
 pub const DEFAULT_RENDER_VK_SEPERATELY: &str = "false";
 /// Default VK sol path
@@ -450,8 +450,8 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_SPLIT)]
         split_proofs: bool,
         /// compress selectors
-        #[arg(long, default_value = DEFAULT_COMPRESS_SELECTORS)]
-        compress_selectors: bool,
+        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION)]
+        disable_selector_compression: bool,
     },
     /// Aggregates proofs :)
     Aggregate {
@@ -515,8 +515,8 @@ pub enum Commands {
         #[arg(short = 'W', long)]
         witness: Option<PathBuf>,
         /// compress selectors
-        #[arg(long, default_value = DEFAULT_COMPRESS_SELECTORS)]
-        compress_selectors: bool,
+        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION)]
+        disable_selector_compression: bool,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -540,8 +540,8 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_FUZZ_RUNS)]
         num_runs: usize,
         /// compress selectors
-        #[arg(long, default_value = DEFAULT_COMPRESS_SELECTORS)]
-        compress_selectors: bool,
+        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION)]
+        disable_selector_compression: bool,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Deploys a test contact that the data attester reads from and creates a data attestation formatted input.json file that contains call data information

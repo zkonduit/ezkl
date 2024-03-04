@@ -484,7 +484,7 @@ where
 pub fn create_keys<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     circuit: &C,
     params: &'_ Scheme::ParamsProver,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<ProvingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
 where
     C: Circuit<Scheme::Scalar>,
@@ -496,7 +496,7 @@ where
     // Initialize verifying key
     let now = Instant::now();
     trace!("preparing VK");
-    let vk = keygen_vk_custom(params, &empty_circuit, compress_selectors)?;
+    let vk = keygen_vk_custom(params, &empty_circuit, !disable_selector_compression)?;
     let elapsed = now.elapsed();
     info!("VK took {}.{}", elapsed.as_secs(), elapsed.subsec_millis());
 

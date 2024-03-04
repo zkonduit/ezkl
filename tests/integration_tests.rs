@@ -1849,6 +1849,7 @@ mod native_tests {
                 &format!("{}/{}/key.pk", test_dir, example_name),
                 "--vk-path",
                 &format!("{}/{}/key.vk", test_dir, example_name),
+                "--disable-selector-compression",
             ])
             .status()
             .expect("failed to execute process");

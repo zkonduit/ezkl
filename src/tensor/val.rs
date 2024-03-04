@@ -318,6 +318,19 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
         matches!(self, ValTensor::Instance { .. })
     }
 
+    /// reverse order of elements whilst preserving the shape
+    pub fn reverse(&mut self) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value { inner: v, .. } => {
+                v.reverse();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(())
+    }
+
     ///
     pub fn set_initial_instance_offset(&mut self, offset: usize) {
         if let ValTensor::Instance { initial_offset, .. } = self {
