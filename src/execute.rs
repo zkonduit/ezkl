@@ -902,7 +902,12 @@ pub(crate) fn calibrate(
             input_scale, param_scale, scale_rebase_multiplier, div_rebasing
         ));
 
-        let key = (input_scale, param_scale, scale_rebase_multiplier);
+        let key = (
+            input_scale,
+            param_scale,
+            scale_rebase_multiplier,
+            div_rebasing,
+        );
         forward_pass_res.insert(key, vec![]);
 
         let local_run_args = RunArgs {
@@ -964,36 +969,28 @@ pub(crate) fn calibrate(
                 continue;
             }
         }
-
-        // drop the gag
+      
+         // drop the gag
         #[cfg(unix)]
         drop(_r);
         #[cfg(unix)]
         drop(_g);
 
-        let min_lookup_range = forward_pass_res
-            .get(&key)
-            .unwrap()
+        let result = forward_pass_res.get(&key).ok_or("key not found")?;
+
+        let min_lookup_range = result
             .iter()
             .map(|x| x.min_lookup_inputs)
             .min()
             .unwrap_or(0);
 
-        let max_lookup_range = forward_pass_res
-            .get(&key)
-            .unwrap()
+        let max_lookup_range = result
             .iter()
             .map(|x| x.max_lookup_inputs)
             .max()
             .unwrap_or(0);
 
-        let max_range_size = forward_pass_res
-            .get(&key)
-            .unwrap()
-            .iter()
-            .map(|x| x.max_range_size)
-            .max()
-            .unwrap_or(0);
+        let max_range_size = result.iter().map(|x| x.max_range_size).max().unwrap_or(0);
 
         let res = circuit.calc_min_logrows(
             (min_lookup_range, max_lookup_range),
@@ -1114,6 +1111,7 @@ pub(crate) fn calibrate(
             best_params.run_args.input_scale,
             best_params.run_args.param_scale,
             best_params.run_args.scale_rebase_multiplier,
+            best_params.run_args.div_rebasing,
         ))
         .ok_or("no params found")?
         .iter()
