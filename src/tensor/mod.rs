@@ -1526,18 +1526,20 @@ pub fn get_broadcasted_shape(
     let num_dims_a = shape_a.len();
     let num_dims_b = shape_b.len();
 
-    // reewrite the below using match
-    if num_dims_a == num_dims_b {
-        let mut broadcasted_shape = Vec::with_capacity(num_dims_a);
-        for (dim_a, dim_b) in shape_a.iter().zip(shape_b.iter()) {
-            let max_dim = dim_a.max(dim_b);
-            broadcasted_shape.push(*max_dim);
+    match (num_dims_a, num_dims_b) {
+        (a, b) if a == b => {
+            let mut broadcasted_shape = Vec::with_capacity(num_dims_a);
+            for (dim_a, dim_b) in shape_a.iter().zip(shape_b.iter()) {
+                let max_dim = dim_a.max(dim_b);
+                broadcasted_shape.push(*max_dim);
+            }
+            Ok(broadcasted_shape)
         }
-        Ok(broadcasted_shape)
-    } else if num_dims_a < num_dims_b {
-        Ok(shape_b.to_vec())
-    } else {
-        Ok(shape_a.to_vec())
+        (a, b) if a < b => Ok(shape_b.to_vec()),
+        (a, b) if a > b => Ok(shape_a.to_vec()),
+        _ => Err(Box::new(TensorError::DimError(
+            "Unknown condition for broadcasting".to_string(),
+        ))),
     }
 }
 ////////////////////////

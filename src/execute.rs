@@ -23,6 +23,7 @@ use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
 use crate::RunArgs;
+#[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::poly::commitment::Params;
@@ -63,7 +64,11 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
+
 #[cfg(not(target_arch = "wasm32"))]
+use crate::EZKL_BUF_CAPACITY;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::BufWriter;
 use std::time::Duration;
 use tabled::Tabled;
 use thiserror::Error;
@@ -140,13 +145,13 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             compiled_circuit,
             transcript,
             num_runs,
-            compress_selectors,
+            disable_selector_compression,
         } => fuzz(
             compiled_circuit,
             witness,
             transcript,
             num_runs,
-            compress_selectors,
+            disable_selector_compression,
         ),
         Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
         #[cfg(not(target_arch = "wasm32"))]
@@ -260,14 +265,14 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             vk_path,
             pk_path,
             witness,
-            compress_selectors,
+            disable_selector_compression,
         } => setup(
             compiled_circuit,
             srs_path,
             vk_path,
             pk_path,
             witness,
-            compress_selectors,
+            disable_selector_compression,
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::SetupTestEvmData {
@@ -331,7 +336,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             split_proofs,
-            compress_selectors,
+            disable_selector_compression,
         } => setup_aggregate(
             sample_snarks,
             vk_path,
@@ -339,7 +344,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             split_proofs,
-            compress_selectors,
+            disable_selector_compression,
         ),
         Commands::Aggregate {
             proof_path,
@@ -493,8 +498,15 @@ fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box
     let path = get_srs_path(logrows, srs_path);
     let file = std::fs::File::open(path.clone())?;
     let mut buffer = vec![];
-    let bytes_read = std::io::BufReader::new(file).read_to_end(&mut buffer)?;
-    debug!("read {} bytes from SRS file", bytes_read);
+    let mut reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
+    let bytes_read = reader.read_to_end(&mut buffer)?;
+
+    info!(
+        "read {} bytes from SRS file (vector of len = {})",
+        bytes_read,
+        buffer.len()
+    );
+
     let hash = sha256::digest(buffer);
     info!("SRS hash: {}", hash);
 
@@ -559,7 +571,11 @@ pub(crate) async fn get_srs_cmd(
         }
 
         let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone()))?;
-        file.write_all(reader.get_ref())?;
+
+        let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
+        buffer.write_all(reader.get_ref())?;
+        buffer.flush()?;
+
         info!("SRS downloaded");
     } else {
         info!("SRS already exists at that path");
@@ -806,7 +822,6 @@ pub(crate) fn calibrate(
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
     // we load the model to get the input and output shapes
-    // check if gag already exists
 
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
 
@@ -898,6 +913,18 @@ pub(crate) fn calibrate(
             ..settings.run_args.clone()
         };
 
+        // if unix get a gag
+        #[cfg(unix)]
+        let _r = match Gag::stdout() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+        #[cfg(unix)]
+        let _g = match Gag::stderr() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+
         let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
             Ok(c) => c,
             Err(e) => {
@@ -937,6 +964,12 @@ pub(crate) fn calibrate(
                 continue;
             }
         }
+
+        // drop the gag
+        #[cfg(unix)]
+        drop(_r);
+        #[cfg(unix)]
+        drop(_g);
 
         let min_lookup_range = forward_pass_res
             .get(&key)
@@ -1499,7 +1532,7 @@ pub(crate) fn setup(
     vk_path: PathBuf,
     pk_path: PathBuf,
     witness: Option<PathBuf>,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<String, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
     let mut circuit = GraphCircuit::load(compiled_circuit)?;
@@ -1513,7 +1546,7 @@ pub(crate) fn setup(
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
         &circuit,
         &params,
-        compress_selectors,
+        disable_selector_compression,
     )
     .map_err(Box::<dyn Error>::from)?;
 
@@ -1654,7 +1687,7 @@ pub(crate) fn fuzz(
     data_path: PathBuf,
     transcript: TranscriptType,
     num_runs: usize,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let passed = AtomicBool::new(true);
@@ -1673,7 +1706,7 @@ pub(crate) fn fuzz(
     let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
         &circuit,
         &params,
-        compress_selectors,
+        disable_selector_compression,
     )
     .map_err(Box::<dyn Error>::from)?;
 
@@ -1694,7 +1727,7 @@ pub(crate) fn fuzz(
         let bad_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
             &circuit,
             &new_params,
-            compress_selectors,
+            disable_selector_compression,
         )
         .map_err(|_| ())?;
 
@@ -1772,7 +1805,7 @@ pub(crate) fn fuzz(
         let bad_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
             &circuit,
             &new_params,
-            compress_selectors,
+            disable_selector_compression,
         )
         .map_err(|_| ())?;
 
@@ -1951,7 +1984,7 @@ pub(crate) fn setup_aggregate(
     srs_path: Option<PathBuf>,
     logrows: u32,
     split_proofs: bool,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<String, Box<dyn Error>> {
     // the K used for the aggregation circuit
     let params = load_params_cmd(srs_path, logrows)?;
@@ -1965,7 +1998,7 @@ pub(crate) fn setup_aggregate(
     let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
         &agg_circuit,
         &params,
-        compress_selectors,
+        disable_selector_compression,
     )?;
 
     let agg_vk = agg_pk.get_vk();
@@ -2042,7 +2075,8 @@ pub(crate) fn verify(
     let circuit_settings = GraphSettings::load(&settings_path)?;
 
     let params = if reduced_srs {
-        load_params_cmd(srs_path, circuit_settings.log2_total_instances())?
+        // only need G_0 for the verification with shplonk
+        load_params_cmd(srs_path, 1)?
     } else {
         load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
     };

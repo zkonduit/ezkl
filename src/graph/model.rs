@@ -103,6 +103,10 @@ pub struct DummyPassRes {
     pub num_dynamic_lookups: usize,
     /// dynamic lookup col size
     pub dynamic_lookup_col_coord: usize,
+    /// num shuffles
+    pub num_shuffles: usize,
+    /// shuffle
+    pub shuffle_col_coord: usize,
     /// linear coordinate
     pub linear_coord: usize,
     /// total const size
@@ -546,6 +550,8 @@ impl Model {
             model_input_scales: self.graph.get_input_scales(),
             num_dynamic_lookups: res.num_dynamic_lookups,
             total_dynamic_col_size: res.dynamic_lookup_col_coord,
+            num_shuffles: res.num_shuffles,
+            total_shuffle_col_size: res.shuffle_col_coord,
             total_const_size: res.total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -1019,7 +1025,6 @@ impl Model {
 
         let lookup_range = settings.run_args.lookup_range;
         let logrows = settings.run_args.logrows as usize;
-        let num_dynamic_lookups = settings.num_dynamic_lookups;
         let required_lookups = settings.required_lookups.clone();
         let required_range_checks = settings.required_range_checks.clone();
 
@@ -1041,8 +1046,16 @@ impl Model {
             base_gate.configure_range_check(meta, input, index, range, logrows)?;
         }
 
-        for _ in 0..num_dynamic_lookups {
+        if settings.requires_dynamic_lookup() {
             base_gate.configure_dynamic_lookup(
+                meta,
+                vars.advices[0..3].try_into()?,
+                vars.advices[3..6].try_into()?,
+            )?;
+        }
+
+        if settings.requires_shuffle() {
+            base_gate.configure_shuffles(
                 meta,
                 vars.advices[0..2].try_into()?,
                 vars.advices[3..5].try_into()?,
@@ -1456,6 +1469,8 @@ impl Model {
             max_range_size: region.max_range_size(),
             num_dynamic_lookups: region.dynamic_lookup_index(),
             dynamic_lookup_col_coord: region.dynamic_lookup_col_coord(),
+            num_shuffles: region.shuffle_index(),
+            shuffle_col_coord: region.shuffle_col_coord(),
             outputs,
         };
 

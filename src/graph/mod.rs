@@ -12,6 +12,8 @@ pub mod utilities;
 pub mod vars;
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
+#[cfg(unix)]
+use gag::Gag;
 use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::poly::kzg::commitment::ParamsKZG;
 pub use input::DataSource;
@@ -453,6 +455,10 @@ pub struct GraphSettings {
     pub total_dynamic_col_size: usize,
     /// number of dynamic lookups
     pub num_dynamic_lookups: usize,
+    /// number of shuffles
+    pub num_shuffles: usize,
+    /// total shuffle column size
+    pub total_shuffle_col_size: usize,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
@@ -482,8 +488,14 @@ impl GraphSettings {
             .ceil() as u32
     }
 
-    fn dynamic_lookup_logrows(&self) -> u32 {
-        (self.total_dynamic_col_size as f64).log2().ceil() as u32
+    fn dynamic_lookup_and_shuffle_logrows(&self) -> u32 {
+        (self.total_dynamic_col_size as f64 + self.total_shuffle_col_size as f64)
+            .log2()
+            .ceil() as u32
+    }
+
+    fn dynamic_lookup_and_shuffle_col_size(&self) -> usize {
+        self.total_dynamic_col_size + self.total_shuffle_col_size
     }
 
     fn module_constraint_logrows(&self) -> u32 {
@@ -581,6 +593,11 @@ impl GraphSettings {
     /// requires dynamic lookup  
     pub fn requires_dynamic_lookup(&self) -> bool {
         self.num_dynamic_lookups > 0
+    }
+
+    /// requires dynamic shuffle
+    pub fn requires_shuffle(&self) -> bool {
+        self.num_shuffles > 0
     }
 
     /// any kzg visibility
@@ -1097,7 +1114,7 @@ impl GraphCircuit {
         // These are hard lower limits, we can't overflow instances or modules constraints
         let instance_logrows = self.settings().log2_total_instances();
         let module_constraint_logrows = self.settings().module_constraint_logrows();
-        let dynamic_lookup_logrows = self.settings().dynamic_lookup_logrows();
+        let dynamic_lookup_logrows = self.settings().dynamic_lookup_and_shuffle_logrows();
         min_logrows = std::cmp::max(
             min_logrows,
             // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit
@@ -1181,9 +1198,9 @@ impl GraphCircuit {
         max_range_size: i128,
     ) -> bool {
         // if num cols is too large then the extended k is too large
-        if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS {
-            return false;
-        } else if Self::calc_num_cols(max_range_size, k) > MAX_NUM_LOOKUP_COLS {
+        if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS
+            || Self::calc_num_cols(max_range_size, k) > MAX_NUM_LOOKUP_COLS
+        {
             return false;
         }
 
@@ -1192,7 +1209,26 @@ impl GraphCircuit {
         settings.run_args.logrows = k;
         settings.required_range_checks = vec![(0, max_range_size)];
         let mut cs = ConstraintSystem::default();
+        // if unix get a gag
+        #[cfg(unix)]
+        let _r = match Gag::stdout() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+        #[cfg(unix)]
+        let _g = match Gag::stderr() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+
         Self::configure_with_params(&mut cs, settings);
+
+        // drop the gag
+        #[cfg(unix)]
+        drop(_r);
+        #[cfg(unix)]
+        drop(_g);
+
         #[cfg(feature = "mv-lookup")]
         let cs = cs.chunk_lookups();
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
