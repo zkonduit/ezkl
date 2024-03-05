@@ -132,41 +132,6 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd>(
     Ok(claimed_output)
 }
 
-fn recip_int<F: PrimeField + TensorType + PartialOrd>(
-    config: &BaseConfig<F>,
-    region: &mut RegionCtx<F>,
-    input: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    // assert is boolean
-    let zero_inverse_val = tensor::ops::nonlinearities::zero_recip(1.0)[0];
-    // get values where input is 0
-    let zero_mask = equals_zero(config, region, input)?;
-
-    let zero_mask_minus_one = pairwise(
-        config,
-        region,
-        &[zero_mask.clone(), create_unit_tensor(1)],
-        BaseOp::Sub,
-    )?;
-
-    let zero_inverse_val = pairwise(
-        config,
-        region,
-        &[
-            zero_mask,
-            create_constant_tensor(i128_to_felt(zero_inverse_val), 1),
-        ],
-        BaseOp::Mult,
-    )?;
-
-    pairwise(
-        config,
-        region,
-        &[zero_mask_minus_one, zero_inverse_val],
-        BaseOp::Add,
-    )
-}
-
 /// recip accumulated layout
 pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd>(
     config: &BaseConfig<F>,
@@ -175,10 +140,6 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd>(
     input_scale: F,
     output_scale: F,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    if output_scale == F::ONE || output_scale == F::ZERO {
-        return recip_int(config, region, value);
-    }
-
     let input = value[0].clone();
     let input_dims = input.dims();
 
@@ -234,11 +195,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd>(
 
     let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
 
-    let equal_inverse_mask = equals(
-        config,
-        region,
-        &[claimed_output.clone(), zero_inverse],
-    )?;
+    let equal_inverse_mask = equals(config, region, &[claimed_output.clone(), zero_inverse])?;
 
     // assert the two masks are equal
     enforce_equality(
@@ -249,12 +206,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd>(
 
     let unit_scale = create_constant_tensor(i128_to_felt(range_check_len), 1);
 
-    let unit_mask = pairwise(
-        config,
-        region,
-        &[equal_zero_mask, unit_scale],
-        BaseOp::Mult,
-    )?;
+    let unit_mask = pairwise(config, region, &[equal_zero_mask, unit_scale], BaseOp::Mult)?;
 
     // now add the unit mask to the rebased_div
     let rebased_offset_div = pairwise(config, region, &[rebased_div, unit_mask], BaseOp::Add)?;
@@ -1963,13 +1915,7 @@ pub(crate) fn sumpool<F: PrimeField + TensorType + PartialOrd>(
         .map(|coord| {
             let (b, i) = (coord[0], coord[1]);
             let input = values[0].get_slice(&[b..b + 1, i..i + 1])?;
-            let output = conv(
-                config,
-                region,
-                &[input, kernel.clone()],
-                padding,
-                stride,
-            )?;
+            let output = conv(config, region, &[input, kernel.clone()], padding, stride)?;
             res.push(output);
             Ok(())
         })
