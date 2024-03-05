@@ -149,8 +149,11 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd>(
     // range_check_bracket is min of input_scale * output_scale and 2^F::S - 3
     let range_check_len = std::cmp::min(integer_output_scale, 2_i128.pow(F::S - 4));
 
-    let input_scale_ratio =
-        i128_to_felt(integer_input_scale * integer_output_scale / range_check_len);
+    let input_scale_ratio = if range_check_len > 0 {
+        i128_to_felt(integer_input_scale * integer_output_scale / range_check_len)
+    } else {
+        F::ONE
+    };
 
     let range_check_bracket = range_check_len / 2;
 
