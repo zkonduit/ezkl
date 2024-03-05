@@ -1126,6 +1126,7 @@ pub(crate) fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
         let mut sliced_input = input.get_slice(&slice)?;
         sliced_input.flatten();
 
+        slice[dim] = 0..output_size[dim];
         let mut sliced_index = index.get_slice(&slice)?;
         sliced_index.flatten();
 
@@ -1206,12 +1207,6 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    let mut unit = Tensor::from(vec![F::from(1)].into_iter());
-    unit.set_visibility(&crate::graph::Visibility::Fixed);
-    let unit: ValTensor<F> = unit.try_into()?;
-    region.assign(&config.custom_gates.inputs[1], &unit)?;
-    region.increment(1);
-
     let mut output: Tensor<()> = Tensor::new(None, &output_size)?;
 
     let mut inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
@@ -1231,22 +1226,7 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
 
         let mask = equals(config, region, &[index_valtensor, indices.clone()])?;
 
-        let one_minus_mask = pairwise(config, region, &[unit.clone(), mask.clone()], BaseOp::Sub)?;
-
-        let pairwise_prod = pairwise(config, region, &[src_valtensor, mask], BaseOp::Mult)?;
-        let pairwise_prod_2 = pairwise(
-            config,
-            region,
-            &[sliced_input, one_minus_mask],
-            BaseOp::Mult,
-        )?;
-
-        let res = pairwise(
-            config,
-            region,
-            &[pairwise_prod, pairwise_prod_2],
-            BaseOp::Add,
-        )?;
+        let res = iff(config, region, &[mask, src_valtensor, sliced_input])?;
 
         let input_cartesian_coord = slice.into_iter().multi_cartesian_product();
 
