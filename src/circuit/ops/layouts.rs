@@ -13,6 +13,8 @@ use maybe_rayon::{
     slice::ParallelSliceMut,
 };
 
+use self::tensor::{create_constant_tensor, create_zero_tensor};
+
 use super::{
     chip::{BaseConfig, CircuitError},
     region::RegionCtx,
@@ -21,7 +23,7 @@ use crate::{
     circuit::{ops::base::BaseOp, utils},
     fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{
-        get_broadcasted_shape,
+        create_unit_tensor, get_broadcasted_shape,
         ops::{accumulated, add, mult, sub},
         Tensor, TensorError, ValType,
     },
@@ -81,8 +83,8 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd>(
 
     let range_check_bracket = felt_to_i128(div) / 2;
 
-    let mut divisor = Tensor::from(vec![ValType::Constant(div)].into_iter());
-    divisor.set_visibility(&crate::graph::Visibility::Fixed);
+    let divisor = create_constant_tensor(div, 1);
+
     let divisor = region.assign(&config.custom_gates.inputs[1], &divisor.into())?;
     region.increment(divisor.len());
 
@@ -140,13 +142,10 @@ fn recip_int<F: PrimeField + TensorType + PartialOrd>(
     // get values where input is 0
     let zero_mask = equals_zero(config, region, input)?;
 
-    let one_minus_zero_mask = pairwise(
+    let zero_mask_minus_one = pairwise(
         config,
         region,
-        &[
-            zero_mask.clone(),
-            ValTensor::from(Tensor::from([ValType::Constant(F::ONE)].into_iter())),
-        ],
+        &[zero_mask.clone(), create_unit_tensor(1)],
         BaseOp::Sub,
     )?;
 
@@ -155,9 +154,7 @@ fn recip_int<F: PrimeField + TensorType + PartialOrd>(
         region,
         &[
             zero_mask,
-            ValTensor::from(Tensor::from(
-                [ValType::Constant(i128_to_felt(zero_inverse_val))].into_iter(),
-            )),
+            create_constant_tensor(i128_to_felt(zero_inverse_val), 1),
         ],
         BaseOp::Mult,
     )?;
@@ -165,7 +162,7 @@ fn recip_int<F: PrimeField + TensorType + PartialOrd>(
     pairwise(
         config,
         region,
-        &[one_minus_zero_mask, zero_inverse_val],
+        &[zero_mask_minus_one, zero_inverse_val],
         BaseOp::Add,
     )
 }
@@ -233,8 +230,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd>(
 
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_i128(output_scale) as f64)[0];
-    let zero_inverse =
-        Tensor::from([ValType::Constant(i128_to_felt::<F>(zero_inverse_val))].into_iter());
+    let zero_inverse = create_constant_tensor(i128_to_felt(zero_inverse_val), 1);
 
     let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
 
@@ -251,7 +247,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd>(
         &[equal_zero_mask.clone(), equal_inverse_mask],
     )?;
 
-    let unit_scale = Tensor::from([ValType::Constant(i128_to_felt(range_check_len))].into_iter());
+    let unit_scale = create_constant_tensor(i128_to_felt(range_check_len), 1);
 
     let unit_mask = pairwise(
         config,
@@ -306,7 +302,7 @@ pub(crate) fn dot<F: PrimeField + TensorType + PartialOrd>(
 
     // if empty return a const
     if values[0].is_empty() && values[1].is_empty() {
-        return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
+        return Ok(create_zero_tensor(1));
     }
 
     let start = instant::Instant::now();
@@ -643,11 +639,9 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
     let window_a = assigned_sort.get_slice(&[0..assigned_sort.len() - 1])?;
     let window_b = assigned_sort.get_slice(&[1..assigned_sort.len()])?;
 
-    let is_greater = greater(config, region, &[window_a.clone(), window_b.clone()])?;
+    let is_greater = greater_equal(config, region, &[window_b.clone(), window_a.clone()])?;
 
-    let mut unit =
-        Tensor::from(vec![ValType::Constant(F::from(1)); assigned_sort.len()].into_iter());
-    unit.set_visibility(&crate::graph::Visibility::Fixed);
+    let unit = create_unit_tensor(is_greater.len());
 
     enforce_equality(config, region, &[unit.into(), is_greater])?;
 
@@ -763,9 +757,7 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd>(
 
     let sum = sum(config, region, &[assigned_output.clone()])?;
     // assert sum is 1
-    let mut unit = Tensor::from(vec![F::from(1)].into_iter());
-    unit.set_visibility(&crate::graph::Visibility::Fixed);
-    let unit: ValTensor<F> = unit.try_into()?;
+    let unit = create_unit_tensor(1);
 
     enforce_equality(config, region, &[unit.clone(), sum])?;
 
@@ -808,10 +800,7 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
     let table_len = table_0.len();
 
     // now create a vartensor of constants for the dynamic lookup index
-    let mut table_index = Tensor::from(
-        vec![ValType::Constant(F::from(dynamic_lookup_index as u64)); table_len].into_iter(),
-    );
-    table_index.set_visibility(&crate::graph::Visibility::Fixed);
+    let table_index = create_constant_tensor(F::from(dynamic_lookup_index as u64), table_len);
     let _table_index =
         region.assign_dynamic_lookup(&config.dynamic_lookups.tables[2], &table_index.into())?;
 
@@ -820,10 +809,8 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
     let lookup_len = lookup_0.len();
 
     // now set the lookup index
-    let mut lookup_index = Tensor::from(
-        vec![ValType::Constant(F::from(dynamic_lookup_index as u64)); lookup_len].into_iter(),
-    );
-    lookup_index.set_visibility(&crate::graph::Visibility::Fixed);
+    let lookup_index = create_constant_tensor(F::from(dynamic_lookup_index as u64), lookup_len);
+
     let _lookup_index = region.assign(&config.dynamic_lookups.inputs[2], &lookup_index.into())?;
 
     if !region.is_dummy() {
@@ -883,10 +870,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd>(
     let reference_len = reference.len();
 
     // now create a vartensor of constants for the shuffle index
-    let mut index = Tensor::from(
-        vec![ValType::Constant(F::from(shuffle_index as u64)); reference_len].into_iter(),
-    );
-    index.set_visibility(&crate::graph::Visibility::Fixed);
+    let index = create_constant_tensor(F::from(shuffle_index as u64), reference_len);
     let index = region.assign_shuffle(&config.shuffles.references[1], &index.into())?;
 
     let input = region.assign(&config.shuffles.inputs[0], &input)?;
@@ -1229,7 +1213,6 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
         let res = iff(config, region, &[mask, src_valtensor, sliced_input])?;
 
         let input_cartesian_coord = slice.into_iter().multi_cartesian_product();
-
         let mutable_input_inner = input.get_inner_tensor_mut()?;
 
         for (i, r) in res.get_inner_tensor()?.iter().enumerate() {
@@ -1276,7 +1259,7 @@ pub(crate) fn sum<F: PrimeField + TensorType + PartialOrd>(
 
     // if empty return a const
     if values[0].is_empty() {
-        return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
+        return Ok(create_zero_tensor(1));
     }
 
     let block_width = config.custom_gates.output.num_inner_cols();
@@ -1351,7 +1334,7 @@ pub(crate) fn prod<F: PrimeField + TensorType + PartialOrd>(
     trace!("finding const zero indices took: {:?}", elapsed);
     // if empty return a const
     if !removal_indices.is_empty() {
-        return Ok(Tensor::from([ValType::Constant(F::ZERO)].into_iter()).into());
+        return Ok(create_zero_tensor(1));
     }
 
     let block_width = config.custom_gates.output.num_inner_cols();
@@ -1856,14 +1839,12 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd>(
     )?;
 
     // constant of 1
-    let mut ones = Tensor::from(vec![ValType::Constant(F::from(1))].into_iter());
-    ones.set_visibility(&crate::graph::Visibility::Fixed);
-
+    let ones = create_unit_tensor(1);
     // subtract
     let output = pairwise(
         config,
         region,
-        &[ones.into(), product_values_and_invert],
+        &[ones, product_values_and_invert],
         BaseOp::Sub,
     )?;
 
@@ -1909,14 +1890,8 @@ pub(crate) fn not<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let mask = values[0].clone();
 
-    let unit: ValTensor<F> = Tensor::from(
-        vec![region.assign_constant(&config.custom_gates.inputs[0], F::from(1))?].into_iter(),
-    )
-    .into();
-
-    // to leverage sparsity we don't assign this guy
-    let nil: ValTensor<F> = Tensor::from(vec![ValType::Constant(F::from(0))].into_iter()).into();
-    region.next();
+    let unit = create_unit_tensor(1);
+    let nil = create_zero_tensor(1);
 
     let res = iff(config, region, &[mask, nil, unit])?;
 
@@ -1932,11 +1907,7 @@ pub(crate) fn iff<F: PrimeField + TensorType + PartialOrd>(
     // if mask > 0 then output a else output b
     let (mask, a, b) = (&values[0], &values[1], &values[2]);
 
-    let unit: ValTensor<F> = Tensor::from(
-        vec![region.assign_constant(&config.custom_gates.inputs[0], F::from(1))?].into_iter(),
-    )
-    .into();
-
+    let unit = create_unit_tensor(1);
     // make sure mask is boolean
     let assigned_mask = boolean_identity(config, region, &[mask.clone()], true)?;
 
@@ -1957,14 +1928,8 @@ pub(crate) fn neg<F: PrimeField + TensorType + PartialOrd>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let mut nil = Tensor::from(vec![ValType::Constant(F::from(0))].into_iter());
-    nil.set_visibility(&crate::graph::Visibility::Fixed);
-    pairwise(
-        config,
-        region,
-        &[nil.into(), values[0].clone()],
-        BaseOp::Sub,
-    )
+    let nil = create_zero_tensor(1);
+    pairwise(config, region, &[nil, values[0].clone()], BaseOp::Sub)
 }
 
 /// Sumpool accumulated layout
@@ -1980,11 +1945,10 @@ pub(crate) fn sumpool<F: PrimeField + TensorType + PartialOrd>(
     let batch_size = values[0].dims()[0];
     let image_channels = values[0].dims()[1];
 
-    let unit = region.assign_constant(&config.custom_gates.inputs[1], F::from(1))?;
-    region.next();
-
-    let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit.clone());
+    let mut kernel = create_unit_tensor(kernel_shape.0 * kernel_shape.1);
     kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1])?;
+    let kernel = region.assign(&config.custom_gates.inputs[1], &kernel)?;
+    region.increment(kernel.len());
 
     let cartesian_coord = [(0..batch_size), (0..image_channels)]
         .iter()
@@ -2119,8 +2083,6 @@ pub(crate) fn deconv<
     let (kernel_height, kernel_width) = (kernel.dims()[2], kernel.dims()[3]);
 
     let null_val = ValType::Constant(F::ZERO);
-    // region.assign_constant(&config.custom_gates.inputs[1], F::from(0))?;
-    // region.next();
 
     let mut expanded_image = image.clone();
     expanded_image.intercalate_values(null_val.clone(), stride.0, 2)?;
@@ -2399,8 +2361,7 @@ pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd>(
             continue;
         }
 
-        let multiplier: ValTensor<F> =
-            Tensor::from(vec![ValType::Constant(F::from(scales[i].1 as u64))].into_iter()).into();
+        let multiplier = create_constant_tensor(F::from(scales[i].1 as u64), 1);
         let scaled_input = pairwise(config, region, &[ri.clone(), multiplier], BaseOp::Mult)?;
         rescaled_inputs.push(scaled_input);
     }
@@ -2579,6 +2540,11 @@ pub(crate) fn enforce_equality<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assert of same len
+    if values[0].len() != values[1].len() {
+        return Err(Box::new(TensorError::DimMismatch(
+            "enforce_equality".to_string(),
+        )));
+    }
 
     // assigns the instance to the advice.
     let input = region.assign(&config.custom_gates.inputs[1], &values[0])?;
