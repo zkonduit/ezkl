@@ -387,7 +387,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                 nonaccum_selectors.insert((BaseOp::Add, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::Sub, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::Mult, i, j), meta.selector());
-                nonaccum_selectors.insert((BaseOp::IsZero, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::IsBoolean, i, j), meta.selector());
             }
         }
@@ -431,12 +430,6 @@ impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
                         let output = expected_output[base_op.constraint_idx()].clone();
 
                         vec![(output.clone()) * (output.clone() - Expression::Constant(F::from(1)))]
-                    }
-                    BaseOp::IsZero => {
-                        let expected_output: Tensor<Expression<F>> = output
-                            .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
-                            .expect("non accum: output query failed");
-                        vec![expected_output[base_op.constraint_idx()].clone()]
                     }
                     _ => {
                         let expected_output: Tensor<Expression<F>> = output
