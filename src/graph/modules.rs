@@ -13,10 +13,7 @@ use serde::{Deserialize, Serialize};
 use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
-pub const POSEIDON_LEN_GRAPH: usize = 32;
-
-/// ElGamal number of instances
-pub const ELGAMAL_INSTANCES: usize = 4;
+pub const POSEIDON_LEN_GRAPH: usize = 2;
 /// Poseidon number of instancess
 pub const POSEIDON_INSTANCES: usize = 1;
 
