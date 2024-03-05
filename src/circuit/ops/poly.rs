@@ -60,8 +60,6 @@ pub enum PolyOp {
         len_prod: usize,
     },
     Pow(u32),
-    Pack(u32, u32),
-    GlobalSumPool,
     Concat {
         axis: usize,
     },
@@ -110,8 +108,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Sum { .. } => "SUM".into(),
             PolyOp::Prod { .. } => "PROD".into(),
             PolyOp::Pow(_) => "POW".into(),
-            PolyOp::Pack(_, _) => "PACK".into(),
-            PolyOp::GlobalSumPool => "GLOBALSUMPOOL".into(),
             PolyOp::Conv { .. } => "CONV".into(),
             PolyOp::DeConv { .. } => "DECONV".into(),
             PolyOp::Concat { axis } => format!("CONCAT (axis={})", axis),
@@ -181,13 +177,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 output_padding,
                 stride,
             } => tensor::ops::deconv(&inputs, *padding, *output_padding, *stride),
-            PolyOp::Pack(base, scale) => {
-                if 1 != inputs.len() {
-                    return Err(TensorError::DimMismatch("pack inputs".to_string()));
-                }
-
-                tensor::ops::pack(&inputs[0], F::from(*base as u64), *scale)
-            }
             PolyOp::Pow(u) => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("pow inputs".to_string()));
@@ -206,7 +195,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 }
                 tensor::ops::prod_axes(&inputs[0], axes)
             }
-            PolyOp::GlobalSumPool => unreachable!(),
             PolyOp::Concat { axis } => {
                 tensor::ops::concat(&inputs.iter().collect::<Vec<_>>(), *axis)
             }
@@ -334,10 +322,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 input
             }
             PolyOp::Pow(exp) => layouts::pow(config, region, values[..].try_into()?, *exp)?,
-            PolyOp::Pack(base, scale) => {
-                layouts::pack(config, region, values[..].try_into()?, *base, *scale)?
-            }
-            PolyOp::GlobalSumPool => unreachable!(),
             PolyOp::Concat { axis } => layouts::concat(values[..].try_into()?, axis)?,
             PolyOp::Slice { axis, start, end } => {
                 layouts::slice(config, region, values[..].try_into()?, axis, start, end)?

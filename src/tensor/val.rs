@@ -4,6 +4,37 @@ use super::{
 };
 use halo2_proofs::{arithmetic::Field, plonk::Instance};
 
+pub(crate) fn create_constant_tensor<
+    F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd,
+>(
+    val: F,
+    len: usize,
+) -> ValTensor<F> {
+    let mut constant = Tensor::from(vec![ValType::Constant(val); len].into_iter());
+    constant.set_visibility(&crate::graph::Visibility::Fixed);
+    ValTensor::from(constant)
+}
+
+pub(crate) fn create_unit_tensor<
+    F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd,
+>(
+    len: usize,
+) -> ValTensor<F> {
+    let mut unit = Tensor::from(vec![ValType::Constant(F::ONE); len].into_iter());
+    unit.set_visibility(&crate::graph::Visibility::Fixed);
+    ValTensor::from(unit)
+}
+
+pub(crate) fn create_zero_tensor<
+    F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd,
+>(
+    len: usize,
+) -> ValTensor<F> {
+    let mut zero = Tensor::from(vec![ValType::Constant(F::ZERO); len].into_iter());
+    zero.set_visibility(&crate::graph::Visibility::Fixed);
+    ValTensor::from(zero)
+}
+
 #[derive(Debug, Clone)]
 /// A [ValType] is a wrapper around Halo2 value(s).
 pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd> {
