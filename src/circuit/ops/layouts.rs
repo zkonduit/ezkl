@@ -85,7 +85,7 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd>(
 
     let divisor = create_constant_tensor(div, 1);
 
-    let divisor = region.assign(&config.custom_gates.inputs[1], &divisor.into())?;
+    let divisor = region.assign(&config.custom_gates.inputs[1], &divisor)?;
     region.increment(divisor.len());
 
     let is_assigned = !input.any_unknowns()? && !divisor.any_unknowns()?;
@@ -237,7 +237,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd>(
     let equal_inverse_mask = equals(
         config,
         region,
-        &[claimed_output.clone(), zero_inverse.into()],
+        &[claimed_output.clone(), zero_inverse],
     )?;
 
     // assert the two masks are equal
@@ -252,7 +252,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd>(
     let unit_mask = pairwise(
         config,
         region,
-        &[equal_zero_mask, unit_scale.into()],
+        &[equal_zero_mask, unit_scale],
         BaseOp::Mult,
     )?;
 
@@ -643,7 +643,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd>(
 
     let unit = create_unit_tensor(is_greater.len());
 
-    enforce_equality(config, region, &[unit.into(), is_greater])?;
+    enforce_equality(config, region, &[unit, is_greater])?;
 
     // assert that this is a permutation/shuffle
     shuffles(config, region, &[assigned_sort.clone()], &[input.clone()])?;
@@ -802,7 +802,7 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
     // now create a vartensor of constants for the dynamic lookup index
     let table_index = create_constant_tensor(F::from(dynamic_lookup_index as u64), table_len);
     let _table_index =
-        region.assign_dynamic_lookup(&config.dynamic_lookups.tables[2], &table_index.into())?;
+        region.assign_dynamic_lookup(&config.dynamic_lookups.tables[2], &table_index)?;
 
     let lookup_0 = region.assign(&config.dynamic_lookups.inputs[0], &lookup_0)?;
     let lookup_1 = region.assign(&config.dynamic_lookups.inputs[1], &lookup_1)?;
@@ -811,7 +811,7 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd>(
     // now set the lookup index
     let lookup_index = create_constant_tensor(F::from(dynamic_lookup_index as u64), lookup_len);
 
-    let _lookup_index = region.assign(&config.dynamic_lookups.inputs[2], &lookup_index.into())?;
+    let _lookup_index = region.assign(&config.dynamic_lookups.inputs[2], &lookup_index)?;
 
     if !region.is_dummy() {
         (0..table_len)
@@ -871,7 +871,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd>(
 
     // now create a vartensor of constants for the shuffle index
     let index = create_constant_tensor(F::from(shuffle_index as u64), reference_len);
-    let index = region.assign_shuffle(&config.shuffles.references[1], &index.into())?;
+    let index = region.assign_shuffle(&config.shuffles.references[1], &index)?;
 
     let input = region.assign(&config.shuffles.inputs[0], &input)?;
     region.assign(&config.shuffles.inputs[1], &index)?;
@@ -1966,7 +1966,7 @@ pub(crate) fn sumpool<F: PrimeField + TensorType + PartialOrd>(
             let output = conv(
                 config,
                 region,
-                &[input, kernel.clone().into()],
+                &[input, kernel.clone()],
                 padding,
                 stride,
             )?;
