@@ -969,8 +969,8 @@ pub(crate) fn calibrate(
                 continue;
             }
         }
-      
-         // drop the gag
+
+        // drop the gag
         #[cfg(unix)]
         drop(_r);
         #[cfg(unix)]
@@ -1695,7 +1695,7 @@ pub(crate) fn fuzz(
     let logrows = circuit.settings().run_args.logrows;
 
     info!("setting up tests");
-
+    #[cfg(unix)]
     let _r = Gag::stdout()?;
     let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
 
@@ -1713,6 +1713,7 @@ pub(crate) fn fuzz(
     let public_inputs = circuit.prepare_public_inputs(&data)?;
 
     let strategy = KZGSingleStrategy::new(&params);
+    #[cfg(unix)]
     std::mem::drop(_r);
 
     info!("starting fuzzing");
@@ -1903,6 +1904,7 @@ pub(crate) fn run_fuzz_fn(
     passed: &AtomicBool,
 ) {
     let num_failures = AtomicI64::new(0);
+    #[cfg(unix)]
     let _r = Gag::stdout().unwrap();
 
     let pb = init_bar(num_runs as u64);
@@ -1916,6 +1918,7 @@ pub(crate) fn run_fuzz_fn(
         pb.inc(1);
     });
     pb.finish_with_message("Done.");
+    #[cfg(unix)]
     std::mem::drop(_r);
     info!(
         "num failures: {} out of {}",
