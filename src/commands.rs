@@ -402,9 +402,6 @@ pub enum Commands {
         /// Number of logrows to use for srs. Overrides settings_path if specified.
         #[arg(long, default_value = None)]
         logrows: Option<u32>,
-        /// Check mode for SRS. Verifies downloaded srs is valid. Set to unsafe for speed.
-        #[arg(long, default_value = DEFAULT_CHECKMODE)]
-        check: CheckMode,
     },
     /// Loads model and input and runs mock prover (for testing)
     Mock {

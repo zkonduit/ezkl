@@ -159,8 +159,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             settings_path,
             logrows,
-            check,
-        } => get_srs_cmd(srs_path, settings_path, logrows, check).await,
+        } => get_srs_cmd(srs_path, settings_path, logrows).await,
         Commands::Table { model, args } => table(model, args),
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
@@ -532,7 +531,6 @@ pub(crate) async fn get_srs_cmd(
     srs_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
-    check_mode: CheckMode,
 ) -> Result<String, Box<dyn Error>> {
     // logrows overrides settings
 
@@ -560,21 +558,20 @@ pub(crate) async fn get_srs_cmd(
         let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
         let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
         // check the SRS
-        if matches!(check_mode, CheckMode::SAFE) {
-            #[cfg(not(target_arch = "wasm32"))]
-            let pb = init_spinner();
-            #[cfg(not(target_arch = "wasm32"))]
-            pb.set_message("Validating SRS (this may take a while) ...");
-            ParamsKZG::<Bn256>::read(&mut reader)?;
-            #[cfg(not(target_arch = "wasm32"))]
-            pb.finish_with_message("SRS validated");
-        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let pb = init_spinner();
+        #[cfg(not(target_arch = "wasm32"))]
+        pb.set_message("Validating SRS (this may take a while) ...");
+        let params = ParamsKZG::<Bn256>::read(&mut reader)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        pb.finish_with_message("SRS validated.");
 
+        info!("Saving SRS to disk...");
         let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone()))?;
-
         let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
-        buffer.write_all(reader.get_ref())?;
-        buffer.flush()?;
+        params.write(&mut buffer)?;
+
+        info!("Saved SRS to disk.");
 
         info!("SRS downloaded");
     } else {
