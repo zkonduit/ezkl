@@ -491,23 +491,28 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box<dyn Error>> {
+pub(crate) fn get_file_hash(path: &PathBuf) -> Result<String, Box<dyn Error>> {
     use std::io::Read;
-
-    let path = get_srs_path(logrows, srs_path);
-    let file = std::fs::File::open(path.clone())?;
+    let file = std::fs::File::open(path)?;
+    let mut reader = std::io::BufReader::new(file);
     let mut buffer = vec![];
-    let mut reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
     let bytes_read = reader.read_to_end(&mut buffer)?;
-
     info!(
-        "read {} bytes from SRS file (vector of len = {})",
+        "read {} bytes from file (vector of len = {})",
         bytes_read,
         buffer.len()
     );
 
     let hash = sha256::digest(buffer);
-    info!("SRS hash: {}", hash);
+    info!("file hash: {}", hash);
+
+    Ok(hash)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box<dyn Error>> {
+    let path = get_srs_path(logrows, srs_path);
+    let hash = get_file_hash(&path)?;
 
     let predefined_hash = match { crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) } {
         Some(h) => h,

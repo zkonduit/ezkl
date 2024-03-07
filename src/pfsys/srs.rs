@@ -7,6 +7,8 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
+use crate::execute::get_file_hash;
+
 /// for now we use the urls of the powers of tau ceremony from <https://github.com/han0110/halo2-kzg-srs>
 pub const PUBLIC_SRS_URL: &str =
     "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/perpetual-powers-of-tau-raw-";
@@ -21,6 +23,7 @@ pub fn load_srs<Scheme: CommitmentScheme>(
     path: PathBuf,
 ) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
     info!("loading srs from {:?}", path);
+    get_file_hash(&path)?;
     let f = File::open(path.clone())
         .map_err(|_| format!("failed to load srs at {}", path.display()))?;
     let mut reader = BufReader::new(f);
