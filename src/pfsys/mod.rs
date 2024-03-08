@@ -5,7 +5,6 @@ pub mod evm;
 pub mod srs;
 
 use crate::circuit::CheckMode;
-use crate::execute::get_file_hash;
 use crate::graph::GraphWitness;
 use crate::pfsys::evm::aggregation::PoseidonTranscript;
 use crate::tensor::TensorType;
@@ -730,7 +729,6 @@ where
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("loading verification key from {:?}", path);
-    get_file_hash(&path)?;
     let f =
         File::open(path.clone()).map_err(|_| format!("failed to load vk at {}", path.display()))?;
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
@@ -754,7 +752,6 @@ where
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     info!("loading proving key from {:?}", path);
-    get_file_hash(&path)?;
     let f =
         File::open(path.clone()).map_err(|_| format!("failed to load pk at {}", path.display()))?;
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
@@ -771,7 +768,7 @@ where
 pub fn save_pk<Scheme: CommitmentScheme>(
     path: &PathBuf,
     pk: &ProvingKey<Scheme::Curve>,
-) -> Result<String, io::Error>
+) -> Result<(), io::Error>
 where
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
@@ -782,14 +779,14 @@ where
     pk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
     info!("done saving proving key ✅");
-    get_file_hash(&path).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    Ok(())
 }
 
 /// Saves a [VerifyingKey] to `path`.
 pub fn save_vk<Scheme: CommitmentScheme>(
     path: &PathBuf,
     vk: &VerifyingKey<Scheme::Curve>,
-) -> Result<String, io::Error>
+) -> Result<(), io::Error>
 where
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
@@ -800,20 +797,20 @@ where
     vk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
     writer.flush()?;
     info!("done saving verification key ✅");
-    get_file_hash(&path).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    Ok(())
 }
 
 /// Saves [CommitmentScheme] parameters to `path`.
 pub fn save_params<Scheme: CommitmentScheme>(
     path: &PathBuf,
     params: &'_ Scheme::ParamsVerifier,
-) -> Result<String, io::Error> {
+) -> Result<(), io::Error> {
     info!("saving parameters 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     params.write(&mut writer)?;
     writer.flush()?;
-    get_file_hash(&path).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    Ok(())
 }
 
 /// helper function
