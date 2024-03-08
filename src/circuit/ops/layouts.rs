@@ -1038,7 +1038,7 @@ pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd>(
         .map(|x| ValType::Constant(x))
         .into();
 
-    let mut output = Tensor::new(None, &[iteration_dims.len()])?;
+    let mut output = Tensor::new(None, &[cartesian_coord.len()])?;
 
     let inner_loop_function = |i: usize, region: &mut RegionCtx<'_, F>| {
         let coord = cartesian_coord[i].clone();
