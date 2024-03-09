@@ -2,7 +2,7 @@ use super::TensorError;
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
 use maybe_rayon::{
-    iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
+    iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
     prelude::IntoParallelRefIterator,
 };
 use std::collections::{HashMap, HashSet};
@@ -1326,6 +1326,126 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
     output.reshape(&output_size)?;
 
     Ok(output)
+}
+
+/// Gather ND.
+/// # Arguments
+/// * `input` - Tensor
+/// * `index` - Tensor of indices to gather
+/// * `batch_dims` - Number of batch dimensions
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::gather_nd;
+/// let x = Tensor::<i128>::new(
+///   Some(&[0, 1, 2, 3]),
+/// &[2, 2],
+/// ).unwrap();
+/// let index = Tensor::<usize>::new(
+/// Some(&[0, 0, 1, 1]),
+/// &[2, 2],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 3]), &[2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[1, 0]),
+/// &[2, 1],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 0, 1]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///  Some(&[0, 1, 2, 3, 4, 5, 6, 7]),
+/// &[2, 2, 2],
+/// ).unwrap();
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 1, 1, 0]),
+/// &[2, 2],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 1, 1, 0]),
+/// &[2, 1, 2],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 1, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[1, 0]),
+/// &[2, 1],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 1).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+pub fn gather_nd<T: TensorType + Send + Sync>(
+    input: &Tensor<T>,
+    index: &Tensor<usize>,
+    batch_dims: usize,
+) -> Result<Tensor<T>, TensorError> {
+    // Calculate the output tensor size
+    let index_dims = index.dims().to_vec();
+    let input_dims = input.dims().to_vec();
+
+    let output_size = if index_dims.len() < input_dims.len() || index_dims.last() == Some(&1) {
+        input_dims[..index_dims.len()].to_vec()
+    } else if index_dims == input_dims {
+        input_dims[..input_dims.len() - 1].to_vec()
+    } else {
+        index_dims
+    };
+
+    // cartesian coord over batch dims
+    let mut batch_cartesian_coord = input_dims[0..batch_dims]
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    if batch_cartesian_coord.is_empty() {
+        batch_cartesian_coord.push(vec![]);
+    }
+
+    let outputs = batch_cartesian_coord
+        .par_iter()
+        .map(|batch_coord| {
+            let batch_slice = batch_coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let mut index_slice = index.get_slice(&batch_slice)?;
+            index_slice.reshape(&index.dims()[batch_dims..])?;
+            let mut input_slice = input.get_slice(&batch_slice)?;
+            input_slice.reshape(&input.dims()[batch_dims..])?;
+
+            println!("{:?}", index_slice.dims());
+            println!("{:?}", input_slice.dims());
+
+            let output = (0..index_slice.dims()[0])
+                .map(|d| {
+                    let slice = index_slice
+                        .get_slice(&[d..d + 1])
+                        .unwrap()
+                        .iter()
+                        .map(|x| *x..*x + 1)
+                        .collect::<Vec<_>>();
+                    input_slice.get_slice(&slice).unwrap()
+                })
+                .collect::<Tensor<_>>();
+
+            Ok(output.combine()?)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut outputs = outputs.into_iter().flatten().collect::<Tensor<_>>();
+
+    outputs.reshape(&output_size)?;
+
+    Ok(outputs)
 }
 
 fn axes_op<T: TensorType + Send + Sync>(

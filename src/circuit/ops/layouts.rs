@@ -972,6 +972,31 @@ pub(crate) fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
     Ok((output, linear_index))
 }
 
+/// Gather accumulated layout
+pub(crate) fn gather_nd<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+    batch_dims: usize,
+) -> Result<(ValTensor<F>, ValTensor<F>), Box<dyn Error>> {
+    let (input, index) = (values[0].clone(), values[1].clone());
+
+    assert_eq!(input.dims().len(), index.dims().len());
+
+    // Calculate the output tensor size
+    let output_size = index.dims().to_vec();
+
+    let linear_index = linearize_nd_index(config, region, &[index], input.dims(), batch_dims)?;
+
+    println!("linear index {:?}", linear_index);
+
+    let mut output = select(config, region, &[input, linear_index.clone()])?;
+
+    output.reshape(&output_size)?;
+
+    Ok((output, linear_index))
+}
+
 /// Takes a tensor representing a multi-dimensional index and returns a tensor representing the linearized index.
 /// The linearized index is the index of the element in the flattened tensor.
 /// FOr instance if the dims is [3,5,2], the linearized index of [2] at dim 1 is 2*5 + 3 = 13
@@ -1055,6 +1080,131 @@ pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd>(
     };
 
     region.apply_in_loop(&mut output, inner_loop_function)?;
+
+    Ok(output.into())
+}
+
+/// Takes a tensor representing a nd index and returns a tensor representing the linearized index.
+/// The linearized index is the index of the element in the flattened tensor.
+/// Given data tensor of rank r >= 1, indices tensor of rank q >= 1, and batch_dims integer b, this operator gathers slices of data into an output tensor of rank q + r - indices_shape[-1] - 1 - b.
+/// indices is an q-dimensional integer tensor, best thought of as a (q-1)-dimensional tensor of index-tuples into data, where each element defines a slice of data
+/// batch_dims (denoted as b) is an integer indicating the number of batch dimensions, i.e the leading b number of dimensions of data tensor and indices are representing the batches, and the gather starts from the b+1 dimension.
+/// Some salient points about the inputs’ rank and shape:
+///     r >= 1 and q >= 1 are to be honored. There is no dependency condition to be met between ranks r and q
+///     The first b dimensions of the shape of indices tensor and data tensor must be equal.
+///     b < min(q, r) is to be honored.
+///     The indices_shape[-1] should have a value between 1 (inclusive) and rank r-b (inclusive)
+///     All values in indices are expected to be within bounds [-s, s-1] along axis of size s (i.e.) -data_shape[i] <= indices[...,i] <= data_shape[i] - 1. It is an error if any of the index values are out of bounds.
+// The output is computed as follows:
+/// The output tensor is obtained by mapping each index-tuple in the indices tensor to the corresponding slice of the input data.
+///     If indices_shape[-1] > r-b => error condition
+///     If indices_shape[-1] == r-b, since the rank of indices is q, indices can be thought of as N (q-b-1)-dimensional tensors containing 1-D tensors of dimension r-b, where N is an integer equals to the product of 1 and all the elements in the batch dimensions of the indices_shape.
+///     Let us think of each such r-b ranked tensor as indices_slice. Each scalar value corresponding to data[0:b-1,indices_slice] is filled into the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor (Example 1 below)
+///     If indices_shape[-1] < r-b, since the rank of indices is q, indices can be thought of as N (q-b-1)-dimensional tensor containing 1-D tensors of dimension < r-b. Let us think of each such tensors as indices_slice. Each tensor slice corresponding to data[0:b-1, indices_slice , :] is filled into the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor (Examples 2, 3, 4 and 5 below)
+pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    dims: &[usize],
+    batch_dims: usize,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let mut index = values[0].clone();
+    let index_dims = index.dims().to_vec();
+    // if last_element of index dims is 1 truncate
+    if index_dims.last() == Some(&1) && index_dims.len() == dims.len() {
+        index.reshape(&index_dims[0..index_dims.len() - 1])?;
+    }
+
+    let dim_multiplier: Tensor<usize> = Tensor::new(None, &[dims.len()])?;
+    let dim_multiplier: Tensor<F> = dim_multiplier.par_enum_map(|i, _| {
+        let mut res = 1;
+        for dim in dims.iter().skip(i + 1) {
+            res *= dim;
+        }
+        Ok::<_, region::RegionError>(F::from(res as u64))
+    })?;
+
+    let iteration_dims = index.dims()[0..batch_dims].to_vec();
+
+    let mut batch_cartesian_coord = iteration_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    if batch_cartesian_coord.is_empty() {
+        batch_cartesian_coord.push(vec![]);
+    }
+
+    let index_dim_multiplier: ValTensor<F> = dim_multiplier
+        .get_slice(&[batch_dims..dims.len()])?
+        .map(|x| ValType::Constant(x))
+        .into();
+
+    let mut outer_results = vec![];
+
+    for coord in batch_cartesian_coord {
+        let slice: Vec<Range<usize>> = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+
+        let mut index_val = index.get_slice(&slice)?;
+        index_val.flatten();
+
+        // expand the index to the full dims by iterating over the rest of the dims and inserting constants
+        // eg in the case
+        // batch_dims = 0
+        // data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape    = [2, 2, 2]
+        // indices = [[0,1],[1,0]]                 # indices_shape = [2, 2]
+        // output  = [[2,3],[4,5]]                 # output_shape  = [2, 2]
+        // the index should be expanded to the shape [2,2,2]: 
+        let indices = if index.dims().len() < dims.len() {
+            let missing_dims_start = dims.len() - index.dims().len();
+            let cartesian_coord = dims[missing_dims_start..]
+                .iter()
+                .map(|x| 0..*x)
+                .multi_cartesian_product()
+                .collect::<Vec<_>>();
+            let mut indices = vec![];
+            for coord in cartesian_coord {
+                let coord_valtensor =
+                    Tensor::from(coord.iter().map(|x| ValType::Constant(F::from(*x as u64))));
+                indices.push(index_val.concat(coord_valtensor.into())?);
+            }
+            indices
+        } else {
+            vec![index_val]
+        };
+
+        println!("indices {:?}", indices);
+
+        let mut const_offset = F::ZERO;
+        for i in 0..batch_dims {
+            const_offset += F::from(coord[i] as u64) * dim_multiplier[i];
+        }
+        let const_offset = create_constant_tensor(const_offset, 1);
+
+        let mut results = vec![];
+
+        for index_val in indices {
+            let res = pairwise(
+                config,
+                region,
+                &[index_val, index_dim_multiplier.clone()],
+                BaseOp::Mult,
+            )?;
+
+            let res = pairwise(config, region, &[res, const_offset.clone()], BaseOp::Add)?;
+            results.push(res.get_inner_tensor()?.clone());
+        }
+
+        println!("results {:?}", results);
+
+        let result_tensor = Tensor::from(results.into_iter());
+
+        outer_results.push(result_tensor.combine()?);
+    }
+
+    let output = Tensor::from(outer_results.into_iter());
+    let output = output.combine()?;
 
     Ok(output.into())
 }

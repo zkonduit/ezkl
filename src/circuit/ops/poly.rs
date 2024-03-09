@@ -14,6 +14,10 @@ pub enum PolyOp {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
     },
+    GatherND {
+        batch_dims: usize,
+        indices: Option<Tensor<usize>>,
+    },
     ScatterElements {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
@@ -89,6 +93,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     fn as_string(&self) -> String {
         match &self {
             PolyOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
+            PolyOp::GatherND { batch_dims, .. } => format!("GATHERND (batch_dims={})", batch_dims),
             PolyOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
             PolyOp::MultiBroadcastTo { shape } => format!("MULTIBROADCASTTO (shape={:?})", shape),
             PolyOp::MoveAxis { .. } => "MOVEAXIS".into(),
@@ -213,6 +218,18 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 };
                 tensor::ops::gather_elements(&x, &y, *dim)
             }
+            PolyOp::GatherND {
+                indices,
+                batch_dims,
+            } => {
+                let x = inputs[0].clone();
+                let y = if let Some(idx) = indices {
+                    idx.clone()
+                } else {
+                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
+                };
+                tensor::ops::gather_nd(&x, &y, *batch_dims)
+            }
             PolyOp::ScatterElements { dim, constant_idx } => {
                 let x = inputs[0].clone();
 
@@ -277,6 +294,16 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                     tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
                 } else {
                     layouts::gather_elements(config, region, values[..].try_into()?, *dim)?.0
+                }
+            }
+            PolyOp::GatherND {
+                batch_dims,
+                indices,
+            } => {
+                if let Some(idx) = indices {
+                    tensor::ops::gather_nd(values[0].get_inner_tensor()?, idx, *batch_dims)?.into()
+                } else {
+                    layouts::gather_nd(config, region, values[..].try_into()?, *batch_dims)?.0
                 }
             }
             PolyOp::ScatterElements { dim, constant_idx } => {

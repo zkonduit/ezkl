@@ -245,6 +245,8 @@ pub fn new_op_from_onnx(
     symbol_values: &SymbolValues,
     rebase_frac_zero_constants: bool,
 ) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
+    use tract_onnx::tract_hir::ops::array::GatherNd;
+
     use crate::circuit::InputType;
 
     let input_scales = inputs
@@ -467,6 +469,44 @@ pub fn new_op_from_onnx(
 
             // Extract the max value
         }
+
+        "GatherNd" => {
+            if inputs.len() != 2 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "gather nd".to_string(),
+                )));
+            };
+            let op = load_op::<GatherNd>(node.op(), idx, node.op().name().to_string())?;
+            let batch_dims = op.batch_dims;
+
+            let mut op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::GatherND {
+                batch_dims,
+                indices: None,
+            });
+
+            // if param_visibility.is_public() {
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(inputs.len() - 1);
+                op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::GatherND {
+                    batch_dims,
+                    indices: Some(c.raw_values.map(|x| x as usize)),
+                })
+            }
+            // }
+
+            if inputs[1].opkind().is_input() {
+                inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
+                    scale: 0,
+                    datum_type: InputType::TDim,
+                }));
+                inputs[1].bump_scale(0);
+            }
+
+            op
+        }
+
         "GatherElements" => {
             if inputs.len() != 2 {
                 return Err(Box::new(GraphError::InvalidDims(
