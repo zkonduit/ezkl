@@ -494,7 +494,12 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             }
             _ => return Err(Box::new(TensorError::WrongMethod)),
         };
-        Ok(integer_evals.into_iter().into())
+        let mut tensor: Tensor<i128> = integer_evals.into_iter().into();
+        match tensor.reshape(self.dims()) {
+            _ => {}
+        };
+
+        Ok(tensor)
     }
 
     /// Calls `pad_to_zero_rem` on the inner tensor.

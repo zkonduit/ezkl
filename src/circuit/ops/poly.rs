@@ -276,7 +276,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 if let Some(idx) = constant_idx {
                     tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
                 } else {
-                    layouts::gather_elements(config, region, values[..].try_into()?, *dim)?
+                    layouts::gather_elements(config, region, values[..].try_into()?, *dim)?.0
                 }
             }
             PolyOp::ScatterElements { dim, constant_idx } => {

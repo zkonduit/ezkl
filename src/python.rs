@@ -484,7 +484,6 @@ fn get_srs(
             srs_path,
             settings_path,
             logrows,
-            CheckMode::SAFE,
         ))
         .map_err(|e| {
             let err_str = format!("Failed to get srs: {}", e);

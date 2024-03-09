@@ -159,8 +159,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             settings_path,
             logrows,
-            check,
-        } => get_srs_cmd(srs_path, settings_path, logrows, check).await,
+        } => get_srs_cmd(srs_path, settings_path, logrows).await,
         Commands::Table { model, args } => table(model, args),
         #[cfg(feature = "render")]
         Commands::RenderCircuit {
@@ -492,23 +491,28 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box<dyn Error>> {
+pub(crate) fn get_file_hash(path: &PathBuf) -> Result<String, Box<dyn Error>> {
     use std::io::Read;
-
-    let path = get_srs_path(logrows, srs_path);
-    let file = std::fs::File::open(path.clone())?;
+    let file = std::fs::File::open(path)?;
+    let mut reader = std::io::BufReader::new(file);
     let mut buffer = vec![];
-    let mut reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
     let bytes_read = reader.read_to_end(&mut buffer)?;
-
     info!(
-        "read {} bytes from SRS file (vector of len = {})",
+        "read {} bytes from file (vector of len = {})",
         bytes_read,
         buffer.len()
     );
 
     let hash = sha256::digest(buffer);
-    info!("SRS hash: {}", hash);
+    info!("file hash: {}", hash);
+
+    Ok(hash)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box<dyn Error>> {
+    let path = get_srs_path(logrows, srs_path);
+    let hash = get_file_hash(&path)?;
 
     let predefined_hash = match { crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) } {
         Some(h) => h,
@@ -532,7 +536,6 @@ pub(crate) async fn get_srs_cmd(
     srs_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
-    check_mode: CheckMode,
 ) -> Result<String, Box<dyn Error>> {
     // logrows overrides settings
 
@@ -560,21 +563,20 @@ pub(crate) async fn get_srs_cmd(
         let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
         let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
         // check the SRS
-        if matches!(check_mode, CheckMode::SAFE) {
-            #[cfg(not(target_arch = "wasm32"))]
-            let pb = init_spinner();
-            #[cfg(not(target_arch = "wasm32"))]
-            pb.set_message("Validating SRS (this may take a while) ...");
-            ParamsKZG::<Bn256>::read(&mut reader)?;
-            #[cfg(not(target_arch = "wasm32"))]
-            pb.finish_with_message("SRS validated");
-        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let pb = init_spinner();
+        #[cfg(not(target_arch = "wasm32"))]
+        pb.set_message("Validating SRS (this may take a while) ...");
+        let params = ParamsKZG::<Bn256>::read(&mut reader)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        pb.finish_with_message("SRS validated.");
 
+        info!("Saving SRS to disk...");
         let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone()))?;
-
         let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
-        buffer.write_all(reader.get_ref())?;
-        buffer.flush()?;
+        params.write(&mut buffer)?;
+
+        info!("Saved SRS to disk.");
 
         info!("SRS downloaded");
     } else {
