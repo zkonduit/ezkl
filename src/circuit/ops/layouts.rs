@@ -928,25 +928,10 @@ pub(crate) fn gather<F: PrimeField + TensorType + PartialOrd>(
     values: &[ValTensor<F>; 2],
     dim: usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
-    let (mut input, mut index_clone) = (values[0].clone(), values[1].clone());
+    let (input, mut index_clone) = (values[0].clone(), values[1].clone());
     index_clone.flatten();
     if index_clone.is_singleton() {
         index_clone.reshape(&[1])?;
-    }
-
-    let mut assigned_len = vec![];
-    if !input.all_prev_assigned() {
-        input = region.assign(&config.custom_gates.inputs[0], &input)?;
-        assigned_len.push(input.len());
-    }
-    if !index_clone.all_prev_assigned() {
-        index_clone = region.assign(&config.custom_gates.inputs[1], &index_clone)?;
-        assigned_len.push(index_clone.len());
-    }
-
-    if !assigned_len.is_empty() {
-        // safe to unwrap since we've just checked it has at least one element
-        region.increment(*assigned_len.iter().max().unwrap());
     }
 
     // Calculate the output tensor size
@@ -955,7 +940,7 @@ pub(crate) fn gather<F: PrimeField + TensorType + PartialOrd>(
     output_size[dim] = index_clone.dims()[0];
 
     let linear_index =
-        linearize_element_index(config, region, &[index_clone], &input_dims, dim, true)?;
+        linearize_element_index(config, region, &[index_clone], input_dims, dim, true)?;
 
     let mut output = select(config, region, &[input, linear_index])?;
 
@@ -978,8 +963,7 @@ pub(crate) fn gather_elements<F: PrimeField + TensorType + PartialOrd>(
     // Calculate the output tensor size
     let output_size = index.dims().to_vec();
 
-    let linear_index =
-        linearize_element_index(config, region, &[index], &input.dims(), dim, false)?;
+    let linear_index = linearize_element_index(config, region, &[index], input.dims(), dim, false)?;
 
     let mut output = select(config, region, &[input, linear_index.clone()])?;
 
@@ -1012,8 +996,8 @@ pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd>(
 
     let dim_multiplier: Tensor<F> = dim_multiplier.par_enum_map(|i, _| {
         let mut res = 1;
-        for j in (i + 1)..dims.len() {
-            res *= dims[j];
+        for dim in dims.iter().skip(i + 1) {
+            res *= dim;
         }
 
         Ok::<_, region::RegionError>(F::from(res as u64))
@@ -1082,11 +1066,8 @@ pub(crate) fn get_missing_set_elements<F: PrimeField + TensorType + PartialOrd>(
     ordered: bool,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     let (mut input, fullset) = (values[0].clone(), values[1].clone());
+    let set_len = fullset.len();
     input.flatten();
-
-    if !input.all_prev_assigned() {
-        input = region.assign(&config.custom_gates.inputs[0], &input)?;
-    }
 
     let is_assigned = !input.any_unknowns()? && !fullset.any_unknowns()?;
 
@@ -1101,6 +1082,13 @@ pub(crate) fn get_missing_set_elements<F: PrimeField + TensorType + PartialOrd>(
                 fullset_evals.remove(pos);
             }
         }
+
+        // if fullset + input is the same length, then input is a subset of fullset, else randomly delete elements, this is a patch for
+        // the fact that we can't have a tensor of unknowns when using constant during gen-settings
+        if fullset_evals.len() != set_len - input.len() {
+            fullset_evals.truncate(set_len - input.len());
+        }
+
         fullset_evals
             .iter()
             .map(|x| Value::known(i128_to_felt(*x)))
@@ -1176,7 +1164,7 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
     // assign the claimed output
     let mut claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
     region.increment(claimed_output.len());
-    claimed_output.reshape(&input.dims())?;
+    claimed_output.reshape(input.dims())?;
 
     // scatter elements is the inverse of gather elements
     let (gather_src, linear_index) = gather_elements(
@@ -1185,6 +1173,7 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
         &[claimed_output.clone(), index.clone()],
         dim,
     )?;
+
     // assert this is equal to the src
     enforce_equality(config, region, &[gather_src, src])?;
 
@@ -1212,7 +1201,7 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
         &[full_index_set, input.clone()],
     )?;
 
-    claimed_output.reshape(&input_dims)?;
+    claimed_output.reshape(input_dims)?;
 
     Ok(claimed_output)
 }
