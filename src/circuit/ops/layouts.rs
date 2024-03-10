@@ -1155,7 +1155,7 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd>(
         // data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape    = [2, 2, 2]
         // indices = [[0,1],[1,0]]                 # indices_shape = [2, 2]
         // output  = [[2,3],[4,5]]                 # output_shape  = [2, 2]
-        // the index should be expanded to the shape [2,2,2]: 
+        // the index should be expanded to the shape [2,2,3]: [[0,1,0],[0,1,1],[1,0,0],[1,0,1]]
         let indices = if index.dims().len() < dims.len() {
             let missing_dims_start = dims.len() - index.dims().len();
             let cartesian_coord = dims[missing_dims_start..]
