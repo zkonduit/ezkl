@@ -1393,6 +1393,22 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 1, 0, 0, 1, 1, 1, 0]),
+/// &[2, 2, 2],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 0, 1, 6, 7, 4, 5]), &[2, 2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 1, 0, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 7]), &[2]).unwrap();
+/// assert_eq!(result, expected);
+///
 pub fn gather_nd<T: TensorType + Send + Sync>(
     input: &Tensor<T>,
     index: &Tensor<usize>,
@@ -1401,36 +1417,33 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
     // Calculate the output tensor size
     let index_dims = index.dims().to_vec();
     let input_dims = input.dims().to_vec();
+    let last_value = index_dims
+        .last()
+        .ok_or(TensorError::DimMismatch("gather_nd".to_string()))?;
+    if index_dims.last() > Some(&(input_dims.len() - batch_dims)) {
+        return Err(TensorError::DimMismatch("gather_nd".to_string()));
+    }
 
-    println!("----------- {:?} {:?}", input.dims(), index.dims());
-
-    let output_size = 
+    let output_size =
     // If indices_shape[-1] == r-b, since the rank of indices is q,
     // indices can be thought of as N (q-b-1)-dimensional tensors containing 1-D tensors of dimension r-b,
     // where N is an integer equals to the product of 1 and all the elements in the batch dimensions of the indices_shape.
     // Let us think of each such r-b ranked tensor as indices_slice.
     // Each scalar value corresponding to data[0:b-1,indices_slice] is filled into
     // the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor
-    if index_dims.last() == Some(&(input_dims.len() - batch_dims)) {
-        input_dims[..input_dims.len() - 1].to_vec()
-    // if indices_shape[-1] < r-b, since the rank of indices is q, indices can be thought of as N (q-b-1)-dimensional tensor containing 1-D tensors of dimension < r-b.
+     // if indices_shape[-1] < r-b, since the rank of indices is q, indices can be thought of as N (q-b-1)-dimensional tensor containing 1-D tensors of dimension < r-b.
     // Let us think of each such tensors as indices_slice.
     // Each tensor slice corresponding to data[0:b-1, indices_slice , :] is filled into the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor
-    } else if index_dims.last() < Some(&(input_dims.len() - batch_dims)) {
-        let last_value = index_dims.last().unwrap();
+    {
         let output_rank = input_dims.len() + index_dims.len() - 1 - batch_dims - last_value;
 
         let mut dims = index_dims[..index_dims.len() - 1].to_vec();
         let input_offset = batch_dims + last_value;
         dims.extend(input_dims[input_offset..input_dims.len()].to_vec());
 
-        println!("{:?} {:?}", dims, output_rank);
-
         assert_eq!(output_rank, dims.len());
         dims
 
-    } else {
-        return Err(TensorError::DimMismatch("gather_nd".to_string()));
     };
 
     // cartesian coord over batch dims
@@ -1453,9 +1466,6 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
             let mut input_slice = input.get_slice(&batch_slice)?;
             input_slice.reshape(&input.dims()[batch_dims..])?;
 
-            println!("{:?}", index_slice.dims());
-            println!("{:?}", input_slice.dims());
-
             let mut inner_cartesian_coord = index_slice.dims()[0..index_slice.dims().len() - 1]
                 .iter()
                 .map(|x| 0..*x)
@@ -1469,14 +1479,11 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
             let output = inner_cartesian_coord
                 .iter()
                 .map(|coord| {
-                    println!("inner coord {:?}", coord);
                     let slice = coord
                         .iter()
                         .map(|x| *x..*x + 1)
                         .chain(batch_coord.iter().map(|x| *x..*x + 1))
                         .collect::<Vec<_>>();
-
-                    println!("input slice {:?}", input_slice.dims());
 
                     let index_slice = index_slice
                         .get_slice(&slice)
@@ -1485,21 +1492,15 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
                         .map(|x| *x..*x + 1)
                         .collect::<Vec<_>>();
 
-                    println!("index slice {:?}", index_slice);
-
                     input_slice.get_slice(&index_slice).unwrap()
                 })
                 .collect::<Tensor<_>>();
 
-            println!("output {:?}", output.dims());
-
-            Ok(output.combine()?)
+            output.combine()
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     let mut outputs = outputs.into_iter().flatten().collect::<Tensor<_>>();
-
-    println!("outputs {}", outputs.show());
 
     outputs.reshape(&output_size)?;
 
