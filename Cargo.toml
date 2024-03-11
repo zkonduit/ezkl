@@ -1,5 +1,3 @@
-cargo-features = ["profile-rustflags"]
-
 [package]
 name = "ezkl"
 version = "0.0.0"
@@ -165,7 +163,4 @@ no-banner = []
 
 # icicle patch to 0.1.0 if feature icicle is enabled
 [patch.'https://github.com/ingonyama-zk/icicle']
-icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix"}
-
-[profile.release]
-rustflags = [ "-C", "relocation-model=pic" ]
+icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=3884ad6", rev="3884ad64112b4588f7071e598685ce1817eaef7e", package = "icicle" }
