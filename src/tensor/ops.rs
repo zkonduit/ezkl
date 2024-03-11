@@ -1420,7 +1420,7 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
     let last_value = index_dims
         .last()
         .ok_or(TensorError::DimMismatch("gather_nd".to_string()))?;
-    if index_dims.last() > Some(&(input_dims.len() - batch_dims)) {
+    if last_value > &(input_dims.len() - batch_dims) {
         return Err(TensorError::DimMismatch("gather_nd".to_string()));
     }
 
@@ -1505,6 +1505,137 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
     outputs.reshape(&output_size)?;
 
     Ok(outputs)
+}
+
+/// Scatter ND.
+/// This operator is the inverse of GatherND.
+/// # Arguments
+/// * `input` - Tensor
+/// * `index` - Tensor of indices to scatter
+/// * `src` - Tensor of src
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::scatter_nd;
+/// let x = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[8],
+/// ).unwrap();
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[4, 3, 1, 7]),
+/// &[4, 1],
+/// ).unwrap();
+/// let src = Tensor::<i128>::new(
+/// Some(&[9, 10, 11, 12]),
+/// &[4],
+/// ).unwrap();
+/// let result = scatter_nd(&x, &index, &src).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 11, 3, 10, 9, 6, 7, 12]), &[8]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
+///         1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
+///         8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8,
+///         8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[4, 4, 4],
+/// ).unwrap();
+///
+/// let index = Tensor::<usize>::new(
+///   Some(&[0, 2]),
+/// &[2, 1],
+/// ).unwrap();
+///
+/// let src = Tensor::<i128>::new(
+///  Some(&[5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8,
+///         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
+///   ]),
+/// &[2, 4, 4],
+/// ).unwrap();
+///
+/// let result = scatter_nd(&x, &index, &src).unwrap();
+///
+/// let expected = Tensor::<i128>::new(
+///  Some(&[5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8,
+///         1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
+///         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
+///         8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[4, 4, 4],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[2, 4],
+/// ).unwrap();
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[0, 1]),
+/// &[2, 1],
+/// ).unwrap();
+/// let src = Tensor::<i128>::new(
+/// Some(&[9, 10]),
+/// &[2],
+/// ).unwrap();
+/// let result = scatter_nd(&x, &index, &src).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[9, 9, 9, 9, 10, 10, 10, 10]), &[2, 4]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[2, 4],
+/// ).unwrap();
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[0, 1]),
+/// &[1, 1, 2],
+/// ).unwrap();
+/// let src = Tensor::<i128>::new(
+/// Some(&[9]),
+/// &[1, 1],
+/// ).unwrap();
+/// let result = scatter_nd(&x, &index, &src).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 9, 3, 4, 5, 6, 7, 8]), &[2, 4]).unwrap();
+/// assert_eq!(result, expected);
+/// ````
+///
+pub fn scatter_nd<T: TensorType + Send + Sync>(
+    input: &Tensor<T>,
+    index: &Tensor<usize>,
+    src: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    // Calculate the output tensor size
+    let index_dims = index.dims().to_vec();
+    let input_dims = input.dims().to_vec();
+    let last_value = index_dims
+        .last()
+        .ok_or(TensorError::DimMismatch("scatter_nd".to_string()))?;
+    if last_value > &input_dims.len() {
+        return Err(TensorError::DimMismatch("scatter_nd".to_string()));
+    }
+
+    let mut output = input.clone();
+
+    let cartesian_coord = index_dims[0..index_dims.len() - 1]
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    cartesian_coord
+        .iter()
+        .map(|coord| {
+            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let index_val = index.get_slice(&slice)?;
+            let index_slice = index_val.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let src_val = src.get_slice(&slice)?;
+            output.set_slice(&index_slice, &src_val)?;
+            Ok(())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(output)
 }
 
 fn axes_op<T: TensorType + Send + Sync>(

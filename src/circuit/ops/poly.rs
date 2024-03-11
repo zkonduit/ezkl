@@ -22,6 +22,9 @@ pub enum PolyOp {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
     },
+    ScatterND {
+        constant_idx: Option<Tensor<usize>>,
+    },
     MultiBroadcastTo {
         shape: Vec<usize>,
     },
@@ -95,6 +98,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
             PolyOp::GatherND { batch_dims, .. } => format!("GATHERND (batch_dims={})", batch_dims),
             PolyOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
+            PolyOp::ScatterND { .. } => "SCATTERND".into(),
             PolyOp::MultiBroadcastTo { shape } => format!("MULTIBROADCASTTO (shape={:?})", shape),
             PolyOp::MoveAxis { .. } => "MOVEAXIS".into(),
             PolyOp::Downsample { .. } => "DOWNSAMPLE".into(),
@@ -246,6 +250,21 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 };
                 tensor::ops::scatter(&x, &idx, &src, *dim)
             }
+
+            PolyOp::ScatterND { constant_idx } => {
+                let x = inputs[0].clone();
+                let idx = if let Some(idx) = constant_idx {
+                    idx.clone()
+                } else {
+                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
+                };
+                let src = if constant_idx.is_some() {
+                    inputs[1].clone()
+                } else {
+                    inputs[2].clone()
+                };
+                tensor::ops::scatter_nd(&x, &idx, &src)
+            }
         }?;
 
         Ok(ForwardResult { output: res })
@@ -317,6 +336,18 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                     .into()
                 } else {
                     layouts::scatter_elements(config, region, values[..].try_into()?, *dim)?
+                }
+            }
+            PolyOp::ScatterND { constant_idx } => {
+                if let Some(idx) = constant_idx {
+                    tensor::ops::scatter_nd(
+                        values[0].get_inner_tensor()?,
+                        idx,
+                        values[1].get_inner_tensor()?,
+                    )?
+                    .into()
+                } else {
+                    layouts::scatter_nd(config, region, values[..].try_into()?)?
                 }
             }
             PolyOp::DeConv {
@@ -416,7 +447,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             vec![1, 2]
         } else if matches!(self, PolyOp::Concat { .. }) {
             (0..100).collect()
-        } else if matches!(self, PolyOp::ScatterElements { .. }) {
+        } else if matches!(self, PolyOp::ScatterElements { .. })
+            | matches!(self, PolyOp::ScatterND { .. })
+        {
             vec![0, 2]
         } else {
             vec![]

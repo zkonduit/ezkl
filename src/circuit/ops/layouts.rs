@@ -981,8 +981,6 @@ pub(crate) fn gather_nd<F: PrimeField + TensorType + PartialOrd>(
 ) -> Result<(ValTensor<F>, ValTensor<F>), Box<dyn Error>> {
     let (input, index) = (values[0].clone(), values[1].clone());
 
-    assert_eq!(input.dims().len(), index.dims().len());
-
     let index_dims = index.dims().to_vec();
     let input_dims = input.dims().to_vec();
     let last_value = index_dims
@@ -1233,20 +1231,35 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd>(
         for i in 0..batch_dims {
             const_offset += F::from(coord[i] as u64) * dim_multiplier[i];
         }
+
+
         let const_offset = create_constant_tensor(const_offset, 1);
 
         let mut results = vec![];
 
         for index_val in indices {
+            let mut index_val = index_val.clone();
+            index_val.flatten();
             let res = pairwise(
                 config,
                 region,
-                &[index_val, index_dim_multiplier.clone()],
+                &[index_val.clone(), index_dim_multiplier.clone()],
                 BaseOp::Mult,
             )?;
             let res = res.concat(const_offset.clone())?;
             let res = sum(config, region, &[res])?;
             results.push(res.get_inner_tensor()?.clone());
+            // assert than res is less than the product of the dims
+            assert!(
+                res.get_int_evals()?
+                    .iter()
+                    .all(|x| *x < dims.iter().product::<usize>() as i128),
+                "res is greater than the product of the dims {} (coord={}, index_dim_multiplier={}, res={})",
+                dims.iter().product::<usize>(),
+                index_val.show(), 
+                index_dim_multiplier.show(),
+                res.show()
+            );
         }
 
         let result_tensor = Tensor::from(results.into_iter());
@@ -1334,8 +1347,6 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
 
     assert_eq!(input.dims().len(), index.dims().len());
 
-    let input_dims = input.dims();
-
     if !index.all_prev_assigned() {
         index = region.assign(&config.custom_gates.inputs[1], &index)?;
         region.increment(index.len());
@@ -1402,7 +1413,86 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd>(
         &[full_index_set, input.clone()],
     )?;
 
-    claimed_output.reshape(input_dims)?;
+    claimed_output.reshape(input.dims())?;
+
+    Ok(claimed_output)
+}
+
+/// Scatter Nd
+pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 3],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let (input, mut index, src) = (values[0].clone(), values[1].clone(), values[2].clone());
+
+    if !index.all_prev_assigned() {
+        index = region.assign(&config.custom_gates.inputs[1], &index)?;
+        region.increment(index.len());
+    }
+
+    let is_assigned = !input.any_unknowns()? && !index.any_unknowns()? && !src.any_unknowns()?;
+
+    let claimed_output: ValTensor<F> = if is_assigned {
+        let input_inner = input.get_int_evals()?;
+        let index_inner = index.get_int_evals()?.map(|x| x as usize);
+        let src_inner = src.get_int_evals()?;
+
+        let res = tensor::ops::scatter_nd(&input_inner, &index_inner, &src_inner)?;
+
+        res.iter()
+            .map(|x| Value::known(i128_to_felt(*x)))
+            .collect::<Tensor<Value<F>>>()
+            .into()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); input.len()]),
+            &[input.len()],
+        )?
+        .into()
+    };
+
+    // assign the claimed output
+    let mut claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
+    region.increment(claimed_output.len());
+    claimed_output.reshape(input.dims())?;
+
+
+    // scatter elements is the inverse of gather elements
+    let (gather_src, linear_index) =
+        gather_nd(config, region, &[claimed_output.clone(), index.clone()], 0)?;
+
+    // assert this is equal to the src
+    enforce_equality(config, region, &[gather_src, src])?;
+
+    let full_index_set: ValTensor<F> =
+        Tensor::from((0..input.len() as u64).map(|x| ValType::Constant(F::from(x)))).into();
+
+    let input_indices = get_missing_set_elements(
+        config,
+        region,
+        &[linear_index, full_index_set.clone()],
+        true,
+    )?;
+
+    // now that it is flattened we can gather over elements on dim 0
+    claimed_output.flatten();
+    let (gather_input, _) = gather_elements(
+        config,
+        region,
+        &[claimed_output.clone(), input_indices.clone()],
+        0,
+    )?;
+
+    // assert this is a subset of the input
+    dynamic_lookup(
+        config,
+        region,
+        &[input_indices, gather_input],
+        &[full_index_set, input.clone()],
+    )?;
+
+    claimed_output.reshape(input.dims())?;
 
     Ok(claimed_output)
 }

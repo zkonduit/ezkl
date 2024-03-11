@@ -23,7 +23,10 @@ use std::sync::Arc;
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_core::ops::{
-    array::{Gather, GatherElements, MultiBroadcastTo, OneHot, ScatterElements, Slice, Topk},
+    array::{
+        Gather, GatherElements, GatherNd, MultiBroadcastTo, OneHot, ScatterElements, ScatterNd,
+        Slice, Topk,
+    },
     change_axes::AxisOp,
     cnn::{Conv, Deconv},
     einsum::EinSum,
@@ -245,8 +248,6 @@ pub fn new_op_from_onnx(
     symbol_values: &SymbolValues,
     rebase_frac_zero_constants: bool,
 ) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
-    use tract_onnx::tract_hir::ops::array::GatherNd;
-
     use crate::circuit::InputType;
 
     let input_scales = inputs
@@ -468,6 +469,40 @@ pub fn new_op_from_onnx(
             op
 
             // Extract the max value
+        }
+        "ScatterNd" => {
+            if inputs.len() != 3 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "scatter nd".to_string(),
+                )));
+            };
+            // just verify it deserializes correctly
+            let _op = load_op::<ScatterNd>(node.op(), idx, node.op().name().to_string())?;
+
+            let mut op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::ScatterND {
+                constant_idx: None,
+            });
+
+            // if param_visibility.is_public() {
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(inputs.len() - 1);
+                op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::ScatterND {
+                    constant_idx: Some(c.raw_values.map(|x| x as usize)),
+                })
+            }
+            // }
+
+            if inputs[1].opkind().is_input() {
+                inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
+                    scale: 0,
+                    datum_type: InputType::TDim,
+                }));
+                inputs[1].bump_scale(0);
+            }
+
+            op
         }
 
         "GatherNd" => {
