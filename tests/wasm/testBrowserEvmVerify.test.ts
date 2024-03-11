@@ -1,4 +1,4 @@
-import localEVMVerify, { Hardfork } from '@ezkljs/verify'
+import localEVMVerify from '../../in-browser-evm-verifier/src/index'
 import { serialize, deserialize } from '@ezkljs/engine/nodejs'
 import { compileContracts } from './utils'
 import * as fs from 'fs'
@@ -32,6 +32,8 @@ describe('localEVMVerify', () => {
 
     const result = await localEVMVerify(proofFileBuffer, bytecode)
 
+    console.log('result', result)
+
     expect(result).toBe(true)
   })
 
@@ -39,11 +41,14 @@ describe('localEVMVerify', () => {
     let result: boolean = true
     console.log(proof.proof)
     try {
-      let index = Math.floor(Math.random() * (proof.proof.length - 2)) + 2
-      let number = (proof.proof[index] + 1) % 16
+      let index = Math.round((Math.random() * (proof.proof.length))) % proof.proof.length
+      console.log('index', index)
+      console.log('index', proof.proof[index])
+      let number = (proof.proof[index] + 1) % 256
       console.log('index', index)
       console.log('new number', number)
       proof.proof[index] = number
+      console.log('index post', proof.proof[index])
       const proofModified = serialize(proof)
       result = await localEVMVerify(proofModified, bytecode)
     } catch (error) {

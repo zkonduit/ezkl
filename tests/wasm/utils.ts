@@ -55,7 +55,7 @@ export function getSolcInput(path: string, example: string) {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 1,
       },
       evmVersion: 'london',
       outputSelection: {
