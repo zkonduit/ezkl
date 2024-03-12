@@ -673,6 +673,68 @@ impl<T: Clone + TensorType> Tensor<T> {
         Tensor::new(Some(&res), &dims)
     }
 
+    /// Set a slice of the Tensor.
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
+    /// let b = Tensor::<i32>::new(Some(&[1, 2, 3, 1, 2, 3]), &[2, 3]).unwrap();
+    /// a.set_slice(&[1..2], &Tensor::<i32>::new(Some(&[1, 2, 3]), &[1, 3]).unwrap()).unwrap();
+    /// assert_eq!(a, b);
+    /// ```
+    pub fn set_slice(
+        &mut self,
+        indices: &[Range<usize>],
+        value: &Tensor<T>,
+    ) -> Result<(), TensorError>
+    where
+        T: Send + Sync,
+    {
+        if indices.is_empty() {
+            return Ok(());
+        }
+        if self.dims.len() < indices.len() {
+            return Err(TensorError::DimError(format!(
+                "The dimensionality of the slice {:?} is greater than the tensor's {:?}",
+                indices, self.dims
+            )));
+        }
+
+        // if indices weren't specified we fill them in as required
+        let mut full_indices = indices.to_vec();
+
+        let omitted_dims = (indices.len()..self.dims.len())
+            .map(|i| self.dims[i])
+            .collect::<Vec<_>>();
+
+        for dim in &omitted_dims {
+            full_indices.push(0..*dim);
+        }
+
+        let full_dims = full_indices
+            .iter()
+            .map(|x| x.end - x.start)
+            .collect::<Vec<_>>();
+
+        // now broadcast the value to the full dims
+        let value = value.expand(&full_dims)?;
+
+        let cartesian_coord: Vec<Vec<usize>> = full_indices
+            .iter()
+            .cloned()
+            .multi_cartesian_product()
+            .collect();
+
+        let _ = cartesian_coord
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                self.set(e, value[i].clone());
+            })
+            .collect::<Vec<_>>();
+
+        Ok(())
+    }
+
     /// Get the array index from rows / columns indices.
     ///
     /// ```
