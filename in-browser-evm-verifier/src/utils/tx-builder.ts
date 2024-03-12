@@ -46,7 +46,6 @@ export const buildTransaction = (
   data: Partial<TransactionsData>,
 ): TransactionsData => {
   const defaultData: Partial<TransactionsData> = {
-    nonce: BigInt(0),
     gasLimit: 3_000_000_000_000_000,
     gasPrice: 7,
     value: 0,

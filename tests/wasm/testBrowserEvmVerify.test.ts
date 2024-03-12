@@ -3,26 +3,40 @@ import { serialize, deserialize } from '@ezkljs/engine/nodejs'
 import { compileContracts } from './utils'
 import * as fs from 'fs'
 
-exports.USER_NAME = require("minimist")(process.argv.slice(2))["example"];
+exports.EXAMPLE = require("minimist")(process.argv.slice(2))["example"];
 exports.PATH = require("minimist")(process.argv.slice(2))["dir"];
+exports.VK = require("minimist")(process.argv.slice(2))["vk"];
 
 describe('localEVMVerify', () => {
 
-  let bytecode: string
+  let bytecode_verifier: string
+
+  let bytecode_vk: string | undefined = undefined
 
   let proof: any
 
-  const example = exports.USER_NAME || "1l_mlp"
+  const example = exports.EXAMPLE || "1l_mlp"
   const path = exports.PATH || "../ezkl/examples/onnx"
+  const vk = exports.VK || false
 
   beforeEach(() => {
-    let solcOutput = compileContracts(path, example)
+    const solcOutput = compileContracts(path, example, 'kzg')
 
-    bytecode =
+    bytecode_verifier =
       solcOutput.contracts['artifacts/Verifier.sol']['Halo2Verifier'].evm.bytecode
         .object
 
-    console.log('size', bytecode.length)
+    if (vk) {
+      const solcOutput_vk = compileContracts(path, example, 'vk')
+
+      bytecode_vk =
+        solcOutput_vk.contracts['artifacts/Verifier.sol']['Halo2VerifyingKey'].evm.bytecode
+          .object
+
+
+      console.log('size of verifier bytecode', bytecode_verifier.length)
+    }
+    console.log('verifier bytecode', bytecode_verifier)
   })
 
   it('should return true when verification succeeds', async () => {
@@ -30,7 +44,7 @@ describe('localEVMVerify', () => {
 
     proof = deserialize(proofFileBuffer)
 
-    const result = await localEVMVerify(proofFileBuffer, bytecode)
+    const result = await localEVMVerify(proofFileBuffer, bytecode_verifier, bytecode_vk)
 
     console.log('result', result)
 
@@ -50,7 +64,7 @@ describe('localEVMVerify', () => {
       proof.proof[index] = number
       console.log('index post', proof.proof[index])
       const proofModified = serialize(proof)
-      result = await localEVMVerify(proofModified, bytecode)
+      result = await localEVMVerify(proofModified, bytecode_verifier, bytecode_vk)
     } catch (error) {
       // Check if the error thrown is the "out of gas" error.
       expect(error).toEqual(

@@ -18,13 +18,21 @@ const result = await localEVMVerify(proofFileBuffer, bytecode)
 console.log('result', result)
 ```
 
-**Note**: Run `ezkl create-evm-verifier` to get the Solidity verifier, with which you can retrieve the bytecode once compiled. We recommend compiling to the London hardfork target, else you will have to pass an additional parameter specifying the EVM version to the `localEVMVerify` function like so (for Paris hardfork):
+**Note**: Run `ezkl create-evm-verifier` to get the Solidity verifier, with which you can retrieve the bytecode once compiled. We recommend compiling to the Shanghai hardfork target, else you will have to pass an additional parameter specifying the EVM version to the `localEVMVerify` function like so (for Paris hardfork):
 
 ```ts
 import localEVMVerify, { hardfork } from '@ezkljs/verify';
 
 const result = await localEVMVerify(proofFileBuffer, bytecode, hardfork['Paris'])
 ```
+
+**Note**: You can also verify separated vk verifiers using the `localEVMVerify` function. Just pass the vk verifier bytecode as the third parameter like so:
+```ts
+import localEVMVerify from '@ezkljs/verify';
+
+const result = await localEVMVerify(proofFileBuffer, verifierBytecode, VKBytecode)
+```
+
 
 ## How to use (Browser)
 

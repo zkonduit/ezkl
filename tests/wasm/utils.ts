@@ -43,12 +43,12 @@ export function serialize(data: object | string): Uint8ClampedArray { // data is
   return new Uint8ClampedArray(uint8Array.buffer);
 }
 
-export function getSolcInput(path: string, example: string) {
+export function getSolcInput(path: string, example: string, name: string) {
   return {
     language: 'Solidity',
     sources: {
       'artifacts/Verifier.sol': {
-        content: fsSync.readFileSync(`${path}/${example}/kzg.sol`, 'utf-8'),
+        content: fsSync.readFileSync(`${path}/${example}/${name}.sol`, 'utf-8'),
       },
       // If more contracts were to be compiled, they should have their own entries here
     },
@@ -57,7 +57,7 @@ export function getSolcInput(path: string, example: string) {
         enabled: true,
         runs: 1,
       },
-      evmVersion: 'london',
+      evmVersion: 'shanghai',
       outputSelection: {
         '*': {
           '*': ['abi', 'evm.bytecode'],
@@ -67,8 +67,8 @@ export function getSolcInput(path: string, example: string) {
   }
 }
 
-export function compileContracts(path: string, example: string) {
-  const input = getSolcInput(path, example)
+export function compileContracts(path: string, example: string, name: string) {
+  const input = getSolcInput(path, example, name)
   const output = JSON.parse(solc.compile(JSON.stringify(input)))
 
   let compilationFailed = false
