@@ -1103,6 +1103,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(felt_to_big_endian, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_int, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_float, m)?)?;
