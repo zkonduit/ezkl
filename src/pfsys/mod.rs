@@ -7,7 +7,6 @@ pub mod srs;
 use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
 use crate::pfsys::evm::aggregation::PoseidonTranscript;
-use crate::tensor::TensorType;
 use crate::{EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
@@ -481,7 +480,7 @@ where
 }
 
 /// Creates a [VerifyingKey] and [ProvingKey] for a [crate::graph::GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
-pub fn create_keys<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
+pub fn create_keys<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     circuit: &C,
     params: &'_ Scheme::ParamsProver,
     disable_selector_compression: bool,
@@ -491,7 +490,7 @@ where
     <Scheme as CommitmentScheme>::Scalar: FromUniformBytes<64>,
 {
     //	Real proof
-    let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
+    let empty_circuit = <C as Circuit<Scheme::Scalar>>::without_witnesses(circuit);
 
     // Initialize verifying key
     let now = Instant::now();
@@ -513,8 +512,7 @@ where
 pub fn create_proof_circuit<
     'params,
     Scheme: CommitmentScheme,
-    F: PrimeField + TensorType,
-    C: Circuit<F>,
+    C: Circuit<Scheme::Scalar>,
     P: Prover<'params, Scheme>,
     V: Verifier<'params, Scheme>,
     Strategy: VerificationStrategy<'params, Scheme, V>,
@@ -533,15 +531,13 @@ pub fn create_proof_circuit<
     set_protocol: bool,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
 where
-    C: Circuit<Scheme::Scalar>,
     Scheme::ParamsVerifier: 'params,
     Scheme::Scalar: Serialize
         + DeserializeOwned
         + SerdeObject
         + PrimeField
         + FromUniformBytes<64>
-        + WithSmallOrderMulGroup<3>
-        + Ord,
+        + WithSmallOrderMulGroup<3>,
     Scheme::Curve: Serialize + DeserializeOwned,
 {
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
@@ -601,7 +597,7 @@ where
     if check_mode == CheckMode::SAFE {
         debug!("verifying generated proof");
         let verifier_params = params.verifier_params();
-        verify_proof_circuit::<F, V, Scheme, Strategy, E, TR>(
+        verify_proof_circuit::<V, Scheme, Strategy, E, TR>(
             &checkable_pf,
             verifier_params,
             pk.get_vk(),
@@ -683,7 +679,6 @@ pub fn swap_proof_commitments_kzg(
 /// A wrapper around halo2's verify_proof
 pub fn verify_proof_circuit<
     'params,
-    F: PrimeField,
     V: Verifier<'params, Scheme>,
     Scheme: CommitmentScheme,
     Strategy: VerificationStrategy<'params, Scheme, V>,
@@ -701,7 +696,6 @@ where
         + PrimeField
         + FromUniformBytes<64>
         + WithSmallOrderMulGroup<3>
-        + Ord
         + Serialize
         + DeserializeOwned,
     Scheme::Curve: Serialize + DeserializeOwned,
@@ -719,7 +713,7 @@ where
 }
 
 /// Loads a [VerifyingKey] at `path`.
-pub fn load_vk<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
+pub fn load_vk<Scheme: CommitmentScheme, F: PrimeField, C: Circuit<F>>(
     path: PathBuf,
     params: <C as Circuit<Scheme::Scalar>>::Params,
 ) -> Result<VerifyingKey<Scheme::Curve>, Box<dyn Error>>
@@ -742,7 +736,7 @@ where
 }
 
 /// Loads a [ProvingKey] at `path`.
-pub fn load_pk<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
+pub fn load_pk<Scheme: CommitmentScheme, F: PrimeField, C: Circuit<F>>(
     path: PathBuf,
     params: <C as Circuit<Scheme::Scalar>>::Params,
 ) -> Result<ProvingKey<Scheme::Curve>, Box<dyn Error>>
@@ -842,7 +836,6 @@ pub fn create_proof_circuit_kzg<
     match transcript {
         TranscriptType::EVM => create_proof_circuit::<
             KZGCommitmentScheme<_>,
-            Fr,
             _,
             ProverSHPLONK<_>,
             VerifierSHPLONK<_>,
@@ -864,7 +857,6 @@ pub fn create_proof_circuit_kzg<
         .map_err(Box::<dyn Error>::from),
         TranscriptType::Poseidon => create_proof_circuit::<
             KZGCommitmentScheme<_>,
-            Fr,
             _,
             ProverSHPLONK<_>,
             VerifierSHPLONK<_>,
@@ -901,7 +893,6 @@ pub(crate) fn verify_proof_circuit_kzg<
 ) -> Result<Strategy::Output, halo2_proofs::plonk::Error> {
     match proof.transcript_type {
         TranscriptType::EVM => verify_proof_circuit::<
-            Fr,
             VerifierSHPLONK<'_, Bn256>,
             _,
             _,
@@ -909,7 +900,6 @@ pub(crate) fn verify_proof_circuit_kzg<
             EvmTranscript<G1Affine, _, _, _>,
         >(&proof, params, vk, strategy, orig_n),
         TranscriptType::Poseidon => verify_proof_circuit::<
-            Fr,
             VerifierSHPLONK<'_, Bn256>,
             _,
             _,
@@ -951,7 +941,7 @@ mod tests {
         let mut dest = File::create(fname.clone()).unwrap();
         let content = response.bytes().await.unwrap();
         copy(&mut &content[..], &mut dest).unwrap();
-        let res = srs::load_srs::<KZGCommitmentScheme<Bn256>>(fname);
+        let res = srs::load_srs_prover::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 
@@ -962,7 +952,7 @@ mod tests {
         let srs = srs::gen_srs::<KZGCommitmentScheme<Bn256>>(1);
         let res = save_params::<KZGCommitmentScheme<Bn256>>(&fname, &srs);
         assert!(res.is_ok());
-        let res = srs::load_srs::<KZGCommitmentScheme<Bn256>>(fname);
+        let res = srs::load_srs_prover::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 

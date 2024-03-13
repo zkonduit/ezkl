@@ -324,7 +324,6 @@ mod matmul_col_ultra_overflow_double_col {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             MatmulCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
@@ -441,7 +440,6 @@ mod matmul_col_ultra_overflow {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             MatmulCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
@@ -1243,7 +1241,6 @@ mod conv_col_ultra_overflow {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             ConvCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
@@ -1396,7 +1393,6 @@ mod conv_relu_col_ultra_overflow {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             ConvCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
@@ -2497,7 +2493,6 @@ mod lookup_ultra_overflow {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             ReLUCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();

@@ -115,13 +115,13 @@ fn runmatmul(c: &mut Criterion) {
         group.throughput(Throughput::Elements(k as u64));
         group.bench_with_input(BenchmarkId::new("pk", k), &k, |b, &_| {
             b.iter(|| {
-                create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params, true)
+                create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit>(&circuit, &params, true)
                     .unwrap();
             });
         });
 
-        let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params, true)
-            .unwrap();
+        let pk =
+            create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit>(&circuit, &params, true).unwrap();
 
         group.throughput(Throughput::Elements(k as u64));
         group.bench_with_input(BenchmarkId::new("prove", k), &k, |b, &_| {

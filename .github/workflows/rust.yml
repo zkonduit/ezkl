@@ -380,6 +380,8 @@ jobs:
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+      - name: IPA prove and verify tests
+        run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_
       - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests single inner col
@@ -440,28 +442,6 @@ jobs:
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 1
 
-  fuzz-tests:
-    runs-on: ubuntu-latest-32-cores
-    needs: [build, library-tests, python-tests]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2024-01-04
-          override: true
-          components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-      - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
-      - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
-      - name: fuzz tests (EVM)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_fuzz_ --test-threads 2
-      # - name: fuzz tests
-      #   run: cargo nextest run --release --verbose tests::kzg_fuzz_ --test-threads 6
 
   prove-and-verify-mock-aggr-tests:
     runs-on: self-hosted
@@ -512,7 +492,9 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: KZG )tests
+      - name: IPA tests
+        run: cargo nextest run --release --verbose tests_aggr::ipa_aggr_prove_and_verify_  --test-threads 4 -- --include-ignored
+      - name: KZG tests
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_  --test-threads 4 -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:

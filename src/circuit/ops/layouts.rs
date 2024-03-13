@@ -1222,7 +1222,7 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd>(
                 .iter()
                 .map(|x| {
                     let slice = x.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
-                    Ok(index_slice.get_slice(&slice)?)
+                    index_slice.get_slice(&slice)
                 })
                 .collect::<Result<Vec<_>, Box<dyn Error>>>()?
         };
