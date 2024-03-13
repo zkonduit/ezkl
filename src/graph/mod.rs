@@ -126,7 +126,7 @@ pub enum GraphError {
     #[error("failed to rescale inputs for {0}")]
     RescalingError(String),
     /// Error when attempting to load a model
-    #[error("failed to load model")]
+    #[error("failed to load")]
     ModelLoad,
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
@@ -318,7 +318,7 @@ impl GraphWitness {
     /// Load the model input from a file
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let file = std::fs::File::open(path.clone())
-            .map_err(|_| format!("failed to load model at {}", path.display()))?;
+            .map_err(|_| format!("failed to load {}", path.display()))?;
 
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
         serde_json::from_reader(reader).map_err(|e| e.into())

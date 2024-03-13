@@ -468,10 +468,8 @@ pub fn get_srs_path(logrows: u32, srs_path: Option<PathBuf>, commitment: Commitm
             std::fs::create_dir_all(&*EZKL_SRS_REPO_PATH).unwrap();
         }
         match commitment {
-            Commitments::KZG => Path::new(&*EZKL_SRS_REPO_PATH)
-                .join(format!("kzg{}.srs", logrows)),
-            Commitments::IPA => Path::new(&*EZKL_SRS_REPO_PATH)
-                .join(format!("ipa{}.srs", logrows)),
+            Commitments::KZG => Path::new(&*EZKL_SRS_REPO_PATH).join(format!("kzg{}.srs", logrows)),
+            Commitments::IPA => Path::new(&*EZKL_SRS_REPO_PATH).join(format!("ipa{}.srs", logrows)),
         }
     }
 }
@@ -572,6 +570,8 @@ pub(crate) async fn get_srs_cmd(
 ) -> Result<String, Box<dyn Error>> {
     // logrows overrides settings
 
+    let err_string = "You will need to provide a valid settings file to use the settings option. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows).";
+
     let k = if let Some(k) = logrows {
         k
     } else if let Some(settings_p) = &settings_path {
@@ -579,15 +579,9 @@ pub(crate) async fn get_srs_cmd(
             let settings = GraphSettings::load(settings_p)?;
             settings.run_args.logrows
         } else {
-            let err_string = format!(
-                "You will need to provide a valid settings file to use the settings option. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows)."
-            );
             return Err(err_string.into());
         }
     } else {
-        let err_string = format!(
-            "You will need to provide a settings file or set the logrows. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows)."
-        );
         return Err(err_string.into());
     };
 
@@ -598,13 +592,10 @@ pub(crate) async fn get_srs_cmd(
             let settings = GraphSettings::load(&settings_p)?;
             settings.run_args.commitment
         } else {
-            let err_string = format!(
-                "You will need to provide a valid settings file to use the settings option. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows)."
-            );
             return Err(err_string.into());
         }
     } else {
-        Commitments::KZG
+        return Err(err_string.into());
     };
 
     if !srs_exists_check(k, srs_path.clone(), commitment) {

@@ -98,10 +98,16 @@ mod native_tests {
         });
     }
 
-    fn download_srs(logrows: u32) {
+    fn download_srs(logrows: u32, commitment: Commitments) {
         // if does not exist, download it
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(["get-srs", "--logrows", &format!("{}", logrows)])
+            .args([
+                "get-srs",
+                "--logrows",
+                &format!("{}", logrows),
+                "--commitment",
+                &commitment.to_string(),
+            ])
             .status()
             .expect("failed to execute process");
         assert!(status.success());
@@ -116,7 +122,7 @@ mod native_tests {
         let settings: GraphSettings = serde_json::from_str(&settings).unwrap();
         let logrows = settings.run_args.logrows;
 
-        download_srs(logrows)
+        download_srs(logrows, settings.run_args.commitment);
     }
 
     fn mv_test_(test_dir: &str, test: &str) {
@@ -1673,7 +1679,7 @@ mod native_tests {
             commitment,
         );
 
-        download_srs(23);
+        download_srs(23, commitment);
         // now setup-aggregate
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1735,7 +1741,7 @@ mod native_tests {
             Commitments::KZG,
         );
 
-        download_srs(23);
+        download_srs(23, Commitments::KZG);
 
         let vk_arg = &format!("{}/{}/aggr.vk", test_dir, example_name);
 
@@ -1922,7 +1928,7 @@ mod native_tests {
             .expect("failed to parse settings file");
 
         // get_srs for the graph_settings_num_instances
-        download_srs(graph_settings.log2_total_instances());
+        download_srs(1, graph_settings.run_args.commitment);
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
