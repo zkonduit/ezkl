@@ -2190,7 +2190,7 @@ pub(crate) fn verify(
                 load_params_verifier::<KZGCommitmentScheme<Bn256>>(
                     srs_path,
                     logrows,
-                    Commitments::IPA,
+                    Commitments::KZG,
                 )?
             };
             match proof.transcript_type {
