@@ -2288,9 +2288,8 @@ where
     let vk = load_vk::<Scheme, C>(vk_path, settings)?;
     let now = Instant::now();
 
-    let orig_n = 1 << logrows;
-
-    let result = verify_proof_circuit::<V, _, _, _, TR>(&proof, params, &vk, strategy, orig_n);
+    let result =
+        verify_proof_circuit::<V, _, _, _, TR>(&proof, params, &vk, strategy, 1 << logrows);
 
     let elapsed = now.elapsed();
     info!(

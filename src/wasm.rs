@@ -443,7 +443,6 @@ pub fn prove(
                 halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
                     .map_err(|e| JsError::new(&format!("Failed to deserialize srs: {}", e)))?;
 
-            let strategy = KZGSingleStrategy::new(&params);
             create_proof_circuit::<
                 KZGCommitmentScheme<Bn256>,
                 _,
@@ -458,7 +457,6 @@ pub fn prove(
                 vec![public_inputs],
                 &params,
                 &pk,
-                strategy,
                 CheckMode::UNSAFE,
                 crate::Commitments::KZG,
                 TranscriptType::EVM,
@@ -471,7 +469,6 @@ pub fn prove(
                 halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
                     .map_err(|e| JsError::new(&format!("Failed to deserialize srs: {}", e)))?;
 
-            let strategy = IPASingleStrategy::new(&params);
             create_proof_circuit::<
                 IPACommitmentScheme<G1Affine>,
                 _,
@@ -486,7 +483,6 @@ pub fn prove(
                 vec![public_inputs],
                 &params,
                 &pk,
-                strategy,
                 CheckMode::UNSAFE,
                 crate::Commitments::IPA,
                 TranscriptType::EVM,

@@ -503,7 +503,7 @@ fn gen_vk_from_pk_single(
     let vk = pk.get_vk();
 
     // now save
-    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_output_path, vk)
+    save_vk::<G1Affine>(&vk_output_path, vk)
         .map_err(|_| PyIOError::new_err("Failed to save vk"))?;
 
     Ok(true)
@@ -521,7 +521,7 @@ fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult
     let vk = pk.get_vk();
 
     // now save
-    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_output_path, vk)
+    save_vk::<G1Affine>(&vk_output_path, vk)
         .map_err(|_| PyIOError::new_err("Failed to save vk"))?;
 
     Ok(true)
