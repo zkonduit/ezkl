@@ -303,12 +303,24 @@ jobs:
         with:
           node-version: "18.12.1"
           cache: "pnpm"
-      - name: Install dependencies
+      - name: Install dependencies for js tests and in-browser-evm-verifier package
         run: |
           pnpm install --no-frozen-lockfile
+          pnpm install --dir ./in-browser-evm-verifier --no-frozen-lockfile
         env:
           CI: false
           NODE_ENV: development
+      - name: Build wasm package for nodejs target.
+        run: |
+          wasm-pack build --release --target nodejs --out-dir ./in-browser-evm-verifier/nodejs . -- -Z build-std="panic_abort,std"
+      - name: Replace memory definition in nodejs
+        run: |
+          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" in-browser-evm-verifier/nodejs/ezkl.js
+      - name: Build @ezkljs/verify package
+        run: |
+          cd in-browser-evm-verifier
+          pnpm build:commonjs
+          cd ..
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
@@ -364,7 +376,7 @@ jobs:
         with:
           node-version: "18.12.1"
           cache: "pnpm"
-      - name: Install dependencies
+      - name: Install dependencies for js tests
         run: |
           pnpm install --no-frozen-lockfile
         env:

@@ -45,6 +45,7 @@ var/
 *.whl
 *.bak
 node_modules
+/dist
 timingData.json
 !tests/wasm/pk.key
 !tests/wasm/vk.key

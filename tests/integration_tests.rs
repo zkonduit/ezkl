@@ -884,7 +884,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true, "single", Commitments::KZG);
                     #[cfg(not(feature = "icicle"))]
-                    run_js_tests(path, test.to_string(), "testWasm");
+                    run_js_tests(path, test.to_string(), "testWasm", false);
                     // test_dir.close().unwrap();
                 }
 
@@ -897,7 +897,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     prove_and_verify(path, test.to_string(), "safe", "private", "fixed", "public", 1, None, true, "single", Commitments::KZG);
                     #[cfg(not(feature = "icicle"))]
-                    run_js_tests(path, test.to_string(), "testWasm");
+                    run_js_tests(path, test.to_string(), "testWasm", false);
                     test_dir.close().unwrap();
                 }
 
@@ -944,6 +944,7 @@ mod native_tests {
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use tempdir::TempDir;
             use crate::native_tests::Hardfork;
+            use crate::native_tests::run_js_tests;
 
             /// Currently only on chain inputs that return a non-negative value are supported.
             const TESTS_ON_CHAIN_INPUT: [&str; 17] = [
@@ -1038,8 +1039,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "public");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
                 }
@@ -1051,8 +1052,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify_render_seperately(2, path, test.to_string(), "private", "private", "public");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", true);
                     test_dir.close().unwrap();
 
                 }
@@ -1065,8 +1066,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "hashed", "private", "private");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1082,8 +1083,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false, hardfork);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "private", "public");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1095,8 +1096,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "hashed", "public");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
                 }
@@ -1108,8 +1109,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "hashed");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1121,8 +1122,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "polycommit", "public");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1134,8 +1135,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "polycommit");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -1146,8 +1147,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "polycommit", "polycommit");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
                 }
 
@@ -2181,15 +2182,17 @@ mod native_tests {
     }
 
     // run js browser evm verify tests for a given example
-    fn run_js_tests(test_dir: &str, example_name: String, js_test: &str) {
+    fn run_js_tests(test_dir: &str, example_name: String, js_test: &str, vk: bool) {
+        let example = format!("--example={}", example_name);
+        let dir = format!("--dir={}", test_dir);
+        let mut args = vec!["run", "test", js_test, &example, &dir];
+        let vk_string: String;
+        if vk {
+            vk_string = format!("--vk={}", vk);
+            args.push(&vk_string);
+        };
         let status = Command::new("pnpm")
-            .args([
-                "run",
-                "test",
-                js_test,
-                &format!("--example={}", example_name),
-                &format!("--dir={}", test_dir),
-            ])
+            .args(&args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
