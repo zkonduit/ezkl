@@ -381,7 +381,9 @@ jobs:
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - name: IPA prove and verify tests
-        run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_
+        run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_::t
+      - name: IPA prove and verify tests (ipa outputs)
+        run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_ipa_output
       - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests single inner col
