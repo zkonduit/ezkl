@@ -249,6 +249,7 @@ mod matmul_col_ultra_overflow_double_col {
     use halo2_proofs::poly::kzg::{
         commitment::KZGCommitmentScheme,
         multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        strategy::SingleStrategy,
     };
     use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
@@ -338,7 +339,7 @@ mod matmul_col_ultra_overflow_double_col {
             _,
             ProverSHPLONK<_>,
             VerifierSHPLONK<_>,
-            _,
+            SingleStrategy<_>,
             _,
             EvmTranscript<_, _, _, _>,
             EvmTranscript<_, _, _, _>,
@@ -347,7 +348,6 @@ mod matmul_col_ultra_overflow_double_col {
             vec![],
             &params,
             &pk,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
             crate::Commitments::KZG,
@@ -367,6 +367,7 @@ mod matmul_col_ultra_overflow {
     use halo2_proofs::poly::kzg::{
         commitment::KZGCommitmentScheme,
         multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        strategy::SingleStrategy,
     };
     use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
@@ -455,7 +456,7 @@ mod matmul_col_ultra_overflow {
             _,
             ProverSHPLONK<_>,
             VerifierSHPLONK<_>,
-            _,
+            SingleStrategy<_>,
             _,
             EvmTranscript<_, _, _, _>,
             EvmTranscript<_, _, _, _>,
@@ -464,7 +465,6 @@ mod matmul_col_ultra_overflow {
             vec![],
             &params,
             &pk,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
             crate::Commitments::KZG,
@@ -1146,9 +1146,12 @@ mod conv {
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod conv_col_ultra_overflow {
 
-    use halo2_proofs::poly::kzg::{
-        commitment::KZGCommitmentScheme,
-        multiopen::{ProverSHPLONK, VerifierSHPLONK},
+    use halo2_proofs::poly::{
+        kzg::strategy::SingleStrategy,
+        kzg::{
+            commitment::KZGCommitmentScheme,
+            multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        },
     };
     use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
@@ -1257,7 +1260,7 @@ mod conv_col_ultra_overflow {
             _,
             ProverSHPLONK<_>,
             VerifierSHPLONK<_>,
-            _,
+            SingleStrategy<_>,
             _,
             EvmTranscript<_, _, _, _>,
             EvmTranscript<_, _, _, _>,
@@ -1266,7 +1269,6 @@ mod conv_col_ultra_overflow {
             vec![],
             &params,
             &pk,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
             crate::Commitments::KZG,
@@ -1287,6 +1289,7 @@ mod conv_relu_col_ultra_overflow {
     use halo2_proofs::poly::kzg::{
         commitment::KZGCommitmentScheme,
         multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        strategy::SingleStrategy,
     };
     use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
@@ -1410,7 +1413,7 @@ mod conv_relu_col_ultra_overflow {
             _,
             ProverSHPLONK<_>,
             VerifierSHPLONK<_>,
-            _,
+            SingleStrategy<_>,
             _,
             EvmTranscript<_, _, _, _>,
             EvmTranscript<_, _, _, _>,
@@ -1419,7 +1422,6 @@ mod conv_relu_col_ultra_overflow {
             vec![],
             &params,
             &pk,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             CheckMode::SAFE,
             crate::Commitments::KZG,
             crate::pfsys::TranscriptType::EVM,
@@ -2420,6 +2422,7 @@ mod lookup_ultra_overflow {
         poly::kzg::{
             commitment::KZGCommitmentScheme,
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
+            strategy::SingleStrategy,
         },
     };
     use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
@@ -2510,7 +2513,7 @@ mod lookup_ultra_overflow {
             _,
             ProverSHPLONK<_>,
             VerifierSHPLONK<_>,
-            _,
+            SingleStrategy<_>,
             _,
             EvmTranscript<_, _, _, _>,
             EvmTranscript<_, _, _, _>,
@@ -2519,7 +2522,6 @@ mod lookup_ultra_overflow {
             vec![],
             &params,
             &pk,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
             crate::Commitments::KZG,

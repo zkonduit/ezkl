@@ -536,7 +536,6 @@ pub fn create_proof_circuit<
     instances: Vec<Vec<Scheme::Scalar>>,
     params: &'params Scheme::ParamsProver,
     pk: &ProvingKey<Scheme::Curve>,
-    strategy: Strategy,
     check_mode: CheckMode,
     commitment: Commitments,
     transcript_type: TranscriptType,
@@ -553,6 +552,7 @@ where
         + WithSmallOrderMulGroup<3>,
     Scheme::Curve: Serialize + DeserializeOwned,
 {
+    let strategy = Strategy::new(params.verifier_params());
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
     #[cfg(feature = "det-prove")]
     let mut rng = <StdRng as rand::SeedableRng>::from_seed([0u8; 32]);
@@ -777,13 +777,12 @@ where
 }
 
 /// Saves a [ProvingKey] to `path`.
-pub fn save_pk<Scheme: CommitmentScheme>(
+pub fn save_pk<C: SerdeObject + CurveAffine>(
     path: &PathBuf,
-    pk: &ProvingKey<Scheme::Curve>,
+    pk: &ProvingKey<C>,
 ) -> Result<(), io::Error>
 where
-    Scheme::Curve: SerdeObject + CurveAffine,
-    Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
+    C::ScalarExt: FromUniformBytes<64> + SerdeObject,
 {
     info!("saving proving key 💾");
     let f = File::create(path)?;
@@ -795,13 +794,12 @@ where
 }
 
 /// Saves a [VerifyingKey] to `path`.
-pub fn save_vk<Scheme: CommitmentScheme>(
+pub fn save_vk<C: CurveAffine + SerdeObject>(
     path: &PathBuf,
-    vk: &VerifyingKey<Scheme::Curve>,
+    vk: &VerifyingKey<C>,
 ) -> Result<(), io::Error>
 where
-    Scheme::Curve: SerdeObject + CurveAffine,
-    Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
+    C::ScalarExt: FromUniformBytes<64> + SerdeObject,
 {
     info!("saving verification key 💾");
     let f = File::create(path)?;

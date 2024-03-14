@@ -27,8 +27,8 @@ use crate::{Commitments, RunArgs};
 #[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
-use halo2_proofs::plonk::{self, Circuit, ProvingKey};
-use halo2_proofs::poly::commitment::{CommitmentScheme, Params, Prover};
+use halo2_proofs::plonk::{self, Circuit};
+use halo2_proofs::poly::commitment::{CommitmentScheme, Params};
 use halo2_proofs::poly::commitment::{ParamsProver, Verifier};
 use halo2_proofs::poly::ipa::commitment::{IPACommitmentScheme, ParamsIPA};
 use halo2_proofs::poly::ipa::multiopen::{ProverIPA, VerifierIPA};
@@ -41,7 +41,7 @@ use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
 use halo2_proofs::poly::VerificationStrategy;
-use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
+use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer};
 #[cfg(not(target_arch = "wasm32"))]
 use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
@@ -63,7 +63,6 @@ use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::compile;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use snark_verifier::system::halo2::Config;
-use snark_verifier::verifier::plonk::PlonkProtocol;
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
@@ -1635,20 +1634,18 @@ pub(crate) fn setup(
 
     let logrows = circuit.settings().run_args.logrows;
 
-    match circuit.settings().run_args.commitment {
+    let pk = match circuit.settings().run_args.commitment {
         Commitments::KZG => {
             let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(
                 srs_path,
                 logrows,
                 Commitments::KZG,
             )?;
-            return setup_commitment::<KZGCommitmentScheme<Bn256>, _, GraphCircuit>(
-                circuit,
+            create_keys::<KZGCommitmentScheme<Bn256>, GraphCircuit>(
+                &circuit,
                 &params,
-                vk_path,
-                pk_path,
                 disable_selector_compression,
-            );
+            )?
         }
         Commitments::IPA => {
             let params = load_params_prover::<IPACommitmentScheme<G1Affine>>(
@@ -1656,33 +1653,15 @@ pub(crate) fn setup(
                 logrows,
                 Commitments::IPA,
             )?;
-            return setup_commitment::<IPACommitmentScheme<G1Affine>, _, GraphCircuit>(
-                circuit,
+            create_keys::<IPACommitmentScheme<G1Affine>, GraphCircuit>(
+                &circuit,
                 &params,
-                vk_path,
-                pk_path,
                 disable_selector_compression,
-            );
+            )?
         }
-    }
-}
-
-fn setup_commitment<Scheme: CommitmentScheme, Params, C: Circuit<Scheme::Scalar, Params = Params>>(
-    circuit: C,
-    params: &Scheme::ParamsProver,
-    vk_path: PathBuf,
-    pk_path: PathBuf,
-    disable_selector_compression: bool,
-) -> Result<String, Box<dyn Error>>
-where
-    Scheme::Scalar: FromUniformBytes<64> + SerdeObject,
-    Scheme::Curve: SerdeObject,
-{
-    let pk = create_keys::<Scheme, C>(&circuit, params, disable_selector_compression)
-        .map_err(Box::<dyn Error>::from)?;
-
-    save_vk::<Scheme>(&vk_path, pk.get_vk())?;
-    save_pk::<Scheme>(&pk_path, &pk)?;
+    };
+    save_vk::<G1Affine>(&vk_path, pk.get_vk())?;
+    save_pk::<G1Affine>(&pk_path, &pk)?;
     Ok(String::new())
 }
 
@@ -1777,7 +1756,7 @@ pub(crate) fn prove(
                 Commitments::KZG,
             )?;
             match strategy {
-                StrategyType::Single => prove_commitment::<
+                StrategyType::Single => create_proof_circuit::<
                     KZGCommitmentScheme<Bn256>,
                     _,
                     ProverSHPLONK<_>,
@@ -1788,14 +1767,14 @@ pub(crate) fn prove(
                     EvmTranscript<_, _, _, _>,
                 >(
                     circuit,
-                    &pk,
+                    vec![public_inputs],
                     &params,
-                    transcript,
-                    public_inputs,
-                    proof_split_commits,
+                    &pk,
                     check_mode,
-                    None,
                     commitment,
+                    transcript,
+                    proof_split_commits,
+                    None,
                 ),
                 StrategyType::Accum => {
                     let protocol = Some(compile(
@@ -1804,7 +1783,7 @@ pub(crate) fn prove(
                         Config::kzg().with_num_instance(vec![public_inputs.len()]),
                     ));
 
-                    prove_commitment::<
+                    create_proof_circuit::<
                         KZGCommitmentScheme<Bn256>,
                         _,
                         ProverSHPLONK<_>,
@@ -1815,14 +1794,14 @@ pub(crate) fn prove(
                         PoseidonTranscript<NativeLoader, _>,
                     >(
                         circuit,
-                        &pk,
+                        vec![public_inputs],
                         &params,
-                        transcript,
-                        public_inputs,
-                        proof_split_commits,
+                        &pk,
                         check_mode,
-                        protocol,
                         commitment,
+                        transcript,
+                        proof_split_commits,
+                        protocol,
                     )
                 }
             }
@@ -1837,7 +1816,7 @@ pub(crate) fn prove(
                 Commitments::IPA,
             )?;
             match strategy {
-                StrategyType::Single => prove_commitment::<
+                StrategyType::Single => create_proof_circuit::<
                     IPACommitmentScheme<G1Affine>,
                     _,
                     ProverIPA<_>,
@@ -1848,14 +1827,14 @@ pub(crate) fn prove(
                     EvmTranscript<_, _, _, _>,
                 >(
                     circuit,
-                    &pk,
+                    vec![public_inputs],
                     &params,
-                    transcript,
-                    public_inputs,
-                    proof_split_commits,
+                    &pk,
                     check_mode,
-                    None,
                     commitment,
+                    transcript,
+                    proof_split_commits,
+                    None,
                 ),
                 StrategyType::Accum => {
                     let protocol = Some(compile(
@@ -1863,7 +1842,7 @@ pub(crate) fn prove(
                         pk.get_vk(),
                         Config::ipa().with_num_instance(vec![public_inputs.len()]),
                     ));
-                    prove_commitment::<
+                    create_proof_circuit::<
                         IPACommitmentScheme<G1Affine>,
                         _,
                         ProverIPA<_>,
@@ -1874,14 +1853,14 @@ pub(crate) fn prove(
                         PoseidonTranscript<NativeLoader, _>,
                     >(
                         circuit,
-                        &pk,
+                        vec![public_inputs],
                         &params,
-                        transcript,
-                        public_inputs,
-                        proof_split_commits,
+                        &pk,
                         check_mode,
-                        protocol,
                         commitment,
+                        transcript,
+                        proof_split_commits,
+                        protocol,
                     )
                 }
             }
@@ -1895,52 +1874,6 @@ pub(crate) fn prove(
     }
 
     Ok(snark)
-}
-
-pub(crate) fn prove_commitment<
-    'a,
-    Scheme: CommitmentScheme,
-    C: Circuit<Scheme::Scalar>,
-    P: Prover<'a, Scheme>,
-    V: Verifier<'a, Scheme>,
-    Strategy: VerificationStrategy<'a, Scheme, V>,
-    E: EncodedChallenge<Scheme::Curve>,
-    TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
-    TR: TranscriptReadBuffer<Cursor<Vec<u8>>, Scheme::Curve, E>,
->(
-    circuit: C,
-    pk: &ProvingKey<Scheme::Curve>,
-    params: &'a Scheme::ParamsProver,
-    transcript: TranscriptType,
-    public_inputs: Vec<Scheme::Scalar>,
-    proof_split_commits: Option<ProofSplitCommit>,
-    check_mode: CheckMode,
-    protocol: Option<PlonkProtocol<Scheme::Curve>>,
-    commitment: Commitments,
-) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
-where
-    Scheme::Scalar: FromUniformBytes<64>
-        + SerdeObject
-        + DeserializeOwned
-        + Serialize
-        + WithSmallOrderMulGroup<3>,
-    Scheme::Curve: SerdeObject + DeserializeOwned + Serialize,
-    Scheme::ParamsVerifier: 'a,
-{
-    let strategy = Strategy::new(params.verifier_params());
-    // creates and verifies the proof
-    create_proof_circuit::<Scheme, C, P, V, Strategy, _, TW, TR>(
-        circuit,
-        vec![public_inputs],
-        params,
-        &pk,
-        strategy,
-        check_mode,
-        commitment,
-        transcript,
-        proof_split_commits,
-        protocol,
-    )
 }
 
 pub(crate) fn swap_proof_commitments_cmd(
@@ -2026,7 +1959,7 @@ pub(crate) fn setup_aggregate(
 
     let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks, split_proofs)?;
 
-    match commitment {
+    let pk = match commitment {
         Commitments::KZG => {
             let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(
                 srs_path,
@@ -2034,13 +1967,11 @@ pub(crate) fn setup_aggregate(
                 Commitments::KZG,
             )?;
 
-            setup_commitment::<KZGCommitmentScheme<Bn256>, _, _>(
-                circuit,
+            create_keys::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(
+                &circuit,
                 &params,
-                vk_path,
-                pk_path,
                 disable_selector_compression,
-            )
+            )?
         }
         Commitments::IPA => {
             let params = load_params_prover::<IPACommitmentScheme<G1Affine>>(
@@ -2048,15 +1979,17 @@ pub(crate) fn setup_aggregate(
                 logrows,
                 Commitments::IPA,
             )?;
-            setup_commitment::<IPACommitmentScheme<G1Affine>, _, _>(
-                circuit,
+            create_keys::<IPACommitmentScheme<G1Affine>, AggregationCircuit>(
+                &circuit,
                 &params,
-                vk_path,
-                pk_path,
                 disable_selector_compression,
-            )
+            )?
         }
-    }
+    };
+    save_vk::<G1Affine>(&vk_path, pk.get_vk())?;
+    save_pk::<G1Affine>(&pk_path, &pk)?;
+
+    Ok(String::new())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2101,33 +2034,33 @@ pub(crate) fn aggregate(
                 logrows,
                 Commitments::KZG,
             )?;
-            let agg_circuit = AggregationCircuit::new(
+            let circuit = AggregationCircuit::new(
                 &ParamsProver::<G1Affine>::get_g(&params)[0].into(),
                 snarks,
                 split_proofs,
             )?;
-            let public_inputs = agg_circuit.instances();
+            let public_inputs = circuit.instances();
             match transcript {
-                TranscriptType::EVM => prove_commitment::<
+                TranscriptType::EVM => create_proof_circuit::<
                     KZGCommitmentScheme<Bn256>,
                     _,
                     ProverSHPLONK<_>,
                     VerifierSHPLONK<_>,
-                    KZGSingleStrategy<_>,
+                    KZGAccumulatorStrategy<_>,
                     _,
                     EvmTranscript<_, _, _, _>,
                     EvmTranscript<_, _, _, _>,
                 >(
-                    agg_circuit,
-                    &pk,
+                    circuit,
+                    vec![public_inputs],
                     &params,
-                    transcript,
-                    public_inputs,
-                    None,
+                    &pk,
                     check_mode,
-                    None,
                     commitment,
-                )?,
+                    transcript,
+                    None,
+                    None,
+                ),
                 TranscriptType::Poseidon => {
                     let protocol = Some(compile(
                         &params,
@@ -2135,26 +2068,26 @@ pub(crate) fn aggregate(
                         Config::kzg().with_num_instance(vec![public_inputs.len()]),
                     ));
 
-                    prove_commitment::<
+                    create_proof_circuit::<
                         KZGCommitmentScheme<Bn256>,
                         _,
                         ProverSHPLONK<_>,
                         VerifierSHPLONK<_>,
-                        KZGSingleStrategy<_>,
+                        KZGAccumulatorStrategy<_>,
                         _,
                         PoseidonTranscript<NativeLoader, _>,
                         PoseidonTranscript<NativeLoader, _>,
                     >(
-                        agg_circuit,
-                        &pk,
+                        circuit,
+                        vec![public_inputs],
                         &params,
-                        transcript,
-                        public_inputs,
-                        None,
+                        &pk,
                         check_mode,
-                        protocol,
                         commitment,
-                    )?
+                        transcript,
+                        None,
+                        protocol,
+                    )
                 }
             }
         }
@@ -2165,34 +2098,34 @@ pub(crate) fn aggregate(
                 logrows,
                 Commitments::IPA,
             )?;
-            let agg_circuit = AggregationCircuit::new(
+            let circuit = AggregationCircuit::new(
                 &ParamsProver::<G1Affine>::get_g(&params)[0].into(),
                 snarks,
                 split_proofs,
             )?;
-            let public_inputs = agg_circuit.instances();
+            let public_inputs = circuit.instances();
 
             match transcript {
-                TranscriptType::EVM => prove_commitment::<
+                TranscriptType::EVM => create_proof_circuit::<
                     IPACommitmentScheme<G1Affine>,
                     _,
                     ProverIPA<_>,
                     VerifierIPA<_>,
-                    IPASingleStrategy<_>,
+                    IPAAccumulatorStrategy<_>,
                     _,
                     EvmTranscript<_, _, _, _>,
                     EvmTranscript<_, _, _, _>,
                 >(
-                    agg_circuit,
-                    &pk,
+                    circuit,
+                    vec![public_inputs],
                     &params,
-                    transcript,
-                    public_inputs,
-                    None,
+                    &pk,
                     check_mode,
-                    None,
                     commitment,
-                )?,
+                    transcript,
+                    None,
+                    None,
+                ),
                 TranscriptType::Poseidon => {
                     let protocol = Some(compile(
                         &params,
@@ -2200,30 +2133,30 @@ pub(crate) fn aggregate(
                         Config::ipa().with_num_instance(vec![public_inputs.len()]),
                     ));
 
-                    prove_commitment::<
+                    create_proof_circuit::<
                         IPACommitmentScheme<G1Affine>,
                         _,
                         ProverIPA<_>,
                         VerifierIPA<_>,
-                        IPASingleStrategy<_>,
+                        IPAAccumulatorStrategy<_>,
                         _,
                         PoseidonTranscript<NativeLoader, _>,
                         PoseidonTranscript<NativeLoader, _>,
                     >(
-                        agg_circuit,
-                        &pk,
+                        circuit,
+                        vec![public_inputs],
                         &params,
-                        transcript,
-                        public_inputs,
-                        None,
+                        &pk,
                         check_mode,
-                        protocol,
                         commitment,
-                    )?
+                        transcript,
+                        None,
+                        protocol,
+                    )
                 }
             }
         }
-    };
+    }?;
     // the K used for the aggregation circuit
 
     let elapsed = now.elapsed();

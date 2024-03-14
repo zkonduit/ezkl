@@ -107,7 +107,6 @@ fn runrelu(c: &mut Criterion) {
                     vec![],
                     &params,
                     &pk,
-                    SingleStrategy::new(&params),
                     CheckMode::UNSAFE,
                     ezkl::Commitments::KZG,
                     TranscriptType::EVM,
