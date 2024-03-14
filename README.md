@@ -74,6 +74,10 @@ For more details visit the [docs](https://docs.ezkl.xyz).
 
 Build the auto-generated rust documentation and open the docs in your browser locally. `cargo doc --open`
 
+#### In-browser EVM verifier
+
+As an alternative to running the native Halo2 verifier as a WASM binding in the browser, you can use the in-browser EVM verifier. The source code of which you can find in the `in-browser-evm-verifier` directory and a README with instructions on how to use it.
+
 
 ### building the project 🔨
 
