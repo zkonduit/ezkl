@@ -830,37 +830,11 @@ pub fn save_params<Scheme: CommitmentScheme>(
 #[cfg(test)]
 #[cfg(not(target_arch = "wasm32"))]
 mod tests {
-    use std::io::copy;
 
     use super::*;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2curves::bn256::{Bn256, Fr, G1Affine};
     use tempfile::Builder;
-
-    #[tokio::test]
-    async fn test_can_load_pre_generated_srs() {
-        let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
-        // lets hope this link never rots
-        let target =
-            "https://trusted-setup-halo2polycommit.s3.eu-central-1.amazonaws.com/hermez-raw-1";
-        let response = reqwest::get(target).await.unwrap();
-
-        let fname = response
-            .url()
-            .path_segments()
-            .and_then(|segments| segments.last())
-            .and_then(|name| if name.is_empty() { None } else { Some(name) })
-            .unwrap_or("tmp.bin");
-
-        info!("file to download: '{}'", fname);
-        let fname = tmp_dir.path().join(fname);
-        info!("will be located under: '{:?}'", fname);
-        let mut dest = File::create(fname.clone()).unwrap();
-        let content = response.bytes().await.unwrap();
-        copy(&mut &content[..], &mut dest).unwrap();
-        let res = srs::load_srs_prover::<KZGCommitmentScheme<Bn256>>(fname);
-        assert!(res.is_ok())
-    }
 
     #[tokio::test]
     async fn test_can_load_saved_srs() {

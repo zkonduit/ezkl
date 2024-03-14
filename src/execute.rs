@@ -576,11 +576,6 @@ pub(crate) async fn get_srs_cmd(
 
     let err_string = "You will need to provide a valid settings file to use the settings option. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows).";
 
-    println!("logrows: {:?}", logrows);
-    println!("commitment: {:?}", commitment);
-    println!("srs_path: {:?}", srs_path);
-    println!("settings_path: {:?}", settings_path);
-
     let k = if let Some(k) = logrows {
         k
     } else if let Some(settings_p) = &settings_path {
