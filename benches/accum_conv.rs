@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::*;
 use ezkl::pfsys::create_keys;
-use ezkl::pfsys::create_proof_circuit_kzg;
+use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::srs::gen_srs;
 use ezkl::pfsys::TranscriptType;
 use ezkl::tensor::*;
@@ -132,14 +132,16 @@ fn runcnvrl(c: &mut Criterion) {
             group.throughput(Throughput::Elements(*size as u64));
             group.bench_with_input(BenchmarkId::new("prove", size), &size, |b, &_| {
                 b.iter(|| {
-                    let prover = create_proof_circuit_kzg(
+                    let prover = create_proof_circuit(
                         circuit.clone(),
+                        vec![],
                         &params,
-                        None,
                         &pk,
-                        TranscriptType::EVM,
                         SingleStrategy::new(&params),
                         CheckMode::UNSAFE,
+                        ezkl::Commitments::KZG,
+                        TranscriptType::EVM,
+                        None,
                         None,
                     );
                     prover.unwrap();

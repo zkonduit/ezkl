@@ -4,7 +4,7 @@ use ezkl::circuit::*;
 use ezkl::circuit::lookup::LookupOp;
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::table::Range;
-use ezkl::pfsys::create_proof_circuit_kzg;
+use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
 use ezkl::tensor::*;
@@ -126,14 +126,16 @@ fn runmatmul(c: &mut Criterion) {
         group.throughput(Throughput::Elements(k as u64));
         group.bench_with_input(BenchmarkId::new("prove", k), &k, |b, &_| {
             b.iter(|| {
-                let prover = create_proof_circuit_kzg(
+                let prover = create_proof_circuit(
                     circuit.clone(),
+                    vec![],
                     &params,
-                    None,
                     &pk,
-                    TranscriptType::EVM,
                     SingleStrategy::new(&params),
-                    CheckMode::SAFE,
+                    CheckMode::UNSAFE,
+                    ezkl::Commitments::KZG,
+                    TranscriptType::EVM,
+                    None,
                     None,
                 );
                 prover.unwrap();

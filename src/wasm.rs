@@ -235,7 +235,7 @@ pub fn genWitness(
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let witness = circuit
-        .forward(&mut input, None, None, false)
+        .forward::<KZGCommitmentScheme<Bn256>>(&mut input, None, None, false)
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     serde_json::to_vec(&witness)
@@ -460,9 +460,10 @@ pub fn prove(
                 &pk,
                 strategy,
                 CheckMode::UNSAFE,
+                crate::Commitments::KZG,
                 TranscriptType::EVM,
                 proof_split_commits,
-                false,
+                None,
             )
         }
         Commitments::IPA => {
@@ -487,9 +488,10 @@ pub fn prove(
                 &pk,
                 strategy,
                 CheckMode::UNSAFE,
+                crate::Commitments::IPA,
                 TranscriptType::EVM,
                 proof_split_commits,
-                false,
+                None,
             )
         }
     }
