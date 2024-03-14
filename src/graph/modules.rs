@@ -1,12 +1,12 @@
-use crate::circuit::modules::kzg::{KZGChip, KZGConfig};
+use crate::circuit::modules::polycommit::{PolyCommitChip, PolyCommitConfig};
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::Module;
 use crate::tensor::{Tensor, ValTensor};
 use halo2_proofs::circuit::Layouter;
 use halo2_proofs::plonk::{Column, ConstraintSystem, Error, Instance, VerifyingKey};
-use halo2_proofs::poly::kzg::commitment::ParamsKZG;
-use halo2curves::bn256::{Bn256, Fr as Fp, G1Affine};
+use halo2_proofs::poly::commitment::CommitmentScheme;
+use halo2curves::bn256::{Fr as Fp, G1Affine};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
@@ -14,9 +14,6 @@ use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
 pub const POSEIDON_LEN_GRAPH: usize = 32;
-
-/// ElGamal number of instances
-pub const ELGAMAL_INSTANCES: usize = 4;
 /// Poseidon number of instancess
 pub const POSEIDON_INSTANCES: usize = 1;
 
@@ -29,8 +26,8 @@ pub type ModulePoseidonConfig = PoseidonConfig<POSEIDON_WIDTH, POSEIDON_RATE>;
 ///
 #[derive(Clone, Debug, Default)]
 pub struct ModuleConfigs {
-    /// KZG
-    kzg: Vec<KZGConfig>,
+    /// PolyCommit
+    polycommit: Vec<PolyCommitConfig>,
     /// Poseidon
     poseidon: Option<ModulePoseidonConfig>,
     /// Instance
@@ -46,8 +43,10 @@ impl ModuleConfigs {
     ) -> Self {
         let mut config = Self::default();
 
-        for size in module_size.kzg {
-            config.kzg.push(KZGChip::configure(cs, (logrows, size)));
+        for size in module_size.polycommit {
+            config
+                .polycommit
+                .push(PolyCommitChip::configure(cs, (logrows, size)));
         }
 
         config
@@ -94,8 +93,8 @@ impl ModuleConfigs {
 pub struct ModuleForwardResult {
     /// The inputs of the forward pass for poseidon
     pub poseidon_hash: Option<Vec<Fp>>,
-    /// The outputs of the forward pass for KZG
-    pub kzg_commit: Option<Vec<Vec<G1Affine>>>,
+    /// The outputs of the forward pass for PolyCommit
+    pub polycommit: Option<Vec<Vec<G1Affine>>>,
 }
 
 impl ModuleForwardResult {
@@ -126,7 +125,7 @@ impl ModuleForwardResult {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 ///
 pub struct ModuleSizes {
-    kzg: Vec<usize>,
+    polycommit: Vec<usize>,
     poseidon: (usize, Vec<usize>),
 }
 
@@ -134,7 +133,7 @@ impl ModuleSizes {
     /// Create new module sizes
     pub fn new() -> Self {
         ModuleSizes {
-            kzg: vec![],
+            polycommit: vec![],
             poseidon: (
                 0,
                 vec![0; crate::circuit::modules::poseidon::NUM_INSTANCE_COLUMNS],
@@ -156,17 +155,17 @@ impl ModuleSizes {
 /// Graph modules that can process inputs, params and outputs beyond the basic operations
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GraphModules {
-    kzg_idx: usize,
+    polycommit_idx: usize,
 }
 impl GraphModules {
     ///
     pub fn new() -> GraphModules {
-        GraphModules { kzg_idx: 0 }
+        GraphModules { polycommit_idx: 0 }
     }
 
     ///
     pub fn reset_index(&mut self) {
-        self.kzg_idx = 0;
+        self.polycommit_idx = 0;
     }
 }
 
@@ -179,9 +178,9 @@ impl GraphModules {
         for shape in shapes {
             let total_len = shape.iter().product::<usize>();
             if total_len > 0 {
-                if visibility.is_kzgcommit() {
-                    // 1 constraint for each kzg commitment
-                    sizes.kzg.push(total_len);
+                if visibility.is_polycommit() {
+                    // 1 constraint for each polycommit commitment
+                    sizes.polycommit.push(total_len);
                 } else if visibility.is_hashed() {
                     sizes.poseidon.0 += ModulePoseidon::num_rows(total_len);
                     // 1 constraints for hash
@@ -236,22 +235,22 @@ impl GraphModules {
         element_visibility: &Visibility,
         instance_offset: &mut usize,
     ) -> Result<(), Error> {
-        if element_visibility.is_kzgcommit() && !values.is_empty() {
+        if element_visibility.is_polycommit() && !values.is_empty() {
             // concat values and sk to get the inputs
             let mut inputs = values.iter_mut().map(|x| vec![x.clone()]).collect_vec();
 
             // layout the module
             inputs.iter_mut().for_each(|x| {
                 // create the module
-                let chip = KZGChip::new(configs.kzg[self.kzg_idx].clone());
-                // reserve module 2 onwards for kzg modules
-                let module_offset = 3 + self.kzg_idx;
+                let chip = PolyCommitChip::new(configs.polycommit[self.polycommit_idx].clone());
+                // reserve module 2 onwards for polycommit modules
+                let module_offset = 3 + self.polycommit_idx;
                 layouter
                     .assign_region(|| format!("_enter_module_{}", module_offset), |_| Ok(()))
                     .unwrap();
                 Self::layout_module(&chip, layouter, x, instance_offset).unwrap();
                 // increment the current index
-                self.kzg_idx += 1;
+                self.polycommit_idx += 1;
             });
 
             // replace the inputs with the outputs
@@ -288,14 +287,14 @@ impl GraphModules {
     }
 
     /// Run forward pass
-    pub fn forward(
-        inputs: &[Tensor<Fp>],
+    pub fn forward<Scheme: CommitmentScheme<Scalar = Fp, Curve = G1Affine>>(
+        inputs: &[Tensor<Scheme::Scalar>],
         element_visibility: &Visibility,
         vk: Option<&VerifyingKey<G1Affine>>,
-        srs: Option<&ParamsKZG<Bn256>>,
+        srs: Option<&Scheme::ParamsProver>,
     ) -> Result<ModuleForwardResult, Box<dyn std::error::Error>> {
         let mut poseidon_hash = None;
-        let mut kzg_commit = None;
+        let mut polycommit = None;
 
         if element_visibility.is_hashed() {
             let field_elements = inputs.iter().fold(vec![], |mut acc, x| {
@@ -306,11 +305,11 @@ impl GraphModules {
             poseidon_hash = Some(field_elements);
         }
 
-        if element_visibility.is_kzgcommit() {
+        if element_visibility.is_polycommit() {
             if let Some(vk) = vk {
                 if let Some(srs) = srs {
                     let commitments = inputs.iter().fold(vec![], |mut acc, x| {
-                        let res = KZGChip::commit(
+                        let res = PolyCommitChip::commit::<Scheme>(
                             x.to_vec(),
                             vk.cs().degree() as u32,
                             (vk.cs().blinding_factors() + 1) as u32,
@@ -319,20 +318,20 @@ impl GraphModules {
                         acc.push(res);
                         acc
                     });
-                    kzg_commit = Some(commitments);
+                    polycommit = Some(commitments);
                 } else {
-                    log::warn!("no srs provided for kzgcommit. processed value will be none");
+                    log::warn!("no srs provided for polycommit. processed value will be none");
                 }
             } else {
                 log::debug!(
-                    "no verifying key provided for kzgcommit. processed value will be none"
+                    "no verifying key provided for polycommit. processed value will be none"
                 );
             }
         }
 
         Ok(ModuleForwardResult {
             poseidon_hash,
-            kzg_commit,
+            polycommit,
         })
     }
 }

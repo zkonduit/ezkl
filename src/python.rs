@@ -1,4 +1,4 @@
-use crate::circuit::modules::kzg::KZGChip;
+use crate::circuit::modules::polycommit::PolyCommitChip;
 use crate::circuit::modules::poseidon::{
     spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
     PoseidonChip,
@@ -19,6 +19,7 @@ use crate::pfsys::{
 };
 use crate::Commitments;
 use crate::RunArgs;
+use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
@@ -417,10 +418,50 @@ fn kzg_commit(
     let srs = load_srs_prover::<KZGCommitmentScheme<Bn256>>(srs_path)
         .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings)
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, settings)
         .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
 
-    let output = KZGChip::commit(
+    let output = PolyCommitChip::commit::<KZGCommitmentScheme<Bn256>>(
+        message,
+        vk.cs().degree() as u32,
+        (vk.cs().blinding_factors() + 1) as u32,
+        &srs,
+    );
+
+    Ok(output.iter().map(|x| (*x).into()).collect::<Vec<_>>())
+}
+
+/// Generate an ipa commitment.
+#[pyfunction(signature = (
+    message,
+    vk_path=PathBuf::from(DEFAULT_VK),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    srs_path=None
+    ))]
+fn ipa_commit(
+    message: Vec<PyFelt>,
+    vk_path: PathBuf,
+    settings_path: PathBuf,
+    srs_path: Option<PathBuf>,
+) -> PyResult<Vec<PyG1Affine>> {
+    let message: Vec<Fr> = message
+        .iter()
+        .map(crate::pfsys::string_to_field::<Fr>)
+        .collect::<Vec<_>>();
+
+    let settings = GraphSettings::load(&settings_path)
+        .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
+
+    let srs_path =
+        crate::execute::get_srs_path(settings.run_args.logrows, srs_path, Commitments::KZG);
+
+    let srs = load_srs_prover::<IPACommitmentScheme<G1Affine>>(srs_path)
+        .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
+
+    let vk = load_vk::<IPACommitmentScheme<G1Affine>, GraphCircuit>(vk_path, settings)
+        .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
+
+    let output = PolyCommitChip::commit::<IPACommitmentScheme<G1Affine>>(
         message,
         vk.cs().degree() as u32,
         (vk.cs().blinding_factors() + 1) as u32,
@@ -436,7 +477,7 @@ fn kzg_commit(
     witness_path=PathBuf::from(DEFAULT_WITNESS),
     ))]
 fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResult<()> {
-    crate::execute::swap_proof_commitments(proof_path, witness_path)
+    crate::execute::swap_proof_commitments_cmd(proof_path, witness_path)
         .map_err(|_| PyIOError::new_err("Failed to swap commitments"))?;
 
     Ok(())
@@ -456,7 +497,7 @@ fn gen_vk_from_pk_single(
     let settings = GraphSettings::load(&circuit_settings_path)
         .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
 
-    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(path_to_pk, settings)
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(path_to_pk, settings)
         .map_err(|_| PyIOError::new_err("Failed to load pk"))?;
 
     let vk = pk.get_vk();
@@ -474,7 +515,7 @@ fn gen_vk_from_pk_single(
     vk_output_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
     ))]
 fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult<bool> {
-    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(path_to_pk, ())
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(path_to_pk, ())
         .map_err(|_| PyIOError::new_err("Failed to load pk"))?;
 
     let vk = pk.get_vk();
@@ -1178,10 +1219,12 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
+    m.add_class::<PyCommitments>()?;
     m.add_function(wrap_pyfunction!(felt_to_big_endian, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_int, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_float, m)?)?;
     m.add_function(wrap_pyfunction!(kzg_commit, m)?)?;
+    m.add_function(wrap_pyfunction!(ipa_commit, m)?)?;
     m.add_function(wrap_pyfunction!(swap_proof_commitments, m)?)?;
     m.add_function(wrap_pyfunction!(poseidon_hash, m)?)?;
     m.add_function(wrap_pyfunction!(float_to_felt, m)?)?;

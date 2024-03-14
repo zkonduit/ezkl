@@ -2,7 +2,7 @@
 pub mod poseidon;
 
 ///
-pub mod kzg;
+pub mod polycommit;
 
 ///
 pub mod planner;

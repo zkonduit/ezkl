@@ -245,7 +245,12 @@ mod matmul_col_overflow {
 #[cfg(test)]
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod matmul_col_ultra_overflow_double_col {
-    use halo2_proofs::poly::commitment::{Params, ParamsProver};
+
+    use halo2_proofs::poly::kzg::{
+        commitment::KZGCommitmentScheme,
+        multiopen::{ProverSHPLONK, VerifierSHPLONK},
+    };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     use super::*;
 
@@ -328,41 +333,42 @@ mod matmul_col_ultra_overflow_double_col {
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            _,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
     }
 }
 
 #[cfg(test)]
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod matmul_col_ultra_overflow {
-    use halo2_proofs::poly::commitment::{Params, ParamsProver};
+
+    use halo2_proofs::poly::kzg::{
+        commitment::KZGCommitmentScheme,
+        multiopen::{ProverSHPLONK, VerifierSHPLONK},
+    };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     use super::*;
 
@@ -444,34 +450,30 @@ mod matmul_col_ultra_overflow {
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            _,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
     }
 }
 
@@ -1143,7 +1145,12 @@ mod conv {
 #[cfg(test)]
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod conv_col_ultra_overflow {
-    use halo2_proofs::poly::commitment::{Params, ParamsProver};
+
+    use halo2_proofs::poly::kzg::{
+        commitment::KZGCommitmentScheme,
+        multiopen::{ProverSHPLONK, VerifierSHPLONK},
+    };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     use super::*;
 
@@ -1245,34 +1252,30 @@ mod conv_col_ultra_overflow {
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            _,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
     }
 }
 
@@ -1280,7 +1283,12 @@ mod conv_col_ultra_overflow {
 // not wasm 32 unknown
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod conv_relu_col_ultra_overflow {
-    use halo2_proofs::poly::commitment::{Params, ParamsProver};
+
+    use halo2_proofs::poly::kzg::{
+        commitment::KZGCommitmentScheme,
+        multiopen::{ProverSHPLONK, VerifierSHPLONK},
+    };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     use super::*;
 
@@ -1397,34 +1405,30 @@ mod conv_relu_col_ultra_overflow {
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            _,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
-            // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            // use safe mode to verify that the proof is correct
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
     }
 }
 
@@ -2413,8 +2417,12 @@ mod lookup_ultra_overflow {
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner, Value},
         plonk::{Circuit, ConstraintSystem, Error},
-        poly::commitment::{Params, ParamsProver},
+        poly::kzg::{
+            commitment::KZGCommitmentScheme,
+            multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        },
     };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     #[derive(Clone)]
     struct ReLUCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -2497,33 +2505,29 @@ mod lookup_ultra_overflow {
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            _,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
             halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
     }
 }

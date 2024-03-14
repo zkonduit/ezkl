@@ -670,7 +670,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "kzgcommit", "private", "public", 1, "resources", None, 0.0);
+                mock(path, test.to_string(), "polycommit", "private", "public", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -690,7 +690,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "kzgcommit", "public", 1, "resources", None, 0.0);
+                mock(path, test.to_string(), "private", "polycommit", "public", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -709,7 +709,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "private", "kzgcommit", 1, "resources", None, 0.0);
+                mock(path, test.to_string(), "public", "private", "polycommit", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -728,7 +728,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "kzgcommit", "hashed", 1, "resources", None, 0.0);
+                mock(path, test.to_string(), "public", "polycommit", "hashed", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -738,7 +738,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "kzgcommit", "kzgcommit", "kzgcommit", 1, "resources", None, 0.0);
+                mock(path, test.to_string(), "polycommit", "polycommit", "polycommit", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -858,7 +858,16 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-               prove_and_verify(path, test.to_string(), "safe", "private", "private", "kzgcommit", 1, None, false, "single", Commitments::KZG);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "polycommit", 1, None, false, "single", Commitments::KZG);
+               test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn ipa_prove_and_verify_ipa_output(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+               prove_and_verify(path, test.to_string(), "safe", "private", "private", "polycommit", 1, None, false, "single", Commitments::IPA);
                test_dir.close().unwrap();
             }
 
@@ -1072,7 +1081,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let mut _anvil_child = crate::native_tests::start_anvil(false, hardfork);
-                    kzg_evm_prove_and_verify(2, path, test.to_string(), "kzgcommit", "private", "public");
+                    kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "private", "public");
                     // #[cfg(not(feature = "icicle"))]
                     // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
@@ -1111,7 +1120,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
-                    kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "kzgcommit", "public");
+                    kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "polycommit", "public");
                     // #[cfg(not(feature = "icicle"))]
                     // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
@@ -1124,7 +1133,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
-                    kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "kzgcommit");
+                    kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "polycommit");
                     // #[cfg(not(feature = "icicle"))]
                     // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
@@ -1136,7 +1145,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
-                    kzg_evm_prove_and_verify(2, path, test.to_string(), "kzgcommit", "kzgcommit", "kzgcommit");
+                    kzg_evm_prove_and_verify(2, path, test.to_string(), "polycommit", "polycommit", "polycommit");
                     // #[cfg(not(feature = "icicle"))]
                     // run_js_tests(path, test.to_string(), "testBrowserEvmVerify");
                     test_dir.close().unwrap();
