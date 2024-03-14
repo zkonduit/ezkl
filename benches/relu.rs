@@ -7,6 +7,7 @@ use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
 use ezkl::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -14,6 +15,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{Bn256, Fr};
 use rand::Rng;
+use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
 const BITS: Range = (-32768, 32768);
 static mut LEN: usize = 4;
@@ -102,7 +104,16 @@ fn runrelu(c: &mut Criterion) {
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::new("prove", len), &len, |b, &_| {
             b.iter(|| {
-                let prover = create_proof_circuit(
+                let prover = create_proof_circuit::<
+                    KZGCommitmentScheme<_>,
+                    NLCircuit,
+                    ProverSHPLONK<_>,
+                    VerifierSHPLONK<_>,
+                    SingleStrategy<_>,
+                    _,
+                    EvmTranscript<_, _, _, _>,
+                    EvmTranscript<_, _, _, _>,
+                >(
                     circuit.clone(),
                     vec![],
                     &params,

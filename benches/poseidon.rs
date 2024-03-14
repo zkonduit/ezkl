@@ -10,6 +10,7 @@ use ezkl::pfsys::TranscriptType;
 use ezkl::tensor::*;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
     arithmetic::Field,
@@ -18,6 +19,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
+use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
 const L: usize = 10;
 
@@ -62,7 +64,7 @@ fn runposeidon(c: &mut Criterion) {
         let params = gen_srs::<KZGCommitmentScheme<_>>(k);
 
         let message = (0..*size).map(|_| Fr::random(OsRng)).collect::<Vec<_>>();
-        let output =
+        let _output =
             PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, L>::run(message.to_vec())
                 .unwrap();
 
@@ -87,7 +89,16 @@ fn runposeidon(c: &mut Criterion) {
         group.throughput(Throughput::Elements(*size as u64));
         group.bench_with_input(BenchmarkId::new("prove", size), &size, |b, &_| {
             b.iter(|| {
-                let prover = create_proof_circuit(
+                let prover = create_proof_circuit::<
+                    KZGCommitmentScheme<_>,
+                    MyCircuit,
+                    ProverSHPLONK<_>,
+                    VerifierSHPLONK<_>,
+                    SingleStrategy<_>,
+                    _,
+                    EvmTranscript<_, _, _, _>,
+                    EvmTranscript<_, _, _, _>,
+                >(
                     circuit.clone(),
                     vec![],
                     &params,

@@ -55,7 +55,6 @@ use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::debug;
 use log::{info, trace, warn};
-use plotters::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use snark_verifier::loader::native::NativeLoader;
