@@ -55,7 +55,6 @@ use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::debug;
 use log::{info, trace, warn};
-#[cfg(feature = "render")]
 use plotters::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -161,12 +160,6 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             commitment,
         } => get_srs_cmd(srs_path, settings_path, logrows, commitment).await,
         Commands::Table { model, args } => table(model, args),
-        #[cfg(feature = "render")]
-        Commands::RenderCircuit {
-            model,
-            output,
-            args,
-        } => render(model, output, args),
         Commands::GenSettings {
             model,
             settings_path,
@@ -1274,29 +1267,6 @@ pub(crate) fn mock(
     prover
         .verify()
         .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
-    Ok(String::new())
-}
-
-#[cfg(feature = "render")]
-pub(crate) fn render(
-    model: PathBuf,
-    output: PathBuf,
-    args: RunArgs,
-) -> Result<String, Box<dyn Error>> {
-    let circuit = GraphCircuit::from_run_args(&args, &model)?;
-    info!("Rendering circuit");
-
-    // Create the area we want to draw on.
-    // We could use SVGBackend if we want to render to .svg instead.
-    // for an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
-    let root = BitMapBackend::new(&output, (512, 512)).into_drawing_area();
-    root.fill(&TRANSPARENT)?;
-    let root = root.titled("Layout", ("sans-serif", 20))?;
-
-    halo2_proofs::dev::CircuitLayout::default()
-        // We hide labels, else most circuits become impossible to decipher because of overlaid text
-        .show_labels(false)
-        .render(circuit.settings().run_args.logrows, &circuit, &root)?;
     Ok(String::new())
 }
 

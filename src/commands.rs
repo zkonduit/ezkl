@@ -296,21 +296,6 @@ pub enum Commands {
         args: RunArgs,
     },
 
-    #[cfg(feature = "render")]
-    /// Renders the model circuit to a .png file. For an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
-    #[command(arg_required_else_help = true)]
-    RenderCircuit {
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
-        /// Path to save the .png circuit render
-        #[arg(short = 'O', long)]
-        output: PathBuf,
-        /// proving arguments
-        #[clap(flatten)]
-        args: RunArgs,
-    },
-
     /// Generates the witness from an input file.
     GenWitness {
         /// The path to the .json data file
