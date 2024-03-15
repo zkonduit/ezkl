@@ -695,7 +695,6 @@ fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     aggregation_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     split_proofs = false,
-    commitment=DEFAULT_COMMITMENT.parse().unwrap(),
 ))]
 fn mock_aggregate(
     aggregation_snarks: Vec<PathBuf>,
