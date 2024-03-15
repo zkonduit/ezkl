@@ -471,8 +471,11 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Mock aggr tests
+      - name: Mock aggr tests (IPA)
+        run: cargo nextest run --release --verbose tests_aggr:ipa_aggr_mock_prove_and_verify_  --test-threads 8
+      - name: Mock aggr tests (KZG)
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_  --test-threads 8
+      
 
   prove-and-verify-aggr-tests-gpu:
     runs-on: GPU
