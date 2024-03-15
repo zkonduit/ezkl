@@ -8,7 +8,7 @@ use crate::graph::quantize_float;
 use crate::graph::scale_to_multiplier;
 use crate::graph::{GraphCircuit, GraphSettings};
 use crate::pfsys::create_proof_circuit;
-use crate::pfsys::evm::aggregation::PoseidonTranscript;
+use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
 use crate::pfsys::verify_proof_circuit;
 use crate::pfsys::TranscriptType;
 use crate::tensor::TensorType;

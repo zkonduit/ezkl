@@ -12,7 +12,7 @@ use crate::graph::TestDataSource;
 use crate::graph::{
     quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
 };
-use crate::pfsys::evm::aggregation::AggregationCircuit;
+use crate::pfsys::evm::aggregation_kzg::AggregationCircuit;
 use crate::pfsys::{
     load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
     ProofType, TranscriptType,
