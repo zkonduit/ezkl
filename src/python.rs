@@ -701,13 +701,11 @@ fn mock_aggregate(
     aggregation_snarks: Vec<PathBuf>,
     logrows: u32,
     split_proofs: bool,
-    commitment: PyCommitments,
 ) -> PyResult<bool> {
-    crate::execute::mock_aggregate(aggregation_snarks, logrows, split_proofs, commitment.into())
-        .map_err(|e| {
-            let err_str = format!("Failed to run mock: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+    crate::execute::mock_aggregate(aggregation_snarks, logrows, split_proofs).map_err(|e| {
+        let err_str = format!("Failed to run mock: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }

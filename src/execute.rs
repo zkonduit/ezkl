@@ -13,7 +13,7 @@ use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::{TestDataSource, TestSources};
-use crate::pfsys::evm::aggregation::{AggregationCircuit, PoseidonTranscript};
+use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::{
     create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
@@ -319,8 +319,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             aggregation_snarks,
             logrows,
             split_proofs,
-            commitment,
-        } => mock_aggregate(aggregation_snarks, logrows, split_proofs, commitment),
+        } => mock_aggregate(aggregation_snarks, logrows, split_proofs),
         Commands::SetupAggregate {
             sample_snarks,
             vk_path,
@@ -1871,16 +1870,17 @@ pub(crate) fn mock_aggregate(
     aggregation_snarks: Vec<PathBuf>,
     logrows: u32,
     split_proofs: bool,
-    commitment: Commitments,
 ) -> Result<String, Box<dyn Error>> {
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
-        match commitment {
-            Commitments::KZG => {
-                snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+        match Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path) {
+            Ok(snark) => {
+                snarks.push(snark);
             }
-            Commitments::IPA => {
-                snarks.push(Snark::load::<IPACommitmentScheme<G1Affine>>(proof_path)?);
+            Err(_) => {
+                return Err(
+                    format!("invalid sample commitment type for aggregation, must be KZG").into(),
+                );
             }
         }
     }
@@ -1916,12 +1916,14 @@ pub(crate) fn setup_aggregate(
 ) -> Result<String, Box<dyn Error>> {
     let mut snarks = vec![];
     for proof_path in sample_snarks.iter() {
-        match commitment {
-            Commitments::KZG => {
-                snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+        match Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path) {
+            Ok(snark) => {
+                snarks.push(snark);
             }
-            Commitments::IPA => {
-                snarks.push(Snark::load::<IPACommitmentScheme<G1Affine>>(proof_path)?);
+            Err(_) => {
+                return Err(
+                    format!("invalid sample commitment type for aggregation, must be KZG",).into(),
+                );
             }
         }
     }
@@ -1975,12 +1977,14 @@ pub(crate) fn aggregate(
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
-        match commitment {
-            Commitments::KZG => {
-                snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+        match Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path) {
+            Ok(snark) => {
+                snarks.push(snark);
             }
-            Commitments::IPA => {
-                snarks.push(Snark::load::<IPACommitmentScheme<G1Affine>>(proof_path)?);
+            Err(_) => {
+                return Err(
+                    format!("invalid sample commitment type for aggregation, must be KZG").into(),
+                );
             }
         }
     }

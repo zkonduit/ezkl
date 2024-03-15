@@ -417,9 +417,6 @@ pub enum Commands {
         /// whether the accumulated are segments of a larger proof
         #[arg(long, default_value = DEFAULT_SPLIT)]
         split_proofs: bool,
-        /// commitment used
-        #[arg(long, default_value = DEFAULT_COMMITMENT)]
-        commitment: Commitments,
     },
 
     /// setup aggregation circuit :)

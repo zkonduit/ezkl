@@ -6,7 +6,7 @@ pub mod srs;
 
 use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
-use crate::pfsys::evm::aggregation::PoseidonTranscript;
+use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
 use crate::{Commitments, EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;

@@ -439,18 +439,10 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                kzg_aggr_mock_prove_and_verify(path, test.to_string(), Commitments::KZG);
+                kzg_aggr_mock_prove_and_verify(path, test.to_string());
                 test_dir.close().unwrap();
             }
 
-            #(#[test_case(TESTS_AGGR[N])])*
-            fn ipa_aggr_mock_prove_and_verify_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                kzg_aggr_mock_prove_and_verify(path, test.to_string(), Commitments::IPA);
-                test_dir.close().unwrap();
-            }
 
 
             #(#[test_case(TESTS_AGGR[N])])*
@@ -1649,11 +1641,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_aggr_mock_prove_and_verify(
-        test_dir: &str,
-        example_name: String,
-        commitment: Commitments,
-    ) {
+    fn kzg_aggr_mock_prove_and_verify(test_dir: &str, example_name: String) {
         prove_and_verify(
             test_dir,
             example_name.clone(),
@@ -1665,7 +1653,7 @@ mod native_tests {
             None,
             false,
             "for-aggr",
-            commitment,
+            Commitments::KZG,
         );
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -1699,7 +1687,7 @@ mod native_tests {
             None,
             false,
             "for-aggr",
-            commitment,
+            Commitments::KZG,
         );
 
         download_srs(23, commitment);
@@ -1714,6 +1702,7 @@ mod native_tests {
                 &format!("{}/{}/aggr.vk", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/aggr.pk", test_dir, example_name),
+                &format!("--commitment={}", commitment),
             ])
             .status()
             .expect("failed to execute process");
@@ -1729,6 +1718,7 @@ mod native_tests {
                 &format!("{}/{}/aggr.pf", test_dir, example_name),
                 "--pk-path",
                 &format!("{}/{}/aggr.pk", test_dir, example_name),
+                &format!("--commitment={}", commitment),
             ])
             .status()
             .expect("failed to execute process");
