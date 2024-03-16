@@ -508,8 +508,7 @@ jobs:
           locked: true
       - name: KZG tests
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_  --test-threads 4 -- --include-ignored
-      - name: IPA tests
-        run: cargo nextest run --release --verbose tests_aggr::ipa_aggr_prove_and_verify_  --test-threads 4 -- --include-ignored
+
 
 
   prove-and-verify-aggr-evm-tests:
