@@ -1,7 +1,7 @@
 use thiserror::Error;
 
-/// Aggregate proof generation for EVM
-pub mod aggregation;
+/// Aggregate proof generation for EVM using KZG
+pub mod aggregation_kzg;
 
 #[derive(Error, Debug)]
 /// Errors related to evm verification

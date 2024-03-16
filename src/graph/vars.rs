@@ -45,7 +45,7 @@ pub enum Visibility {
 impl Display for Visibility {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Visibility::KZGCommit => write!(f, "kzgcommit"),
+            Visibility::KZGCommit => write!(f, "polycommit"),
             Visibility::Private => write!(f, "private"),
             Visibility::Public => write!(f, "public"),
             Visibility::Fixed => write!(f, "fixed"),
@@ -88,7 +88,7 @@ impl<'a> From<&'a str> for Visibility {
         match s {
             "private" => Visibility::Private,
             "public" => Visibility::Public,
-            "kzgcommit" => Visibility::KZGCommit,
+            "polycommit" => Visibility::KZGCommit,
             "fixed" => Visibility::Fixed,
             "hashed" | "hashed/public" => Visibility::Hashed {
                 hash_is_public: true,
@@ -111,7 +111,7 @@ impl IntoPy<PyObject> for Visibility {
             Visibility::Private => "private".to_object(py),
             Visibility::Public => "public".to_object(py),
             Visibility::Fixed => "fixed".to_object(py),
-            Visibility::KZGCommit => "kzgcommit".to_object(py),
+            Visibility::KZGCommit => "polycommit".to_object(py),
             Visibility::Hashed {
                 hash_is_public,
                 outlets,
@@ -158,7 +158,7 @@ impl<'source> FromPyObject<'source> for Visibility {
         match strval.to_lowercase().as_str() {
             "private" => Ok(Visibility::Private),
             "public" => Ok(Visibility::Public),
-            "kzgcommit" => Ok(Visibility::KZGCommit),
+            "polycommit" => Ok(Visibility::KZGCommit),
             "hashed" => Ok(Visibility::Hashed {
                 hash_is_public: true,
                 outlets: vec![],
@@ -192,7 +192,7 @@ impl Visibility {
         matches!(&self, Visibility::Hashed { .. })
     }
     #[allow(missing_docs)]
-    pub fn is_kzgcommit(&self) -> bool {
+    pub fn is_polycommit(&self) -> bool {
         matches!(&self, Visibility::KZGCommit)
     }
 
@@ -323,9 +323,9 @@ impl VarVisibility {
             & !output_vis.is_hashed()
             & !params_vis.is_hashed()
             & !input_vis.is_hashed()
-            & !output_vis.is_kzgcommit()
-            & !params_vis.is_kzgcommit()
-            & !input_vis.is_kzgcommit()
+            & !output_vis.is_polycommit()
+            & !params_vis.is_polycommit()
+            & !input_vis.is_polycommit()
         {
             return Err(Box::new(GraphError::Visibility));
         }

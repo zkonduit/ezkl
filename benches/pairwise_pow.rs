@@ -2,11 +2,13 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::region::RegionCtx;
 use ezkl::circuit::*;
-use ezkl::pfsys::create_proof_circuit_kzg;
+use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
 use ezkl::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
+use halo2_proofs::poly::kzg::multiopen::VerifierSHPLONK;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
     arithmetic::Field,
@@ -15,6 +17,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
+use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::marker::PhantomData;
 
 static mut LEN: usize = 4;
@@ -83,25 +86,35 @@ fn runpow(c: &mut Criterion) {
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::new("pk", len), &len, |b, &_| {
             b.iter(|| {
-                create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params, true)
+                create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit>(&circuit, &params, true)
                     .unwrap();
             });
         });
 
-        let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params, true)
-            .unwrap();
+        let pk =
+            create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit>(&circuit, &params, true).unwrap();
 
         group.throughput(Throughput::Elements(len as u64));
         group.bench_with_input(BenchmarkId::new("prove", len), &len, |b, &_| {
             b.iter(|| {
-                let prover = create_proof_circuit_kzg(
+                let prover = create_proof_circuit::<
+                    KZGCommitmentScheme<_>,
+                    MyCircuit,
+                    ProverSHPLONK<_>,
+                    VerifierSHPLONK<_>,
+                    SingleStrategy<_>,
+                    _,
+                    EvmTranscript<_, _, _, _>,
+                    EvmTranscript<_, _, _, _>,
+                >(
                     circuit.clone(),
+                    vec![],
                     &params,
-                    None,
                     &pk,
+                    CheckMode::UNSAFE,
+                    ezkl::Commitments::KZG,
                     TranscriptType::EVM,
-                    SingleStrategy::new(&params),
-                    CheckMode::SAFE,
+                    None,
                     None,
                 );
                 prover.unwrap();

@@ -6,17 +6,16 @@ pub mod srs;
 
 use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
-use crate::pfsys::evm::aggregation::PoseidonTranscript;
-use crate::tensor::TensorType;
-use crate::{EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
+use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
+use crate::{Commitments, EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
     create_proof, keygen_pk, keygen_vk_custom, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
-use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG};
-use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
+use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
+use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
 use halo2curves::ff::{FromUniformBytes, PrimeField, WithSmallOrderMulGroup};
@@ -32,7 +31,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
-use snark_verifier::system::halo2::{compile, Config};
 use snark_verifier::verifier::plonk::PlonkProtocol;
 use std::error::Error;
 use std::fs::File;
@@ -293,6 +291,8 @@ where
     pub pretty_public_inputs: Option<PrettyElements>,
     /// timestamp
     pub timestamp: Option<u128>,
+    /// commitment
+    pub commitment: Option<Commitments>,
 }
 
 #[cfg(feature = "python-bindings")]
@@ -336,6 +336,7 @@ where
         transcript_type: TranscriptType,
         split: Option<ProofSplitCommit>,
         pretty_public_inputs: Option<PrettyElements>,
+        commitment: Option<Commitments>,
     ) -> Self {
         Self {
             protocol,
@@ -352,6 +353,7 @@ where
                     .unwrap()
                     .as_millis(),
             ),
+            commitment,
         }
     }
 
@@ -398,27 +400,36 @@ impl From<GraphWitness> for Option<ProofSplitCommit> {
         let mut elem_offset = 0;
 
         if let Some(input) = witness.processed_inputs {
-            if let Some(kzg) = input.kzg_commit {
+            if let Some(polycommit) = input.polycommit {
                 // flatten and count number of elements
-                let num_elements = kzg.iter().map(|kzg| kzg.len()).sum::<usize>();
+                let num_elements = polycommit
+                    .iter()
+                    .map(|polycommit| polycommit.len())
+                    .sum::<usize>();
 
                 elem_offset += num_elements;
             }
         }
 
         if let Some(params) = witness.processed_params {
-            if let Some(kzg) = params.kzg_commit {
+            if let Some(polycommit) = params.polycommit {
                 // flatten and count number of elements
-                let num_elements = kzg.iter().map(|kzg| kzg.len()).sum::<usize>();
+                let num_elements = polycommit
+                    .iter()
+                    .map(|polycommit| polycommit.len())
+                    .sum::<usize>();
 
                 elem_offset += num_elements;
             }
         }
 
         if let Some(output) = witness.processed_outputs {
-            if let Some(kzg) = output.kzg_commit {
+            if let Some(polycommit) = output.polycommit {
                 // flatten and count number of elements
-                let num_elements = kzg.iter().map(|kzg| kzg.len()).sum::<usize>();
+                let num_elements = polycommit
+                    .iter()
+                    .map(|polycommit| polycommit.len())
+                    .sum::<usize>();
 
                 Some(ProofSplitCommit {
                     start: elem_offset,
@@ -481,7 +492,7 @@ where
 }
 
 /// Creates a [VerifyingKey] and [ProvingKey] for a [crate::graph::GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`).
-pub fn create_keys<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
+pub fn create_keys<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     circuit: &C,
     params: &'_ Scheme::ParamsProver,
     disable_selector_compression: bool,
@@ -491,7 +502,7 @@ where
     <Scheme as CommitmentScheme>::Scalar: FromUniformBytes<64>,
 {
     //	Real proof
-    let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
+    let empty_circuit = <C as Circuit<Scheme::Scalar>>::without_witnesses(circuit);
 
     // Initialize verifying key
     let now = Instant::now();
@@ -513,8 +524,7 @@ where
 pub fn create_proof_circuit<
     'params,
     Scheme: CommitmentScheme,
-    F: PrimeField + TensorType,
-    C: Circuit<F>,
+    C: Circuit<Scheme::Scalar>,
     P: Prover<'params, Scheme>,
     V: Verifier<'params, Scheme>,
     Strategy: VerificationStrategy<'params, Scheme, V>,
@@ -526,40 +536,28 @@ pub fn create_proof_circuit<
     instances: Vec<Vec<Scheme::Scalar>>,
     params: &'params Scheme::ParamsProver,
     pk: &ProvingKey<Scheme::Curve>,
-    strategy: Strategy,
     check_mode: CheckMode,
+    commitment: Commitments,
     transcript_type: TranscriptType,
     split: Option<ProofSplitCommit>,
-    set_protocol: bool,
+    protocol: Option<PlonkProtocol<Scheme::Curve>>,
 ) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
 where
-    C: Circuit<Scheme::Scalar>,
     Scheme::ParamsVerifier: 'params,
     Scheme::Scalar: Serialize
         + DeserializeOwned
         + SerdeObject
         + PrimeField
         + FromUniformBytes<64>
-        + WithSmallOrderMulGroup<3>
-        + Ord,
+        + WithSmallOrderMulGroup<3>,
     Scheme::Curve: Serialize + DeserializeOwned,
 {
+    let strategy = Strategy::new(params.verifier_params());
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
     #[cfg(feature = "det-prove")]
     let mut rng = <StdRng as rand::SeedableRng>::from_seed([0u8; 32]);
     #[cfg(not(feature = "det-prove"))]
     let mut rng = OsRng;
-    let number_instance = instances.iter().map(|x| x.len()).collect();
-    trace!("number_instance {:?}", number_instance);
-    let mut protocol = None;
-
-    if set_protocol {
-        protocol = Some(compile(
-            params,
-            pk.get_vk(),
-            Config::kzg().with_num_instance(number_instance),
-        ))
-    }
 
     let pi_inner = instances
         .iter()
@@ -595,13 +593,14 @@ where
         transcript_type,
         split,
         None,
+        Some(commitment),
     );
 
     // sanity check that the generated proof is valid
     if check_mode == CheckMode::SAFE {
         debug!("verifying generated proof");
         let verifier_params = params.verifier_params();
-        verify_proof_circuit::<F, V, Scheme, Strategy, E, TR>(
+        verify_proof_circuit::<V, Scheme, Strategy, E, TR>(
             &checkable_pf,
             verifier_params,
             pk.get_vk(),
@@ -621,7 +620,6 @@ where
 
 /// Swaps the proof commitments to a new set in the proof
 pub fn swap_proof_commitments<
-    F: PrimeField,
     Scheme: CommitmentScheme,
     E: EncodedChallenge<Scheme::Curve>,
     TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
@@ -641,7 +639,7 @@ where
 {
     let mut transcript_new: TW = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
 
-    // kzg commitments are the first set of points in the proof, this we'll always be the first set of advice
+    // polycommit commitments are the first set of points in the proof, this we'll always be the first set of advice
     for commit in commitments {
         transcript_new
             .write_point(*commit)
@@ -659,31 +657,46 @@ where
 }
 
 /// Swap the proof commitments to a new set in the proof for KZG
-pub fn swap_proof_commitments_kzg(
+pub fn swap_proof_commitments_polycommit(
     snark: &Snark<Fr, G1Affine>,
     commitments: &[G1Affine],
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
-    let proof = match snark.transcript_type {
-        TranscriptType::EVM => swap_proof_commitments::<
-            Fr,
-            KZGCommitmentScheme<Bn256>,
-            _,
-            EvmTranscript<G1Affine, _, _, _>,
-        >(snark, commitments)?,
-        TranscriptType::Poseidon => swap_proof_commitments::<
-            Fr,
-            KZGCommitmentScheme<Bn256>,
-            _,
-            PoseidonTranscript<NativeLoader, _>,
-        >(snark, commitments)?,
+    let proof = match snark.commitment {
+        Some(Commitments::KZG) => match snark.transcript_type {
+            TranscriptType::EVM => swap_proof_commitments::<
+                KZGCommitmentScheme<Bn256>,
+                _,
+                EvmTranscript<G1Affine, _, _, _>,
+            >(snark, commitments)?,
+            TranscriptType::Poseidon => swap_proof_commitments::<
+                KZGCommitmentScheme<Bn256>,
+                _,
+                PoseidonTranscript<NativeLoader, _>,
+            >(snark, commitments)?,
+        },
+        Some(Commitments::IPA) => match snark.transcript_type {
+            TranscriptType::EVM => swap_proof_commitments::<
+                IPACommitmentScheme<G1Affine>,
+                _,
+                EvmTranscript<G1Affine, _, _, _>,
+            >(snark, commitments)?,
+            TranscriptType::Poseidon => swap_proof_commitments::<
+                IPACommitmentScheme<G1Affine>,
+                _,
+                PoseidonTranscript<NativeLoader, _>,
+            >(snark, commitments)?,
+        },
+        None => {
+            return Err("commitment scheme not found".into());
+        }
     };
+
     Ok(proof)
 }
 
 /// A wrapper around halo2's verify_proof
 pub fn verify_proof_circuit<
     'params,
-    F: PrimeField,
     V: Verifier<'params, Scheme>,
     Scheme: CommitmentScheme,
     Strategy: VerificationStrategy<'params, Scheme, V>,
@@ -701,7 +714,6 @@ where
         + PrimeField
         + FromUniformBytes<64>
         + WithSmallOrderMulGroup<3>
-        + Ord
         + Serialize
         + DeserializeOwned,
     Scheme::Curve: Serialize + DeserializeOwned,
@@ -719,7 +731,7 @@ where
 }
 
 /// Loads a [VerifyingKey] at `path`.
-pub fn load_vk<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
+pub fn load_vk<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     path: PathBuf,
     params: <C as Circuit<Scheme::Scalar>>::Params,
 ) -> Result<VerifyingKey<Scheme::Curve>, Box<dyn Error>>
@@ -742,7 +754,7 @@ where
 }
 
 /// Loads a [ProvingKey] at `path`.
-pub fn load_pk<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
+pub fn load_pk<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     path: PathBuf,
     params: <C as Circuit<Scheme::Scalar>>::Params,
 ) -> Result<ProvingKey<Scheme::Curve>, Box<dyn Error>>
@@ -765,13 +777,12 @@ where
 }
 
 /// Saves a [ProvingKey] to `path`.
-pub fn save_pk<Scheme: CommitmentScheme>(
+pub fn save_pk<C: SerdeObject + CurveAffine>(
     path: &PathBuf,
-    pk: &ProvingKey<Scheme::Curve>,
+    pk: &ProvingKey<C>,
 ) -> Result<(), io::Error>
 where
-    Scheme::Curve: SerdeObject + CurveAffine,
-    Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
+    C::ScalarExt: FromUniformBytes<64> + SerdeObject,
 {
     info!("saving proving key 💾");
     let f = File::create(path)?;
@@ -783,13 +794,12 @@ where
 }
 
 /// Saves a [VerifyingKey] to `path`.
-pub fn save_vk<Scheme: CommitmentScheme>(
+pub fn save_vk<C: CurveAffine + SerdeObject>(
     path: &PathBuf,
-    vk: &VerifyingKey<Scheme::Curve>,
+    vk: &VerifyingKey<C>,
 ) -> Result<(), io::Error>
 where
-    Scheme::Curve: SerdeObject + CurveAffine,
-    Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
+    C::ScalarExt: FromUniformBytes<64> + SerdeObject,
 {
     info!("saving verification key 💾");
     let f = File::create(path)?;
@@ -813,118 +823,11 @@ pub fn save_params<Scheme: CommitmentScheme>(
     Ok(())
 }
 
-/// helper function
-#[allow(clippy::too_many_arguments)]
-pub fn create_proof_circuit_kzg<
-    'params,
-    C: Circuit<Fr>,
-    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierSHPLONK<'params, Bn256>>,
->(
-    circuit: C,
-    params: &'params ParamsKZG<Bn256>,
-    public_inputs: Option<Vec<Fr>>,
-    pk: &ProvingKey<G1Affine>,
-    transcript: TranscriptType,
-    strategy: Strategy,
-    check_mode: CheckMode,
-    split: Option<ProofSplitCommit>,
-) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
-    let public_inputs = if let Some(public_inputs) = public_inputs {
-        if !public_inputs.is_empty() {
-            vec![public_inputs]
-        } else {
-            vec![vec![]]
-        }
-    } else {
-        vec![]
-    };
-
-    match transcript {
-        TranscriptType::EVM => create_proof_circuit::<
-            KZGCommitmentScheme<_>,
-            Fr,
-            _,
-            ProverSHPLONK<_>,
-            VerifierSHPLONK<_>,
-            _,
-            _,
-            EvmTranscript<G1Affine, _, _, _>,
-            EvmTranscript<G1Affine, _, _, _>,
-        >(
-            circuit,
-            public_inputs,
-            params,
-            pk,
-            strategy,
-            check_mode,
-            transcript,
-            split,
-            false,
-        )
-        .map_err(Box::<dyn Error>::from),
-        TranscriptType::Poseidon => create_proof_circuit::<
-            KZGCommitmentScheme<_>,
-            Fr,
-            _,
-            ProverSHPLONK<_>,
-            VerifierSHPLONK<_>,
-            _,
-            _,
-            PoseidonTranscript<NativeLoader, _>,
-            PoseidonTranscript<NativeLoader, _>,
-        >(
-            circuit,
-            public_inputs,
-            params,
-            pk,
-            strategy,
-            check_mode,
-            transcript,
-            split,
-            true,
-        )
-        .map_err(Box::<dyn Error>::from),
-    }
-}
-
-#[allow(unused)]
-/// helper function
-pub(crate) fn verify_proof_circuit_kzg<
-    'params,
-    Strategy: VerificationStrategy<'params, KZGCommitmentScheme<Bn256>, VerifierSHPLONK<'params, Bn256>>,
->(
-    params: &'params ParamsKZG<Bn256>,
-    proof: Snark<Fr, G1Affine>,
-    vk: &VerifyingKey<G1Affine>,
-    strategy: Strategy,
-    orig_n: u64,
-) -> Result<Strategy::Output, halo2_proofs::plonk::Error> {
-    match proof.transcript_type {
-        TranscriptType::EVM => verify_proof_circuit::<
-            Fr,
-            VerifierSHPLONK<'_, Bn256>,
-            _,
-            _,
-            _,
-            EvmTranscript<G1Affine, _, _, _>,
-        >(&proof, params, vk, strategy, orig_n),
-        TranscriptType::Poseidon => verify_proof_circuit::<
-            Fr,
-            VerifierSHPLONK<'_, Bn256>,
-            _,
-            _,
-            _,
-            PoseidonTranscript<NativeLoader, _>,
-        >(&proof, params, vk, strategy, orig_n),
-    }
-}
-
 ////////////////////////
 
 #[cfg(test)]
 #[cfg(not(target_arch = "wasm32"))]
 mod tests {
-    use std::io::copy;
 
     use super::*;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
@@ -932,37 +835,13 @@ mod tests {
     use tempfile::Builder;
 
     #[tokio::test]
-    async fn test_can_load_pre_generated_srs() {
-        let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
-        // lets hope this link never rots
-        let target = "https://trusted-setup-halo2kzg.s3.eu-central-1.amazonaws.com/hermez-raw-1";
-        let response = reqwest::get(target).await.unwrap();
-
-        let fname = response
-            .url()
-            .path_segments()
-            .and_then(|segments| segments.last())
-            .and_then(|name| if name.is_empty() { None } else { Some(name) })
-            .unwrap_or("tmp.bin");
-
-        info!("file to download: '{}'", fname);
-        let fname = tmp_dir.path().join(fname);
-        info!("will be located under: '{:?}'", fname);
-        let mut dest = File::create(fname.clone()).unwrap();
-        let content = response.bytes().await.unwrap();
-        copy(&mut &content[..], &mut dest).unwrap();
-        let res = srs::load_srs::<KZGCommitmentScheme<Bn256>>(fname);
-        assert!(res.is_ok())
-    }
-
-    #[tokio::test]
     async fn test_can_load_saved_srs() {
         let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
-        let fname = tmp_dir.path().join("kzg.params");
+        let fname = tmp_dir.path().join("polycommit.params");
         let srs = srs::gen_srs::<KZGCommitmentScheme<Bn256>>(1);
         let res = save_params::<KZGCommitmentScheme<Bn256>>(&fname, &srs);
         assert!(res.is_ok());
-        let res = srs::load_srs::<KZGCommitmentScheme<Bn256>>(fname);
+        let res = srs::load_srs_prover::<KZGCommitmentScheme<Bn256>>(fname);
         assert!(res.is_ok())
     }
 
@@ -977,6 +856,7 @@ mod tests {
             split: None,
             pretty_public_inputs: None,
             timestamp: None,
+            commitment: None,
         };
 
         snark

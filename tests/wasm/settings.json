@@ -24,7 +24,8 @@
         "param_visibility": "Private",
         "div_rebasing": false,
         "rebase_frac_zero_constants": false,
-        "check_mode": "UNSAFE"
+        "check_mode": "UNSAFE",
+        "commitment": "KZG"
     },
     "num_rows": 16,
     "total_dynamic_col_size": 0,
@@ -46,7 +47,7 @@
         0
     ],
     "module_sizes": {
-        "kzg": [],
+        "polycommit": [],
         "poseidon": [
             0,
             [

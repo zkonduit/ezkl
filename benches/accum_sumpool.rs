@@ -2,11 +2,13 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use ezkl::circuit::hybrid::HybridOp;
 use ezkl::circuit::*;
 use ezkl::pfsys::create_keys;
-use ezkl::pfsys::create_proof_circuit_kzg;
+use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::srs::gen_srs;
 use ezkl::pfsys::TranscriptType;
 use ezkl::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
+use halo2_proofs::poly::kzg::multiopen::VerifierSHPLONK;
 use halo2_proofs::poly::kzg::strategy::SingleStrategy;
 use halo2_proofs::{
     arithmetic::Field,
@@ -15,6 +17,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
+use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
 static mut IMAGE_HEIGHT: usize = 2;
 static mut IMAGE_WIDTH: usize = 2;
@@ -101,28 +104,35 @@ fn runsumpool(c: &mut Criterion) {
             group.throughput(Throughput::Elements(*size as u64));
             group.bench_with_input(BenchmarkId::new("pk", size), &size, |b, &_| {
                 b.iter(|| {
-                    create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(
-                        &circuit, &params, true,
-                    )
-                    .unwrap();
+                    create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit>(&circuit, &params, true)
+                        .unwrap();
                 });
             });
 
-            let pk =
-                create_keys::<KZGCommitmentScheme<Bn256>, Fr, MyCircuit>(&circuit, &params, true)
-                    .unwrap();
+            let pk = create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit>(&circuit, &params, true)
+                .unwrap();
 
             group.throughput(Throughput::Elements(*size as u64));
             group.bench_with_input(BenchmarkId::new("prove", size), &size, |b, &_| {
                 b.iter(|| {
-                    let prover = create_proof_circuit_kzg(
+                    let prover = create_proof_circuit::<
+                        KZGCommitmentScheme<_>,
+                        MyCircuit,
+                        ProverSHPLONK<_>,
+                        VerifierSHPLONK<_>,
+                        SingleStrategy<_>,
+                        _,
+                        EvmTranscript<_, _, _, _>,
+                        EvmTranscript<_, _, _, _>,
+                    >(
                         circuit.clone(),
+                        vec![],
                         &params,
-                        None,
                         &pk,
-                        TranscriptType::EVM,
-                        SingleStrategy::new(&params),
                         CheckMode::UNSAFE,
+                        ezkl::Commitments::KZG,
+                        TranscriptType::EVM,
+                        None,
                         None,
                     );
                     prover.unwrap();

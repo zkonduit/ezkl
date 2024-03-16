@@ -15,7 +15,7 @@ use colored_json::ToColoredJson;
 #[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::plonk::VerifyingKey;
-use halo2_proofs::poly::kzg::commitment::ParamsKZG;
+use halo2_proofs::poly::commitment::CommitmentScheme;
 pub use input::DataSource;
 use itertools::Itertools;
 use tosubcommand::ToFlags;
@@ -37,7 +37,7 @@ use halo2_proofs::{
     circuit::Layouter,
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
-use halo2curves::bn256::{self, Bn256, Fr as Fp, G1Affine};
+use halo2curves::bn256::{self, Fr as Fp, G1Affine};
 use halo2curves::ff::PrimeField;
 #[cfg(not(target_arch = "wasm32"))]
 use lazy_static::lazy_static;
@@ -126,7 +126,7 @@ pub enum GraphError {
     #[error("failed to rescale inputs for {0}")]
     RescalingError(String),
     /// Error when attempting to load a model
-    #[error("failed to load model")]
+    #[error("failed to load")]
     ModelLoad,
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
@@ -284,20 +284,20 @@ impl GraphWitness {
     }
 
     ///
-    pub fn get_kzg_commitments(&self) -> Vec<G1Affine> {
+    pub fn get_polycommitments(&self) -> Vec<G1Affine> {
         let mut commitments = vec![];
         if let Some(processed_inputs) = &self.processed_inputs {
-            if let Some(commits) = &processed_inputs.kzg_commit {
+            if let Some(commits) = &processed_inputs.polycommit {
                 commitments.extend(commits.iter().flatten());
             }
         }
         if let Some(processed_params) = &self.processed_params {
-            if let Some(commits) = &processed_params.kzg_commit {
+            if let Some(commits) = &processed_params.polycommit {
                 commitments.extend(commits.iter().flatten());
             }
         }
         if let Some(processed_outputs) = &self.processed_outputs {
-            if let Some(commits) = &processed_outputs.kzg_commit {
+            if let Some(commits) = &processed_outputs.polycommit {
                 commitments.extend(commits.iter().flatten());
             }
         }
@@ -318,7 +318,7 @@ impl GraphWitness {
     /// Load the model input from a file
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let file = std::fs::File::open(path.clone())
-            .map_err(|_| format!("failed to load model at {}", path.display()))?;
+            .map_err(|_| format!("failed to load {}", path.display()))?;
 
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
         serde_json::from_reader(reader).map_err(|e| e.into())
@@ -387,8 +387,8 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_inputs, processed_inputs_poseidon_hash).unwrap();
             }
-            if let Some(processed_inputs_kzg_commit) = &processed_inputs.kzg_commit {
-                insert_kzg_commit_pydict(dict_inputs, processed_inputs_kzg_commit).unwrap();
+            if let Some(processed_inputs_polycommit) = &processed_inputs.polycommit {
+                insert_polycommit_pydict(dict_inputs, processed_inputs_polycommit).unwrap();
             }
 
             dict.set_item("processed_inputs", dict_inputs).unwrap();
@@ -398,8 +398,8 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash).unwrap();
             }
-            if let Some(processed_params_kzg_commit) = &processed_params.kzg_commit {
-                insert_kzg_commit_pydict(dict_inputs, processed_params_kzg_commit).unwrap();
+            if let Some(processed_params_polycommit) = &processed_params.polycommit {
+                insert_polycommit_pydict(dict_inputs, processed_params_polycommit).unwrap();
             }
 
             dict.set_item("processed_params", dict_params).unwrap();
@@ -409,8 +409,8 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash).unwrap();
             }
-            if let Some(processed_outputs_kzg_commit) = &processed_outputs.kzg_commit {
-                insert_kzg_commit_pydict(dict_inputs, processed_outputs_kzg_commit).unwrap();
+            if let Some(processed_outputs_polycommit) = &processed_outputs.polycommit {
+                insert_polycommit_pydict(dict_inputs, processed_outputs_polycommit).unwrap();
             }
 
             dict.set_item("processed_outputs", dict_outputs).unwrap();
@@ -429,13 +429,13 @@ fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) -> Resu
 }
 
 #[cfg(feature = "python-bindings")]
-fn insert_kzg_commit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Result<(), PyErr> {
+fn insert_polycommit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Result<(), PyErr> {
     use crate::python::PyG1Affine;
     let poseidon_hash: Vec<Vec<PyG1Affine>> = commits
         .iter()
         .map(|c| c.iter().map(|x| PyG1Affine::from(*x)).collect())
         .collect();
-    pydict.set_item("kzg_commit", poseidon_hash)?;
+    pydict.set_item("polycommit", poseidon_hash)?;
 
     Ok(())
 }
@@ -590,7 +590,7 @@ impl GraphSettings {
             || self.run_args.param_visibility.is_hashed()
     }
 
-    /// requires dynamic lookup  
+    /// requires dynamic lookup
     pub fn requires_dynamic_lookup(&self) -> bool {
         self.num_dynamic_lookups > 0
     }
@@ -601,10 +601,10 @@ impl GraphSettings {
     }
 
     /// any kzg visibility
-    pub fn module_requires_kzg(&self) -> bool {
-        self.run_args.input_visibility.is_kzgcommit()
-            || self.run_args.output_visibility.is_kzgcommit()
-            || self.run_args.param_visibility.is_kzgcommit()
+    pub fn module_requires_polycommit(&self) -> bool {
+        self.run_args.input_visibility.is_polycommit()
+            || self.run_args.output_visibility.is_polycommit()
+            || self.run_args.param_visibility.is_polycommit()
     }
 }
 
@@ -1248,11 +1248,11 @@ impl GraphCircuit {
     }
 
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
-    pub fn forward(
+    pub fn forward<Scheme: CommitmentScheme<Scalar = Fp, Curve = G1Affine>>(
         &self,
         inputs: &mut [Tensor<Fp>],
         vk: Option<&VerifyingKey<G1Affine>>,
-        srs: Option<&ParamsKZG<Bn256>>,
+        srs: Option<&Scheme::ParamsProver>,
         throw_range_check_error: bool,
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let original_inputs = inputs.to_vec();
@@ -1269,7 +1269,8 @@ impl GraphCircuit {
                 for outlet in &module_outlets {
                     module_inputs.push(inputs[*outlet].clone());
                 }
-                let res = GraphModules::forward(&module_inputs, &visibility.input, vk, srs)?;
+                let res =
+                    GraphModules::forward::<Scheme>(&module_inputs, &visibility.input, vk, srs)?;
                 processed_inputs = Some(res.clone());
                 let module_results = res.get_result(visibility.input.clone());
 
@@ -1277,7 +1278,12 @@ impl GraphCircuit {
                     inputs[*outlet] = Tensor::from(module_results[i].clone().into_iter());
                 }
             } else {
-                processed_inputs = Some(GraphModules::forward(inputs, &visibility.input, vk, srs)?);
+                processed_inputs = Some(GraphModules::forward::<Scheme>(
+                    inputs,
+                    &visibility.input,
+                    vk,
+                    srs,
+                )?);
             }
         }
 
@@ -1285,7 +1291,7 @@ impl GraphCircuit {
             let params = self.model().get_all_params();
             if !params.is_empty() {
                 let flattened_params = Tensor::new(Some(&params), &[params.len()])?.combine()?;
-                processed_params = Some(GraphModules::forward(
+                processed_params = Some(GraphModules::forward::<Scheme>(
                     &[flattened_params],
                     &visibility.params,
                     vk,
@@ -1305,7 +1311,8 @@ impl GraphCircuit {
                 for outlet in &module_outlets {
                     module_inputs.push(model_results.outputs[*outlet].clone());
                 }
-                let res = GraphModules::forward(&module_inputs, &visibility.output, vk, srs)?;
+                let res =
+                    GraphModules::forward::<Scheme>(&module_inputs, &visibility.output, vk, srs)?;
                 processed_outputs = Some(res.clone());
                 let module_results = res.get_result(visibility.output.clone());
 
@@ -1314,7 +1321,7 @@ impl GraphCircuit {
                         Tensor::from(module_results[i].clone().into_iter());
                 }
             } else {
-                processed_outputs = Some(GraphModules::forward(
+                processed_outputs = Some(GraphModules::forward::<Scheme>(
                     &model_results.outputs,
                     &visibility.output,
                     vk,

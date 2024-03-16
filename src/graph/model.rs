@@ -970,7 +970,7 @@ impl Model {
 
         let (model, _) = Model::load_onnx_using_tract(
             &mut std::fs::File::open(model_path)
-                .map_err(|_| format!("failed to load model at {}", model_path.display()))?,
+                .map_err(|_| format!("failed to load {}", model_path.display()))?,
             run_args,
         )?;
 
@@ -1006,7 +1006,7 @@ impl Model {
     ) -> Result<Self, Box<dyn Error>> {
         Model::new(
             &mut std::fs::File::open(model)
-                .map_err(|_| format!("failed to load model at {}", model.display()))?,
+                .map_err(|_| format!("failed to load {}", model.display()))?,
             run_args,
         )
     }

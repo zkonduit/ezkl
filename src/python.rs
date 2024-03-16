@@ -1,4 +1,4 @@
-use crate::circuit::modules::kzg::KZGChip;
+use crate::circuit::modules::polycommit::PolyCommitChip;
 use crate::circuit::modules::poseidon::{
     spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
     PoseidonChip,
@@ -12,12 +12,14 @@ use crate::graph::TestDataSource;
 use crate::graph::{
     quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
 };
-use crate::pfsys::evm::aggregation::AggregationCircuit;
+use crate::pfsys::evm::aggregation_kzg::AggregationCircuit;
 use crate::pfsys::{
-    load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs, ProofType,
-    TranscriptType,
+    load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
+    ProofType, TranscriptType,
 };
+use crate::Commitments;
 use crate::RunArgs;
+use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
@@ -25,6 +27,7 @@ use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
 use snark_verifier::util::arithmetic::PrimeField;
+use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 use tokio::runtime::Runtime;
 
@@ -163,6 +166,8 @@ struct PyRunArgs {
     pub rebase_frac_zero_constants: bool,
     #[pyo3(get, set)]
     pub check_mode: CheckMode,
+    #[pyo3(get, set)]
+    pub commitment: PyCommitments,
 }
 
 /// default instantiation of PyRunArgs
@@ -192,6 +197,7 @@ impl From<PyRunArgs> for RunArgs {
             div_rebasing: py_run_args.div_rebasing,
             rebase_frac_zero_constants: py_run_args.rebase_frac_zero_constants,
             check_mode: py_run_args.check_mode,
+            commitment: py_run_args.commitment.into(),
         }
     }
 }
@@ -213,6 +219,46 @@ impl Into<PyRunArgs> for RunArgs {
             div_rebasing: self.div_rebasing,
             rebase_frac_zero_constants: self.rebase_frac_zero_constants,
             check_mode: self.check_mode,
+            commitment: self.commitment.into(),
+        }
+    }
+}
+
+#[pyclass]
+#[derive(Debug, Clone)]
+/// Pyclass marking the type of commitment
+pub enum PyCommitments {
+    /// KZG commitment
+    KZG,
+    /// IPA commitment
+    IPA,
+}
+
+impl From<PyCommitments> for Commitments {
+    fn from(py_commitments: PyCommitments) -> Self {
+        match py_commitments {
+            PyCommitments::KZG => Commitments::KZG,
+            PyCommitments::IPA => Commitments::IPA,
+        }
+    }
+}
+
+impl Into<PyCommitments> for Commitments {
+    fn into(self) -> PyCommitments {
+        match self {
+            Commitments::KZG => PyCommitments::KZG,
+            Commitments::IPA => PyCommitments::IPA,
+        }
+    }
+}
+
+impl FromStr for PyCommitments {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "kzg" => Ok(PyCommitments::KZG),
+            "ipa" => Ok(PyCommitments::IPA),
+            _ => Err("Invalid value for Commitments".to_string()),
         }
     }
 }
@@ -366,15 +412,56 @@ fn kzg_commit(
     let settings = GraphSettings::load(&settings_path)
         .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
 
-    let srs_path = crate::execute::get_srs_path(settings.run_args.logrows, srs_path);
+    let srs_path =
+        crate::execute::get_srs_path(settings.run_args.logrows, srs_path, Commitments::KZG);
 
-    let srs = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)
+    let srs = load_srs_prover::<KZGCommitmentScheme<Bn256>>(srs_path)
         .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, settings)
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, settings)
         .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
 
-    let output = KZGChip::commit(
+    let output = PolyCommitChip::commit::<KZGCommitmentScheme<Bn256>>(
+        message,
+        vk.cs().degree() as u32,
+        (vk.cs().blinding_factors() + 1) as u32,
+        &srs,
+    );
+
+    Ok(output.iter().map(|x| (*x).into()).collect::<Vec<_>>())
+}
+
+/// Generate an ipa commitment.
+#[pyfunction(signature = (
+    message,
+    vk_path=PathBuf::from(DEFAULT_VK),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    srs_path=None
+    ))]
+fn ipa_commit(
+    message: Vec<PyFelt>,
+    vk_path: PathBuf,
+    settings_path: PathBuf,
+    srs_path: Option<PathBuf>,
+) -> PyResult<Vec<PyG1Affine>> {
+    let message: Vec<Fr> = message
+        .iter()
+        .map(crate::pfsys::string_to_field::<Fr>)
+        .collect::<Vec<_>>();
+
+    let settings = GraphSettings::load(&settings_path)
+        .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
+
+    let srs_path =
+        crate::execute::get_srs_path(settings.run_args.logrows, srs_path, Commitments::KZG);
+
+    let srs = load_srs_prover::<IPACommitmentScheme<G1Affine>>(srs_path)
+        .map_err(|_| PyIOError::new_err("Failed to load srs"))?;
+
+    let vk = load_vk::<IPACommitmentScheme<G1Affine>, GraphCircuit>(vk_path, settings)
+        .map_err(|_| PyIOError::new_err("Failed to load vk"))?;
+
+    let output = PolyCommitChip::commit::<IPACommitmentScheme<G1Affine>>(
         message,
         vk.cs().degree() as u32,
         (vk.cs().blinding_factors() + 1) as u32,
@@ -390,7 +477,7 @@ fn kzg_commit(
     witness_path=PathBuf::from(DEFAULT_WITNESS),
     ))]
 fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResult<()> {
-    crate::execute::swap_proof_commitments(proof_path, witness_path)
+    crate::execute::swap_proof_commitments_cmd(proof_path, witness_path)
         .map_err(|_| PyIOError::new_err("Failed to swap commitments"))?;
 
     Ok(())
@@ -410,13 +497,13 @@ fn gen_vk_from_pk_single(
     let settings = GraphSettings::load(&circuit_settings_path)
         .map_err(|_| PyIOError::new_err("Failed to load circuit settings"))?;
 
-    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(path_to_pk, settings)
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(path_to_pk, settings)
         .map_err(|_| PyIOError::new_err("Failed to load pk"))?;
 
     let vk = pk.get_vk();
 
     // now save
-    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_output_path, vk)
+    save_vk::<G1Affine>(&vk_output_path, vk)
         .map_err(|_| PyIOError::new_err("Failed to save vk"))?;
 
     Ok(true)
@@ -428,13 +515,13 @@ fn gen_vk_from_pk_single(
     vk_output_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
     ))]
 fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult<bool> {
-    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(path_to_pk, ())
+    let pk = load_pk::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(path_to_pk, ())
         .map_err(|_| PyIOError::new_err("Failed to load pk"))?;
 
     let vk = pk.get_vk();
 
     // now save
-    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_output_path, vk)
+    save_vk::<G1Affine>(&vk_output_path, vk)
         .map_err(|_| PyIOError::new_err("Failed to save vk"))?;
 
     Ok(true)
@@ -471,19 +558,27 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
 #[pyfunction(signature = (
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     logrows=None,
-    srs_path=None
+    srs_path=None,
+    commitment=None,
 ))]
 fn get_srs(
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
     srs_path: Option<PathBuf>,
+    commitment: Option<PyCommitments>,
 ) -> PyResult<bool> {
+    let commitment: Option<Commitments> = match commitment {
+        Some(c) => Some(c.into()),
+        None => None,
+    };
+
     Runtime::new()
         .unwrap()
         .block_on(crate::execute::get_srs_cmd(
             srs_path,
             settings_path,
             logrows,
+            commitment,
         ))
         .map_err(|e| {
             let err_str = format!("Failed to get srs: {}", e);
@@ -719,6 +814,7 @@ fn verify(
     split_proofs = false,
     srs_path = None,
     disable_selector_compression=DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap(),
+    commitment=DEFAULT_COMMITMENT.parse().unwrap(),
 ))]
 fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
@@ -728,6 +824,7 @@ fn setup_aggregate(
     split_proofs: bool,
     srs_path: Option<PathBuf>,
     disable_selector_compression: bool,
+    commitment: PyCommitments,
 ) -> Result<bool, PyErr> {
     crate::execute::setup_aggregate(
         sample_snarks,
@@ -737,6 +834,7 @@ fn setup_aggregate(
         logrows,
         split_proofs,
         disable_selector_compression,
+        commitment.into(),
     )
     .map_err(|e| {
         let err_str = format!("Failed to setup aggregate: {}", e);
@@ -774,6 +872,7 @@ fn compile_circuit(
     check_mode=CheckMode::UNSAFE,
     split_proofs = false,
     srs_path=None,
+    commitment=DEFAULT_COMMITMENT.parse().unwrap(),
 ))]
 fn aggregate(
     aggregation_snarks: Vec<PathBuf>,
@@ -784,6 +883,7 @@ fn aggregate(
     check_mode: CheckMode,
     split_proofs: bool,
     srs_path: Option<PathBuf>,
+    commitment: PyCommitments,
 ) -> Result<bool, PyErr> {
     // the K used for the aggregation circuit
     crate::execute::aggregate(
@@ -795,6 +895,7 @@ fn aggregate(
         logrows,
         check_mode,
         split_proofs,
+        commitment.into(),
     )
     .map_err(|e| {
         let err_str = format!("Failed to run aggregate: {}", e);
@@ -809,15 +910,27 @@ fn aggregate(
     proof_path=PathBuf::from(DEFAULT_PROOF_AGGREGATED),
     vk_path=PathBuf::from(DEFAULT_VK),
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
+    commitment=DEFAULT_COMMITMENT.parse().unwrap(),
+    reduced_srs=DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse().unwrap(),
     srs_path=None,
 ))]
 fn verify_aggr(
     proof_path: PathBuf,
     vk_path: PathBuf,
     logrows: u32,
+    commitment: PyCommitments,
+    reduced_srs: bool,
     srs_path: Option<PathBuf>,
 ) -> Result<bool, PyErr> {
-    crate::execute::verify_aggr(proof_path, vk_path, srs_path, logrows).map_err(|e| {
+    crate::execute::verify_aggr(
+        proof_path,
+        vk_path,
+        srs_path,
+        logrows,
+        reduced_srs,
+        commitment.into(),
+    )
+    .map_err(|e| {
         let err_str = format!("Failed to run verify_aggr: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
@@ -1103,11 +1216,13 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
+    m.add_class::<PyCommitments>()?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(felt_to_big_endian, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_int, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_float, m)?)?;
     m.add_function(wrap_pyfunction!(kzg_commit, m)?)?;
+    m.add_function(wrap_pyfunction!(ipa_commit, m)?)?;
     m.add_function(wrap_pyfunction!(swap_proof_commitments, m)?)?;
     m.add_function(wrap_pyfunction!(poseidon_hash, m)?)?;
     m.add_function(wrap_pyfunction!(float_to_felt, m)?)?;

@@ -242,7 +242,7 @@ def test_get_srs():
 
     another_srs_path = os.path.join(folder_path, "kzg_test_k8.params")
 
-    res = ezkl.get_srs(logrows=8, srs_path=another_srs_path)
+    res = ezkl.get_srs(logrows=8, srs_path=another_srs_path, commitment=ezkl.PyCommitments.KZG)
 
     assert os.path.isfile(another_srs_path)
 
