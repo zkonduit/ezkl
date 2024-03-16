@@ -61,6 +61,7 @@ mod py_tests {
             let status = Command::new("pip")
                 .args([
                     "install",
+                    "torch-geometric==2.5.0",
                     "torch==2.0.1",
                     "torchvision==0.15.2",
                     "pandas==2.0.3",
