@@ -72,7 +72,7 @@ curl https://raw.githubusercontent.com/zkonduit/ezkl/main/install_ezkl_cli.sh | 
 
 https://user-images.githubusercontent.com/45801863/236771676-5bbbbfd1-ba6f-418a-902e-20738ce0e9f0.mp4
 
-For more details visit the [docs](https://docs.ezkl.xyz). The CLI is faster than Python, as it has less overhead.
+For more details visit the [docs](https://docs.ezkl.xyz). The CLI is faster than Python, as it has less overhead. For even more speed and convenience, check out the [remote proving service](https://ei40vx5x6j0.typeform.com/to/sFv1oxvb), which feels like the CLI but is backed by a tuned cluster.
 
 Build the auto-generated rust documentation and open the docs in your browser locally. `cargo doc --open`
 
