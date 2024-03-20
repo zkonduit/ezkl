@@ -16,7 +16,7 @@ class MyModel(nn.Module):
 
 circuit = MyModel()
 
-x = torch.empty(2, 2, 8).uniform_(0, 1)
+x = torch.empty(1, 2, 2, 8).uniform_(0, 1)
 
 out = circuit(x)
 
