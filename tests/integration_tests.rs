@@ -288,7 +288,7 @@ mod native_tests {
         "gru",        // 80
         "hard_swish", // 81
         "hard_max",
-        "tril",
+        "tril",      // 83
         "triu",      // 84
         "logsumexp", // 85
         "clip",
