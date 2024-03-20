@@ -8,6 +8,142 @@ use maybe_rayon::{
 use std::collections::{HashMap, HashSet};
 pub use std::ops::{Add, Div, Mul, Neg, Sub};
 
+/// Trilu operation.
+/// # Arguments
+/// * `a` - Tensor
+/// * `k` - i32
+/// * `upper` - Boolean
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::trilu;
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6]),
+/// &[1, 3, 2],
+/// ).unwrap();
+/// let result = trilu(&a, 1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 2, 0, 0, 0, 0]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 0, 0]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let result = trilu(&a, -1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 0, 6]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, -1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 3, 0, 5, 6]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6]),
+/// &[1, 2, 3],
+/// ).unwrap();
+/// let result = trilu(&a, 1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 2, 3, 0, 0, 6]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 5, 6]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 0, 5, 6]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 4, 5, 0]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let result = trilu(&a, -1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, -1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 4, 0, 0]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9]),
+/// &[1, 3, 3],
+/// ).unwrap();
+/// let result = trilu(&a, 1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 2, 3, 0, 0, 6, 0, 0, 0]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 5, 6, 7, 8, 9]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 0, 5, 6, 0, 0, 9]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 4, 5, 0, 7, 8, 9]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let result = trilu(&a, -1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 8, 9]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, -1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 4, 0, 0, 7, 8, 0]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);  
+/// ```
+pub fn trilu<T: TensorType + std::marker::Send + std::marker::Sync>(
+    a: &Tensor<T>,
+    k: i32,
+    upper: bool,
+) -> Result<Tensor<T>, TensorError> {
+    let mut output = a.clone();
+
+    // Given a 2-D matrix or batches of 2-D matrices, returns the upper or lower triangular part of the tensor(s).
+    // The attribute “upper” determines whether the upper or lower part is retained.
+    // If set to true, the upper triangular matrix is retained. Lower triangular matrix is retained otherwise.
+    // Default value for the “upper” attribute is true. Trilu takes one input tensor of shape [*, N, M], where * is zero or more batch dimensions.
+    // The upper triangular part consists of the elements on and above the given diagonal (k).
+    // The lower triangular part consists of elements on and below the diagonal. All other elements in the matrix are set to zero.
+
+    let batch_dims = &a.dims()[0..a.dims().len() - 2];
+    let batch_cartiesian = batch_dims.iter().map(|d| 0..*d).multi_cartesian_product();
+
+    for b in batch_cartiesian {
+        for i in 0..a.dims()[1] {
+            for j in 0..a.dims()[2] {
+                let mut coord = b.clone();
+                coord.push(i);
+                coord.push(j);
+                // If k = 0, the triangular part on and above/below the main diagonal is retained.
+
+                if upper {
+                    // If upper is set to true, a positive k retains the upper triangular matrix excluding the main diagonal and (k-1) diagonals above it.
+                    if (j as i32) < (i as i32) + k {
+                        output.set(&coord, T::zero().ok_or(TensorError::Unsupported)?);
+                    }
+                } else {
+                    // If upper is set to false, a positive k retains the lower triangular matrix including the main diagonal and k diagonals above it.
+                    if (j as i32) > (i as i32) + k {
+                        output.set(&coord, T::zero().ok_or(TensorError::Unsupported)?);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(output)
+}
+
 /// IFF operation.
 /// # Arguments
 /// * `mask` - Tensor of 0s and 1s
@@ -3251,6 +3387,47 @@ pub mod nonlinearities {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input / (1.0 + (-kix).exp());
             let rounded = fout.round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
+    }
+
+    /// Elementwise applies hardswish to a tensor of integers.
+    /// Hardswish is defined as:
+    // Hardswish(x)={0if x≤−3,xif x≥+3,x⋅(x+3)/6otherwise
+    // Hardswish(x)=⎩
+    // ⎨
+    // ⎧​0xx⋅(x+3)/6​if x≤−3,if x≥+3,otherwise​
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::hardswish;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[-12, -3, 2, 1, 1, 15]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = hardswish(&x, 1.0);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 2, 1, 1, 15]), &[2, 3]).unwrap();
+    ///
+    /// assert_eq!(result, expected);
+    ///
+    /// ```
+    pub fn hardswish(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let res = if kix <= -3.0 {
+                0.0
+            } else if kix >= 3.0 {
+                kix
+            } else {
+                kix * (kix + 3.0) / 6.0
+            };
+            let rounded = res.round() * scale_input;
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()

@@ -83,6 +83,10 @@ pub enum PolyOp {
     And,
     Or,
     Xor,
+    Trilu {
+        upper: bool,
+        k: i32,
+    },
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F>
@@ -114,7 +118,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Add => "ADD".into(),
             PolyOp::Mult => "MULT".into(),
             PolyOp::Sub => "SUB".into(),
-            PolyOp::Sum { .. } => "SUM".into(),
+            PolyOp::Sum { axes } => format!("SUM (axes={:?})", axes),
             PolyOp::Prod { .. } => "PROD".into(),
             PolyOp::Pow(_) => "POW".into(),
             PolyOp::Conv { .. } => "CONV".into(),
@@ -128,6 +132,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::And => "AND".into(),
             PolyOp::Or => "OR".into(),
             PolyOp::Xor => "XOR".into(),
+            PolyOp::Trilu { upper, k } => format!("TRILU (upper={}, k={})", upper, k),
         }
     }
 
@@ -265,6 +270,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 };
                 tensor::ops::scatter_nd(&x, &idx, &src)
             }
+            PolyOp::Trilu { upper, k } => tensor::ops::trilu(&inputs[0], *k, *upper),
         }?;
 
         Ok(ForwardResult { output: res })
@@ -383,6 +389,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Concat { axis } => layouts::concat(values[..].try_into()?, axis)?,
             PolyOp::Slice { axis, start, end } => {
                 layouts::slice(config, region, values[..].try_into()?, axis, start, end)?
+            }
+            PolyOp::Trilu { upper, k } => {
+                layouts::trilu(config, region, values[..].try_into()?, k, upper)?
             }
         }))
     }

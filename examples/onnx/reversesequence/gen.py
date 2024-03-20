@@ -8,15 +8,14 @@ class MyModel(nn.Module):
     def __init__(self):
         super(MyModel, self).__init__()
 
-    def forward(self, x):          
-        m = nn.LogSoftmax()(x)
-        
+    def forward(self, x):
+        m = torch.flip(x, dims=[1])
         return m 
 
 
 circuit = MyModel()
 
-x = torch.empty(1, 8).uniform_(0, 1)
+x = torch.empty(2, 2, 8).uniform_(0, 1)
 
 out = circuit(x)
 

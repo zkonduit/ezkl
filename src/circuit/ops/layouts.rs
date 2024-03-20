@@ -2660,9 +2660,39 @@ pub(crate) fn slice<F: PrimeField + TensorType + PartialOrd>(
     end: &usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // assigns the instance to the advice.
-    let mut output = region.assign(&config.custom_gates.output, &values[0])?;
-    region.increment(output.len());
+    let mut output = values[0].clone();
+
+    let is_assigned = output.all_prev_assigned();
+    if !is_assigned {
+        output = region.assign(&config.custom_gates.output, &values[0])?;
+        region.increment(output.len());
+    }
+
     output.slice(axis, start, end)?;
+
+    Ok(output)
+}
+
+/// Trilu layout
+pub(crate) fn trilu<F: PrimeField + TensorType + PartialOrd>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    k: &i32,
+    upper: &bool,
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // assigns the instance to the advice.
+    let mut output = values[0].clone();
+
+    let is_assigned = output.all_prev_assigned();
+    if !is_assigned {
+        output = region.assign(&config.custom_gates.inputs[0], &values[0])?;
+    }
+
+    let res = tensor::ops::trilu(output.get_inner_tensor()?, *k, *upper)?;
+
+    let output = region.assign(&config.custom_gates.output, &res.into())?;
+    region.increment(output.len());
 
     Ok(output)
 }

@@ -9,7 +9,7 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
     def forward(self, x):          
-        m = nn.LogSoftmax()(x)
+        m = torch.argmax(x)
         
         return m 
 

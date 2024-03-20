@@ -839,6 +839,9 @@ pub fn new_op_from_onnx(
         }
         "Abs" => SupportedOp::Nonlinear(LookupOp::Abs),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
+        "HardSwish" => SupportedOp::Nonlinear(LookupOp::HardSwish {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
         "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
         }),
