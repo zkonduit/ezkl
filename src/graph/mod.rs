@@ -503,7 +503,9 @@ impl GraphSettings {
     }
 
     fn constants_logrows(&self) -> u32 {
-        (self.total_const_size as f64).log2().ceil() as u32
+        (self.total_const_size as f64 / self.run_args.num_inner_cols as f64)
+            .log2()
+            .ceil() as u32
     }
 
     /// calculate the total number of instances
