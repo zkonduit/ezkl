@@ -6,7 +6,7 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{ConstraintSystem, Expression, TableColumn},
 };
-use log::warn;
+use log::{debug, warn};
 use maybe_rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
@@ -165,7 +165,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let num_cols = table_inputs.len();
 
         if num_cols > 1 {
-            warn!("Using {} columns for non-linearity table.", num_cols);
+            debug!("Using {} columns for non-linearity table.", num_cols);
         }
 
         let table_outputs = table_inputs

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use log::{error, warn};
+use log::{debug, error, warn};
 
 use crate::circuit::CheckMode;
 
@@ -104,7 +104,7 @@ impl VarTensor {
         let mut advices = vec![];
 
         if modulo > 1 {
-            warn!("using column duplication for {} advice blocks", modulo - 1);
+            debug!("using column duplication for {} advice blocks", modulo - 1);
         }
 
         for _ in 0..modulo {
@@ -150,7 +150,7 @@ impl VarTensor {
         modulo = (num_constants + modulo) / max_rows + 1;
 
         if modulo > 1 {
-            warn!("using column duplication for {} fixed columns", modulo - 1);
+            debug!("using column duplication for {} fixed columns", modulo - 1);
         }
 
         for _ in 0..modulo {

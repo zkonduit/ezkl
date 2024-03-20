@@ -1171,17 +1171,6 @@ impl GraphCircuit {
             .settings()
             .clone();
 
-        // recalculate the logrows if there has been overflow on the constants
-        settings_mut.run_args.logrows = std::cmp::max(
-            settings_mut.run_args.logrows,
-            settings_mut.constants_logrows(),
-        );
-        // recalculate the logrows if there has been overflow for the model constraints
-        settings_mut.run_args.logrows = std::cmp::max(
-            settings_mut.run_args.logrows,
-            settings_mut.model_constraint_logrows(),
-        );
-
         debug!(
             "setting lookup_range to: {:?}, setting logrows to: {}",
             self.settings().run_args.lookup_range,
