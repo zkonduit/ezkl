@@ -9,14 +9,14 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
     def forward(self, x):          
-        m = nn.LogSoftmax()(x)
+        m = torch.triu(x)
         
         return m 
 
 
 circuit = MyModel()
 
-x = torch.empty(1, 8).uniform_(0, 1)
+x = torch.empty(1, 3, 3).uniform_(0, 5)
 
 out = circuit(x)
 

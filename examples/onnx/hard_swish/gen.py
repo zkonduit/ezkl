@@ -8,10 +8,9 @@ class MyModel(nn.Module):
     def __init__(self):
         super(MyModel, self).__init__()
 
-    def forward(self, x):          
-        m = nn.LogSoftmax()(x)
-        
-        return m 
+    def forward(self, x):
+        m = nn.Hardswish()(x)
+        return m
 
 
 circuit = MyModel()

@@ -200,7 +200,7 @@ mod native_tests {
         "1l_tiny_div",
     ];
 
-    const TESTS: [&str; 79] = [
+    const TESTS: [&str; 91] = [
         "1l_mlp", //0
         "1l_slice",
         "1l_concat",
@@ -284,6 +284,18 @@ mod native_tests {
         "bitshift",
         "gather_nd",
         "scatter_nd",
+        "celu",
+        "gru",        // 80
+        "hard_swish", // 81
+        "hard_max",
+        "tril",      // 83
+        "triu",      // 84
+        "logsumexp", // 85
+        "clip",
+        "mish",
+        "reducel1",
+        "reducel2", // 89
+        "1l_lppool",
     ];
 
     const WASM_TESTS: [&str; 46] = [
@@ -522,7 +534,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=78 {
+            seq!(N in 0..=90 {
 
             #(#[test_case(TESTS[N])])*
             #[ignore]

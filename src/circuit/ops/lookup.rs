@@ -123,6 +123,9 @@ pub enum LookupOp {
         scale: utils::F32,
         a: utils::F32,
     },
+    HardSwish {
+        scale: utils::F32,
+    },
 }
 
 impl LookupOp {
@@ -223,6 +226,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::ATan { scale } => Ok(tensor::ops::nonlinearities::atan(&x, scale.into())),
             LookupOp::ATanh { scale } => Ok(tensor::ops::nonlinearities::atanh(&x, scale.into())),
             LookupOp::Tanh { scale } => Ok(tensor::ops::nonlinearities::tanh(&x, scale.into())),
+            LookupOp::HardSwish { scale } => {
+                Ok(tensor::ops::nonlinearities::hardswish(&x, scale.into()))
+            }
         }?;
 
         let output = res.map(|x| i128_to_felt(x));
@@ -276,6 +282,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for LookupOp {
             LookupOp::ASin { scale } => format!("ASIN(scale={})", scale),
             LookupOp::Sinh { scale } => format!("SINH(scale={})", scale),
             LookupOp::ASinh { scale } => format!("ASINH(scale={})", scale),
+            LookupOp::HardSwish { scale } => format!("HARDSWISH(scale={})", scale),
         }
     }
 

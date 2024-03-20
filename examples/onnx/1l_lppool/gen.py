@@ -1,22 +1,19 @@
 from torch import nn
 import torch
 import json
-import numpy as np
 
-
-class MyModel(nn.Module):
+class Model(nn.Module):
     def __init__(self):
-        super(MyModel, self).__init__()
+        super(Model, self).__init__()
+        self.layer = nn.LPPool2d(2, 1, (1, 1))
 
-    def forward(self, x):          
-        m = nn.LogSoftmax()(x)
-        
-        return m 
+    def forward(self, x):
+        return self.layer(x)[0]
 
 
-circuit = MyModel()
+circuit = Model()
 
-x = torch.empty(1, 8).uniform_(0, 1)
+x = torch.empty(1, 3, 2, 2).uniform_(0, 1)
 
 out = circuit(x)
 
@@ -40,3 +37,4 @@ data = dict(
 
 # Serialize data into file:
 json.dump(data, open("input.json", 'w'))
+

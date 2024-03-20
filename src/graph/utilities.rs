@@ -248,6 +248,8 @@ pub fn new_op_from_onnx(
     symbol_values: &SymbolValues,
     rebase_frac_zero_constants: bool,
 ) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
+    use tract_onnx::tract_core::ops::array::Trilu;
+
     use crate::circuit::InputType;
 
     let input_scales = inputs
@@ -361,6 +363,26 @@ pub fn new_op_from_onnx(
             let c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
             // Create a constant op
             SupportedOp::Constant(c)
+        }
+
+        "Trilu" => {
+            let op = load_op::<Trilu>(node.op(), idx, node.op().name().to_string())?;
+            let upper = op.upper;
+
+            // assert second input is a constant
+            let diagonal = if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(1);
+                let raw_values = &c.raw_values;
+                if raw_values.len() != 1 {
+                    return Err(Box::new(GraphError::InvalidDims(idx, "trilu".to_string())));
+                }
+                raw_values[0] as i32
+            } else {
+                return Err("we only support constant inputs for trilu diagonal".into());
+            };
+
+            SupportedOp::Linear(PolyOp::Trilu { upper, k: diagonal })
         }
 
         "Gather" => {
@@ -839,6 +861,9 @@ pub fn new_op_from_onnx(
         }
         "Abs" => SupportedOp::Nonlinear(LookupOp::Abs),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
+        "HardSwish" => SupportedOp::Nonlinear(LookupOp::HardSwish {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
         "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
         }),
