@@ -285,17 +285,17 @@ mod native_tests {
         "gather_nd",
         "scatter_nd",
         "celu",
-        "gru",
-        "hard_swish",
+        "gru",        // 80
+        "hard_swish", // 81
         "hard_max",
         "tril",
-        "triu",
-        "logsumexp",
+        "triu",      // 84
+        "logsumexp", // 85
         "clip",
         "mish",
         "reversequence",
         "reducel1",
-        "reducel2",
+        "reducel2", // 90
         "1l_lppool",
     ];
 

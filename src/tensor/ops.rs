@@ -3427,7 +3427,7 @@ pub mod nonlinearities {
             } else {
                 kix * (kix + 3.0) / 6.0
             };
-            let rounded = res.round() * scale_input;
+            let rounded = (res * scale_input).round();
             Ok::<_, TensorError>(rounded as i128)
         })
         .unwrap()
