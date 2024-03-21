@@ -204,7 +204,7 @@ no-banner = []
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#cc5f5743f4141047e011e760d38eff04e0ac6704", package = "halo2_proofs", branch = "ac/optional-selector-poly" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a", package = "halo2_proofs", branch = "ac/optional-selector-poly" }
 
 
 [profile.release]

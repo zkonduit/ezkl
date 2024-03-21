@@ -2187,7 +2187,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#cc5f5743f4141047e011e760d38eff04e0ac6704"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec",
@@ -2204,7 +2204,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#cc5f5743f4141047e011e760d38eff04e0ac6704?branch=ac/optional-selector-poly#cc5f5743f4141047e011e760d38eff04e0ac6704"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a"
 dependencies = [
  "blake2b_simd",
  "env_logger",
