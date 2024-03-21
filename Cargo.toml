@@ -15,14 +15,14 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "main" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch = "main" }
+halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/optional-selector-poly" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch = "ac/optional-selector-poly" }
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "9fff22c", features = [
     "derive_serde",
 ] }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
-clap = { version = "4.3.3", features = ["derive"] }
+clap = { version = "4.5.3", features = ["derive"] }
 serde = { version = "1.0.126", features = ["derive"], optional = true }
 serde_json = { version = "1.0.97", default_features = false, features = [
     "float_roundtrip",
@@ -202,6 +202,10 @@ no-banner = []
 # icicle patch to 0.1.0 if feature icicle is enabled
 [patch.'https://github.com/ingonyama-zk/icicle']
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
+
+[patch.'https://github.com/zkonduit/halo2']
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#cc5f5743f4141047e011e760d38eff04e0ac6704", package = "halo2_proofs", branch = "ac/optional-selector-poly" }
+
 
 [profile.release]
 rustflags = ["-C", "relocation-model=pic"]
