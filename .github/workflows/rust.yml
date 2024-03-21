@@ -392,6 +392,8 @@ jobs:
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+      - name: KZG prove and verify tests (public outputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_tight_lookup_::t
       - name: IPA prove and verify tests
         run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_::t --test-threads 1
       - name: IPA prove and verify tests (ipa outputs)
@@ -411,8 +413,6 @@ jobs:
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (public outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t
-      - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t
       - name: KZG prove and verify tests (public inputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input
@@ -455,7 +455,6 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params --features icicle  --test-threads 1
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 1
-
 
   prove-and-verify-mock-aggr-tests:
     runs-on: self-hosted
@@ -508,8 +507,6 @@ jobs:
           locked: true
       - name: KZG tests
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_  --test-threads 4 -- --include-ignored
-
-
 
   prove-and-verify-aggr-evm-tests:
     runs-on: large-self-hosted
