@@ -1051,14 +1051,10 @@ impl GraphCircuit {
     }
 
     fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i128) -> Range {
-        let mut margin = (
+        let margin = (
             lookup_safety_margin * min_max_lookup.0,
             lookup_safety_margin * min_max_lookup.1,
         );
-        if lookup_safety_margin == 1 {
-            margin.0 += 4;
-            margin.1 += 4;
-        }
 
         margin
     }
