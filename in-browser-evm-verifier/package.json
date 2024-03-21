@@ -17,7 +17,7 @@
     "clean": "rm -r dist || true",
     "build:commonjs": "tsc --project tsconfig.commonjs.json && resolve-tspaths -p tsconfig.commonjs.json",
     "build:esm": "tsc --project tsconfig.esm.json && resolve-tspaths -p tsconfig.esm.json",
-    "build": "pnpm run clean && pnpm run build:commonjs && pnpm run build:esm"
+    "build": "npm run clean && npm run build:commonjs && npm run build:esm"
   },
   "dependencies": {
     "@ethereumjs/common": "^4.0.0",
