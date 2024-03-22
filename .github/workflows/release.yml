@@ -45,7 +45,7 @@ jobs:
     steps:
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-16
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - name: Checkout repo

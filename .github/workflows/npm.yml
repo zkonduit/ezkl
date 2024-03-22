@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-16
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -30,7 +30,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-01-16-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
       - name: Install binaryen
         run: |
           set -e
