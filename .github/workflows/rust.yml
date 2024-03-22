@@ -303,6 +303,8 @@ jobs:
         with:
           node-version: "18.12.1"
           cache: "pnpm"
+      - name: "Add rust-src"
+        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
       - name: Install dependencies for js tests and in-browser-evm-verifier package
         run: |
           pnpm install --no-frozen-lockfile
