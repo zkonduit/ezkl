@@ -32,7 +32,7 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: ${{ env.EZKL_VERSION }}
 
-  build-release-gpu: 
+  build-release-gpu:
     name: build-release-gpu
     needs: ["create-release"]
     runs-on: GPU
@@ -45,7 +45,7 @@ jobs:
     steps:
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - name: Checkout repo
@@ -60,16 +60,15 @@ jobs:
       - name: Set Cargo.toml version to match github tag
         shell: bash
         run: |
-            mv Cargo.toml Cargo.toml.orig
-            sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.toml.orig >Cargo.toml
-            mv Cargo.lock Cargo.lock.orig
-            sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.lock.orig >Cargo.lock
-
+          mv Cargo.toml Cargo.toml.orig
+          sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.toml.orig >Cargo.toml
+          mv Cargo.lock Cargo.lock.orig
+          sed "s/0\\.0\\.0/${EZKL_VERSION//v}/" Cargo.lock.orig >Cargo.lock
 
       - name: Install dependencies
         shell: bash
         run: |
-            sudo apt-get update
+          sudo apt-get update
 
       - name: Build release binary
         run: cargo build --release -Z sparse-registry --features icicle
@@ -90,7 +89,6 @@ jobs:
           asset_path: ${{ env.ASSET }}
           asset_name: ${{ env.ASSET }}
           asset_content_type: application/octet-stream
-
 
   build-release:
     name: build-release

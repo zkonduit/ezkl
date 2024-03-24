@@ -152,7 +152,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         // number of cols needed to store the range
         let num_cols = num_cols_required((range.1 - range.0).abs(), col_size);
 
-        log::debug!("table range: {:?}", range);
+        debug!("table range: {:?}", range);
 
         let table_inputs = preexisting_inputs.unwrap_or_else(|| {
             let mut cols = vec![];
@@ -165,7 +165,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
         let num_cols = table_inputs.len();
 
         if num_cols > 1 {
-            debug!("Using {} columns for non-linearity table.", num_cols);
+            warn!("Using {} columns for non-linearity table.", num_cols);
         }
 
         let table_outputs = table_inputs
