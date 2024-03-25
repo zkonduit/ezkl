@@ -128,6 +128,14 @@ jobs:
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
+      - name: Set Cargo.toml version to match github tag for docs
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv docs/python/conf.py docs/python/conf.py.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" docs/python/conf.py.orig >docs/python/conf.py
+
       - name: Install required libraries
         shell: bash
         run: |
