@@ -3532,12 +3532,17 @@ pub mod nonlinearities {
     }
 
     /// softmax layout
-    pub fn softmax_axes(a: &Tensor<i128>, scale: f64, axes: &[usize]) -> Tensor<i128> {
+    pub fn softmax_axes(
+        a: &Tensor<i128>,
+        input_scale: f64,
+        output_scale: f64,
+        axes: &[usize],
+    ) -> Tensor<i128> {
         // we want this to be as small as possible so we set the output scale to 1
         let dims = a.dims();
 
         if dims.len() == 1 {
-            return softmax(a, scale);
+            return softmax(a, input_scale, output_scale);
         }
 
         let cartesian_coord = dims[..dims.len() - 1]
@@ -3560,7 +3565,7 @@ pub mod nonlinearities {
 
             let softmax_input = a.get_slice(&sum_dims).unwrap();
 
-            let res = softmax(&softmax_input, scale);
+            let res = softmax(&softmax_input, input_scale, output_scale);
 
             outputs.push(res);
         }
@@ -3592,13 +3597,13 @@ pub mod nonlinearities {
     /// let expected = Tensor::<i128>::new(Some(&[2730, 2730, 2751, 2730, 2730, 2688]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn softmax(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn softmax(a: &Tensor<i128>, input_scale: f64, output_scale: f64) -> Tensor<i128> {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
 
-        let exp = exp(a, scale);
+        let exp = exp(a, input_scale);
 
         let sum = sum(&exp).unwrap();
-        let inv_denom = recip(&sum, scale, scale);
+        let inv_denom = recip(&sum, input_scale, output_scale);
 
         (exp * inv_denom).unwrap()
     }

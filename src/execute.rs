@@ -24,8 +24,8 @@ use crate::pfsys::{
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
 use crate::{Commitments, RunArgs};
-#[cfg(unix)]
-use gag::Gag;
+// #[cfg(unix)]
+// use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{self, Circuit};
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params};
@@ -819,7 +819,15 @@ impl AccuracyResults {
             let error = (original.clone() - calibrated.clone())?;
             let abs_error = error.map(|x| x.abs());
             let squared_error = error.map(|x| x.powi(2));
-            let percentage_error = error.enum_map(|i, x| Ok::<_, TensorError>(x / original[i]))?;
+            let percentage_error = error.enum_map(|i, x| {
+                // if everything is 0 then we can't divide by 0 so we just return 0
+                let res = if original[i] == 0.0 && x == 0.0 {
+                    0.0
+                } else {
+                    x / original[i]
+                };
+                Ok::<f32, TensorError>(res)
+            })?;
             let abs_percentage_error = percentage_error.map(|x| x.abs());
 
             errors.extend(error);
@@ -888,6 +896,7 @@ pub(crate) fn calibrate(
     only_range_check_rebase: bool,
     max_logrows: Option<u32>,
 ) -> Result<GraphSettings, Box<dyn Error>> {
+    use log::error;
     use std::collections::HashMap;
     use tabled::Table;
 
@@ -993,21 +1002,21 @@ pub(crate) fn calibrate(
         };
 
         // if unix get a gag
-        #[cfg(unix)]
-        let _r = match Gag::stdout() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
-        #[cfg(unix)]
-        let _g = match Gag::stderr() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        // #[cfg(unix)]
+        // let _r = match Gag::stdout() {
+        //     Ok(g) => Some(g),
+        //     _ => None,
+        // };
+        // #[cfg(unix)]
+        // let _g = match Gag::stderr() {
+        //     Ok(g) => Some(g),
+        //     _ => None,
+        // };
 
         let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
             Ok(c) => c,
             Err(e) => {
-                debug!("circuit creation from run args failed: {:?}", e);
+                error!("circuit creation from run args failed: {:?}", e);
                 continue;
             }
         };
@@ -1039,16 +1048,16 @@ pub(crate) fn calibrate(
             Ok(_) => (),
             // typically errors will be due to the circuit overflowing the i128 limit
             Err(e) => {
-                debug!("forward pass failed: {:?}", e);
+                error!("forward pass failed: {:?}", e);
                 continue;
             }
         }
 
-        // drop the gag
-        #[cfg(unix)]
-        drop(_r);
-        #[cfg(unix)]
-        drop(_g);
+        // // drop the gag
+        // #[cfg(unix)]
+        // drop(_r);
+        // #[cfg(unix)]
+        // drop(_g);
 
         let result = forward_pass_res.get(&key).ok_or("key not found")?;
 
@@ -1105,7 +1114,7 @@ pub(crate) fn calibrate(
                 found_settings.as_json()?.to_colored_json_auto()?
             );
         } else {
-            debug!("calibration failed {}", res.err().unwrap());
+            error!("calibration failed {}", res.err().unwrap());
         }
 
         pb.inc(1);

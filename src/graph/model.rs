@@ -1157,10 +1157,6 @@ impl Model {
                         error!("{}", e);
                         halo2_proofs::plonk::Error::Synthesis
                     })?;
-                } else if !run_args.output_visibility.is_private() {
-                    for output in &outputs {
-                    thread_safe_region.increment_total_constants(output.num_constants());
-                    }
                 }
                 num_rows = thread_safe_region.row();
                 linear_coord = thread_safe_region.linear_coord();
@@ -1430,10 +1426,6 @@ impl Model {
                 })
                 .collect::<Result<Vec<_>, _>>();
             res?;
-        } else if !self.visibility.output.is_private() {
-            for output in &outputs {
-                region.increment_total_constants(output.num_constants());
-            }
         }
 
         let duration = start_time.elapsed();

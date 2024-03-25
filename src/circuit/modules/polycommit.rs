@@ -4,6 +4,8 @@ is already implemented in halo2_gadgets, there is no wrapper chip that makes it 
 Thanks to https://github.com/summa-dev/summa-solvency/blob/master/src/chips/poseidon/hash.rs for the inspiration (and also helping us understand how to use this).
 */
 
+use std::collections::HashMap;
+
 // This chip adds a set of advice columns to the gadget Chip to store the inputs of the hash
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
 use halo2_proofs::poly::commitment::{Blind, CommitmentScheme, Params};
@@ -121,9 +123,14 @@ impl Module<Fp> for PolyCommitChip {
         _: usize,
     ) -> Result<ValTensor<Fp>, Error> {
         assert_eq!(input.len(), 1);
+
         layouter.assign_region(
             || "PolyCommit",
-            |mut region| self.config.inputs.assign(&mut region, 0, &input[0]),
+            |mut region| {
+                self.config
+                    .inputs
+                    .assign(&mut region, 0, &input[0], &mut HashMap::new())
+            },
         )
     }
 

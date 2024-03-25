@@ -98,7 +98,7 @@ pub struct Table<F: PrimeField> {
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
     /// get column index given input
     pub fn get_col_index(&self, input: F) -> F {
         //    range is split up into chunks of size col_size, find the chunk that input is in
@@ -138,7 +138,7 @@ pub fn num_cols_required(range_len: i128, col_size: usize) -> usize {
     (range_len / (col_size as i128)) as usize + 1
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Table<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
     /// Configures the table.
     pub fn configure(
         cs: &mut ConstraintSystem<F>,
@@ -275,7 +275,7 @@ pub struct RangeCheck<F: PrimeField> {
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
     /// get first_element of column
     pub fn get_first_element(&self, chunk: usize) -> F {
         let chunk = chunk as i128;
@@ -303,7 +303,7 @@ impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> RangeCheck<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
     /// Configures the table.
     pub fn configure(cs: &mut ConstraintSystem<F>, range: Range, logrows: usize) -> RangeCheck<F> {
         log::debug!("range check range: {:?}", range);

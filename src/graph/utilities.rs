@@ -1072,8 +1072,12 @@ pub fn new_op_from_onnx(
                 }
             };
 
+            let in_scale = inputs[0].out_scales()[0];
+            let max_scale = std::cmp::max(scales.get_max(), in_scale);
+
             SupportedOp::Hybrid(HybridOp::Softmax {
-                scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                input_scale: scale_to_multiplier(in_scale).into(),
+                output_scale: scale_to_multiplier(max_scale).into(),
                 axes: softmax_op.axes.to_vec(),
             })
         }

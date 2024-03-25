@@ -435,6 +435,18 @@ impl<F: PrimeField + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>>
 }
 
 impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
+    maybe_rayon::iter::FromParallelIterator<T> for Tensor<T>
+{
+    fn from_par_iter<I>(par_iter: I) -> Self
+    where
+        I: maybe_rayon::iter::IntoParallelIterator<Item = T>,
+    {
+        let inner: Vec<T> = par_iter.into_par_iter().collect();
+        Tensor::new(Some(&inner), &[inner.len()]).unwrap()
+    }
+}
+
+impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
     maybe_rayon::iter::IntoParallelIterator for Tensor<T>
 {
     type Iter = maybe_rayon::vec::IntoIter<T>;

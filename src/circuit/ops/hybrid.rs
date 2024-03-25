@@ -46,7 +46,8 @@ pub enum HybridOp {
         dim: usize,
     },
     Softmax {
-        scale: utils::F32,
+        input_scale: utils::F32,
+        output_scale: utils::F32,
         axes: Vec<usize>,
     },
     RangeCheck(Tolerance),
@@ -70,7 +71,7 @@ pub enum HybridOp {
     },
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for HybridOp {
     ///
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         match self {
@@ -130,9 +131,16 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
                 kernel_shape,
                 normalized,
             } => tensor::ops::sumpool(&x, *padding, *stride, *kernel_shape, *normalized)?,
-            HybridOp::Softmax { scale, axes } => {
-                tensor::ops::nonlinearities::softmax_axes(&x, scale.into(), axes)
-            }
+            HybridOp::Softmax {
+                input_scale,
+                output_scale,
+                axes,
+            } => tensor::ops::nonlinearities::softmax_axes(
+                &x,
+                input_scale.into(),
+                output_scale.into(),
+                axes,
+            ),
             HybridOp::RangeCheck(tol) => {
                 let y = inputs[1].clone().map(|x| felt_to_i128(x));
                 tensor::ops::nonlinearities::range_check_percent(&[x, y], 128, 128, tol.val)
@@ -203,8 +211,15 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             ),
             HybridOp::ReduceMin { axes } => format!("REDUCEMIN (axes={:?})", axes),
             HybridOp::ReduceArgMin { dim } => format!("REDUCEARGMIN (dim={})", dim),
-            HybridOp::Softmax { scale, axes } => {
-                format!("SOFTMAX (scale={}, axes={:?})", scale, axes)
+            HybridOp::Softmax {
+                input_scale,
+                output_scale,
+                axes,
+            } => {
+                format!(
+                    "SOFTMAX (input_scale={}, output_scale={}, axes={:?})",
+                    input_scale, output_scale, axes
+                )
             }
             HybridOp::RangeCheck(p) => format!("RANGECHECK (tol={:?})", p),
             HybridOp::Greater => "GREATER".into(),
@@ -324,9 +339,18 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             HybridOp::ReduceArgMin { dim } => {
                 layouts::argmin_axes(config, region, values[..].try_into()?, *dim)?
             }
-            HybridOp::Softmax { scale, axes } => {
-                layouts::softmax_axes(config, region, values[..].try_into()?, *scale, axes)?
-            }
+            HybridOp::Softmax {
+                input_scale,
+                output_scale,
+                axes,
+            } => layouts::softmax_axes(
+                config,
+                region,
+                values[..].try_into()?,
+                *input_scale,
+                *output_scale,
+                axes,
+            )?,
             HybridOp::RangeCheck(tol) => layouts::range_check_percent(
                 config,
                 region,
@@ -359,8 +383,9 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for HybridOp {
             | HybridOp::ReduceArgMax { .. }
             | HybridOp::OneHot { .. }
             | HybridOp::ReduceArgMin { .. } => 0,
-            HybridOp::Softmax { .. } => 2 * in_scales[0],
-            HybridOp::Recip { output_scale, .. } => multiplier_to_scale(output_scale.0 as f64),
+            HybridOp::Softmax { output_scale, .. } | HybridOp::Recip { output_scale, .. } => {
+                multiplier_to_scale(output_scale.0 as f64)
+            }
             _ => in_scales[0],
         };
         Ok(scale)
