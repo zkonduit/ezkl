@@ -180,6 +180,8 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
 
         let start_time = instant::Instant::now();
 
+        let local_constants = constants.clone();
+
         let res = layouter.assign_region(
             || "load message",
             |mut region| {
@@ -202,18 +204,23 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                                     Ok(v.clone())
                                 }
                                 ValType::Constant(f) => {
-                                    if constants.contains_key(f) {
+                                    if local_constants.contains_key(f) {
                                         Ok(constants.get(f).unwrap().assigned_cell().ok_or({
                                             log::error!("constant not previously assigned");
                                             Error::Synthesis
                                         })?)
                                     } else {
-                                        region.assign_advice_from_constant(
+                                        let res = region.assign_advice_from_constant(
                                             || format!("load message_{}", i),
                                             self.config.hash_inputs[x],
                                             y,
                                             *f,
-                                        )
+                                        )?;
+
+                                        constants
+                                            .insert(*f, ValType::AssignedConstant(res.clone(), *f));
+
+                                        Ok(res)
                                     }
                                 }
                                 e => {

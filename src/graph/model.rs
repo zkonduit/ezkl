@@ -1111,10 +1111,12 @@ impl Model {
         config.base.layout_tables(layouter)?;
         config.base.layout_range_checks(layouter)?;
 
+        let original_constants = constants.clone();
+
         let outputs = layouter.assign_region(
             || "model",
             |region| {
-                let mut thread_safe_region = RegionCtx::new_with_constants(region, 0, run_args.num_inner_cols, constants.clone());
+                let mut thread_safe_region = RegionCtx::new_with_constants(region, 0, run_args.num_inner_cols, original_constants.clone());
                 // we need to do this as this loop is called multiple times
                 vars.set_instance_idx(instance_idx);
 
@@ -1166,7 +1168,6 @@ impl Model {
                 thread_safe_region.debug_report();
 
                 *constants = thread_safe_region.assigned_constants().clone();
-
 
                 Ok(outputs)
             },

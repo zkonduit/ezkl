@@ -127,12 +127,19 @@ impl Module<Fp> for PolyCommitChip {
     ) -> Result<ValTensor<Fp>, Error> {
         assert_eq!(input.len(), 1);
 
+        let local_constants = constants.clone();
         layouter.assign_region(
             || "PolyCommit",
             |mut region| {
-                self.config
-                    .inputs
-                    .assign(&mut region, 0, &input[0], constants)
+                let mut local_inner_constants = local_constants.clone();
+                let res = self.config.inputs.assign(
+                    &mut region,
+                    0,
+                    &input[0],
+                    &mut local_inner_constants,
+                )?;
+                *constants = local_inner_constants;
+                Ok(res)
             },
         )
     }
