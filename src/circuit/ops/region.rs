@@ -2,6 +2,7 @@ use crate::{
     circuit::table::Range,
     tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor},
 };
+#[cfg(not(target_arch = "wasm32"))]
 use colored::Colorize;
 use halo2_proofs::{
     circuit::Region,
@@ -140,6 +141,7 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a, F> {
+    #[cfg(not(target_arch = "wasm32"))]
     ///
     pub fn debug_report(&self) {
         log::debug!(

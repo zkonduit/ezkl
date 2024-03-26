@@ -3592,7 +3592,7 @@ pub mod nonlinearities {
     ///     Some(&[2, 2, 3, 2, 2, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = softmax(&x, 128.0);
+    /// let result = softmax(&x, 128.0, 16384.0);
     /// // doubles the scale of the input
     /// let expected = Tensor::<i128>::new(Some(&[2730, 2730, 2751, 2730, 2730, 2688]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
