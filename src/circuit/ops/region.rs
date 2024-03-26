@@ -164,7 +164,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
 
     ///
     pub fn update_constants(&mut self, constants: ConstantsMap<F>) {
-        self.assigned_constants.par_extend(constants);
+        self.assigned_constants.extend(constants);
     }
 
     ///
@@ -378,10 +378,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 min_lookup_inputs.fetch_min(local_reg.min_lookup_inputs(), Ordering::SeqCst);
                 // update the lookups
                 let mut lookups = lookups.lock().unwrap();
-                lookups.par_extend(local_reg.used_lookups());
+                lookups.extend(local_reg.used_lookups());
                 // update the range checks
                 let mut range_checks = range_checks.lock().unwrap();
-                range_checks.par_extend(local_reg.used_range_checks());
+                range_checks.extend(local_reg.used_range_checks());
                 // update the dynamic lookup index
                 let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
                 dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
@@ -390,7 +390,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 shuffle_index.update(&local_reg.shuffle_index);
                 // update the constants
                 let mut constants = constants.lock().unwrap();
-                constants.par_extend(local_reg.assigned_constants);
+                constants.extend(local_reg.assigned_constants);
 
                 res
             })
@@ -644,7 +644,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 }
             }
 
-            self.assigned_constants.par_extend(values_map);
+            self.assigned_constants.extend(values_map);
 
             Ok(values.clone())
         }
