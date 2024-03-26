@@ -9,6 +9,7 @@ use halo2_proofs::{
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
+use maybe_rayon::iter::ParallelExtend;
 use portable_atomic::AtomicI128 as AtomicInt;
 use std::{
     cell::RefCell,
@@ -163,7 +164,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
 
     ///
     pub fn update_constants(&mut self, constants: ConstantsMap<F>) {
-        self.assigned_constants.extend(constants.into_iter());
+        self.assigned_constants.par_extend(constants);
     }
 
     ///
@@ -377,10 +378,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 min_lookup_inputs.fetch_min(local_reg.min_lookup_inputs(), Ordering::SeqCst);
                 // update the lookups
                 let mut lookups = lookups.lock().unwrap();
-                lookups.extend(local_reg.used_lookups());
+                lookups.par_extend(local_reg.used_lookups());
                 // update the range checks
                 let mut range_checks = range_checks.lock().unwrap();
-                range_checks.extend(local_reg.used_range_checks());
+                range_checks.par_extend(local_reg.used_range_checks());
                 // update the dynamic lookup index
                 let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
                 dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
@@ -389,7 +390,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 shuffle_index.update(&local_reg.shuffle_index);
                 // update the constants
                 let mut constants = constants.lock().unwrap();
-                constants.extend(local_reg.assigned_constants.into_iter());
+                constants.par_extend(local_reg.assigned_constants);
 
                 res
             })
@@ -574,8 +575,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 &mut self.assigned_constants,
             )
         } else {
-            let values_map = values.create_constants_map();
-            self.assigned_constants.extend(values_map);
+            if !values.is_instance() {
+                let values_map = values.create_constants_map_iterator();
+                self.assigned_constants.par_extend(values_map);
+            }
             Ok(values.clone())
         }
     }
@@ -599,8 +602,19 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 &mut self.assigned_constants,
             )
         } else {
-            let values_map = values.create_constants_map();
-            self.assigned_constants.extend(values_map);
+            if !values.is_instance() {
+                let start = instant::Instant::now();
+                let values_map = values.create_constants_map_iterator();
+                log::trace!(
+                    "assign_dynamic_lookup: create_constants_map: {:?}",
+                    start.elapsed()
+                );
+                self.assigned_constants.par_extend(values_map);
+                log::trace!(
+                    "assign_dynamic_lookup: assigned_constants: {:?}",
+                    start.elapsed()
+                );
+            }
             Ok(values.clone())
         }
     }
@@ -630,9 +644,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 &mut self.assigned_constants,
             )
         } else {
-            let mut values_map = values.create_constants_map();
-
             let inner_tensor = values.get_inner_tensor().unwrap();
+            let mut values_map = values.create_constants_map();
 
             for o in ommissions {
                 if let ValType::Constant(value) = inner_tensor.get_flat_index(**o) {
@@ -640,7 +653,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 }
             }
 
-            self.assigned_constants.extend(values_map);
+            self.assigned_constants.par_extend(values_map);
 
             Ok(values.clone())
         }

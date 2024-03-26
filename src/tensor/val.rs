@@ -450,23 +450,45 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// Returns the number of constants in the [ValTensor].
     pub fn num_constants(&self) -> usize {
         match self {
-            ValTensor::Value { inner, .. } => inner.iter().filter(|x| x.is_constant()).count(),
+            ValTensor::Value { inner, .. } => inner.par_iter().filter(|x| x.is_constant()).count(),
             ValTensor::Instance { .. } => 0,
+        }
+    }
+
+    /// Returns the number of constants in the [ValTensor].
+    pub fn create_constants_map_iterator(
+        &self,
+    ) -> maybe_rayon::iter::FilterMap<
+        maybe_rayon::slice::Iter<'_, ValType<F>>,
+        fn(&ValType<F>) -> Option<(F, ValType<F>)>,
+    > {
+        match self {
+            ValTensor::Value { inner, .. } => inner.par_iter().filter_map(|x| {
+                if let ValType::Constant(v) = x {
+                    Some((*v, x.clone()))
+                } else {
+                    None
+                }
+            }),
+            ValTensor::Instance { .. } => {
+                unreachable!("Instance tensors do not have constants")
+            }
         }
     }
 
     /// Returns the number of constants in the [ValTensor].
     pub fn create_constants_map(&self) -> ConstantsMap<F> {
         match self {
-            ValTensor::Value { inner, .. } => {
-                let map = inner.iter().fold(ConstantsMap::new(), |mut acc, x| {
-                    if let ValType::Constant(c) = x {
-                        acc.insert(*c, x.clone());
+            ValTensor::Value { inner, .. } => inner
+                .par_iter()
+                .filter_map(|x| {
+                    if let ValType::Constant(v) = x {
+                        Some((*v, x.clone()))
+                    } else {
+                        None
                     }
-                    acc
-                });
-                map
-            }
+                })
+                .collect(),
             ValTensor::Instance { .. } => ConstantsMap::new(),
         }
     }

@@ -568,10 +568,10 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let is_assigned = !input.any_unknowns()?;
 
     let sorted = if is_assigned {
-        input
-            .get_int_evals()?
-            .iter()
-            .sorted_by(|a, b| a.cmp(b))
+        let mut int_evals = input.get_int_evals()?;
+        int_evals.par_sort_unstable_by(|a, b| a.cmp(b));
+        int_evals
+            .par_iter()
             .map(|x| Value::known(i128_to_felt(*x)))
             .collect::<Tensor<Value<F>>>()
     } else {
@@ -753,19 +753,27 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
     let _table_1 = region.assign_dynamic_lookup(&config.dynamic_lookups.tables[1], &table_1)?;
     let table_len = table_0.len();
 
+    trace!("assigning tables took: {:?}", start.elapsed());
+
     // now create a vartensor of constants for the dynamic lookup index
     let table_index = create_constant_tensor(F::from(dynamic_lookup_index as u64), table_len);
     let _table_index =
         region.assign_dynamic_lookup(&config.dynamic_lookups.tables[2], &table_index)?;
 
+    trace!("assigning table index took: {:?}", start.elapsed());
+
     let lookup_0 = region.assign(&config.dynamic_lookups.inputs[0], &lookup_0)?;
     let lookup_1 = region.assign(&config.dynamic_lookups.inputs[1], &lookup_1)?;
     let lookup_len = lookup_0.len();
+
+    trace!("assigning lookups took: {:?}", start.elapsed());
 
     // now set the lookup index
     let lookup_index = create_constant_tensor(F::from(dynamic_lookup_index as u64), lookup_len);
 
     let _lookup_index = region.assign(&config.dynamic_lookups.inputs[2], &lookup_index)?;
+
+    trace!("assigning lookup index took: {:?}", start.elapsed());
 
     if !region.is_dummy() {
         (0..table_len)
@@ -1199,10 +1207,10 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
 
         let indices = if last_dim < &input_rank {
             inner_cartesian_coord
-                .iter()
+                .par_iter()
                 .map(|x| {
                     let slice = x.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
-                    let index = index_slice.get_slice(&slice)?;
+                    let index = index_slice.get_slice(&slice).map_err(|e| e.to_string())?;
 
                     // map over cartesian coord of rest of dims and insert constants
                     let grid = (*last_dim..input_rank)
@@ -1218,20 +1226,21 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
                             .into();
                             index.concat(constant_valtensor)
                         })
-                        .collect::<Result<Vec<_>, TensorError>>()?)
+                        .collect::<Result<Vec<_>, TensorError>>()
+                        .map_err(|e| e.to_string())?)
                 })
-                .collect::<Result<Vec<_>, Box<dyn Error>>>()?
+                .collect::<Result<Vec<_>, String>>()?
                 .into_iter()
                 .flatten()
                 .collect::<Vec<_>>()
         } else {
             inner_cartesian_coord
-                .iter()
+                .par_iter()
                 .map(|x| {
                     let slice = x.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
-                    index_slice.get_slice(&slice)
+                    index_slice.get_slice(&slice).map_err(|e| e.to_string())
                 })
-                .collect::<Result<Vec<_>, Box<dyn Error>>>()?
+                .collect::<Result<Vec<_>, String>>()?
         };
 
         let mut const_offset = F::ZERO;
@@ -1259,7 +1268,7 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
             if region.witness_gen() {
                 assert!(
                 res.get_int_evals()?
-                    .iter()
+                    .par_iter()
                     .all(|x| *x < dims.iter().product::<usize>() as i128),
                 "res is greater than the product of the dims {} (coord={}, index_dim_multiplier={}, res={})",
                 dims.iter().product::<usize>(),
@@ -3251,11 +3260,15 @@ pub(crate) fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     input_scale: utils::F32,
     output_scale: utils::F32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
+    // get the max then subtract it
+    let max_val = max(config, region, values)?;
+    // rebase the input to 0
+    let sub = pairwise(config, region, &[values[0].clone(), max_val], BaseOp::Sub)?;
     // elementwise exponential
     let ex = nonlinearity(
         config,
         region,
-        values,
+        &[sub],
         &LookupOp::Exp { scale: input_scale },
     )?;
 

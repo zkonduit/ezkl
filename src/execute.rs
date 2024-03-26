@@ -911,7 +911,7 @@ pub(crate) fn calibrate(
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
 
     let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
-    debug!("num of calibration batches: {}", chunks.len());
+    info!("num calibration batches: {}", chunks.len());
 
     debug!("running onnx predictions...");
     let original_predictions = Model::run_onnx_predictions(
