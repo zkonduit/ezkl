@@ -3592,7 +3592,7 @@ pub mod nonlinearities {
     ///     Some(&[2, 2, 3, 2, 2, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = softmax(&x, 128.0, 16384.0);
+    /// let result = softmax(&x, 128.0, 128.0);
     /// // doubles the scale of the input
     /// let expected = Tensor::<i128>::new(Some(&[2730, 2730, 2751, 2730, 2730, 2688]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
@@ -3604,8 +3604,10 @@ pub mod nonlinearities {
 
         let sum = sum(&exp).unwrap();
         let inv_denom = recip(&sum, input_scale, output_scale);
-
-        (exp * inv_denom).unwrap()
+        let mut res = (exp * inv_denom).unwrap();
+        res = res.iter().map(|x| x / (input_scale as i128)).collect();
+        res.reshape(a.dims()).unwrap();
+        res
     }
 
     /// Applies range_check_percent
