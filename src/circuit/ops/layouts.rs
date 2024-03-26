@@ -1210,7 +1210,7 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
                 .iter()
                 .map(|x| {
                     let slice = x.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
-                    let index = index_slice.get_slice(&slice).map_err(|e| e.to_string())?;
+                    let index = index_slice.get_slice(&slice)?;
 
                     // map over cartesian coord of rest of dims and insert constants
                     let grid = (*last_dim..input_rank)
@@ -1226,10 +1226,9 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
                             .into();
                             index.concat(constant_valtensor)
                         })
-                        .collect::<Result<Vec<_>, TensorError>>()
-                        .map_err(|e| e.to_string())?)
+                        .collect::<Result<Vec<_>, TensorError>>()?)
                 })
-                .collect::<Result<Vec<_>, String>>()?
+                .collect::<Result<Vec<_>, Box<dyn Error>>>()?
                 .into_iter()
                 .flatten()
                 .collect::<Vec<_>>()
