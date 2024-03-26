@@ -9,7 +9,6 @@ use halo2_proofs::{
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
-use maybe_rayon::iter::ParallelExtend;
 use portable_atomic::AtomicI128 as AtomicInt;
 use std::{
     cell::RefCell,
