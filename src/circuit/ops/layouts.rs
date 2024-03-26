@@ -1234,12 +1234,12 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
                 .collect::<Vec<_>>()
         } else {
             inner_cartesian_coord
-                .par_iter()
+                .iter()
                 .map(|x| {
                     let slice = x.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
-                    index_slice.get_slice(&slice).map_err(|e| e.to_string())
+                    index_slice.get_slice(&slice)
                 })
-                .collect::<Result<Vec<_>, String>>()?
+                .collect::<Result<Vec<_>, Box<dyn Error>>>()?
         };
 
         let mut const_offset = F::ZERO;
