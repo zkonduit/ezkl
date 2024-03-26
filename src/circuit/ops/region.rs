@@ -576,7 +576,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             )
         } else {
             if !values.is_instance() {
-                let values_map = values.create_constants_map_iterator();
+                let values_map = values.create_constants_map();
                 self.assigned_constants.par_extend(values_map);
             }
             Ok(values.clone())
@@ -603,7 +603,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             )
         } else {
             if !values.is_instance() {
-                let values_map = values.create_constants_map_iterator();
+                let values_map = values.create_constants();
                 self.assigned_constants.par_extend(values_map);
             }
             Ok(values.clone())
