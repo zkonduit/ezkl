@@ -289,9 +289,10 @@ impl VarTensor {
         &self,
         region: &mut Region<F>,
         offset: usize,
+        coord: usize,
         constant: F,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
-        let (x, y, z) = self.cartesian_coord(offset);
+        let (x, y, z) = self.cartesian_coord(offset + coord);
         match &self {
             VarTensor::Advice { inner: advices, .. } => {
                 region.assign_advice_from_constant(|| "constant", advices[x][y], z, constant)
@@ -498,8 +499,12 @@ impl VarTensor {
                         prev_cell = Some(cell.clone());
                     } else if coord > 0 && z == 0 && single_inner_col {
                         if let Some(prev_cell) = prev_cell.as_ref() {
-                            let cell = cell.cell().ok_or(halo2_proofs::plonk::Error::Synthesis)?;
-                            let prev_cell = prev_cell.cell().ok_or(halo2_proofs::plonk::Error::Synthesis)?;
+                            let cell = cell.cell().ok_or({
+                                error!("Error getting cell: {:?}", (x,y));
+                                halo2_proofs::plonk::Error::Synthesis})?;
+                            let prev_cell = prev_cell.cell().ok_or({
+                                error!("Error getting cell: {:?}", (x,y));
+                                halo2_proofs::plonk::Error::Synthesis})?;
                             region.constrain_equal(prev_cell,cell)?;
                         } else {
                             error!("Error copy-constraining previous value: {:?}", (x,y));
@@ -571,18 +576,12 @@ impl VarTensor {
                 _ => unimplemented!(),
             },
             ValType::Constant(v) => {
-                if !constants.contains_key(&v) {
+                if constants.contains_key(&v) {
                     let cell = constants.get(&v).unwrap();
-                    self.assign_value(
-                        region,
-                        offset + coord,
-                        cell.clone().into(),
-                        coord,
-                        constants,
-                    )?
+                    self.assign_value(region, offset, cell.clone(), coord, constants)?
                 } else {
                     let value = ValType::AssignedConstant(
-                        self.assign_constant(region, offset + coord, v)?,
+                        self.assign_constant(region, offset, coord, v)?,
                         v,
                     );
                     constants.insert(v, value.clone());

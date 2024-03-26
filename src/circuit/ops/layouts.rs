@@ -9,7 +9,9 @@ use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use log::{error, trace};
 use maybe_rayon::{
-    iter::IntoParallelRefIterator, prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator}, slice::ParallelSliceMut
+    iter::IntoParallelRefIterator,
+    prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
+    slice::ParallelSliceMut,
 };
 
 use self::tensor::{create_constant_tensor, create_zero_tensor};
@@ -656,7 +658,7 @@ fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let is_assigned = !input.any_unknowns()? && !index.any_unknowns()?;
 
-    let output: ValTensor<F> = if is_assigned {
+    let output: ValTensor<F> = if is_assigned && region.witness_gen() {
         let felt_evals = input.get_felt_evals()?;
         index
             .get_int_evals()?
@@ -1244,7 +1246,6 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
             const_offset += F::from(coord[i] as u64) * dim_multiplier[i];
         }
 
-
         let const_offset = create_constant_tensor(const_offset, 1);
 
         let mut results = vec![];
@@ -1262,16 +1263,18 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
             let res = sum(config, region, &[res])?;
             results.push(res.get_inner_tensor()?.clone());
             // assert than res is less than the product of the dims
-            assert!(
+            if region.witness_gen() {
+                assert!(
                 res.get_int_evals()?
                     .iter()
                     .all(|x| *x < dims.iter().product::<usize>() as i128),
                 "res is greater than the product of the dims {} (coord={}, index_dim_multiplier={}, res={})",
                 dims.iter().product::<usize>(),
-                index_val.show(), 
+                index_val.show(),
                 index_dim_multiplier.show(),
                 res.show()
             );
+            }
         }
 
         let result_tensor = Tensor::from(results.into_iter());
@@ -1285,7 +1288,9 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
     Ok(output.into())
 }
 
-pub(crate) fn get_missing_set_elements<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn get_missing_set_elements<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
+>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -1366,7 +1371,7 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd + std::ha
 
     let is_assigned = !input.any_unknowns()? && !index.any_unknowns()? && !src.any_unknowns()?;
 
-    let claimed_output: ValTensor<F> = if is_assigned {
+    let claimed_output: ValTensor<F> = if is_assigned && region.witness_gen() {
         let input_inner = input.get_int_evals()?;
         let index_inner = index.get_int_evals()?.map(|x| x as usize);
         let src_inner = src.get_int_evals()?;
@@ -1445,7 +1450,7 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 
     let is_assigned = !input.any_unknowns()? && !index.any_unknowns()? && !src.any_unknowns()?;
 
-    let claimed_output: ValTensor<F> = if is_assigned {
+    let claimed_output: ValTensor<F> = if is_assigned && region.witness_gen() {
         let input_inner = input.get_int_evals()?;
         let index_inner = index.get_int_evals()?.map(|x| x as usize);
         let src_inner = src.get_int_evals()?;
@@ -1468,7 +1473,6 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     let mut claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
     region.increment(claimed_output.len());
     claimed_output.reshape(input.dims())?;
-
 
     // scatter elements is the inverse of gather elements
     let (gather_src, linear_index) =
@@ -2872,7 +2876,8 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
     }
 
-    if region.throw_range_check_error() {
+    let is_assigned = !w.any_unknowns()?;
+    if is_assigned && region.witness_gen() {
         // assert is within range
         let int_values = w.get_int_evals()?;
         for v in int_values.iter() {
@@ -3212,7 +3217,6 @@ pub(crate) fn softmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::
     Ok(output)
 }
 
-
 /// percent func
 pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
@@ -3230,10 +3234,15 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     // sum of exps
     let denom = sum(config, region, &[input.clone()])?;
 
-
     let input_felt_scale = F::from(input_scale.0 as u64);
     let output_felt_scale = F::from(output_scale.0 as u64);
-    let inv_denom = recip(config, region, &[denom], input_felt_scale, output_felt_scale)?;
+    let inv_denom = recip(
+        config,
+        region,
+        &[denom],
+        input_felt_scale,
+        output_felt_scale,
+    )?;
     // product of num * (1 / denom) = 2*output_scale
     let percent = pairwise(config, region, &[input, inv_denom], BaseOp::Mult)?;
 
@@ -3250,7 +3259,12 @@ pub(crate) fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     output_scale: utils::F32,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
     // elementwise exponential
-    let ex = nonlinearity(config, region, values, &LookupOp::Exp { scale: input_scale })?;
+    let ex = nonlinearity(
+        config,
+        region,
+        values,
+        &LookupOp::Exp { scale: input_scale },
+    )?;
 
     percent(config, region, &[ex.clone()], input_scale, output_scale)
 }

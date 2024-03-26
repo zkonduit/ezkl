@@ -684,7 +684,7 @@ pub(crate) async fn gen_witness(
                         &mut input,
                         vk.as_ref(),
                         Some(&srs),
-                        false,
+                        true,
                     )?
                 }
                 Commitments::IPA => {
@@ -698,16 +698,16 @@ pub(crate) async fn gen_witness(
                         &mut input,
                         vk.as_ref(),
                         Some(&srs),
-                        false,
+                        true,
                     )?
                 }
             }
         } else {
             warn!("SRS for poly commit does not exist (will be ignored)");
-            circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, false)?
+            circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true)?
         }
     } else {
-        circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, false)?
+        circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true)?
     };
 
     // print each variable tuple (symbol, value) as symbol=value

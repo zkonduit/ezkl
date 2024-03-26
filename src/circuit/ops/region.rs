@@ -2,11 +2,13 @@ use crate::{
     circuit::table::Range,
     tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor},
 };
+use colored::Colorize;
 use halo2_proofs::{
     circuit::Region,
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
+use portable_atomic::AtomicI128 as AtomicInt;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -15,8 +17,6 @@ use std::{
         Arc, Mutex,
     },
 };
-
-use portable_atomic::AtomicI128 as AtomicInt;
 
 use super::lookup::LookupOp;
 
@@ -135,11 +135,25 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     max_lookup_inputs: i128,
     min_lookup_inputs: i128,
     max_range_size: i128,
-    throw_range_check_error: bool,
+    witness_gen: bool,
     assigned_constants: ConstantsMap<F>,
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a, F> {
+    ///
+    pub fn debug_report(&self) {
+        log::debug!(
+            "(rows={}, coord={}, constants={}, max_lookup_inputs={}, min_lookup_inputs={}, max_range_size={}, dynamic_lookup_col_coord={}, shuffle_col_coord={})",
+            self.row().to_string().blue(),
+            self.linear_coord().to_string().yellow(),
+            self.total_constants().to_string().red(),
+            self.max_lookup_inputs().to_string().green(),
+            self.min_lookup_inputs().to_string().green(),
+            self.max_range_size().to_string().green(),
+            self.dynamic_lookup_col_coord().to_string().green(),
+            self.shuffle_col_coord().to_string().green());
+    }
+
     ///
     pub fn increment_dynamic_lookup_index(&mut self, n: usize) {
         self.dynamic_lookup_index.index += n;
@@ -161,8 +175,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     ///
-    pub fn throw_range_check_error(&self) -> bool {
-        self.throw_range_check_error
+    pub fn witness_gen(&self) -> bool {
+        self.witness_gen
     }
 
     /// Create a new region context
@@ -182,7 +196,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
-            throw_range_check_error: false,
+            witness_gen: true,
             assigned_constants: HashMap::new(),
         }
     }
@@ -207,17 +221,13 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
-            throw_range_check_error: false,
+            witness_gen: false,
             assigned_constants: HashMap::new(),
         }
     }
 
     /// Create a new region context
-    pub fn new_dummy(
-        row: usize,
-        num_inner_cols: usize,
-        throw_range_check_error: bool,
-    ) -> RegionCtx<'a, F> {
+    pub fn new_dummy(row: usize, num_inner_cols: usize, witness_gen: bool) -> RegionCtx<'a, F> {
         let region = None;
         let linear_coord = row * num_inner_cols;
 
@@ -233,7 +243,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
-            throw_range_check_error,
+            witness_gen,
             assigned_constants: HashMap::new(),
         }
     }
@@ -243,7 +253,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         row: usize,
         linear_coord: usize,
         num_inner_cols: usize,
-        throw_range_check_error: bool,
+        witness_gen: bool,
     ) -> RegionCtx<'a, F> {
         let region = None;
         RegionCtx {
@@ -258,7 +268,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
-            throw_range_check_error,
+            witness_gen,
             assigned_constants: HashMap::new(),
         }
     }
@@ -329,7 +339,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                     starting_offset,
                     starting_linear_coord,
                     self.num_inner_cols,
-                    self.throw_range_check_error,
+                    self.witness_gen,
                 );
                 let res = inner_loop_function(idx, &mut local_reg);
                 // we update the offset and constants
@@ -540,6 +550,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 &mut self.assigned_constants,
             )
         } else {
+            let values_map = values.create_constants_map();
+            self.assigned_constants.extend(values_map.into_iter());
             Ok(values.clone())
         }
     }
@@ -563,6 +575,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 &mut self.assigned_constants,
             )
         } else {
+            let values_map = values.create_constants_map();
+            self.assigned_constants.extend(values_map.into_iter());
             Ok(values.clone())
         }
     }
@@ -597,11 +611,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             let inner_tensor = values.get_inner_tensor().unwrap();
 
             for o in ommissions {
-                if inner_tensor.get_flat_index(**o).is_constant() {
-                    let value = inner_tensor
-                        .get_flat_index(**o)
-                        .get_felt_eval()
-                        .ok_or(Error::Synthesis)?;
+                if let ValType::Constant(value) = inner_tensor.get_flat_index(**o) {
                     values_map.remove(&value);
                 }
             }

@@ -451,8 +451,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         match self {
             ValTensor::Value { inner, .. } => {
                 let map = inner.iter().fold(ConstantsMap::new(), |mut acc, x| {
-                    if x.is_constant() {
-                        acc.insert(x.get_felt_eval().unwrap(), x.clone());
+                    if let ValType::Constant(c) = x {
+                        acc.insert(*c, x.clone());
                     }
                     acc
                 });
