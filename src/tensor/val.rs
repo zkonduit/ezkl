@@ -450,12 +450,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// Returns the number of constants in the [ValTensor].
     pub fn create_constants_map_iterator(
         &self,
-    ) -> maybe_rayon::iter::FilterMap<
-        maybe_rayon::slice::Iter<'_, ValType<F>>,
+    ) -> core::iter::FilterMap<
+        core::slice::Iter<'_, ValType<F>>,
         fn(&ValType<F>) -> Option<(F, ValType<F>)>,
     > {
         match self {
-            ValTensor::Value { inner, .. } => inner.par_iter().filter_map(|x| {
+            ValTensor::Value { inner, .. } => inner.iter().filter_map(|x| {
                 if let ValType::Constant(v) = x {
                     Some((*v, x.clone()))
                 } else {
