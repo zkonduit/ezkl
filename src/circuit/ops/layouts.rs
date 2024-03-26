@@ -1207,7 +1207,7 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
 
         let indices = if last_dim < &input_rank {
             inner_cartesian_coord
-                .par_iter()
+                .iter()
                 .map(|x| {
                     let slice = x.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
                     let index = index_slice.get_slice(&slice).map_err(|e| e.to_string())?;
