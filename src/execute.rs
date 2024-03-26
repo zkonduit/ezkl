@@ -538,7 +538,7 @@ fn check_srs_hash(
     let path = get_srs_path(logrows, srs_path, commitment);
     let hash = get_file_hash(&path)?;
 
-    let predefined_hash = match { crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) } {
+    let predefined_hash = match crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) {
         Some(h) => h,
         None => return Err(format!("SRS (k={}) hash not found in public set", logrows).into()),
     };
@@ -1888,7 +1888,7 @@ pub(crate) fn mock_aggregate(
             }
             Err(_) => {
                 return Err(
-                    format!("invalid sample commitment type for aggregation, must be KZG").into(),
+                    "invalid sample commitment type for aggregation, must be KZG".to_string().into(),
                 );
             }
         }
@@ -1931,7 +1931,7 @@ pub(crate) fn setup_aggregate(
             }
             Err(_) => {
                 return Err(
-                    format!("invalid sample commitment type for aggregation, must be KZG",).into(),
+                    "invalid sample commitment type for aggregation, must be KZG".to_string().into(),
                 );
             }
         }
@@ -1992,7 +1992,7 @@ pub(crate) fn aggregate(
             }
             Err(_) => {
                 return Err(
-                    format!("invalid sample commitment type for aggregation, must be KZG").into(),
+                    "invalid sample commitment type for aggregation, must be KZG".to_string().into(),
                 );
             }
         }

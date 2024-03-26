@@ -26,6 +26,7 @@ use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
+use crate::circuit::region::ConstantsMap;
 use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::fieldutils::felt_to_f64;
@@ -155,7 +156,7 @@ use std::cell::RefCell;
 thread_local!(
     /// This is a global variable that holds the settings for the graph
     /// This is used to pass settings to the layouter and other parts of the circuit without needing to heavily modify the Halo2 API in a new fork
-    pub static GLOBAL_SETTINGS: RefCell<Option<GraphSettings>> = RefCell::new(None)
+    pub static GLOBAL_SETTINGS: RefCell<Option<GraphSettings>> = const { RefCell::new(None) }
 );
 
 /// Result from a forward pass
@@ -1051,12 +1052,12 @@ impl GraphCircuit {
     }
 
     fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i128) -> Range {
-        let margin = (
+        
+
+        (
             lookup_safety_margin * min_max_lookup.0,
             lookup_safety_margin * min_max_lookup.1,
-        );
-
-        margin
+        )
     }
 
     fn calc_num_cols(range_len: i128, max_logrows: u32) -> usize {
@@ -1604,6 +1605,8 @@ impl Circuit<Fp> for GraphCircuit {
         let output_vis = &self.settings().run_args.output_visibility;
         let mut graph_modules = GraphModules::new();
 
+        let mut constants = ConstantsMap::new();
+
         let mut config = config.clone();
 
         let mut inputs = self
@@ -1649,6 +1652,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut input_outlets,
                 input_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
             // replace inputs with the outlets
             for (i, outlet) in outlets.iter().enumerate() {
@@ -1661,6 +1665,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut inputs,
                 input_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
         }
 
@@ -1697,6 +1702,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut flattened_params,
                 param_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
 
             let shapes = self.model().const_shapes();
@@ -1725,6 +1731,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &inputs,
                 &mut vars,
                 &outputs,
+                &mut constants,
             )
             .map_err(|e| {
                 log::error!("{}", e);
@@ -1749,6 +1756,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut output_outlets,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
 
             // replace outputs with the outlets
@@ -1762,6 +1770,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut outputs,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
         }
 

@@ -425,7 +425,7 @@ impl VarTensor {
                 let mut res: ValTensor<F> = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap().into();
 
                 let constants_map = res.create_constants_map();
-                constants.extend(constants_map.into_iter());
+                constants.extend(constants_map);
 
                 let total_used_len = res.len();
                 res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
@@ -576,16 +576,16 @@ impl VarTensor {
                 _ => unimplemented!(),
             },
             ValType::Constant(v) => {
-                if constants.contains_key(&v) {
-                    let cell = constants.get(&v).unwrap();
-                    self.assign_value(region, offset, cell.clone(), coord, constants)?
-                } else {
+                if let std::collections::hash_map::Entry::Vacant(e) = constants.entry(v) {
                     let value = ValType::AssignedConstant(
                         self.assign_constant(region, offset, coord, v)?,
                         v,
                     );
-                    constants.insert(v, value.clone());
+                    e.insert(value.clone());
                     value
+                } else {
+                    let cell = constants.get(&v).unwrap();
+                    self.assign_value(region, offset, cell.clone(), coord, constants)?
                 }
             }
         };

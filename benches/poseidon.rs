@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use ezkl::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
@@ -48,7 +50,7 @@ impl Circuit<Fr> for MyCircuit {
     ) -> Result<(), Error> {
         let chip: PoseidonChip<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, L> =
             PoseidonChip::new(config);
-        chip.layout(&mut layouter, &[self.image.clone()], 0)?;
+        chip.layout(&mut layouter, &[self.image.clone()], 0, &mut HashMap::new())?;
         Ok(())
     }
 }

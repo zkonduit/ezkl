@@ -62,6 +62,15 @@ impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + Partia
         }
     }
 
+    /// Returns the assigned cell of the [ValType].
+    pub fn assigned_cell(&self) -> Option<AssignedCell<F, F>> {
+        match self {
+            ValType::PrevAssigned(cell) => Some(cell.clone()),
+            ValType::AssignedConstant(cell, _) => Some(cell.clone()),
+            _ => None,
+        }
+    }
+
     /// Returns true if the value is previously assigned.
     pub fn is_prev_assigned(&self) -> bool {
         matches!(

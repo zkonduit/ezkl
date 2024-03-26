@@ -525,14 +525,7 @@ pub(crate) fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
                 // Compute the product of all input tensors
                 for pair in input_pairs {
-                    let product_across_pair = prod(
-                        config,
-                        region,
-                        &[pair.try_into().map_err(|e| {
-                            error!("{}", e);
-                            halo2_proofs::plonk::Error::Synthesis
-                        })?],
-                    )?;
+                    let product_across_pair = prod(config, region, &[pair.into()])?;
 
                     if let Some(product) = prod_res {
                         prod_res = Some(

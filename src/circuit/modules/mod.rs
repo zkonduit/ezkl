@@ -15,6 +15,8 @@ pub use planner::*;
 
 use crate::tensor::{TensorType, ValTensor};
 
+use super::region::ConstantsMap;
+
 /// Module trait used to extend ezkl functionality
 pub trait Module<F: PrimeField + TensorType + PartialOrd> {
     /// Config
@@ -39,6 +41,7 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
         &self,
         layouter: &mut impl Layouter<F>,
         input: &[ValTensor<F>],
+        constants: &mut ConstantsMap<F>,
     ) -> Result<Self::InputAssignments, Error>;
     /// Layout
     fn layout(
@@ -46,6 +49,7 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
         layouter: &mut impl Layouter<F>,
         input: &[ValTensor<F>],
         row_offset: usize,
+        constants: &mut ConstantsMap<F>,
     ) -> Result<ValTensor<F>, Error>;
     /// Number of instance values the module uses every time it is applied
     fn instance_increment_input(&self) -> Vec<usize>;

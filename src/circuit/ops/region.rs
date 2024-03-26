@@ -157,6 +157,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     ///
+    pub fn assigned_constants(&self) -> &ConstantsMap<F> {
+        &self.assigned_constants
+    }
+
+    ///
+    pub fn update_constants(&mut self, constants: ConstantsMap<F>) {
+        self.assigned_constants.extend(constants.into_iter());
+    }
+
+    ///
     pub fn increment_dynamic_lookup_index(&mut self, n: usize) {
         self.dynamic_lookup_index.index += n;
     }
@@ -201,6 +211,18 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             witness_gen: true,
             assigned_constants: HashMap::new(),
         }
+    }
+
+    /// Create a new region context
+    pub fn new_with_constants(
+        region: Region<'a, F>,
+        row: usize,
+        num_inner_cols: usize,
+        constants: ConstantsMap<F>,
+    ) -> RegionCtx<'a, F> {
+        let mut new_self = Self::new(region, row, num_inner_cols);
+        new_self.assigned_constants = constants;
+        new_self
     }
     /// Create a new region context from a wrapped region
     pub fn from_wrapped_region(
@@ -553,7 +575,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             )
         } else {
             let values_map = values.create_constants_map();
-            self.assigned_constants.extend(values_map.into_iter());
+            self.assigned_constants.extend(values_map);
             Ok(values.clone())
         }
     }
@@ -578,7 +600,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             )
         } else {
             let values_map = values.create_constants_map();
-            self.assigned_constants.extend(values_map.into_iter());
+            self.assigned_constants.extend(values_map);
             Ok(values.clone())
         }
     }
@@ -618,7 +640,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 }
             }
 
-            self.assigned_constants.extend(values_map.into_iter());
+            self.assigned_constants.extend(values_map);
 
             Ok(values.clone())
         }

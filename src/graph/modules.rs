@@ -2,6 +2,7 @@ use crate::circuit::modules::polycommit::{PolyCommitChip, PolyCommitConfig};
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::{PoseidonChip, PoseidonConfig};
 use crate::circuit::modules::Module;
+use crate::circuit::region::ConstantsMap;
 use crate::tensor::{Tensor, ValTensor};
 use halo2_proofs::circuit::Layouter;
 use halo2_proofs::plonk::{Column, ConstraintSystem, Error, Instance, VerifyingKey};
@@ -211,12 +212,13 @@ impl GraphModules {
         layouter: &mut impl Layouter<Fp>,
         x: &mut Vec<ValTensor<Fp>>,
         instance_offset: &mut usize,
+        constants: &mut ConstantsMap<Fp>,
     ) -> Result<(), Error> {
         // reserve module 0 for ... modules
         // hash the input and replace the constrained cells in the input
         let cloned_x = (*x).clone();
         x[0] = module
-            .layout(layouter, &cloned_x, instance_offset.to_owned())
+            .layout(layouter, &cloned_x, instance_offset.to_owned(), constants)
             .unwrap();
         for inc in module.instance_increment_input().iter() {
             // increment the instance offset to make way for future module layouts
@@ -234,6 +236,7 @@ impl GraphModules {
         values: &mut [ValTensor<Fp>],
         element_visibility: &Visibility,
         instance_offset: &mut usize,
+        constants: &mut ConstantsMap<Fp>,
     ) -> Result<(), Error> {
         if element_visibility.is_polycommit() && !values.is_empty() {
             // concat values and sk to get the inputs
@@ -248,7 +251,7 @@ impl GraphModules {
                 layouter
                     .assign_region(|| format!("_enter_module_{}", module_offset), |_| Ok(()))
                     .unwrap();
-                Self::layout_module(&chip, layouter, x, instance_offset).unwrap();
+                Self::layout_module(&chip, layouter, x, instance_offset, constants).unwrap();
                 // increment the current index
                 self.polycommit_idx += 1;
             });
@@ -270,7 +273,7 @@ impl GraphModules {
                 let mut inputs = values.iter_mut().map(|x| vec![x.clone()]).collect_vec();
                 // layout the module
                 inputs.iter_mut().for_each(|x| {
-                    Self::layout_module(&chip, layouter, x, instance_offset).unwrap();
+                    Self::layout_module(&chip, layouter, x, instance_offset, constants).unwrap();
                 });
                 // replace the inputs with the outputs
                 values.iter_mut().enumerate().for_each(|(i, x)| {

@@ -5,6 +5,7 @@ use super::vars::*;
 use super::GraphError;
 use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
+use crate::circuit::region::ConstantsMap;
 use crate::circuit::region::RegionCtx;
 use crate::circuit::table::Range;
 use crate::circuit::Input;
@@ -404,7 +405,7 @@ impl ParsedNodes {
                 .get(input)
                 .ok_or(GraphError::MissingNode(*input))?;
             let input_dims = node.out_dims();
-            let input_dim = input_dims.get(0).ok_or(GraphError::MissingNode(*input))?;
+            let input_dim = input_dims.first().ok_or(GraphError::MissingNode(*input))?;
             inputs.push(input_dim.clone());
         }
 
@@ -1074,6 +1075,8 @@ impl Model {
     /// * `layouter` - Halo2 Layouter.
     /// * `inputs` - The values to feed into the circuit.
     /// * `vars` - The variables for the circuit.
+    /// * `witnessed_outputs` - The values to compare against.
+    /// * `constants` - The constants for the circuit.
     pub fn layout(
         &self,
         mut config: ModelConfig,
@@ -1082,6 +1085,7 @@ impl Model {
         inputs: &[ValTensor<Fp>],
         vars: &mut ModelVars<Fp>,
         witnessed_outputs: &[ValTensor<Fp>],
+        constants: &mut ConstantsMap<Fp>,
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         info!("model layout...");
 
@@ -1110,7 +1114,7 @@ impl Model {
         let outputs = layouter.assign_region(
             || "model",
             |region| {
-                let mut thread_safe_region = RegionCtx::new(region, 0, run_args.num_inner_cols);
+                let mut thread_safe_region = RegionCtx::new_with_constants(region, 0, run_args.num_inner_cols, constants.clone());
                 // we need to do this as this loop is called multiple times
                 vars.set_instance_idx(instance_idx);
 
@@ -1160,6 +1164,8 @@ impl Model {
                 // Then number of columns in the circuits
                 #[cfg(not(target_arch = "wasm32"))]
                 thread_safe_region.debug_report();
+
+                *constants = thread_safe_region.assigned_constants().clone();
 
 
                 Ok(outputs)
@@ -1412,6 +1418,10 @@ impl Model {
                 })
                 .collect::<Result<Vec<_>, _>>();
             res?;
+        } else if !self.visibility.output.is_private() {
+            for output in &outputs {
+                region.update_constants(output.create_constants_map());
+            }
         }
 
         let duration = start_time.elapsed();

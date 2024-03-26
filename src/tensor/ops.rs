@@ -1878,7 +1878,6 @@ pub fn topk<T: TensorType + PartialOrd>(
     let mut indexed_a = a
         .iter()
         .enumerate()
-        .map(|(i, x)| (i, x))
         .collect::<Vec<_>>();
 
     if largest {

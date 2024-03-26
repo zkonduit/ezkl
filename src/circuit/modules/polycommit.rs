@@ -15,6 +15,7 @@ use halo2curves::group::prime::PrimeCurveAffine;
 use halo2curves::group::Curve;
 use halo2curves::CurveAffine;
 
+use crate::circuit::region::ConstantsMap;
 use crate::tensor::{Tensor, ValTensor, ValType, VarTensor};
 
 use super::Module;
@@ -109,6 +110,7 @@ impl Module<Fp> for PolyCommitChip {
         &self,
         _: &mut impl Layouter<Fp>,
         _: &[ValTensor<Fp>],
+        _: &mut ConstantsMap<Fp>,
     ) -> Result<Self::InputAssignments, Error> {
         Ok(())
     }
@@ -121,6 +123,7 @@ impl Module<Fp> for PolyCommitChip {
         layouter: &mut impl Layouter<Fp>,
         input: &[ValTensor<Fp>],
         _: usize,
+        constants: &mut ConstantsMap<Fp>,
     ) -> Result<ValTensor<Fp>, Error> {
         assert_eq!(input.len(), 1);
 
@@ -129,7 +132,7 @@ impl Module<Fp> for PolyCommitChip {
             |mut region| {
                 self.config
                     .inputs
-                    .assign(&mut region, 0, &input[0], &mut HashMap::new())
+                    .assign(&mut region, 0, &input[0], constants)
             },
         )
     }
@@ -191,7 +194,12 @@ mod tests {
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
             let polycommit_chip = PolyCommitChip::new(config);
-            polycommit_chip.layout(&mut layouter, &[self.message.clone()], 0);
+            polycommit_chip.layout(
+                &mut layouter,
+                &[self.message.clone()],
+                0,
+                &mut HashMap::new(),
+            );
 
             Ok(())
         }
