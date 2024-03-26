@@ -655,7 +655,7 @@ fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         let felt_evals = input.get_felt_evals()?;
         index
             .get_int_evals()?
-            .par_iter()
+            .iter()
             .map(|x| Value::known(felt_evals.get(&[*x as usize])))
             .collect::<Tensor<Value<F>>>()
     } else {

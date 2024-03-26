@@ -603,17 +603,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             )
         } else {
             if !values.is_instance() {
-                let start = instant::Instant::now();
                 let values_map = values.create_constants_map_iterator();
-                log::trace!(
-                    "assign_dynamic_lookup: create_constants_map: {:?}",
-                    start.elapsed()
-                );
                 self.assigned_constants.par_extend(values_map);
-                log::trace!(
-                    "assign_dynamic_lookup: assigned_constants: {:?}",
-                    start.elapsed()
-                );
             }
             Ok(values.clone())
         }

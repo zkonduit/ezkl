@@ -448,14 +448,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// Returns the number of constants in the [ValTensor].
-    pub fn num_constants(&self) -> usize {
-        match self {
-            ValTensor::Value { inner, .. } => inner.par_iter().filter(|x| x.is_constant()).count(),
-            ValTensor::Instance { .. } => 0,
-        }
-    }
-
-    /// Returns the number of constants in the [ValTensor].
     pub fn create_constants_map_iterator(
         &self,
     ) -> maybe_rayon::iter::FilterMap<
