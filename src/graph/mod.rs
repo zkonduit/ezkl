@@ -1052,8 +1052,6 @@ impl GraphCircuit {
     }
 
     fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i128) -> Range {
-        
-
         (
             lookup_safety_margin * min_max_lookup.0,
             lookup_safety_margin * min_max_lookup.1,

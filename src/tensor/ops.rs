@@ -1875,10 +1875,7 @@ pub fn topk<T: TensorType + PartialOrd>(
     let mut indexed_a = a.clone();
     indexed_a.flatten();
 
-    let mut indexed_a = a
-        .iter()
-        .enumerate()
-        .collect::<Vec<_>>();
+    let mut indexed_a = a.iter().enumerate().collect::<Vec<_>>();
 
     if largest {
         indexed_a.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
