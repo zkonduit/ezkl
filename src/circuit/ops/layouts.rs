@@ -1267,7 +1267,7 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
             if region.witness_gen() {
                 assert!(
                 res.get_int_evals()?
-                    .par_iter()
+                    .iter()
                     .all(|x| *x < dims.iter().product::<usize>() as i128),
                 "res is greater than the product of the dims {} (coord={}, index_dim_multiplier={}, res={})",
                 dims.iter().product::<usize>(),
