@@ -24,6 +24,8 @@ use crate::pfsys::{
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
 use crate::{Commitments, RunArgs};
+#[cfg(not(target_arch = "wasm32"))]
+use colored::Colorize;
 #[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
@@ -538,7 +540,7 @@ fn check_srs_hash(
     let path = get_srs_path(logrows, srs_path, commitment);
     let hash = get_file_hash(&path)?;
 
-    let predefined_hash = match { crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) } {
+    let predefined_hash = match crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) {
         Some(h) => h,
         None => return Err(format!("SRS (k={}) hash not found in public set", logrows).into()),
     };
@@ -684,7 +686,7 @@ pub(crate) async fn gen_witness(
                         &mut input,
                         vk.as_ref(),
                         Some(&srs),
-                        false,
+                        true,
                     )?
                 }
                 Commitments::IPA => {
@@ -698,16 +700,16 @@ pub(crate) async fn gen_witness(
                         &mut input,
                         vk.as_ref(),
                         Some(&srs),
-                        false,
+                        true,
                     )?
                 }
             }
         } else {
             warn!("SRS for poly commit does not exist (will be ignored)");
-            circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, false)?
+            circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true)?
         }
     } else {
-        circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, false)?
+        circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true)?
     };
 
     // print each variable tuple (symbol, value) as symbol=value
@@ -819,7 +821,15 @@ impl AccuracyResults {
             let error = (original.clone() - calibrated.clone())?;
             let abs_error = error.map(|x| x.abs());
             let squared_error = error.map(|x| x.powi(2));
-            let percentage_error = error.enum_map(|i, x| Ok::<_, TensorError>(x / original[i]))?;
+            let percentage_error = error.enum_map(|i, x| {
+                // if everything is 0 then we can't divide by 0 so we just return 0
+                let res = if original[i] == 0.0 && x == 0.0 {
+                    0.0
+                } else {
+                    x / original[i]
+                };
+                Ok::<f32, TensorError>(res)
+            })?;
             let abs_percentage_error = percentage_error.map(|x| x.abs());
 
             errors.extend(error);
@@ -888,6 +898,7 @@ pub(crate) fn calibrate(
     only_range_check_rebase: bool,
     max_logrows: Option<u32>,
 ) -> Result<GraphSettings, Box<dyn Error>> {
+    use log::error;
     use std::collections::HashMap;
     use tabled::Table;
 
@@ -900,9 +911,9 @@ pub(crate) fn calibrate(
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
 
     let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
-    info!("num of calibration batches: {}", chunks.len());
+    debug!("num of calibration batches: {}", chunks.len());
 
-    info!("running onnx predictions...");
+    debug!("running onnx predictions...");
     let original_predictions = Model::run_onnx_predictions(
         &settings.run_args,
         &model_path,
@@ -970,10 +981,18 @@ pub(crate) fn calibrate(
     let pb = init_bar(range_grid.len() as u64);
     pb.set_message("calibrating...");
 
+    let mut num_failed = 0;
+    let mut num_passed = 0;
+
     for (((input_scale, param_scale), scale_rebase_multiplier), div_rebasing) in range_grid {
         pb.set_message(format!(
-            "input scale: {}, param scale: {}, scale rebase multiplier: {}, div rebasing: {}",
-            input_scale, param_scale, scale_rebase_multiplier, div_rebasing
+            "i-scale: {}, p-scale: {}, rebase-(x): {}, div-rebase: {}, fail: {}, pass: {}",
+            input_scale.to_string().blue(),
+            param_scale.to_string().blue(),
+            scale_rebase_multiplier.to_string().blue(),
+            div_rebasing.to_string().yellow(),
+            num_failed.to_string().red(),
+            num_passed.to_string().green()
         ));
 
         let key = (
@@ -1007,7 +1026,9 @@ pub(crate) fn calibrate(
         let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
             Ok(c) => c,
             Err(e) => {
-                debug!("circuit creation from run args failed: {:?}", e);
+                error!("circuit creation from run args failed: {:?}", e);
+                pb.inc(1);
+                num_failed += 1;
                 continue;
             }
         };
@@ -1039,7 +1060,9 @@ pub(crate) fn calibrate(
             Ok(_) => (),
             // typically errors will be due to the circuit overflowing the i128 limit
             Err(e) => {
-                debug!("forward pass failed: {:?}", e);
+                error!("forward pass failed: {:?}", e);
+                pb.inc(1);
+                num_failed += 1;
                 continue;
             }
         }
@@ -1104,8 +1127,10 @@ pub(crate) fn calibrate(
                 "found settings: \n {}",
                 found_settings.as_json()?.to_colored_json_auto()?
             );
+            num_passed += 1;
         } else {
-            debug!("calibration failed {}", res.err().unwrap());
+            error!("calibration failed {}", res.err().unwrap());
+            num_failed += 1;
         }
 
         pb.inc(1);
@@ -1879,7 +1904,9 @@ pub(crate) fn mock_aggregate(
             }
             Err(_) => {
                 return Err(
-                    format!("invalid sample commitment type for aggregation, must be KZG").into(),
+                    "invalid sample commitment type for aggregation, must be KZG"
+                        .to_string()
+                        .into(),
                 );
             }
         }
@@ -1922,7 +1949,9 @@ pub(crate) fn setup_aggregate(
             }
             Err(_) => {
                 return Err(
-                    format!("invalid sample commitment type for aggregation, must be KZG",).into(),
+                    "invalid sample commitment type for aggregation, must be KZG"
+                        .to_string()
+                        .into(),
                 );
             }
         }
@@ -1983,7 +2012,9 @@ pub(crate) fn aggregate(
             }
             Err(_) => {
                 return Err(
-                    format!("invalid sample commitment type for aggregation, must be KZG").into(),
+                    "invalid sample commitment type for aggregation, must be KZG"
+                        .to_string()
+                        .into(),
                 );
             }
         }

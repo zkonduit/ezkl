@@ -346,7 +346,7 @@ pub struct ModelVars<F: PrimeField + TensorType + PartialOrd> {
     pub instance: Option<ValTensor<F>>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
     /// Get instance col
     pub fn get_instance_col(&self) -> Option<&Column<Instance>> {
         if let Some(instance) = &self.instance {

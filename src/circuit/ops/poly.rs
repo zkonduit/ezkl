@@ -89,8 +89,14 @@ pub enum PolyOp {
     },
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F>
-    for PolyOp
+impl<
+        F: PrimeField
+            + TensorType
+            + PartialOrd
+            + std::hash::Hash
+            + Serialize
+            + for<'de> Deserialize<'de>,
+    > Op<F> for PolyOp
 {
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {

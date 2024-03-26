@@ -4,6 +4,8 @@ is already implemented in halo2_gadgets, there is no wrapper chip that makes it 
 Thanks to https://github.com/summa-dev/summa-solvency/blob/master/src/chips/poseidon/hash.rs for the inspiration (and also helping us understand how to use this).
 */
 
+use std::collections::HashMap;
+
 // This chip adds a set of advice columns to the gadget Chip to store the inputs of the hash
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
 use halo2_proofs::poly::commitment::{Blind, CommitmentScheme, Params};
@@ -13,6 +15,7 @@ use halo2curves::group::prime::PrimeCurveAffine;
 use halo2curves::group::Curve;
 use halo2curves::CurveAffine;
 
+use crate::circuit::region::ConstantsMap;
 use crate::tensor::{Tensor, ValTensor, ValType, VarTensor};
 
 use super::Module;
@@ -107,6 +110,7 @@ impl Module<Fp> for PolyCommitChip {
         &self,
         _: &mut impl Layouter<Fp>,
         _: &[ValTensor<Fp>],
+        _: &mut ConstantsMap<Fp>,
     ) -> Result<Self::InputAssignments, Error> {
         Ok(())
     }
@@ -119,11 +123,24 @@ impl Module<Fp> for PolyCommitChip {
         layouter: &mut impl Layouter<Fp>,
         input: &[ValTensor<Fp>],
         _: usize,
+        constants: &mut ConstantsMap<Fp>,
     ) -> Result<ValTensor<Fp>, Error> {
         assert_eq!(input.len(), 1);
+
+        let local_constants = constants.clone();
         layouter.assign_region(
             || "PolyCommit",
-            |mut region| self.config.inputs.assign(&mut region, 0, &input[0]),
+            |mut region| {
+                let mut local_inner_constants = local_constants.clone();
+                let res = self.config.inputs.assign(
+                    &mut region,
+                    0,
+                    &input[0],
+                    &mut local_inner_constants,
+                )?;
+                *constants = local_inner_constants;
+                Ok(res)
+            },
         )
     }
 
@@ -184,7 +201,12 @@ mod tests {
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
             let polycommit_chip = PolyCommitChip::new(config);
-            polycommit_chip.layout(&mut layouter, &[self.message.clone()], 0);
+            polycommit_chip.layout(
+                &mut layouter,
+                &[self.message.clone()],
+                0,
+                &mut HashMap::new(),
+            );
 
             Ok(())
         }

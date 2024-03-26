@@ -345,7 +345,7 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> BaseConfig<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
     /// Returns a new [BaseConfig] with no inputs, no selectors, and no tables.
     pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
         Self {

@@ -27,12 +27,14 @@ pub mod region;
 
 /// A struct representing the result of a forward pass.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd> {
+pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
     pub(crate) output: Tensor<F>,
 }
 
 /// A trait representing operations that can be represented as constraints in a circuit.
-pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + Sync + Any {
+pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
+    std::fmt::Debug + Send + Sync + Any
+{
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError>;
     /// Returns a string representation of the operation.
@@ -98,7 +100,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd>: std::fmt::Debug + Send + 
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Clone for Box<dyn Op<F>> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Clone for Box<dyn Op<F>> {
     fn clone(&self) -> Self {
         self.clone_dyn()
     }
@@ -165,7 +167,7 @@ pub struct Input {
     pub datum_type: InputType,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input {
     fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         Ok(self.scale)
     }
@@ -226,7 +228,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Input {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Unknown;
 
-impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Unknown {
     fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         Ok(0)
     }
@@ -256,7 +258,7 @@ impl<F: PrimeField + TensorType + PartialOrd> Op<F> for Unknown {
 
 ///
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
+pub struct Constant<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
     ///
     pub quantized_values: Tensor<F>,
     ///
@@ -266,7 +268,7 @@ pub struct Constant<F: PrimeField + TensorType + PartialOrd> {
     pub pre_assigned_val: Option<ValTensor<F>>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
     ///
     pub fn new(quantized_values: Tensor<F>, raw_values: Tensor<f32>) -> Self {
         Self {
@@ -293,8 +295,14 @@ impl<F: PrimeField + TensorType + PartialOrd> Constant<F> {
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F>
-    for Constant<F>
+impl<
+        F: PrimeField
+            + TensorType
+            + PartialOrd
+            + std::hash::Hash
+            + Serialize
+            + for<'de> Deserialize<'de>,
+    > Op<F> for Constant<F>
 {
     fn as_any(&self) -> &dyn Any {
         self

@@ -1875,11 +1875,7 @@ pub fn topk<T: TensorType + PartialOrd>(
     let mut indexed_a = a.clone();
     indexed_a.flatten();
 
-    let mut indexed_a = a
-        .iter()
-        .enumerate()
-        .map(|(i, x)| (i, x))
-        .collect::<Vec<_>>();
+    let mut indexed_a = a.iter().enumerate().collect::<Vec<_>>();
 
     if largest {
         indexed_a.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
@@ -3532,12 +3528,17 @@ pub mod nonlinearities {
     }
 
     /// softmax layout
-    pub fn softmax_axes(a: &Tensor<i128>, scale: f64, axes: &[usize]) -> Tensor<i128> {
+    pub fn softmax_axes(
+        a: &Tensor<i128>,
+        input_scale: f64,
+        output_scale: f64,
+        axes: &[usize],
+    ) -> Tensor<i128> {
         // we want this to be as small as possible so we set the output scale to 1
         let dims = a.dims();
 
         if dims.len() == 1 {
-            return softmax(a, scale);
+            return softmax(a, input_scale, output_scale);
         }
 
         let cartesian_coord = dims[..dims.len() - 1]
@@ -3560,7 +3561,7 @@ pub mod nonlinearities {
 
             let softmax_input = a.get_slice(&sum_dims).unwrap();
 
-            let res = softmax(&softmax_input, scale);
+            let res = softmax(&softmax_input, input_scale, output_scale);
 
             outputs.push(res);
         }
@@ -3587,20 +3588,25 @@ pub mod nonlinearities {
     ///     Some(&[2, 2, 3, 2, 2, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = softmax(&x, 128.0);
+    /// let result = softmax(&x, 128.0, 128.0 * 128.0);
     /// // doubles the scale of the input
-    /// let expected = Tensor::<i128>::new(Some(&[2730, 2730, 2751, 2730, 2730, 2688]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[2734, 2734, 2755, 2734, 2734, 2692]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn softmax(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn softmax(a: &Tensor<i128>, input_scale: f64, output_scale: f64) -> Tensor<i128> {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
 
-        let exp = exp(a, scale);
+        let exp = exp(a, input_scale);
 
         let sum = sum(&exp).unwrap();
-        let inv_denom = recip(&sum, scale, scale);
-
-        (exp * inv_denom).unwrap()
+        let inv_denom = recip(&sum, input_scale, output_scale);
+        let mut res = (exp * inv_denom).unwrap();
+        res = res
+            .iter()
+            .map(|x| ((*x as f64) / input_scale).round() as i128)
+            .collect();
+        res.reshape(a.dims()).unwrap();
+        res
     }
 
     /// Applies range_check_percent

@@ -378,7 +378,7 @@ impl<F: PrimeField + Clone + TensorType + PartialOrd> From<Tensor<AssignedCell<A
 {
     fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<Value<F>> {
         let mut output = Vec::new();
-        for (_, x) in value.iter().enumerate() {
+        for x in value.iter() {
             output.push(x.value_field().evaluate());
         }
         Tensor::new(Some(&output), value.dims()).unwrap()
@@ -431,6 +431,18 @@ impl<F: PrimeField + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>>
         // safe to unwrap as we know the dims are correct
         ta.reshape(t.dims()).unwrap();
         ta
+    }
+}
+
+impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
+    maybe_rayon::iter::FromParallelIterator<T> for Tensor<T>
+{
+    fn from_par_iter<I>(par_iter: I) -> Self
+    where
+        I: maybe_rayon::iter::IntoParallelIterator<Item = T>,
+    {
+        let inner: Vec<T> = par_iter.into_par_iter().collect();
+        Tensor::new(Some(&inner), &[inner.len()]).unwrap()
     }
 }
 
