@@ -163,7 +163,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
 
     ///
     pub fn update_constants(&mut self, constants: ConstantsMap<F>) {
-        self.assigned_constants.extend(constants.into_iter());
+        self.assigned_constants.extend(constants);
     }
 
     ///
@@ -389,7 +389,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 shuffle_index.update(&local_reg.shuffle_index);
                 // update the constants
                 let mut constants = constants.lock().unwrap();
-                constants.extend(local_reg.assigned_constants.into_iter());
+                constants.extend(local_reg.assigned_constants);
 
                 res
             })
@@ -574,8 +574,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 &mut self.assigned_constants,
             )
         } else {
-            let values_map = values.create_constants_map();
-            self.assigned_constants.extend(values_map);
+            if !values.is_instance() {
+                let values_map = values.create_constants_map_iterator();
+                self.assigned_constants.extend(values_map);
+            }
             Ok(values.clone())
         }
     }
@@ -599,8 +601,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 &mut self.assigned_constants,
             )
         } else {
-            let values_map = values.create_constants_map();
-            self.assigned_constants.extend(values_map);
+            if !values.is_instance() {
+                let values_map = values.create_constants_map_iterator();
+                self.assigned_constants.extend(values_map);
+            }
             Ok(values.clone())
         }
     }
@@ -630,9 +634,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 &mut self.assigned_constants,
             )
         } else {
-            let mut values_map = values.create_constants_map();
-
             let inner_tensor = values.get_inner_tensor().unwrap();
+            let mut values_map = values.create_constants_map();
 
             for o in ommissions {
                 if let ValType::Constant(value) = inner_tensor.get_flat_index(**o) {
