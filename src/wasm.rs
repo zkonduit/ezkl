@@ -8,12 +8,14 @@ use crate::graph::quantize_float;
 use crate::graph::scale_to_multiplier;
 use crate::graph::{GraphCircuit, GraphSettings};
 use crate::pfsys::create_proof_circuit;
+use crate::pfsys::evm::aggregation_kzg::AggregationCircuit;
 use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
 use crate::pfsys::verify_proof_circuit;
 use crate::pfsys::TranscriptType;
 use crate::tensor::TensorType;
 use crate::CheckMode;
 use crate::Commitments;
+use console_error_panic_hook;
 use halo2_proofs::plonk::*;
 use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
 use halo2_proofs::poly::ipa::multiopen::{ProverIPA, VerifierIPA};
@@ -33,10 +35,9 @@ use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, PrimeField};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
+use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_console_logger::DEFAULT_LOGGER;
-
-use console_error_panic_hook;
 
 #[cfg(feature = "web")]
 pub use wasm_bindgen_rayon::init_thread_pool;
@@ -384,6 +385,88 @@ pub fn verify(
                         _,
                         PoseidonTranscript<NativeLoader, _>,
                     >(&proof, &params, &vk, strategy, orig_n)
+                }
+            }
+        }
+    };
+
+    match result {
+        Ok(_) => Ok(true),
+        Err(e) => Err(JsError::new(&format!("{}", e))),
+    }
+}
+
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+/// Verify aggregate proof in browser using wasm
+pub fn verifyAggr(
+    proof_js: wasm_bindgen::Clamped<Vec<u8>>,
+    vk: wasm_bindgen::Clamped<Vec<u8>>,
+    logrows: u64,
+    srs: wasm_bindgen::Clamped<Vec<u8>>,
+    commitment: &str,
+) -> Result<bool, JsError> {
+    let proof: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof_js[..])
+        .map_err(|e| JsError::new(&format!("Failed to deserialize proof: {}", e)))?;
+
+    let mut reader = std::io::BufReader::new(&vk[..]);
+    let vk = VerifyingKey::<G1Affine>::read::<_, AggregationCircuit>(
+        &mut reader,
+        halo2_proofs::SerdeFormat::RawBytes,
+        (),
+    )
+    .map_err(|e| JsError::new(&format!("Failed to deserialize vk: {}", e)))?;
+
+    let commit = Commitments::from_str(commitment).map_err(|e| JsError::new(&format!("{}", e)))?;
+
+    let mut reader = std::io::BufReader::new(&srs[..]);
+    let result = match commit {
+        Commitments::KZG => {
+            let params: ParamsKZG<Bn256> =
+                halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
+                    .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
+            let strategy = KZGSingleStrategy::new(params.verifier_params());
+            match proof.transcript_type {
+                TranscriptType::EVM => verify_proof_circuit::<
+                    VerifierSHPLONK<'_, Bn256>,
+                    KZGCommitmentScheme<Bn256>,
+                    KZGSingleStrategy<_>,
+                    _,
+                    EvmTranscript<G1Affine, _, _, _>,
+                >(&proof, &params, &vk, strategy, logrows),
+
+                TranscriptType::Poseidon => {
+                    verify_proof_circuit::<
+                        VerifierSHPLONK<'_, Bn256>,
+                        KZGCommitmentScheme<Bn256>,
+                        KZGSingleStrategy<_>,
+                        _,
+                        PoseidonTranscript<NativeLoader, _>,
+                    >(&proof, &params, &vk, strategy, logrows)
+                }
+            }
+        }
+        Commitments::IPA => {
+            let params: ParamsIPA<_> =
+                halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
+                    .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
+            let strategy = IPASingleStrategy::new(params.verifier_params());
+            match proof.transcript_type {
+                TranscriptType::EVM => verify_proof_circuit::<
+                    VerifierIPA<_>,
+                    IPACommitmentScheme<G1Affine>,
+                    IPASingleStrategy<_>,
+                    _,
+                    EvmTranscript<G1Affine, _, _, _>,
+                >(&proof, &params, &vk, strategy, logrows),
+                TranscriptType::Poseidon => {
+                    verify_proof_circuit::<
+                        VerifierIPA<_>,
+                        IPACommitmentScheme<G1Affine>,
+                        IPASingleStrategy<_>,
+                        _,
+                        PoseidonTranscript<NativeLoader, _>,
+                    >(&proof, &params, &vk, strategy, logrows)
                 }
             }
         }
