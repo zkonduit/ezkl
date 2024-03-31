@@ -56,7 +56,12 @@ mod py_tests {
             // source .env/bin/activate
             // pip install -r requirements.txt
             // maturin develop --release --features python-bindings
-
+            // first install tf2onnx as it has protobuf conflict with onnx
+            let status = Command::new("pip")
+                .args(["install", "tf2onnx==1.16.1"])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
             // now install torch, pandas, numpy, seaborn, jupyter
             let status = Command::new("pip")
                 .args([
@@ -77,7 +82,6 @@ mod py_tests {
                     "keras==3.1.1",
                     "tensorflow==2.16.1",
                     "tensorflow-datasets==4.9.4",
-                    "tf2onnx==1.16.1",
                     "pytorch-lightning==2.2.1",
                     "sk2torch==1.2.0",
                     "scikit-learn==1.4.1.post1",
