@@ -1,3 +1,4 @@
+use crate::graph::CircuitSize;
 use crate::pfsys::{Snark, SnarkWitness};
 use halo2_proofs::circuit::AssignedCell;
 use halo2_proofs::plonk::{self};
@@ -16,7 +17,7 @@ use halo2_wrong_ecc::{
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
-use log::trace;
+use log::{debug, trace};
 use rand::rngs::OsRng;
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::loader::EcPointLoader;
@@ -193,6 +194,19 @@ impl AggregationConfig {
         let main_gate_config = MainGate::<F>::configure(meta);
         let range_config =
             RangeChip::<F>::configure(meta, &main_gate_config, composition_bits, overflow_bits);
+
+        let circuit_size = CircuitSize::from_cs(meta, 23);
+
+        debug!(
+            "circuit size: \n {}",
+            circuit_size
+                .as_json()
+                .unwrap()
+                .to_colored_json_auto()
+                .unwrap()()
+            .to_colored_json_auto()
+        );
+
         AggregationConfig {
             main_gate_config,
             range_config,

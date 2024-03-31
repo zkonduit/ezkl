@@ -419,6 +419,8 @@ pub fn verifyAggr(
 
     let commit = Commitments::from_str(commitment).map_err(|e| JsError::new(&format!("{}", e)))?;
 
+    let orig_n = 1 << logrows;
+
     let mut reader = std::io::BufReader::new(&srs[..]);
     let result = match commit {
         Commitments::KZG => {
@@ -433,7 +435,7 @@ pub fn verifyAggr(
                     KZGSingleStrategy<_>,
                     _,
                     EvmTranscript<G1Affine, _, _, _>,
-                >(&proof, &params, &vk, strategy, logrows),
+                >(&proof, &params, &vk, strategy, orig_n),
 
                 TranscriptType::Poseidon => {
                     verify_proof_circuit::<
@@ -442,7 +444,7 @@ pub fn verifyAggr(
                         KZGSingleStrategy<_>,
                         _,
                         PoseidonTranscript<NativeLoader, _>,
-                    >(&proof, &params, &vk, strategy, logrows)
+                    >(&proof, &params, &vk, strategy, orig_n)
                 }
             }
         }
@@ -458,7 +460,7 @@ pub fn verifyAggr(
                     IPASingleStrategy<_>,
                     _,
                     EvmTranscript<G1Affine, _, _, _>,
-                >(&proof, &params, &vk, strategy, logrows),
+                >(&proof, &params, &vk, strategy, orig_n),
                 TranscriptType::Poseidon => {
                     verify_proof_circuit::<
                         VerifierIPA<_>,
@@ -466,7 +468,7 @@ pub fn verifyAggr(
                         IPASingleStrategy<_>,
                         _,
                         PoseidonTranscript<NativeLoader, _>,
-                    >(&proof, &params, &vk, strategy, logrows)
+                    >(&proof, &params, &vk, strategy, orig_n)
                 }
             }
         }

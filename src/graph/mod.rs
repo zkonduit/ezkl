@@ -39,7 +39,7 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
 use halo2curves::bn256::{self, Fr as Fp, G1Affine};
-use halo2curves::ff::PrimeField;
+use halo2curves::ff::{Field, PrimeField};
 #[cfg(not(target_arch = "wasm32"))]
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
@@ -1451,7 +1451,8 @@ impl GraphCircuit {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-struct CircuitSize {
+/// The configuration for the graph circuit
+pub struct CircuitSize {
     num_instances: usize,
     num_advice_columns: usize,
     num_fixed: usize,
@@ -1461,7 +1462,8 @@ struct CircuitSize {
 }
 
 impl CircuitSize {
-    pub fn from_cs(cs: &ConstraintSystem<Fp>, logrows: u32) -> Self {
+    ///
+    pub fn from_cs<F: Field>(cs: &ConstraintSystem<F>, logrows: u32) -> Self {
         CircuitSize {
             num_instances: cs.num_instance_columns(),
             num_advice_columns: cs.num_advice_columns(),
