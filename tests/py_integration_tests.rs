@@ -80,7 +80,7 @@ mod py_tests {
                     "tf2onnx==1.16.1",
                     "pytorch-lightning==2.2.1",
                     "sk2torch==1.2.0",
-                    "scikit-learn==1.4.1",
+                    "scikit-learn==1.4.1.post1",
                     "xgboost==2.0.3",
                     "hummingbird-ml==0.4.11",
                     "lightgbm==4.3.0",
