@@ -69,7 +69,7 @@ mod py_tests {
                     "seaborn==0.13.2",
                     "notebook==7.1.2",
                     "nbconvert==7.16.3",
-                    "onnx==1.15.0",
+                    "onnx==1.16.0",
                     "kaggle==1.6.8",
                     "py-solc-x==2.0.2",
                     "web3==6.16.0",
