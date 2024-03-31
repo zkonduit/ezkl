@@ -1,5 +1,6 @@
 use crate::graph::CircuitSize;
 use crate::pfsys::{Snark, SnarkWitness};
+use colored_json::ToColoredJson;
 use halo2_proofs::circuit::AssignedCell;
 use halo2_proofs::plonk::{self};
 use halo2_proofs::{
@@ -203,8 +204,7 @@ impl AggregationConfig {
                 .as_json()
                 .unwrap()
                 .to_colored_json_auto()
-                .unwrap()()
-            .to_colored_json_auto()
+                .unwrap()
         );
 
         AggregationConfig {
