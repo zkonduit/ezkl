@@ -563,6 +563,8 @@ jobs:
           toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
+      - name: Install cmake
+        run: sudo apt-get install cmake
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Setup Virtual Env and Install python dependencies
