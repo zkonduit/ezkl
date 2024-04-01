@@ -633,7 +633,7 @@ jobs:
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       - name: Tictactoe tutorials
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
       # - name: authenticate-kaggle-cli
       #   shell: bash
       #   env:
