@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.12
           architecture: x64
 
       - name: Set Cargo.toml version to match github tag
@@ -70,7 +70,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.12
           architecture: ${{ matrix.target }}
 
       - name: Set Cargo.toml version to match github tag
@@ -115,7 +115,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.12
           architecture: x64
 
       - name: Set Cargo.toml version to match github tag
@@ -176,7 +176,7 @@ jobs:
   #   - uses: actions/checkout@v4
   #   - uses: actions/setup-python@v4
   #     with:
-  #       python-version: 3.7
+  #       python-version: 3.12
 
   #   - name: Install cross-compilation tools for aarch64
   #     if: matrix.target == 'aarch64'
@@ -228,7 +228,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.12
           architecture: x64
 
       - name: Set Cargo.toml version to match github tag
@@ -263,7 +263,7 @@ jobs:
             apk add py3-pip
             pip3 install -U pip
             python3 -m venv .venv
-            source .venv/bin/activate            
+            source .venv/bin/activate
             pip3 install ezkl --no-index --find-links /io/dist/ --force-reinstall
             python3 -c "import ezkl"
 
@@ -287,7 +287,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: 3.7
+          python-version: 3.12
 
       - name: Set Cargo.toml version to match github tag
         shell: bash

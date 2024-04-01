@@ -1,4 +1,8 @@
+#[cfg(not(target_arch = "wasm32"))]
+use crate::graph::CircuitSize;
 use crate::pfsys::{Snark, SnarkWitness};
+#[cfg(not(target_arch = "wasm32"))]
+use colored_json::ToColoredJson;
 use halo2_proofs::circuit::AssignedCell;
 use halo2_proofs::plonk::{self};
 use halo2_proofs::{
@@ -16,6 +20,8 @@ use halo2_wrong_ecc::{
 use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine};
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
+#[cfg(not(target_arch = "wasm32"))]
+use log::debug;
 use log::trace;
 use rand::rngs::OsRng;
 use snark_verifier::loader::native::NativeLoader;
@@ -193,6 +199,23 @@ impl AggregationConfig {
         let main_gate_config = MainGate::<F>::configure(meta);
         let range_config =
             RangeChip::<F>::configure(meta, &main_gate_config, composition_bits, overflow_bits);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let circuit_size = CircuitSize::from_cs(meta, 23);
+
+            // not wasm
+
+            debug!(
+                "circuit size: \n {}",
+                circuit_size
+                    .as_json()
+                    .unwrap()
+                    .to_colored_json_auto()
+                    .unwrap()
+            );
+        }
+
         AggregationConfig {
             main_gate_config,
             range_config,
