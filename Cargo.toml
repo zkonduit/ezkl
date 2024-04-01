@@ -15,73 +15,96 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch= "main" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch= "main"  }
-halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev="9fff22c", features=["derive_serde"] }
+halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/optional-selector-poly" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", branch = "ac/optional-selector-poly" }
+halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "9fff22c", features = [
+    "derive_serde",
+] }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
-clap = { version = "4.3.3", features = ["derive"]}
+clap = { version = "4.5.3", features = ["derive"] }
 serde = { version = "1.0.126", features = ["derive"], optional = true }
-serde_json = { version = "1.0.97", default_features = false, features = ["float_roundtrip", "raw_value"], optional = true }
+serde_json = { version = "1.0.97", default_features = false, features = [
+    "float_roundtrip",
+    "raw_value",
+], optional = true }
 log = { version = "0.4.17", default_features = false, optional = true }
 thiserror = { version = "1.0.38", default_features = false }
 hex = { version = "0.4.3", default_features = false }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/chunked-mv-lookup", package = "ecc" }
-snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup", features=["derive_serde"]}
-halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier",  branch= "main" }
-maybe-rayon = { version = "0.1.1",  default_features = false }
+snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup", features = [
+    "derive_serde",
+] }
+halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", branch = "main" }
+maybe-rayon = { version = "0.1.1", default_features = false }
 bincode = { version = "1.3.3", default_features = false }
 ark-std = { version = "^0.3.0", default-features = false }
 unzip-n = "0.1.2"
 num = "0.4.1"
 portable-atomic = "1.6.0"
-tosubcommand = { git =  "https://github.com/zkonduit/enum_to_subcommand", package = "tosubcommand" }
+tosubcommand = { git = "https://github.com/zkonduit/enum_to_subcommand", package = "tosubcommand" }
 
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ethers = { version = "2.0.11", default_features = false, features = ["ethers-solc"] }
-indicatif = {version = "0.17.5", features = ["rayon"]}
-gag =  { version = "1.0.0", default_features = false}
+ethers = { version = "2.0.11", default_features = false, features = [
+    "ethers-solc",
+] }
+indicatif = { version = "0.17.5", features = ["rayon"] }
+gag = { version = "1.0.0", default_features = false }
 instant = { version = "0.1" }
-reqwest = { version = "0.11.14", default-features = false, features = ["default-tls", "multipart", "stream"] }
+reqwest = { version = "0.11.14", default-features = false, features = [
+    "default-tls",
+    "multipart",
+    "stream",
+] }
 openssl = { version = "0.10.55", features = ["vendored"] }
 postgres = "0.19.5"
 pg_bigdecimal = "0.1.5"
 lazy_static = "1.4.0"
-colored_json =  { version = "3.0.1",  default_features = false, optional = true}
+colored_json = { version = "3.0.1", default_features = false, optional = true }
 plotters = { version = "0.3.0", default_features = false, optional = true }
 regex = { version = "1", default_features = false }
-tokio = { version = "1.26.0",  default_features = false, features = ["macros", "rt"] }
+tokio = { version = "1.26.0", default_features = false, features = [
+    "macros",
+    "rt",
+] }
 tokio-util = { version = "0.7.9", features = ["codec"] }
-pyo3 = { version = "0.20.2", features = ["extension-module", "abi3-py37", "macros"],  default_features = false, optional = true }
-pyo3-asyncio = { version = "0.20.0",  features = ["attributes", "tokio-runtime"],  default_features = false, optional = true }
+pyo3 = { version = "0.20.2", features = [
+    "extension-module",
+    "abi3-py37",
+    "macros",
+], default_features = false, optional = true }
+pyo3-asyncio = { version = "0.20.0", features = [
+    "attributes",
+    "tokio-runtime",
+], default_features = false, optional = true }
 pyo3-log = { version = "0.9.0", default_features = false, optional = true }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev= "7b1aa33b2f7d1f19b80e270c83320f0f94daff69", default_features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev = "7b1aa33b2f7d1f19b80e270c83320f0f94daff69", default_features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
 
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
-colored = { version = "2.0.0",  default_features = false, optional = true}
-env_logger = { version = "0.10.0",  default_features = false, optional = true}
+colored = { version = "2.0.0", default_features = false, optional = true }
+env_logger = { version = "0.10.0", default_features = false, optional = true }
 chrono = "0.4.31"
 sha256 = "1.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["js"] }
-instant = { version = "0.1", features = [ "wasm-bindgen", "inaccurate" ] }
+instant = { version = "0.1", features = ["wasm-bindgen", "inaccurate"] }
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-wasm-bindgen-rayon = { version = "1.0", optional=true }
-wasm-bindgen-test = "0.3.34"
-serde-wasm-bindgen = "0.4"
-wasm-bindgen = { version = "0.2.81", features = ["serde-serialize"]}
+wasm-bindgen-rayon = { version = "1.2.1", optional = true }
+wasm-bindgen-test = "0.3.42"
+serde-wasm-bindgen = "0.6.5"
+wasm-bindgen = { version = "0.2.92", features = ["serde-serialize"] }
 console_error_panic_hook = "0.1.7"
 wasm-bindgen-console-logger = "0.1.1"
 
 
 [dev-dependencies]
-criterion = {version = "0.3",  features = ["html_reports"]}
+criterion = { version = "0.3", features = ["html_reports"] }
 tempfile = "3.3.0"
 lazy_static = "1.4.0"
 mnist = "0.5"
@@ -153,11 +176,24 @@ required-features = ["ezkl"]
 [features]
 web = ["wasm-bindgen-rayon"]
 default = ["ezkl", "mv-lookup"]
-render = ["halo2_proofs/dev-graph", "plotters"]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
-ezkl = ["onnx", "serde", "serde_json", "log", "colored", "env_logger", "tabled/color", "colored_json", "halo2_proofs/circuit-params"]
-mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup", "halo2_solidity_verifier/mv-lookup"]
+ezkl = [
+    "onnx",
+    "serde",
+    "serde_json",
+    "log",
+    "colored",
+    "env_logger",
+    "tabled/color",
+    "colored_json",
+    "halo2_proofs/circuit-params",
+]
+mv-lookup = [
+    "halo2_proofs/mv-lookup",
+    "snark-verifier/mv-lookup",
+    "halo2_solidity_verifier/mv-lookup",
+]
 det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
 empty-cmd = []
@@ -165,7 +201,11 @@ no-banner = []
 
 # icicle patch to 0.1.0 if feature icicle is enabled
 [patch.'https://github.com/ingonyama-zk/icicle']
-icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix"}
+icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
+
+[patch.'https://github.com/zkonduit/halo2']
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a", package = "halo2_proofs", branch = "ac/optional-selector-poly" }
+
 
 [profile.release]
-rustflags = [ "-C", "relocation-model=pic" ]
+rustflags = ["-C", "relocation-model=pic"]

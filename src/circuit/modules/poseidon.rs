@@ -18,6 +18,7 @@ use maybe_rayon::slice::ParallelSlice;
 
 use std::marker::PhantomData;
 
+use crate::circuit::region::ConstantsMap;
 use crate::tensor::{Tensor, ValTensor, ValType};
 
 use super::Module;
@@ -172,11 +173,14 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         &self,
         layouter: &mut impl Layouter<Fp>,
         message: &[ValTensor<Fp>],
+        constants: &mut ConstantsMap<Fp>,
     ) -> Result<Self::InputAssignments, Error> {
         assert_eq!(message.len(), 1);
         let message = message[0].clone();
 
         let start_time = instant::Instant::now();
+
+        let local_constants = constants.clone();
 
         let res = layouter.assign_region(
             || "load message",
@@ -199,12 +203,26 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                                 ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
                                     Ok(v.clone())
                                 }
-                                ValType::Constant(f) => region.assign_advice_from_constant(
-                                    || format!("load message_{}", i),
-                                    self.config.hash_inputs[x],
-                                    y,
-                                    *f,
-                                ),
+                                ValType::Constant(f) => {
+                                    if local_constants.contains_key(f) {
+                                        Ok(constants.get(f).unwrap().assigned_cell().ok_or({
+                                            log::error!("constant not previously assigned");
+                                            Error::Synthesis
+                                        })?)
+                                    } else {
+                                        let res = region.assign_advice_from_constant(
+                                            || format!("load message_{}", i),
+                                            self.config.hash_inputs[x],
+                                            y,
+                                            *f,
+                                        )?;
+
+                                        constants
+                                            .insert(*f, ValType::AssignedConstant(res.clone(), *f));
+
+                                        Ok(res)
+                                    }
+                                }
                                 e => {
                                     log::error!(
                                         "wrong input type {:?}, must be previously assigned",
@@ -270,8 +288,9 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         layouter: &mut impl Layouter<Fp>,
         input: &[ValTensor<Fp>],
         row_offset: usize,
+        constants: &mut ConstantsMap<Fp>,
     ) -> Result<ValTensor<Fp>, Error> {
-        let (mut input_cells, zero_val) = self.layout_inputs(layouter, input)?;
+        let (mut input_cells, zero_val) = self.layout_inputs(layouter, input, constants)?;
         // extract the values from the input cells
         let mut assigned_input: Tensor<ValType<Fp>> =
             input_cells.iter().map(|e| ValType::from(e.clone())).into();
@@ -434,7 +453,7 @@ mod tests {
         *,
     };
 
-    use std::marker::PhantomData;
+    use std::{collections::HashMap, marker::PhantomData};
 
     use halo2_gadgets::poseidon::primitives::Spec;
     use halo2_proofs::{
@@ -477,7 +496,12 @@ mod tests {
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
             let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, L> = PoseidonChip::new(config);
-            chip.layout(&mut layouter, &[self.message.clone()], 0)?;
+            chip.layout(
+                &mut layouter,
+                &[self.message.clone()],
+                0,
+                &mut HashMap::new(),
+            )?;
 
             Ok(())
         }

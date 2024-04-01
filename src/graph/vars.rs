@@ -45,7 +45,7 @@ pub enum Visibility {
 impl Display for Visibility {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Visibility::KZGCommit => write!(f, "kzgcommit"),
+            Visibility::KZGCommit => write!(f, "polycommit"),
             Visibility::Private => write!(f, "private"),
             Visibility::Public => write!(f, "public"),
             Visibility::Fixed => write!(f, "fixed"),
@@ -88,7 +88,7 @@ impl<'a> From<&'a str> for Visibility {
         match s {
             "private" => Visibility::Private,
             "public" => Visibility::Public,
-            "kzgcommit" => Visibility::KZGCommit,
+            "polycommit" => Visibility::KZGCommit,
             "fixed" => Visibility::Fixed,
             "hashed" | "hashed/public" => Visibility::Hashed {
                 hash_is_public: true,
@@ -111,7 +111,7 @@ impl IntoPy<PyObject> for Visibility {
             Visibility::Private => "private".to_object(py),
             Visibility::Public => "public".to_object(py),
             Visibility::Fixed => "fixed".to_object(py),
-            Visibility::KZGCommit => "kzgcommit".to_object(py),
+            Visibility::KZGCommit => "polycommit".to_object(py),
             Visibility::Hashed {
                 hash_is_public,
                 outlets,
@@ -158,7 +158,7 @@ impl<'source> FromPyObject<'source> for Visibility {
         match strval.to_lowercase().as_str() {
             "private" => Ok(Visibility::Private),
             "public" => Ok(Visibility::Public),
-            "kzgcommit" => Ok(Visibility::KZGCommit),
+            "polycommit" => Ok(Visibility::KZGCommit),
             "hashed" => Ok(Visibility::Hashed {
                 hash_is_public: true,
                 outlets: vec![],
@@ -192,7 +192,7 @@ impl Visibility {
         matches!(&self, Visibility::Hashed { .. })
     }
     #[allow(missing_docs)]
-    pub fn is_kzgcommit(&self) -> bool {
+    pub fn is_polycommit(&self) -> bool {
         matches!(&self, Visibility::KZGCommit)
     }
 
@@ -323,9 +323,9 @@ impl VarVisibility {
             & !output_vis.is_hashed()
             & !params_vis.is_hashed()
             & !input_vis.is_hashed()
-            & !output_vis.is_kzgcommit()
-            & !params_vis.is_kzgcommit()
-            & !input_vis.is_kzgcommit()
+            & !output_vis.is_polycommit()
+            & !params_vis.is_polycommit()
+            & !input_vis.is_polycommit()
         {
             return Err(Box::new(GraphError::Visibility));
         }
@@ -346,7 +346,7 @@ pub struct ModelVars<F: PrimeField + TensorType + PartialOrd> {
     pub instance: Option<ValTensor<F>>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
     /// Get instance col
     pub fn get_instance_col(&self) -> Option<&Column<Instance>> {
         if let Some(instance) = &self.instance {
@@ -420,19 +420,33 @@ impl<F: PrimeField + TensorType + PartialOrd> ModelVars<F> {
     }
 
     /// Allocate all columns that will be assigned to by a model.
-    pub fn new(
-        cs: &mut ConstraintSystem<F>,
-        logrows: usize,
-        var_len: usize,
-        num_inner_cols: usize,
-        num_constants: usize,
-        module_requires_fixed: bool,
-    ) -> Self {
+    pub fn new(cs: &mut ConstraintSystem<F>, params: &GraphSettings) -> Self {
         debug!("number of blinding factors: {}", cs.blinding_factors());
 
-        let advices = (0..3)
+        let logrows = params.run_args.logrows as usize;
+        let var_len = params.total_assignments;
+        let num_inner_cols = params.run_args.num_inner_cols;
+        let num_constants = params.total_const_size;
+        let module_requires_fixed = params.module_requires_fixed();
+        let requires_dynamic_lookup = params.requires_dynamic_lookup();
+        let requires_shuffle = params.requires_shuffle();
+        let dynamic_lookup_and_shuffle_size = params.dynamic_lookup_and_shuffle_col_size();
+
+        let mut advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, num_inner_cols, var_len))
             .collect_vec();
+
+        if requires_dynamic_lookup || requires_shuffle {
+            let num_cols = if requires_dynamic_lookup { 3 } else { 2 };
+            for _ in 0..num_cols {
+                let dynamic_lookup =
+                    VarTensor::new_advice(cs, logrows, 1, dynamic_lookup_and_shuffle_size);
+                if dynamic_lookup.num_blocks() > 1 {
+                    panic!("dynamic lookup or shuffle should only have one block");
+                };
+                advices.push(dynamic_lookup);
+            }
+        }
 
         debug!(
             "model uses {} advice blocks (size={})",

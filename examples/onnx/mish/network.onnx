@@ -1,0 +1,19 @@
+pytorch2.2.1:ä
+0
+input/Softplus_output_0	/Softplus"Softplus
+1
+/Softplus_output_0/Tanh_output_0/Tanh"Tanh
+*
+input
+/Tanh_output_0output/Mul"Mul
+main_graphZ!
+input
+
+
+batch_size
+b"
+output
+
+
+batch_size
+B

@@ -378,7 +378,7 @@ impl<F: PrimeField + Clone + TensorType + PartialOrd> From<Tensor<AssignedCell<A
 {
     fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<Value<F>> {
         let mut output = Vec::new();
-        for (_, x) in value.iter().enumerate() {
+        for x in value.iter() {
             output.push(x.value_field().evaluate());
         }
         Tensor::new(Some(&output), value.dims()).unwrap()
@@ -431,6 +431,18 @@ impl<F: PrimeField + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>>
         // safe to unwrap as we know the dims are correct
         ta.reshape(t.dims()).unwrap();
         ta
+    }
+}
+
+impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
+    maybe_rayon::iter::FromParallelIterator<T> for Tensor<T>
+{
+    fn from_par_iter<I>(par_iter: I) -> Self
+    where
+        I: maybe_rayon::iter::IntoParallelIterator<Item = T>,
+    {
+        let inner: Vec<T> = par_iter.into_par_iter().collect();
+        Tensor::new(Some(&inner), &[inner.len()]).unwrap()
     }
 }
 
@@ -671,6 +683,68 @@ impl<T: Clone + TensorType> Tensor<T> {
         let dims: Vec<usize> = full_indices.iter().map(|e| e.end - e.start).collect();
 
         Tensor::new(Some(&res), &dims)
+    }
+
+    /// Set a slice of the Tensor.
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
+    /// let b = Tensor::<i32>::new(Some(&[1, 2, 3, 1, 2, 3]), &[2, 3]).unwrap();
+    /// a.set_slice(&[1..2], &Tensor::<i32>::new(Some(&[1, 2, 3]), &[1, 3]).unwrap()).unwrap();
+    /// assert_eq!(a, b);
+    /// ```
+    pub fn set_slice(
+        &mut self,
+        indices: &[Range<usize>],
+        value: &Tensor<T>,
+    ) -> Result<(), TensorError>
+    where
+        T: Send + Sync,
+    {
+        if indices.is_empty() {
+            return Ok(());
+        }
+        if self.dims.len() < indices.len() {
+            return Err(TensorError::DimError(format!(
+                "The dimensionality of the slice {:?} is greater than the tensor's {:?}",
+                indices, self.dims
+            )));
+        }
+
+        // if indices weren't specified we fill them in as required
+        let mut full_indices = indices.to_vec();
+
+        let omitted_dims = (indices.len()..self.dims.len())
+            .map(|i| self.dims[i])
+            .collect::<Vec<_>>();
+
+        for dim in &omitted_dims {
+            full_indices.push(0..*dim);
+        }
+
+        let full_dims = full_indices
+            .iter()
+            .map(|x| x.end - x.start)
+            .collect::<Vec<_>>();
+
+        // now broadcast the value to the full dims
+        let value = value.expand(&full_dims)?;
+
+        let cartesian_coord: Vec<Vec<usize>> = full_indices
+            .iter()
+            .cloned()
+            .multi_cartesian_product()
+            .collect();
+
+        let _ = cartesian_coord
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                self.set(e, value[i].clone());
+            })
+            .collect::<Vec<_>>();
+
+        Ok(())
     }
 
     /// Get the array index from rows / columns indices.
@@ -1526,18 +1600,20 @@ pub fn get_broadcasted_shape(
     let num_dims_a = shape_a.len();
     let num_dims_b = shape_b.len();
 
-    // reewrite the below using match
-    if num_dims_a == num_dims_b {
-        let mut broadcasted_shape = Vec::with_capacity(num_dims_a);
-        for (dim_a, dim_b) in shape_a.iter().zip(shape_b.iter()) {
-            let max_dim = dim_a.max(dim_b);
-            broadcasted_shape.push(*max_dim);
+    match (num_dims_a, num_dims_b) {
+        (a, b) if a == b => {
+            let mut broadcasted_shape = Vec::with_capacity(num_dims_a);
+            for (dim_a, dim_b) in shape_a.iter().zip(shape_b.iter()) {
+                let max_dim = dim_a.max(dim_b);
+                broadcasted_shape.push(*max_dim);
+            }
+            Ok(broadcasted_shape)
         }
-        Ok(broadcasted_shape)
-    } else if num_dims_a < num_dims_b {
-        Ok(shape_b.to_vec())
-    } else {
-        Ok(shape_a.to_vec())
+        (a, b) if a < b => Ok(shape_b.to_vec()),
+        (a, b) if a > b => Ok(shape_a.to_vec()),
+        _ => Err(Box::new(TensorError::DimError(
+            "Unknown condition for broadcasting".to_string(),
+        ))),
     }
 }
 ////////////////////////

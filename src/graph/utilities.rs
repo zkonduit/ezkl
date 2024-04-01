@@ -23,7 +23,10 @@ use std::sync::Arc;
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_core::ops::{
-    array::{Gather, GatherElements, MultiBroadcastTo, OneHot, ScatterElements, Slice, Topk},
+    array::{
+        Gather, GatherElements, GatherNd, MultiBroadcastTo, OneHot, ScatterElements, ScatterNd,
+        Slice, Topk,
+    },
     change_axes::AxisOp,
     cnn::{Conv, Deconv},
     einsum::EinSum,
@@ -245,6 +248,8 @@ pub fn new_op_from_onnx(
     symbol_values: &SymbolValues,
     rebase_frac_zero_constants: bool,
 ) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
+    use tract_onnx::tract_core::ops::array::Trilu;
+
     use crate::circuit::InputType;
 
     let input_scales = inputs
@@ -360,6 +365,26 @@ pub fn new_op_from_onnx(
             SupportedOp::Constant(c)
         }
 
+        "Trilu" => {
+            let op = load_op::<Trilu>(node.op(), idx, node.op().name().to_string())?;
+            let upper = op.upper;
+
+            // assert second input is a constant
+            let diagonal = if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(1);
+                let raw_values = &c.raw_values;
+                if raw_values.len() != 1 {
+                    return Err(Box::new(GraphError::InvalidDims(idx, "trilu".to_string())));
+                }
+                raw_values[0] as i32
+            } else {
+                return Err("we only support constant inputs for trilu diagonal".into());
+            };
+
+            SupportedOp::Linear(PolyOp::Trilu { upper, k: diagonal })
+        }
+
         "Gather" => {
             if inputs.len() != 2 {
                 return Err(Box::new(GraphError::InvalidDims(idx, "gather".to_string())));
@@ -467,6 +492,78 @@ pub fn new_op_from_onnx(
 
             // Extract the max value
         }
+        "ScatterNd" => {
+            if inputs.len() != 3 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "scatter nd".to_string(),
+                )));
+            };
+            // just verify it deserializes correctly
+            let _op = load_op::<ScatterNd>(node.op(), idx, node.op().name().to_string())?;
+
+            let mut op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::ScatterND {
+                constant_idx: None,
+            });
+
+            // if param_visibility.is_public() {
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(inputs.len() - 1);
+                op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::ScatterND {
+                    constant_idx: Some(c.raw_values.map(|x| x as usize)),
+                })
+            }
+            // }
+
+            if inputs[1].opkind().is_input() {
+                inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
+                    scale: 0,
+                    datum_type: InputType::TDim,
+                }));
+                inputs[1].bump_scale(0);
+            }
+
+            op
+        }
+
+        "GatherNd" => {
+            if inputs.len() != 2 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "gather nd".to_string(),
+                )));
+            };
+            let op = load_op::<GatherNd>(node.op(), idx, node.op().name().to_string())?;
+            let batch_dims = op.batch_dims;
+
+            let mut op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::GatherND {
+                batch_dims,
+                indices: None,
+            });
+
+            // if param_visibility.is_public() {
+            if let Some(c) = inputs[1].opkind().get_mutable_constant() {
+                inputs[1].decrement_use();
+                deleted_indices.push(inputs.len() - 1);
+                op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::GatherND {
+                    batch_dims,
+                    indices: Some(c.raw_values.map(|x| x as usize)),
+                })
+            }
+            // }
+
+            if inputs[1].opkind().is_input() {
+                inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
+                    scale: 0,
+                    datum_type: InputType::TDim,
+                }));
+                inputs[1].bump_scale(0);
+            }
+
+            op
+        }
+
         "GatherElements" => {
             if inputs.len() != 2 {
                 return Err(Box::new(GraphError::InvalidDims(
@@ -764,6 +861,9 @@ pub fn new_op_from_onnx(
         }
         "Abs" => SupportedOp::Nonlinear(LookupOp::Abs),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
+        "HardSwish" => SupportedOp::Nonlinear(LookupOp::HardSwish {
+            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        }),
         "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
         }),
@@ -972,8 +1072,12 @@ pub fn new_op_from_onnx(
                 }
             };
 
+            let in_scale = inputs[0].out_scales()[0];
+            let max_scale = std::cmp::max(scales.get_max(), in_scale);
+
             SupportedOp::Hybrid(HybridOp::Softmax {
-                scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                input_scale: scale_to_multiplier(in_scale).into(),
+                output_scale: scale_to_multiplier(max_scale).into(),
                 axes: softmax_op.axes.to_vec(),
             })
         }

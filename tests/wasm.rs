@@ -9,9 +9,9 @@ mod wasm32 {
     use ezkl::pfsys;
     use ezkl::wasm::{
         bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
-        feltToFloat, feltToInt, genPk, genVk, genWitness, inputValidation, pkValidation,
-        poseidonHash, proofValidation, prove, settingsValidation, srsValidation,
-        u8_array_to_u128_le, verify, vkValidation, witnessValidation,
+        feltToFloat, feltToInt, feltToLittleEndian, genPk, genVk, genWitness, inputValidation,
+        pkValidation, poseidonHash, proofValidation, prove, settingsValidation, srsValidation,
+        u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
     };
     use halo2_solidity_verifier::encode_calldata;
     use halo2curves::bn256::{Fr, G1Affine};
@@ -27,10 +27,29 @@ mod wasm32 {
     pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/network.onnx");
     pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
     pub const PROOF: &[u8] = include_bytes!("../tests/wasm/proof.json");
+    pub const PROOF_AGGR: &[u8] = include_bytes!("../tests/wasm/proof_aggr.json");
     pub const SETTINGS: &[u8] = include_bytes!("../tests/wasm/settings.json");
     pub const PK: &[u8] = include_bytes!("../tests/wasm/pk.key");
     pub const VK: &[u8] = include_bytes!("../tests/wasm/vk.key");
+    pub const VK_AGGR: &[u8] = include_bytes!("../tests/wasm/vk_aggr.key");
     pub const SRS: &[u8] = include_bytes!("../tests/wasm/kzg");
+    pub const SRS1: &[u8] = include_bytes!("../tests/wasm/kzg1.srs");
+
+    #[wasm_bindgen_test]
+    async fn can_verify_aggr() {
+        let value = verifyAggr(
+            wasm_bindgen::Clamped(PROOF_AGGR.to_vec()),
+            wasm_bindgen::Clamped(VK_AGGR.to_vec()),
+            21,
+            wasm_bindgen::Clamped(SRS1.to_vec()),
+            "kzg",
+        )
+        .map_err(|_| "failed")
+        .unwrap();
+
+        // should not fail
+        assert!(value);
+    }
 
     #[wasm_bindgen_test]
     async fn verify_encode_verifier_calldata() {
@@ -89,9 +108,16 @@ mod wasm32 {
                     .unwrap();
             assert_eq!(integer, i as i128);
 
-            let hex_string = format!("{:?}", field_element);
-            let returned_string: String = feltToBigEndian(clamped).map_err(|_| "failed").unwrap();
+            let hex_string = format!("{:?}", field_element.clone());
+            let returned_string: String = feltToBigEndian(clamped.clone())
+                .map_err(|_| "failed")
+                .unwrap();
             assert_eq!(hex_string, returned_string);
+            let repr = serde_json::to_string(&field_element).unwrap();
+            let little_endian_string: String = serde_json::from_str(&repr).unwrap();
+            let returned_string: String =
+                feltToLittleEndian(clamped).map_err(|_| "failed").unwrap();
+            assert_eq!(little_endian_string, returned_string);
         }
     }
 

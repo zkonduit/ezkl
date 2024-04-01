@@ -16,15 +16,7 @@ export async function readEzklArtifactsFile(path: string, example: string, filen
   return new Uint8ClampedArray(buffer.buffer);
 }
 
-export async function readEzklSrsFile(path: string, example: string): Promise<Uint8ClampedArray> {
-  // const settingsPath = path.join(__dirname, '..', '..', 'ezkl', 'examples', 'onnx', example, 'settings.json');
-
-  const settingsPath = `${path}/${example}/settings.json`
-  const settingsBuffer = await fs.readFile(settingsPath, { encoding: 'utf-8' });
-  const settings = JSONBig.parse(settingsBuffer);
-  const logrows = settings.run_args.logrows;
-  // const filePath = path.join(__dirname, '..', '..', 'ezkl', 'examples', 'onnx', `kzg${logrows}.srs`);
-  // srs path is at $HOME/.ezkl/srs
+export async function readEzklSrsFile(logrows: string): Promise<Uint8ClampedArray> {
   const filePath = `${userHomeDir}/.ezkl/srs/kzg${logrows}.srs`
   const buffer = await fs.readFile(filePath);
   return new Uint8ClampedArray(buffer.buffer);
@@ -51,21 +43,21 @@ export function serialize(data: object | string): Uint8ClampedArray { // data is
   return new Uint8ClampedArray(uint8Array.buffer);
 }
 
-export function getSolcInput(path: string, example: string) {
+export function getSolcInput(path: string, example: string, name: string) {
   return {
     language: 'Solidity',
     sources: {
       'artifacts/Verifier.sol': {
-        content: fsSync.readFileSync(`${path}/${example}/kzg.sol`, 'utf-8'),
+        content: fsSync.readFileSync(`${path}/${example}/${name}.sol`, 'utf-8'),
       },
       // If more contracts were to be compiled, they should have their own entries here
     },
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 1,
       },
-      evmVersion: 'london',
+      evmVersion: 'shanghai',
       outputSelection: {
         '*': {
           '*': ['abi', 'evm.bytecode'],
@@ -75,8 +67,8 @@ export function getSolcInput(path: string, example: string) {
   }
 }
 
-export function compileContracts(path: string, example: string) {
-  const input = getSolcInput(path, example)
+export function compileContracts(path: string, example: string, name: string) {
+  const input = getSolcInput(path, example, name)
   const output = JSON.parse(solc.compile(JSON.stringify(input)))
 
   let compilationFailed = false

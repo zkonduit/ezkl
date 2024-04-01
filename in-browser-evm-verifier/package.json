@@ -1,0 +1,42 @@
+{
+  "name": "@ezkljs/verify",
+  "version": "0.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Evm verify EZKL proofs in the browser.",
+  "main": "dist/commonjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/commonjs/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "rm -r dist || true",
+    "build:commonjs": "tsc --project tsconfig.commonjs.json && resolve-tspaths -p tsconfig.commonjs.json",
+    "build:esm": "tsc --project tsconfig.esm.json && resolve-tspaths -p tsconfig.esm.json",
+    "build": "npm run clean && npm run build:commonjs && npm run build:esm"
+  },
+  "dependencies": {
+    "@ethereumjs/common": "^4.0.0",
+    "@ethereumjs/evm": "^2.0.0",
+    "@ethereumjs/statemanager": "^2.0.0",
+    "@ethereumjs/tx": "^5.0.0",
+    "@ethereumjs/util": "^9.0.0",
+    "@ethereumjs/vm": "^7.0.0",
+    "@ethersproject/abi": "^5.7.0",
+    "@ezkljs/engine": "^9.4.4",
+    "ethers": "^6.7.1",
+    "json-bigint": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.3",
+    "ts-loader": "^9.5.0",
+    "ts-node": "^10.9.1",
+    "resolve-tspaths": "^0.8.16",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.2.2"
+  }
+}

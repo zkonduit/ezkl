@@ -17,9 +17,20 @@ pub fn gen_srs<Scheme: CommitmentScheme>(k: u32) -> Scheme::ParamsProver {
 }
 
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
-pub fn load_srs<Scheme: CommitmentScheme>(
+pub fn load_srs_verifier<Scheme: CommitmentScheme>(
     path: PathBuf,
 ) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
+    info!("loading srs from {:?}", path);
+    let f = File::open(path.clone())
+        .map_err(|_| format!("failed to load srs at {}", path.display()))?;
+    let mut reader = BufReader::new(f);
+    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
+}
+
+/// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
+pub fn load_srs_prover<Scheme: CommitmentScheme>(
+    path: PathBuf,
+) -> Result<Scheme::ParamsProver, Box<dyn Error>> {
     info!("loading srs from {:?}", path);
     let f = File::open(path.clone())
         .map_err(|_| format!("failed to load srs at {}", path.display()))?;

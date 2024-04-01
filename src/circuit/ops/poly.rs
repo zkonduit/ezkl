@@ -14,8 +14,15 @@ pub enum PolyOp {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
     },
+    GatherND {
+        batch_dims: usize,
+        indices: Option<Tensor<usize>>,
+    },
     ScatterElements {
         dim: usize,
+        constant_idx: Option<Tensor<usize>>,
+    },
+    ScatterND {
         constant_idx: Option<Tensor<usize>>,
     },
     MultiBroadcastTo {
@@ -60,8 +67,6 @@ pub enum PolyOp {
         len_prod: usize,
     },
     Pow(u32),
-    Pack(u32, u32),
-    GlobalSumPool,
     Concat {
         axis: usize,
     },
@@ -78,10 +83,20 @@ pub enum PolyOp {
     And,
     Or,
     Xor,
+    Trilu {
+        upper: bool,
+        k: i32,
+    },
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<'de>> Op<F>
-    for PolyOp
+impl<
+        F: PrimeField
+            + TensorType
+            + PartialOrd
+            + std::hash::Hash
+            + Serialize
+            + for<'de> Deserialize<'de>,
+    > Op<F> for PolyOp
 {
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {
@@ -91,7 +106,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
     fn as_string(&self) -> String {
         match &self {
             PolyOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
+            PolyOp::GatherND { batch_dims, .. } => format!("GATHERND (batch_dims={})", batch_dims),
             PolyOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
+            PolyOp::ScatterND { .. } => "SCATTERND".into(),
             PolyOp::MultiBroadcastTo { shape } => format!("MULTIBROADCASTTO (shape={:?})", shape),
             PolyOp::MoveAxis { .. } => "MOVEAXIS".into(),
             PolyOp::Downsample { .. } => "DOWNSAMPLE".into(),
@@ -107,11 +124,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::Add => "ADD".into(),
             PolyOp::Mult => "MULT".into(),
             PolyOp::Sub => "SUB".into(),
-            PolyOp::Sum { .. } => "SUM".into(),
+            PolyOp::Sum { axes } => format!("SUM (axes={:?})", axes),
             PolyOp::Prod { .. } => "PROD".into(),
             PolyOp::Pow(_) => "POW".into(),
-            PolyOp::Pack(_, _) => "PACK".into(),
-            PolyOp::GlobalSumPool => "GLOBALSUMPOOL".into(),
             PolyOp::Conv { .. } => "CONV".into(),
             PolyOp::DeConv { .. } => "DECONV".into(),
             PolyOp::Concat { axis } => format!("CONCAT (axis={})", axis),
@@ -123,6 +138,7 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             PolyOp::And => "AND".into(),
             PolyOp::Or => "OR".into(),
             PolyOp::Xor => "XOR".into(),
+            PolyOp::Trilu { upper, k } => format!("TRILU (upper={}, k={})", upper, k),
         }
     }
 
@@ -181,13 +197,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 output_padding,
                 stride,
             } => tensor::ops::deconv(&inputs, *padding, *output_padding, *stride),
-            PolyOp::Pack(base, scale) => {
-                if 1 != inputs.len() {
-                    return Err(TensorError::DimMismatch("pack inputs".to_string()));
-                }
-
-                tensor::ops::pack(&inputs[0], F::from(*base as u64), *scale)
-            }
             PolyOp::Pow(u) => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch("pow inputs".to_string()));
@@ -206,7 +215,6 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 }
                 tensor::ops::prod_axes(&inputs[0], axes)
             }
-            PolyOp::GlobalSumPool => unreachable!(),
             PolyOp::Concat { axis } => {
                 tensor::ops::concat(&inputs.iter().collect::<Vec<_>>(), *axis)
             }
@@ -225,6 +233,18 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 };
                 tensor::ops::gather_elements(&x, &y, *dim)
             }
+            PolyOp::GatherND {
+                indices,
+                batch_dims,
+            } => {
+                let x = inputs[0].clone();
+                let y = if let Some(idx) = indices {
+                    idx.clone()
+                } else {
+                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
+                };
+                tensor::ops::gather_nd(&x, &y, *batch_dims)
+            }
             PolyOp::ScatterElements { dim, constant_idx } => {
                 let x = inputs[0].clone();
 
@@ -241,6 +261,22 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 };
                 tensor::ops::scatter(&x, &idx, &src, *dim)
             }
+
+            PolyOp::ScatterND { constant_idx } => {
+                let x = inputs[0].clone();
+                let idx = if let Some(idx) = constant_idx {
+                    idx.clone()
+                } else {
+                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
+                };
+                let src = if constant_idx.is_some() {
+                    inputs[1].clone()
+                } else {
+                    inputs[2].clone()
+                };
+                tensor::ops::scatter_nd(&x, &idx, &src)
+            }
+            PolyOp::Trilu { upper, k } => tensor::ops::trilu(&inputs[0], *k, *upper),
         }?;
 
         Ok(ForwardResult { output: res })
@@ -288,7 +324,17 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 if let Some(idx) = constant_idx {
                     tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
                 } else {
-                    layouts::gather_elements(config, region, values[..].try_into()?, *dim)?
+                    layouts::gather_elements(config, region, values[..].try_into()?, *dim)?.0
+                }
+            }
+            PolyOp::GatherND {
+                batch_dims,
+                indices,
+            } => {
+                if let Some(idx) = indices {
+                    tensor::ops::gather_nd(values[0].get_inner_tensor()?, idx, *batch_dims)?.into()
+                } else {
+                    layouts::gather_nd(config, region, values[..].try_into()?, *batch_dims)?.0
                 }
             }
             PolyOp::ScatterElements { dim, constant_idx } => {
@@ -302,6 +348,18 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                     .into()
                 } else {
                     layouts::scatter_elements(config, region, values[..].try_into()?, *dim)?
+                }
+            }
+            PolyOp::ScatterND { constant_idx } => {
+                if let Some(idx) = constant_idx {
+                    tensor::ops::scatter_nd(
+                        values[0].get_inner_tensor()?,
+                        idx,
+                        values[1].get_inner_tensor()?,
+                    )?
+                    .into()
+                } else {
+                    layouts::scatter_nd(config, region, values[..].try_into()?)?
                 }
             }
             PolyOp::DeConv {
@@ -334,13 +392,12 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
                 input
             }
             PolyOp::Pow(exp) => layouts::pow(config, region, values[..].try_into()?, *exp)?,
-            PolyOp::Pack(base, scale) => {
-                layouts::pack(config, region, values[..].try_into()?, *base, *scale)?
-            }
-            PolyOp::GlobalSumPool => unreachable!(),
             PolyOp::Concat { axis } => layouts::concat(values[..].try_into()?, axis)?,
             PolyOp::Slice { axis, start, end } => {
                 layouts::slice(config, region, values[..].try_into()?, axis, start, end)?
+            }
+            PolyOp::Trilu { upper, k } => {
+                layouts::trilu(config, region, values[..].try_into()?, k, upper)?
             }
         }))
     }
@@ -405,7 +462,9 @@ impl<F: PrimeField + TensorType + PartialOrd + Serialize + for<'de> Deserialize<
             vec![1, 2]
         } else if matches!(self, PolyOp::Concat { .. }) {
             (0..100).collect()
-        } else if matches!(self, PolyOp::ScatterElements { .. }) {
+        } else if matches!(self, PolyOp::ScatterElements { .. })
+            | matches!(self, PolyOp::ScatterND { .. })
+        {
             vec![0, 2]
         } else {
             vec![]

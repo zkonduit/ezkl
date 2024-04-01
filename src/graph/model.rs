@@ -5,6 +5,7 @@ use super::vars::*;
 use super::GraphError;
 use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
+use crate::circuit::region::ConstantsMap;
 use crate::circuit::region::RegionCtx;
 use crate::circuit::table::Range;
 use crate::circuit::Input;
@@ -99,6 +100,14 @@ pub type NodeGraph = BTreeMap<usize, NodeType>;
 pub struct DummyPassRes {
     /// number of rows use
     pub num_rows: usize,
+    /// num dynamic lookups
+    pub num_dynamic_lookups: usize,
+    /// dynamic lookup col size
+    pub dynamic_lookup_col_coord: usize,
+    /// num shuffles
+    pub num_shuffles: usize,
+    /// shuffle
+    pub shuffle_col_coord: usize,
     /// linear coordinate
     pub linear_coord: usize,
     /// total const size
@@ -396,7 +405,7 @@ impl ParsedNodes {
                 .get(input)
                 .ok_or(GraphError::MissingNode(*input))?;
             let input_dims = node.out_dims();
-            let input_dim = input_dims.get(0).ok_or(GraphError::MissingNode(*input))?;
+            let input_dim = input_dims.first().ok_or(GraphError::MissingNode(*input))?;
             inputs.push(input_dim.clone());
         }
 
@@ -506,21 +515,24 @@ impl Model {
             instance_shapes.len().to_string().blue(),
             "instances".blue()
         );
-        // this is the total number of variables we will need to allocate
-        // for the circuit
-        let default_value = if !self.visibility.input.is_fixed() {
-            ValType::Value(Value::<Fp>::unknown())
-        } else {
-            ValType::Constant(Fp::ONE)
-        };
 
         let inputs: Vec<ValTensor<Fp>> = self
             .graph
             .input_shapes()?
             .iter()
             .map(|shape| {
-                let mut t: ValTensor<Fp> =
-                    vec![default_value.clone(); shape.iter().product()].into();
+                let len = shape.iter().product();
+                let mut t: ValTensor<Fp> = (0..len)
+                    .map(|_| {
+                        if !self.visibility.input.is_fixed() {
+                            ValType::Value(Value::<Fp>::unknown())
+                        } else {
+                            ValType::Constant(Fp::random(&mut rand::thread_rng()))
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .into();
+
                 t.reshape(shape)?;
                 Ok(t)
             })
@@ -540,6 +552,10 @@ impl Model {
             required_range_checks: res.range_checks.into_iter().collect(),
             model_output_scales: self.graph.get_output_scales()?,
             model_input_scales: self.graph.get_input_scales(),
+            num_dynamic_lookups: res.num_dynamic_lookups,
+            total_dynamic_col_size: res.dynamic_lookup_col_coord,
+            num_shuffles: res.num_shuffles,
+            total_shuffle_col_size: res.shuffle_col_coord,
             total_const_size: res.total_const_size,
             check_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -565,13 +581,13 @@ impl Model {
         &self,
         model_inputs: &[Tensor<Fp>],
         run_args: &RunArgs,
-        throw_range_check_error: bool,
+        witness_gen: bool,
     ) -> Result<ForwardResult, Box<dyn Error>> {
         let valtensor_inputs: Vec<ValTensor<Fp>> = model_inputs
             .iter()
             .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
             .collect();
-        let res = self.dummy_layout(run_args, &valtensor_inputs, throw_range_check_error)?;
+        let res = self.dummy_layout(run_args, &valtensor_inputs, witness_gen)?;
         Ok(res.into())
     }
 
@@ -958,7 +974,7 @@ impl Model {
 
         let (model, _) = Model::load_onnx_using_tract(
             &mut std::fs::File::open(model_path)
-                .map_err(|_| format!("failed to load model at {}", model_path.display()))?,
+                .map_err(|_| format!("failed to load {}", model_path.display()))?,
             run_args,
         )?;
 
@@ -994,7 +1010,7 @@ impl Model {
     ) -> Result<Self, Box<dyn Error>> {
         Model::new(
             &mut std::fs::File::open(model)
-                .map_err(|_| format!("failed to load model at {}", model.display()))?,
+                .map_err(|_| format!("failed to load {}", model.display()))?,
             run_args,
         )
     }
@@ -1003,24 +1019,24 @@ impl Model {
     /// # Arguments
     /// * `meta` - The constraint system.
     /// * `vars` - The variables for the circuit.
-    /// * `run_args` - [RunArgs]
-    /// * `required_lookups` - The required lookup operations for the circuit.
+    /// * `settings` - [GraphSettings]
     pub fn configure(
         meta: &mut ConstraintSystem<Fp>,
         vars: &ModelVars<Fp>,
-        lookup_range: Range,
-        logrows: usize,
-        required_lookups: Vec<LookupOp>,
-        required_range_checks: Vec<Range>,
-        check_mode: CheckMode,
+        settings: &GraphSettings,
     ) -> Result<PolyConfig<Fp>, Box<dyn Error>> {
-        info!("configuring model");
+        debug!("configuring model");
+
+        let lookup_range = settings.run_args.lookup_range;
+        let logrows = settings.run_args.logrows as usize;
+        let required_lookups = settings.required_lookups.clone();
+        let required_range_checks = settings.required_range_checks.clone();
 
         let mut base_gate = PolyConfig::configure(
             meta,
             vars.advices[0..2].try_into()?,
             &vars.advices[2],
-            check_mode,
+            settings.check_mode,
         );
         // set scale for HybridOp::RangeCheck and call self.conf_lookup on that op for percentage tolerance case
         let input = &vars.advices[0];
@@ -1034,6 +1050,22 @@ impl Model {
             base_gate.configure_range_check(meta, input, index, range, logrows)?;
         }
 
+        if settings.requires_dynamic_lookup() {
+            base_gate.configure_dynamic_lookup(
+                meta,
+                vars.advices[0..3].try_into()?,
+                vars.advices[3..6].try_into()?,
+            )?;
+        }
+
+        if settings.requires_shuffle() {
+            base_gate.configure_shuffles(
+                meta,
+                vars.advices[0..2].try_into()?,
+                vars.advices[3..5].try_into()?,
+            )?;
+        }
+
         Ok(base_gate)
     }
 
@@ -1043,6 +1075,8 @@ impl Model {
     /// * `layouter` - Halo2 Layouter.
     /// * `inputs` - The values to feed into the circuit.
     /// * `vars` - The variables for the circuit.
+    /// * `witnessed_outputs` - The values to compare against.
+    /// * `constants` - The constants for the circuit.
     pub fn layout(
         &self,
         mut config: ModelConfig,
@@ -1051,6 +1085,7 @@ impl Model {
         inputs: &[ValTensor<Fp>],
         vars: &mut ModelVars<Fp>,
         witnessed_outputs: &[ValTensor<Fp>],
+        constants: &mut ConstantsMap<Fp>,
     ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
         info!("model layout...");
 
@@ -1076,14 +1111,12 @@ impl Model {
         config.base.layout_tables(layouter)?;
         config.base.layout_range_checks(layouter)?;
 
-        let mut num_rows = 0;
-        let mut linear_coord = 0;
-        let mut total_const_size = 0;
+        let original_constants = constants.clone();
 
         let outputs = layouter.assign_region(
             || "model",
             |region| {
-                let mut thread_safe_region = RegionCtx::new(region, 0, run_args.num_inner_cols);
+                let mut thread_safe_region = RegionCtx::new_with_constants(region, 0, run_args.num_inner_cols, original_constants.clone());
                 // we need to do this as this loop is called multiple times
                 vars.set_instance_idx(instance_idx);
 
@@ -1129,29 +1162,17 @@ impl Model {
                         error!("{}", e);
                         halo2_proofs::plonk::Error::Synthesis
                     })?;
-                } else if !run_args.output_visibility.is_private() {
-                    for output in &outputs {
-                    thread_safe_region.increment_total_constants(output.num_constants());
-                    }
                 }
-                num_rows = thread_safe_region.row();
-                linear_coord = thread_safe_region.linear_coord();
-                total_const_size = thread_safe_region.total_constants();
+                // Then number of columns in the circuits
+                #[cfg(not(target_arch = "wasm32"))]
+                thread_safe_region.debug_report();
+
+                *constants = thread_safe_region.assigned_constants().clone();
 
                 Ok(outputs)
             },
-        )?;
 
-        // Then number of columns in the circuits
-        #[cfg(not(target_arch = "wasm32"))]
-        debug!(
-            "{} {} {} (coord={}, constants={})",
-            "model uses".blue(),
-            num_rows.to_string().blue(),
-            "rows".blue(),
-            linear_coord.to_string().yellow(),
-            total_const_size.to_string().red()
-        );
+        )?;
 
         let duration = start_time.elapsed();
         trace!("model layout took: {:?}", duration);
@@ -1185,16 +1206,10 @@ impl Model {
                 vec![results.get(idx).ok_or(GraphError::MissingResults)?[0].clone()]
             };
 
-            debug!(
-                "laying out {}: {}, row:{}, coord:{}, total_constants: {}, max_lookup_inputs: {}, min_lookup_inputs: {}",
-                idx,
-                node.as_str(),
-                region.row(),
-                region.linear_coord(),
-                region.total_constants(),
-                region.max_lookup_inputs(),
-                region.min_lookup_inputs()
-            );
+            debug!("laying out {}: {}", idx, node.as_str(),);
+            // Then number of columns in the circuits
+            #[cfg(not(target_arch = "wasm32"))]
+            region.debug_report();
             debug!("dims: {:?}", node.out_dims());
             debug!(
                 "input_dims {:?}",
@@ -1352,7 +1367,7 @@ impl Model {
         &self,
         run_args: &RunArgs,
         inputs: &[ValTensor<Fp>],
-        throw_range_check_error: bool,
+        witness_gen: bool,
     ) -> Result<DummyPassRes, Box<dyn Error>> {
         debug!("calculating num of constraints using dummy model layout...");
 
@@ -1371,28 +1386,30 @@ impl Model {
             vars: ModelVars::new_dummy(),
         };
 
-        let mut region = RegionCtx::new_dummy(0, run_args.num_inner_cols, throw_range_check_error);
+        let mut region = RegionCtx::new_dummy(0, run_args.num_inner_cols, witness_gen);
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
         if self.visibility.output.is_public() || self.visibility.output.is_fixed() {
-            let default_value = if !self.visibility.output.is_fixed() {
-                ValType::Value(Value::<Fp>::unknown())
-            } else {
-                ValType::Constant(Fp::ONE)
-            };
-
             let output_scales = self.graph.get_output_scales()?;
             let res = outputs
                 .iter()
                 .enumerate()
                 .map(|(i, output)| {
+                    let mut comparator: ValTensor<Fp> = (0..output.len())
+                        .map(|_| {
+                            if !self.visibility.output.is_fixed() {
+                                ValType::Value(Value::<Fp>::unknown())
+                            } else {
+                                ValType::Constant(Fp::random(&mut rand::thread_rng()))
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .into();
+                    comparator.reshape(output.dims())?;
+
                     let mut tolerance = run_args.tolerance;
                     tolerance.scale = scale_to_multiplier(output_scales[i]).into();
-
-                    let mut comparator: ValTensor<Fp> =
-                        vec![default_value.clone(); output.dims().iter().product::<usize>()].into();
-                    comparator.reshape(output.dims())?;
 
                     dummy_config.layout(
                         &mut region,
@@ -1404,7 +1421,7 @@ impl Model {
             res?;
         } else if !self.visibility.output.is_private() {
             for output in &outputs {
-                region.increment_total_constants(output.num_constants());
+                region.update_constants(output.create_constants_map());
             }
         }
 
@@ -1413,14 +1430,7 @@ impl Model {
 
         // Then number of columns in the circuits
         #[cfg(not(target_arch = "wasm32"))]
-        debug!(
-            "{} {} {} (coord={}, constants={})",
-            "model uses".blue(),
-            region.row().to_string().blue(),
-            "rows".blue(),
-            region.linear_coord().to_string().yellow(),
-            region.total_constants().to_string().red()
-        );
+        region.debug_report();
 
         let outputs = outputs
             .iter()
@@ -1439,6 +1449,10 @@ impl Model {
             max_lookup_inputs: region.max_lookup_inputs(),
             min_lookup_inputs: region.min_lookup_inputs(),
             max_range_size: region.max_range_size(),
+            num_dynamic_lookups: region.dynamic_lookup_index(),
+            dynamic_lookup_col_coord: region.dynamic_lookup_col_coord(),
+            num_shuffles: region.shuffle_index(),
+            shuffle_col_coord: region.shuffle_col_coord(),
             outputs,
         };
 
