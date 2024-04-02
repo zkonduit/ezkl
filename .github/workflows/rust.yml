@@ -184,7 +184,7 @@ jobs:
 
   wasm32-tests:
     runs-on: ubuntu-latest
-    # needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -207,7 +207,7 @@ jobs:
 
   tutorial:
     runs-on: ubuntu-latest
-    needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -224,7 +224,7 @@ jobs:
 
   mock-proving-tests:
     runs-on: non-gpu
-    # needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -281,7 +281,7 @@ jobs:
 
   prove-and-verify-evm-tests:
     runs-on: non-gpu
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -354,7 +354,7 @@ jobs:
 
   prove-and-verify-tests:
     runs-on: non-gpu
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -460,7 +460,7 @@ jobs:
 
   prove-and-verify-mock-aggr-tests:
     runs-on: self-hosted
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -495,7 +495,7 @@ jobs:
 
   prove-and-verify-aggr-tests:
     runs-on: large-self-hosted
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -512,7 +512,7 @@ jobs:
 
   prove-and-verify-aggr-evm-tests:
     runs-on: large-self-hosted
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -568,7 +568,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Setup Virtual Env and Install python dependencies
-        run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+        run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
       - name: Build python ezkl
@@ -578,7 +578,7 @@ jobs:
 
   accuracy-measurement-tests:
     runs-on: ubuntu-latest-32-cores
-    # needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
@@ -594,7 +594,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Setup Virtual Env and Install python dependencies
-        run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+        run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       - name: Div rebase
@@ -628,12 +628,14 @@ jobs:
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
+      - name: Install pip
+        run: python -m ensurepip --upgrade
       - name: Setup Virtual Env and Install python dependencies
-        run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+        run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt; python -m ensurepip --upgrade
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       - name: Tictactoe tutorials
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
       # - name: authenticate-kaggle-cli
       #   shell: bash
       #   env:
