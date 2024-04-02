@@ -9,6 +9,9 @@ build:
   tools:
     python: "3.12"
     rust: "1.75"
+  apt_packages:
+    - libclang
+    - cmake
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
