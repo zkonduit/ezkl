@@ -29,6 +29,7 @@
 
 use std::str::FromStr;
 
+use crate::commands::*;
 use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
 use graph::Visibility;
@@ -112,6 +113,12 @@ pub enum Commitments {
     KZG,
     /// IPA
     IPA,
+}
+
+impl From<Option<Commitments>> for Commitments {
+    fn from(value: Option<Commitments>) -> Self {
+        value.unwrap_or(Commitments::KZG)
+    }
 }
 
 impl FromStr for Commitments {
@@ -210,11 +217,11 @@ pub struct RunArgs {
     #[arg(long, default_value = "false")]
     pub rebase_frac_zero_constants: bool,
     /// check mode (safe, unsafe, etc)
-    #[arg(long, default_value = "unsafe")]
+    #[arg(long, default_value = DEFAULT_CHECKMODE)]
     pub check_mode: CheckMode,
     /// commitment scheme
-    #[arg(long, default_value = "kzg")]
-    pub commitment: Commitments,
+    #[arg(long, default_value = DEFAULT_COMMITMENT)]
+    pub commitment: Option<Commitments>,
 }
 
 impl Default for RunArgs {
@@ -234,7 +241,7 @@ impl Default for RunArgs {
             div_rebasing: false,
             rebase_frac_zero_constants: false,
             check_mode: CheckMode::UNSAFE,
-            commitment: Commitments::KZG,
+            commitment: None,
         }
     }
 }
