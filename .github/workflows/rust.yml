@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - name: Build
@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - name: Docs
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -73,7 +73,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -139,7 +139,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -172,7 +172,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -184,12 +184,12 @@ jobs:
 
   wasm32-tests:
     runs-on: ubuntu-latest
-    # needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -199,7 +199,7 @@ jobs:
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-01-04-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
       - name: Run wasm verifier tests
         # on mac:
         #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
@@ -207,12 +207,12 @@ jobs:
 
   tutorial:
     runs-on: ubuntu-latest
-    needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -224,12 +224,12 @@ jobs:
 
   mock-proving-tests:
     runs-on: non-gpu
-    # needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -281,12 +281,12 @@ jobs:
 
   prove-and-verify-evm-tests:
     runs-on: non-gpu
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -303,16 +303,30 @@ jobs:
         with:
           node-version: "18.12.1"
           cache: "pnpm"
-      - name: Install dependencies
+      - name: "Add rust-src"
+        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
+      - name: Install dependencies for js tests and in-browser-evm-verifier package
         run: |
           pnpm install --no-frozen-lockfile
+          pnpm install --dir ./in-browser-evm-verifier --no-frozen-lockfile
         env:
           CI: false
           NODE_ENV: development
+      - name: Build wasm package for nodejs target.
+        run: |
+          wasm-pack build --release --target nodejs --out-dir ./in-browser-evm-verifier/nodejs . -- -Z build-std="panic_abort,std"
+      - name: Replace memory definition in nodejs
+        run: |
+          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" in-browser-evm-verifier/nodejs/ezkl.js
+      - name: Build @ezkljs/verify package
+        run: |
+          cd in-browser-evm-verifier
+          pnpm build:commonjs
+          cd ..
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
       - name: KZG prove and verify tests (EVM + VK rendered seperately)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify_render_seperately_ --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg all)
@@ -340,12 +354,12 @@ jobs:
 
   prove-and-verify-tests:
     runs-on: non-gpu
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -353,7 +367,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-01-04-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
       - uses: actions/checkout@v3
       - name: Use pnpm 8
         uses: pnpm/action-setup@v2
@@ -364,7 +378,7 @@ jobs:
         with:
           node-version: "18.12.1"
           cache: "pnpm"
-      - name: Install dependencies
+      - name: Install dependencies for js tests
         run: |
           pnpm install --no-frozen-lockfile
         env:
@@ -380,6 +394,12 @@ jobs:
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+      - name: KZG prove and verify tests (public outputs)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_tight_lookup_::t
+      - name: IPA prove and verify tests
+        run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_::t --test-threads 1
+      - name: IPA prove and verify tests (ipa outputs)
+        run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_ipa_output
       - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests single inner col
@@ -396,8 +416,6 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (public outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t
-      - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t
       - name: KZG prove and verify tests (public inputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input
       - name: KZG prove and verify tests (fixed params)
@@ -413,11 +431,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-01-04-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
       - uses: actions/checkout@v3
       - uses: baptiste0928/cargo-install@v1
         with:
@@ -440,44 +458,21 @@ jobs:
       - name: KZG prove and verify tests (hashed outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 1
 
-  fuzz-tests:
-    runs-on: ubuntu-latest-32-cores
-    needs: [build, library-tests, python-tests]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2024-01-04
-          override: true
-          components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-      - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
-      - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
-      - name: fuzz tests (EVM)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_fuzz_ --test-threads 2
-      # - name: fuzz tests
-      #   run: cargo nextest run --release --verbose tests::kzg_fuzz_ --test-threads 6
-
   prove-and-verify-mock-aggr-tests:
     runs-on: self-hosted
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-nextest
           locked: true
-      - name: Mock aggr tests
+      - name: Mock aggr tests (KZG)
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_  --test-threads 8
 
   prove-and-verify-aggr-tests-gpu:
@@ -488,7 +483,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -500,29 +495,29 @@ jobs:
 
   prove-and-verify-aggr-tests:
     runs-on: large-self-hosted
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-nextest
           locked: true
-      - name: KZG )tests
+      - name: KZG tests
         run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_  --test-threads 4 -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:
     runs-on: large-self-hosted
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -532,7 +527,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
       - name: KZG prove and verify aggr tests
         run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 4 -- --include-ignored
 
@@ -543,7 +538,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -562,34 +557,36 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.7"
+          python-version: "3.12"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
+      - name: Install cmake
+        run: sudo apt-get install -y cmake
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Setup Virtual Env and Install python dependencies
-        run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+        run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
       - name: Build python ezkl
-        run: source .env/bin/activate; maturin develop --features python-bindings --release
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       - name: Run pytest
         run: source .env/bin/activate; pytest -vv
 
   accuracy-measurement-tests:
     runs-on: ubuntu-latest-32-cores
-    # needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.7"
+          python-version: "3.12"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -597,9 +594,9 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Setup Virtual Env and Install python dependencies
-        run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+        run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl
-        run: source .env/bin/activate; maturin develop --features python-bindings --release
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       - name: Div rebase
         run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_div_rebase_
       - name: Public inputs
@@ -617,10 +614,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.9"
+          python-version: "3.11"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-01-04
+          toolchain: nightly-2024-02-06
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -630,11 +627,15 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev b320f350156a0fb15c2eb13dc380deb2367c4474 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
+      - name: Install pip
+        run: python -m ensurepip --upgrade
       - name: Setup Virtual Env and Install python dependencies
-        run: python -m venv .env; source .env/bin/activate; pip install -r requirements.txt;
+        run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt; python -m ensurepip --upgrade
       - name: Build python ezkl
-        run: source .env/bin/activate; maturin develop --features python-bindings --release
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
+      - name: Tictactoe tutorials
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
       # - name: authenticate-kaggle-cli
       #   shell: bash
       #   env:
@@ -645,12 +646,10 @@ jobs:
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
       - name: All notebooks
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --no-capture
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
       - name: Voice tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
-      - name: Tictactoe tutorials
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --no-capture
       # - name: Postgres tutorials
       #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1

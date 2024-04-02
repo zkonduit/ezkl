@@ -2,11 +2,147 @@ use super::TensorError;
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
 use maybe_rayon::{
-    iter::IndexedParallelIterator, iter::IntoParallelRefMutIterator, iter::ParallelIterator,
+    iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
     prelude::IntoParallelRefIterator,
 };
 use std::collections::{HashMap, HashSet};
 pub use std::ops::{Add, Div, Mul, Neg, Sub};
+
+/// Trilu operation.
+/// # Arguments
+/// * `a` - Tensor
+/// * `k` - i32
+/// * `upper` - Boolean
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::trilu;
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6]),
+/// &[1, 3, 2],
+/// ).unwrap();
+/// let result = trilu(&a, 1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 2, 0, 0, 0, 0]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 0, 0]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let result = trilu(&a, -1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 0, 6]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, -1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 3, 0, 5, 6]), &[1, 3, 2]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6]),
+/// &[1, 2, 3],
+/// ).unwrap();
+/// let result = trilu(&a, 1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 2, 3, 0, 0, 6]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 5, 6]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 0, 5, 6]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 4, 5, 0]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let result = trilu(&a, -1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, -1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 4, 0, 0]), &[1, 2, 3]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let a = Tensor::<i128>::new(
+///   Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9]),
+/// &[1, 3, 3],
+/// ).unwrap();
+/// let result = trilu(&a, 1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 2, 3, 0, 0, 6, 0, 0, 0]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 5, 6, 7, 8, 9]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 0, 5, 6, 0, 0, 9]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, 0, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 4, 5, 0, 7, 8, 9]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);  
+///
+/// let result = trilu(&a, -1, true).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 8, 9]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = trilu(&a, -1, false).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 4, 0, 0, 7, 8, 0]), &[1, 3, 3]).unwrap();
+/// assert_eq!(result, expected);  
+/// ```
+pub fn trilu<T: TensorType + std::marker::Send + std::marker::Sync>(
+    a: &Tensor<T>,
+    k: i32,
+    upper: bool,
+) -> Result<Tensor<T>, TensorError> {
+    let mut output = a.clone();
+
+    // Given a 2-D matrix or batches of 2-D matrices, returns the upper or lower triangular part of the tensor(s).
+    // The attribute “upper” determines whether the upper or lower part is retained.
+    // If set to true, the upper triangular matrix is retained. Lower triangular matrix is retained otherwise.
+    // Default value for the “upper” attribute is true. Trilu takes one input tensor of shape [*, N, M], where * is zero or more batch dimensions.
+    // The upper triangular part consists of the elements on and above the given diagonal (k).
+    // The lower triangular part consists of elements on and below the diagonal. All other elements in the matrix are set to zero.
+
+    let batch_dims = &a.dims()[0..a.dims().len() - 2];
+    let batch_cartiesian = batch_dims.iter().map(|d| 0..*d).multi_cartesian_product();
+
+    for b in batch_cartiesian {
+        for i in 0..a.dims()[1] {
+            for j in 0..a.dims()[2] {
+                let mut coord = b.clone();
+                coord.push(i);
+                coord.push(j);
+                // If k = 0, the triangular part on and above/below the main diagonal is retained.
+
+                if upper {
+                    // If upper is set to true, a positive k retains the upper triangular matrix excluding the main diagonal and (k-1) diagonals above it.
+                    if (j as i32) < (i as i32) + k {
+                        output.set(&coord, T::zero().ok_or(TensorError::Unsupported)?);
+                    }
+                } else {
+                    // If upper is set to false, a positive k retains the lower triangular matrix including the main diagonal and k diagonals above it.
+                    if (j as i32) > (i as i32) + k {
+                        output.set(&coord, T::zero().ok_or(TensorError::Unsupported)?);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(output)
+}
 
 /// IFF operation.
 /// # Arguments
@@ -1328,6 +1464,316 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
     Ok(output)
 }
 
+/// Gather ND.
+/// # Arguments
+/// * `input` - Tensor
+/// * `index` - Tensor of indices to gather
+/// * `batch_dims` - Number of batch dimensions
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::gather_nd;
+/// let x = Tensor::<i128>::new(
+///   Some(&[0, 1, 2, 3]),
+/// &[2, 2],
+/// ).unwrap();
+/// let index = Tensor::<usize>::new(
+/// Some(&[0, 0, 1, 1]),
+/// &[2, 2],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[0, 3]), &[2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[1, 0]),
+/// &[2, 1],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 0, 1]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///  Some(&[0, 1, 2, 3, 4, 5, 6, 7]),
+/// &[2, 2, 2],
+/// ).unwrap();
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 1, 1, 0]),
+/// &[2, 2],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 1, 1, 0]),
+/// &[2, 1, 2],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 1, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[1, 0]),
+/// &[2, 1],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 1).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1]),
+/// &[2, 2, 3],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 1, 0, 0, 1, 1, 1, 0]),
+/// &[2, 2, 2],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 3, 0, 1, 6, 7, 4, 5]), &[2, 2, 2]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let index = Tensor::<usize>::new(
+///  Some(&[0, 1, 0, 1, 1, 1]),
+/// &[2, 3],
+/// ).unwrap();
+/// let result = gather_nd(&x, &index, 0).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[2, 7]), &[2]).unwrap();
+/// assert_eq!(result, expected);
+///
+pub fn gather_nd<T: TensorType + Send + Sync>(
+    input: &Tensor<T>,
+    index: &Tensor<usize>,
+    batch_dims: usize,
+) -> Result<Tensor<T>, TensorError> {
+    // Calculate the output tensor size
+    let index_dims = index.dims().to_vec();
+    let input_dims = input.dims().to_vec();
+    let last_value = index_dims
+        .last()
+        .ok_or(TensorError::DimMismatch("gather_nd".to_string()))?;
+    if last_value > &(input_dims.len() - batch_dims) {
+        return Err(TensorError::DimMismatch("gather_nd".to_string()));
+    }
+
+    let output_size =
+    // If indices_shape[-1] == r-b, since the rank of indices is q,
+    // indices can be thought of as N (q-b-1)-dimensional tensors containing 1-D tensors of dimension r-b,
+    // where N is an integer equals to the product of 1 and all the elements in the batch dimensions of the indices_shape.
+    // Let us think of each such r-b ranked tensor as indices_slice.
+    // Each scalar value corresponding to data[0:b-1,indices_slice] is filled into
+    // the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor
+     // if indices_shape[-1] < r-b, since the rank of indices is q, indices can be thought of as N (q-b-1)-dimensional tensor containing 1-D tensors of dimension < r-b.
+    // Let us think of each such tensors as indices_slice.
+    // Each tensor slice corresponding to data[0:b-1, indices_slice , :] is filled into the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor
+    {
+        let output_rank = input_dims.len() + index_dims.len() - 1 - batch_dims - last_value;
+
+        let mut dims = index_dims[..index_dims.len() - 1].to_vec();
+        let input_offset = batch_dims + last_value;
+        dims.extend(input_dims[input_offset..input_dims.len()].to_vec());
+
+        assert_eq!(output_rank, dims.len());
+        dims
+
+    };
+
+    // cartesian coord over batch dims
+    let mut batch_cartesian_coord = input_dims[0..batch_dims]
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    if batch_cartesian_coord.is_empty() {
+        batch_cartesian_coord.push(vec![]);
+    }
+
+    let outputs = batch_cartesian_coord
+        .par_iter()
+        .map(|batch_coord| {
+            let batch_slice = batch_coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let mut index_slice = index.get_slice(&batch_slice)?;
+            index_slice.reshape(&index.dims()[batch_dims..])?;
+            let mut input_slice = input.get_slice(&batch_slice)?;
+            input_slice.reshape(&input.dims()[batch_dims..])?;
+
+            let mut inner_cartesian_coord = index_slice.dims()[0..index_slice.dims().len() - 1]
+                .iter()
+                .map(|x| 0..*x)
+                .multi_cartesian_product()
+                .collect::<Vec<_>>();
+
+            if inner_cartesian_coord.is_empty() {
+                inner_cartesian_coord.push(vec![]);
+            }
+
+            let output = inner_cartesian_coord
+                .iter()
+                .map(|coord| {
+                    let slice = coord
+                        .iter()
+                        .map(|x| *x..*x + 1)
+                        .chain(batch_coord.iter().map(|x| *x..*x + 1))
+                        .collect::<Vec<_>>();
+
+                    let index_slice = index_slice
+                        .get_slice(&slice)
+                        .unwrap()
+                        .iter()
+                        .map(|x| *x..*x + 1)
+                        .collect::<Vec<_>>();
+
+                    input_slice.get_slice(&index_slice).unwrap()
+                })
+                .collect::<Tensor<_>>();
+
+            output.combine()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut outputs = outputs.into_iter().flatten().collect::<Tensor<_>>();
+
+    outputs.reshape(&output_size)?;
+
+    Ok(outputs)
+}
+
+/// Scatter ND.
+/// This operator is the inverse of GatherND.
+/// # Arguments
+/// * `input` - Tensor
+/// * `index` - Tensor of indices to scatter
+/// * `src` - Tensor of src
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::tensor::ops::scatter_nd;
+/// let x = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[8],
+/// ).unwrap();
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[4, 3, 1, 7]),
+/// &[4, 1],
+/// ).unwrap();
+/// let src = Tensor::<i128>::new(
+/// Some(&[9, 10, 11, 12]),
+/// &[4],
+/// ).unwrap();
+/// let result = scatter_nd(&x, &index, &src).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 11, 3, 10, 9, 6, 7, 12]), &[8]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
+///         1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
+///         8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8,
+///         8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[4, 4, 4],
+/// ).unwrap();
+///
+/// let index = Tensor::<usize>::new(
+///   Some(&[0, 2]),
+/// &[2, 1],
+/// ).unwrap();
+///
+/// let src = Tensor::<i128>::new(
+///  Some(&[5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8,
+///         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
+///   ]),
+/// &[2, 4, 4],
+/// ).unwrap();
+///
+/// let result = scatter_nd(&x, &index, &src).unwrap();
+///
+/// let expected = Tensor::<i128>::new(
+///  Some(&[5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8,
+///         1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
+///         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
+///         8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[4, 4, 4],
+/// ).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[2, 4],
+/// ).unwrap();
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[0, 1]),
+/// &[2, 1],
+/// ).unwrap();
+/// let src = Tensor::<i128>::new(
+/// Some(&[9, 10]),
+/// &[2],
+/// ).unwrap();
+/// let result = scatter_nd(&x, &index, &src).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[9, 9, 9, 9, 10, 10, 10, 10]), &[2, 4]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<i128>::new(
+///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
+/// &[2, 4],
+/// ).unwrap();
+///
+/// let index = Tensor::<usize>::new(
+/// Some(&[0, 1]),
+/// &[1, 1, 2],
+/// ).unwrap();
+/// let src = Tensor::<i128>::new(
+/// Some(&[9]),
+/// &[1, 1],
+/// ).unwrap();
+/// let result = scatter_nd(&x, &index, &src).unwrap();
+/// let expected = Tensor::<i128>::new(Some(&[1, 9, 3, 4, 5, 6, 7, 8]), &[2, 4]).unwrap();
+/// assert_eq!(result, expected);
+/// ````
+///
+pub fn scatter_nd<T: TensorType + Send + Sync>(
+    input: &Tensor<T>,
+    index: &Tensor<usize>,
+    src: &Tensor<T>,
+) -> Result<Tensor<T>, TensorError> {
+    // Calculate the output tensor size
+    let index_dims = index.dims().to_vec();
+    let input_dims = input.dims().to_vec();
+    let last_value = index_dims
+        .last()
+        .ok_or(TensorError::DimMismatch("scatter_nd".to_string()))?;
+    if last_value > &input_dims.len() {
+        return Err(TensorError::DimMismatch("scatter_nd".to_string()));
+    }
+
+    let mut output = input.clone();
+
+    let cartesian_coord = index_dims[0..index_dims.len() - 1]
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    cartesian_coord
+        .iter()
+        .map(|coord| {
+            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let index_val = index.get_slice(&slice)?;
+            let index_slice = index_val.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let src_val = src.get_slice(&slice)?;
+            output.set_slice(&index_slice, &src_val)?;
+            Ok(())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(output)
+}
+
 fn axes_op<T: TensorType + Send + Sync>(
     a: &Tensor<T>,
     axes: &[usize],
@@ -1429,11 +1875,7 @@ pub fn topk<T: TensorType + PartialOrd>(
     let mut indexed_a = a.clone();
     indexed_a.flatten();
 
-    let mut indexed_a = a
-        .iter()
-        .enumerate()
-        .map(|(i, x)| (i, x))
-        .collect::<Vec<_>>();
+    let mut indexed_a = a.iter().enumerate().collect::<Vec<_>>();
 
     if largest {
         indexed_a.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
@@ -2946,6 +3388,47 @@ pub mod nonlinearities {
         .unwrap()
     }
 
+    /// Elementwise applies hardswish to a tensor of integers.
+    /// Hardswish is defined as:
+    // Hardswish(x)={0if x≤−3,xif x≥+3,x⋅(x+3)/6otherwise
+    // Hardswish(x)=⎩
+    // ⎨
+    // ⎧​0xx⋅(x+3)/6​if x≤−3,if x≥+3,otherwise​
+    /// # Arguments
+    ///
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// * `scale_output` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::hardswish;
+    /// let x = Tensor::<i128>::new(
+    ///     Some(&[-12, -3, 2, 1, 1, 15]),
+    ///     &[2, 3],
+    /// ).unwrap();
+    /// let result = hardswish(&x, 1.0);
+    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 2, 1, 1, 15]), &[2, 3]).unwrap();
+    ///
+    /// assert_eq!(result, expected);
+    ///
+    /// ```
+    pub fn hardswish(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let res = if kix <= -3.0 {
+                0.0
+            } else if kix >= 3.0 {
+                kix
+            } else {
+                kix * (kix + 3.0) / 6.0
+            };
+            let rounded = (res * scale_input).round();
+            Ok::<_, TensorError>(rounded as i128)
+        })
+        .unwrap()
+    }
+
     /// Elementwise applies exponential to a tensor of integers.
     /// # Arguments
     ///
@@ -3045,12 +3528,17 @@ pub mod nonlinearities {
     }
 
     /// softmax layout
-    pub fn softmax_axes(a: &Tensor<i128>, scale: f64, axes: &[usize]) -> Tensor<i128> {
+    pub fn softmax_axes(
+        a: &Tensor<i128>,
+        input_scale: f64,
+        output_scale: f64,
+        axes: &[usize],
+    ) -> Tensor<i128> {
         // we want this to be as small as possible so we set the output scale to 1
         let dims = a.dims();
 
         if dims.len() == 1 {
-            return softmax(a, scale);
+            return softmax(a, input_scale, output_scale);
         }
 
         let cartesian_coord = dims[..dims.len() - 1]
@@ -3073,7 +3561,7 @@ pub mod nonlinearities {
 
             let softmax_input = a.get_slice(&sum_dims).unwrap();
 
-            let res = softmax(&softmax_input, scale);
+            let res = softmax(&softmax_input, input_scale, output_scale);
 
             outputs.push(res);
         }
@@ -3100,20 +3588,25 @@ pub mod nonlinearities {
     ///     Some(&[2, 2, 3, 2, 2, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = softmax(&x, 128.0);
+    /// let result = softmax(&x, 128.0, 128.0 * 128.0);
     /// // doubles the scale of the input
-    /// let expected = Tensor::<i128>::new(Some(&[2730, 2730, 2751, 2730, 2730, 2688]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i128>::new(Some(&[2734, 2734, 2755, 2734, 2734, 2692]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn softmax(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn softmax(a: &Tensor<i128>, input_scale: f64, output_scale: f64) -> Tensor<i128> {
         // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
 
-        let exp = exp(a, scale);
+        let exp = exp(a, input_scale);
 
         let sum = sum(&exp).unwrap();
-        let inv_denom = recip(&sum, scale, scale);
-
-        (exp * inv_denom).unwrap()
+        let inv_denom = recip(&sum, input_scale, output_scale);
+        let mut res = (exp * inv_denom).unwrap();
+        res = res
+            .iter()
+            .map(|x| ((*x as f64) / input_scale).round() as i128)
+            .collect();
+        res.reshape(a.dims()).unwrap();
+        res
     }
 
     /// Applies range_check_percent

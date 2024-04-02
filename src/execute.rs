@@ -13,30 +13,42 @@ use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::{TestDataSource, TestSources};
-use crate::pfsys::evm::aggregation::AggregationCircuit;
+use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::{
-    create_keys, load_pk, load_vk, save_params, save_pk, swap_proof_commitments_kzg, Snark,
-    StrategyType, TranscriptType,
+    create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
 };
-use crate::pfsys::{create_proof_circuit_kzg, verify_proof_circuit_kzg};
+use crate::pfsys::{
+    create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit, ProofSplitCommit,
+};
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
-use crate::RunArgs;
+use crate::{Commitments, RunArgs};
+#[cfg(not(target_arch = "wasm32"))]
+use colored::Colorize;
+#[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
-use halo2_proofs::poly::commitment::Params;
-use halo2_proofs::poly::commitment::ParamsProver;
+use halo2_proofs::plonk::{self, Circuit};
+use halo2_proofs::poly::commitment::{CommitmentScheme, Params};
+use halo2_proofs::poly::commitment::{ParamsProver, Verifier};
+use halo2_proofs::poly::ipa::commitment::{IPACommitmentScheme, ParamsIPA};
+use halo2_proofs::poly::ipa::multiopen::{ProverIPA, VerifierIPA};
+use halo2_proofs::poly::ipa::strategy::AccumulatorStrategy as IPAAccumulatorStrategy;
+use halo2_proofs::poly::ipa::strategy::SingleStrategy as IPASingleStrategy;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy;
+use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
+use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy as KZGAccumulatorStrategy;
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
+use halo2_proofs::poly::VerificationStrategy;
+use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer};
 #[cfg(not(target_arch = "wasm32"))]
 use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
-#[cfg(not(target_arch = "wasm32"))]
-use halo2curves::ff::Field;
+use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
+use halo2curves::serde::SerdeObject;
 #[cfg(not(target_arch = "wasm32"))]
 use indicatif::{ProgressBar, ProgressStyle};
 use instant::Instant;
@@ -45,12 +57,12 @@ use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::debug;
 use log::{info, trace, warn};
-#[cfg(not(target_arch = "wasm32"))]
-use maybe_rayon::prelude::{IntoParallelIterator, ParallelIterator};
-#[cfg(feature = "render")]
-use plotters::prelude::*;
-#[cfg(not(target_arch = "wasm32"))]
-use rand::Rng;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use snark_verifier::loader::native::NativeLoader;
+use snark_verifier::system::halo2::compile;
+use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
+use snark_verifier::system::halo2::Config;
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
@@ -60,10 +72,12 @@ use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-#[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
+
 #[cfg(not(target_arch = "wasm32"))]
+use crate::EZKL_BUF_CAPACITY;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::BufWriter;
 use std::time::Duration;
 use tabled::Tabled;
 use thiserror::Error;
@@ -134,35 +148,19 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
     match command {
         #[cfg(feature = "empty-cmd")]
         Commands::Empty => Ok(String::new()),
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::Fuzz {
-            witness,
-            compiled_circuit,
-            transcript,
-            num_runs,
-            compress_selectors,
-        } => fuzz(
-            compiled_circuit,
-            witness,
-            transcript,
-            num_runs,
-            compress_selectors,
-        ),
-        Commands::GenSrs { srs_path, logrows } => gen_srs_cmd(srs_path, logrows as u32),
+        Commands::GenSrs {
+            srs_path,
+            logrows,
+            commitment,
+        } => gen_srs_cmd(srs_path, logrows as u32, commitment),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::GetSrs {
             srs_path,
             settings_path,
             logrows,
-            check,
-        } => get_srs_cmd(srs_path, settings_path, logrows, check).await,
+            commitment,
+        } => get_srs_cmd(srs_path, settings_path, logrows, commitment).await,
         Commands::Table { model, args } => table(model, args),
-        #[cfg(feature = "render")]
-        Commands::RenderCircuit {
-            model,
-            output,
-            args,
-        } => render(model, output, args),
         Commands::GenSettings {
             model,
             settings_path,
@@ -260,14 +258,14 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             vk_path,
             pk_path,
             witness,
-            compress_selectors,
+            disable_selector_compression,
         } => setup(
             compiled_circuit,
             srs_path,
             vk_path,
             pk_path,
             witness,
-            compress_selectors,
+            disable_selector_compression,
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::SetupTestEvmData {
@@ -298,7 +296,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
         Commands::SwapProofCommitments {
             proof_path,
             witness_path,
-        } => swap_proof_commitments(proof_path, witness_path)
+        } => swap_proof_commitments_cmd(proof_path, witness_path)
             .map(|e| serde_json::to_string(&e).unwrap()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
@@ -331,7 +329,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             split_proofs,
-            compress_selectors,
+            disable_selector_compression,
+            commitment,
         } => setup_aggregate(
             sample_snarks,
             vk_path,
@@ -339,7 +338,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             split_proofs,
-            compress_selectors,
+            disable_selector_compression,
+            commitment,
         ),
         Commands::Aggregate {
             proof_path,
@@ -350,6 +350,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             logrows,
             check_mode,
             split_proofs,
+            commitment,
         } => aggregate(
             proof_path,
             aggregation_snarks,
@@ -359,6 +360,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             logrows,
             check_mode,
             split_proofs,
+            commitment,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::Verify {
@@ -373,9 +375,18 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             proof_path,
             vk_path,
             srs_path,
+            reduced_srs,
             logrows,
-        } => verify_aggr(proof_path, vk_path, srs_path, logrows)
-            .map(|e| serde_json::to_string(&e).unwrap()),
+            commitment,
+        } => verify_aggr(
+            proof_path,
+            vk_path,
+            srs_path,
+            logrows,
+            reduced_srs,
+            commitment,
+        )
+        .map(|e| serde_json::to_string(&e).unwrap()),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvmVerifier {
             sol_code_path,
@@ -445,24 +456,39 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
 }
 
 /// Get the srs path
-pub fn get_srs_path(logrows: u32, srs_path: Option<PathBuf>) -> PathBuf {
+pub fn get_srs_path(logrows: u32, srs_path: Option<PathBuf>, commitment: Commitments) -> PathBuf {
     if let Some(srs_path) = srs_path {
         srs_path
     } else {
         if !Path::new(&*EZKL_SRS_REPO_PATH).exists() {
             std::fs::create_dir_all(&*EZKL_SRS_REPO_PATH).unwrap();
         }
-        (EZKL_SRS_REPO_PATH.clone() + &format!("/kzg{}.srs", logrows)).into()
+        match commitment {
+            Commitments::KZG => Path::new(&*EZKL_SRS_REPO_PATH).join(format!("kzg{}.srs", logrows)),
+            Commitments::IPA => Path::new(&*EZKL_SRS_REPO_PATH).join(format!("ipa{}.srs", logrows)),
+        }
     }
 }
 
-fn srs_exists_check(logrows: u32, srs_path: Option<PathBuf>) -> bool {
-    Path::new(&get_srs_path(logrows, srs_path)).exists()
+fn srs_exists_check(logrows: u32, srs_path: Option<PathBuf>, commitment: Commitments) -> bool {
+    Path::new(&get_srs_path(logrows, srs_path, commitment)).exists()
 }
 
-pub(crate) fn gen_srs_cmd(srs_path: PathBuf, logrows: u32) -> Result<String, Box<dyn Error>> {
-    let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
-    save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
+pub(crate) fn gen_srs_cmd(
+    srs_path: PathBuf,
+    logrows: u32,
+    commitment: Commitments,
+) -> Result<String, Box<dyn Error>> {
+    match commitment {
+        Commitments::KZG => {
+            let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
+            save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
+        }
+        Commitments::IPA => {
+            let params = gen_srs::<IPACommitmentScheme<G1Affine>>(logrows);
+            save_params::<IPACommitmentScheme<G1Affine>>(&srs_path, &params)?;
+        }
+    }
     Ok(String::new())
 }
 
@@ -487,18 +513,34 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn check_srs_hash(logrows: u32, srs_path: Option<PathBuf>) -> Result<String, Box<dyn Error>> {
+pub(crate) fn get_file_hash(path: &PathBuf) -> Result<String, Box<dyn Error>> {
     use std::io::Read;
-
-    let path = get_srs_path(logrows, srs_path);
-    let file = std::fs::File::open(path.clone())?;
+    let file = std::fs::File::open(path)?;
+    let mut reader = std::io::BufReader::new(file);
     let mut buffer = vec![];
-    let bytes_read = std::io::BufReader::new(file).read_to_end(&mut buffer)?;
-    debug!("read {} bytes from SRS file", bytes_read);
-    let hash = sha256::digest(buffer);
-    info!("SRS hash: {}", hash);
+    let bytes_read = reader.read_to_end(&mut buffer)?;
+    info!(
+        "read {} bytes from file (vector of len = {})",
+        bytes_read,
+        buffer.len()
+    );
 
-    let predefined_hash = match { crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) } {
+    let hash = sha256::digest(buffer);
+    info!("file hash: {}", hash);
+
+    Ok(hash)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn check_srs_hash(
+    logrows: u32,
+    srs_path: Option<PathBuf>,
+    commitment: Commitments,
+) -> Result<String, Box<dyn Error>> {
+    let path = get_srs_path(logrows, srs_path, commitment);
+    let hash = get_file_hash(&path)?;
+
+    let predefined_hash = match crate::srs_sha::PUBLIC_SRS_SHA256_HASHES.get(&logrows) {
         Some(h) => h,
         None => return Err(format!("SRS (k={}) hash not found in public set", logrows).into()),
     };
@@ -520,52 +562,71 @@ pub(crate) async fn get_srs_cmd(
     srs_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
-    check_mode: CheckMode,
+    commitment: Option<Commitments>,
 ) -> Result<String, Box<dyn Error>> {
     // logrows overrides settings
 
+    let err_string = "You will need to provide a valid settings file to use the settings option. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows).";
+
     let k = if let Some(k) = logrows {
         k
-    } else if let Some(settings_p) = settings_path {
+    } else if let Some(settings_p) = &settings_path {
         if settings_p.exists() {
-            let settings = GraphSettings::load(&settings_p)?;
+            let settings = GraphSettings::load(settings_p)?;
             settings.run_args.logrows
         } else {
-            let err_string = format!(
-                "You will need to provide a valid settings file to use the settings option. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows)."
-            );
             return Err(err_string.into());
         }
     } else {
-        let err_string = format!(
-            "You will need to provide a settings file or set the logrows. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows)."
-        );
         return Err(err_string.into());
     };
 
-    if !srs_exists_check(k, srs_path.clone()) {
-        info!("SRS does not exist, downloading...");
-        let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
-        let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
-        // check the SRS
-        if matches!(check_mode, CheckMode::SAFE) {
+    let commitment = if let Some(c) = commitment {
+        c
+    } else if let Some(settings_p) = settings_path {
+        if settings_p.exists() {
+            let settings = GraphSettings::load(&settings_p)?;
+            settings.run_args.commitment
+        } else {
+            return Err(err_string.into());
+        }
+    } else {
+        return Err(err_string.into());
+    };
+
+    if !srs_exists_check(k, srs_path.clone(), commitment) {
+        if matches!(commitment, Commitments::KZG) {
+            info!("SRS does not exist, downloading...");
+            let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
+            let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
+            // check the SRS
             #[cfg(not(target_arch = "wasm32"))]
             let pb = init_spinner();
             #[cfg(not(target_arch = "wasm32"))]
             pb.set_message("Validating SRS (this may take a while) ...");
-            ParamsKZG::<Bn256>::read(&mut reader)?;
+            let params = ParamsKZG::<Bn256>::read(&mut reader)?;
             #[cfg(not(target_arch = "wasm32"))]
-            pb.finish_with_message("SRS validated");
-        }
+            pb.finish_with_message("SRS validated.");
 
-        let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone()))?;
-        file.write_all(reader.get_ref())?;
-        info!("SRS downloaded");
+            info!("Saving SRS to disk...");
+            let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone(), commitment))?;
+            let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
+            params.write(&mut buffer)?;
+
+            info!("Saved SRS to disk.");
+
+            info!("SRS downloaded");
+        } else {
+            let path = get_srs_path(k, srs_path.clone(), commitment);
+            gen_srs_cmd(path, k, commitment)?;
+        }
     } else {
         info!("SRS already exists at that path");
     };
     // check the hash
-    check_srs_hash(k, srs_path.clone())?;
+    if matches!(commitment, Commitments::KZG) {
+        check_srs_hash(k, srs_path.clone(), commitment)?;
+    }
 
     Ok(String::new())
 }
@@ -590,23 +651,10 @@ pub(crate) async fn gen_witness(
     let settings = circuit.settings().clone();
 
     let vk = if let Some(vk) = vk_path {
-        Some(load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
+        Some(load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(
             vk,
             settings.clone(),
         )?)
-    } else {
-        None
-    };
-
-    // if any of the settings have kzg visibility then we need to load the srs
-
-    let srs = if settings.module_requires_kzg() {
-        if get_srs_path(settings.run_args.logrows, srs_path.clone()).exists() {
-            Some(load_params_cmd(srs_path, settings.run_args.logrows)?)
-        } else {
-            warn!("SRS for kzg commit does not exist (will be ignored)");
-            None
-        }
     } else {
         None
     };
@@ -616,9 +664,53 @@ pub(crate) async fn gen_witness(
     #[cfg(target_arch = "wasm32")]
     let mut input = circuit.load_graph_input(&data)?;
 
-    let start_time = Instant::now();
+    // if any of the settings have kzg visibility then we need to load the srs
 
-    let witness = circuit.forward(&mut input, vk.as_ref(), srs.as_ref(), false)?;
+    let start_time = Instant::now();
+    let witness = if settings.module_requires_polycommit() {
+        if get_srs_path(
+            settings.run_args.logrows,
+            srs_path.clone(),
+            settings.run_args.commitment,
+        )
+        .exists()
+        {
+            match settings.run_args.commitment {
+                Commitments::KZG => {
+                    let srs: ParamsKZG<Bn256> = load_params_prover::<KZGCommitmentScheme<Bn256>>(
+                        srs_path.clone(),
+                        settings.run_args.logrows,
+                        settings.run_args.commitment,
+                    )?;
+                    circuit.forward::<KZGCommitmentScheme<_>>(
+                        &mut input,
+                        vk.as_ref(),
+                        Some(&srs),
+                        true,
+                    )?
+                }
+                Commitments::IPA => {
+                    let srs: ParamsIPA<G1Affine> =
+                        load_params_prover::<IPACommitmentScheme<G1Affine>>(
+                            srs_path.clone(),
+                            settings.run_args.logrows,
+                            settings.run_args.commitment,
+                        )?;
+                    circuit.forward::<IPACommitmentScheme<_>>(
+                        &mut input,
+                        vk.as_ref(),
+                        Some(&srs),
+                        true,
+                    )?
+                }
+            }
+        } else {
+            warn!("SRS for poly commit does not exist (will be ignored)");
+            circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true)?
+        }
+    } else {
+        circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true)?
+    };
 
     // print each variable tuple (symbol, value) as symbol=value
     trace!(
@@ -729,7 +821,15 @@ impl AccuracyResults {
             let error = (original.clone() - calibrated.clone())?;
             let abs_error = error.map(|x| x.abs());
             let squared_error = error.map(|x| x.powi(2));
-            let percentage_error = error.enum_map(|i, x| Ok::<_, TensorError>(x / original[i]))?;
+            let percentage_error = error.enum_map(|i, x| {
+                // if everything is 0 then we can't divide by 0 so we just return 0
+                let res = if original[i] == 0.0 && x == 0.0 {
+                    0.0
+                } else {
+                    x / original[i]
+                };
+                Ok::<f32, TensorError>(res)
+            })?;
             let abs_percentage_error = percentage_error.map(|x| x.abs());
 
             errors.extend(error);
@@ -798,6 +898,7 @@ pub(crate) fn calibrate(
     only_range_check_rebase: bool,
     max_logrows: Option<u32>,
 ) -> Result<GraphSettings, Box<dyn Error>> {
+    use log::error;
     use std::collections::HashMap;
     use tabled::Table;
 
@@ -806,14 +907,13 @@ pub(crate) fn calibrate(
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
     // we load the model to get the input and output shapes
-    // check if gag already exists
 
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
 
     let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
-    info!("num of calibration batches: {}", chunks.len());
+    info!("num calibration batches: {}", chunks.len());
 
-    info!("running onnx predictions...");
+    debug!("running onnx predictions...");
     let original_predictions = Model::run_onnx_predictions(
         &settings.run_args,
         &model_path,
@@ -881,13 +981,26 @@ pub(crate) fn calibrate(
     let pb = init_bar(range_grid.len() as u64);
     pb.set_message("calibrating...");
 
+    let mut num_failed = 0;
+    let mut num_passed = 0;
+
     for (((input_scale, param_scale), scale_rebase_multiplier), div_rebasing) in range_grid {
         pb.set_message(format!(
-            "input scale: {}, param scale: {}, scale rebase multiplier: {}, div rebasing: {}",
-            input_scale, param_scale, scale_rebase_multiplier, div_rebasing
+            "i-scale: {}, p-scale: {}, rebase-(x): {}, div-rebase: {}, fail: {}, pass: {}",
+            input_scale.to_string().blue(),
+            param_scale.to_string().blue(),
+            scale_rebase_multiplier.to_string().blue(),
+            div_rebasing.to_string().yellow(),
+            num_failed.to_string().red(),
+            num_passed.to_string().green()
         ));
 
-        let key = (input_scale, param_scale, scale_rebase_multiplier);
+        let key = (
+            input_scale,
+            param_scale,
+            scale_rebase_multiplier,
+            div_rebasing,
+        );
         forward_pass_res.insert(key, vec![]);
 
         let local_run_args = RunArgs {
@@ -898,10 +1011,24 @@ pub(crate) fn calibrate(
             ..settings.run_args.clone()
         };
 
+        // if unix get a gag
+        #[cfg(unix)]
+        let _r = match Gag::stdout() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+        #[cfg(unix)]
+        let _g = match Gag::stderr() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+
         let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
             Ok(c) => c,
             Err(e) => {
-                debug!("circuit creation from run args failed: {:?}", e);
+                error!("circuit creation from run args failed: {:?}", e);
+                pb.inc(1);
+                num_failed += 1;
                 continue;
             }
         };
@@ -916,7 +1043,7 @@ pub(crate) fn calibrate(
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                 let forward_res = circuit
-                    .forward(&mut data.clone(), None, None, true)
+                    .forward::<KZGCommitmentScheme<Bn256>>(&mut data.clone(), None, None, true)
                     .map_err(|e| format!("failed to forward: {}", e))?;
 
                 // push result to the hashmap
@@ -933,36 +1060,36 @@ pub(crate) fn calibrate(
             Ok(_) => (),
             // typically errors will be due to the circuit overflowing the i128 limit
             Err(e) => {
-                debug!("forward pass failed: {:?}", e);
+                error!("forward pass failed: {:?}", e);
+                pb.inc(1);
+                num_failed += 1;
                 continue;
             }
         }
 
-        let min_lookup_range = forward_pass_res
-            .get(&key)
-            .unwrap()
+        // drop the gag
+        #[cfg(unix)]
+        drop(_r);
+        #[cfg(unix)]
+        drop(_g);
+
+        let result = forward_pass_res.get(&key).ok_or("key not found")?;
+
+        let min_lookup_range = result
             .iter()
             .map(|x| x.min_lookup_inputs)
             .min()
             .unwrap_or(0);
 
-        let max_lookup_range = forward_pass_res
-            .get(&key)
-            .unwrap()
+        let max_lookup_range = result
             .iter()
             .map(|x| x.max_lookup_inputs)
             .max()
             .unwrap_or(0);
 
-        let max_range_size = forward_pass_res
-            .get(&key)
-            .unwrap()
-            .iter()
-            .map(|x| x.max_range_size)
-            .max()
-            .unwrap_or(0);
+        let max_range_size = result.iter().map(|x| x.max_range_size).max().unwrap_or(0);
 
-        let res = circuit.calibrate_from_min_max(
+        let res = circuit.calc_min_logrows(
             (min_lookup_range, max_lookup_range),
             max_range_size,
             max_logrows,
@@ -1000,8 +1127,10 @@ pub(crate) fn calibrate(
                 "found settings: \n {}",
                 found_settings.as_json()?.to_colored_json_auto()?
             );
+            num_passed += 1;
         } else {
-            debug!("calibration failed {}", res.err().unwrap());
+            error!("calibration failed {}", res.err().unwrap());
+            num_failed += 1;
         }
 
         pb.inc(1);
@@ -1081,6 +1210,7 @@ pub(crate) fn calibrate(
             best_params.run_args.input_scale,
             best_params.run_args.param_scale,
             best_params.run_args.scale_rebase_multiplier,
+            best_params.run_args.div_rebasing,
         ))
         .ok_or("no params found")?
         .iter()
@@ -1163,29 +1293,6 @@ pub(crate) fn mock(
     Ok(String::new())
 }
 
-#[cfg(feature = "render")]
-pub(crate) fn render(
-    model: PathBuf,
-    output: PathBuf,
-    args: RunArgs,
-) -> Result<String, Box<dyn Error>> {
-    let circuit = GraphCircuit::from_run_args(&args, &model)?;
-    info!("Rendering circuit");
-
-    // Create the area we want to draw on.
-    // We could use SVGBackend if we want to render to .svg instead.
-    // for an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
-    let root = BitMapBackend::new(&output, (512, 512)).into_drawing_area();
-    root.fill(&TRANSPARENT)?;
-    let root = root.titled("Layout", ("sans-serif", 20))?;
-
-    halo2_proofs::dev::CircuitLayout::default()
-        // We hide labels, else most circuits become impossible to decipher because of overlaid text
-        .show_labels(false)
-        .render(circuit.settings().run_args.logrows, &circuit, &root)?;
-    Ok(String::new())
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn create_evm_verifier(
     vk_path: PathBuf,
@@ -1197,12 +1304,16 @@ pub(crate) fn create_evm_verifier(
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
-    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
+    let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
+        srs_path,
+        circuit_settings.run_args.logrows,
+        circuit_settings.run_args.commitment,
+    )?;
 
     let num_instance = circuit_settings.total_instances();
     let num_instance: usize = num_instance.iter().sum::<usize>();
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, circuit_settings)?;
     trace!("params computed");
 
     let generator = halo2_solidity_verifier::SolidityGenerator::new(
@@ -1237,12 +1348,16 @@ pub(crate) fn create_evm_vk(
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
     let circuit_settings = GraphSettings::load(&settings_path)?;
-    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
+    let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
+        srs_path,
+        circuit_settings.run_args.logrows,
+        circuit_settings.run_args.commitment,
+    )?;
 
     let num_instance = circuit_settings.total_instances();
     let num_instance: usize = num_instance.iter().sum::<usize>();
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings)?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, circuit_settings)?;
     trace!("params computed");
 
     let generator = halo2_solidity_verifier::SolidityGenerator::new(
@@ -1430,8 +1545,8 @@ pub(crate) fn create_evm_aggregate_verifier(
     render_vk_seperately: bool,
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
-    let srs_path = get_srs_path(logrows, srs_path);
-    let params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
+    let srs_path = get_srs_path(logrows, srs_path, Commitments::KZG);
+    let params: ParamsKZG<Bn256> = load_srs_verifier::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
     let mut settings: Vec<GraphSettings> = vec![];
 
@@ -1449,7 +1564,7 @@ pub(crate) fn create_evm_aggregate_verifier(
     assert_eq!(num_instance.len(), 1);
     let num_instance = num_instance[0];
 
-    let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
+    let agg_vk = load_vk::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(vk_path, ())?;
 
     let mut generator = halo2_solidity_verifier::SolidityGenerator::new(
         &params,
@@ -1499,26 +1614,47 @@ pub(crate) fn setup(
     vk_path: PathBuf,
     pk_path: PathBuf,
     witness: Option<PathBuf>,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
 ) -> Result<String, Box<dyn Error>> {
     // these aren't real values so the sanity checks are mostly meaningless
+
     let mut circuit = GraphCircuit::load(compiled_circuit)?;
+
     if let Some(witness) = witness {
         let data = GraphWitness::from_path(witness)?;
         circuit.load_graph_witness(&data)?;
     }
 
-    let params = load_params_cmd(srs_path, circuit.settings().run_args.logrows)?;
+    let logrows = circuit.settings().run_args.logrows;
 
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
-        &circuit,
-        &params,
-        compress_selectors,
-    )
-    .map_err(Box::<dyn Error>::from)?;
-
-    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, pk.get_vk())?;
-    save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &pk)?;
+    let pk = match circuit.settings().run_args.commitment {
+        Commitments::KZG => {
+            let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(
+                srs_path,
+                logrows,
+                Commitments::KZG,
+            )?;
+            create_keys::<KZGCommitmentScheme<Bn256>, GraphCircuit>(
+                &circuit,
+                &params,
+                disable_selector_compression,
+            )?
+        }
+        Commitments::IPA => {
+            let params = load_params_prover::<IPACommitmentScheme<G1Affine>>(
+                srs_path,
+                logrows,
+                Commitments::IPA,
+            )?;
+            create_keys::<IPACommitmentScheme<G1Affine>, GraphCircuit>(
+                &circuit,
+                &params,
+                disable_selector_compression,
+            )?
+        }
+    };
+    save_vk::<G1Affine>(&vk_path, pk.get_vk())?;
+    save_pk::<G1Affine>(&pk_path, &pk)?;
     Ok(String::new())
 }
 
@@ -1586,8 +1722,6 @@ pub(crate) fn prove(
     proof_type: ProofType,
     check_mode: CheckMode,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
-    use crate::pfsys::ProofSplitCommit;
-
     let data = GraphWitness::from_path(data_path)?;
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
@@ -1598,46 +1732,133 @@ pub(crate) fn prove(
 
     let circuit_settings = circuit.settings().clone();
 
-    let params = load_params_cmd(srs_path, circuit_settings.run_args.logrows)?;
-
-    let pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(pk_path, circuit_settings)
-        .map_err(Box::<dyn Error>::from)?;
-
-    trace!("params computed");
-
     let strategy: StrategyType = proof_type.into();
     let transcript: TranscriptType = proof_type.into();
     let proof_split_commits: Option<ProofSplitCommit> = data.into();
 
+    let commitment = circuit_settings.run_args.commitment;
     // creates and verifies the proof
-    let mut snark = match strategy {
-        StrategyType::Single => {
-            let strategy = KZGSingleStrategy::new(&params);
-            create_proof_circuit_kzg(
-                circuit,
-                &params,
-                Some(public_inputs),
-                &pk,
-                transcript,
-                strategy,
-                check_mode,
-                proof_split_commits,
-            )?
+    let mut snark = match commitment {
+        Commitments::KZG => {
+            let pk =
+                load_pk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(pk_path, circuit.params())?;
+
+            let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(
+                srs_path,
+                circuit_settings.run_args.logrows,
+                Commitments::KZG,
+            )?;
+            match strategy {
+                StrategyType::Single => create_proof_circuit::<
+                    KZGCommitmentScheme<Bn256>,
+                    _,
+                    ProverSHPLONK<_>,
+                    VerifierSHPLONK<_>,
+                    KZGSingleStrategy<_>,
+                    _,
+                    EvmTranscript<_, _, _, _>,
+                    EvmTranscript<_, _, _, _>,
+                >(
+                    circuit,
+                    vec![public_inputs],
+                    &params,
+                    &pk,
+                    check_mode,
+                    commitment,
+                    transcript,
+                    proof_split_commits,
+                    None,
+                ),
+                StrategyType::Accum => {
+                    let protocol = Some(compile(
+                        &params,
+                        pk.get_vk(),
+                        Config::kzg().with_num_instance(vec![public_inputs.len()]),
+                    ));
+
+                    create_proof_circuit::<
+                        KZGCommitmentScheme<Bn256>,
+                        _,
+                        ProverSHPLONK<_>,
+                        VerifierSHPLONK<_>,
+                        KZGAccumulatorStrategy<_>,
+                        _,
+                        PoseidonTranscript<NativeLoader, _>,
+                        PoseidonTranscript<NativeLoader, _>,
+                    >(
+                        circuit,
+                        vec![public_inputs],
+                        &params,
+                        &pk,
+                        check_mode,
+                        commitment,
+                        transcript,
+                        proof_split_commits,
+                        protocol,
+                    )
+                }
+            }
         }
-        StrategyType::Accum => {
-            let strategy = AccumulatorStrategy::new(&params);
-            create_proof_circuit_kzg(
-                circuit,
-                &params,
-                Some(public_inputs),
-                &pk,
-                transcript,
-                strategy,
-                check_mode,
-                proof_split_commits,
-            )?
+        Commitments::IPA => {
+            let pk =
+                load_pk::<IPACommitmentScheme<G1Affine>, GraphCircuit>(pk_path, circuit.params())?;
+
+            let params = load_params_prover::<IPACommitmentScheme<G1Affine>>(
+                srs_path,
+                circuit_settings.run_args.logrows,
+                Commitments::IPA,
+            )?;
+            match strategy {
+                StrategyType::Single => create_proof_circuit::<
+                    IPACommitmentScheme<G1Affine>,
+                    _,
+                    ProverIPA<_>,
+                    VerifierIPA<_>,
+                    IPASingleStrategy<_>,
+                    _,
+                    EvmTranscript<_, _, _, _>,
+                    EvmTranscript<_, _, _, _>,
+                >(
+                    circuit,
+                    vec![public_inputs],
+                    &params,
+                    &pk,
+                    check_mode,
+                    commitment,
+                    transcript,
+                    proof_split_commits,
+                    None,
+                ),
+                StrategyType::Accum => {
+                    let protocol = Some(compile(
+                        &params,
+                        pk.get_vk(),
+                        Config::ipa().with_num_instance(vec![public_inputs.len()]),
+                    ));
+                    create_proof_circuit::<
+                        IPACommitmentScheme<G1Affine>,
+                        _,
+                        ProverIPA<_>,
+                        VerifierIPA<_>,
+                        IPAAccumulatorStrategy<_>,
+                        _,
+                        PoseidonTranscript<NativeLoader, _>,
+                        PoseidonTranscript<NativeLoader, _>,
+                    >(
+                        circuit,
+                        vec![public_inputs],
+                        &params,
+                        &pk,
+                        check_mode,
+                        commitment,
+                        transcript,
+                        proof_split_commits,
+                        protocol,
+                    )
+                }
+            }
         }
-    };
+    }?;
 
     snark.pretty_public_inputs = pretty_public_inputs;
 
@@ -1648,264 +1869,19 @@ pub(crate) fn prove(
     Ok(snark)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn fuzz(
-    compiled_circuit_path: PathBuf,
-    data_path: PathBuf,
-    transcript: TranscriptType,
-    num_runs: usize,
-    compress_selectors: bool,
-) -> Result<String, Box<dyn Error>> {
-    check_solc_requirement();
-    let passed = AtomicBool::new(true);
-
-    // these aren't real values so the sanity checks are mostly meaningless
-    let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
-    let logrows = circuit.settings().run_args.logrows;
-
-    info!("setting up tests");
-
-    let _r = Gag::stdout()?;
-    let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
-
-    let data = GraphWitness::from_path(data_path)?;
-
-    let pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
-        &circuit,
-        &params,
-        compress_selectors,
-    )
-    .map_err(Box::<dyn Error>::from)?;
-
-    circuit.load_graph_witness(&data)?;
-
-    let public_inputs = circuit.prepare_public_inputs(&data)?;
-
-    let strategy = KZGSingleStrategy::new(&params);
-    std::mem::drop(_r);
-
-    info!("starting fuzzing");
-
-    info!("fuzzing pk");
-
-    let fuzz_pk = || {
-        let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
-
-        let bad_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
-            &circuit,
-            &new_params,
-            compress_selectors,
-        )
-        .map_err(|_| ())?;
-
-        let bad_proof = create_proof_circuit_kzg(
-            circuit.clone(),
-            &params,
-            Some(public_inputs.clone()),
-            &bad_pk,
-            transcript,
-            strategy.clone(),
-            CheckMode::UNSAFE,
-            None,
-        )
-        .map_err(|_| ())?;
-
-        verify_proof_circuit_kzg(
-            params.verifier_params(),
-            bad_proof,
-            pk.get_vk(),
-            strategy.clone(),
-            params.n(),
-        )
-        .map_err(|_| ())
-    };
-
-    run_fuzz_fn(num_runs, fuzz_pk, &passed);
-
-    info!("fuzzing public inputs");
-
-    let fuzz_public_inputs = || {
-        let bad_inputs: Vec<Fr> = (0..public_inputs.len())
-            .map(|_| Fr::random(rand::rngs::OsRng))
-            .collect();
-
-        let bad_proof = create_proof_circuit_kzg(
-            circuit.clone(),
-            &params,
-            Some(bad_inputs.clone()),
-            &pk,
-            transcript,
-            strategy.clone(),
-            CheckMode::UNSAFE,
-            None,
-        )
-        .map_err(|_| ())?;
-
-        verify_proof_circuit_kzg(
-            params.verifier_params(),
-            bad_proof,
-            pk.get_vk(),
-            strategy.clone(),
-            params.n(),
-        )
-        .map_err(|_| ())
-    };
-
-    run_fuzz_fn(num_runs, fuzz_public_inputs, &passed);
-
-    info!("fuzzing vk");
-
-    let proof = create_proof_circuit_kzg(
-        circuit.clone(),
-        &params,
-        Some(public_inputs.clone()),
-        &pk,
-        transcript,
-        strategy.clone(),
-        CheckMode::SAFE,
-        None,
-    )?;
-
-    let fuzz_vk = || {
-        let new_params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
-
-        let bad_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
-            &circuit,
-            &new_params,
-            compress_selectors,
-        )
-        .map_err(|_| ())?;
-
-        let bad_vk = bad_pk.get_vk();
-
-        verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof.clone(),
-            bad_vk,
-            strategy.clone(),
-            params.n(),
-        )
-        .map_err(|_| ())
-    };
-
-    run_fuzz_fn(num_runs, fuzz_vk, &passed);
-
-    info!("fuzzing proof bytes");
-
-    let fuzz_proof_bytes = || {
-        let mut rng = rand::thread_rng();
-
-        let bad_proof_bytes: Vec<u8> = (0..proof.proof.len())
-            .map(|_| rng.gen_range(0..20))
-            .collect();
-
-        let bad_proof = Snark::<_, _> {
-            instances: proof.instances.clone(),
-            proof: bad_proof_bytes,
-            protocol: proof.protocol.clone(),
-            transcript_type: transcript,
-            split: None,
-            pretty_public_inputs: None,
-            hex_proof: None,
-            timestamp: None,
-        };
-
-        verify_proof_circuit_kzg(
-            params.verifier_params(),
-            bad_proof,
-            pk.get_vk(),
-            strategy.clone(),
-            params.n(),
-        )
-        .map_err(|_| ())
-    };
-
-    run_fuzz_fn(num_runs, fuzz_proof_bytes, &passed);
-
-    info!("fuzzing proof instances");
-
-    let fuzz_proof_instances = || {
-        let mut bad_inputs = vec![vec![]];
-
-        for l in &proof.instances {
-            bad_inputs.push(
-                (0..l.len())
-                    .map(|_| Fr::random(rand::rngs::OsRng))
-                    .collect(),
-            );
-        }
-
-        let bad_proof = Snark::<_, _> {
-            instances: bad_inputs.clone(),
-            proof: proof.proof.clone(),
-            protocol: proof.protocol.clone(),
-            transcript_type: transcript,
-            split: None,
-            hex_proof: None,
-            pretty_public_inputs: None,
-            timestamp: None,
-        };
-
-        verify_proof_circuit_kzg(
-            params.verifier_params(),
-            bad_proof,
-            pk.get_vk(),
-            strategy.clone(),
-            params.n(),
-        )
-        .map_err(|_| ())
-    };
-
-    run_fuzz_fn(num_runs, fuzz_proof_instances, &passed);
-
-    if !passed.into_inner() {
-        Err("fuzzing failed".into())
-    } else {
-        Ok(String::new())
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn run_fuzz_fn(
-    num_runs: usize,
-    f: impl Fn() -> Result<(), ()> + std::marker::Sync + std::marker::Send,
-    passed: &AtomicBool,
-) {
-    let num_failures = AtomicI64::new(0);
-    let _r = Gag::stdout().unwrap();
-
-    let pb = init_bar(num_runs as u64);
-    pb.set_message("fuzzing...");
-    (0..num_runs).into_par_iter().for_each(|_| {
-        let result = f();
-        if result.is_ok() {
-            passed.swap(false, Ordering::Relaxed);
-            num_failures.fetch_add(1, Ordering::Relaxed);
-        }
-        pb.inc(1);
-    });
-    pb.finish_with_message("Done.");
-    std::mem::drop(_r);
-    info!(
-        "num failures: {} out of {}",
-        num_failures.load(Ordering::Relaxed),
-        num_runs
-    );
-}
-
-pub(crate) fn swap_proof_commitments(
+pub(crate) fn swap_proof_commitments_cmd(
     proof_path: PathBuf,
     witness: PathBuf,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
     let snark = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
     let witness = GraphWitness::from_path(witness)?;
-    let commitments = witness.get_kzg_commitments();
+    let commitments = witness.get_polycommitments();
 
     if commitments.is_empty() {
         log::warn!("no commitments found in witness");
     }
 
-    let snark_new = swap_proof_commitments_kzg(&snark, &commitments)?;
+    let snark_new = swap_proof_commitments_polycommit(&snark, &commitments)?;
 
     if snark_new.proof != *snark.proof {
         log::warn!("swap proof has created a different proof");
@@ -1922,7 +1898,18 @@ pub(crate) fn mock_aggregate(
 ) -> Result<String, Box<dyn Error>> {
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
-        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+        match Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path) {
+            Ok(snark) => {
+                snarks.push(snark);
+            }
+            Err(_) => {
+                return Err(
+                    "invalid sample commitment type for aggregation, must be KZG"
+                        .to_string()
+                        .into(),
+                );
+            }
+        }
     }
     // proof aggregation
     #[cfg(not(target_arch = "wasm32"))]
@@ -1951,28 +1938,57 @@ pub(crate) fn setup_aggregate(
     srs_path: Option<PathBuf>,
     logrows: u32,
     split_proofs: bool,
-    compress_selectors: bool,
+    disable_selector_compression: bool,
+    commitment: Commitments,
 ) -> Result<String, Box<dyn Error>> {
-    // the K used for the aggregation circuit
-    let params = load_params_cmd(srs_path, logrows)?;
-
     let mut snarks = vec![];
     for proof_path in sample_snarks.iter() {
-        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+        match Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path) {
+            Ok(snark) => {
+                snarks.push(snark);
+            }
+            Err(_) => {
+                return Err(
+                    "invalid sample commitment type for aggregation, must be KZG"
+                        .to_string()
+                        .into(),
+                );
+            }
+        }
     }
 
-    let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks, split_proofs)?;
-    let agg_pk = create_keys::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(
-        &agg_circuit,
-        &params,
-        compress_selectors,
-    )?;
+    let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks, split_proofs)?;
 
-    let agg_vk = agg_pk.get_vk();
+    let pk = match commitment {
+        Commitments::KZG => {
+            let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(
+                srs_path,
+                logrows,
+                Commitments::KZG,
+            )?;
 
-    // now save
-    save_vk::<KZGCommitmentScheme<Bn256>>(&vk_path, agg_vk)?;
-    save_pk::<KZGCommitmentScheme<Bn256>>(&pk_path, &agg_pk)?;
+            create_keys::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(
+                &circuit,
+                &params,
+                disable_selector_compression,
+            )?
+        }
+        Commitments::IPA => {
+            let params = load_params_prover::<IPACommitmentScheme<G1Affine>>(
+                srs_path,
+                logrows,
+                Commitments::IPA,
+            )?;
+            create_keys::<IPACommitmentScheme<G1Affine>, AggregationCircuit>(
+                &circuit,
+                &params,
+                disable_selector_compression,
+            )?
+        }
+    };
+    save_vk::<G1Affine>(&vk_path, pk.get_vk())?;
+    save_pk::<G1Affine>(&pk_path, &pk)?;
+
     Ok(String::new())
 }
 
@@ -1986,16 +2002,24 @@ pub(crate) fn aggregate(
     logrows: u32,
     check_mode: CheckMode,
     split_proofs: bool,
+    commitment: Commitments,
 ) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
-    // the K used for the aggregation circuit
-    let params = load_params_cmd(srs_path, logrows)?;
-
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
-        snarks.push(Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path)?);
+        match Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path) {
+            Ok(snark) => {
+                snarks.push(snark);
+            }
+            Err(_) => {
+                return Err(
+                    "invalid sample commitment type for aggregation, must be KZG"
+                        .to_string()
+                        .into(),
+                );
+            }
+        }
     }
 
-    let agg_pk = load_pk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(pk_path, ())?;
     // proof aggregation
     #[cfg(not(target_arch = "wasm32"))]
     let pb = {
@@ -2004,19 +2028,140 @@ pub(crate) fn aggregate(
         pb
     };
 
-    let agg_circuit = AggregationCircuit::new(&params.get_g()[0].into(), snarks, split_proofs)?;
-
     let now = Instant::now();
-    let snark = create_proof_circuit_kzg(
-        agg_circuit.clone(),
-        &params,
-        Some(agg_circuit.instances()),
-        &agg_pk,
-        transcript,
-        AccumulatorStrategy::new(&params),
-        check_mode,
-        None,
-    )?;
+
+    let snark = match commitment {
+        Commitments::KZG => {
+            let pk = load_pk::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(pk_path, ())?;
+            let params: ParamsKZG<Bn256> = load_params_prover::<KZGCommitmentScheme<_>>(
+                srs_path.clone(),
+                logrows,
+                Commitments::KZG,
+            )?;
+            let circuit = AggregationCircuit::new(
+                &ParamsProver::<G1Affine>::get_g(&params)[0].into(),
+                snarks,
+                split_proofs,
+            )?;
+            let public_inputs = circuit.instances();
+            match transcript {
+                TranscriptType::EVM => create_proof_circuit::<
+                    KZGCommitmentScheme<Bn256>,
+                    _,
+                    ProverSHPLONK<_>,
+                    VerifierSHPLONK<_>,
+                    KZGSingleStrategy<_>,
+                    _,
+                    EvmTranscript<_, _, _, _>,
+                    EvmTranscript<_, _, _, _>,
+                >(
+                    circuit,
+                    vec![public_inputs],
+                    &params,
+                    &pk,
+                    check_mode,
+                    commitment,
+                    transcript,
+                    None,
+                    None,
+                ),
+                TranscriptType::Poseidon => {
+                    let protocol = Some(compile(
+                        &params,
+                        pk.get_vk(),
+                        Config::kzg().with_num_instance(vec![public_inputs.len()]),
+                    ));
+
+                    create_proof_circuit::<
+                        KZGCommitmentScheme<Bn256>,
+                        _,
+                        ProverSHPLONK<_>,
+                        VerifierSHPLONK<_>,
+                        KZGAccumulatorStrategy<_>,
+                        _,
+                        PoseidonTranscript<NativeLoader, _>,
+                        PoseidonTranscript<NativeLoader, _>,
+                    >(
+                        circuit,
+                        vec![public_inputs],
+                        &params,
+                        &pk,
+                        check_mode,
+                        commitment,
+                        transcript,
+                        None,
+                        protocol,
+                    )
+                }
+            }
+        }
+        Commitments::IPA => {
+            let pk = load_pk::<IPACommitmentScheme<_>, AggregationCircuit>(pk_path, ())?;
+            let params: ParamsIPA<_> = load_params_prover::<IPACommitmentScheme<_>>(
+                srs_path.clone(),
+                logrows,
+                Commitments::IPA,
+            )?;
+            let circuit = AggregationCircuit::new(
+                &ParamsProver::<G1Affine>::get_g(&params)[0].into(),
+                snarks,
+                split_proofs,
+            )?;
+            let public_inputs = circuit.instances();
+
+            match transcript {
+                TranscriptType::EVM => create_proof_circuit::<
+                    IPACommitmentScheme<G1Affine>,
+                    _,
+                    ProverIPA<_>,
+                    VerifierIPA<_>,
+                    IPASingleStrategy<_>,
+                    _,
+                    EvmTranscript<_, _, _, _>,
+                    EvmTranscript<_, _, _, _>,
+                >(
+                    circuit,
+                    vec![public_inputs],
+                    &params,
+                    &pk,
+                    check_mode,
+                    commitment,
+                    transcript,
+                    None,
+                    None,
+                ),
+                TranscriptType::Poseidon => {
+                    let protocol = Some(compile(
+                        &params,
+                        pk.get_vk(),
+                        Config::ipa().with_num_instance(vec![public_inputs.len()]),
+                    ));
+
+                    create_proof_circuit::<
+                        IPACommitmentScheme<G1Affine>,
+                        _,
+                        ProverIPA<_>,
+                        VerifierIPA<_>,
+                        IPAAccumulatorStrategy<_>,
+                        _,
+                        PoseidonTranscript<NativeLoader, _>,
+                        PoseidonTranscript<NativeLoader, _>,
+                    >(
+                        circuit,
+                        vec![public_inputs],
+                        &params,
+                        &pk,
+                        check_mode,
+                        commitment,
+                        transcript,
+                        None,
+                        protocol,
+                    )
+                }
+            }
+        }
+    }?;
+    // the K used for the aggregation circuit
 
     let elapsed = now.elapsed();
     info!(
@@ -2041,25 +2186,115 @@ pub(crate) fn verify(
 ) -> Result<bool, Box<dyn Error>> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
 
-    let params = if reduced_srs {
-        load_params_cmd(srs_path, circuit_settings.log2_total_instances())?
-    } else {
-        load_params_cmd(srs_path, circuit_settings.run_args.logrows)?
-    };
+    let logrows = circuit_settings.run_args.logrows;
 
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
+    match circuit_settings.run_args.commitment {
+        Commitments::KZG => {
+            let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
+            let params: ParamsKZG<Bn256> = if reduced_srs {
+                // only need G_0 for the verification with shplonk
+                load_params_verifier::<KZGCommitmentScheme<Bn256>>(srs_path, 1, Commitments::KZG)?
+            } else {
+                load_params_verifier::<KZGCommitmentScheme<Bn256>>(
+                    srs_path,
+                    logrows,
+                    Commitments::KZG,
+                )?
+            };
+            match proof.transcript_type {
+                TranscriptType::EVM => {
+                    verify_commitment::<
+                        KZGCommitmentScheme<Bn256>,
+                        VerifierSHPLONK<'_, Bn256>,
+                        _,
+                        KZGSingleStrategy<_>,
+                        EvmTranscript<G1Affine, _, _, _>,
+                        GraphCircuit,
+                        _,
+                    >(proof_path, circuit_settings, vk_path, &params, logrows)
+                }
+                TranscriptType::Poseidon => {
+                    verify_commitment::<
+                        KZGCommitmentScheme<Bn256>,
+                        VerifierSHPLONK<'_, Bn256>,
+                        _,
+                        KZGSingleStrategy<_>,
+                        PoseidonTranscript<NativeLoader, _>,
+                        GraphCircuit,
+                        _,
+                    >(proof_path, circuit_settings, vk_path, &params, logrows)
+                }
+            }
+        }
+        Commitments::IPA => {
+            let proof = Snark::load::<IPACommitmentScheme<G1Affine>>(&proof_path)?;
+            let params: ParamsIPA<_> = load_params_verifier::<IPACommitmentScheme<G1Affine>>(
+                srs_path,
+                logrows,
+                Commitments::IPA,
+            )?;
+            match proof.transcript_type {
+                TranscriptType::EVM => {
+                    verify_commitment::<
+                        IPACommitmentScheme<G1Affine>,
+                        VerifierIPA<_>,
+                        _,
+                        IPASingleStrategy<_>,
+                        EvmTranscript<G1Affine, _, _, _>,
+                        GraphCircuit,
+                        _,
+                    >(proof_path, circuit_settings, vk_path, &params, logrows)
+                }
+                TranscriptType::Poseidon => {
+                    verify_commitment::<
+                        IPACommitmentScheme<G1Affine>,
+                        VerifierIPA<_>,
+                        _,
+                        IPASingleStrategy<_>,
+                        PoseidonTranscript<NativeLoader, _>,
+                        GraphCircuit,
+                        _,
+                    >(proof_path, circuit_settings, vk_path, &params, logrows)
+                }
+            }
+        }
+    }
+}
 
-    let strategy = KZGSingleStrategy::new(params.verifier_params());
-    let vk =
-        load_vk::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk_path, circuit_settings.clone())?;
+fn verify_commitment<
+    'a,
+    Scheme: CommitmentScheme,
+    V: Verifier<'a, Scheme>,
+    E: EncodedChallenge<Scheme::Curve>,
+    Strategy: VerificationStrategy<'a, Scheme, V>,
+    TR: TranscriptReadBuffer<Cursor<Vec<u8>>, Scheme::Curve, E>,
+    C: Circuit<<Scheme as CommitmentScheme>::Scalar, Params = Params>,
+    Params,
+>(
+    proof_path: PathBuf,
+    settings: Params,
+    vk_path: PathBuf,
+    params: &'a Scheme::ParamsVerifier,
+    logrows: u32,
+) -> Result<bool, Box<dyn Error>>
+where
+    Scheme::Scalar: FromUniformBytes<64>
+        + SerdeObject
+        + Serialize
+        + DeserializeOwned
+        + WithSmallOrderMulGroup<3>,
+    Scheme::Curve: SerdeObject + Serialize + DeserializeOwned,
+    Scheme::ParamsVerifier: 'a,
+{
+    let proof = Snark::load::<Scheme>(&proof_path)?;
+
+    let strategy = Strategy::new(params);
+    let vk = load_vk::<Scheme, C>(vk_path, settings)?;
     let now = Instant::now();
-    let result = verify_proof_circuit_kzg(
-        params.verifier_params(),
-        proof,
-        &vk,
-        strategy,
-        1 << circuit_settings.run_args.logrows,
-    );
+
+    let result =
+        verify_proof_circuit::<V, _, _, _, TR>(&proof, params, &vk, strategy, 1 << logrows);
+
     let elapsed = now.elapsed();
     info!(
         "verify took {}.{}",
@@ -2067,7 +2302,7 @@ pub(crate) fn verify(
         elapsed.subsec_millis()
     );
     info!("verified: {}", result.is_ok());
-    result.map_err(|e| e.into()).map(|_| true)
+    result.map_err(|e: plonk::Error| e.into()).map(|_| true)
 }
 
 pub(crate) fn verify_aggr(
@@ -2075,34 +2310,101 @@ pub(crate) fn verify_aggr(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     logrows: u32,
+    reduced_srs: bool,
+    commitment: Commitments,
 ) -> Result<bool, Box<dyn Error>> {
-    let params = load_params_cmd(srs_path, logrows)?;
-
-    let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
-
-    let strategy = AccumulatorStrategy::new(params.verifier_params());
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, Fr, AggregationCircuit>(vk_path, ())?;
-    let now = Instant::now();
-    let result = verify_proof_circuit_kzg(&params, proof, &vk, strategy, 1 << logrows);
-
-    let elapsed = now.elapsed();
-    info!(
-        "verify took {}.{}",
-        elapsed.as_secs(),
-        elapsed.subsec_millis()
-    );
-    info!("verified: {}", result.is_ok());
-    result?;
-    Ok(true)
+    match commitment {
+        Commitments::KZG => {
+            let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
+            let params: ParamsKZG<Bn256> = if reduced_srs {
+                // only need G_0 for the verification with shplonk
+                load_params_verifier::<KZGCommitmentScheme<Bn256>>(srs_path, 1, Commitments::KZG)?
+            } else {
+                load_params_verifier::<KZGCommitmentScheme<Bn256>>(
+                    srs_path,
+                    logrows,
+                    Commitments::KZG,
+                )?
+            };
+            match proof.transcript_type {
+                TranscriptType::EVM => verify_commitment::<
+                    KZGCommitmentScheme<Bn256>,
+                    VerifierSHPLONK<'_, Bn256>,
+                    _,
+                    KZGSingleStrategy<_>,
+                    EvmTranscript<_, _, _, _>,
+                    AggregationCircuit,
+                    _,
+                >(proof_path, (), vk_path, &params, logrows),
+                TranscriptType::Poseidon => {
+                    verify_commitment::<
+                        KZGCommitmentScheme<Bn256>,
+                        VerifierSHPLONK<'_, Bn256>,
+                        _,
+                        KZGAccumulatorStrategy<_>,
+                        PoseidonTranscript<NativeLoader, _>,
+                        AggregationCircuit,
+                        _,
+                    >(proof_path, (), vk_path, &params, logrows)
+                }
+            }
+        }
+        Commitments::IPA => {
+            let proof = Snark::load::<IPACommitmentScheme<G1Affine>>(&proof_path)?;
+            let params: ParamsIPA<_> = load_params_verifier::<IPACommitmentScheme<G1Affine>>(
+                srs_path,
+                logrows,
+                Commitments::IPA,
+            )?;
+            match proof.transcript_type {
+                TranscriptType::EVM => verify_commitment::<
+                    IPACommitmentScheme<G1Affine>,
+                    VerifierIPA<_>,
+                    _,
+                    IPASingleStrategy<_>,
+                    EvmTranscript<_, _, _, _>,
+                    AggregationCircuit,
+                    _,
+                >(proof_path, (), vk_path, &params, logrows),
+                TranscriptType::Poseidon => {
+                    verify_commitment::<
+                        IPACommitmentScheme<G1Affine>,
+                        VerifierIPA<_>,
+                        _,
+                        IPAAccumulatorStrategy<_>,
+                        PoseidonTranscript<NativeLoader, _>,
+                        AggregationCircuit,
+                        _,
+                    >(proof_path, (), vk_path, &params, logrows)
+                }
+            }
+        }
+    }
 }
 
 /// helper function for load_params
-pub(crate) fn load_params_cmd(
+pub(crate) fn load_params_verifier<Scheme: CommitmentScheme>(
     srs_path: Option<PathBuf>,
     logrows: u32,
-) -> Result<ParamsKZG<Bn256>, Box<dyn Error>> {
-    let srs_path = get_srs_path(logrows, srs_path);
-    let mut params: ParamsKZG<Bn256> = load_srs::<KZGCommitmentScheme<Bn256>>(srs_path)?;
+    commitment: Commitments,
+) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
+    let srs_path = get_srs_path(logrows, srs_path, commitment);
+    let mut params = load_srs_verifier::<Scheme>(srs_path)?;
+    info!("downsizing params to {} logrows", logrows);
+    if logrows < params.k() {
+        params.downsize(logrows);
+    }
+    Ok(params)
+}
+
+/// helper function for load_params
+pub(crate) fn load_params_prover<Scheme: CommitmentScheme>(
+    srs_path: Option<PathBuf>,
+    logrows: u32,
+    commitment: Commitments,
+) -> Result<Scheme::ParamsProver, Box<dyn Error>> {
+    let srs_path = get_srs_path(logrows, srs_path, commitment);
+    let mut params = load_srs_prover::<Scheme>(srs_path)?;
     info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {
         params.downsize(logrows);

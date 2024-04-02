@@ -245,7 +245,13 @@ mod matmul_col_overflow {
 #[cfg(test)]
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod matmul_col_ultra_overflow_double_col {
-    use halo2_proofs::poly::commitment::{Params, ParamsProver};
+
+    use halo2_proofs::poly::kzg::{
+        commitment::KZGCommitmentScheme,
+        multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        strategy::SingleStrategy,
+    };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     use super::*;
 
@@ -324,48 +330,46 @@ mod matmul_col_ultra_overflow_double_col {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             MatmulCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            SingleStrategy<_>,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
-
-        println!("done.");
     }
 }
 
 #[cfg(test)]
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod matmul_col_ultra_overflow {
-    use halo2_proofs::poly::commitment::{Params, ParamsProver};
+
+    use halo2_proofs::poly::kzg::{
+        commitment::KZGCommitmentScheme,
+        multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        strategy::SingleStrategy,
+    };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     use super::*;
 
@@ -443,41 +447,33 @@ mod matmul_col_ultra_overflow {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             MatmulCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            SingleStrategy<_>,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
-
-        println!("done.");
     }
 }
 
@@ -1149,7 +1145,15 @@ mod conv {
 #[cfg(test)]
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod conv_col_ultra_overflow {
-    use halo2_proofs::poly::commitment::{Params, ParamsProver};
+
+    use halo2_proofs::poly::{
+        kzg::strategy::SingleStrategy,
+        kzg::{
+            commitment::KZGCommitmentScheme,
+            multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        },
+    };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     use super::*;
 
@@ -1247,41 +1251,33 @@ mod conv_col_ultra_overflow {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             ConvCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            SingleStrategy<_>,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
-
-        println!("done.");
     }
 }
 
@@ -1289,7 +1285,13 @@ mod conv_col_ultra_overflow {
 // not wasm 32 unknown
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 mod conv_relu_col_ultra_overflow {
-    use halo2_proofs::poly::commitment::{Params, ParamsProver};
+
+    use halo2_proofs::poly::kzg::{
+        commitment::KZGCommitmentScheme,
+        multiopen::{ProverSHPLONK, VerifierSHPLONK},
+        strategy::SingleStrategy,
+    };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     use super::*;
 
@@ -1402,41 +1404,33 @@ mod conv_relu_col_ultra_overflow {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             ConvCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            SingleStrategy<_>,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
-            // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            // use safe mode to verify that the proof is correct
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
-
-        println!("done.");
     }
 }
 
@@ -1575,6 +1569,280 @@ mod add {
 }
 
 #[cfg(test)]
+mod dynamic_lookup {
+    use super::*;
+
+    const K: usize = 6;
+    const LEN: usize = 4;
+    const NUM_LOOP: usize = 5;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
+        tables: [[ValTensor<F>; 2]; NUM_LOOP],
+        lookups: [[ValTensor<F>; 2]; NUM_LOOP],
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, 2, LEN);
+            let b = VarTensor::new_advice(cs, K, 2, LEN);
+            let c: VarTensor = VarTensor::new_advice(cs, K, 2, LEN);
+
+            let d = VarTensor::new_advice(cs, K, 1, LEN);
+            let e = VarTensor::new_advice(cs, K, 1, LEN);
+            let f: VarTensor = VarTensor::new_advice(cs, K, 1, LEN);
+
+            let _constant = VarTensor::constant_cols(cs, K, LEN * NUM_LOOP, false);
+
+            let mut config =
+                Self::Config::configure(cs, &[a.clone(), b.clone()], &c, CheckMode::SAFE);
+            config
+                .configure_dynamic_lookup(
+                    cs,
+                    &[a.clone(), b.clone(), c.clone()],
+                    &[d.clone(), e.clone(), f.clone()],
+                )
+                .unwrap();
+            config
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0, 1);
+                        for i in 0..NUM_LOOP {
+                            layouts::dynamic_lookup(
+                                &config,
+                                &mut region,
+                                &self.lookups[i],
+                                &self.tables[i],
+                            )
+                            .map_err(|_| Error::Synthesis)?;
+                        }
+                        assert_eq!(
+                            region.dynamic_lookup_col_coord(),
+                            NUM_LOOP * self.tables[0][0].len()
+                        );
+                        assert_eq!(region.dynamic_lookup_index(), NUM_LOOP);
+
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn dynamiclookupcircuit() {
+        // parameters
+        let tables = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                [
+                    ValTensor::from(Tensor::from(
+                        (0..LEN).map(|i| Value::known(F::from((i * loop_idx) as u64 + 1))),
+                    )),
+                    ValTensor::from(Tensor::from(
+                        (0..LEN).map(|i| Value::known(F::from((loop_idx * i * i) as u64 + 1))),
+                    )),
+                ]
+            })
+            .collect::<Vec<_>>();
+
+        let lookups = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                [
+                    ValTensor::from(Tensor::from(
+                        (0..3).map(|i| Value::known(F::from((i * loop_idx) as u64 + 1))),
+                    )),
+                    ValTensor::from(Tensor::from(
+                        (0..3).map(|i| Value::known(F::from((loop_idx * i * i) as u64 + 1))),
+                    )),
+                ]
+            })
+            .collect::<Vec<_>>();
+
+        let circuit = MyCircuit::<F> {
+            tables: tables.clone().try_into().unwrap(),
+            lookups: lookups.try_into().unwrap(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+
+        let lookups = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                let prev_idx = if loop_idx == 0 {
+                    NUM_LOOP - 1
+                } else {
+                    loop_idx - 1
+                };
+                [
+                    ValTensor::from(Tensor::from(
+                        (0..3).map(|i| Value::known(F::from((i * prev_idx) as u64 + 1))),
+                    )),
+                    ValTensor::from(Tensor::from(
+                        (0..3).map(|i| Value::known(F::from((prev_idx * i * i) as u64 + 1))),
+                    )),
+                ]
+            })
+            .collect::<Vec<_>>();
+
+        let circuit = MyCircuit::<F> {
+            tables: tables.try_into().unwrap(),
+            lookups: lookups.try_into().unwrap(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        assert!(prover.verify().is_err());
+    }
+}
+
+#[cfg(test)]
+mod shuffle {
+    use super::*;
+
+    const K: usize = 6;
+    const LEN: usize = 4;
+    const NUM_LOOP: usize = 5;
+
+    #[derive(Clone)]
+    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
+        inputs: [[ValTensor<F>; 1]; NUM_LOOP],
+        references: [[ValTensor<F>; 1]; NUM_LOOP],
+        _marker: PhantomData<F>,
+    }
+
+    impl Circuit<F> for MyCircuit<F> {
+        type Config = BaseConfig<F>;
+        type FloorPlanner = SimpleFloorPlanner;
+        type Params = TestParams;
+
+        fn without_witnesses(&self) -> Self {
+            self.clone()
+        }
+
+        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
+            let a = VarTensor::new_advice(cs, K, 2, LEN);
+            let b = VarTensor::new_advice(cs, K, 2, LEN);
+            let c: VarTensor = VarTensor::new_advice(cs, K, 2, LEN);
+
+            let d = VarTensor::new_advice(cs, K, 1, LEN);
+            let e = VarTensor::new_advice(cs, K, 1, LEN);
+
+            let _constant = VarTensor::constant_cols(cs, K, LEN * NUM_LOOP, false);
+
+            let mut config =
+                Self::Config::configure(cs, &[a.clone(), b.clone()], &c, CheckMode::SAFE);
+            config
+                .configure_shuffles(cs, &[a.clone(), b.clone()], &[d.clone(), e.clone()])
+                .unwrap();
+            config
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<F>,
+        ) -> Result<(), Error> {
+            layouter
+                .assign_region(
+                    || "",
+                    |region| {
+                        let mut region = RegionCtx::new(region, 0, 1);
+                        for i in 0..NUM_LOOP {
+                            layouts::shuffles(
+                                &config,
+                                &mut region,
+                                &self.inputs[i],
+                                &self.references[i],
+                            )
+                            .map_err(|_| Error::Synthesis)?;
+                        }
+                        assert_eq!(
+                            region.shuffle_col_coord(),
+                            NUM_LOOP * self.references[0][0].len()
+                        );
+                        assert_eq!(region.shuffle_index(), NUM_LOOP);
+
+                        Ok(())
+                    },
+                )
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn shufflecircuit() {
+        // parameters
+        let references = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                [ValTensor::from(Tensor::from((0..LEN).map(|i| {
+                    Value::known(F::from((i * loop_idx) as u64 + 1))
+                })))]
+            })
+            .collect::<Vec<_>>();
+
+        let inputs = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                [ValTensor::from(Tensor::from((0..LEN).rev().map(|i| {
+                    Value::known(F::from((i * loop_idx) as u64 + 1))
+                })))]
+            })
+            .collect::<Vec<_>>();
+
+        let circuit = MyCircuit::<F> {
+            references: references.clone().try_into().unwrap(),
+            inputs: inputs.try_into().unwrap(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
+
+        let inputs = (0..NUM_LOOP)
+            .map(|loop_idx| {
+                let prev_idx = if loop_idx == 0 {
+                    NUM_LOOP - 1
+                } else {
+                    loop_idx - 1
+                };
+                [ValTensor::from(Tensor::from((0..LEN).rev().map(|i| {
+                    Value::known(F::from((i * prev_idx) as u64 + 1))
+                })))]
+            })
+            .collect::<Vec<_>>();
+
+        let circuit = MyCircuit::<F> {
+            references: references.try_into().unwrap(),
+            inputs: inputs.try_into().unwrap(),
+            _marker: PhantomData,
+        };
+
+        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
+        assert!(prover.verify().is_err());
+    }
+}
+
+#[cfg(test)]
 mod add_with_overflow {
     use super::*;
 
@@ -1643,6 +1911,8 @@ mod add_with_overflow {
 
 #[cfg(test)]
 mod add_with_overflow_and_poseidon {
+    use std::collections::HashMap;
+
     use halo2curves::bn256::Fr;
 
     use crate::circuit::modules::{
@@ -1701,8 +1971,10 @@ mod add_with_overflow_and_poseidon {
             let poseidon_chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, WIDTH> =
                 PoseidonChip::new(config.poseidon.clone());
 
-            let assigned_inputs_a = poseidon_chip.layout(&mut layouter, &self.inputs[0..1], 0)?;
-            let assigned_inputs_b = poseidon_chip.layout(&mut layouter, &self.inputs[1..2], 1)?;
+            let assigned_inputs_a =
+                poseidon_chip.layout(&mut layouter, &self.inputs[0..1], 0, &mut HashMap::new())?;
+            let assigned_inputs_b =
+                poseidon_chip.layout(&mut layouter, &self.inputs[1..2], 1, &mut HashMap::new())?;
 
             layouter.assign_region(|| "_new_module", |_| Ok(()))?;
 
@@ -1978,75 +2250,6 @@ mod pow {
 }
 
 #[cfg(test)]
-mod pack {
-    use super::*;
-
-    const K: usize = 8;
-    const LEN: usize = 4;
-
-    #[derive(Clone)]
-    struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
-        inputs: [ValTensor<F>; 1],
-        _marker: PhantomData<F>,
-    }
-
-    impl Circuit<F> for MyCircuit<F> {
-        type Config = BaseConfig<F>;
-        type FloorPlanner = SimpleFloorPlanner;
-        type Params = TestParams;
-
-        fn without_witnesses(&self) -> Self {
-            self.clone()
-        }
-
-        fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, 1, LEN);
-            let b = VarTensor::new_advice(cs, K, 1, LEN);
-            let output = VarTensor::new_advice(cs, K, 1, LEN);
-
-            Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
-        }
-
-        fn synthesize(
-            &self,
-            mut config: Self::Config,
-            mut layouter: impl Layouter<F>,
-        ) -> Result<(), Error> {
-            layouter
-                .assign_region(
-                    || "",
-                    |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
-                        config
-                            .layout(
-                                &mut region,
-                                &self.inputs.clone(),
-                                Box::new(PolyOp::Pack(2, 1)),
-                            )
-                            .map_err(|_| Error::Synthesis)
-                    },
-                )
-                .unwrap();
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn packcircuit() {
-        // parameters
-        let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
-
-        let circuit = MyCircuit::<F> {
-            inputs: [ValTensor::from(a)],
-            _marker: PhantomData,
-        };
-
-        let prover = MockProver::run(K as u32, &circuit, vec![]).unwrap();
-        prover.assert_satisfied();
-    }
-}
-
-#[cfg(test)]
 mod matmul_relu {
     use super::*;
 
@@ -2220,8 +2423,13 @@ mod lookup_ultra_overflow {
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner, Value},
         plonk::{Circuit, ConstraintSystem, Error},
-        poly::commitment::{Params, ParamsProver},
+        poly::kzg::{
+            commitment::KZGCommitmentScheme,
+            multiopen::{ProverSHPLONK, VerifierSHPLONK},
+            strategy::SingleStrategy,
+        },
     };
+    use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     #[derive(Clone)]
     struct ReLUCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -2300,40 +2508,32 @@ mod lookup_ultra_overflow {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            F,
             ReLUCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
 
-        let prover = crate::pfsys::create_proof_circuit_kzg(
+        let prover = crate::pfsys::create_proof_circuit::<
+            KZGCommitmentScheme<_>,
+            _,
+            ProverSHPLONK<_>,
+            VerifierSHPLONK<_>,
+            SingleStrategy<_>,
+            _,
+            EvmTranscript<_, _, _, _>,
+            EvmTranscript<_, _, _, _>,
+        >(
             circuit.clone(),
+            vec![],
             &params,
-            None,
             &pk,
-            crate::pfsys::TranscriptType::EVM,
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(&params),
             // use safe mode to verify that the proof is correct
             CheckMode::SAFE,
+            crate::Commitments::KZG,
+            crate::pfsys::TranscriptType::EVM,
+            None,
             None,
         );
 
         assert!(prover.is_ok());
-
-        let proof = prover.unwrap();
-
-        let strategy =
-            halo2_proofs::poly::kzg::strategy::SingleStrategy::new(params.verifier_params());
-        let vk = pk.get_vk();
-        let result = crate::pfsys::verify_proof_circuit_kzg(
-            params.verifier_params(),
-            proof,
-            vk,
-            strategy,
-            params.n(),
-        );
-
-        assert!(result.is_ok());
-
-        println!("done.");
     }
 }

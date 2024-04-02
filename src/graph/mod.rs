@@ -12,8 +12,10 @@ pub mod utilities;
 pub mod vars;
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
+#[cfg(unix)]
+use gag::Gag;
 use halo2_proofs::plonk::VerifyingKey;
-use halo2_proofs::poly::kzg::commitment::ParamsKZG;
+use halo2_proofs::poly::commitment::CommitmentScheme;
 pub use input::DataSource;
 use itertools::Itertools;
 use tosubcommand::ToFlags;
@@ -24,6 +26,7 @@ use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
+use crate::circuit::region::ConstantsMap;
 use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::fieldutils::felt_to_f64;
@@ -35,8 +38,8 @@ use halo2_proofs::{
     circuit::Layouter,
     plonk::{Circuit, ConstraintSystem, Error as PlonkError},
 };
-use halo2curves::bn256::{self, Bn256, Fr as Fp, G1Affine};
-use halo2curves::ff::PrimeField;
+use halo2curves::bn256::{self, Fr as Fp, G1Affine};
+use halo2curves::ff::{Field, PrimeField};
 #[cfg(not(target_arch = "wasm32"))]
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
@@ -124,7 +127,7 @@ pub enum GraphError {
     #[error("failed to rescale inputs for {0}")]
     RescalingError(String),
     /// Error when attempting to load a model
-    #[error("failed to load model")]
+    #[error("failed to load")]
     ModelLoad,
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
@@ -153,7 +156,7 @@ use std::cell::RefCell;
 thread_local!(
     /// This is a global variable that holds the settings for the graph
     /// This is used to pass settings to the layouter and other parts of the circuit without needing to heavily modify the Halo2 API in a new fork
-    pub static GLOBAL_SETTINGS: RefCell<Option<GraphSettings>> = RefCell::new(None)
+    pub static GLOBAL_SETTINGS: RefCell<Option<GraphSettings>> = const { RefCell::new(None) }
 );
 
 /// Result from a forward pass
@@ -282,20 +285,20 @@ impl GraphWitness {
     }
 
     ///
-    pub fn get_kzg_commitments(&self) -> Vec<G1Affine> {
+    pub fn get_polycommitments(&self) -> Vec<G1Affine> {
         let mut commitments = vec![];
         if let Some(processed_inputs) = &self.processed_inputs {
-            if let Some(commits) = &processed_inputs.kzg_commit {
+            if let Some(commits) = &processed_inputs.polycommit {
                 commitments.extend(commits.iter().flatten());
             }
         }
         if let Some(processed_params) = &self.processed_params {
-            if let Some(commits) = &processed_params.kzg_commit {
+            if let Some(commits) = &processed_params.polycommit {
                 commitments.extend(commits.iter().flatten());
             }
         }
         if let Some(processed_outputs) = &self.processed_outputs {
-            if let Some(commits) = &processed_outputs.kzg_commit {
+            if let Some(commits) = &processed_outputs.polycommit {
                 commitments.extend(commits.iter().flatten());
             }
         }
@@ -316,7 +319,7 @@ impl GraphWitness {
     /// Load the model input from a file
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         let file = std::fs::File::open(path.clone())
-            .map_err(|_| format!("failed to load model at {}", path.display()))?;
+            .map_err(|_| format!("failed to load {}", path.display()))?;
 
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
         serde_json::from_reader(reader).map_err(|e| e.into())
@@ -385,8 +388,8 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_inputs, processed_inputs_poseidon_hash).unwrap();
             }
-            if let Some(processed_inputs_kzg_commit) = &processed_inputs.kzg_commit {
-                insert_kzg_commit_pydict(dict_inputs, processed_inputs_kzg_commit).unwrap();
+            if let Some(processed_inputs_polycommit) = &processed_inputs.polycommit {
+                insert_polycommit_pydict(dict_inputs, processed_inputs_polycommit).unwrap();
             }
 
             dict.set_item("processed_inputs", dict_inputs).unwrap();
@@ -396,8 +399,8 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash).unwrap();
             }
-            if let Some(processed_params_kzg_commit) = &processed_params.kzg_commit {
-                insert_kzg_commit_pydict(dict_inputs, processed_params_kzg_commit).unwrap();
+            if let Some(processed_params_polycommit) = &processed_params.polycommit {
+                insert_polycommit_pydict(dict_inputs, processed_params_polycommit).unwrap();
             }
 
             dict.set_item("processed_params", dict_params).unwrap();
@@ -407,8 +410,8 @@ impl ToPyObject for GraphWitness {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
                 insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash).unwrap();
             }
-            if let Some(processed_outputs_kzg_commit) = &processed_outputs.kzg_commit {
-                insert_kzg_commit_pydict(dict_inputs, processed_outputs_kzg_commit).unwrap();
+            if let Some(processed_outputs_polycommit) = &processed_outputs.polycommit {
+                insert_polycommit_pydict(dict_inputs, processed_outputs_polycommit).unwrap();
             }
 
             dict.set_item("processed_outputs", dict_outputs).unwrap();
@@ -427,13 +430,13 @@ fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) -> Resu
 }
 
 #[cfg(feature = "python-bindings")]
-fn insert_kzg_commit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Result<(), PyErr> {
+fn insert_polycommit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Result<(), PyErr> {
     use crate::python::PyG1Affine;
     let poseidon_hash: Vec<Vec<PyG1Affine>> = commits
         .iter()
         .map(|c| c.iter().map(|x| PyG1Affine::from(*x)).collect())
         .collect();
-    pydict.set_item("kzg_commit", poseidon_hash)?;
+    pydict.set_item("polycommit", poseidon_hash)?;
 
     Ok(())
 }
@@ -449,6 +452,14 @@ pub struct GraphSettings {
     pub total_assignments: usize,
     /// total const size
     pub total_const_size: usize,
+    /// total dynamic column size
+    pub total_dynamic_col_size: usize,
+    /// number of dynamic lookups
+    pub num_dynamic_lookups: usize,
+    /// number of shuffles
+    pub num_shuffles: usize,
+    /// total shuffle column size
+    pub total_shuffle_col_size: usize,
     /// the shape of public inputs to the model (in order of appearance)
     pub model_instance_shapes: Vec<Vec<usize>>,
     /// model output scales
@@ -478,12 +489,24 @@ impl GraphSettings {
             .ceil() as u32
     }
 
+    fn dynamic_lookup_and_shuffle_logrows(&self) -> u32 {
+        (self.total_dynamic_col_size as f64 + self.total_shuffle_col_size as f64)
+            .log2()
+            .ceil() as u32
+    }
+
+    fn dynamic_lookup_and_shuffle_col_size(&self) -> usize {
+        self.total_dynamic_col_size + self.total_shuffle_col_size
+    }
+
     fn module_constraint_logrows(&self) -> u32 {
         (self.module_sizes.max_constraints() as f64).log2().ceil() as u32
     }
 
     fn constants_logrows(&self) -> u32 {
-        (self.total_const_size as f64).log2().ceil() as u32
+        (self.total_const_size as f64 / self.run_args.num_inner_cols as f64)
+            .log2()
+            .ceil() as u32
     }
 
     /// calculate the total number of instances
@@ -570,11 +593,21 @@ impl GraphSettings {
             || self.run_args.param_visibility.is_hashed()
     }
 
+    /// requires dynamic lookup
+    pub fn requires_dynamic_lookup(&self) -> bool {
+        self.num_dynamic_lookups > 0
+    }
+
+    /// requires dynamic shuffle
+    pub fn requires_shuffle(&self) -> bool {
+        self.num_shuffles > 0
+    }
+
     /// any kzg visibility
-    pub fn module_requires_kzg(&self) -> bool {
-        self.run_args.input_visibility.is_kzgcommit()
-            || self.run_args.output_visibility.is_kzgcommit()
-            || self.run_args.param_visibility.is_kzgcommit()
+    pub fn module_requires_polycommit(&self) -> bool {
+        self.run_args.input_visibility.is_polycommit()
+            || self.run_args.output_visibility.is_polycommit()
+            || self.run_args.param_visibility.is_polycommit()
     }
 }
 
@@ -1019,16 +1052,10 @@ impl GraphCircuit {
     }
 
     fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i128) -> Range {
-        let mut margin = (
+        (
             lookup_safety_margin * min_max_lookup.0,
             lookup_safety_margin * min_max_lookup.1,
-        );
-        if lookup_safety_margin == 1 {
-            margin.0 += 4;
-            margin.1 += 4;
-        }
-
-        margin
+        )
     }
 
     fn calc_num_cols(range_len: i128, max_logrows: u32) -> usize {
@@ -1054,7 +1081,8 @@ impl GraphCircuit {
         Ok(min_bits)
     }
 
-    fn calc_min_logrows(
+    /// calculate the minimum logrows required for the circuit
+    pub fn calc_min_logrows(
         &mut self,
         min_max_lookup: Range,
         max_range_size: i128,
@@ -1083,14 +1111,18 @@ impl GraphCircuit {
         // These are hard lower limits, we can't overflow instances or modules constraints
         let instance_logrows = self.settings().log2_total_instances();
         let module_constraint_logrows = self.settings().module_constraint_logrows();
+        let dynamic_lookup_logrows = self.settings().dynamic_lookup_and_shuffle_logrows();
         min_logrows = std::cmp::max(
             min_logrows,
-            // max of the instance logrows and the module constraint logrows is the lower limit
-            [instance_logrows, module_constraint_logrows]
-                .iter()
-                .max()
-                .unwrap()
-                .clone(),
+            // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit
+            *[
+                instance_logrows,
+                module_constraint_logrows,
+                dynamic_lookup_logrows,
+            ]
+            .iter()
+            .max()
+            .unwrap(),
         );
 
         // These are upper limits, going above these is wasteful, but they are not hard limits
@@ -1100,11 +1132,10 @@ impl GraphCircuit {
         max_logrows = std::cmp::min(
             max_logrows,
             // max of the model constraint logrows, min_bits, and the constants logrows is the upper limit
-            [model_constraint_logrows, min_bits, constants_logrows]
+            *[model_constraint_logrows, min_bits, constants_logrows]
                 .iter()
                 .max()
-                .unwrap()
-                .clone(),
+                .unwrap(),
         );
 
         // we now have a min and max logrows
@@ -1137,17 +1168,6 @@ impl GraphCircuit {
             .settings()
             .clone();
 
-        // recalculate the logrows if there has been overflow on the constants
-        settings_mut.run_args.logrows = std::cmp::max(
-            settings_mut.run_args.logrows,
-            settings_mut.constants_logrows(),
-        );
-        // recalculate the logrows if there has been overflow for the model constraints
-        settings_mut.run_args.logrows = std::cmp::max(
-            settings_mut.run_args.logrows,
-            settings_mut.model_constraint_logrows(),
-        );
-
         debug!(
             "setting lookup_range to: {:?}, setting logrows to: {}",
             self.settings().run_args.lookup_range,
@@ -1164,9 +1184,9 @@ impl GraphCircuit {
         max_range_size: i128,
     ) -> bool {
         // if num cols is too large then the extended k is too large
-        if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS {
-            return false;
-        } else if Self::calc_num_cols(max_range_size, k) > MAX_NUM_LOOKUP_COLS {
+        if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS
+            || Self::calc_num_cols(max_range_size, k) > MAX_NUM_LOOKUP_COLS
+        {
             return false;
         }
 
@@ -1175,19 +1195,30 @@ impl GraphCircuit {
         settings.run_args.logrows = k;
         settings.required_range_checks = vec![(0, max_range_size)];
         let mut cs = ConstraintSystem::default();
-        // fetch gag
+        // if unix get a gag
         #[cfg(unix)]
-        let _r = match gag::Gag::stdout() {
-            Ok(r) => Some(r),
-            Err(_) => None,
+        let _r = match Gag::stdout() {
+            Ok(g) => Some(g),
+            _ => None,
         };
+        #[cfg(unix)]
+        let _g = match Gag::stderr() {
+            Ok(g) => Some(g),
+            _ => None,
+        };
+
         Self::configure_with_params(&mut cs, settings);
+
+        // drop the gag
+        #[cfg(unix)]
+        drop(_r);
+        #[cfg(unix)]
+        drop(_g);
+
         #[cfg(feature = "mv-lookup")]
         let cs = cs.chunk_lookups();
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
         let max_degree = cs.degree();
-        #[cfg(unix)]
-        std::mem::drop(_r);
         let quotient_poly_degree = (max_degree - 1) as u64;
         // n = 2^k
         let n = 1u64 << k;
@@ -1202,30 +1233,13 @@ impl GraphCircuit {
         true
     }
 
-    /// Calibrate the circuit to the supplied data.
-    pub fn calibrate_from_min_max(
-        &mut self,
-        min_max_lookup: Range,
-        max_range_size: i128,
-        max_logrows: Option<u32>,
-        lookup_safety_margin: i128,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.calc_min_logrows(
-            min_max_lookup,
-            max_range_size,
-            max_logrows,
-            lookup_safety_margin,
-        )?;
-        Ok(())
-    }
-
     /// Runs the forward pass of the model / graph of computations and any associated hashing.
-    pub fn forward(
+    pub fn forward<Scheme: CommitmentScheme<Scalar = Fp, Curve = G1Affine>>(
         &self,
         inputs: &mut [Tensor<Fp>],
         vk: Option<&VerifyingKey<G1Affine>>,
-        srs: Option<&ParamsKZG<Bn256>>,
-        throw_range_check_error: bool,
+        srs: Option<&Scheme::ParamsProver>,
+        witness_gen: bool,
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let original_inputs = inputs.to_vec();
 
@@ -1241,7 +1255,8 @@ impl GraphCircuit {
                 for outlet in &module_outlets {
                     module_inputs.push(inputs[*outlet].clone());
                 }
-                let res = GraphModules::forward(&module_inputs, &visibility.input, vk, srs)?;
+                let res =
+                    GraphModules::forward::<Scheme>(&module_inputs, &visibility.input, vk, srs)?;
                 processed_inputs = Some(res.clone());
                 let module_results = res.get_result(visibility.input.clone());
 
@@ -1249,7 +1264,12 @@ impl GraphCircuit {
                     inputs[*outlet] = Tensor::from(module_results[i].clone().into_iter());
                 }
             } else {
-                processed_inputs = Some(GraphModules::forward(inputs, &visibility.input, vk, srs)?);
+                processed_inputs = Some(GraphModules::forward::<Scheme>(
+                    inputs,
+                    &visibility.input,
+                    vk,
+                    srs,
+                )?);
             }
         }
 
@@ -1257,7 +1277,7 @@ impl GraphCircuit {
             let params = self.model().get_all_params();
             if !params.is_empty() {
                 let flattened_params = Tensor::new(Some(&params), &[params.len()])?.combine()?;
-                processed_params = Some(GraphModules::forward(
+                processed_params = Some(GraphModules::forward::<Scheme>(
                     &[flattened_params],
                     &visibility.params,
                     vk,
@@ -1268,7 +1288,7 @@ impl GraphCircuit {
 
         let mut model_results =
             self.model()
-                .forward(inputs, &self.settings().run_args, throw_range_check_error)?;
+                .forward(inputs, &self.settings().run_args, witness_gen)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();
@@ -1277,7 +1297,8 @@ impl GraphCircuit {
                 for outlet in &module_outlets {
                     module_inputs.push(model_results.outputs[*outlet].clone());
                 }
-                let res = GraphModules::forward(&module_inputs, &visibility.output, vk, srs)?;
+                let res =
+                    GraphModules::forward::<Scheme>(&module_inputs, &visibility.output, vk, srs)?;
                 processed_outputs = Some(res.clone());
                 let module_results = res.get_result(visibility.output.clone());
 
@@ -1286,7 +1307,7 @@ impl GraphCircuit {
                         Tensor::from(module_results[i].clone().into_iter());
                 }
             } else {
-                processed_outputs = Some(GraphModules::forward(
+                processed_outputs = Some(GraphModules::forward::<Scheme>(
                     &model_results.outputs,
                     &visibility.output,
                     vk,
@@ -1430,7 +1451,8 @@ impl GraphCircuit {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-struct CircuitSize {
+/// The configuration for the graph circuit
+pub struct CircuitSize {
     num_instances: usize,
     num_advice_columns: usize,
     num_fixed: usize,
@@ -1440,7 +1462,8 @@ struct CircuitSize {
 }
 
 impl CircuitSize {
-    pub fn from_cs(cs: &ConstraintSystem<Fp>, logrows: u32) -> Self {
+    ///
+    pub fn from_cs<F: Field>(cs: &ConstraintSystem<F>, logrows: u32) -> Self {
         CircuitSize {
             num_instances: cs.num_instance_columns(),
             num_advice_columns: cs.num_advice_columns(),
@@ -1518,34 +1541,18 @@ impl Circuit<Fp> for GraphCircuit {
             params.run_args.logrows as usize,
         );
 
-        let mut vars = ModelVars::new(
-            cs,
-            params.run_args.logrows as usize,
-            params.total_assignments,
-            params.run_args.num_inner_cols,
-            params.total_const_size,
-            params.module_requires_fixed(),
-        );
+        let mut vars = ModelVars::new(cs, &params);
 
         module_configs.configure_complex_modules(cs, visibility, params.module_sizes.clone());
 
         vars.instantiate_instance(
             cs,
-            params.model_instance_shapes,
+            params.model_instance_shapes.clone(),
             params.run_args.input_scale,
             module_configs.instance,
         );
 
-        let base = Model::configure(
-            cs,
-            &vars,
-            params.run_args.lookup_range,
-            params.run_args.logrows as usize,
-            params.required_lookups,
-            params.required_range_checks,
-            params.check_mode,
-        )
-        .unwrap();
+        let base = Model::configure(cs, &vars, &params).unwrap();
 
         let model_config = ModelConfig { base, vars };
 
@@ -1598,6 +1605,8 @@ impl Circuit<Fp> for GraphCircuit {
         let output_vis = &self.settings().run_args.output_visibility;
         let mut graph_modules = GraphModules::new();
 
+        let mut constants = ConstantsMap::new();
+
         let mut config = config.clone();
 
         let mut inputs = self
@@ -1643,6 +1652,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut input_outlets,
                 input_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
             // replace inputs with the outlets
             for (i, outlet) in outlets.iter().enumerate() {
@@ -1655,6 +1665,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut inputs,
                 input_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
         }
 
@@ -1691,6 +1702,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut flattened_params,
                 param_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
 
             let shapes = self.model().const_shapes();
@@ -1719,6 +1731,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &inputs,
                 &mut vars,
                 &outputs,
+                &mut constants,
             )
             .map_err(|e| {
                 log::error!("{}", e);
@@ -1743,6 +1756,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut output_outlets,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
 
             // replace outputs with the outlets
@@ -1756,6 +1770,7 @@ impl Circuit<Fp> for GraphCircuit {
                 &mut outputs,
                 &self.settings().run_args.output_visibility,
                 &mut instance_offset,
+                &mut constants,
             )?;
         }
 

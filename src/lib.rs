@@ -23,14 +23,19 @@
 )]
 // we allow this for our dynamic range based indexing scheme
 #![allow(clippy::single_range_in_vec_init)]
-#![feature(round_ties_even)]
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
 
+use std::str::FromStr;
+
 use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
 use graph::Visibility;
+use halo2_proofs::poly::{
+    ipa::commitment::IPACommitmentScheme, kzg::commitment::KZGCommitmentScheme,
+};
+use halo2curves::bn256::{Bn256, G1Affine};
 use serde::{Deserialize, Serialize};
 use tosubcommand::ToFlags;
 
@@ -97,6 +102,71 @@ const EZKL_KEY_FORMAT: &str = "raw-bytes";
 #[cfg(target_arch = "wasm32")]
 const EZKL_BUF_CAPACITY: &usize = &8000;
 
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default, Copy,
+)]
+/// Commitment scheme
+pub enum Commitments {
+    #[default]
+    /// KZG
+    KZG,
+    /// IPA
+    IPA,
+}
+
+impl FromStr for Commitments {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "kzg" => Ok(Commitments::KZG),
+            "ipa" => Ok(Commitments::IPA),
+            _ => Err("Invalid value for Commitments".to_string()),
+        }
+    }
+}
+
+impl From<KZGCommitmentScheme<Bn256>> for Commitments {
+    fn from(_value: KZGCommitmentScheme<Bn256>) -> Self {
+        Commitments::KZG
+    }
+}
+
+impl From<IPACommitmentScheme<G1Affine>> for Commitments {
+    fn from(_value: IPACommitmentScheme<G1Affine>) -> Self {
+        Commitments::IPA
+    }
+}
+
+impl std::fmt::Display for Commitments {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Commitments::KZG => write!(f, "kzg"),
+            Commitments::IPA => write!(f, "ipa"),
+        }
+    }
+}
+
+impl ToFlags for Commitments {
+    /// Convert the struct to a subcommand string
+    fn to_flags(&self) -> Vec<String> {
+        vec![format!("{}", self)]
+    }
+}
+
+impl From<String> for Commitments {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "kzg" => Commitments::KZG,
+            "ipa" => Commitments::IPA,
+            _ => {
+                log::error!("Invalid value for Commitments");
+                log::warn!("defaulting to KZG");
+                Commitments::KZG
+            }
+        }
+    }
+}
+
 /// Parameters specific to a proving run
 #[derive(Debug, Args, Deserialize, Serialize, Clone, PartialEq, PartialOrd, ToFlags)]
 pub struct RunArgs {
@@ -142,6 +212,9 @@ pub struct RunArgs {
     /// check mode (safe, unsafe, etc)
     #[arg(long, default_value = "unsafe")]
     pub check_mode: CheckMode,
+    /// commitment scheme
+    #[arg(long, default_value = "kzg")]
+    pub commitment: Commitments,
 }
 
 impl Default for RunArgs {
@@ -161,6 +234,7 @@ impl Default for RunArgs {
             div_rebasing: false,
             rebase_frac_zero_constants: false,
             check_mode: CheckMode::UNSAFE,
+            commitment: Commitments::KZG,
         }
     }
 }
@@ -180,10 +254,8 @@ impl RunArgs {
         if self.num_inner_cols < 1 {
             return Err("num_inner_cols must be >= 1".into());
         }
-        if self.tolerance.val > 0.0 {
-            if self.output_visibility != Visibility::Public {
-                return Err("tolerance > 0.0 requires output_visibility to be public".into());
-            }
+        if self.tolerance.val > 0.0 && self.output_visibility != Visibility::Public {
+            return Err("tolerance > 0.0 requires output_visibility to be public".into());
         }
         Ok(())
     }

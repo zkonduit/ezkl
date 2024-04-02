@@ -1,8 +1,41 @@
+use crate::circuit::region::ConstantsMap;
+
 use super::{
     ops::{intercalate_values, pad, resize},
     *,
 };
-use halo2_proofs::{arithmetic::Field, plonk::Instance};
+use halo2_proofs::{arithmetic::Field, circuit::Cell, plonk::Instance};
+
+pub(crate) fn create_constant_tensor<
+    F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd,
+>(
+    val: F,
+    len: usize,
+) -> ValTensor<F> {
+    let mut constant = Tensor::from(vec![ValType::Constant(val); len].into_iter());
+    constant.set_visibility(&crate::graph::Visibility::Fixed);
+    ValTensor::from(constant)
+}
+
+pub(crate) fn create_unit_tensor<
+    F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd,
+>(
+    len: usize,
+) -> ValTensor<F> {
+    let mut unit = Tensor::from(vec![ValType::Constant(F::ONE); len].into_iter());
+    unit.set_visibility(&crate::graph::Visibility::Fixed);
+    ValTensor::from(unit)
+}
+
+pub(crate) fn create_zero_tensor<
+    F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd,
+>(
+    len: usize,
+) -> ValTensor<F> {
+    let mut zero = Tensor::from(vec![ValType::Constant(F::ZERO); len].into_iter());
+    zero.set_visibility(&crate::graph::Visibility::Fixed);
+    ValTensor::from(zero)
+}
 
 #[derive(Debug, Clone)]
 /// A [ValType] is a wrapper around Halo2 value(s).
@@ -20,6 +53,24 @@ pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::S
 }
 
 impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd> ValType<F> {
+    /// Returns the inner cell of the [ValType].
+    pub fn cell(&self) -> Option<Cell> {
+        match self {
+            ValType::PrevAssigned(cell) => Some(cell.cell()),
+            ValType::AssignedConstant(cell, _) => Some(cell.cell()),
+            _ => None,
+        }
+    }
+
+    /// Returns the assigned cell of the [ValType].
+    pub fn assigned_cell(&self) -> Option<AssignedCell<F, F>> {
+        match self {
+            ValType::PrevAssigned(cell) => Some(cell.clone()),
+            ValType::AssignedConstant(cell, _) => Some(cell.clone()),
+            _ => None,
+        }
+    }
+
     /// Returns true if the value is previously assigned.
     pub fn is_prev_assigned(&self) -> bool {
         matches!(
@@ -262,7 +313,7 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
     pub fn new_instance(
         cs: &mut ConstraintSystem<F>,
@@ -316,6 +367,19 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     ///
     pub fn is_instance(&self) -> bool {
         matches!(self, ValTensor::Instance { .. })
+    }
+
+    /// reverse order of elements whilst preserving the shape
+    pub fn reverse(&mut self) -> Result<(), Box<dyn Error>> {
+        match self {
+            ValTensor::Value { inner: v, .. } => {
+                v.reverse();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(Box::new(TensorError::WrongMethod));
+            }
+        };
+        Ok(())
     }
 
     ///
@@ -384,10 +448,40 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     }
 
     /// Returns the number of constants in the [ValTensor].
-    pub fn num_constants(&self) -> usize {
+    pub fn create_constants_map_iterator(
+        &self,
+    ) -> core::iter::FilterMap<
+        core::slice::Iter<'_, ValType<F>>,
+        fn(&ValType<F>) -> Option<(F, ValType<F>)>,
+    > {
         match self {
-            ValTensor::Value { inner, .. } => inner.iter().filter(|x| x.is_constant()).count(),
-            ValTensor::Instance { .. } => 0,
+            ValTensor::Value { inner, .. } => inner.iter().filter_map(|x| {
+                if let ValType::Constant(v) = x {
+                    Some((*v, x.clone()))
+                } else {
+                    None
+                }
+            }),
+            ValTensor::Instance { .. } => {
+                unreachable!("Instance tensors do not have constants")
+            }
+        }
+    }
+
+    /// Returns the number of constants in the [ValTensor].
+    pub fn create_constants_map(&self) -> ConstantsMap<F> {
+        match self {
+            ValTensor::Value { inner, .. } => inner
+                .par_iter()
+                .filter_map(|x| {
+                    if let ValType::Constant(v) = x {
+                        Some((*v, x.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            ValTensor::Instance { .. } => ConstantsMap::new(),
         }
     }
 
@@ -450,7 +544,12 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
             }
             _ => return Err(Box::new(TensorError::WrongMethod)),
         };
-        Ok(integer_evals.into_iter().into())
+        let mut tensor: Tensor<i128> = integer_evals.into_iter().into();
+        match tensor.reshape(self.dims()) {
+            _ => {}
+        };
+
+        Ok(tensor)
     }
 
     /// Calls `pad_to_zero_rem` on the inner tensor.

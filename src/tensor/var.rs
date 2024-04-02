@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use log::{error, warn};
+use log::{debug, error, warn};
 
-use crate::circuit::CheckMode;
+use crate::circuit::{region::ConstantsMap, CheckMode};
 
 use super::*;
 /// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
@@ -104,7 +104,7 @@ impl VarTensor {
         let mut advices = vec![];
 
         if modulo > 1 {
-            warn!("using column duplication for {} advice blocks", modulo - 1);
+            debug!("using column duplication for {} advice blocks", modulo - 1);
         }
 
         for _ in 0..modulo {
@@ -150,7 +150,7 @@ impl VarTensor {
         modulo = (num_constants + modulo) / max_rows + 1;
 
         if modulo > 1 {
-            warn!("using column duplication for {} fixed columns", modulo - 1);
+            debug!("using column duplication for {} fixed columns", modulo - 1);
         }
 
         for _ in 0..modulo {
@@ -289,9 +289,10 @@ impl VarTensor {
         &self,
         region: &mut Region<F>,
         offset: usize,
+        coord: usize,
         constant: F,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
-        let (x, y, z) = self.cartesian_coord(offset);
+        let (x, y, z) = self.cartesian_coord(offset + coord);
         match &self {
             VarTensor::Advice { inner: advices, .. } => {
                 region.assign_advice_from_constant(|| "constant", advices[x][y], z, constant)
@@ -304,33 +305,28 @@ impl VarTensor {
     }
 
     /// Assigns [ValTensor] to the columns of the inner tensor.
-    pub fn assign_with_omissions<F: PrimeField + TensorType + PartialOrd>(
+    pub fn assign_with_omissions<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
         region: &mut Region<F>,
         offset: usize,
         values: &ValTensor<F>,
         omissions: &HashSet<&usize>,
+        constants: &mut ConstantsMap<F>,
     ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
         let mut assigned_coord = 0;
         let mut res: ValTensor<F> = match values {
             ValTensor::Instance { .. } => {
                 unimplemented!("cannot assign instance to advice columns with omissions")
             }
-            ValTensor::Value { inner: v, .. } => Ok::<_, halo2_proofs::plonk::Error>(
+            ValTensor::Value { inner: v, .. } => Ok::<ValTensor<F>, halo2_proofs::plonk::Error>(
                 v.enum_map(|coord, k| {
                     if omissions.contains(&coord) {
-                        return Ok(k);
+                        return Ok::<_, halo2_proofs::plonk::Error>(k);
                     }
-                    let cell = self.assign_value(region, offset, k.clone(), assigned_coord)?;
+                    let cell =
+                        self.assign_value(region, offset, k.clone(), assigned_coord, constants)?;
                     assigned_coord += 1;
-
-                    match k {
-                        ValType::Constant(f) => Ok::<ValType<F>, halo2_proofs::plonk::Error>(
-                            ValType::AssignedConstant(cell, f),
-                        ),
-                        ValType::AssignedConstant(_, f) => Ok(ValType::AssignedConstant(cell, f)),
-                        _ => Ok(ValType::PrevAssigned(cell)),
-                    }
+                    Ok::<_, halo2_proofs::plonk::Error>(cell)
                 })?
                 .into(),
             ),
@@ -340,11 +336,12 @@ impl VarTensor {
     }
 
     /// Assigns [ValTensor] to the columns of the inner tensor.
-    pub fn assign<F: PrimeField + TensorType + PartialOrd>(
+    pub fn assign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
         region: &mut Region<F>,
         offset: usize,
         values: &ValTensor<F>,
+        constants: &mut ConstantsMap<F>,
     ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
         let mut res: ValTensor<F> = match values {
             ValTensor::Instance {
@@ -382,14 +379,7 @@ impl VarTensor {
             },
             ValTensor::Value { inner: v, .. } => Ok(v
                 .enum_map(|coord, k| {
-                    let cell = self.assign_value(region, offset, k.clone(), coord)?;
-                    match k {
-                        ValType::Constant(f) => Ok::<ValType<F>, halo2_proofs::plonk::Error>(
-                            ValType::AssignedConstant(cell, f),
-                        ),
-                        ValType::AssignedConstant(_, f) => Ok(ValType::AssignedConstant(cell, f)),
-                        _ => Ok(ValType::PrevAssigned(cell)),
-                    }
+                    self.assign_value(region, offset, k.clone(), coord, constants)
                 })?
                 .into()),
         }?;
@@ -399,13 +389,16 @@ impl VarTensor {
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
     /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two.
-    pub fn dummy_assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
+    pub fn dummy_assign_with_duplication<
+        F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
+    >(
         &self,
         row: usize,
         offset: usize,
         values: &ValTensor<F>,
         single_inner_col: bool,
-    ) -> Result<(ValTensor<F>, usize, usize), halo2_proofs::plonk::Error> {
+        constants: &mut ConstantsMap<F>,
+    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
         match values {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims , ..} => {
@@ -430,21 +423,24 @@ impl VarTensor {
 
                 // duplicates every nth element to adjust for column overflow
                 let mut res: ValTensor<F> = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap().into();
+
+                let constants_map = res.create_constants_map();
+                constants.extend(constants_map);
+
                 let total_used_len = res.len();
-                let total_constants = res.num_constants();
                 res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
 
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());
 
-                Ok((res, total_used_len, total_constants))
+                Ok((res, total_used_len))
             }
         }
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
     /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two.
-    pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd>(
+    pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
         region: &mut Region<F>,
         row: usize,
@@ -452,7 +448,8 @@ impl VarTensor {
         values: &ValTensor<F>,
         check_mode: &CheckMode,
         single_inner_col: bool,
-    ) -> Result<(ValTensor<F>, usize, usize), halo2_proofs::plonk::Error> {
+        constants: &mut ConstantsMap<F>,
+    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
         let mut prev_cell = None;
 
         match values {
@@ -494,7 +491,7 @@ impl VarTensor {
                         assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
                     };
 
-                    let cell = self.assign_value(region, offset, k.clone(), coord * step)?;
+                    let cell = self.assign_value(region, offset, k.clone(), coord * step, constants)?;
 
                     if single_inner_col {
                     if z == 0 {
@@ -502,28 +499,23 @@ impl VarTensor {
                         prev_cell = Some(cell.clone());
                     } else if coord > 0 && z == 0 && single_inner_col {
                         if let Some(prev_cell) = prev_cell.as_ref() {
-                            region.constrain_equal(prev_cell.cell(),cell.cell())?;
+                            let cell = cell.cell().ok_or({
+                                error!("Error getting cell: {:?}", (x,y));
+                                halo2_proofs::plonk::Error::Synthesis})?;
+                            let prev_cell = prev_cell.cell().ok_or({
+                                error!("Error getting cell: {:?}", (x,y));
+                                halo2_proofs::plonk::Error::Synthesis})?;
+                            region.constrain_equal(prev_cell,cell)?;
                         } else {
                             error!("Error copy-constraining previous value: {:?}", (x,y));
                             return Err(halo2_proofs::plonk::Error::Synthesis);
                         }
                     }}
 
-                    match k {
-                        ValType::Constant(f) => {
-                            Ok(ValType::AssignedConstant(cell, f))
-                        },
-                        ValType::AssignedConstant(_, f) => {
-                            Ok(ValType::AssignedConstant(cell, f))
-                        },
-                        _ => {
-                            Ok(ValType::PrevAssigned(cell))
-                        }
-                    }
+                    Ok(cell)
 
                 })?.into()};
                 let total_used_len = res.len();
-                let total_constants = res.num_constants();
                 res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
 
                 res.reshape(dims).unwrap();
@@ -542,42 +534,61 @@ impl VarTensor {
                     )};
                 }
 
-                Ok((res, total_used_len, total_constants))
+                Ok((res, total_used_len))
             }
         }
     }
 
-    fn assign_value<F: PrimeField + TensorType + PartialOrd>(
+    fn assign_value<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
         region: &mut Region<F>,
         offset: usize,
         k: ValType<F>,
         coord: usize,
-    ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
+        constants: &mut ConstantsMap<F>,
+    ) -> Result<ValType<F>, halo2_proofs::plonk::Error> {
         let (x, y, z) = self.cartesian_coord(offset + coord);
-        match k {
+        let res = match k {
             ValType::Value(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
-                    region.assign_advice(|| "k", advices[x][y], z, || v)
+                    ValType::PrevAssigned(region.assign_advice(|| "k", advices[x][y], z, || v)?)
                 }
                 _ => unimplemented!(),
             },
-            ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => match &self {
+            ValType::PrevAssigned(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
-                    v.copy_advice(|| "k", region, advices[x][y], z)
+                    ValType::PrevAssigned(v.copy_advice(|| "k", region, advices[x][y], z)?)
                 }
-                _ => {
-                    error!("PrevAssigned is only supported for advice columns");
-                    Err(halo2_proofs::plonk::Error::Synthesis)
+                _ => unimplemented!(),
+            },
+            ValType::AssignedConstant(v, val) => match &self {
+                VarTensor::Advice { inner: advices, .. } => {
+                    ValType::AssignedConstant(v.copy_advice(|| "k", region, advices[x][y], z)?, val)
                 }
+                _ => unimplemented!(),
             },
             ValType::AssignedValue(v) => match &self {
-                VarTensor::Advice { inner: advices, .. } => region
-                    .assign_advice(|| "k", advices[x][y], z, || v)
-                    .map(|a| a.evaluate()),
+                VarTensor::Advice { inner: advices, .. } => ValType::PrevAssigned(
+                    region
+                        .assign_advice(|| "k", advices[x][y], z, || v)?
+                        .evaluate(),
+                ),
                 _ => unimplemented!(),
             },
-            ValType::Constant(v) => self.assign_constant(region, offset + coord, v),
-        }
+            ValType::Constant(v) => {
+                if let std::collections::hash_map::Entry::Vacant(e) = constants.entry(v) {
+                    let value = ValType::AssignedConstant(
+                        self.assign_constant(region, offset, coord, v)?,
+                        v,
+                    );
+                    e.insert(value.clone());
+                    value
+                } else {
+                    let cell = constants.get(&v).unwrap();
+                    self.assign_value(region, offset, cell.clone(), coord, constants)?
+                }
+            }
+        };
+        Ok(res)
     }
 }

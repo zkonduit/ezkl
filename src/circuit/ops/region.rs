@@ -2,23 +2,87 @@ use crate::{
     circuit::table::Range,
     tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor},
 };
+#[cfg(not(target_arch = "wasm32"))]
+use colored::Colorize;
 use halo2_proofs::{
     circuit::Region,
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
+use portable_atomic::AtomicI128 as AtomicInt;
 use std::{
     cell::RefCell,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
     },
 };
 
-use portable_atomic::AtomicI128 as AtomicInt;
-
 use super::lookup::LookupOp;
+
+/// Constants map
+pub type ConstantsMap<F> = HashMap<F, ValType<F>>;
+
+/// Dynamic lookup index
+#[derive(Clone, Debug, Default)]
+pub struct DynamicLookupIndex {
+    index: usize,
+    col_coord: usize,
+}
+
+impl DynamicLookupIndex {
+    /// Create a new dynamic lookup index
+    pub fn new(index: usize, col_coord: usize) -> DynamicLookupIndex {
+        DynamicLookupIndex { index, col_coord }
+    }
+
+    /// Get the lookup index
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// Get the column coord
+    pub fn col_coord(&self) -> usize {
+        self.col_coord
+    }
+
+    /// update with another dynamic lookup index
+    pub fn update(&mut self, other: &DynamicLookupIndex) {
+        self.index += other.index;
+        self.col_coord += other.col_coord;
+    }
+}
+
+/// Dynamic lookup index
+#[derive(Clone, Debug, Default)]
+pub struct ShuffleIndex {
+    index: usize,
+    col_coord: usize,
+}
+
+impl ShuffleIndex {
+    /// Create a new dynamic lookup index
+    pub fn new(index: usize, col_coord: usize) -> ShuffleIndex {
+        ShuffleIndex { index, col_coord }
+    }
+
+    /// Get the lookup index
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// Get the column coord
+    pub fn col_coord(&self) -> usize {
+        self.col_coord
+    }
+
+    /// update with another shuffle index
+    pub fn update(&mut self, other: &ShuffleIndex) {
+        self.index += other.index;
+        self.col_coord += other.col_coord;
+    }
+}
 
 /// Region error
 #[derive(Debug, thiserror::Error)]
@@ -60,29 +124,71 @@ impl From<Box<dyn std::error::Error>> for RegionError {
 
 #[derive(Debug)]
 /// A context for a region
-pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd> {
+pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
     region: Option<RefCell<Region<'a, F>>>,
     row: usize,
     linear_coord: usize,
     num_inner_cols: usize,
-    total_constants: usize,
+    dynamic_lookup_index: DynamicLookupIndex,
+    shuffle_index: ShuffleIndex,
     used_lookups: HashSet<LookupOp>,
     used_range_checks: HashSet<Range>,
     max_lookup_inputs: i128,
     min_lookup_inputs: i128,
     max_range_size: i128,
-    throw_range_check_error: bool,
+    witness_gen: bool,
+    assigned_constants: ConstantsMap<F>,
 }
 
-impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
+impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a, F> {
+    #[cfg(not(target_arch = "wasm32"))]
     ///
-    pub fn increment_total_constants(&mut self, n: usize) {
-        self.total_constants += n;
+    pub fn debug_report(&self) {
+        log::debug!(
+            "(rows={}, coord={}, constants={}, max_lookup_inputs={}, min_lookup_inputs={}, max_range_size={}, dynamic_lookup_col_coord={}, shuffle_col_coord={})",
+            self.row().to_string().blue(),
+            self.linear_coord().to_string().yellow(),
+            self.total_constants().to_string().red(),
+            self.max_lookup_inputs().to_string().green(),
+            self.min_lookup_inputs().to_string().green(),
+            self.max_range_size().to_string().green(),
+            self.dynamic_lookup_col_coord().to_string().green(),
+            self.shuffle_col_coord().to_string().green());
     }
 
     ///
-    pub fn throw_range_check_error(&self) -> bool {
-        self.throw_range_check_error
+    pub fn assigned_constants(&self) -> &ConstantsMap<F> {
+        &self.assigned_constants
+    }
+
+    ///
+    pub fn update_constants(&mut self, constants: ConstantsMap<F>) {
+        self.assigned_constants.extend(constants);
+    }
+
+    ///
+    pub fn increment_dynamic_lookup_index(&mut self, n: usize) {
+        self.dynamic_lookup_index.index += n;
+    }
+
+    ///
+    pub fn increment_dynamic_lookup_col_coord(&mut self, n: usize) {
+        self.dynamic_lookup_index.col_coord += n;
+    }
+
+    ///
+    pub fn increment_shuffle_index(&mut self, n: usize) {
+        self.shuffle_index.index += n;
+    }
+
+    ///
+    pub fn increment_shuffle_col_coord(&mut self, n: usize) {
+        self.shuffle_index.col_coord += n;
+    }
+
+    ///
+    pub fn witness_gen(&self) -> bool {
+        self.witness_gen
     }
 
     /// Create a new region context
@@ -95,20 +201,36 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             num_inner_cols,
             row,
             linear_coord,
-            total_constants: 0,
+            dynamic_lookup_index: DynamicLookupIndex::default(),
+            shuffle_index: ShuffleIndex::default(),
             used_lookups: HashSet::new(),
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
-            throw_range_check_error: false,
+            witness_gen: true,
+            assigned_constants: HashMap::new(),
         }
+    }
+
+    /// Create a new region context
+    pub fn new_with_constants(
+        region: Region<'a, F>,
+        row: usize,
+        num_inner_cols: usize,
+        constants: ConstantsMap<F>,
+    ) -> RegionCtx<'a, F> {
+        let mut new_self = Self::new(region, row, num_inner_cols);
+        new_self.assigned_constants = constants;
+        new_self
     }
     /// Create a new region context from a wrapped region
     pub fn from_wrapped_region(
         region: Option<RefCell<Region<'a, F>>>,
         row: usize,
         num_inner_cols: usize,
+        dynamic_lookup_index: DynamicLookupIndex,
+        shuffle_index: ShuffleIndex,
     ) -> RegionCtx<'a, F> {
         let linear_coord = row * num_inner_cols;
         RegionCtx {
@@ -116,22 +238,20 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             num_inner_cols,
             linear_coord,
             row,
-            total_constants: 0,
+            dynamic_lookup_index,
+            shuffle_index,
             used_lookups: HashSet::new(),
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
-            throw_range_check_error: false,
+            witness_gen: false,
+            assigned_constants: HashMap::new(),
         }
     }
 
     /// Create a new region context
-    pub fn new_dummy(
-        row: usize,
-        num_inner_cols: usize,
-        throw_range_check_error: bool,
-    ) -> RegionCtx<'a, F> {
+    pub fn new_dummy(row: usize, num_inner_cols: usize, witness_gen: bool) -> RegionCtx<'a, F> {
         let region = None;
         let linear_coord = row * num_inner_cols;
 
@@ -140,25 +260,24 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             num_inner_cols,
             linear_coord,
             row,
-            total_constants: 0,
+            dynamic_lookup_index: DynamicLookupIndex::default(),
+            shuffle_index: ShuffleIndex::default(),
             used_lookups: HashSet::new(),
             used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
-            throw_range_check_error,
+            witness_gen,
+            assigned_constants: HashMap::new(),
         }
     }
 
     /// Create a new region context
-    pub fn new_dummy_with_constants(
+    pub fn new_dummy_with_linear_coord(
         row: usize,
         linear_coord: usize,
-        total_constants: usize,
         num_inner_cols: usize,
-        used_lookups: HashSet<LookupOp>,
-        used_range_checks: HashSet<Range>,
-        throw_range_check_error: bool,
+        witness_gen: bool,
     ) -> RegionCtx<'a, F> {
         let region = None;
         RegionCtx {
@@ -166,13 +285,15 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             num_inner_cols,
             linear_coord,
             row,
-            total_constants,
-            used_lookups,
-            used_range_checks,
+            dynamic_lookup_index: DynamicLookupIndex::default(),
+            shuffle_index: ShuffleIndex::default(),
+            used_lookups: HashSet::new(),
+            used_range_checks: HashSet::new(),
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
-            throw_range_check_error,
+            witness_gen,
+            assigned_constants: HashMap::new(),
         }
     }
 
@@ -222,29 +343,27 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     ) -> Result<(), RegionError> {
         let row = AtomicUsize::new(self.row());
         let linear_coord = AtomicUsize::new(self.linear_coord());
-        let constants = AtomicUsize::new(self.total_constants());
         let max_lookup_inputs = AtomicInt::new(self.max_lookup_inputs());
         let min_lookup_inputs = AtomicInt::new(self.min_lookup_inputs());
         let lookups = Arc::new(Mutex::new(self.used_lookups.clone()));
         let range_checks = Arc::new(Mutex::new(self.used_range_checks.clone()));
+        let dynamic_lookup_index = Arc::new(Mutex::new(self.dynamic_lookup_index.clone()));
+        let shuffle_index = Arc::new(Mutex::new(self.shuffle_index.clone()));
+        let constants = Arc::new(Mutex::new(self.assigned_constants.clone()));
 
         *output = output
             .par_enum_map(|idx, _| {
                 // we kick off the loop with the current offset
                 let starting_offset = row.load(Ordering::SeqCst);
                 let starting_linear_coord = linear_coord.load(Ordering::SeqCst);
-                let starting_constants = constants.load(Ordering::SeqCst);
                 // get inner value of the locked lookups
 
                 // we need to make sure that the region is not shared between threads
-                let mut local_reg = Self::new_dummy_with_constants(
+                let mut local_reg = Self::new_dummy_with_linear_coord(
                     starting_offset,
                     starting_linear_coord,
-                    starting_constants,
                     self.num_inner_cols,
-                    HashSet::new(),
-                    HashSet::new(),
-                    self.throw_range_check_error,
+                    self.witness_gen,
                 );
                 let res = inner_loop_function(idx, &mut local_reg);
                 // we update the offset and constants
@@ -253,25 +372,28 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                     local_reg.linear_coord() - starting_linear_coord,
                     Ordering::SeqCst,
                 );
-                constants.fetch_add(
-                    local_reg.total_constants() - starting_constants,
-                    Ordering::SeqCst,
-                );
 
                 max_lookup_inputs.fetch_max(local_reg.max_lookup_inputs(), Ordering::SeqCst);
                 min_lookup_inputs.fetch_min(local_reg.min_lookup_inputs(), Ordering::SeqCst);
                 // update the lookups
                 let mut lookups = lookups.lock().unwrap();
                 lookups.extend(local_reg.used_lookups());
+                // update the range checks
                 let mut range_checks = range_checks.lock().unwrap();
                 range_checks.extend(local_reg.used_range_checks());
+                // update the dynamic lookup index
+                let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
+                dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
+                // update the shuffle index
+                let mut shuffle_index = shuffle_index.lock().unwrap();
+                shuffle_index.update(&local_reg.shuffle_index);
+                // update the constants
+                let mut constants = constants.lock().unwrap();
+                constants.extend(local_reg.assigned_constants);
+
                 res
             })
-            .map_err(|e| {
-                log::error!("dummy_loop: {:?}", e);
-                Error::Synthesis
-            })?;
-        self.total_constants = constants.into_inner();
+            .map_err(|e| RegionError::from(format!("dummy_loop: {:?}", e)))?;
         self.linear_coord = linear_coord.into_inner();
         #[allow(trivial_numeric_casts)]
         {
@@ -292,6 +414,36 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             .into_inner()
             .map_err(|e| {
                 RegionError::from(format!("dummy_loop: failed to get range checks: {:?}", e))
+            })?;
+        self.dynamic_lookup_index = Arc::try_unwrap(dynamic_lookup_index)
+            .map_err(|e| {
+                RegionError::from(format!(
+                    "dummy_loop: failed to get dynamic lookup index: {:?}",
+                    e
+                ))
+            })?
+            .into_inner()
+            .map_err(|e| {
+                RegionError::from(format!(
+                    "dummy_loop: failed to get dynamic lookup index: {:?}",
+                    e
+                ))
+            })?;
+        self.shuffle_index = Arc::try_unwrap(shuffle_index)
+            .map_err(|e| {
+                RegionError::from(format!("dummy_loop: failed to get shuffle index: {:?}", e))
+            })?
+            .into_inner()
+            .map_err(|e| {
+                RegionError::from(format!("dummy_loop: failed to get shuffle index: {:?}", e))
+            })?;
+        self.assigned_constants = Arc::try_unwrap(constants)
+            .map_err(|e| {
+                RegionError::from(format!("dummy_loop: failed to get constants: {:?}", e))
+            })?
+            .into_inner()
+            .map_err(|e| {
+                RegionError::from(format!("dummy_loop: failed to get constants: {:?}", e))
             })?;
 
         Ok(())
@@ -318,7 +470,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         range: Range,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if range.0 > range.1 {
-            return Err("update_max_min_lookup_range: invalid range".into());
+            return Err(format!("update_max_min_lookup_range: invalid range {:?}", range).into());
         }
 
         let range_size = (range.1 - range.0).abs();
@@ -360,7 +512,27 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
 
     /// Get the total number of constants
     pub fn total_constants(&self) -> usize {
-        self.total_constants
+        self.assigned_constants.len()
+    }
+
+    /// Get the dynamic lookup index
+    pub fn dynamic_lookup_index(&self) -> usize {
+        self.dynamic_lookup_index.index
+    }
+
+    /// Get the dynamic lookup column coordinate
+    pub fn dynamic_lookup_col_coord(&self) -> usize {
+        self.dynamic_lookup_index.col_coord
+    }
+
+    /// Get the shuffle index
+    pub fn shuffle_index(&self) -> usize {
+        self.shuffle_index.index
+    }
+
+    /// Get the shuffle column coordinate
+    pub fn shuffle_col_coord(&self) -> usize {
+        self.shuffle_index.col_coord
     }
 
     /// get used lookups
@@ -388,28 +560,62 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
         self.max_range_size
     }
 
-    /// Assign a constant value
-    pub fn assign_constant(&mut self, var: &VarTensor, value: F) -> Result<ValType<F>, Error> {
-        self.total_constants += 1;
-        if let Some(region) = &self.region {
-            let cell = var.assign_constant(&mut region.borrow_mut(), self.linear_coord, value)?;
-            Ok(cell.into())
-        } else {
-            Ok(value.into())
-        }
-    }
     /// Assign a valtensor to a vartensor
     pub fn assign(
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, Error> {
-        self.total_constants += values.num_constants();
         if let Some(region) = &self.region {
-            var.assign(&mut region.borrow_mut(), self.linear_coord, values)
+            var.assign(
+                &mut region.borrow_mut(),
+                self.linear_coord,
+                values,
+                &mut self.assigned_constants,
+            )
         } else {
+            if !values.is_instance() {
+                let values_map = values.create_constants_map_iterator();
+                self.assigned_constants.extend(values_map);
+            }
             Ok(values.clone())
         }
+    }
+
+    ///
+    pub fn combined_dynamic_shuffle_coord(&self) -> usize {
+        self.dynamic_lookup_col_coord() + self.shuffle_col_coord()
+    }
+
+    /// Assign a valtensor to a vartensor
+    pub fn assign_dynamic_lookup(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+    ) -> Result<ValTensor<F>, Error> {
+        if let Some(region) = &self.region {
+            var.assign(
+                &mut region.borrow_mut(),
+                self.combined_dynamic_shuffle_coord(),
+                values,
+                &mut self.assigned_constants,
+            )
+        } else {
+            if !values.is_instance() {
+                let values_map = values.create_constants_map_iterator();
+                self.assigned_constants.extend(values_map);
+            }
+            Ok(values.clone())
+        }
+    }
+
+    /// Assign a valtensor to a vartensor
+    pub fn assign_shuffle(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+    ) -> Result<ValTensor<F>, Error> {
+        self.assign_dynamic_lookup(var, values)
     }
 
     /// Assign a valtensor to a vartensor
@@ -425,13 +631,20 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
                 self.linear_coord,
                 values,
                 ommissions,
+                &mut self.assigned_constants,
             )
         } else {
-            self.total_constants += values.num_constants();
             let inner_tensor = values.get_inner_tensor().unwrap();
+            let mut values_map = values.create_constants_map();
+
             for o in ommissions {
-                self.total_constants -= inner_tensor.get_flat_index(**o).is_constant() as usize;
+                if let ValType::Constant(value) = inner_tensor.get_flat_index(**o) {
+                    values_map.remove(&value);
+                }
             }
+
+            self.assigned_constants.extend(values_map);
+
             Ok(values.clone())
         }
     }
@@ -446,24 +659,24 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
     ) -> Result<(ValTensor<F>, usize), Error> {
         if let Some(region) = &self.region {
             // duplicates every nth element to adjust for column overflow
-            let (res, len, total_assigned_constants) = var.assign_with_duplication(
+            let (res, len) = var.assign_with_duplication(
                 &mut region.borrow_mut(),
                 self.row,
                 self.linear_coord,
                 values,
                 check_mode,
                 single_inner_col,
+                &mut self.assigned_constants,
             )?;
-            self.total_constants += total_assigned_constants;
             Ok((res, len))
         } else {
-            let (_, len, total_assigned_constants) = var.dummy_assign_with_duplication(
+            let (_, len) = var.dummy_assign_with_duplication(
                 self.row,
                 self.linear_coord,
                 values,
                 single_inner_col,
+                &mut self.assigned_constants,
             )?;
-            self.total_constants += total_assigned_constants;
             Ok((values.clone(), len))
         }
     }
@@ -529,10 +742,5 @@ impl<'a, F: PrimeField + TensorType + PartialOrd> RegionCtx<'a, F> {
             return Err("flush: linear coord is not aligned with the next row".into());
         }
         Ok(())
-    }
-
-    /// increment constants
-    pub fn increment_constants(&mut self, n: usize) {
-        self.total_constants += n
     }
 }

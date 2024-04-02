@@ -4,49 +4,49 @@ is already implemented in halo2_gadgets, there is no wrapper chip that makes it 
 Thanks to https://github.com/summa-dev/summa-solvency/blob/master/src/chips/poseidon/hash.rs for the inspiration (and also helping us understand how to use this).
 */
 
+use std::collections::HashMap;
+
 // This chip adds a set of advice columns to the gadget Chip to store the inputs of the hash
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
-use halo2_proofs::poly::commitment::{Blind, Params};
-use halo2_proofs::poly::kzg::commitment::ParamsKZG;
+use halo2_proofs::poly::commitment::{Blind, CommitmentScheme, Params};
 use halo2_proofs::{circuit::*, plonk::*};
-use halo2curves::bn256::{Bn256, G1Affine};
+use halo2curves::bn256::G1Affine;
 use halo2curves::group::prime::PrimeCurveAffine;
 use halo2curves::group::Curve;
 use halo2curves::CurveAffine;
 
+use crate::circuit::region::ConstantsMap;
 use crate::tensor::{Tensor, ValTensor, ValType, VarTensor};
 
 use super::Module;
 
-/// The number of instance columns used by the KZG hash function
+/// The number of instance columns used by the PolyCommit hash function
 pub const NUM_INSTANCE_COLUMNS: usize = 0;
-/// The number of advice columns used by the KZG hash function
+/// The number of advice columns used by the PolyCommit hash function
 pub const NUM_INNER_COLS: usize = 1;
 
 #[derive(Debug, Clone)]
-/// WIDTH, RATE and L are const generics for the struct, which represent the width, rate, and number of inputs for the Poseidon hash function, respectively.
-/// This means they are values that are known at compile time and can be used to specialize the implementation of the struct.
-/// The actual chip provided by halo2_gadgets is added to the parent Chip.
-pub struct KZGConfig {
+/// Configuration for the PolyCommit chip
+pub struct PolyCommitConfig {
     ///
-    pub hash_inputs: VarTensor,
+    pub inputs: VarTensor,
 }
 
 type InputAssignments = ();
 
-/// PoseidonChip is a wrapper around the Pow5Chip that adds a set of advice columns to the gadget Chip to store the inputs of the hash
+///
 #[derive(Debug)]
-pub struct KZGChip {
-    config: KZGConfig,
+pub struct PolyCommitChip {
+    config: PolyCommitConfig,
 }
 
-impl KZGChip {
+impl PolyCommitChip {
     /// Commit to the message using the KZG commitment scheme
-    pub fn commit(
-        message: Vec<Fp>,
+    pub fn commit<Scheme: CommitmentScheme<Scalar = Fp, Curve = G1Affine>>(
+        message: Vec<Scheme::Scalar>,
         degree: u32,
         num_unusable_rows: u32,
-        params: &ParamsKZG<Bn256>,
+        params: &Scheme::ParamsProver,
     ) -> Vec<G1Affine> {
         let k = params.k();
         let domain = halo2_proofs::poly::EvaluationDomain::new(degree, k);
@@ -81,14 +81,14 @@ impl KZGChip {
     }
 }
 
-impl Module<Fp> for KZGChip {
-    type Config = KZGConfig;
+impl Module<Fp> for PolyCommitChip {
+    type Config = PolyCommitConfig;
     type InputAssignments = InputAssignments;
     type RunInputs = Vec<Fp>;
     type Params = (usize, usize);
 
     fn name(&self) -> &'static str {
-        "KZG"
+        "PolyCommit"
     }
 
     fn instance_increment_input(&self) -> Vec<usize> {
@@ -102,14 +102,15 @@ impl Module<Fp> for KZGChip {
 
     /// Configuration of the PoseidonChip
     fn configure(meta: &mut ConstraintSystem<Fp>, params: Self::Params) -> Self::Config {
-        let hash_inputs = VarTensor::new_unblinded_advice(meta, params.0, NUM_INNER_COLS, params.1);
-        Self::Config { hash_inputs }
+        let inputs = VarTensor::new_unblinded_advice(meta, params.0, NUM_INNER_COLS, params.1);
+        Self::Config { inputs }
     }
 
     fn layout_inputs(
         &self,
         _: &mut impl Layouter<Fp>,
         _: &[ValTensor<Fp>],
+        _: &mut ConstantsMap<Fp>,
     ) -> Result<Self::InputAssignments, Error> {
         Ok(())
     }
@@ -122,11 +123,24 @@ impl Module<Fp> for KZGChip {
         layouter: &mut impl Layouter<Fp>,
         input: &[ValTensor<Fp>],
         _: usize,
+        constants: &mut ConstantsMap<Fp>,
     ) -> Result<ValTensor<Fp>, Error> {
         assert_eq!(input.len(), 1);
+
+        let local_constants = constants.clone();
         layouter.assign_region(
-            || "kzg commit",
-            |mut region| self.config.hash_inputs.assign(&mut region, 0, &input[0]),
+            || "PolyCommit",
+            |mut region| {
+                let mut local_inner_constants = local_constants.clone();
+                let res = self.config.inputs.assign(
+                    &mut region,
+                    0,
+                    &input[0],
+                    &mut local_inner_constants,
+                )?;
+                *constants = local_inner_constants;
+                Ok(res)
+            },
         )
     }
 
@@ -163,7 +177,7 @@ mod tests {
     }
 
     impl Circuit<Fp> for HashCircuit {
-        type Config = KZGConfig;
+        type Config = PolyCommitConfig;
         type FloorPlanner = ModulePlanner;
         type Params = ();
 
@@ -178,7 +192,7 @@ mod tests {
 
         fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
             let params = (K, R);
-            KZGChip::configure(meta, params)
+            PolyCommitChip::configure(meta, params)
         }
 
         fn synthesize(
@@ -186,8 +200,13 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
-            let kzg_chip = KZGChip::new(config);
-            kzg_chip.layout(&mut layouter, &[self.message.clone()], 0);
+            let polycommit_chip = PolyCommitChip::new(config);
+            polycommit_chip.layout(
+                &mut layouter,
+                &[self.message.clone()],
+                0,
+                &mut HashMap::new(),
+            );
 
             Ok(())
         }
@@ -195,7 +214,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn kzg_for_a_range_of_input_sizes() {
+    fn polycommit_chip_for_a_range_of_input_sizes() {
         let rng = rand::rngs::OsRng;
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -225,7 +244,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn kzg_commit_much_longer_input() {
+    fn polycommit_chip_much_longer_input() {
         #[cfg(not(target_arch = "wasm32"))]
         env_logger::init();
 

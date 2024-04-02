@@ -24,9 +24,14 @@
         "param_visibility": "Private",
         "div_rebasing": false,
         "rebase_frac_zero_constants": false,
-        "check_mode": "UNSAFE"
+        "check_mode": "UNSAFE",
+        "commitment": "KZG"
     },
     "num_rows": 16,
+    "total_dynamic_col_size": 0,
+    "num_dynamic_lookups": 0,
+    "num_shuffles": 0,
+    "total_shuffle_col_size": 0,
     "total_assignments": 32,
     "total_const_size": 8,
     "model_instance_shapes": [
@@ -42,7 +47,7 @@
         0
     ],
     "module_sizes": {
-        "kzg": [],
+        "polycommit": [],
         "poseidon": [
             0,
             [

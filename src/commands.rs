@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::{error::Error, str::FromStr};
 use tosubcommand::{ToFlags, ToSubcommand};
 
-use crate::{pfsys::ProofType, RunArgs};
+use crate::{pfsys::ProofType, Commitments, RunArgs};
 
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
@@ -77,7 +77,7 @@ pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
 /// Default lookup safety margin
 pub const DEFAULT_LOOKUP_SAFETY_MARGIN: &str = "2";
 /// Default Compress selectors
-pub const DEFAULT_COMPRESS_SELECTORS: &str = "false";
+pub const DEFAULT_DISABLE_SELECTOR_COMPRESSION: &str = "false";
 /// Default render vk seperately
 pub const DEFAULT_RENDER_VK_SEPERATELY: &str = "false";
 /// Default VK sol path
@@ -90,6 +90,8 @@ pub const DEFAULT_SCALE_REBASE_MULTIPLIERS: &str = "1,2,10";
 pub const DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION: &str = "false";
 /// Default only check for range check rebase
 pub const DEFAULT_ONLY_RANGE_CHECK_REBASE: &str = "false";
+/// Default commitment
+pub const DEFAULT_COMMITMENT: &str = "kzg";
 
 #[cfg(feature = "python-bindings")]
 /// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
@@ -294,21 +296,6 @@ pub enum Commands {
         args: RunArgs,
     },
 
-    #[cfg(feature = "render")]
-    /// Renders the model circuit to a .png file. For an overview of how to interpret these plots, see https://zcash.github.io/halo2/user/dev-tools.html
-    #[command(arg_required_else_help = true)]
-    RenderCircuit {
-        /// The path to the .onnx model file
-        #[arg(short = 'M', long)]
-        model: PathBuf,
-        /// Path to save the .png circuit render
-        #[arg(short = 'O', long)]
-        output: PathBuf,
-        /// proving arguments
-        #[clap(flatten)]
-        args: RunArgs,
-    },
-
     /// Generates the witness from an input file.
     GenWitness {
         /// The path to the .json data file
@@ -387,6 +374,9 @@ pub enum Commands {
         /// number of logrows to use for srs
         #[arg(long)]
         logrows: usize,
+        /// commitment used
+        #[arg(long, default_value = DEFAULT_COMMITMENT)]
+        commitment: Commitments,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -402,9 +392,9 @@ pub enum Commands {
         /// Number of logrows to use for srs. Overrides settings_path if specified.
         #[arg(long, default_value = None)]
         logrows: Option<u32>,
-        /// Check mode for SRS. Verifies downloaded srs is valid. Set to unsafe for speed.
-        #[arg(long, default_value = DEFAULT_CHECKMODE)]
-        check: CheckMode,
+        /// Commitment used
+        #[arg(long, default_value = None)]
+        commitment: Option<Commitments>,
     },
     /// Loads model and input and runs mock prover (for testing)
     Mock {
@@ -450,8 +440,11 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_SPLIT)]
         split_proofs: bool,
         /// compress selectors
-        #[arg(long, default_value = DEFAULT_COMPRESS_SELECTORS)]
-        compress_selectors: bool,
+        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION)]
+        disable_selector_compression: bool,
+        /// commitment used
+        #[arg(long, default_value = DEFAULT_COMMITMENT)]
+        commitment: Commitments,
     },
     /// Aggregates proofs :)
     Aggregate {
@@ -484,6 +477,9 @@ pub enum Commands {
         /// whether the accumulated proofs are segments of a larger circuit
         #[arg(long, default_value = DEFAULT_SPLIT)]
         split_proofs: bool,
+        /// commitment used
+        #[arg(long, default_value = DEFAULT_COMMITMENT)]
+        commitment: Commitments,
     },
     /// Compiles a circuit from onnx to a simplified graph (einsum + other ops) and parameters as sets of field elements
     CompileCircuit {
@@ -515,33 +511,8 @@ pub enum Commands {
         #[arg(short = 'W', long)]
         witness: Option<PathBuf>,
         /// compress selectors
-        #[arg(long, default_value = DEFAULT_COMPRESS_SELECTORS)]
-        compress_selectors: bool,
-    },
-
-    #[cfg(not(target_arch = "wasm32"))]
-    /// Fuzzes the proof pipeline with random inputs, random parameters, and random keys
-    Fuzz {
-        /// The path to the .json witness file (generated using the gen-witness command)
-        #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
-        witness: PathBuf,
-        /// The path to the compiled model file (generated using the compile-circuit command)
-        #[arg(short = 'M', long)]
-        compiled_circuit: PathBuf,
-        #[arg(
-            long,
-            require_equals = true,
-            num_args = 0..=1,
-            default_value_t = TranscriptType::default(),
-            value_enum
-        )]
-        transcript: TranscriptType,
-        /// number of fuzz iterations
-        #[arg(long, default_value = DEFAULT_FUZZ_RUNS)]
-        num_runs: usize,
-        /// compress selectors
-        #[arg(long, default_value = DEFAULT_COMPRESS_SELECTORS)]
-        compress_selectors: bool,
+        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION)]
+        disable_selector_compression: bool,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Deploys a test contact that the data attester reads from and creates a data attestation formatted input.json file that contains call data information
@@ -744,12 +715,18 @@ pub enum Commands {
         /// The path to the verification key file (generated using the setup-aggregate command)
         #[arg(long, default_value = DEFAULT_VK_AGGREGATED)]
         vk_path: PathBuf,
+        /// reduced srs
+        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION)]
+        reduced_srs: bool,
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
         logrows: u32,
+        /// commitment
+        #[arg(long, default_value = DEFAULT_COMMITMENT)]
+        commitment: Commitments,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Deploys an evm verifier that is generated by ezkl
