@@ -629,9 +629,9 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
       - name: Setup Virtual Env and Install python dependencies
-        run: python -m venv .env --python=python3.11; source .env/bin/activate; pip install -r requirements.txt; pip install --upgrade setuptools
+        run: python -m ensurepip --upgrade; python -m pip install --user virtualenv; virtualenv --upgrade-embed-wheels; virtualenv .env2 --python=3.12; source .env2/bin/activate; pip install -r requirements.txt; pip install --upgrade setuptools
       - name: Build python ezkl
-        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
+        run: source .env2/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       
       # - name: authenticate-kaggle-cli
       #   shell: bash
@@ -643,12 +643,12 @@ jobs:
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
       - name: All notebooks
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
+        run: source .env2/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
       - name: Tictactoe tutorials
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
+        run: source .env2/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
       - name: Voice tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
+        run: source .env2/bin/activate; cargo nextest run py_tests::tests::voice_
       - name: NBEATS tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
+        run: source .env2/bin/activate; cargo nextest run py_tests::tests::nbeats_
       # - name: Postgres tutorials
-      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
+      #   run: source .env2/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
