@@ -1,1 +1,2 @@
-sphinx-build src build
+#!/bin/sh
+sphinx-build ./src build
