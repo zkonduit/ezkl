@@ -29,7 +29,6 @@
 
 use std::str::FromStr;
 
-use crate::commands::*;
 use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
 use graph::Visibility;
@@ -217,10 +216,10 @@ pub struct RunArgs {
     #[arg(long, default_value = "false")]
     pub rebase_frac_zero_constants: bool,
     /// check mode (safe, unsafe, etc)
-    #[arg(long, default_value = DEFAULT_CHECKMODE)]
+    #[arg(long, default_value = "unsafe")]
     pub check_mode: CheckMode,
     /// commitment scheme
-    #[arg(long, default_value = DEFAULT_COMMITMENT)]
+    #[arg(long, default_value = "kzg")]
     pub commitment: Option<Commitments>,
 }
 
