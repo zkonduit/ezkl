@@ -184,7 +184,7 @@ jobs:
 
   wasm32-tests:
     runs-on: ubuntu-latest
-    # needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -207,7 +207,7 @@ jobs:
 
   tutorial:
     runs-on: ubuntu-latest
-    needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -224,7 +224,7 @@ jobs:
 
   mock-proving-tests:
     runs-on: non-gpu
-    # needs: [build,  library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -281,7 +281,7 @@ jobs:
 
   prove-and-verify-evm-tests:
     runs-on: non-gpu
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -354,7 +354,7 @@ jobs:
 
   prove-and-verify-tests:
     runs-on: non-gpu
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -460,7 +460,7 @@ jobs:
 
   prove-and-verify-mock-aggr-tests:
     runs-on: self-hosted
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -495,7 +495,7 @@ jobs:
 
   prove-and-verify-aggr-tests:
     runs-on: large-self-hosted
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -512,7 +512,7 @@ jobs:
 
   prove-and-verify-aggr-evm-tests:
     runs-on: large-self-hosted
-    needs: [build, library-tests]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -578,7 +578,7 @@ jobs:
 
   accuracy-measurement-tests:
     runs-on: ubuntu-latest-32-cores
-    # needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
