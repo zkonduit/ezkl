@@ -114,6 +114,12 @@ pub enum Commitments {
     IPA,
 }
 
+impl From<Option<Commitments>> for Commitments {
+    fn from(value: Option<Commitments>) -> Self {
+        value.unwrap_or(Commitments::KZG)
+    }
+}
+
 impl FromStr for Commitments {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -214,7 +220,7 @@ pub struct RunArgs {
     pub check_mode: CheckMode,
     /// commitment scheme
     #[arg(long, default_value = "kzg")]
-    pub commitment: Commitments,
+    pub commitment: Option<Commitments>,
 }
 
 impl Default for RunArgs {
@@ -234,7 +240,7 @@ impl Default for RunArgs {
             div_rebasing: false,
             rebase_frac_zero_constants: false,
             check_mode: CheckMode::UNSAFE,
-            commitment: Commitments::KZG,
+            commitment: None,
         }
     }
 }
