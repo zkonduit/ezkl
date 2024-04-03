@@ -37,7 +37,8 @@ jobs:
           git fetch --tags
           git tag -d $RELEASE_TAG
           git tag $RELEASE_TAG
-          git commit -a -m "ci: update version string in docs"
+          git add .
+          git commit -m "ci: update version string in docs"
 
       - name: Push changes
         uses: ad-m/github-push-action@master
