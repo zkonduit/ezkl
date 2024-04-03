@@ -122,7 +122,7 @@ mod native_tests {
         let settings: GraphSettings = serde_json::from_str(&settings).unwrap();
         let logrows = settings.run_args.logrows;
 
-        download_srs(logrows, settings.run_args.commitment);
+        download_srs(logrows, settings.run_args.commitment.into());
     }
 
     fn mv_test_(test_dir: &str, test: &str) {
@@ -1971,7 +1971,7 @@ mod native_tests {
             .expect("failed to parse settings file");
 
         // get_srs for the graph_settings_num_instances
-        download_srs(1, graph_settings.run_args.commitment);
+        download_srs(1, graph_settings.run_args.commitment.into());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([

@@ -24,8 +24,7 @@
         "param_visibility": "Private",
         "div_rebasing": false,
         "rebase_frac_zero_constants": false,
-        "check_mode": "UNSAFE",
-        "commitment": "KZG"
+        "check_mode": "UNSAFE"
     },
     "num_rows": 16,
     "total_dynamic_col_size": 0,
