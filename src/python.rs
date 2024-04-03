@@ -33,7 +33,7 @@ use tokio::runtime::Runtime;
 
 type PyFelt = String;
 
-/// pyclass for setup evm witness
+/// pyclass representing an enum
 #[pyclass]
 #[derive(Debug, Clone)]
 enum PyTestDataSource {
@@ -57,10 +57,12 @@ impl From<PyTestDataSource> for TestDataSource {
 #[derive(Debug, Clone)]
 struct PyG1 {
     #[pyo3(get, set)]
-    /// x for the gr
+    /// Field Element representing x
     x: PyFelt,
     #[pyo3(get, set)]
+    /// Field Element representing y
     y: PyFelt,
+    /// Field Element representing y
     #[pyo3(get, set)]
     z: PyFelt,
 }
@@ -138,50 +140,6 @@ impl pyo3::ToPyObject for PyG1Affine {
 
 /// Python class containing the struct used for run_args
 ///
-/// Arguments
-/// ---------
-/// tolerance: float
-///    The tolerance for error on model outputs
-///
-/// input_scale: int
-///   The denominator in the fixed point representation used when quantizing inputs
-///
-/// param_scale: int
-///   The denominator in the fixed point representation used when quantizing parameters
-///
-/// scale_rebase_multiplier: int
-///   If the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
-///
-/// lookup_range: list[int]
-///   The min and max elements in the lookup table input column
-///
-/// logrows: int
-///   The log_2 number of rows
-///
-/// num_inner_cols: int
-///   The log_2 number of rows
-///
-/// input_visibility: str
-///   Flags whether inputs are public, private, hashed
-///
-/// output_visibility: str
-///   Flags whether outputs are public, private, hashed
-///
-/// param_visibility: str
-///   Flags whether params are public, private, hashed
-///
-/// variables: list[tuple[str, int]]
-///   Hand-written parser for graph variables, eg. batch_size=1
-///
-/// div_rebasing: bool
-///   Rebase the scale using lookup table for division instead of using a range check
-///
-/// rebase_frac_zero_constants: bool
-///   Should constants with 0.0 fraction be rebased to scale 0
-///
-/// check_mode: str
-///   check mode (safe, unsafe)
-///
 /// Returns
 /// -------
 /// PyRunArgs
@@ -190,34 +148,49 @@ impl pyo3::ToPyObject for PyG1Affine {
 #[derive(Clone)]
 struct PyRunArgs {
     #[pyo3(get, set)]
+    /// float: The tolerance for error on model outputs
     pub tolerance: f32,
     #[pyo3(get, set)]
+    /// int: The denominator in the fixed point representation used when quantizing inputs
     pub input_scale: crate::Scale,
     #[pyo3(get, set)]
+    /// int:  The denominator in the fixed point representation used when quantizing parameters
     pub param_scale: crate::Scale,
     #[pyo3(get, set)]
+    /// int: If the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
     pub scale_rebase_multiplier: u32,
     #[pyo3(get, set)]
+    /// list[int]: The min and max elements in the lookup table input column
     pub lookup_range: crate::circuit::table::Range,
     #[pyo3(get, set)]
+    /// int: The log_2 number of rows
     pub logrows: u32,
     #[pyo3(get, set)]
+    /// int: The number of inner columns used for the lookup table
     pub num_inner_cols: usize,
     #[pyo3(get, set)]
+    /// string: accepts `public`, `private`, `fixed`, `hashed/public`, `hashed/private`, `polycommit`
     pub input_visibility: Visibility,
     #[pyo3(get, set)]
+    /// string: accepts `public`, `private`, `fixed`, `hashed/public`, `hashed/private`, `polycommit`
     pub output_visibility: Visibility,
     #[pyo3(get, set)]
+    /// string: accepts `public`, `private`, `fixed`, `hashed/public`, `hashed/private`, `polycommit`
     pub param_visibility: Visibility,
     #[pyo3(get, set)]
+    /// list[tuple[str, int]]: Hand-written parser for graph variables, eg. batch_size=1
     pub variables: Vec<(String, usize)>,
     #[pyo3(get, set)]
+    /// bool: Rebase the scale using lookup table for division instead of using a range check
     pub div_rebasing: bool,
     #[pyo3(get, set)]
+    /// bool: Should constants with 0.0 fraction be rebased to scale 0
     pub rebase_frac_zero_constants: bool,
     #[pyo3(get, set)]
+    /// str: check mode, accepts `safe`, `unsafe`
     pub check_mode: CheckMode,
     #[pyo3(get, set)]
+    /// str: commitment type, accepts `kzg`, `ipa`
     pub commitment: PyCommitments,
 }
 
@@ -277,7 +250,7 @@ impl Into<PyRunArgs> for RunArgs {
 
 #[pyclass]
 #[derive(Debug, Clone)]
-/// Pyclass marking the type of commitment
+/// pyclass representing an enum, denoting the type of commitment
 pub enum PyCommitments {
     /// KZG commitment
     KZG,
@@ -324,7 +297,19 @@ impl FromStr for PyCommitments {
     }
 }
 
-/// Converts a felt to big endian
+/// Converts a field element hex string to big endian
+///
+/// Arguments
+/// -------
+/// felt: str
+///     The field element represented as a string
+///
+///
+/// Returns
+/// -------
+/// str
+///     field element represented as a string
+///
 #[pyfunction(signature = (
     felt,
 ))]
@@ -334,22 +319,45 @@ fn felt_to_big_endian(felt: PyFelt) -> PyResult<String> {
 }
 
 /// Converts a field element hex string to an integer
+///
+/// Arguments
+/// -------
+/// felt: str
+///     The field element represented as a string
+///
+/// Returns
+/// -------
+/// int
+///
 #[pyfunction(signature = (
-    array,
+    felt,
 ))]
-fn felt_to_int(array: PyFelt) -> PyResult<i128> {
-    let felt = crate::pfsys::string_to_field::<Fr>(&array);
+fn felt_to_int(felt: PyFelt) -> PyResult<i128> {
+    let felt = crate::pfsys::string_to_field::<Fr>(&felt);
     let int_rep = felt_to_i128(felt);
     Ok(int_rep)
 }
 
-/// Converts a field eleement hex string to a floating point number
+/// Converts a field element hex string to a floating point number
+///
+/// Arguments
+/// -------
+/// felt: str
+///    The field element represented as a string
+///
+/// scale: float
+///     The scaling factor used to convert the field element into a floating point representation
+///
+/// Returns
+/// -------
+/// float
+///
 #[pyfunction(signature = (
-    array,
+    felt,
     scale
 ))]
-fn felt_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
-    let felt = crate::pfsys::string_to_field::<Fr>(&array);
+fn felt_to_float(felt: PyFelt, scale: crate::Scale) -> PyResult<f64> {
+    let felt = crate::pfsys::string_to_field::<Fr>(&felt);
     let int_rep = felt_to_i128(felt);
     let multiplier = scale_to_multiplier(scale);
     let float_rep = int_rep as f64 / multiplier;
@@ -357,9 +365,23 @@ fn felt_to_float(array: PyFelt, scale: crate::Scale) -> PyResult<f64> {
 }
 
 /// Converts a floating point element to a field element hex string
+///
+/// Arguments
+/// -------
+/// input: float
+///    The field element represented as a string
+///
+/// scale: float
+///     The scaling factor used to quantize the float into a field element
+///
+/// Returns
+/// -------
+/// str
+///     The field element represented as a string
+///
 #[pyfunction(signature = (
-input,
-scale
+    input,
+    scale
 ))]
 fn float_to_felt(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
     let int_rep = quantize_float(&input, 0.0, scale)
@@ -369,9 +391,20 @@ fn float_to_felt(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
 }
 
 /// Converts a buffer to vector of field elements
+///
+/// Arguments
+/// -------
+/// buffer: list[int]
+///     List of integers representing a buffer
+///
+/// Returns
+/// -------
+/// list[str]
+///     List of field elements represented as strings
+///
 #[pyfunction(signature = (
     buffer
-    ))]
+))]
 fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
     fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
         let mut n: u128 = 0;
@@ -430,9 +463,20 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
 }
 
 /// Generate a poseidon hash.
+///
+/// Arguments
+/// -------
+/// message: list[str]
+///     List of field elements represnted as strings
+///
+/// Returns
+/// -------
+/// list[str]
+///     List of field elements represented as strings
+///
 #[pyfunction(signature = (
     message,
-    ))]
+))]
 fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
     let message: Vec<Fr> = message
         .iter()
@@ -453,12 +497,31 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
 }
 
 /// Generate a kzg commitment.
+///
+/// Arguments
+/// -------
+/// message: list[str]
+///     List of field elements represnted as strings
+///
+/// vk_path: str
+///     Path to the verification key
+///
+/// settings_path: str
+///     Path to the settings file
+///
+/// srs_path: str
+///     Path to the Structure Reference String (SRS) file
+///
+/// Returns
+/// -------
+/// list[PyG1Affine]
+///
 #[pyfunction(signature = (
     message,
     vk_path=PathBuf::from(DEFAULT_VK),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     srs_path=None
-    ))]
+))]
 fn kzg_commit(
     message: Vec<PyFelt>,
     vk_path: PathBuf,
@@ -493,12 +556,31 @@ fn kzg_commit(
 }
 
 /// Generate an ipa commitment.
+///
+/// Arguments
+/// -------
+/// message: list[str]
+///     List of field elements represnted as strings
+///
+/// vk_path: str
+///     Path to the verification key
+///
+/// settings_path: str
+///     Path to the settings file
+///
+/// srs_path: str
+///     Path to the Structure Reference String (SRS) file
+///
+/// Returns
+/// -------
+/// list[PyG1Affine]
+///
 #[pyfunction(signature = (
     message,
     vk_path=PathBuf::from(DEFAULT_VK),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     srs_path=None
-    ))]
+))]
 fn ipa_commit(
     message: Vec<PyFelt>,
     vk_path: PathBuf,
@@ -533,10 +615,19 @@ fn ipa_commit(
 }
 
 /// Swap the commitments in a proof
+///
+/// Arguments
+/// -------
+/// proof_path: str
+///     Path to the proof file
+///
+/// witness_path: str
+///     Path to the witness file
+///
 #[pyfunction(signature = (
     proof_path=PathBuf::from(DEFAULT_PROOF),
     witness_path=PathBuf::from(DEFAULT_WITNESS),
-    ))]
+))]
 fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResult<()> {
     crate::execute::swap_proof_commitments_cmd(proof_path, witness_path)
         .map_err(|_| PyIOError::new_err("Failed to swap commitments"))?;
@@ -545,11 +636,27 @@ fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResul
 }
 
 /// Generates a vk from a pk for a model circuit and saves it to a file
+///
+/// Arguments
+/// -------
+/// path_to_pk: str
+///     Path to the proving key
+///
+/// circuit_settings_path: str
+///     Path to the witness file
+///
+/// vk_output_path: str
+///     Path to create the vk file
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     path_to_pk=PathBuf::from(DEFAULT_PK),
     circuit_settings_path=PathBuf::from(DEFAULT_SETTINGS),
     vk_output_path=PathBuf::from(DEFAULT_VK),
-    ))]
+))]
 fn gen_vk_from_pk_single(
     path_to_pk: PathBuf,
     circuit_settings_path: PathBuf,
@@ -571,10 +678,22 @@ fn gen_vk_from_pk_single(
 }
 
 /// Generates a vk from a pk for an aggregate circuit and saves it to a file
+///
+/// Arguments
+/// -------
+/// path_to_pk: str
+///     Path to the proving key
+///
+/// vk_output_path: str
+///     Path to create the vk file
+///
+/// Returns
+/// -------
+/// bool
 #[pyfunction(signature = (
     path_to_pk=PathBuf::from(DEFAULT_PK_AGGREGATED),
     vk_output_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
-    ))]
+))]
 fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult<bool> {
     let pk = load_pk::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(path_to_pk, ())
         .map_err(|_| PyIOError::new_err("Failed to load pk"))?;
@@ -589,11 +708,17 @@ fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult
 }
 
 /// Displays the table as a string in python
-/// 
+///
 /// Arguments
 /// ---------
 /// model: str
-///   path to the net
+///     Path to the onnx file
+///
+/// Returns
+/// ---------
+/// str
+///     Table of the nodes in the onnx file
+///
 #[pyfunction(signature = (
     model = PathBuf::from(DEFAULT_MODEL),
     py_run_args = None
@@ -609,7 +734,16 @@ fn table(model: PathBuf, py_run_args: Option<PyRunArgs>) -> PyResult<String> {
     }
 }
 
-/// generates the srs
+/// Generates the Structured Reference String (SRS), use this only for testing purposes
+///
+/// Arguments
+/// ---------
+/// srs_path: str
+///     Path to the create the SRS file
+///
+/// logrows: int
+///     The number of logrows for the SRS file
+///
 #[pyfunction(signature = (
     srs_path,
     logrows,
@@ -620,7 +754,26 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
     Ok(())
 }
 
-/// gets a public srs
+/// Gets a public srs
+///
+/// Arguments
+/// ---------
+/// settings_path: str
+///     Path to the settings file
+///
+/// logrows: int
+///     The number of logrows for the SRS file
+///
+/// srs_path: str
+///     Path to the create the SRS file
+///
+/// commitment: str
+///     Specify the commitment used ("kzg", "ipa")
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     logrows=None,
@@ -653,7 +806,23 @@ fn get_srs(
     Ok(true)
 }
 
-/// generates the circuit settings
+/// Generates the circuit settings
+///
+/// Arguments
+/// ---------
+/// model: str
+///     Path to the onnx file
+///
+/// output: str
+///     Path to create the settings file
+///
+/// py_run_args: PyRunArgs
+///     PyRunArgs object to initialize the settings
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     model=PathBuf::from(DEFAULT_MODEL),
     output=PathBuf::from(DEFAULT_SETTINGS),
@@ -674,7 +843,38 @@ fn gen_settings(
     Ok(true)
 }
 
-/// calibrates the circuit settings
+/// Calibrates the circuit settings
+///
+/// Arguments
+/// ---------
+/// data: str
+///     Path to the calibration data
+///
+/// model: str
+///     Path to the onnx file
+///
+/// settings: str
+///     Path to the settings file
+///
+/// lookup_safety_margin: int
+///      the lookup safety margin to use for calibration. if the max lookup is 2^k, then the max lookup will be 2^k * lookup_safety_margin. larger = safer but slower
+///
+/// scales: list[int]
+///     Optional scales to specifically try for calibration
+///
+/// scale_rebase_multiplier: list[int]
+///     Optional scale rebase multipliers to specifically try for calibration. This is the multiplier at which we divide to return to the input scale.
+///
+/// max_logrows: int
+///     Optional max logrows to use for calibration
+///
+/// only_range_check_rebase: bool
+///     Check ranges when rebasing
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     data = PathBuf::from(DEFAULT_CALIBRATION_FILE),
     model = PathBuf::from(DEFAULT_MODEL),
@@ -716,7 +916,30 @@ fn calibrate_settings(
     Ok(true)
 }
 
-/// runs the forward pass operation
+/// Runs the forward pass operation to generate a witness
+///
+/// Arguments
+/// ---------
+/// data: str
+///     Path to the data file
+///
+/// model: str
+///     Path to the compiled model file
+///
+/// output: str
+///     Path to create the witness file
+///
+/// vk_path: str
+///     Path to the verification key
+///
+/// srs_path: str
+///     Path to the SRS file
+///
+/// Returns
+/// -------
+/// dict
+///     Python object containing the witness values
+///
 #[pyfunction(signature = (
     data=PathBuf::from(DEFAULT_DATA),
     model=PathBuf::from(DEFAULT_MODEL),
@@ -743,7 +966,20 @@ fn gen_witness(
     Python::with_gil(|py| Ok(output.to_object(py)))
 }
 
-/// mocks the prover
+/// Mocks the prover
+///
+/// Arguments
+/// ---------
+/// witness: str
+///     Path to the witness file
+///
+/// model: str
+///     Path to the compiled model file
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     witness=PathBuf::from(DEFAULT_WITNESS),
     model=PathBuf::from(DEFAULT_MODEL),
@@ -756,7 +992,23 @@ fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     Ok(true)
 }
 
-/// mocks the aggregate prover
+/// Mocks the aggregate prover
+///
+/// Arguments
+/// ---------
+/// aggregation_snarks: list[str]
+///     List of paths to the relevant proof files
+///
+/// logrows: int
+///     Number of logrows to use for the aggregation circuit
+///
+/// split_proofs: bool
+///     Indicates whether the accumulated are segments of a larger proof
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     aggregation_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
@@ -775,7 +1027,32 @@ fn mock_aggregate(
     Ok(true)
 }
 
-/// runs the prover on a set of inputs
+/// Runs the setup process
+///
+/// Arguments
+/// ---------
+/// model: str
+///     Path to the compiled model file
+///
+/// vk_path: str
+///     Path to create the verification key file
+///
+/// pk_path: str
+///     Path to create the proving key file
+///
+/// srs_path: str
+///     Path to the SRS file
+///
+/// witness_path: str
+///     Path to the witness file
+///
+/// disable_selector_compression: bool
+///     Whether to compress the selectors or not
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     model=PathBuf::from(DEFAULT_MODEL),
     vk_path=PathBuf::from(DEFAULT_VK),
@@ -808,7 +1085,32 @@ fn setup(
     Ok(true)
 }
 
-/// runs the prover on a set of inputs
+/// Runs the prover on a set of inputs
+///
+/// Arguments
+/// ---------
+/// witness: str
+///     Path to the witness file
+///
+/// model: str
+///     Path to the compiled model file
+///
+/// pk_path: str
+///     Path to the proving key file
+///
+/// proof_path: str
+///     Path to create the proof file
+///
+/// proof_type: str
+///     Accepts `single`, `for-aggr`
+///
+/// srs_path: str
+///     Path to the SRS file
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     witness=PathBuf::from(DEFAULT_WITNESS),
     model=PathBuf::from(DEFAULT_MODEL),
@@ -842,7 +1144,29 @@ fn prove(
     Python::with_gil(|py| Ok(snark.to_object(py)))
 }
 
-/// verifies a given proof
+/// Verifies a given proof
+///
+/// Arguments
+/// ---------
+/// proof_path: str
+///     Path to create the proof file
+///
+/// settings_path: str
+///     Path to the settings file
+///
+/// vk_path: str
+///     Path to the verification key file
+///
+/// srs_path: str
+///     Path to the SRS file
+///
+/// non_reduced_srs: bool
+///     Whether to reduce the number of SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     proof_path=PathBuf::from(DEFAULT_PROOF),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
@@ -872,6 +1196,38 @@ fn verify(
     Ok(true)
 }
 
+///  Runs the setup process for an aggregate setup
+///
+/// Arguments
+/// ---------
+/// sample_snarks: list[str]
+///     List of paths to the various proofs
+///
+/// vk_path: str
+///     Path to create the aggregated VK
+///
+/// pk_path: str
+///     Path to create the aggregated PK
+///
+/// logrows: int
+///     Number of logrows to use
+///
+/// split_proofs: bool
+///     Whether the accumulated are segments of a larger proof
+///
+/// srs_path: str
+///     Path to the SRS file
+///
+/// disable_selector_compression: bool
+///     Whether to compress selectors
+///
+/// commitment: str
+///     Accepts `kzg`, `ipa`
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     sample_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
     vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
@@ -910,6 +1266,23 @@ fn setup_aggregate(
     Ok(true)
 }
 
+/// Compiles the circuit for use in other steps
+///
+/// Arguments
+/// ---------
+/// model: str
+///     Path to the onnx model file
+///
+/// compiled_circuit: str
+///     Path to output the compiled circuit
+///
+/// settings_path: str
+///     Path to the settings files
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     model=PathBuf::from(DEFAULT_MODEL),
     compiled_circuit=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
@@ -928,7 +1301,41 @@ fn compile_circuit(
     Ok(true)
 }
 
-/// creates an aggregated proof
+/// Creates an aggregated proof
+///
+/// Arguments
+/// ---------
+/// aggregation_snarks: list[str]
+///     List of paths to the various proofs
+///
+/// proof_path: str
+///     Path to output the aggregated proof
+///
+/// vk_path: str
+///     Path to the VK file
+///
+/// transcript:
+///     Proof transcript type to be used. `evm` used by default. `poseidon` is also supported
+///
+/// logrows:
+///     Logrows used for aggregation circuit
+///
+/// check_mode: str
+///     Run sanity checks during calculations. Accepts `safe` or `unsafe`
+///
+/// split-proofs: bool
+///      Whether the accumulated proofs are segments of a larger circuit
+///
+/// srs_path: str
+///     Path to the SRS used
+///
+/// commitment: str
+///     Accepts "kzg" or "ipa"
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     aggregation_snarks=vec![PathBuf::from(DEFAULT_PROOF)],
     proof_path=PathBuf::from(DEFAULT_PROOF_AGGREGATED),
@@ -971,7 +1378,32 @@ fn aggregate(
     Ok(true)
 }
 
-/// verifies and aggregate proof
+/// Verifies and aggregate proof
+///
+/// Arguments
+/// ---------
+/// proof_path: str
+///      The path to the proof file
+///
+/// vk_path: str
+///     The path to the verification key file
+///
+/// logrows: int
+///     logrows used for aggregation circuit
+///
+/// commitment: str
+///     Accepts "kzg" or "ipa"
+///
+/// reduced_srs: bool
+///     Whether to reduce the number of SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
+///
+/// srs_path: str
+///     The path to the SRS file
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     proof_path=PathBuf::from(DEFAULT_PROOF_AGGREGATED),
     vk_path=PathBuf::from(DEFAULT_VK),
@@ -1004,7 +1436,32 @@ fn verify_aggr(
     Ok(true)
 }
 
-/// creates an EVM compatible verifier, you will need solc installed in your environment to run this
+/// Creates an EVM compatible verifier, you will need solc installed in your environment to run this
+///
+/// Arguments
+/// ---------
+/// vk_path: str
+///     The path to the verification key file
+///
+/// settings_path: str
+///     The path to the settings file
+///
+/// sol_code_path: str
+///     The path to the create the solidity verifier
+///
+/// abi_path: str
+///     The path to create the ABI for the solidity verifier
+///
+/// srs_path: str
+///     The path to the SRS file
+///
+/// render_vk_separately: bool
+///     Whether the verifier key should be rendered as a separate contract. We recommend disabling selector compression if this is enabled. To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     vk_path=PathBuf::from(DEFAULT_VK),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
@@ -1037,7 +1494,26 @@ fn create_evm_verifier(
     Ok(true)
 }
 
-// creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
+/// Creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
+///
+/// Arguments
+/// ---------
+/// input_data: str
+///     The path to the .json data file, which should contain the necessary calldata and account addresses needed to read from all the on-chain view functions that return the data that the network ingests as inputs
+///
+/// settings_path: str
+///     The path to the settings file
+///
+/// sol_code_path: str
+///     The path to the create the solidity verifier
+///
+/// abi_path: str
+///     The path to create the ABI for the solidity verifier
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     input_data=PathBuf::from(DEFAULT_DATA),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
@@ -1059,6 +1535,32 @@ fn create_evm_data_attestation(
     Ok(true)
 }
 
+/// Setup test evm witness
+///
+/// Arguments
+/// ---------
+/// data_path: str
+///     The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+///
+/// compiled_circuit_path: str
+///     The path to the compiled model file (generated using the compile-circuit command)
+///
+/// test_data: str
+///     For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information derived from the file information in the data .json file. Should include both the network input (possibly private) and the network output (public input to the proof)
+///
+/// input_sources: str
+///     Where the input data comes from
+///
+/// output_source: str
+///     Where the output data comes from
+///
+/// rpc_url: str
+///     RPC URL for an EVM compatible node, if None, uses Anvil as a local RPC node
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     data_path,
     compiled_circuit_path,
@@ -1093,6 +1595,7 @@ fn setup_test_evm_witness(
     Ok(true)
 }
 
+/// deploys the solidity verifier
 #[pyfunction(signature = (
     addr_path,
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
@@ -1125,6 +1628,7 @@ fn deploy_evm(
     Ok(true)
 }
 
+/// deploys the solidity vk verifier
 #[pyfunction(signature = (
     addr_path,
     sol_code_path=PathBuf::from(DEFAULT_VK_SOL),
@@ -1157,6 +1661,7 @@ fn deploy_vk_evm(
     Ok(true)
 }
 
+/// deploys the solidity da verifier
 #[pyfunction(signature = (
     addr_path,
     input_data,
@@ -1194,6 +1699,27 @@ fn deploy_da_evm(
     Ok(true)
 }
 /// verifies an evm compatible proof, you will need solc installed in your environment to run this
+///
+/// Arguments
+/// ---------
+/// addr_verifier: str
+///     The path to verifier contract's address
+///
+/// proof_path: str
+///     The path to the proof file (generated using the prove command)
+///
+/// rpc_url: str
+///     RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+///
+/// addr_da: str
+///     does the verifier use data attestation ?
+///
+/// addr_vk: str
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     addr_verifier,
     proof_path=PathBuf::from(DEFAULT_PROOF),
@@ -1239,7 +1765,35 @@ fn verify_evm(
     Ok(true)
 }
 
-/// creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
+/// Creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
+///
+/// Arguments
+/// ---------
+/// aggregation_settings: str
+///     path to the settings file
+///
+/// vk_path: str
+///     The path to load the desired verification key file
+///
+/// sol_code_path: str
+///     The path to the Solidity code
+///
+/// abi_path: str
+///     The path to output the Solidity verifier ABI
+///
+/// logrows: int
+///     Number of logrows used during aggregated setup
+///
+/// srs_path: str
+///     The path to the SRS file
+///
+/// render_vk_separately: bool
+///     Whether the verifier key should be rendered as a separate contract. We recommend disabling selector compression if this is enabled. To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
     aggregation_settings=vec![PathBuf::from(DEFAULT_PROOF)],
     vk_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
