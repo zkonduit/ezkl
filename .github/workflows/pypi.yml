@@ -362,34 +362,15 @@ jobs:
   #         packages-dir: ./
 
   doc-publish:
+    permissions: write-all
     name: Uploads documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set Cargo.toml version to match github tag for docs
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          cp docs/python/src/conf.py docs/python/src/conf.py.orig
-          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" docs/python/src/conf.py.orig >docs/python/src/conf.py
-          cp docs/python/requirements-docs.txt docs/python/requirements-docs.txt.orig
-          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" docs/python/requirements-docs.txt.orig >docs/python/requirements-docs.txt
-
-      - name: Update requirements for documentation
-        id: update-req-for-doc
-        uses: test-room-7/action-update-file@v1
-        with:
-            file-path: |
-              docs/python/requirements-docs.txt
-              docs/python/src/conf.py
-            commit-msg: "fix: updates version in docs requirements"
-            github-token: ${{ secrets.GITHUB_TOKEN }}
-            branch: ${{ env.RELEASE_TAG }}
 
       - name: Trigger RTDs build
         uses: dfm/rtds-action@v1
         with:
           webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
           webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
-          commit_ref: ${{ steps.update-req-for-doc.outputs.commit-sha }}
+          commit_ref: ${{ github.ref_name }}

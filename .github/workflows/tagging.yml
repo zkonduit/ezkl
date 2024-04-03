@@ -17,3 +17,28 @@ jobs:
         uses: mathieudutour/github-tag-action@v6.1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Cargo.toml version to match github tag for docs
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.tag_version.outputs.new_tag }}
+        run: |
+          cp docs/python/src/conf.py docs/python/src/conf.py.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" docs/python/src/conf.py.orig >docs/python/src/conf.py
+          cp docs/python/requirements-docs.txt docs/python/requirements-docs.txt.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" docs/python/requirements-docs.txt.orig >docs/python/requirements-docs.txt
+
+      - name: Commit files
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git tag -d $steps.tag_version.outputs.new_tag
+          git tag $steps.tag_version.outputs.new_tag
+          git commit -a -m "ci: update documentation versions"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          force: true
+          tags: true
