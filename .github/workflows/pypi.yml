@@ -15,157 +15,157 @@ defaults:
     working-directory: .
 
 jobs:
-  # macos:
-  #   runs-on: macos-latest
-  #   if: startsWith(github.ref, 'refs/tags/')
-  #   strategy:
-  #     matrix:
-  #       target: [x86_64, universal2-apple-darwin]
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v4
-  #       with:
-  #         python-version: 3.12
-  #         architecture: x64
+  macos:
+    runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      matrix:
+        target: [x86_64, universal2-apple-darwin]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+          architecture: x64
 
-  #     - name: Set Cargo.toml version to match github tag
-  #       shell: bash
-  #       env:
-  #         RELEASE_TAG: ${{ github.ref_name }}
-  #       run: |
-  #         mv Cargo.toml Cargo.toml.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
-  #         mv Cargo.lock Cargo.lock.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
+      - name: Set Cargo.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv Cargo.toml Cargo.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
+          mv Cargo.lock Cargo.lock.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
-  #     - uses: actions-rs/toolchain@v1
-  #       with:
-  #         toolchain: nightly-2023-06-27
-  #         override: true
-  #         components: rustfmt, clippy
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-06-27
+          override: true
+          components: rustfmt, clippy
 
-  #     - name: Build wheels
-  #       uses: PyO3/maturin-action@v1
-  #       with:
-  #         target: ${{ matrix.target }}
-  #         args: --release --out dist --features python-bindings
-  #     - name: Install built wheel
-  #       run: |
-  #         pip install ezkl --no-index --find-links dist --force-reinstall
-  #         python -c "import ezkl"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --features python-bindings
+      - name: Install built wheel
+        run: |
+          pip install ezkl --no-index --find-links dist --force-reinstall
+          python -c "import ezkl"
 
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@v3
-  #       with:
-  #         name: wheels
-  #         path: dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist
 
-  # windows:
-  #   runs-on: windows-latest
-  #   if: startsWith(github.ref, 'refs/tags/')
-  #   strategy:
-  #     matrix:
-  #       target: [x64, x86]
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v4
-  #       with:
-  #         python-version: 3.12
-  #         architecture: ${{ matrix.target }}
+  windows:
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      matrix:
+        target: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+          architecture: ${{ matrix.target }}
 
-  #     - name: Set Cargo.toml version to match github tag
-  #       shell: bash
-  #       env:
-  #         RELEASE_TAG: ${{ github.ref_name }}
-  #       run: |
-  #         mv Cargo.toml Cargo.toml.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
-  #         mv Cargo.lock Cargo.lock.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
+      - name: Set Cargo.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv Cargo.toml Cargo.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
+          mv Cargo.lock Cargo.lock.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
-  #     - uses: actions-rs/toolchain@v1
-  #       with:
-  #         toolchain: nightly-2023-06-27
-  #         override: true
-  #         components: rustfmt, clippy
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-06-27
+          override: true
+          components: rustfmt, clippy
 
-  #     - name: Build wheels
-  #       uses: PyO3/maturin-action@v1
-  #       with:
-  #         target: ${{ matrix.target }}
-  #         args: --release --out dist --features python-bindings
-  #     - name: Install built wheel
-  #       run: |
-  #         pip install ezkl --no-index --find-links dist --force-reinstall
-  #         python -c "import ezkl"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --features python-bindings
+      - name: Install built wheel
+        run: |
+          pip install ezkl --no-index --find-links dist --force-reinstall
+          python -c "import ezkl"
 
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@v3
-  #       with:
-  #         name: wheels
-  #         path: dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist
 
-  # linux:
-  #   runs-on: ubuntu-latest
-  #   if: startsWith(github.ref, 'refs/tags/')
-  #   strategy:
-  #     matrix:
-  #       target: [x86_64, i686]
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v4
-  #       with:
-  #         python-version: 3.12
-  #         architecture: x64
+  linux:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      matrix:
+        target: [x86_64, i686]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+          architecture: x64
 
-  #     - name: Set Cargo.toml version to match github tag
-  #       shell: bash
-  #       env:
-  #         RELEASE_TAG: ${{ github.ref_name }}
-  #       run: |
-  #         mv Cargo.toml Cargo.toml.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
-  #         mv Cargo.lock Cargo.lock.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
+      - name: Set Cargo.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv Cargo.toml Cargo.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
+          mv Cargo.lock Cargo.lock.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
 
-      # - name: Install required libraries
-      #   shell: bash
-      #   run: |
-      #     sudo apt-get update && sudo apt-get install -y openssl pkg-config libssl-dev
+      - name: Install required libraries
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y openssl pkg-config libssl-dev
 
-      # - name: Build wheels
-      #   uses: PyO3/maturin-action@v1
-      #   with:
-      #     target: ${{ matrix.target }}
-      #     manylinux: auto
-      #     args: --release --out dist --features python-bindings
-      #     before-script-linux: |
-      #       # If we're running on rhel centos, install needed packages.
-      #       if command -v yum &> /dev/null; then
-      #           yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --out dist --features python-bindings
+          before-script-linux: |
+            # If we're running on rhel centos, install needed packages.
+            if command -v yum &> /dev/null; then
+                yum update -y && yum install -y perl-core openssl openssl-devel pkgconfig libatomic
 
-      #           # If we're running on i686 we need to symlink libatomic
-      #           # in order to build openssl with -latomic flag.
-      #           if [[ ! -d "/usr/lib64" ]]; then
-      #               ln -s /usr/lib/libatomic.so.1 /usr/lib/libatomic.so
-      #           fi
-      #       else
-      #           # If we're running on debian-based system.
-      #           apt update -y && apt-get install -y libssl-dev openssl pkg-config
-      #       fi
+                # If we're running on i686 we need to symlink libatomic
+                # in order to build openssl with -latomic flag.
+                if [[ ! -d "/usr/lib64" ]]; then
+                    ln -s /usr/lib/libatomic.so.1 /usr/lib/libatomic.so
+                fi
+            else
+                # If we're running on debian-based system.
+                apt update -y && apt-get install -y libssl-dev openssl pkg-config
+            fi
 
-      # - name: Install built wheel
-      #   if: matrix.target == 'x86_64'
-      #   run: |
-      #     pip install ezkl --no-index --find-links dist --force-reinstall
-      #     python -c "import ezkl"
+      - name: Install built wheel
+        if: matrix.target == 'x86_64'
+        run: |
+          pip install ezkl --no-index --find-links dist --force-reinstall
+          python -c "import ezkl"
 
-      # - name: Upload wheels
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: wheels
-      #     path: dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist
 
   # TODO: There's a problem with the maturin-action toolchain for arm arch leading to failed builds
   # linux-cross:
@@ -218,148 +218,148 @@ jobs:
   #       name: wheels
   #       path: dist
 
-  # musllinux:
-  #   runs-on: ubuntu-latest
-  #   if: startsWith(github.ref, 'refs/tags/')
-  #   strategy:
-  #     matrix:
-  #       target:
-  #         - x86_64-unknown-linux-musl
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v4
-  #       with:
-  #         python-version: 3.12
-  #         architecture: x64
+  musllinux:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+          architecture: x64
 
-  #     - name: Set Cargo.toml version to match github tag
-  #       shell: bash
-  #       env:
-  #         RELEASE_TAG: ${{ github.ref_name }}
-  #       run: |
-  #         mv Cargo.toml Cargo.toml.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
-  #         mv Cargo.lock Cargo.lock.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
+      - name: Set Cargo.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv Cargo.toml Cargo.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
+          mv Cargo.lock Cargo.lock.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
-  #     - name: Install required libraries
-  #       shell: bash
-  #       run: |
-  #         sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Install required libraries
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
 
-  #     - name: Build wheels
-  #       uses: PyO3/maturin-action@v1
-  #       with:
-  #         target: ${{ matrix.target }}
-  #         manylinux: musllinux_1_2
-  #         args: --release --out dist --features python-bindings
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: musllinux_1_2
+          args: --release --out dist --features python-bindings
 
-  #     - name: Install built wheel
-  #       if: matrix.target == 'x86_64-unknown-linux-musl'
-  #       uses: addnab/docker-run-action@v3
-  #       with:
-  #         image: alpine:latest
-  #         options: -v ${{ github.workspace }}:/io -w /io
-  #         run: |
-  #           apk add py3-pip
-  #           pip3 install -U pip
-  #           python3 -m venv .venv
-  #           source .venv/bin/activate
-  #           pip3 install ezkl --no-index --find-links /io/dist/ --force-reinstall
-  #           python3 -c "import ezkl"
+      - name: Install built wheel
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        uses: addnab/docker-run-action@v3
+        with:
+          image: alpine:latest
+          options: -v ${{ github.workspace }}:/io -w /io
+          run: |
+            apk add py3-pip
+            pip3 install -U pip
+            python3 -m venv .venv
+            source .venv/bin/activate
+            pip3 install ezkl --no-index --find-links /io/dist/ --force-reinstall
+            python3 -c "import ezkl"
 
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@v3
-  #       with:
-  #         name: wheels
-  #         path: dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist
 
-  # musllinux-cross:
-  #   runs-on: ubuntu-latest
-  #   if: startsWith(github.ref, 'refs/tags/')
-  #   strategy:
-  #     matrix:
-  #       platform:
-  #         - target: aarch64-unknown-linux-musl
-  #           arch: aarch64
-  #         - target: armv7-unknown-linux-musleabihf
-  #           arch: armv7
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-python@v4
-  #       with:
-  #         python-version: 3.12
+  musllinux-cross:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      matrix:
+        platform:
+          - target: aarch64-unknown-linux-musl
+            arch: aarch64
+          - target: armv7-unknown-linux-musleabihf
+            arch: armv7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
 
-  #     - name: Set Cargo.toml version to match github tag
-  #       shell: bash
-  #       env:
-  #         RELEASE_TAG: ${{ github.ref_name }}
-  #       run: |
-  #         mv Cargo.toml Cargo.toml.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
-  #         mv Cargo.lock Cargo.lock.orig
-  #         sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
+      - name: Set Cargo.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv Cargo.toml Cargo.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
+          mv Cargo.lock Cargo.lock.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
-  #     - name: Build wheels
-  #       uses: PyO3/maturin-action@v1
-  #       with:
-  #         target: ${{ matrix.platform.target }}
-  #         manylinux: musllinux_1_2
-  #         args: --release --out dist --features python-bindings
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          manylinux: musllinux_1_2
+          args: --release --out dist --features python-bindings
 
-  #     - uses: uraimo/run-on-arch-action@v2.5.0
-  #       name: Install built wheel
-  #       with:
-  #         arch: ${{ matrix.platform.arch }}
-  #         distro: alpine_latest
-  #         githubToken: ${{ github.token }}
-  #         run: |
-  #           apk add py3-pip
-  #           python3 -m venv .venv
-  #           source .venv/bin/activate
-  #           pip3 install -U pip
-  #           pip3 install ezkl --no-index --find-links dist/ --force-reinstall
-  #           python3 -c "import ezkl"
+      - uses: uraimo/run-on-arch-action@v2.5.0
+        name: Install built wheel
+        with:
+          arch: ${{ matrix.platform.arch }}
+          distro: alpine_latest
+          githubToken: ${{ github.token }}
+          run: |
+            apk add py3-pip
+            python3 -m venv .venv
+            source .venv/bin/activate
+            pip3 install -U pip
+            pip3 install ezkl --no-index --find-links dist/ --force-reinstall
+            python3 -c "import ezkl"
 
-  #     - name: Upload wheels
-  #       uses: actions/upload-artifact@v3
-  #       with:
-  #         name: wheels
-  #         path: dist
+      - name: Upload wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist
 
-  # pypi-publish:
-  #   name: Uploads release to PyPI
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     id-token: write
-  #   if: "startsWith(github.ref, 'refs/tags/')"
-  #   # TODO: Uncomment if linux-cross is working
-  #   # needs: [ macos, windows, linux, linux-cross, musllinux, musllinux-cross ]
-  #   needs: [macos, windows, linux, musllinux, musllinux-cross]
-  #   steps:
-  #     - uses: actions/download-artifact@v3
-  #       with:
-  #         name: wheels
-  #     - name: List Files
-  #       run: ls -R
+  pypi-publish:
+    name: Uploads release to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    if: "startsWith(github.ref, 'refs/tags/')"
+    # TODO: Uncomment if linux-cross is working
+    # needs: [ macos, windows, linux, linux-cross, musllinux, musllinux-cross ]
+    needs: [macos, windows, linux, musllinux, musllinux-cross]
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: wheels
+      - name: List Files
+        run: ls -R
 
-  #     # Both publish steps will fail if there is no trusted publisher setup
-  #     # On failure the publish step will then simply continue to the next one
+      # Both publish steps will fail if there is no trusted publisher setup
+      # On failure the publish step will then simply continue to the next one
 
-  #     # publishes to PyPI
-  #     - name: Publish package distributions to PyPI
-  #       continue-on-error: true
-  #       uses: pypa/gh-action-pypi-publish@release/v1
-  #       with:
-  #         packages-dir: ./
+      # publishes to PyPI
+      - name: Publish package distributions to PyPI
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./
 
-  #     # publishes to TestPyPI
-  #     - name: Publish package distribution to TestPyPI
-  #       continue-on-error: true
-  #       uses: pypa/gh-action-pypi-publish@release/v1
-  #       with:
-  #         repository-url: https://test.pypi.org/legacy/
-  #         packages-dir: ./
+      # publishes to TestPyPI
+      - name: Publish package distribution to TestPyPI
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: ./
 
   doc-publish:
     name: Trigger ReadTheDocs Build
