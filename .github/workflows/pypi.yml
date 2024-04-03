@@ -365,6 +365,7 @@ jobs:
     name: Uploads documentation
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Set Cargo.toml version to match github tag for docs
         shell: bash
         env:
