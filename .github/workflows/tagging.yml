@@ -38,17 +38,16 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git fetch --tags
           git checkout -b release-$RELEASE_TAG
-          git tag -d $RELEASE_TAG
-          git tag $RELEASE_TAG
           git add .
           git commit -m "ci: update version string in docs"
+          git tag -d $RELEASE_TAG
+          git tag $RELEASE_TAG
 
       - name: Push changes
         uses: ad-m/github-push-action@master
         env:
           RELEASE_TAG: ${{ steps.tag_version.outputs.new_tag }}
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: release-${{ steps.tag_version.outputs.new_tag }}
           force: true
           tags: true
