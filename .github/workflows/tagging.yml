@@ -23,10 +23,12 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.tag_version.outputs.new_tag }}
         run: |
-          cp docs/python/src/conf.py docs/python/src/conf.py.orig
+          mv docs/python/src/conf.py docs/python/src/conf.py.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" docs/python/src/conf.py.orig >docs/python/src/conf.py
-          cp docs/python/requirements-docs.txt docs/python/requirements-docs.txt.orig
+          rm docs/python/src/conf.py.orig
+          mv docs/python/requirements-docs.txt docs/python/requirements-docs.txt.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" docs/python/requirements-docs.txt.orig >docs/python/requirements-docs.txt
+          rm docs/python/requirements-docs.txt.orig
 
       - name: Commit files
         env:
