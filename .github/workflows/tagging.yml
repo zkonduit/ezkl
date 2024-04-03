@@ -29,6 +29,7 @@ jobs:
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" docs/python/requirements-docs.txt.orig >docs/python/requirements-docs.txt
 
       - name: Commit files
+<<<<<<< HEAD
         env:
           RELEASE_TAG: ${{ steps.tag_version.outputs.new_tag }}
         run: |
@@ -37,6 +38,14 @@ jobs:
           git tag -d $RELEASE_TAG
           git tag $RELEASE_TAG
           git commit -a -m "ci: update version string in docs"
+=======
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git tag -d $steps.tag_version.outputs.new_tag
+          git tag $steps.tag_version.outputs.new_tag
+          git commit -a -m "ci: update documentation versions"
+>>>>>>> 07e2fe93382fd1b98521283347e9df32eb0bc577
 
       - name: Push changes
         uses: ad-m/github-push-action@master
