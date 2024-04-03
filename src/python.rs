@@ -248,7 +248,7 @@ impl From<PyRunArgs> for RunArgs {
             div_rebasing: py_run_args.div_rebasing,
             rebase_frac_zero_constants: py_run_args.rebase_frac_zero_constants,
             check_mode: py_run_args.check_mode,
-            commitment: py_run_args.commitment.into(),
+            commitment: Some(py_run_args.commitment.into()),
         }
     }
 }
@@ -283,6 +283,16 @@ pub enum PyCommitments {
     KZG,
     /// IPA commitment
     IPA,
+}
+
+impl From<Option<Commitments>> for PyCommitments {
+    fn from(commitment: Option<Commitments>) -> Self {
+        match commitment {
+            Some(Commitments::KZG) => PyCommitments::KZG,
+            Some(Commitments::IPA) => PyCommitments::IPA,
+            None => PyCommitments::KZG,
+        }
+    }
 }
 
 impl From<PyCommitments> for Commitments {

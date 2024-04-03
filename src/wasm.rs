@@ -337,8 +337,10 @@ pub fn verify(
 
     let orig_n = 1 << circuit_settings.run_args.logrows;
 
+    let commitment = circuit_settings.run_args.commitment.into();
+
     let mut reader = std::io::BufReader::new(&srs[..]);
-    let result = match circuit_settings.run_args.commitment {
+    let result = match commitment {
         Commitments::KZG => {
             let params: ParamsKZG<Bn256> =
                 halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
@@ -521,8 +523,9 @@ pub fn prove(
 
     // read in kzg params
     let mut reader = std::io::BufReader::new(&srs[..]);
+    let commitment = circuit.settings().run_args.commitment.into();
     // creates and verifies the proof
-    let proof = match circuit.settings().run_args.commitment {
+    let proof = match commitment {
         Commitments::KZG => {
             let params: ParamsKZG<Bn256> =
                 halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)

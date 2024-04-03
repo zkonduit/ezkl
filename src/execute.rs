@@ -339,7 +339,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             logrows,
             split_proofs,
             disable_selector_compression,
-            commitment,
+            commitment.into(),
         ),
         Commands::Aggregate {
             proof_path,
@@ -360,7 +360,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             logrows,
             check_mode,
             split_proofs,
-            commitment,
+            commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::Verify {
@@ -384,7 +384,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             reduced_srs,
-            commitment,
+            commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
         #[cfg(not(target_arch = "wasm32"))]
@@ -586,7 +586,7 @@ pub(crate) async fn get_srs_cmd(
     } else if let Some(settings_p) = settings_path {
         if settings_p.exists() {
             let settings = GraphSettings::load(&settings_p)?;
-            settings.run_args.commitment
+            settings.run_args.commitment.into()
         } else {
             return Err(err_string.into());
         }
@@ -666,21 +666,17 @@ pub(crate) async fn gen_witness(
 
     // if any of the settings have kzg visibility then we need to load the srs
 
+    let commitment: Commitments = settings.run_args.commitment.into();
+
     let start_time = Instant::now();
     let witness = if settings.module_requires_polycommit() {
-        if get_srs_path(
-            settings.run_args.logrows,
-            srs_path.clone(),
-            settings.run_args.commitment,
-        )
-        .exists()
-        {
-            match settings.run_args.commitment {
+        if get_srs_path(settings.run_args.logrows, srs_path.clone(), commitment).exists() {
+            match Commitments::from(settings.run_args.commitment) {
                 Commitments::KZG => {
                     let srs: ParamsKZG<Bn256> = load_params_prover::<KZGCommitmentScheme<Bn256>>(
                         srs_path.clone(),
                         settings.run_args.logrows,
-                        settings.run_args.commitment,
+                        commitment,
                     )?;
                     circuit.forward::<KZGCommitmentScheme<_>>(
                         &mut input,
@@ -694,7 +690,7 @@ pub(crate) async fn gen_witness(
                         load_params_prover::<IPACommitmentScheme<G1Affine>>(
                             srs_path.clone(),
                             settings.run_args.logrows,
-                            settings.run_args.commitment,
+                            commitment,
                         )?;
                     circuit.forward::<IPACommitmentScheme<_>>(
                         &mut input,
@@ -1303,17 +1299,19 @@ pub(crate) fn create_evm_verifier(
     render_vk_seperately: bool,
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
-    let circuit_settings = GraphSettings::load(&settings_path)?;
+
+    let settings = GraphSettings::load(&settings_path)?;
+    let commitment: Commitments = settings.run_args.commitment.into();
     let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
         srs_path,
-        circuit_settings.run_args.logrows,
-        circuit_settings.run_args.commitment,
+        settings.run_args.logrows,
+        commitment,
     )?;
 
-    let num_instance = circuit_settings.total_instances();
+    let num_instance = settings.total_instances();
     let num_instance: usize = num_instance.iter().sum::<usize>();
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, circuit_settings)?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, settings)?;
     trace!("params computed");
 
     let generator = halo2_solidity_verifier::SolidityGenerator::new(
@@ -1347,17 +1345,18 @@ pub(crate) fn create_evm_vk(
     abi_path: PathBuf,
 ) -> Result<String, Box<dyn Error>> {
     check_solc_requirement();
-    let circuit_settings = GraphSettings::load(&settings_path)?;
+    let settings = GraphSettings::load(&settings_path)?;
+    let commitment: Commitments = settings.run_args.commitment.into();
     let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
         srs_path,
-        circuit_settings.run_args.logrows,
-        circuit_settings.run_args.commitment,
+        settings.run_args.logrows,
+        commitment,
     )?;
 
-    let num_instance = circuit_settings.total_instances();
+    let num_instance = settings.total_instances();
     let num_instance: usize = num_instance.iter().sum::<usize>();
 
-    let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, circuit_settings)?;
+    let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, settings)?;
     trace!("params computed");
 
     let generator = halo2_solidity_verifier::SolidityGenerator::new(
@@ -1626,8 +1625,9 @@ pub(crate) fn setup(
     }
 
     let logrows = circuit.settings().run_args.logrows;
+    let commitment: Commitments = circuit.settings().run_args.commitment.into();
 
-    let pk = match circuit.settings().run_args.commitment {
+    let pk = match commitment {
         Commitments::KZG => {
             let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(
                 srs_path,
@@ -1736,7 +1736,8 @@ pub(crate) fn prove(
     let transcript: TranscriptType = proof_type.into();
     let proof_split_commits: Option<ProofSplitCommit> = data.into();
 
-    let commitment = circuit_settings.run_args.commitment;
+    let commitment = circuit_settings.run_args.commitment.into();
+    let logrows = circuit_settings.run_args.logrows;
     // creates and verifies the proof
     let mut snark = match commitment {
         Commitments::KZG => {
@@ -1745,7 +1746,7 @@ pub(crate) fn prove(
 
             let params = load_params_prover::<KZGCommitmentScheme<Bn256>>(
                 srs_path,
-                circuit_settings.run_args.logrows,
+                logrows,
                 Commitments::KZG,
             )?;
             match strategy {
@@ -2187,8 +2188,9 @@ pub(crate) fn verify(
     let circuit_settings = GraphSettings::load(&settings_path)?;
 
     let logrows = circuit_settings.run_args.logrows;
+    let commitment = circuit_settings.run_args.commitment.into();
 
-    match circuit_settings.run_args.commitment {
+    match commitment {
         Commitments::KZG => {
             let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
             let params: ParamsKZG<Bn256> = if reduced_srs {
