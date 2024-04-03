@@ -30,7 +30,7 @@ jobs:
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" docs/python/requirements-docs.txt.orig >docs/python/requirements-docs.txt
           rm docs/python/requirements-docs.txt.orig
 
-      - name: Commit files
+      - name: Commit files and create tag
         env:
           RELEASE_TAG: ${{ steps.tag_version.outputs.new_tag }}
         run: |
