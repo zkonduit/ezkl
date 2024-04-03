@@ -362,6 +362,7 @@ jobs:
   #         packages-dir: ./
 
   doc-publish:
+    permissions: write-all
     name: Uploads documentation
     runs-on: ubuntu-latest
     steps:
