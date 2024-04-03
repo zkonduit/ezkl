@@ -364,6 +364,7 @@ jobs:
   doc-publish:
     name: Trigger ReadTheDocs Build
     runs-on: ubuntu-latest
+    needs: pypi-publish
     steps:
       - uses: actions/checkout@v4
 
