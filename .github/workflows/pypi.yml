@@ -384,19 +384,11 @@ jobs:
               docs/python/src/conf.py
             commit-msg: "fix: updates version in docs requirements"
             github-token: ${{ secrets.GITHUB_TOKEN }}
-<<<<<<< HEAD
             branch: ${{ env.RELEASE_TAG }}
-=======
-            branch: ${{ RELEASE_TAG }}
->>>>>>> 75b73b29feab626b90e8d9169db92996a7e93185
 
       - name: Trigger RTDs build
         uses: dfm/rtds-action@v1
         with:
           webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
           webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
-<<<<<<< HEAD
           commit_ref: ${{ steps.update-req-for-doc.outputs.commit-sha }}
-=======
-          commit_ref: ${{ steps.update-req-for-doc.outputs.commit-sha }}
->>>>>>> 75b73b29feab626b90e8d9169db92996a7e93185
