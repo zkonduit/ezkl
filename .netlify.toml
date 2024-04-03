@@ -1,4 +1,0 @@
-[build]
-  base = "docs/python"
-  publish = "docs/python/build"
-  command = "apt-get install clang cmake && maturin develop -m ./Cargo.toml --features python-bindings && cd docs/python && sh build.sh"
