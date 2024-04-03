@@ -384,7 +384,7 @@ jobs:
               docs/python/src/conf.py
             commit-msg: "fix: updates version in docs requirements"
             github-token: ${{ secrets.GITHUB_TOKEN }}
-            branch: ${{ RELEASE_TAG }}
+            branch: ${{ env.RELEASE_TAG }}
 
       - name: Trigger RTDs build
         uses: dfm/rtds-action@v1
