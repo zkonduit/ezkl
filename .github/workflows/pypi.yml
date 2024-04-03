@@ -362,8 +362,7 @@ jobs:
   #         packages-dir: ./
 
   doc-publish:
-    permissions: write-all
-    name: Uploads documentation
+    name: Trigger ReadTheDocs Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
