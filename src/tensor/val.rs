@@ -1,3 +1,5 @@
+use core::{iter::FilterMap, slice::Iter};
+
 use crate::circuit::region::ConstantsMap;
 
 use super::{
@@ -450,10 +452,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// Returns the number of constants in the [ValTensor].
     pub fn create_constants_map_iterator(
         &self,
-    ) -> core::iter::FilterMap<
-        core::slice::Iter<'_, ValType<F>>,
-        fn(&ValType<F>) -> Option<(F, ValType<F>)>,
-    > {
+    ) -> FilterMap<Iter<'_, ValType<F>>, fn(&ValType<F>) -> Option<(F, ValType<F>)>> {
         match self {
             ValTensor::Value { inner, .. } => inner.iter().filter_map(|x| {
                 if let ValType::Constant(v) = x {
