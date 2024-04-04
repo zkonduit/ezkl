@@ -415,6 +415,7 @@ impl<
 
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         let scale = match self {
+            PolyOp::MeanOfSquares { .. } => 2 * in_scales[0],
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,
             PolyOp::Iff => in_scales[1],
             PolyOp::Einsum { .. } => {

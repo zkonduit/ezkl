@@ -4427,8 +4427,7 @@ pub mod nonlinearities {
     pub fn mean_of_squares_axes(a: &Tensor<i128>, axes: &[usize]) -> Tensor<i128> {
         let square = a.map(|a_i| a_i * a_i);
         let sum = sum_axes(&square, axes).unwrap();
-        let input_dims = a.dims();
-        let denominator = axes.iter().fold(1, |acc, &i| acc * input_dims[i]);
+        let denominator = a.len() / sum.len();
         const_div(&sum, denominator as f64)
     }
 }
