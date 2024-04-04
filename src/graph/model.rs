@@ -1200,6 +1200,20 @@ impl Model {
             .collect();
 
         for (idx, node) in self.graph.nodes.iter() {
+            debug!("laying out {}: {}", idx, node.as_str(),);
+            // Then number of columns in the circuits
+            #[cfg(not(target_arch = "wasm32"))]
+            region.debug_report();
+            debug!("input indices: {:?}", node.inputs());
+            debug!("output scales: {:?}", node.out_scales());
+            debug!(
+                "input scales: {:?}",
+                node.inputs()
+                    .iter()
+                    .map(|(idx, outlet)| self.graph.nodes[idx].out_scales()[*outlet])
+                    .collect_vec()
+            );
+
             let mut values: Vec<ValTensor<Fp>> = if !node.is_input() {
                 node.inputs()
                     .iter()
@@ -1211,24 +1225,10 @@ impl Model {
                 // we re-assign inputs, always from the 0 outlet
                 vec![results.get(idx).ok_or(GraphError::MissingResults)?[0].clone()]
             };
-
-            debug!("laying out {}: {}", idx, node.as_str(),);
-            // Then number of columns in the circuits
-            #[cfg(not(target_arch = "wasm32"))]
-            region.debug_report();
-            debug!("dims: {:?}", node.out_dims());
+            debug!("output dims: {:?}", node.out_dims());
             debug!(
-                "input_dims {:?}",
+                "input dims {:?}",
                 values.iter().map(|v| v.dims()).collect_vec()
-            );
-            debug!("output scales: {:?}", node.out_scales());
-            debug!("input indices: {:?}", node.inputs());
-            debug!(
-                "input scales: {:?}",
-                node.inputs()
-                    .iter()
-                    .map(|(idx, outlet)| self.graph.nodes[idx].out_scales()[*outlet])
-                    .collect_vec()
             );
 
             match &node {
