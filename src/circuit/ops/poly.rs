@@ -1,6 +1,6 @@
 use crate::{
     circuit::layouts,
-    fieldutils::felt_to_i128,
+    fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{self, Tensor, TensorError},
 };
 
@@ -62,6 +62,9 @@ pub enum PolyOp {
     Sum {
         axes: Vec<usize>,
     },
+    MeanOfSquares {
+        axes: Vec<usize>,
+    },
     Prod {
         axes: Vec<usize>,
         len_prod: usize,
@@ -107,6 +110,7 @@ impl<
         match &self {
             PolyOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
             PolyOp::GatherND { batch_dims, .. } => format!("GATHERND (batch_dims={})", batch_dims),
+            PolyOp::MeanOfSquares { axes } => format!("MEANOFSQUARES (axes={:?})", axes),
             PolyOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
             PolyOp::ScatterND { .. } => "SCATTERND".into(),
             PolyOp::MultiBroadcastTo { shape } => format!("MULTIBROADCASTTO (shape={:?})", shape),
@@ -146,6 +150,10 @@ impl<
     fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let mut inputs = inputs.to_vec();
         let res = match &self {
+            PolyOp::MeanOfSquares { axes } => {
+                let x = inputs[0].map(|x| felt_to_i128(x));
+                Ok(tensor::ops::nonlinearities::mean_of_squares_axes(&x, axes).map(i128_to_felt))
+            }
             PolyOp::MultiBroadcastTo { shape } => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch(
@@ -291,6 +299,9 @@ impl<
         Ok(Some(match self {
             PolyOp::MultiBroadcastTo { shape } => {
                 layouts::expand(config, region, values[..].try_into()?, shape)?
+            }
+            PolyOp::MeanOfSquares { axes } => {
+                layouts::mean_of_squares_axes(config, region, values[..].try_into()?, axes)?
             }
             PolyOp::Xor => layouts::xor(config, region, values[..].try_into()?)?,
             PolyOp::Or => layouts::or(config, region, values[..].try_into()?)?,

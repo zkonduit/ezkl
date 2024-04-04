@@ -1975,6 +1975,21 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     Ok(output)
 }
 
+pub(crate) fn mean_of_squares_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    axes: &[usize],
+) -> Result<ValTensor<F>, Box<dyn Error>> {
+    let input_dims = values[0].dims();
+    let dividand: usize = axes.iter().map(|x| input_dims[*x]).product();
+
+    let squared = pow(config, region, values, 2)?;
+    let sum_squared = sum_axes(config, region, &[squared], axes)?;
+    let mean_squared = div(config, region, &[sum_squared], F::from(dividand as u64))?;
+    Ok(mean_squared)
+}
+
 /// expand the tensor to the given shape
 pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,

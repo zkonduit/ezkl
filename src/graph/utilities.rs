@@ -734,6 +734,19 @@ pub fn new_op_from_onnx(
 
             SupportedOp::Linear(PolyOp::Sum { axes })
         }
+        "Reduce<MeanOfSquares>" => {
+            if inputs.len() != 1 {
+                return Err(Box::new(GraphError::InvalidDims(
+                    idx,
+                    "mean of squares".to_string(),
+                )));
+            };
+            let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
+            let axes = op.axes.into_iter().collect();
+
+            SupportedOp::Linear(PolyOp::MeanOfSquares { axes })
+        }
+
         "Max" => {
             // Extract the max value
             // first find the input that is a constant

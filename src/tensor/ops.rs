@@ -4404,6 +4404,33 @@ pub mod nonlinearities {
         let sum = sum(a).unwrap();
         const_div(&sum, (scale * a.len()) as f64)
     }
+
+    /// Mean of squares axes
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `axis` - [usize]
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::tensor::ops::nonlinearities::mean_of_squares_axes;
+    /// let x = Tensor::<i128>::new(
+    /// Some(&[2, 15, 2, 1, 1, 0]),
+    /// &[2, 3],
+    /// ).unwrap();
+    /// let result = mean_of_squares_axes(&x, &[1]);
+    /// let expected = Tensor::<i128>::new(
+    /// Some(&[78, 1]),
+    /// &[2, 1],
+    /// ).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn mean_of_squares_axes(a: &Tensor<i128>, axes: &[usize]) -> Tensor<i128> {
+        let square = a.map(|a_i| a_i * a_i);
+        let sum = sum_axes(&square, axes).unwrap();
+        let input_dims = a.dims();
+        let denominator = axes.iter().fold(1, |acc, &i| acc * input_dims[i]);
+        const_div(&sum, denominator as f64)
+    }
 }
 
 /// Ops that return the transcript i.e intermediate calcs of an op
