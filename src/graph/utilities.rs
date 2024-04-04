@@ -509,7 +509,7 @@ pub fn new_op_from_onnx(
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
                 inputs[1].decrement_use();
-                deleted_indices.push(inputs.len() - 1);
+                deleted_indices.push(1);
                 op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::ScatterND {
                     constant_idx: Some(c.raw_values.map(|x| x as usize)),
                 })
@@ -545,7 +545,7 @@ pub fn new_op_from_onnx(
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
                 inputs[1].decrement_use();
-                deleted_indices.push(inputs.len() - 1);
+                deleted_indices.push(1);
                 op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::GatherND {
                     batch_dims,
                     indices: Some(c.raw_values.map(|x| x as usize)),
@@ -582,7 +582,7 @@ pub fn new_op_from_onnx(
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
                 inputs[1].decrement_use();
-                deleted_indices.push(inputs.len() - 1);
+                deleted_indices.push(1);
                 op = SupportedOp::Linear(crate::circuit::ops::poly::PolyOp::GatherElements {
                     dim: axis,
                     constant_idx: Some(c.raw_values.map(|x| x as usize)),
@@ -1178,7 +1178,7 @@ pub fn new_op_from_onnx(
             // if param_visibility.is_public() {
             if let Some(c) = inputs[1].opkind().get_mutable_constant() {
                 inputs[1].decrement_use();
-                deleted_indices.push(inputs.len() - 1);
+                deleted_indices.push(1);
                 if c.raw_values.len() > 1 {
                     unimplemented!("only support scalar pow")
                 }

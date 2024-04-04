@@ -108,11 +108,28 @@ impl<
 
     fn as_string(&self) -> String {
         match &self {
-            PolyOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
-            PolyOp::GatherND { batch_dims, .. } => format!("GATHERND (batch_dims={})", batch_dims),
+            PolyOp::GatherElements { dim, constant_idx } => format!(
+                "GATHERELEMENTS (dim={}, constant_idx{})",
+                dim,
+                constant_idx.is_some()
+            ),
+            PolyOp::GatherND {
+                batch_dims,
+                indices,
+            } => format!(
+                "GATHERND (batch_dims={}, constant_idx{})",
+                batch_dims,
+                indices.is_some()
+            ),
             PolyOp::MeanOfSquares { axes } => format!("MEANOFSQUARES (axes={:?})", axes),
-            PolyOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
-            PolyOp::ScatterND { .. } => "SCATTERND".into(),
+            PolyOp::ScatterElements { dim, constant_idx } => format!(
+                "SCATTERELEMENTS (dim={}, constant_idx{})",
+                dim,
+                constant_idx.is_some()
+            ),
+            PolyOp::ScatterND { constant_idx } => {
+                format!("SCATTERND (constant_idx={})", constant_idx.is_some())
+            }
             PolyOp::MultiBroadcastTo { shape } => format!("MULTIBROADCASTTO (shape={:?})", shape),
             PolyOp::MoveAxis { .. } => "MOVEAXIS".into(),
             PolyOp::Downsample { .. } => "DOWNSAMPLE".into(),
