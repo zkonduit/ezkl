@@ -128,6 +128,7 @@ jobs:
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
+
       - name: Install required libraries
         shell: bash
         run: |
@@ -359,3 +360,17 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: ./
+
+  doc-publish:
+    name: Trigger ReadTheDocs Build
+    runs-on: ubuntu-latest
+    needs: pypi-publish
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trigger RTDs build
+        uses: dfm/rtds-action@v1
+        with:
+          webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
+          webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
+          commit_ref: ${{ github.ref_name }}
