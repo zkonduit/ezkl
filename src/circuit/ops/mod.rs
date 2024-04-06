@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     graph::quantize_tensor,
-    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
+    tensor::{self, Tensor, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
 
@@ -35,8 +35,6 @@ pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
     std::fmt::Debug + Send + Sync + Any
 {
-    /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError>;
     /// Returns a string representation of the operation.
     fn as_string(&self) -> String;
 
@@ -71,33 +69,6 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
 
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any;
-
-    /// Safe mode output checl
-    fn safe_mode_check(
-        &self,
-        claimed_output: &ValTensor<F>,
-        original_values: &[ValTensor<F>],
-    ) -> Result<(), TensorError> {
-        let felt_evals = original_values
-            .iter()
-            .map(|v| {
-                let mut evals = v.get_felt_evals().map_err(|_| TensorError::FeltError)?;
-                evals.reshape(v.dims())?;
-                Ok(evals)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let ref_op: Tensor<F> = self.f(&felt_evals)?.output;
-
-        let mut output = claimed_output
-            .get_felt_evals()
-            .map_err(|_| TensorError::FeltError)?;
-        output.reshape(claimed_output.dims())?;
-
-        assert_eq!(output, ref_op);
-
-        Ok(())
-    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Clone for Box<dyn Op<F>> {
@@ -176,12 +147,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
         self
     }
 
-    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        Ok(ForwardResult {
-            output: x[0].clone(),
-        })
-    }
-
     fn as_string(&self) -> String {
         "Input".into()
     }
@@ -234,9 +199,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Unknow
     }
     fn as_any(&self) -> &dyn Any {
         self
-    }
-    fn f(&self, _: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        Err(TensorError::WrongMethod)
     }
 
     fn as_string(&self) -> String {
@@ -306,11 +268,6 @@ impl<
 {
     fn as_any(&self) -> &dyn Any {
         self
-    }
-    fn f(&self, _: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        let output = self.quantized_values.clone();
-
-        Ok(ForwardResult { output })
     }
 
     fn as_string(&self) -> String {

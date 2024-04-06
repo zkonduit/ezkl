@@ -60,6 +60,9 @@ pub enum TensorError {
     /// Unsupported operation
     #[error("Unsupported operation on a tensor type")]
     Unsupported,
+    /// Overflow
+    #[error("Unsigned integer overflow or underflow error in op: {0}")]
+    Overflow(String),
 }
 
 /// The (inner) type of tensor elements.

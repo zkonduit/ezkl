@@ -70,8 +70,8 @@ impl Circuit<Fr> for MyCircuit {
                         &mut region,
                         &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
                         Box::new(PolyOp::Conv {
-                            padding: [(0, 0); 2],
-                            stride: (1, 1),
+                            padding: vec![(0, 0)],
+                            stride: vec![1; 2],
                         }),
                     )
                     .unwrap();
