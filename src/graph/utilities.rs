@@ -1119,17 +1119,7 @@ pub fn new_op_from_onnx(
                 .ok_or(GraphError::MissingParams("stride".to_string()))?;
             let padding = match &pool_spec.padding {
                 PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    if b.len() == 2 && a.len() == 2 {
-                        [(b[0], b[1]), (a[0], a[1])]
-                    } else if b.len() == 1 && a.len() == 1 {
-                        [(b[0], b[0]), (a[0], a[0])]
-                    } else if b.len() == 1 && a.len() == 2 {
-                        [(b[0], b[0]), (a[0], a[1])]
-                    } else if b.len() == 2 && a.len() == 1 {
-                        [(b[0], b[1]), (a[0], a[0])]
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                    }
+                    b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
                 }
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
@@ -1137,26 +1127,10 @@ pub fn new_op_from_onnx(
             };
             let kernel_shape = &pool_spec.kernel_shape;
 
-            let (stride_h, stride_w) = if stride.len() == 1 {
-                (1, stride[0])
-            } else if stride.len() == 2 {
-                (stride[0], stride[1])
-            } else {
-                return Err(Box::new(GraphError::MissingParams("stride".to_string())));
-            };
-
-            let (kernel_height, kernel_width) = if kernel_shape.len() == 1 {
-                (1, kernel_shape[0])
-            } else if kernel_shape.len() == 2 {
-                (kernel_shape[0], kernel_shape[1])
-            } else {
-                return Err(Box::new(GraphError::MissingParams("kernel".to_string())));
-            };
-
-            SupportedOp::Hybrid(HybridOp::MaxPool2d {
+            SupportedOp::Hybrid(HybridOp::MaxPool {
                 padding,
-                stride: (stride_h, stride_w),
-                pool_dims: (kernel_height, kernel_width),
+                stride: stride.to_vec(),
+                pool_dims: kernel_shape.to_vec(),
             })
         }
         "Ceil" => SupportedOp::Nonlinear(LookupOp::Ceil {
@@ -1218,15 +1192,7 @@ pub fn new_op_from_onnx(
             }
 
             let stride = match conv_node.pool_spec.strides.clone() {
-                Some(s) => {
-                    if s.len() == 1 {
-                        (s[0], s[0])
-                    } else if s.len() == 2 {
-                        (s[0], s[1])
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("strides".to_string())));
-                    }
-                }
+                Some(s) => s.to_vec(),
                 None => {
                     return Err(Box::new(GraphError::MissingParams("strides".to_string())));
                 }
@@ -1234,17 +1200,7 @@ pub fn new_op_from_onnx(
 
             let padding = match &conv_node.pool_spec.padding {
                 PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    if b.len() == 2 && a.len() == 2 {
-                        [(b[0], b[1]), (a[0], a[1])]
-                    } else if b.len() == 1 && a.len() == 1 {
-                        [(b[0], b[0]), (a[0], a[0])]
-                    } else if b.len() == 1 && a.len() == 2 {
-                        [(b[0], b[0]), (a[0], a[1])]
-                    } else if b.len() == 2 && a.len() == 1 {
-                        [(b[0], b[1]), (a[0], a[0])]
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                    }
+                    b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
                 }
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
@@ -1299,32 +1255,19 @@ pub fn new_op_from_onnx(
             }
 
             let stride = match deconv_node.pool_spec.strides.clone() {
-                Some(s) => (s[0], s[1]),
+                Some(s) => s.to_vec(),
                 None => {
                     return Err(Box::new(GraphError::MissingParams("strides".to_string())));
                 }
             };
             let padding = match &deconv_node.pool_spec.padding {
                 PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    if b.len() == 2 && a.len() == 2 {
-                        [(b[0], b[1]), (a[0], a[1])]
-                    } else if b.len() == 1 && a.len() == 1 {
-                        [(b[0], b[0]), (a[0], a[0])]
-                    } else if b.len() == 1 && a.len() == 2 {
-                        [(b[0], b[0]), (a[0], a[1])]
-                    } else if b.len() == 2 && a.len() == 1 {
-                        [(b[0], b[1]), (a[0], a[0])]
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                    }
+                    b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
                 }
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
             };
-
-            let output_padding: (usize, usize) =
-                (deconv_node.adjustments[0], deconv_node.adjustments[1]);
 
             // if bias exists then rescale it to the input + kernel scale
             if input_scales.len() == 3 {
@@ -1344,7 +1287,7 @@ pub fn new_op_from_onnx(
 
             SupportedOp::Linear(PolyOp::DeConv {
                 padding,
-                output_padding,
+                output_padding: deconv_node.adjustments.to_vec(),
                 stride,
             })
         }
@@ -1445,46 +1388,17 @@ pub fn new_op_from_onnx(
                 .ok_or(GraphError::MissingParams("stride".to_string()))?;
             let padding = match &pool_spec.padding {
                 PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    if b.len() == 2 && a.len() == 2 {
-                        [(b[0], b[1]), (a[0], a[1])]
-                    } else if b.len() == 1 && a.len() == 1 {
-                        [(b[0], b[0]), (a[0], a[0])]
-                    } else if b.len() == 1 && a.len() == 2 {
-                        [(b[0], b[0]), (a[0], a[1])]
-                    } else if b.len() == 2 && a.len() == 1 {
-                        [(b[0], b[1]), (a[0], a[0])]
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                    }
+                    b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
                 }
                 _ => {
                     return Err(Box::new(GraphError::MissingParams("padding".to_string())));
                 }
             };
-            let kernel_shape = &pool_spec.kernel_shape;
-
-            let (stride_h, stride_w) = if stride.len() == 1 {
-                (1, stride[0])
-            } else if stride.len() == 2 {
-                (stride[0], stride[1])
-            } else {
-                return Err(Box::new(GraphError::MissingParams("stride".to_string())));
-            };
-
-            let (kernel_height, kernel_width) = if kernel_shape.len() == 1 {
-                (1, kernel_shape[0])
-            } else if kernel_shape.len() == 2 {
-                (kernel_shape[0], kernel_shape[1])
-            } else {
-                return Err(Box::new(GraphError::MissingParams(
-                    "kernel shape".to_string(),
-                )));
-            };
 
             SupportedOp::Hybrid(HybridOp::SumPool {
                 padding,
-                stride: (stride_h, stride_w),
-                kernel_shape: (kernel_height, kernel_width),
+                stride: stride.to_vec(),
+                kernel_shape: pool_spec.kernel_shape.to_vec(),
                 normalized: sumpool_node.normalize,
             })
         }
@@ -1511,29 +1425,7 @@ pub fn new_op_from_onnx(
                 )));
             }
 
-            let padding_len = pad_node.pads.len();
-
-            // we only support symmetrical padding that affects the last 2 dims (height and width params)
-            for (i, pad_params) in pad_node.pads.iter().enumerate() {
-                if (i < padding_len - 2) && ((pad_params.0 != 0) || (pad_params.1 != 0)) {
-                    return Err(Box::new(GraphError::MisformedParams(
-                        "ezkl currently only supports padding height and width dimensions"
-                            .to_string(),
-                    )));
-                }
-            }
-
-            let padding = [
-                (
-                    pad_node.pads[padding_len - 2].0,
-                    pad_node.pads[padding_len - 1].0,
-                ),
-                (
-                    pad_node.pads[padding_len - 2].1,
-                    pad_node.pads[padding_len - 1].1,
-                ),
-            ];
-            SupportedOp::Linear(PolyOp::Pad(padding))
+            SupportedOp::Linear(PolyOp::Pad(pad_node.pads.to_vec()))
         }
         "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams

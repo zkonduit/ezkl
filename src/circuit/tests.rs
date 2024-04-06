@@ -1048,8 +1048,8 @@ mod conv {
                                 &mut region,
                                 &self.inputs,
                                 Box::new(PolyOp::Conv {
-                                    padding: [(1, 1); 2],
-                                    stride: (2, 2),
+                                    padding: vec![(1, 1); 2],
+                                    stride: vec![2; 2],
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1198,8 +1198,8 @@ mod conv_col_ultra_overflow {
                                 &mut region,
                                 &[self.image.clone(), self.kernel.clone()],
                                 Box::new(PolyOp::Conv {
-                                    padding: [(1, 1); 2],
-                                    stride: (2, 2),
+                                    padding: vec![(1, 1); 2],
+                                    stride: vec![2; 2],
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1343,8 +1343,8 @@ mod conv_relu_col_ultra_overflow {
                                 &mut region,
                                 &[self.image.clone(), self.kernel.clone()],
                                 Box::new(PolyOp::Conv {
-                                    padding: [(1, 1); 2],
-                                    stride: (2, 2),
+                                    padding: vec![(1, 1); 2],
+                                    stride: vec![2; 2],
                                 }),
                             )
                             .map_err(|_| Error::Synthesis);

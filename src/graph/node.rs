@@ -14,7 +14,6 @@ use crate::circuit::Op;
 use crate::circuit::Unknown;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::new_op_from_onnx;
-use crate::tensor::Tensor;
 use crate::tensor::TensorError;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(not(target_arch = "wasm32"))]
@@ -60,20 +59,6 @@ pub struct Rescaled {
 impl Op<Fp> for Rescaled {
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
-    fn f(&self, x: &[Tensor<Fp>]) -> Result<crate::circuit::ForwardResult<Fp>, TensorError> {
-        if self.scale.len() != x.len() {
-            return Err(TensorError::DimMismatch("rescaled inputs".to_string()));
-        }
-
-        let mut rescaled_inputs = vec![];
-        let inputs = &mut x.to_vec();
-        for (i, ri) in inputs.iter_mut().enumerate() {
-            let mult_tensor = Tensor::from([Fp::from(self.scale[i].1 as u64)].into_iter());
-            let res = (ri.clone() * mult_tensor)?;
-            rescaled_inputs.push(res);
-        }
-        Op::<Fp>::f(&*self.inner, &rescaled_inputs)
     }
 
     fn as_string(&self) -> String {
@@ -214,13 +199,6 @@ impl RebaseScale {
 impl Op<Fp> for RebaseScale {
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
-    fn f(&self, x: &[Tensor<Fp>]) -> Result<crate::circuit::ForwardResult<Fp>, TensorError> {
-        let mut res = Op::<Fp>::f(&*self.inner, x)?;
-        let rebase_res = Op::<Fp>::f(&self.rebase_op, &[res.output])?;
-        res.output = rebase_res.output;
-
-        Ok(res)
     }
 
     fn as_string(&self) -> String {
@@ -389,13 +367,6 @@ impl From<Box<dyn Op<Fp>>> for SupportedOp {
 }
 
 impl Op<Fp> for SupportedOp {
-    fn f(
-        &self,
-        inputs: &[Tensor<Fp>],
-    ) -> Result<crate::circuit::ForwardResult<Fp>, crate::tensor::TensorError> {
-        self.as_op().f(inputs)
-    }
-
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<Fp>,

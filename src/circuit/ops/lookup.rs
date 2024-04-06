@@ -135,15 +135,12 @@ impl LookupOp {
         let range = range as i128;
         (-range, range)
     }
-}
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for LookupOp {
-    /// Returns a reference to the Any trait.
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
+    pub(crate) fn f<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+        &self,
+        x: &[Tensor<F>],
+    ) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_i128(x));
         let res = match &self {
             LookupOp::Abs => Ok(tensor::ops::abs(&x)?),
@@ -234,6 +231,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
         let output = res.map(|x| i128_to_felt(x));
 
         Ok(ForwardResult { output })
+    }
+}
+
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for LookupOp {
+    /// Returns a reference to the Any trait.
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     /// Returns the name of the operation
