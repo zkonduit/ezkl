@@ -1,6 +1,6 @@
 use crate::{
     circuit::layouts,
-    fieldutils::felt_to_i128,
+    fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{self, Tensor, TensorError},
 };
 
@@ -62,6 +62,9 @@ pub enum PolyOp {
     Sum {
         axes: Vec<usize>,
     },
+    MeanOfSquares {
+        axes: Vec<usize>,
+    },
     Prod {
         axes: Vec<usize>,
         len_prod: usize,
@@ -105,10 +108,28 @@ impl<
 
     fn as_string(&self) -> String {
         match &self {
-            PolyOp::GatherElements { dim, .. } => format!("GATHERELEMENTS (dim={})", dim),
-            PolyOp::GatherND { batch_dims, .. } => format!("GATHERND (batch_dims={})", batch_dims),
-            PolyOp::ScatterElements { dim, .. } => format!("SCATTERELEMENTS (dim={})", dim),
-            PolyOp::ScatterND { .. } => "SCATTERND".into(),
+            PolyOp::GatherElements { dim, constant_idx } => format!(
+                "GATHERELEMENTS (dim={}, constant_idx{})",
+                dim,
+                constant_idx.is_some()
+            ),
+            PolyOp::GatherND {
+                batch_dims,
+                indices,
+            } => format!(
+                "GATHERND (batch_dims={}, constant_idx{})",
+                batch_dims,
+                indices.is_some()
+            ),
+            PolyOp::MeanOfSquares { axes } => format!("MEANOFSQUARES (axes={:?})", axes),
+            PolyOp::ScatterElements { dim, constant_idx } => format!(
+                "SCATTERELEMENTS (dim={}, constant_idx{})",
+                dim,
+                constant_idx.is_some()
+            ),
+            PolyOp::ScatterND { constant_idx } => {
+                format!("SCATTERND (constant_idx={})", constant_idx.is_some())
+            }
             PolyOp::MultiBroadcastTo { shape } => format!("MULTIBROADCASTTO (shape={:?})", shape),
             PolyOp::MoveAxis { .. } => "MOVEAXIS".into(),
             PolyOp::Downsample { .. } => "DOWNSAMPLE".into(),
@@ -146,6 +167,10 @@ impl<
     fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
         let mut inputs = inputs.to_vec();
         let res = match &self {
+            PolyOp::MeanOfSquares { axes } => {
+                let x = inputs[0].map(|x| felt_to_i128(x));
+                Ok(tensor::ops::nonlinearities::mean_of_squares_axes(&x, axes).map(i128_to_felt))
+            }
             PolyOp::MultiBroadcastTo { shape } => {
                 if 1 != inputs.len() {
                     return Err(TensorError::DimMismatch(
@@ -292,6 +317,9 @@ impl<
             PolyOp::MultiBroadcastTo { shape } => {
                 layouts::expand(config, region, values[..].try_into()?, shape)?
             }
+            PolyOp::MeanOfSquares { axes } => {
+                layouts::mean_of_squares_axes(config, region, values[..].try_into()?, axes)?
+            }
             PolyOp::Xor => layouts::xor(config, region, values[..].try_into()?)?,
             PolyOp::Or => layouts::or(config, region, values[..].try_into()?)?,
             PolyOp::And => layouts::and(config, region, values[..].try_into()?)?,
@@ -404,6 +432,7 @@ impl<
 
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         let scale = match self {
+            PolyOp::MeanOfSquares { .. } => 2 * in_scales[0],
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,
             PolyOp::Iff => in_scales[1],
             PolyOp::Einsum { .. } => {

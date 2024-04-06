@@ -934,6 +934,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn move_axis(&mut self, source: usize, destination: usize) -> Result<Self, TensorError> {
         assert!(source < self.dims.len());
         assert!(destination < self.dims.len());
+
         let mut new_dims = self.dims.clone();
         new_dims.remove(source);
         new_dims.insert(destination, self.dims[source]);
@@ -965,6 +966,8 @@ impl<T: Clone + TensorType> Tensor<T> {
                     old_coord[source - 1] = *c;
                 } else if (i < source && source < destination)
                     || (i < destination && source > destination)
+                    || (i > source && source > destination)
+                    || (i > destination && source < destination)
                 {
                     old_coord[i] = *c;
                 } else if i > source && source < destination {
@@ -977,7 +980,10 @@ impl<T: Clone + TensorType> Tensor<T> {
                     ));
                 }
             }
-            output.set(&coord, self.get(&old_coord));
+
+            let value = self.get(&old_coord);
+
+            output.set(&coord, value);
         }
 
         Ok(output)
