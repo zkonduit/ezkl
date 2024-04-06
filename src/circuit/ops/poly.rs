@@ -212,7 +212,7 @@ impl<
                 layouts::prod_axes(config, region, values[..].try_into()?, axes)?
             }
             PolyOp::Conv { padding, stride } => {
-                layouts::conv(config, region, values[..].try_into()?, &padding, &stride)?
+                layouts::conv(config, region, values[..].try_into()?, padding, stride)?
             }
             PolyOp::GatherElements { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
