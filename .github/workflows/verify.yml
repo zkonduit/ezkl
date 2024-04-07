@@ -44,7 +44,7 @@ jobs:
       - name: Publish to npm
         run: |
           cd in-browser-evm-verifier
-          pnpm install --frozen-lockfile
+          pnpm install
           pnpm run build
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

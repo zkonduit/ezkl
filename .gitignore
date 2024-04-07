@@ -50,3 +50,4 @@ timingData.json
 !tests/wasm/pk.key
 !tests/wasm/vk.key
 !tests/wasm/vk_aggr.key
+pnpm-lock.yaml
