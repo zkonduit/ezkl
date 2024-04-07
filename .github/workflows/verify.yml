@@ -2,12 +2,7 @@ name: Build and Publish EZKL npm packages (wasm bindings and in-browser evm veri
 
 on:
   push:
-    branches: ["main"]
-    paths-ignore:
-      - "README.md"
-      - "cla.md"
-  pull_request:
-    branches: ["main"]
+    branches: ["test-releases"]
     paths-ignore:
       - "README.md"
       - "cla.md"
