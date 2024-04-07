@@ -28,7 +28,7 @@ jobs:
       - name: Update @ezkljs/engine version in package.json
         shell: bash
         run: |
-          sed -i "s|\"@ezkljs/engine\": \".*\"|\"@ezkljs/engine\": \"asd\"|" in-browser-evm-verifier/package.json
+          sed -i "s|\"@ezkljs/engine\": \".*\"|\"@ezkljs/engine\": \"10.1.0\"|" in-browser-evm-verifier/package.json
       - name: Update the engine import in in-browser-evm-verifier to use @ezkljs/engine package instead of the local one;
         run: |
           sed -i "s|import { encodeVerifierCalldata } from '../nodejs/ezkl';|import { encodeVerifierCalldata } from '@ezkljs/engine';|" in-browser-evm-verifier/src/index.ts
