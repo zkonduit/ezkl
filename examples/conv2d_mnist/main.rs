@@ -203,8 +203,8 @@ where
                     let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
 
                     let op = PolyOp::Conv {
-                        padding: [(PADDING, PADDING); 2],
-                        stride: (STRIDE, STRIDE),
+                        padding: vec![(PADDING, PADDING); 2],
+                        stride: vec![STRIDE; 2],
                     };
                     let x = config
                         .layer_config

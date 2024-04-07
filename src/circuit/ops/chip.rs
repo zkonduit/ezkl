@@ -956,20 +956,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
         values: &[ValTensor<F>],
         op: Box<dyn Op<F>>,
     ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        let res = op.layout(self, region, values)?;
-
-        if matches!(&self.check_mode, CheckMode::SAFE) && !region.is_dummy() {
-            if let Some(claimed_output) = &res {
-                // during key generation this will be unknown vals so we use this as a flag to check
-                let mut is_assigned = !claimed_output.any_unknowns()?;
-                for val in values.iter() {
-                    is_assigned = is_assigned && !val.any_unknowns()?;
-                }
-                if is_assigned {
-                    op.safe_mode_check(claimed_output, values)?;
-                }
-            }
-        };
-        Ok(res)
+        op.layout(self, region, values)
     }
 }

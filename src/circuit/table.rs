@@ -17,8 +17,6 @@ use crate::{
 
 use crate::circuit::lookup::LookupOp;
 
-use super::Op;
-
 /// The range of the lookup table.
 pub type Range = (i128, i128);
 
@@ -113,11 +111,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         let chunk = chunk as i128;
         // we index from 1 to prevent soundness issues
         let first_element = i128_to_felt(chunk * (self.col_size as i128) + self.range.0);
-        let op_f = Op::<F>::f(
-            &self.nonlinearity,
-            &[Tensor::from(vec![first_element].into_iter())],
-        )
-        .unwrap();
+        let op_f = self
+            .nonlinearity
+            .f(&[Tensor::from(vec![first_element].into_iter())])
+            .unwrap();
         (first_element, op_f.output[0])
     }
 
@@ -205,8 +202,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         let smallest = self.range.0;
         let largest = self.range.1;
 
-        let inputs = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
-        let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
+        let inputs: Tensor<F> = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+        let evals = self.nonlinearity.f(&[inputs.clone()])?;
         let chunked_inputs = inputs.chunks(self.col_size);
 
         self.is_assigned = true;

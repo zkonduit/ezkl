@@ -316,6 +316,12 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
+    /// Allocate a new [ValTensor::Value] from the given [Tensor] of [i128].
+    pub fn from_i128_tensor(t: Tensor<i128>) -> ValTensor<F> {
+        let inner = t.map(|x| ValType::Value(Value::known(i128_to_felt(x))));
+        inner.into()
+    }
+
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
     pub fn new_instance(
         cs: &mut ConstraintSystem<F>,
@@ -873,13 +879,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         };
         Ok(())
     }
-    /// Calls `pad` on the inner [Tensor].
-    pub fn pad(&mut self, padding: [(usize, usize); 2]) -> Result<(), TensorError> {
+    /// Calls `pad_spatial_dims` on the inner [Tensor].
+    pub fn pad(&mut self, padding: Vec<(usize, usize)>, offset: usize) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = pad(v, padding)?;
+                *v = pad(v, padding, offset)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

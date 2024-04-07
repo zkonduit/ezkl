@@ -65,9 +65,9 @@ impl Circuit<Fr> for MyCircuit {
                         &mut region,
                         &[self.image.clone()],
                         Box::new(HybridOp::SumPool {
-                            padding: [(0, 0); 2],
-                            stride: (1, 1),
-                            kernel_shape: (2, 2),
+                            padding: vec![(0, 0); 2],
+                            stride: vec![1, 1],
+                            kernel_shape: vec![2, 2],
                             normalized: false,
                         }),
                     )
