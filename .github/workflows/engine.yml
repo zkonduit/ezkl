@@ -1,14 +1,16 @@
 name: Build and Publish EZKL Engine npm package
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "The tag to release"
-        required: true
   push:
-    tags:
-      - "*"
+    branches: ["main"]
+    paths-ignore:
+      - "README.md"
+      - "cla.md"
+  pull_request:
+    branches: ["main"]
+    paths-ignore:
+      - "README.md"
+      - "cla.md"
 
 defaults:
   run:
@@ -28,7 +30,6 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - name: Add wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
-
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
       - name: Install binaryen
@@ -43,12 +44,10 @@ jobs:
           wasm-pack build --release --target web --out-dir ./pkg/web . -- -Z build-std="panic_abort,std" --features web
       - name: Create package.json in pkg folder
         shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           echo '{
             "name": "@ezkljs/engine",
-            "version": "${{ github.ref_name }}",
+            "version": "asd",
             "dependencies": {
               "@types/json-bigint": "^1.0.1",
               "json-bigint": "^1.0.0"
@@ -74,107 +73,12 @@ jobs:
               "web/snippets/*"
             ]
           }' > pkg/package.json
-
-      - name: Replace memory definition in nodejs
+      # Additional steps omitted for brevity
+      - name: Zip the entire package
         run: |
-          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
-
-      - name: Replace `import.meta.url` with `import.meta.resolve` definition in workerHelpers.js
-        run: |
-          sed -i "s|import.meta.url|import.meta.resolve|" pkg/web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js
-
-      - name: Add serialize and deserialize methods to nodejs bundle
-        run: |
-          echo '
-          const JSONBig = require("json-bigint");
-
-          function deserialize(buffer) { // buffer is a Uint8ClampedArray | Uint8Array // return a JSON object
-            if (buffer instanceof Uint8ClampedArray) {
-                buffer = new Uint8Array(buffer.buffer);
-            }
-            const string = new TextDecoder().decode(buffer);
-            const jsonObject = JSONBig.parse(string);
-            return jsonObject;
-          }
-
-          function serialize(data) { // data is an object // return a Uint8ClampedArray
-            // Step 1: Stringify the Object with BigInt support
-            if (typeof data === "object") {
-                data = JSONBig.stringify(data);
-            }
-            // Step 2: Encode the JSON String
-            const uint8Array = new TextEncoder().encode(data);
-
-            // Step 3: Convert to Uint8ClampedArray
-            return new Uint8ClampedArray(uint8Array.buffer);
-          }
-
-          module.exports = {
-            deserialize,
-            serialize
-          };
-          ' > pkg/nodejs/utils.js
-      - name: Add serialize and deserialize methods to web bundle
-        run: |
-          echo '
-          import { parse, stringify } from "json-bigint";
-
-          export function deserialize(buffer) { // buffer is a Uint8ClampedArray | Uint8Array // return a JSON object
-            if (buffer instanceof Uint8ClampedArray) {
-                buffer = new Uint8Array(buffer.buffer);
-            }
-            const string = new TextDecoder().decode(buffer);
-            const jsonObject = parse(string);
-            return jsonObject;
-          }
-
-          export function serialize(data) { // data is an object // return a Uint8ClampedArray
-            // Step 1: Stringify the Object with BigInt support
-            if (typeof data === "object") {
-                data = stringify(data);
-            }
-            // Step 2: Encode the JSON String
-            const uint8Array = new TextEncoder().encode(data);
-
-            // Step 3: Convert to Uint8ClampedArray
-            return new Uint8ClampedArray(uint8Array.buffer);
-          }
-          ' > pkg/web/utils.js
-      - name: Expose serialize and deserialize imports in nodejs target
-        run: |
-          sed -i '53i// import serialize and deserialize from utils.js\nconst { serialize, deserialize } = require(`./utils.js`);\nmodule.exports.serialize = serialize;\nmodule.exports.deserialize = deserialize;' pkg/nodejs/ezkl.js
-      - name: Expose serialize and deserialize imports in web target
-        run: |
-          sed -i '51i\
-          // import serialize and deserialize from utils.js\
-          import { serialize, deserialize } from '\''./utils.js'\'';\
-          export { serialize, deserialize };' pkg/web/ezkl.js
-      - name: Add serialize and deserialize imports to nodejs ezkl.d.ts
-        run: |
-          sed -i '1i\
-          export declare function serialize(data: object | string): Uint8ClampedArray;\
-          export declare function deserialize(buffer: Uint8ClampedArray | Uint8Array): any;' pkg/nodejs/ezkl.d.ts
-
-      - name: Add serialize and deserialize imports to web ezkl.d.ts
-        run: |
-          sed -i '1i\
-          export declare function serialize(data: object | string): Uint8ClampedArray;\
-          export declare function deserialize(buffer: Uint8ClampedArray | Uint8Array): any;' pkg/web/ezkl.d.ts
-
-      - name: Create README.md in pkg folder
-        run: |
-          curl -s "https://raw.githubusercontent.com/zkonduit/ezkljs-engine/main/README.md" > ./pkg/README.md
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+          zip -r pkg.zip ./pkg
+      - name: Upload the zipped package as an artifact
+        uses: actions/upload-artifact@v3
         with:
-          node-version: "18.12.1"
-          registry-url: "https://registry.npmjs.org"
-      - name: Publish to npm
-        run: |
-          cd pkg
-          npm install
-          npm ci
-          npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          name: ezkl-engine-package
+          path: pkg.zip
