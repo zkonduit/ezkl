@@ -47,7 +47,7 @@ jobs:
       - name: Publish to npm
         run: |
           cd in-browser-evm-verifier
-          pnpm install --frozen-lockfile
+          pnpm install
           pnpm run build
           pnpm publish
         env:
