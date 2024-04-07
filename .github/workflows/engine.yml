@@ -13,7 +13,6 @@ jobs:
   publish-wasm-bindings:
     name: publish-wasm-bindings
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
