@@ -610,6 +610,7 @@ jobs:
 
   python-integration-tests:
     runs-on: large-self-hosted
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
