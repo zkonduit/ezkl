@@ -36,7 +36,7 @@ if  [ "$(which ezkl)s" != "s" ] && [ "$(which ezkl)" != "$EZKL_DIR/ezkl" ] ; the
     exit 1
 fi
 
-if [[ ":$PATH:" != *":${EZKl_DIR}:"* ]]; then
+if [[ ":$PATH:" != *":${EZKL_DIR}:"* ]]; then
     # Add the ezkl directory to the path and ensure the old PATH variables remain.
     echo >> $PROFILE && echo "export PATH=\"\$PATH:$EZKL_DIR\"" >> $PROFILE
 fi
