@@ -51,4 +51,3 @@ timingData.json
 !tests/wasm/vk.key
 docs/python/build
 !tests/wasm/vk_aggr.key
-in-browser-evm-verifier/pnpm-lock.yaml
