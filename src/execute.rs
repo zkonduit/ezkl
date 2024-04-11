@@ -196,7 +196,6 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             vk_path,
             srs_path,
         } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path)
-            .await
             .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::Mock { model, witness } => mock(model, witness),
         #[cfg(not(target_arch = "wasm32"))]
@@ -637,7 +636,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, Box<dyn
     Ok(String::new())
 }
 
-pub(crate) async fn gen_witness(
+pub(crate) fn gen_witness(
     compiled_circuit_path: PathBuf,
     data: PathBuf,
     output: Option<PathBuf>,
@@ -660,7 +659,7 @@ pub(crate) async fn gen_witness(
     };
 
     #[cfg(not(target_arch = "wasm32"))]
-    let mut input = circuit.load_graph_input(&data).await?;
+    let mut input = circuit.load_graph_input(&data)?;
     #[cfg(target_arch = "wasm32")]
     let mut input = circuit.load_graph_input(&data)?;
 
