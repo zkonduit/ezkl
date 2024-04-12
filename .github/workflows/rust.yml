@@ -641,6 +641,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
+      - name: Createdb 
+        run: createdb -h localhost -U ubuntu -p 5432 shovel
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
