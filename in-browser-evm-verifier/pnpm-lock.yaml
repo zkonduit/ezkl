@@ -6,34 +6,34 @@ settings:
 
 dependencies:
   '@ethereumjs/common':
-    specifier: ^4.0.0
+    specifier: 4.0.0
     version: 4.0.0
   '@ethereumjs/evm':
-    specifier: ^2.0.0
+    specifier: 2.0.0
     version: 2.0.0
   '@ethereumjs/statemanager':
-    specifier: ^2.0.0
+    specifier: 2.0.0
     version: 2.0.0
   '@ethereumjs/tx':
-    specifier: ^5.0.0
+    specifier: 5.0.0
     version: 5.0.0
   '@ethereumjs/util':
-    specifier: ^9.0.0
+    specifier: 9.0.0
     version: 9.0.0
   '@ethereumjs/vm':
-    specifier: ^7.0.0
+    specifier: 7.0.0
     version: 7.0.0
   '@ethersproject/abi':
-    specifier: ^5.7.0
+    specifier: 5.7.0
     version: 5.7.0
   '@ezkljs/engine':
     specifier: ^9.4.4
     version: 9.4.4
   ethers:
-    specifier: ^6.7.1
+    specifier: 6.7.1
     version: 6.7.1
   json-bigint:
-    specifier: ^1.0.0
+    specifier: 1.0.0
     version: 1.0.0
 
 devDependencies:

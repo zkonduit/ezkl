@@ -1,4 +1,4 @@
-name: Build and Publish EZKL npm packages (wasm bindings and in-browser evm verifier)
+name: Build and Publish EZKL Engine npm package
 
 on:
   workflow_dispatch:
@@ -62,7 +62,7 @@ jobs:
               "web/ezkl_bg.wasm",
               "web/ezkl.js",
               "web/ezkl.d.ts",
-              "web/snippets/wasm-bindgen-rayon-7afa899f36665473/src/workerHelpers.js",
+              "web/snippets/**/*",
               "web/package.json",
               "web/utils.js",
               "ezkl.d.ts"
@@ -78,6 +78,10 @@ jobs:
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
+
+      - name: Replace `import.meta.url` with `import.meta.resolve` definition in workerHelpers.js
+        run: |
+          find ./pkg/web/snippets -type f -name "*.js" -exec sed -i "s|import.meta.url|import.meta.resolve|" {} +
 
       - name: Add serialize and deserialize methods to nodejs bundle
         run: |
@@ -170,43 +174,6 @@ jobs:
         run: |
           cd pkg
           npm install
-          npm ci
-          npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  in-browser-evm-ver-publish:
-    name: publish-in-browser-evm-verifier-package
-    needs: ["publish-wasm-bindings"]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - uses: actions/checkout@v4
-      - name: Update version in package.json
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          sed -i "s|\"version\": \".*\"|\"version\": \"${{ github.ref_name }}\"|" in-browser-evm-verifier/package.json
-      - name: Update @ezkljs/engine version in package.json
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          sed -i "s|\"@ezkljs/engine\": \".*\"|\"@ezkljs/engine\": \"${{ github.ref_name }}\"|" in-browser-evm-verifier/package.json
-      - name: Update the engine import in in-browser-evm-verifier to use @ezkljs/engine package instead of the local one;
-        run: |
-          sed -i "s|import { encodeVerifierCalldata } from '../nodejs/ezkl';|import { encodeVerifierCalldata } from '@ezkljs/engine';|" in-browser-evm-verifier/src/index.ts
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: "18.12.1"
-          registry-url: "https://registry.npmjs.org"
-      - name: Publish to npm
-        run: |
-          cd in-browser-evm-verifier
-          npm install
-          npm run build
           npm ci
           npm publish
         env:

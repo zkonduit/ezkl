@@ -1,0 +1,54 @@
+name: Build and Publish EZKL npm packages (wasm bindings and in-browser evm verifier)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag to release"
+        required: true
+  push:
+    tags:
+      - "*"
+
+defaults:
+  run:
+    working-directory: .
+jobs:
+  in-browser-evm-ver-publish:
+    name: publish-in-browser-evm-verifier-package
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update version in package.json
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          sed -i "s|\"version\": \".*\"|\"version\": \"${{ github.ref_name }}\"|" in-browser-evm-verifier/package.json
+      - name: Update @ezkljs/engine version in package.json
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          sed -i "s|\"@ezkljs/engine\": \".*\"|\"@ezkljs/engine\": \"${{ github.ref_name }}\"|" in-browser-evm-verifier/package.json
+      - name: Update the engine import in in-browser-evm-verifier to use @ezkljs/engine package instead of the local one;
+        run: |
+          sed -i "s|import { encodeVerifierCalldata } from '../nodejs/ezkl';|import { encodeVerifierCalldata } from '@ezkljs/engine';|" in-browser-evm-verifier/src/index.ts
+      - name: Use pnpm 8
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18.12.1"
+          registry-url: "https://registry.npmjs.org"
+      - name: Publish to npm
+        run: |
+          cd in-browser-evm-verifier
+          pnpm install --frozen-lockfile
+          pnpm run build
+          pnpm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
