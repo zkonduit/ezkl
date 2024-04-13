@@ -21,8 +21,6 @@ use std::io::BufWriter;
 use std::io::Read;
 use std::panic::UnwindSafe;
 #[cfg(not(target_arch = "wasm32"))]
-use std::thread;
-#[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_core::{
     tract_data::{prelude::Tensor as TractTensor, TVec},
     value::TValue,
@@ -234,21 +232,15 @@ impl PostgresSource {
             )
         };
 
-        let res: Vec<pg_bigdecimal::PgNumeric> = thread::spawn(move || {
-            let mut client = Client::connect(&config, NoTls).unwrap();
-            let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
-            // extract rows from query
-            for row in client.query(&query, &[]).unwrap() {
-                // extract features from row
-                for i in 0..row.len() {
-                    res.push(row.get(i));
-                }
+        let mut client = Client::connect(&config, NoTls)?;
+        let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
+        // extract rows from query
+        for row in client.query(&query, &[])? {
+            // extract features from row
+            for i in 0..row.len() {
+                res.push(row.get(i));
             }
-            res
-        })
-        .join()
-        .map_err(|_| "failed to fetch data from postgres")?;
-
+        }
         Ok(vec![res])
     }
 

@@ -610,6 +610,24 @@ jobs:
 
   python-integration-tests:
     runs-on: large-self-hosted
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        env:
+          POSTGRES_USER: ubuntu
+          POSTGRES_HOST_AUTH_METHOD: trust
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          -v /var/run/postgresql:/var/run/postgresql
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
@@ -634,6 +652,8 @@ jobs:
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt; python -m ensurepip --upgrade
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
+      - name: Postgres tutorials
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --no-capture
       - name: Tictactoe tutorials
         run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
       # - name: authenticate-kaggle-cli
@@ -651,5 +671,3 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
-      # - name: Postgres tutorials
-      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
