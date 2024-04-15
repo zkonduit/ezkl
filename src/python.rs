@@ -942,7 +942,7 @@ fn calibrate_settings(
 ///
 #[pyfunction(signature = (
     data=PathBuf::from(DEFAULT_DATA),
-    model=PathBuf::from(DEFAULT_MODEL),
+    model=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
     output=PathBuf::from(DEFAULT_WITNESS),
     vk_path=None,
     srs_path=None,
@@ -978,7 +978,7 @@ fn gen_witness(
 ///
 #[pyfunction(signature = (
     witness=PathBuf::from(DEFAULT_WITNESS),
-    model=PathBuf::from(DEFAULT_MODEL),
+    model=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
 ))]
 fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     crate::execute::mock(model, witness).map_err(|e| {
@@ -1050,7 +1050,7 @@ fn mock_aggregate(
 /// bool
 ///
 #[pyfunction(signature = (
-    model=PathBuf::from(DEFAULT_MODEL),
+    model=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
     vk_path=PathBuf::from(DEFAULT_VK),
     pk_path=PathBuf::from(DEFAULT_PK),
     srs_path=None,
@@ -1109,7 +1109,7 @@ fn setup(
 ///
 #[pyfunction(signature = (
     witness=PathBuf::from(DEFAULT_WITNESS),
-    model=PathBuf::from(DEFAULT_MODEL),
+    model=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
     pk_path=PathBuf::from(DEFAULT_PK),
     proof_path=None,
     proof_type=ProofType::default(),
