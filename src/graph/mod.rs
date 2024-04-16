@@ -490,7 +490,15 @@ impl GraphSettings {
             .ceil() as u32
     }
 
-    fn model_constraint_logrows(&self) -> u32 {
+    /// Calc the number of rows required for lookup tables
+    pub fn lookup_log_rows_with_blinding(&self) -> u32 {
+        ((self.run_args.lookup_range.1 - self.run_args.lookup_range.0) as f32
+            + RESERVED_BLINDING_ROWS as f32)
+            .log2()
+            .ceil() as u32
+    }
+
+    fn model_constraint_logrows_with_blinding(&self) -> u32 {
         (self.num_rows as f64 + RESERVED_BLINDING_ROWS as f64)
             .log2()
             .ceil() as u32
@@ -509,6 +517,13 @@ impl GraphSettings {
     /// calculate the number of rows required for the module constraints
     pub fn module_constraint_logrows(&self) -> u32 {
         (self.module_sizes.max_constraints() as f64).log2().ceil() as u32
+    }
+
+    /// calculate the number of rows required for the module constraints
+    pub fn module_constraint_logrows_with_blinding(&self) -> u32 {
+        (self.module_sizes.max_constraints() as f64 + RESERVED_BLINDING_ROWS as f64)
+            .log2()
+            .ceil() as u32
     }
 
     fn constants_logrows(&self) -> u32 {
@@ -532,6 +547,14 @@ impl GraphSettings {
     /// calculate the log2 of the total number of instances
     pub fn log2_total_instances(&self) -> u32 {
         let sum = self.total_instances().iter().sum::<usize>();
+
+        // max between 1 and the log2 of the sums
+        std::cmp::max((sum as f64).log2().ceil() as u32, 1)
+    }
+
+    /// calculate the log2 of the total number of instances
+    pub fn log2_total_instances_with_blinding(&self) -> u32 {
+        let sum = self.total_instances().iter().sum::<usize>() + RESERVED_BLINDING_ROWS;
 
         // max between 1 and the log2 of the sums
         std::cmp::max((sum as f64).log2().ceil() as u32, 1)
@@ -1141,7 +1164,7 @@ impl GraphCircuit {
         );
 
         // These are upper limits, going above these is wasteful, but they are not hard limits
-        let model_constraint_logrows = self.settings().model_constraint_logrows();
+        let model_constraint_logrows = self.settings().model_constraint_logrows_with_blinding();
         let min_bits = self.table_size_logrows(safe_lookup_range, max_range_size)?;
         let constants_logrows = self.settings().constants_logrows();
         max_logrows = std::cmp::min(

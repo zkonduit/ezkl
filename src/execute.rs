@@ -1228,9 +1228,9 @@ pub(crate) fn calibrate(
     );
 
     if matches!(target, CalibrationTarget::Resources { col_overflow: true }) {
-        let lookup_log_rows = best_params.lookup_log_rows();
-        let module_log_row = best_params.module_constraint_logrows();
-        let instance_logrows = best_params.log2_total_instances();
+        let lookup_log_rows = best_params.lookup_log_rows_with_blinding();
+        let module_log_row = best_params.module_constraint_logrows_with_blinding();
+        let instance_logrows = best_params.log2_total_instances_with_blinding();
 
         let mut reduction = std::cmp::max(
             lookup_log_rows,
