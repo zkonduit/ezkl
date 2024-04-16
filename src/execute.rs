@@ -1228,21 +1228,13 @@ pub(crate) fn calibrate(
     );
 
     if matches!(target, CalibrationTarget::Resources { col_overflow: true }) {
-        let lookup_log_rows = ((best_params.run_args.lookup_range.1
-            - best_params.run_args.lookup_range.0) as f32)
-            .log2()
-            .ceil() as u32
-            + 1;
+        let lookup_log_rows = best_params.lookup_log_rows();
+        let module_log_row = best_params.module_constraint_logrows();
+        let instance_logrows = best_params.log2_total_instances();
+
         let mut reduction = std::cmp::max(
-            (best_params
-                .model_instance_shapes
-                .iter()
-                .map(|x| x.iter().product::<usize>())
-                .sum::<usize>() as f32)
-                .log2()
-                .ceil() as u32
-                + 1,
             lookup_log_rows,
+            std::cmp::max(module_log_row, instance_logrows),
         );
         reduction = std::cmp::max(reduction, crate::graph::MIN_LOGROWS);
 

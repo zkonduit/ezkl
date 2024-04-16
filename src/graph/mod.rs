@@ -483,6 +483,13 @@ pub struct GraphSettings {
 }
 
 impl GraphSettings {
+    /// Calc the number of rows required for lookup tables
+    pub fn lookup_log_rows(&self) -> u32 {
+        ((self.run_args.lookup_range.1 - self.run_args.lookup_range.0) as f32)
+            .log2()
+            .ceil() as u32
+    }
+
     fn model_constraint_logrows(&self) -> u32 {
         (self.num_rows as f64 + RESERVED_BLINDING_ROWS as f64)
             .log2()
@@ -499,7 +506,8 @@ impl GraphSettings {
         self.total_dynamic_col_size + self.total_shuffle_col_size
     }
 
-    fn module_constraint_logrows(&self) -> u32 {
+    /// calculate the number of rows required for the module constraints
+    pub fn module_constraint_logrows(&self) -> u32 {
         (self.module_sizes.max_constraints() as f64).log2().ceil() as u32
     }
 
