@@ -1175,7 +1175,7 @@ fn verify(
     settings_path: PathBuf,
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
-    non_reduced_srs: bool,
+    reduced_srs: bool,
 ) -> Result<bool, PyErr> {
     crate::execute::verify(proof_path, settings_path, vk_path, srs_path, reduced_srs).map_err(
         |e| {
