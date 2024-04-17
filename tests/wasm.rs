@@ -1,21 +1,29 @@
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 #[cfg(test)]
 mod wasm32 {
+    use ezkl::circuit::modules::polycommit::PolyCommitChip;
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
     use ezkl::circuit::modules::Module;
     use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
-    use ezkl::graph::GraphWitness;
+    use ezkl::graph::GraphCircuit;
+    use ezkl::graph::{GraphSettings, GraphWitness};
     use ezkl::pfsys;
     use ezkl::wasm::{
         bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
         feltToFloat, feltToInt, feltToLittleEndian, genPk, genVk, genWitness, inputValidation,
-        pkValidation, poseidonHash, proofValidation, prove, settingsValidation, srsValidation,
-        u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
+        kzgCommit, pkValidation, poseidonHash, proofValidation, prove, settingsValidation,
+        srsValidation, u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
     };
+    use halo2_proofs::plonk::VerifyingKey;
+    use halo2_proofs::poly::commitment::CommitmentScheme;
+    use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+    use halo2_proofs::poly::kzg::commitment::ParamsKZG;
     use halo2_solidity_verifier::encode_calldata;
+    use halo2curves::bn256::Bn256;
     use halo2curves::bn256::{Fr, G1Affine};
     use snark_verifier::util::arithmetic::PrimeField;
+    use wasm_bindgen::JsError;
     #[cfg(feature = "web")]
     pub use wasm_bindgen_rayon::init_thread_pool;
     use wasm_bindgen_test::*;
@@ -88,6 +96,46 @@ mod wasm32 {
             &flattened_instances.collect::<Vec<_>>(),
         );
         assert_eq!(calldata, reference_calldata);
+    }
+
+    #[wasm_bindgen_test]
+    fn verify_kzg_commit() {
+        // create a vector of field elements Vec<Fr> and assign it to the message variable
+        let mut message: Vec<Fr> = vec![];
+        for i in 0..32 {
+            message.push(Fr::from(i as u64));
+        }
+        let message_ser = serde_json::to_vec(&message).unwrap();
+
+        let settings: GraphSettings = serde_json::from_slice(&SETTINGS).unwrap();
+        let mut reader = std::io::BufReader::new(SRS);
+        let params: ParamsKZG<Bn256> =
+            halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).unwrap();
+        let mut reader = std::io::BufReader::new(VK);
+        let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
+            &mut reader,
+            halo2_proofs::SerdeFormat::RawBytes,
+            settings.clone(),
+        )
+        .unwrap();
+        let commitment_ser = kzgCommit(
+            wasm_bindgen::Clamped(message_ser),
+            wasm_bindgen::Clamped(VK.to_vec()),
+            wasm_bindgen::Clamped(SETTINGS.to_vec()),
+            wasm_bindgen::Clamped(SRS.to_vec()),
+        )
+        .map_err(|_| "failed")
+        .unwrap();
+        let commitment: Vec<halo2curves::bn256::G1Affine> =
+            serde_json::from_slice(&commitment_ser[..]).unwrap();
+        let reference_commitment = PolyCommitChip::commit::<KZGCommitmentScheme<Bn256>>(
+            message,
+            vk.cs().degree() as u32,
+            (vk.cs().blinding_factors() + 1) as u32,
+            &params,
+        );
+
+        assert_eq!(commitment, reference_commitment);
     }
 
     #[wasm_bindgen_test]
