@@ -1231,11 +1231,11 @@ pub(crate) fn calibrate(
         let lookup_log_rows = best_params.lookup_log_rows_with_blinding();
         let module_log_row = best_params.module_constraint_logrows_with_blinding();
         let instance_logrows = best_params.log2_total_instances_with_blinding();
+        let dynamic_lookup_logrows = best_params.dynamic_lookup_and_shuffle_logrows_with_blinding();
 
-        let mut reduction = std::cmp::max(
-            lookup_log_rows,
-            std::cmp::max(module_log_row, instance_logrows),
-        );
+        let mut reduction = std::cmp::max(lookup_log_rows, module_log_row);
+        reduction = std::cmp::max(reduction, instance_logrows);
+        reduction = std::cmp::max(reduction, dynamic_lookup_logrows);
         reduction = std::cmp::max(reduction, crate::graph::MIN_LOGROWS);
 
         info!(

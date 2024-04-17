@@ -510,6 +510,15 @@ impl GraphSettings {
             .ceil() as u32
     }
 
+    /// calculate the number of rows required for the dynamic lookup and shuffle
+    pub fn dynamic_lookup_and_shuffle_logrows_with_blinding(&self) -> u32 {
+        (self.total_dynamic_col_size as f64
+            + self.total_shuffle_col_size as f64
+            + RESERVED_BLINDING_ROWS as f64)
+            .log2()
+            .ceil() as u32
+    }
+
     fn dynamic_lookup_and_shuffle_col_size(&self) -> usize {
         self.total_dynamic_col_size + self.total_shuffle_col_size
     }
