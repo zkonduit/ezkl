@@ -185,8 +185,6 @@ pub fn kzgCommit(
     Ok(wasm_bindgen::Clamped(
         serde_json::to_vec(&output).map_err(|e| JsError::new(&format!("{}", e)))?,
     ))
-
-    // Ok(output.iter().map(|x| (*x).into()).collect::<Vec<_>>())
 }
 
 /// Converts a buffer to vector of 4 u64s representing a fixed point field element
