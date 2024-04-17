@@ -1,3 +1,4 @@
+use crate::circuit::modules::polycommit::PolyCommitChip;
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::PoseidonChip;
 use crate::circuit::modules::Module;
@@ -145,6 +146,47 @@ pub fn floatToFelt(
     Ok(wasm_bindgen::Clamped(serde_json::to_vec(&vec).map_err(
         |e| JsError::new(&format!("Failed to serialize a float to felt{}", e)),
     )?))
+}
+
+/// Generate a kzg commitment.
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn kzgCommit(
+    message: wasm_bindgen::Clamped<Vec<u8>>,
+    vk: wasm_bindgen::Clamped<Vec<u8>>,
+    settings: wasm_bindgen::Clamped<Vec<u8>>,
+    params_ser: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
+    let message: Vec<Fr> = serde_json::from_slice(&message[..])
+        .map_err(|e| JsError::new(&format!("Failed to deserialize message: {}", e)))?;
+
+    let mut reader = std::io::BufReader::new(&params_ser[..]);
+    let params: ParamsKZG<Bn256> =
+        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
+            .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
+
+    let mut reader = std::io::BufReader::new(&vk[..]);
+    let circuit_settings: GraphSettings = serde_json::from_slice(&settings[..])
+        .map_err(|e| JsError::new(&format!("Failed to deserialize settings: {}", e)))?;
+    let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
+        &mut reader,
+        halo2_proofs::SerdeFormat::RawBytes,
+        circuit_settings,
+    )
+    .map_err(|e| JsError::new(&format!("Failed to deserialize vk: {}", e)))?;
+
+    let output = PolyCommitChip::commit::<KZGCommitmentScheme<Bn256>>(
+        message,
+        vk.cs().degree() as u32,
+        (vk.cs().blinding_factors() + 1) as u32,
+        &params,
+    );
+
+    Ok(wasm_bindgen::Clamped(
+        serde_json::to_vec(&output).map_err(|e| JsError::new(&format!("{}", e)))?,
+    ))
+
+    // Ok(output.iter().map(|x| (*x).into()).collect::<Vec<_>>())
 }
 
 /// Converts a buffer to vector of 4 u64s representing a fixed point field element
