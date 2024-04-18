@@ -899,7 +899,7 @@ mod native_tests {
             seq!(N in 0..=45 {
 
                 #(#[test_case(WASM_TESTS[N])])*
-                fn prove_and_verify_with_overflow_(test: &str) {
+                fn kzg_prove_and_verify_with_overflow_(test: &str) {
                     crate::native_tests::init_binary();
                     // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
@@ -912,7 +912,20 @@ mod native_tests {
                 }
 
                 #(#[test_case(WASM_TESTS[N])])*
-                fn prove_and_verify_with_overflow_fixed_params_(test: &str) {
+                fn kzg_prove_and_verify_with_overflow_hashed_inputs_(test: &str) {
+                    crate::native_tests::init_binary();
+                    // crate::native_tests::init_wasm();
+                    let test_dir = TempDir::new(test).unwrap();
+                    env_logger::init();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testWasm", false);
+                    // test_dir.close().unwrap();
+                }
+
+                #(#[test_case(WASM_TESTS[N])])*
+                fn kzg_prove_and_verify_with_overflow_fixed_params_(test: &str) {
                     crate::native_tests::init_binary();
                     // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
