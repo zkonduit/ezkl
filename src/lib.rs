@@ -200,13 +200,13 @@ pub struct RunArgs {
     /// Hand-written parser for graph variables, eg. batch_size=1
     #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size->1", value_delimiter = ',')]
     pub variables: Vec<(String, usize)>,
-    /// Flags whether inputs are public, private, hashed
+    /// Flags whether inputs are public, private, hashed, fixed, kzgcommit
     #[arg(long, default_value = "private")]
     pub input_visibility: Visibility,
-    /// Flags whether outputs are public, private, hashed
+    /// Flags whether outputs are public, private, fixed, hashed, kzgcommit
     #[arg(long, default_value = "public")]
     pub output_visibility: Visibility,
-    /// Flags whether params are public, private, hashed
+    /// Flags whether params are fixed, private, hashed, kzgcommit
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
     #[arg(long, default_value = "false")]
@@ -248,6 +248,12 @@ impl Default for RunArgs {
 impl RunArgs {
     ///
     pub fn validate(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.param_visibility == Visibility::Public {
+            return Err(
+                "params cannot be public instances, you are probably trying to use `fixed` or `kzgcommit`"
+                    .into(),
+            );
+        }
         if self.scale_rebase_multiplier < 1 {
             return Err("scale_rebase_multiplier must be >= 1".into());
         }
