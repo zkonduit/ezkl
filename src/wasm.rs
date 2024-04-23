@@ -177,7 +177,6 @@ pub fn kzgCommit(
 
     let output = PolyCommitChip::commit::<KZGCommitmentScheme<Bn256>>(
         message,
-        vk.cs().degree() as u32,
         (vk.cs().blinding_factors() + 1) as u32,
         &params,
     );
