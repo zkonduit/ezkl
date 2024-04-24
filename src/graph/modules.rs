@@ -314,7 +314,6 @@ impl GraphModules {
                     let commitments = inputs.iter().fold(vec![], |mut acc, x| {
                         let res = PolyCommitChip::commit::<Scheme>(
                             x.to_vec(),
-                            vk.cs().degree() as u32,
                             (vk.cs().blinding_factors() + 1) as u32,
                             srs,
                         );

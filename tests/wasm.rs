@@ -130,7 +130,6 @@ mod wasm32 {
             serde_json::from_slice(&commitment_ser[..]).unwrap();
         let reference_commitment = PolyCommitChip::commit::<KZGCommitmentScheme<Bn256>>(
             message,
-            vk.cs().degree() as u32,
             (vk.cs().blinding_factors() + 1) as u32,
             &params,
         );

@@ -547,7 +547,6 @@ fn kzg_commit(
 
     let output = PolyCommitChip::commit::<KZGCommitmentScheme<Bn256>>(
         message,
-        vk.cs().degree() as u32,
         (vk.cs().blinding_factors() + 1) as u32,
         &srs,
     );
@@ -606,7 +605,6 @@ fn ipa_commit(
 
     let output = PolyCommitChip::commit::<IPACommitmentScheme<G1Affine>>(
         message,
-        vk.cs().degree() as u32,
         (vk.cs().blinding_factors() + 1) as u32,
         &srs,
     );

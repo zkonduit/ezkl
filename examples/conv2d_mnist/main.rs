@@ -308,6 +308,7 @@ pub fn runconv() {
         tst_lbl: _,
         ..
     } = MnistBuilder::new()
+        .base_path("examples/data")
         .label_format_digit()
         .training_set_length(50_000)
         .validation_set_length(10_000)

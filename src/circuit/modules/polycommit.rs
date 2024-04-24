@@ -44,12 +44,11 @@ impl PolyCommitChip {
     /// Commit to the message using the KZG commitment scheme
     pub fn commit<Scheme: CommitmentScheme<Scalar = Fp, Curve = G1Affine>>(
         message: Vec<Scheme::Scalar>,
-        degree: u32,
         num_unusable_rows: u32,
         params: &Scheme::ParamsProver,
     ) -> Vec<G1Affine> {
         let k = params.k();
-        let domain = halo2_proofs::poly::EvaluationDomain::new(degree, k);
+        let domain = halo2_proofs::poly::EvaluationDomain::new(2, k);
         let n = 2_u64.pow(k) - num_unusable_rows as u64;
         let num_poly = (message.len() / n as usize) + 1;
         let mut poly = vec![domain.empty_lagrange(); num_poly];
