@@ -547,8 +547,6 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Download MNIST
-        run: sh data.sh
       - name: Examples
         run: cargo nextest run --release tests_examples
 
