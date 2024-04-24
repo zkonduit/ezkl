@@ -125,7 +125,7 @@ contract QuantizeData {
     }
 
     function to_field_element(
-        int128[] memory quantized_data
+        int64[] memory quantized_data
     ) public pure returns (uint256[] memory output) {
         output = new uint256[](quantized_data.length);
         for (uint i; i < quantized_data.length; i++) {

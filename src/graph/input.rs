@@ -1,7 +1,7 @@
 use super::quantize_float;
 use super::GraphError;
 use crate::circuit::InputType;
-use crate::fieldutils::i128_to_felt;
+use crate::fieldutils::i64_to_felt;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::tensor::Tensor;
 use crate::EZKL_BUF_CAPACITY;
@@ -128,7 +128,7 @@ impl FileSourceInner {
     /// Convert to a field element
     pub fn to_field(&self, scale: crate::Scale) -> Fp {
         match self {
-            FileSourceInner::Float(f) => i128_to_felt(quantize_float(f, 0.0, scale).unwrap()),
+            FileSourceInner::Float(f) => i64_to_felt(quantize_float(f, 0.0, scale).unwrap()),
             FileSourceInner::Bool(f) => {
                 if *f {
                     Fp::one()
@@ -150,7 +150,7 @@ impl FileSourceInner {
                     0.0
                 }
             }
-            FileSourceInner::Field(f) => crate::fieldutils::felt_to_i128(*f) as f64,
+            FileSourceInner::Field(f) => crate::fieldutils::felt_to_i64(*f) as f64,
         }
     }
 }

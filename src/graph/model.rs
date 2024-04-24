@@ -65,11 +65,11 @@ pub struct ForwardResult {
     /// The outputs of the forward pass.
     pub outputs: Vec<Tensor<Fp>>,
     /// The maximum value of any input to a lookup operation.
-    pub max_lookup_inputs: i128,
+    pub max_lookup_inputs: i64,
     /// The minimum value of any input to a lookup operation.
-    pub min_lookup_inputs: i128,
+    pub min_lookup_inputs: i64,
     /// The max range check size
-    pub max_range_size: i128,
+    pub max_range_size: i64,
 }
 
 impl From<DummyPassRes> for ForwardResult {
@@ -117,11 +117,11 @@ pub struct DummyPassRes {
     /// range checks
     pub range_checks: HashSet<Range>,
     /// max lookup inputs
-    pub max_lookup_inputs: i128,
+    pub max_lookup_inputs: i64,
     /// min lookup inputs
-    pub min_lookup_inputs: i128,
+    pub min_lookup_inputs: i64,
     /// min range check
-    pub max_range_size: i128,
+    pub max_range_size: i64,
     /// outputs
     pub outputs: Vec<Tensor<Fp>>,
 }

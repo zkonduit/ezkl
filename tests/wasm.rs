@@ -151,10 +151,10 @@ mod wasm32 {
                 .unwrap();
             assert_eq!(floating_point, (i as f64) / 4.0);
 
-            let integer: i128 =
+            let integer: i64 =
                 serde_json::from_slice(&feltToInt(clamped.clone()).map_err(|_| "failed").unwrap())
                     .unwrap();
-            assert_eq!(integer, i as i128);
+            assert_eq!(integer, i as i64);
 
             let hex_string = format!("{:?}", field_element.clone());
             let returned_string: String = feltToBigEndian(clamped.clone())

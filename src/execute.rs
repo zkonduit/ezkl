@@ -887,7 +887,7 @@ pub(crate) fn calibrate(
     data: PathBuf,
     settings_path: PathBuf,
     target: CalibrationTarget,
-    lookup_safety_margin: i128,
+    lookup_safety_margin: i64,
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     only_range_check_rebase: bool,
@@ -1053,7 +1053,7 @@ pub(crate) fn calibrate(
 
         match forward_res {
             Ok(_) => (),
-            // typically errors will be due to the circuit overflowing the i128 limit
+            // typically errors will be due to the circuit overflowing the i64 limit
             Err(e) => {
                 error!("forward pass failed: {:?}", e);
                 pb.inc(1);

@@ -122,8 +122,8 @@ impl InputType {
                 *input = T::from_f64(f64_input).unwrap();
             }
             InputType::Int | InputType::TDim => {
-                let int_input = input.clone().to_i128().unwrap();
-                *input = T::from_i128(int_input).unwrap();
+                let int_input = input.clone().to_i64().unwrap();
+                *input = T::from_i64(int_input).unwrap();
             }
         }
     }

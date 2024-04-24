@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     circuit::{layouts, utils, Tolerance},
-    fieldutils::i128_to_felt,
+    fieldutils::i64_to_felt,
     graph::multiplier_to_scale,
     tensor::{self, Tensor, TensorType, ValTensor},
 };
@@ -184,8 +184,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                         config,
                         region,
                         values[..].try_into()?,
-                        i128_to_felt(input_scale.0 as i128),
-                        i128_to_felt(output_scale.0 as i128),
+                        i64_to_felt(input_scale.0 as i64),
+                        i64_to_felt(output_scale.0 as i64),
                     )?
                 } else {
                     layouts::nonlinearity(
@@ -209,7 +209,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                         config,
                         region,
                         values[..].try_into()?,
-                        i128_to_felt(denom.0 as i128),
+                        i64_to_felt(denom.0 as i64),
                     )?
                 } else {
                     layouts::nonlinearity(

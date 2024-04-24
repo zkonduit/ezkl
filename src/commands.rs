@@ -345,7 +345,7 @@ pub enum Commands {
         target: CalibrationTarget,
         /// the lookup safety margin to use for calibration. if the max lookup is 2^k, then the max lookup will be 2^k * lookup_safety_margin. larger = safer but slower
         #[arg(long, default_value = DEFAULT_LOOKUP_SAFETY_MARGIN)]
-        lookup_safety_margin: i128,
+        lookup_safety_margin: i64,
         /// Optional scales to specifically try for calibration. Example, --scales 0,4
         #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
         scales: Option<Vec<crate::Scale>>,

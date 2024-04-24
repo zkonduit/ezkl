@@ -4,7 +4,7 @@ use std::error::Error;
 
 use crate::{
     circuit::{layouts, table::Range, utils},
-    fieldutils::{felt_to_i128, i128_to_felt},
+    fieldutils::{felt_to_i64, i64_to_felt},
     graph::multiplier_to_scale,
     tensor::{self, Tensor, TensorError, TensorType},
 };
@@ -132,7 +132,7 @@ impl LookupOp {
     /// Returns the range of values that can be represented by the table
     pub fn bit_range(max_len: usize) -> Range {
         let range = (max_len - 1) as f64 / 2_f64;
-        let range = range as i128;
+        let range = range as i64;
         (-range, range)
     }
 
@@ -141,7 +141,7 @@ impl LookupOp {
         &self,
         x: &[Tensor<F>],
     ) -> Result<ForwardResult<F>, TensorError> {
-        let x = x[0].clone().map(|x| felt_to_i128(x));
+        let x = x[0].clone().map(|x| felt_to_i64(x));
         let res = match &self {
             LookupOp::Abs => Ok(tensor::ops::abs(&x)?),
             LookupOp::Ceil { scale } => Ok(tensor::ops::nonlinearities::ceil(&x, scale.into())),
@@ -228,7 +228,7 @@ impl LookupOp {
             }
         }?;
 
-        let output = res.map(|x| i128_to_felt(x));
+        let output = res.map(|x| i64_to_felt(x));
 
         Ok(ForwardResult { output })
     }

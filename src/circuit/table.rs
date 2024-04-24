@@ -11,17 +11,17 @@ use maybe_rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     circuit::CircuitError,
-    fieldutils::i128_to_felt,
+    fieldutils::i64_to_felt,
     tensor::{Tensor, TensorType},
 };
 
 use crate::circuit::lookup::LookupOp;
 
 /// The range of the lookup table.
-pub type Range = (i128, i128);
+pub type Range = (i64, i64);
 
 /// The safety factor for the range of the lookup table.
-pub const RANGE_MULTIPLIER: i128 = 2;
+pub const RANGE_MULTIPLIER: i64 = 2;
 /// The safety factor offset for the number of rows in the lookup table.
 pub const RESERVED_BLINDING_ROWS_PAD: usize = 3;
 
@@ -101,16 +101,16 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
     pub fn get_col_index(&self, input: F) -> F {
         //    range is split up into chunks of size col_size, find the chunk that input is in
         let chunk =
-            (crate::fieldutils::felt_to_i128(input) - self.range.0).abs() / (self.col_size as i128);
+            (crate::fieldutils::felt_to_i64(input) - self.range.0).abs() / (self.col_size as i64);
 
-        i128_to_felt(chunk)
+        i64_to_felt(chunk)
     }
 
     /// get first_element of column
     pub fn get_first_element(&self, chunk: usize) -> (F, F) {
-        let chunk = chunk as i128;
+        let chunk = chunk as i64;
         // we index from 1 to prevent soundness issues
-        let first_element = i128_to_felt(chunk * (self.col_size as i128) + self.range.0);
+        let first_element = i64_to_felt(chunk * (self.col_size as i64) + self.range.0);
         let op_f = self
             .nonlinearity
             .f(&[Tensor::from(vec![first_element].into_iter())])
@@ -130,9 +130,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
 }
 
 ///
-pub fn num_cols_required(range_len: i128, col_size: usize) -> usize {
+pub fn num_cols_required(range_len: i64, col_size: usize) -> usize {
     // number of cols needed to store the range
-    (range_len / (col_size as i128)) as usize + 1
+    (range_len / (col_size as i64)) as usize + 1
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
@@ -202,7 +202,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         let smallest = self.range.0;
         let largest = self.range.1;
 
-        let inputs: Tensor<F> = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+        let inputs: Tensor<F> = Tensor::from(smallest..=largest).map(|x| i64_to_felt(x));
         let evals = self.nonlinearity.f(&[inputs.clone()])?;
         let chunked_inputs = inputs.chunks(self.col_size);
 
@@ -275,9 +275,9 @@ pub struct RangeCheck<F: PrimeField> {
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
     /// get first_element of column
     pub fn get_first_element(&self, chunk: usize) -> F {
-        let chunk = chunk as i128;
+        let chunk = chunk as i64;
         // we index from 1 to prevent soundness issues
-        i128_to_felt(chunk * (self.col_size as i128) + self.range.0)
+        i64_to_felt(chunk * (self.col_size as i64) + self.range.0)
     }
 
     ///
@@ -294,9 +294,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
     pub fn get_col_index(&self, input: F) -> F {
         //    range is split up into chunks of size col_size, find the chunk that input is in
         let chunk =
-            (crate::fieldutils::felt_to_i128(input) - self.range.0).abs() / (self.col_size as i128);
+            (crate::fieldutils::felt_to_i64(input) - self.range.0).abs() / (self.col_size as i64);
 
-        i128_to_felt(chunk)
+        i64_to_felt(chunk)
     }
 }
 
@@ -350,7 +350,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
         let smallest = self.range.0;
         let largest = self.range.1;
 
-        let inputs: Tensor<F> = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+        let inputs: Tensor<F> = Tensor::from(smallest..=largest).map(|x| i64_to_felt(x));
         let chunked_inputs = inputs.chunks(self.col_size);
 
         self.is_assigned = true;

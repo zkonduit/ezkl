@@ -19,7 +19,7 @@ pub use var::*;
 
 use crate::{
     circuit::utils,
-    fieldutils::{felt_to_i32, i128_to_felt, i32_to_felt},
+    fieldutils::{felt_to_i32, i32_to_felt, i64_to_felt},
     graph::Visibility,
 };
 
@@ -145,7 +145,7 @@ impl TensorType for f64 {
 }
 
 tensor_type!(bool, Bool, false, true);
-tensor_type!(i128, Int128, 0, 1);
+tensor_type!(i64, Int64, 0, 1);
 tensor_type!(i32, Int32, 0, 1);
 tensor_type!(usize, USize, 0, 1);
 tensor_type!((), Empty, (), ());
@@ -427,10 +427,10 @@ impl<F: PrimeField + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> 
     }
 }
 
-impl<F: PrimeField + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>> {
-    fn from(t: Tensor<i128>) -> Tensor<Value<F>> {
+impl<F: PrimeField + TensorType + Clone> From<Tensor<i64>> for Tensor<Value<F>> {
+    fn from(t: Tensor<i64>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
-            Tensor::from((0..t.len()).map(|i| Value::known(i128_to_felt::<F>(t[i]))));
+            Tensor::from((0..t.len()).map(|i| Value::known(i64_to_felt::<F>(t[i]))));
         // safe to unwrap as we know the dims are correct
         ta.reshape(t.dims()).unwrap();
         ta

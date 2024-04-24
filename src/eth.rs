@@ -424,7 +424,7 @@ pub async fn setup_test_contract<M: 'static + Middleware>(
             let input = input.to_float() as f32;
             let decimal_places = count_decimal_places(input) as u8;
             let scaled_by_decimals = input * f32::powf(10., decimal_places.into());
-            scaled_by_decimals_data.push(I256::from(scaled_by_decimals as i128));
+            scaled_by_decimals_data.push(I256::from(scaled_by_decimals as i64));
             decimals.push(decimal_places);
         } else if input.is_field() {
             let input = input.to_field(0);

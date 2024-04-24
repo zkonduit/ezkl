@@ -9,7 +9,7 @@ use halo2_proofs::{
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
-use portable_atomic::AtomicI128 as AtomicInt;
+use portable_atomic::AtomicI64 as AtomicInt;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -133,9 +133,9 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     shuffle_index: ShuffleIndex,
     used_lookups: HashSet<LookupOp>,
     used_range_checks: HashSet<Range>,
-    max_lookup_inputs: i128,
-    min_lookup_inputs: i128,
-    max_range_size: i128,
+    max_lookup_inputs: i64,
+    min_lookup_inputs: i64,
+    max_range_size: i64,
     witness_gen: bool,
     assigned_constants: ConstantsMap<F>,
 }
@@ -546,17 +546,17 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// max lookup inputs
-    pub fn max_lookup_inputs(&self) -> i128 {
+    pub fn max_lookup_inputs(&self) -> i64 {
         self.max_lookup_inputs
     }
 
     /// min lookup inputs
-    pub fn min_lookup_inputs(&self) -> i128 {
+    pub fn min_lookup_inputs(&self) -> i64 {
         self.min_lookup_inputs
     }
 
     /// max range check
-    pub fn max_range_size(&self) -> i128 {
+    pub fn max_range_size(&self) -> i64 {
         self.max_range_size
     }
 

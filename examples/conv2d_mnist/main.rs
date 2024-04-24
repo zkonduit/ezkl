@@ -42,8 +42,8 @@ const NUM_INNER_COLS: usize = 1;
 struct Config<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
-    const LOOKUP_MIN: i128,
-    const LOOKUP_MAX: i128,
+    const LOOKUP_MIN: i64,
+    const LOOKUP_MAX: i64,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -66,8 +66,8 @@ struct Config<
 struct MyCircuit<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const CLASSES: usize,
-    const LOOKUP_MIN: i128,
-    const LOOKUP_MAX: i128,
+    const LOOKUP_MIN: i64,
+    const LOOKUP_MAX: i64,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -90,8 +90,8 @@ struct MyCircuit<
 impl<
         const LEN: usize,
         const CLASSES: usize,
-        const LOOKUP_MIN: i128,
-        const LOOKUP_MAX: i128,
+        const LOOKUP_MIN: i64,
+        const LOOKUP_MAX: i64,
         // Convolution
         const KERNEL_HEIGHT: usize,
         const KERNEL_WIDTH: usize,

@@ -52,16 +52,16 @@ use tract_onnx::tract_hir::{
 /// * `dims` - the dimensionality of the resulting [Tensor].
 /// * `shift` - offset used in the fixed point representation.
 /// * `scale` - `2^scale` used in the fixed point representation.
-pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i128, TensorError> {
+pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i64, TensorError> {
     let mult = scale_to_multiplier(scale);
-    let max_value = ((i128::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
+    let max_value = ((i64::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
     if *elem > max_value {
         return Err(TensorError::SigBitTruncationError);
     }
 
     // we parallelize the quantization process as it seems to be quite slow at times
-    let scaled = (mult * *elem + shift).round() as i128;
+    let scaled = (mult * *elem + shift).round() as i64;
 
     Ok(scaled)
 }
@@ -72,7 +72,7 @@ pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i12
 /// * `scale` - `2^scale` used in the fixed point representation.
 /// * `shift` - offset used in the fixed point representation.
 pub fn dequantize(felt: Fp, scale: crate::Scale, shift: f64) -> f64 {
-    let int_rep = crate::fieldutils::felt_to_i128(felt);
+    let int_rep = crate::fieldutils::felt_to_i64(felt);
     let multiplier = scale_to_multiplier(scale);
     int_rep as f64 / multiplier - shift
 }
@@ -1475,7 +1475,7 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     visibility: &Visibility,
 ) -> Result<Tensor<F>, Box<dyn std::error::Error>> {
     let mut value: Tensor<F> = const_value.par_enum_map(|_, x| {
-        Ok::<_, TensorError>(crate::fieldutils::i128_to_felt::<F>(quantize_float(
+        Ok::<_, TensorError>(crate::fieldutils::i64_to_felt::<F>(quantize_float(
             &(x).into(),
             0.0,
             scale,

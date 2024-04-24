@@ -11,8 +11,8 @@ pub fn i32_to_felt<F: PrimeField>(x: i32) -> F {
     }
 }
 
-/// Converts an i128 to a PrimeField element.
-pub fn i128_to_felt<F: PrimeField>(x: i128) -> F {
+/// Converts an i64 to a PrimeField element.
+pub fn i64_to_felt<F: PrimeField>(x: i64) -> F {
     if x >= 0 {
         F::from_u128(x as u128)
     } else {
@@ -37,7 +37,7 @@ pub fn felt_to_i32<F: PrimeField + PartialOrd + Field>(x: F) -> i32 {
 
 /// Converts a PrimeField element to an f64.
 pub fn felt_to_f64<F: PrimeField + PartialOrd + Field>(x: F) -> f64 {
-    if x > F::from_u128(i128::MAX as u128) {
+    if x > F::from_u128(i64::MAX as u128) {
         let rep = (-x).to_repr();
         let negtmp: &[u8] = rep.as_ref();
         let lower_128: u128 = u128::from_le_bytes(negtmp[..16].try_into().unwrap());
@@ -50,18 +50,18 @@ pub fn felt_to_f64<F: PrimeField + PartialOrd + Field>(x: F) -> f64 {
     }
 }
 
-/// Converts a PrimeField element to an i128.
-pub fn felt_to_i128<F: PrimeField + PartialOrd + Field>(x: F) -> i128 {
-    if x > F::from_u128(i128::MAX as u128) {
+/// Converts a PrimeField element to an i64.
+pub fn felt_to_i64<F: PrimeField + PartialOrd + Field>(x: F) -> i64 {
+    if x > F::from_u128(i64::MAX as u128) {
         let rep = (-x).to_repr();
         let negtmp: &[u8] = rep.as_ref();
         let lower_128: u128 = u128::from_le_bytes(negtmp[..16].try_into().unwrap());
-        -(lower_128 as i128)
+        -(lower_128 as i64)
     } else {
         let rep = (x).to_repr();
         let tmp: &[u8] = rep.as_ref();
         let lower_128: u128 = u128::from_le_bytes(tmp[..16].try_into().unwrap());
-        lower_128 as i128
+        lower_128 as i64
     }
 }
 
@@ -79,10 +79,10 @@ mod test {
         let res: F = i32_to_felt(2_i32.pow(17));
         assert_eq!(res, F::from(131072));
 
-        let res: F = i128_to_felt(-15i128);
+        let res: F = i64_to_felt(-15i64);
         assert_eq!(res, -F::from(15));
 
-        let res: F = i128_to_felt(2_i128.pow(17));
+        let res: F = i64_to_felt(2_i64.pow(17));
         assert_eq!(res, F::from(131072));
     }
 
@@ -96,10 +96,10 @@ mod test {
     }
 
     #[test]
-    fn felttoi128() {
-        for x in -(2i128.pow(20))..(2i128.pow(20)) {
-            let fieldx: F = i128_to_felt::<F>(x);
-            let xf: i128 = felt_to_i128::<F>(fieldx);
+    fn felttoi64() {
+        for x in -(2i64.pow(20))..(2i64.pow(20)) {
+            let fieldx: F = i64_to_felt::<F>(x);
+            let xf: i64 = felt_to_i64::<F>(fieldx);
             assert_eq!(x, xf);
         }
     }
