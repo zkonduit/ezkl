@@ -1287,7 +1287,6 @@ impl GraphCircuit {
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&Scheme::ParamsProver>,
         witness_gen: bool,
-        check_lookup: bool,
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let original_inputs = inputs.to_vec();
 
@@ -1336,7 +1335,7 @@ impl GraphCircuit {
 
         let mut model_results =
             self.model()
-                .forward(inputs, &self.settings().run_args, witness_gen, check_lookup)?;
+                .forward(inputs, &self.settings().run_args, witness_gen)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();

@@ -682,7 +682,6 @@ pub(crate) fn gen_witness(
                         vk.as_ref(),
                         Some(&srs),
                         true,
-                        true,
                     )?
                 }
                 Commitments::IPA => {
@@ -697,22 +696,15 @@ pub(crate) fn gen_witness(
                         vk.as_ref(),
                         Some(&srs),
                         true,
-                        true,
                     )?
                 }
             }
         } else {
             warn!("SRS for poly commit does not exist (will be ignored)");
-            circuit.forward::<KZGCommitmentScheme<Bn256>>(
-                &mut input,
-                vk.as_ref(),
-                None,
-                true,
-                true,
-            )?
+            circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true)?
         }
     } else {
-        circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true, true)?
+        circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true)?
     };
 
     // print each variable tuple (symbol, value) as symbol=value
@@ -1011,7 +1003,6 @@ pub(crate) fn calibrate(
             param_scale,
             scale_rebase_multiplier,
             div_rebasing,
-            lookup_range: (i64::MIN, i64::MAX),
             ..settings.run_args.clone()
         };
 
@@ -1047,13 +1038,7 @@ pub(crate) fn calibrate(
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                 let forward_res = circuit
-                    .forward::<KZGCommitmentScheme<Bn256>>(
-                        &mut data.clone(),
-                        None,
-                        None,
-                        true,
-                        false,
-                    )
+                    .forward::<KZGCommitmentScheme<Bn256>>(&mut data.clone(), None, None, true)
                     .map_err(|e| format!("failed to forward: {}", e))?;
 
                 // push result to the hashmap

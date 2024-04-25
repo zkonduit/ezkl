@@ -71,7 +71,7 @@ pub enum HybridOp {
     },
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> for HybridOp {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for HybridOp {
     ///
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         match self {

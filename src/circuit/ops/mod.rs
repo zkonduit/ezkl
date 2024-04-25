@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     graph::quantize_tensor,
-    tensor::{self, IntoI64, Tensor, TensorType, ValTensor},
+    tensor::{self, Tensor, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
 
@@ -27,12 +27,12 @@ pub mod region;
 
 /// A struct representing the result of a forward pass.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> {
+pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
     pub(crate) output: Tensor<F>,
 }
 
 /// A trait representing operations that can be represented as constraints in a circuit.
-pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>:
+pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
     std::fmt::Debug + Send + Sync + Any
 {
     /// Returns a string representation of the operation.
@@ -71,7 +71,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64
     fn as_any(&self) -> &dyn Any;
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Clone for Box<dyn Op<F>> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Clone for Box<dyn Op<F>> {
     fn clone(&self) -> Self {
         self.clone_dyn()
     }
@@ -138,7 +138,7 @@ pub struct Input {
     pub datum_type: InputType,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> for Input {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input {
     fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         Ok(self.scale)
     }
@@ -193,7 +193,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Unknown;
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> for Unknown {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Unknown {
     fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
         Ok(0)
     }
@@ -220,7 +220,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
 
 ///
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Constant<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> {
+pub struct Constant<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
     ///
     pub quantized_values: Tensor<F>,
     ///
@@ -230,7 +230,7 @@ pub struct Constant<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + 
     pub pre_assigned_val: Option<ValTensor<F>>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Constant<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
     ///
     pub fn new(quantized_values: Tensor<F>, raw_values: Tensor<f32>) -> Self {
         Self {
@@ -263,8 +263,7 @@ impl<
             + PartialOrd
             + std::hash::Hash
             + Serialize
-            + for<'de> Deserialize<'de>
-            + IntoI64,
+            + for<'de> Deserialize<'de>,
     > Op<F> for Constant<F>
 {
     fn as_any(&self) -> &dyn Any {
