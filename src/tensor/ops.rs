@@ -1,4 +1,4 @@
-use super::TensorError;
+use super::{IntoI64, TensorError};
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
 use maybe_rayon::{iter::ParallelIterator, prelude::IntoParallelRefIterator};
@@ -251,7 +251,7 @@ pub fn resize<T: TensorType + Send + Sync>(
 /// let expected = Tensor::<i64>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync>(
+pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync + IntoI64>(
     t: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
@@ -298,7 +298,7 @@ pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sy
 /// let expected = Tensor::<i64>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync>(
+pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync + IntoI64>(
     t: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
@@ -343,7 +343,7 @@ pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sy
 /// let expected = Tensor::<i64>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync>(
+pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync + IntoI64>(
     t: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output

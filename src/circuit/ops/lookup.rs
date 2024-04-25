@@ -6,7 +6,7 @@ use crate::{
     circuit::{layouts, table::Range, utils},
     fieldutils::{felt_to_i64, i64_to_felt},
     graph::multiplier_to_scale,
-    tensor::{self, Tensor, TensorError, TensorType},
+    tensor::{self, IntoI64, Tensor, TensorError, TensorType},
 };
 
 use super::Op;
@@ -137,7 +137,7 @@ impl LookupOp {
     }
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
-    pub(crate) fn f<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    pub(crate) fn f<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
         &self,
         x: &[Tensor<F>],
     ) -> Result<ForwardResult<F>, TensorError> {
@@ -234,7 +234,7 @@ impl LookupOp {
     }
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for LookupOp {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> for LookupOp {
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {
         self

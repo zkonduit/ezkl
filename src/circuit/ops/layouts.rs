@@ -14,7 +14,7 @@ use maybe_rayon::{
     slice::ParallelSliceMut,
 };
 
-use self::tensor::{create_constant_tensor, create_zero_tensor};
+use self::tensor::{create_constant_tensor, create_zero_tensor, IntoI64};
 
 use super::{
     chip::{BaseConfig, CircuitError},
@@ -34,7 +34,7 @@ use super::*;
 use crate::circuit::ops::lookup::LookupOp;
 
 /// Same as div but splits the division into N parts
-pub(crate) fn loop_div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn loop_div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     value: &[ValTensor<F>; 1],
@@ -69,7 +69,7 @@ pub(crate) fn loop_div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 }
 
 /// Div accumulated layout
-pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     value: &[ValTensor<F>; 1],
@@ -134,7 +134,7 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// recip accumulated layout
-pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     value: &[ValTensor<F>; 1],
@@ -249,7 +249,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ).unwrap());
 /// assert_eq!(dot::<Fp>(&dummy_config, &mut dummy_region, &[x, y]).unwrap().get_int_evals().unwrap()[0], 86);
 /// ```
-pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -534,7 +534,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///
 /// ```
 ///
-pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     inputs: &[ValTensor<F>],
@@ -753,7 +753,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(output)
 }
 
-fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -797,7 +797,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Returns top K values.
-fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -835,7 +835,7 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn topk_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn topk_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -855,7 +855,7 @@ pub fn topk_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(output)
 }
 
-fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -894,7 +894,7 @@ fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(assigned_output)
 }
 
-fn one_hot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+fn one_hot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -946,7 +946,9 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Dynamic lookup
-pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn dynamic_lookup<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64,
+>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     lookups: &[ValTensor<F>; 2],
@@ -1036,7 +1038,7 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
 }
 
 /// Shuffle arg
-pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     input: &[ValTensor<F>; 1],
@@ -1099,7 +1101,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 }
 
 /// One hot accumulated layout
-pub(crate) fn one_hot_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn one_hot_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -1152,7 +1154,7 @@ pub(crate) fn one_hot_axis<F: PrimeField + TensorType + PartialOrd + std::hash::
 }
 
 /// Gather accumulated layout
-pub(crate) fn gather<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn gather<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -1180,7 +1182,9 @@ pub(crate) fn gather<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Gather accumulated layout
-pub(crate) fn gather_elements<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn gather_elements<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64,
+>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -1203,7 +1207,7 @@ pub(crate) fn gather_elements<F: PrimeField + TensorType + PartialOrd + std::has
 }
 
 /// Gather accumulated layout
-pub(crate) fn gather_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn gather_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -1254,7 +1258,9 @@ pub(crate) fn gather_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 /// Takes a tensor representing a multi-dimensional index and returns a tensor representing the linearized index.
 /// The linearized index is the index of the element in the flattened tensor.
 /// FOr instance if the dims is [3,5,2], the linearized index of [2] at dim 1 is 2*5 + 3 = 13
-pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn linearize_element_index<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64,
+>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -1359,7 +1365,9 @@ pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd + 
 ///     If indices_shape[-1] == r-b, since the rank of indices is q, indices can be thought of as N (q-b-1)-dimensional tensors containing 1-D tensors of dimension r-b, where N is an integer equals to the product of 1 and all the elements in the batch dimensions of the indices_shape.
 ///     Let us think of each such r-b ranked tensor as indices_slice. Each scalar value corresponding to data[0:b-1,indices_slice] is filled into the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor (Example 1 below)
 ///     If indices_shape[-1] < r-b, since the rank of indices is q, indices can be thought of as N (q-b-1)-dimensional tensor containing 1-D tensors of dimension < r-b. Let us think of each such tensors as indices_slice. Each tensor slice corresponding to data[0:b-1, indices_slice , :] is filled into the corresponding location of the (q-b-1)-dimensional tensor to form the output tensor (Examples 2, 3, 4 and 5 below)
-pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn linearize_nd_index<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64,
+>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -1509,7 +1517,7 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
 }
 
 pub(crate) fn get_missing_set_elements<
-    F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64,
 >(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -1574,7 +1582,9 @@ pub(crate) fn get_missing_set_elements<
 }
 
 /// Gather accumulated layout
-pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn scatter_elements<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64,
+>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 3],
@@ -1656,7 +1666,7 @@ pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd + std::ha
 }
 
 /// Scatter Nd
-pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 3],
@@ -1754,7 +1764,7 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 /// let expected = 21;
 /// assert_eq!(result.get_int_evals().unwrap()[0], expected);
 /// ```
-pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -1861,7 +1871,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected = 0;
 /// assert_eq!(result.get_int_evals().unwrap()[0], expected);
 /// ```
-pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -1941,7 +1951,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Axes wise op wrapper
-fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2025,7 +2035,7 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2059,7 +2069,7 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2093,7 +2103,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2133,7 +2143,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2168,7 +2178,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2213,7 +2223,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn min_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn min_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2225,7 +2235,7 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Pairwise (elementwise) op layout
-pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -2403,7 +2413,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 /// ).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn mean_of_squares_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn mean_of_squares_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2419,7 +2429,7 @@ pub fn mean_of_squares_axes<F: PrimeField + TensorType + PartialOrd + std::hash:
 }
 
 /// expand the tensor to the given shape
-pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2459,7 +2469,7 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected = Tensor::<i64>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -2510,7 +2520,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected = Tensor::<i64>::new(Some(&[1, 1, 1, 1, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -2562,7 +2572,7 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
 ///
-pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -2601,7 +2611,7 @@ pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
 ///
-pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -2639,7 +2649,7 @@ pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected = Tensor::<i64>::new(Some(&[1, 0, 1, 0, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -2681,7 +2691,7 @@ pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected = Tensor::<i64>::new(Some(&[1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -2727,7 +2737,7 @@ pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected = Tensor::<i64>::new(Some(&[1, 0, 1, 0, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn equals<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn equals<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -2737,7 +2747,7 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Equality boolean operation
-pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2800,7 +2810,7 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
 ///
-pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -2849,7 +2859,7 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected = Tensor::<i64>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2898,7 +2908,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected = Tensor::<i64>::new(Some(&[1, 8, 3, 10, 5, 12]), &[2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 3],
@@ -2946,7 +2956,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected = Tensor::<i64>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -2982,7 +2992,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let expected: Tensor<i64> = Tensor::<i64>::new(Some(&[3, 2, 2, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.get_int_evals().unwrap(), expected);
 /// ```
-pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>],
@@ -3058,7 +3068,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// assert_eq!(pooled.get_int_evals().unwrap(), expected);
 ///
 /// ```
-pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -3259,7 +3269,13 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///
 /// ```
 pub fn deconv<
-    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + std::marker::Sync,
+    F: PrimeField
+        + TensorType
+        + PartialOrd
+        + std::hash::Hash
+        + std::marker::Send
+        + std::marker::Sync
+        + IntoI64,
 >(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -3424,7 +3440,13 @@ pub fn deconv<
 /// ```
 ///
 pub fn conv<
-    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + std::marker::Sync,
+    F: PrimeField
+        + TensorType
+        + PartialOrd
+        + std::hash::Hash
+        + std::marker::Send
+        + std::marker::Sync
+        + IntoI64,
 >(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -3596,7 +3618,7 @@ pub fn conv<
 }
 
 /// Power accumulated layout
-pub(crate) fn pow<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn pow<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -3612,7 +3634,7 @@ pub(crate) fn pow<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Rescaled op accumulated layout
-pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>],
@@ -3634,7 +3656,7 @@ pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 }
 
 /// Dummy (no contraints) reshape layout
-pub(crate) fn reshape<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn reshape<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     values: &[ValTensor<F>; 1],
     new_dims: &[usize],
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -3644,7 +3666,7 @@ pub(crate) fn reshape<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 }
 
 /// Dummy (no contraints) move_axis layout
-pub(crate) fn move_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn move_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     values: &[ValTensor<F>; 1],
     source: usize,
     destination: usize,
@@ -3655,7 +3677,7 @@ pub(crate) fn move_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 }
 
 /// resize layout
-pub(crate) fn resize<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn resize<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -3669,7 +3691,7 @@ pub(crate) fn resize<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Slice layout
-pub(crate) fn slice<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn slice<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -3692,7 +3714,7 @@ pub(crate) fn slice<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Trilu layout
-pub(crate) fn trilu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn trilu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -3716,7 +3738,7 @@ pub(crate) fn trilu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Concat layout
-pub(crate) fn concat<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn concat<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     values: &[ValTensor<F>],
     axis: &usize,
 ) -> Result<ValTensor<F>, Box<dyn Error>> {
@@ -3728,7 +3750,7 @@ pub(crate) fn concat<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
-pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -3743,7 +3765,9 @@ pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 }
 
 /// Boolean identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
-pub(crate) fn boolean_identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn boolean_identity<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64,
+>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -3779,7 +3803,7 @@ pub(crate) fn boolean_identity<F: PrimeField + TensorType + PartialOrd + std::ha
 }
 
 /// Downsample layout
-pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -3796,7 +3820,9 @@ pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 }
 
 /// layout for enforcing two sets of cells to be equal
-pub(crate) fn enforce_equality<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn enforce_equality<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64,
+>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -3822,7 +3848,7 @@ pub(crate) fn enforce_equality<F: PrimeField + TensorType + PartialOrd + std::ha
 }
 
 /// layout for range check.
-pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -3879,7 +3905,7 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
     }
 
     let is_assigned = !w.any_unknowns()?;
-    if is_assigned && region.witness_gen() {
+    if is_assigned && region.check_lookup_range() {
         // assert is within range
         let int_values = w.get_int_evals()?;
         for v in int_values.iter() {
@@ -3904,7 +3930,7 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
 }
 
 /// layout for nonlinearity check.
-pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -4006,7 +4032,7 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
 }
 
 /// Argmax
-pub(crate) fn argmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn argmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -4042,7 +4068,7 @@ pub(crate) fn argmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Argmin
-pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -4078,7 +4104,7 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// max layout
-pub(crate) fn max<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn max<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -4088,7 +4114,7 @@ pub(crate) fn max<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// min layout
-pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -4096,7 +4122,7 @@ pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     _sort_ascending(config, region, values)?.get_slice(&[0..1])
 }
 
-fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -4199,7 +4225,7 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// softmax layout
-pub(crate) fn softmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn softmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -4220,7 +4246,7 @@ pub(crate) fn softmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::
 }
 
 /// percent func
-pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -4274,7 +4300,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 /// let expected = Tensor::<i64>::new(Some(&[2734, 2734, 2756, 2734, 2734, 2691]), &[2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
-pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
@@ -4321,7 +4347,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ).unwrap());
 /// let result = range_check_percent::<Fp>(&dummy_config, &mut dummy_region, &[x, y], 1024.0.into(), 1.0).unwrap();
 /// ```
-pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
