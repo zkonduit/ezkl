@@ -27,8 +27,8 @@ dependencies:
     specifier: 5.7.0
     version: 5.7.0
   '@ezkljs/engine':
-    specifier: ^9.4.4
-    version: 9.4.4
+    specifier: "10.4.2"
+    version: "10.4.2"
   ethers:
     specifier: 6.7.1
     version: 6.7.1
@@ -397,8 +397,8 @@ packages:
       '@ethersproject/strings': 5.7.0
     dev: false
 
-  /@ezkljs/engine@9.4.4:
-    resolution: {integrity: sha512-kNsTmDQa8mIiQ6yjJmBMwVgAAxh4nfs4NCtnewJifonyA8Mfhs+teXwwW8WhERRDoQPUofKO2pT8BPvV/XGIDA==}
+  /@ezkljs/engine@10.4.2:
+    resolution: {integrity: "sha512-1GNB4vChbaQ1ALcYbEbM/AFoh4QWtswpzGCO/g9wL8Ep6NegM2gQP/uWICU7Utl0Lj1DncXomD7PUhFSXhtx8A=="}
     dependencies:
       '@types/json-bigint': 1.0.2
       json-bigint: 1.0.0
