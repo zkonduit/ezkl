@@ -137,6 +137,7 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     min_lookup_inputs: i64,
     max_range_size: i64,
     witness_gen: bool,
+    check_lookup_range: bool,
     assigned_constants: ConstantsMap<F>,
 }
 
@@ -191,6 +192,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.witness_gen
     }
 
+    ///
+    pub fn check_lookup_range(&self) -> bool {
+        self.check_lookup_range
+    }
+
     /// Create a new region context
     pub fn new(region: Region<'a, F>, row: usize, num_inner_cols: usize) -> RegionCtx<'a, F> {
         let region = Some(RefCell::new(region));
@@ -209,6 +215,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             min_lookup_inputs: 0,
             max_range_size: 0,
             witness_gen: true,
+            check_lookup_range: true,
             assigned_constants: HashMap::new(),
         }
     }
@@ -246,12 +253,18 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             min_lookup_inputs: 0,
             max_range_size: 0,
             witness_gen: false,
+            check_lookup_range: false,
             assigned_constants: HashMap::new(),
         }
     }
 
     /// Create a new region context
-    pub fn new_dummy(row: usize, num_inner_cols: usize, witness_gen: bool) -> RegionCtx<'a, F> {
+    pub fn new_dummy(
+        row: usize,
+        num_inner_cols: usize,
+        witness_gen: bool,
+        check_lookup_range: bool,
+    ) -> RegionCtx<'a, F> {
         let region = None;
         let linear_coord = row * num_inner_cols;
 
@@ -268,6 +281,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             min_lookup_inputs: 0,
             max_range_size: 0,
             witness_gen,
+            check_lookup_range,
             assigned_constants: HashMap::new(),
         }
     }
@@ -278,6 +292,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         linear_coord: usize,
         num_inner_cols: usize,
         witness_gen: bool,
+        check_lookup_range: bool,
     ) -> RegionCtx<'a, F> {
         let region = None;
         RegionCtx {
@@ -293,6 +308,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             min_lookup_inputs: 0,
             max_range_size: 0,
             witness_gen,
+            check_lookup_range,
             assigned_constants: HashMap::new(),
         }
     }
@@ -364,6 +380,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                     starting_linear_coord,
                     self.num_inner_cols,
                     self.witness_gen,
+                    self.check_lookup_range,
                 );
                 let res = inner_loop_function(idx, &mut local_reg);
                 // we update the offset and constants

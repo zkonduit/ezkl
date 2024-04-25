@@ -24,7 +24,7 @@ use crate::{
         table::{Range, RangeCheck, Table},
         utils,
     },
-    tensor::{Tensor, TensorType, ValTensor, VarTensor},
+    tensor::{IntoI64, Tensor, TensorType, ValTensor, VarTensor},
 };
 use std::{collections::BTreeMap, error::Error, marker::PhantomData};
 
@@ -345,7 +345,7 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> BaseConfig<F> {
     /// Returns a new [BaseConfig] with no inputs, no selectors, and no tables.
     pub fn dummy(col_size: usize, num_inner_cols: usize) -> Self {
         Self {
