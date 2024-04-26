@@ -23,6 +23,7 @@
 )]
 // we allow this for our dynamic range based indexing scheme
 #![allow(clippy::single_range_in_vec_init)]
+#![feature(stmt_expr_attributes)]
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
@@ -189,7 +190,7 @@ pub struct RunArgs {
     #[arg(long, default_value = "1")]
     pub scale_rebase_multiplier: u32,
     /// The min and max elements in the lookup table input column
-    #[arg(short = 'B', long, value_parser = parse_key_val::<i128, i128>, default_value = "-32768->32768")]
+    #[arg(short = 'B', long, value_parser = parse_key_val::<i64, i64>, default_value = "-32768->32768")]
     pub lookup_range: Range,
     /// The log_2 number of rows
     #[arg(short = 'K', long, default_value = "17")]

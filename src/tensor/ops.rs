@@ -1,4 +1,4 @@
-use super::TensorError;
+use super::{IntoI64, TensorError};
 use crate::tensor::{Tensor, TensorType};
 use itertools::Itertools;
 use maybe_rayon::{iter::ParallelIterator, prelude::IntoParallelRefIterator};
@@ -13,88 +13,88 @@ pub use std::ops::{Add, Mul, Neg, Sub};
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::trilu;
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<i64>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[1, 3, 2],
 /// ).unwrap();
 /// let result = trilu(&a, 1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 2, 0, 0, 0, 0]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[0, 2, 0, 0, 0, 0]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 0, 0]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 0, 4, 0, 0]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 0, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);  
 ///
 /// let result = trilu(&a, -1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 0, 6]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 0, 6]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, -1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0, 3, 0, 5, 6]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[0, 0, 3, 0, 5, 6]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);  
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<i64>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[1, 2, 3],
 /// ).unwrap();
 /// let result = trilu(&a, 1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 2, 3, 0, 0, 6]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[0, 2, 3, 0, 0, 6]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 5, 6]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 0, 4, 5, 6]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 0, 5, 6]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 3, 0, 5, 6]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 4, 5, 0]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 0, 0, 4, 5, 0]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);  
 ///
 /// let result = trilu(&a, -1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, -1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 4, 0, 0]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[0, 0, 0, 4, 0, 0]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);  
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<i64>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9]),
 /// &[1, 3, 3],
 /// ).unwrap();
 /// let result = trilu(&a, 1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 2, 3, 0, 0, 6, 0, 0, 0]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[0, 2, 3, 0, 0, 6, 0, 0, 0]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 5, 6, 7, 8, 9]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 0, 4, 5, 6, 7, 8, 9]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 0, 5, 6, 0, 0, 9]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 3, 0, 5, 6, 0, 0, 9]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 4, 5, 0, 7, 8, 9]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 0, 0, 4, 5, 0, 7, 8, 9]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);  
 ///
 /// let result = trilu(&a, -1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 8, 9]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 8, 9]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, -1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 4, 0, 0, 7, 8, 0]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[0, 0, 0, 4, 0, 0, 7, 8, 0]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);  
 /// ```
 pub fn trilu<T: TensorType + std::marker::Send + std::marker::Sync>(
@@ -148,40 +148,40 @@ pub fn trilu<T: TensorType + std::marker::Send + std::marker::Sync>(
 /// ```
 ///
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<i64>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap();
 /// let result = resize(&a, &[1, 2]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]), &[2, 6]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]), &[2, 6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<i64>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap();
 /// let result = resize(&a, &[2, 2]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 4, 4, 5, 5, 6, 6]), &[4, 6]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 4, 4, 5, 5, 6, 6]), &[4, 6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::resize;
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<i64>::new(
 ///   Some(&[1, 2, 3, 4]),
 /// &[2, 2],
 /// ).unwrap();
 /// let result = resize(&a, &[2, 2]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 4, 4, 3, 3, 4, 4]), &[4, 4]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 4, 4, 3, 3, 4, 4]), &[4, 4]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<i64>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[3, 2],
 /// ).unwrap();
 /// let result = resize(&a, &[2, 3]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 5, 5, 5, 6, 6, 6]), &[6, 6]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 5, 5, 5, 6, 6, 6]), &[6, 6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
@@ -227,31 +227,31 @@ pub fn resize<T: TensorType + Send + Sync>(
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::add;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<i64>::new(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
 /// let result = add(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // Now test 1D casting
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<i64>::new(
 ///     Some(&[2]),
 ///     &[1]).unwrap();
 /// let result = add(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync>(
+pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync + IntoI64>(
     t: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
@@ -273,32 +273,32 @@ pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sy
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::sub;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<i64>::new(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
 /// let result = sub(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // Now test 1D sub
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<i64>::new(
 ///     Some(&[2]),
 ///     &[1],
 /// ).unwrap();
 /// let result = sub(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync>(
+pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync + IntoI64>(
     t: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
@@ -319,31 +319,31 @@ pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sy
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::mult;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<i64>::new(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
 /// let result = mult(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // Now test 1D mult
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<i64>::new(
 ///     Some(&[2]),
 ///     &[1]).unwrap();
 /// let result = mult(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
-pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync>(
+pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync + IntoI64>(
     t: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
@@ -366,24 +366,24 @@ pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::S
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::downsample;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///    Some(&[1, 2, 3, 4, 5, 6]),
 ///  &[2, 3],
 /// ).unwrap();
 /// let result = downsample(&x, 0, 1, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 5, 6]), &[1, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[4, 5, 6]), &[1, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = downsample(&x, 1, 2, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 3, 4, 6]), &[2, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 3, 4, 6]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = downsample(&x, 1, 2, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 5]), &[2, 1]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 5]), &[2, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = downsample(&x, 1, 2, 2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[3, 6]), &[2, 1]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[3, 6]), &[2, 1]).unwrap();
 /// assert_eq!(result, expected);
 pub fn downsample<T: TensorType + Send + Sync>(
     input: &Tensor<T>,
@@ -435,7 +435,7 @@ pub fn downsample<T: TensorType + Send + Sync>(
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::gather;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///    Some(&[1, 2, 3, 4, 5, 6]),
 ///   &[2, 3],
 /// ).unwrap();
@@ -444,7 +444,7 @@ pub fn downsample<T: TensorType + Send + Sync>(
 ///  &[2],
 /// ).unwrap();
 /// let result = gather(&x, &index, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 4, 5]), &[2, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn gather<T: TensorType + Send + Sync>(
@@ -562,7 +562,7 @@ pub fn scatter<T: TensorType + Send + Sync>(
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::gather_elements;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///    Some(&[1, 2, 3, 4]),
 ///   &[2, 2],
 /// ).unwrap();
@@ -571,7 +571,7 @@ pub fn scatter<T: TensorType + Send + Sync>(
 ///  &[2, 2],
 /// ).unwrap();
 /// let result = gather_elements(&x, &index, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 4, 3]), &[2, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 1, 4, 3]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn gather_elements<T: TensorType + Send + Sync>(
@@ -619,7 +619,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::gather_nd;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///   Some(&[0, 1, 2, 3]),
 /// &[2, 2],
 /// ).unwrap();
@@ -628,7 +628,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 2],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 3]), &[2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[0, 3]), &[2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -636,10 +636,10 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 1],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 0, 1]), &[2, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 3, 0, 1]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///  Some(&[0, 1, 2, 3, 4, 5, 6, 7]),
 /// &[2, 2, 2],
 /// ).unwrap();
@@ -648,7 +648,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 2],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -656,7 +656,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 1, 2],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 1, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 3, 4, 5]), &[2, 1, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -664,7 +664,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 1],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -672,7 +672,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 2, 3],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -680,7 +680,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 2, 2],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 0, 1, 6, 7, 4, 5]), &[2, 2, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 3, 0, 1, 6, 7, 4, 5]), &[2, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -688,7 +688,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 3],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 7]), &[2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 7]), &[2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 pub fn gather_nd<T: TensorType + Send + Sync>(
@@ -799,7 +799,7 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::scatter_nd;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
 /// &[8],
 /// ).unwrap();
@@ -808,15 +808,15 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// Some(&[4, 3, 1, 7]),
 /// &[4, 1],
 /// ).unwrap();
-/// let src = Tensor::<i128>::new(
+/// let src = Tensor::<i64>::new(
 /// Some(&[9, 10, 11, 12]),
 /// &[4],
 /// ).unwrap();
 /// let result = scatter_nd(&x, &index, &src).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 11, 3, 10, 9, 6, 7, 12]), &[8]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 11, 3, 10, 9, 6, 7, 12]), &[8]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
 ///         1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
 ///         8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8,
@@ -829,7 +829,7 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// &[2, 1],
 /// ).unwrap();
 ///
-/// let src = Tensor::<i128>::new(
+/// let src = Tensor::<i64>::new(
 ///  Some(&[5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8,
 ///         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
 ///   ]),
@@ -838,7 +838,7 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 ///
 /// let result = scatter_nd(&x, &index, &src).unwrap();
 ///
-/// let expected = Tensor::<i128>::new(
+/// let expected = Tensor::<i64>::new(
 ///  Some(&[5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8,
 ///         1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
 ///         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
@@ -847,7 +847,7 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// ).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
 /// &[2, 4],
 /// ).unwrap();
@@ -856,15 +856,15 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// Some(&[0, 1]),
 /// &[2, 1],
 /// ).unwrap();
-/// let src = Tensor::<i128>::new(
+/// let src = Tensor::<i64>::new(
 /// Some(&[9, 10]),
 /// &[2],
 /// ).unwrap();
 /// let result = scatter_nd(&x, &index, &src).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[9, 9, 9, 9, 10, 10, 10, 10]), &[2, 4]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[9, 9, 9, 9, 10, 10, 10, 10]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
 /// &[2, 4],
 /// ).unwrap();
@@ -873,12 +873,12 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// Some(&[0, 1]),
 /// &[1, 1, 2],
 /// ).unwrap();
-/// let src = Tensor::<i128>::new(
+/// let src = Tensor::<i64>::new(
 /// Some(&[9]),
 /// &[1, 1],
 /// ).unwrap();
 /// let result = scatter_nd(&x, &index, &src).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 9, 3, 4, 5, 6, 7, 8]), &[2, 4]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 9, 3, 4, 5, 6, 7, 8]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ````
 ///
@@ -927,12 +927,12 @@ pub fn scatter_nd<T: TensorType + Send + Sync>(
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::abs;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///    Some(&[-2, 15, 2, -1, 1, 0]),
 /// &[2, 3],
 /// ).unwrap();
 /// let result = abs(&x).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, 0]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 15, 2, 1, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
@@ -953,14 +953,14 @@ pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::intercalate_values;
 ///
-/// let tensor = Tensor::<i128>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+/// let tensor = Tensor::<i64>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
 /// let result = intercalate_values(&tensor, 0, 2, 1).unwrap();
 ///
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 2, 3, 0, 4]), &[2, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 0, 2, 3, 0, 4]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = intercalate_values(&expected, 0, 2, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 2, 0, 0, 0, 3, 0, 4]), &[3, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 0, 2, 0, 0, 0, 3, 0, 4]), &[3, 3]).unwrap();
 ///
 /// assert_eq!(result, expected);
 ///
@@ -1006,23 +1006,23 @@ pub fn intercalate_values<T: TensorType>(
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::one_hot;
-/// let tensor = Tensor::<i128>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+/// let tensor = Tensor::<i64>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
 /// let result = one_hot(&tensor, 5, 2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0,
+/// let expected = Tensor::<i64>::new(Some(&[0, 1, 0, 0, 0,
 ///                                           0, 0, 1, 0, 0,
 ///                                           0, 0, 0, 1, 0,
 ///                                           0, 0, 0, 0, 1]), &[2, 2, 5]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn one_hot(
-    tensor: &Tensor<i128>,
+    tensor: &Tensor<i64>,
     num_classes: usize,
     axis: usize,
-) -> Result<Tensor<i128>, TensorError> {
+) -> Result<Tensor<i64>, TensorError> {
     let mut output_dims = tensor.dims().to_vec();
     output_dims.insert(axis, num_classes);
 
-    let mut output: Tensor<i128> = Tensor::new(None, &output_dims)?;
+    let mut output: Tensor<i64> = Tensor::new(None, &output_dims)?;
 
     let cartesian_coord = output
         .dims()
@@ -1071,18 +1071,18 @@ pub fn one_hot(
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::pad;
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<i64>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap();
-/// let result = pad::<i128>(&x, vec![(0, 0), (0, 0), (1, 1), (1, 1)], 0).unwrap();
-/// let expected = Tensor::<i128>::new(
+/// let result = pad::<i64>(&x, vec![(0, 0), (0, 0), (1, 1), (1, 1)], 0).unwrap();
+/// let expected = Tensor::<i64>::new(
 ///     Some(&[0, 0, 0, 0, 0, 0, 5, 2, 3, 0, 0, 0, 4, -1, 0, 0, 3, 1, 6, 0, 0, 0, 0, 0, 0]),
 ///     &[1, 1, 5, 5],
 /// ).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let result = pad::<i128>(&x, vec![(1, 1), (1, 1)], 2).unwrap();
+/// let result = pad::<i64>(&x, vec![(1, 1), (1, 1)], 2).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn pad<T: TensorType>(
@@ -1132,33 +1132,33 @@ pub fn pad<T: TensorType>(
 /// // tested against pytorch outputs for reference :)
 ///
 /// // 1D example
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3]), &[3]).unwrap();
-/// let y = Tensor::<i128>::new(Some(&[4, 5, 6]), &[3]).unwrap();
+/// let x = Tensor::<i64>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+/// let y = Tensor::<i64>::new(Some(&[4, 5, 6]), &[3]).unwrap();
 /// let result = concat(&[&x, &y], 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // 2D example
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
-/// let y = Tensor::<i128>::new(Some(&[7, 8, 9]), &[3, 1]).unwrap();
+/// let x = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+/// let y = Tensor::<i64>::new(Some(&[7, 8, 9]), &[3, 1]).unwrap();
 /// let result = concat(&[&x, &y], 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 7, 3, 4, 8, 5, 6, 9]), &[3, 3]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 7, 3, 4, 8, 5, 6, 9]), &[3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// /// 4D example
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[2, 2, 2, 2]).unwrap();
-/// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[2, 2, 1, 2]).unwrap();
+/// let x = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[2, 2, 2, 2]).unwrap();
+/// let y = Tensor::<i64>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[2, 2, 1, 2]).unwrap();
 /// let result = concat(&[&x, &y], 2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 17, 18, 5, 6, 7, 8, 19, 20, 9, 10, 11, 12, 21, 22, 13, 14, 15, 16, 23, 14]), &[2, 2, 3, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 17, 18, 5, 6, 7, 8, 19, 20, 9, 10, 11, 12, 21, 22, 13, 14, 15, 16, 23, 14]), &[2, 2, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
 /// // 5D example
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[8, 1, 1, 1, 2]).unwrap();
-/// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[4, 1, 1, 1, 2]).unwrap();
+/// let x = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[8, 1, 1, 1, 2]).unwrap();
+/// let y = Tensor::<i64>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[4, 1, 1, 1, 2]).unwrap();
 /// let result = concat(&[&x, &y], 0).unwrap();
 ///
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 14]), &[12, 1, 1, 1, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 14]), &[12, 1, 1, 1, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// ```
@@ -1231,19 +1231,19 @@ pub fn concat<T: TensorType + Send + Sync>(
 /// // tested against pytorch output
 /// use ezkl::tensor::Tensor;
 /// use ezkl::tensor::ops::slice;
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+/// let x = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
 /// let result = slice(&x, &0, &1, &2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[3, 4]), &[1, 2]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[3, 4]), &[1, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+/// let x = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
 /// let result = slice(&x, &1, &1, &2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 4, 6]), &[3, 1]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 4, 6]), &[3, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 2, 3]).unwrap();
+/// let x = Tensor::<i64>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 2, 3]).unwrap();
 /// let result = slice(&x, &2, &1, &2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 5, 8, 11]), &[2, 2, 1]).unwrap();
+/// let expected = Tensor::<i64>::new(Some(&[2, 5, 8, 11]), &[2, 2, 1]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 ///
@@ -1285,19 +1285,19 @@ pub mod nonlinearities {
     /// use ezkl::tensor::Tensor;
     ///
     /// use ezkl::tensor::ops::nonlinearities::ceil;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[1, 2, 3, 4, 5, 6]),
     ///  &[3, 2],
     /// ).unwrap();
     /// let result = ceil(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn ceil(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn ceil(a: &Tensor<i64>, scale: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
             let rounded = kix.ceil() * scale;
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1310,19 +1310,19 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::floor;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///   Some(&[1, 2, 3, 4, 5, 6]),
     ///  &[3, 2],
     /// ).unwrap();
     /// let result = floor(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 2, 2, 4, 4, 6]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[0, 2, 2, 4, 4, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn floor(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn floor(a: &Tensor<i64>, scale: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
             let rounded = kix.floor() * scale;
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1335,19 +1335,19 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::round;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///   Some(&[1, 2, 3, 4, 5, 6]),
     /// &[3, 2],
     /// ).unwrap();
     /// let result = round(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn round(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn round(a: &Tensor<i64>, scale: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
             let rounded = kix.round() * scale;
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1360,19 +1360,19 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::round_half_to_even;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///   Some(&[1, 2, 3, 4, 5, 6]),
     /// &[3, 2],
     /// ).unwrap();
     /// let result = round_half_to_even(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 2, 4, 4, 4, 6]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[0, 2, 4, 4, 4, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn round_half_to_even(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn round_half_to_even(a: &Tensor<i64>, scale: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
             let rounded = kix.round_ties_even() * scale;
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1385,20 +1385,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::pow;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[2, 15, 2, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = pow(&x, 1.0, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 225, 4, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[4, 225, 4, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn pow(a: &Tensor<i128>, scale_input: f64, power: f64) -> Tensor<i128> {
+    pub fn pow(a: &Tensor<i64>, scale_input: f64, power: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let kix = scale_input * (kix).powf(power);
             let rounded = kix.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1410,12 +1410,12 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::kronecker_delta;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[2, 15, 2, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = kronecker_delta(&x);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn kronecker_delta<T: TensorType + std::cmp::PartialEq + Send + Sync>(
@@ -1441,37 +1441,37 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::sigmoid;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = sigmoid(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 1, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[1, 1, 1, 1, 1, 1]), &[2, 3]).unwrap();
     ///
     /// assert_eq!(result, expected);
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[65536]),
     ///   &[1],
     /// ).unwrap();
     /// let result = sigmoid(&x, 65536.0);
-    /// let expected = Tensor::<i128>::new(Some(&[47911]), &[1]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[47911]), &[1]).unwrap();
     /// assert_eq!(result, expected);
     ///
     /// /// assert_eq!(result, expected);
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[256]),
     ///   &[1],
     /// ).unwrap();
     /// let result = sigmoid(&x, 256.0);
-    /// let expected = Tensor::<i128>::new(Some(&[187]), &[1]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[187]), &[1]).unwrap();
     ///
     /// ```
-    pub fn sigmoid(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn sigmoid(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input / (1.0 + (-kix).exp());
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1491,17 +1491,17 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::hardswish;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[-12, -3, 2, 1, 1, 15]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = hardswish(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 2, 1, 1, 15]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[0, 0, 2, 1, 1, 15]), &[2, 3]).unwrap();
     ///
     /// assert_eq!(result, expected);
     ///
     /// ```
-    pub fn hardswish(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn hardswish(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let res = if kix <= -3.0 {
@@ -1512,7 +1512,7 @@ pub mod nonlinearities {
                 kix * (kix + 3.0) / 6.0
             };
             let rounded = (res * scale_input).round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1527,31 +1527,31 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::exp;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = exp(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[7, 3269017, 7, 3, 3, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[7, 3269017, 7, 3, 3, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[37, 12, 41]),
     ///   &[3],
     /// ).unwrap();
     /// let result = exp(&x, 512.0);
     ///
-    /// let expected = Tensor::<i128>::new(Some(&[550, 524, 555]), &[3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[550, 524, 555]), &[3]).unwrap();
     ///
     /// assert_eq!(result, expected);
     /// ```
-    pub fn exp(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn exp(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.exp();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1566,31 +1566,31 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::ln;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 15, 2, 1, 1, 3000]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = ln(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 3, 1, 0, 0, 8]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[1, 3, 1, 0, 0, 8]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[37, 12, 41]),
     ///   &[3],
     /// ).unwrap();
     /// let result = ln(&x, 512.0);
     ///
-    /// let expected = Tensor::<i128>::new(Some(&[-1345, -1922, -1293]), &[3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[-1345, -1922, -1293]), &[3]).unwrap();
     ///
     /// assert_eq!(result, expected);
     /// ```
-    pub fn ln(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn ln(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.ln();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1602,15 +1602,15 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::sign;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[-2, 15, 2, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = sign(&x);
-    /// let expected = Tensor::<i128>::new(Some(&[-1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[-1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sign(a: &Tensor<i128>) -> Tensor<i128> {
+    pub fn sign(a: &Tensor<i64>) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| Ok::<_, TensorError>(a_i.signum()))
             .unwrap()
     }
@@ -1625,20 +1625,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::sqrt;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[4, 25, 8, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = sqrt(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 5, 3, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[2, 5, 3, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sqrt(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn sqrt(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sqrt();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1653,20 +1653,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::rsqrt;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[4, 25, 8, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = rsqrt(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 1, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[1, 0, 0, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn rsqrt(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn rsqrt(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input / (kix.sqrt() + f64::EPSILON);
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1680,20 +1680,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::cos;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = cos(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(& [-1, 2, -1, 2, 2, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(& [-1, 2, -1, 2, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn cos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn cos(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.cos();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1707,20 +1707,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::acos;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = acos(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[0, 0, 0, 0, 0, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn acos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn acos(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.acos();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1734,20 +1734,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::cosh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = cosh(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[27, 36002449669, 1490, 2, 2, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[27, 36002449669, 1490, 2, 2, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn cosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn cosh(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.cosh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1761,20 +1761,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::acosh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = acosh(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(& [2, 4, 3, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(& [2, 4, 3, 0, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn acosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn acosh(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.acosh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1788,20 +1788,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::sin;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = sin(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sin(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn sin(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sin();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1815,20 +1815,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::asin;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = asin(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(& [4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(& [4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn asin(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn asin(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.asin();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1842,20 +1842,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::sinh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = sinh(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[7, 268337, 55, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[7, 268337, 55, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn sinh(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sinh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1869,20 +1869,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::asinh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = asinh(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn asinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn asinh(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.asinh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1896,20 +1896,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::tan;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = tan(&x, 64.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 26, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[4, 26, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn tan(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn tan(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.tan();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1923,20 +1923,20 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::atan;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = atan(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn atan(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn atan(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.atan();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1951,21 +1951,21 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::tanh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[4, 25, 8, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = tanh(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
 
-    pub fn tanh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn tanh(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.tanh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -1980,21 +1980,21 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::atanh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[4, 25, 8, 2, 2, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = atanh(&x, 32.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 34, 8, 2, 2, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[4, 34, 8, 2, 2, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
 
-    pub fn atanh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn atanh(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.atanh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -2009,15 +2009,15 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::erffunc;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[5, 28, 9, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = erffunc(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[6, 31, 10, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[6, 31, 10, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn erffunc(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn erffunc(a: &Tensor<i64>, scale_input: f64) -> Tensor<i64> {
         const NCOEF: usize = 28;
         const COF: [f64; 28] = [
             -1.3026537197817094,
@@ -2078,7 +2078,7 @@ pub mod nonlinearities {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * erf(kix);
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as i64)
         })
         .unwrap()
     }
@@ -2093,22 +2093,22 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::leakyrelu;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 15, 2, 1, 1, -5]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = leakyrelu(&x, 0.1);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, -1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[2, 15, 2, 1, 1, -1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn leakyrelu(a: &Tensor<i128>, slope: f64) -> Tensor<i128> {
+    pub fn leakyrelu(a: &Tensor<i64>, slope: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let rounded = if a_i < 0 {
                 let d_inv_x = (slope) * (a_i as f64);
-                d_inv_x.round() as i128
+                d_inv_x.round() as i64
             } else {
                 let d_inv_x = a_i as f64;
-                d_inv_x.round() as i128
+                d_inv_x.round() as i64
             };
             Ok::<_, TensorError>(rounded)
         })
@@ -2123,22 +2123,22 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::max;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[2, 15, 2, 1, 1, -5]),
     ///   &[2, 3],
     /// ).unwrap();
     /// let result = max(&x, 1.0, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[2, 15, 2, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn max(a: &Tensor<i128>, scale_input: f64, threshold: f64) -> Tensor<i128> {
+    pub fn max(a: &Tensor<i64>, scale_input: f64, threshold: f64) -> Tensor<i64> {
         // calculate value of output
         a.par_enum_map(|_, a_i| {
             let d_inv_x = (a_i as f64) / scale_input;
             let rounded = if d_inv_x <= threshold {
-                (threshold * scale_input).round() as i128
+                (threshold * scale_input).round() as i64
             } else {
-                (d_inv_x * scale_input).round() as i128
+                (d_inv_x * scale_input).round() as i64
             };
             Ok::<_, TensorError>(rounded)
         })
@@ -2153,22 +2153,22 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::min;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[2, 15, 2, 1, 1, -5]),
     ///   &[2, 3],
     /// ).unwrap();
     /// let result = min(&x, 1.0, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 2, 1, 1, -5]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[2, 2, 2, 1, 1, -5]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn min(a: &Tensor<i128>, scale_input: f64, threshold: f64) -> Tensor<i128> {
+    pub fn min(a: &Tensor<i64>, scale_input: f64, threshold: f64) -> Tensor<i64> {
         // calculate value of output
         a.par_enum_map(|_, a_i| {
             let d_inv_x = (a_i as f64) / scale_input;
             let rounded = if d_inv_x >= threshold {
-                (threshold * scale_input).round() as i128
+                (threshold * scale_input).round() as i64
             } else {
-                (d_inv_x * scale_input).round() as i128
+                (d_inv_x * scale_input).round() as i64
             };
             Ok::<_, TensorError>(rounded)
         })
@@ -2184,19 +2184,19 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::const_div;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     /// let result = const_div(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn const_div(a: &Tensor<i128>, denom: f64) -> Tensor<i128> {
+    pub fn const_div(a: &Tensor<i64>, denom: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let d_inv_x = (a_i as f64) / (denom);
-            Ok::<_, TensorError>(d_inv_x.round() as i128)
+            Ok::<_, TensorError>(d_inv_x.round() as i64)
         })
         .unwrap()
     }
@@ -2210,21 +2210,21 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::recip;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2_f64;
     /// let result = recip(&x, 1.0, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn recip(a: &Tensor<i128>, input_scale: f64, out_scale: f64) -> Tensor<i128> {
+    pub fn recip(a: &Tensor<i64>, input_scale: f64, out_scale: f64) -> Tensor<i64> {
         a.par_enum_map(|_, a_i| {
             let rescaled = (a_i as f64) / input_scale;
             let denom = (1_f64) / (rescaled + f64::EPSILON);
             let d_inv_x = out_scale * denom;
-            Ok::<_, TensorError>(d_inv_x.round() as i128)
+            Ok::<_, TensorError>(d_inv_x.round() as i64)
         })
         .unwrap()
     }
@@ -2238,17 +2238,17 @@ pub mod nonlinearities {
     /// use ezkl::tensor::ops::nonlinearities::zero_recip;
     /// let k = 2_f64;
     /// let result = zero_recip(1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4503599627370496]), &[1]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[4503599627370496]), &[1]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn zero_recip(out_scale: f64) -> Tensor<i128> {
-        let a = Tensor::<i128>::new(Some(&[0]), &[1]).unwrap();
+    pub fn zero_recip(out_scale: f64) -> Tensor<i64> {
+        let a = Tensor::<i64>::new(Some(&[0]), &[1]).unwrap();
 
         a.par_enum_map(|_, a_i| {
             let rescaled = a_i as f64;
             let denom = (1_f64) / (rescaled + f64::EPSILON);
             let d_inv_x = out_scale * denom;
-            Ok::<_, TensorError>(d_inv_x.round() as i128)
+            Ok::<_, TensorError>(d_inv_x.round() as i64)
         })
         .unwrap()
     }
@@ -2262,17 +2262,17 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::greater_than;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     /// let result = greater_than(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 1, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[0, 0, 0, 1, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn greater_than(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) > 0_f64)))
+    pub fn greater_than(a: &Tensor<i64>, b: f64) -> Tensor<i64> {
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i64::from((a_i as f64 - b) > 0_f64)))
             .unwrap()
     }
 
@@ -2285,17 +2285,17 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::greater_than_equal;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     /// let result = greater_than_equal(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 1, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[1, 0, 1, 1, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn greater_than_equal(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) >= 0_f64)))
+    pub fn greater_than_equal(a: &Tensor<i64>, b: f64) -> Tensor<i64> {
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i64::from((a_i as f64 - b) >= 0_f64)))
             .unwrap()
     }
 
@@ -2308,18 +2308,18 @@ pub mod nonlinearities {
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::less_than;
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[2, 1, 2, 7, 1, 1]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     ///
     /// let result = less_than(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[0, 1, 0, 0, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn less_than(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) < 0_f64)))
+    pub fn less_than(a: &Tensor<i64>, b: f64) -> Tensor<i64> {
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i64::from((a_i as f64 - b) < 0_f64)))
             .unwrap()
     }
 
@@ -2332,18 +2332,18 @@ pub mod nonlinearities {
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::nonlinearities::less_than_equal;
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///    Some(&[2, 1, 2, 7, 1, 1]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     ///
     /// let result = less_than_equal(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 0, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<i64>::new(Some(&[1, 1, 1, 0, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn less_than_equal(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) <= 0_f64)))
+    pub fn less_than_equal(a: &Tensor<i64>, b: f64) -> Tensor<i64> {
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i64::from((a_i as f64 - b) <= 0_f64)))
             .unwrap()
     }
 }
@@ -2361,15 +2361,15 @@ pub mod accumulated {
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::accumulated::dot;
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[5, 2]),
     ///     &[2],
     /// ).unwrap();
-    /// let y = Tensor::<i128>::new(
+    /// let y = Tensor::<i64>::new(
     ///     Some(&[5, 5]),
     ///     &[2],
     /// ).unwrap();
-    /// let expected = Tensor::<i128>::new(
+    /// let expected = Tensor::<i64>::new(
     ///     Some(&[25, 35]),
     ///     &[2],
     /// ).unwrap();
@@ -2409,12 +2409,12 @@ pub mod accumulated {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::accumulated::sum;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = sum(&x, 1).unwrap();
-    /// let expected = Tensor::<i128>::new(
+    /// let expected = Tensor::<i64>::new(
     ///     Some(&[2, 17, 19, 20, 21, 21]),
     ///     &[6],
     /// ).unwrap();
@@ -2446,12 +2446,12 @@ pub mod accumulated {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::tensor::ops::accumulated::prod;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<i64>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = prod(&x, 1).unwrap();
-    /// let expected = Tensor::<i128>::new(
+    /// let expected = Tensor::<i64>::new(
     ///     Some(&[2, 30, 60, 60, 60, 0]),
     ///     &[6],
     /// ).unwrap();

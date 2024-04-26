@@ -316,9 +316,9 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
-    /// Allocate a new [ValTensor::Value] from the given [Tensor] of [i128].
-    pub fn from_i128_tensor(t: Tensor<i128>) -> ValTensor<F> {
-        let inner = t.map(|x| ValType::Value(Value::known(i128_to_felt(x))));
+    /// Allocate a new [ValTensor::Value] from the given [Tensor] of [i64].
+    pub fn from_i64_tensor(t: Tensor<i64>) -> ValTensor<F> {
+        let inner = t.map(|x| ValType::Value(Value::known(i64_to_felt(x))));
         inner.into()
     }
 
@@ -521,9 +521,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// Calls `int_evals` on the inner tensor.
-    pub fn get_int_evals(&self) -> Result<Tensor<i128>, Box<dyn Error>> {
+    pub fn get_int_evals(&self) -> Result<Tensor<i64>, Box<dyn Error>> {
         // finally convert to vector of integers
-        let mut integer_evals: Vec<i128> = vec![];
+        let mut integer_evals: Vec<i64> = vec![];
         match self {
             ValTensor::Value {
                 inner: v, dims: _, ..
@@ -531,25 +531,25 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
                 let _ = v.map(|vaf| match vaf {
                     ValType::Value(v) => v.map(|f| {
-                        integer_evals.push(crate::fieldutils::felt_to_i128(f));
+                        integer_evals.push(crate::fieldutils::felt_to_i64(f));
                     }),
                     ValType::AssignedValue(v) => v.map(|f| {
-                        integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
+                        integer_evals.push(crate::fieldutils::felt_to_i64(f.evaluate()));
                     }),
                     ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
                         v.value_field().map(|f| {
-                            integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
+                            integer_evals.push(crate::fieldutils::felt_to_i64(f.evaluate()));
                         })
                     }
                     ValType::Constant(v) => {
-                        integer_evals.push(crate::fieldutils::felt_to_i128(v));
+                        integer_evals.push(crate::fieldutils::felt_to_i64(v));
                         Value::unknown()
                     }
                 });
             }
             _ => return Err(Box::new(TensorError::WrongMethod)),
         };
-        let mut tensor: Tensor<i128> = integer_evals.into_iter().into();
+        let mut tensor: Tensor<i64> = integer_evals.into_iter().into();
         match tensor.reshape(self.dims()) {
             _ => {}
         };

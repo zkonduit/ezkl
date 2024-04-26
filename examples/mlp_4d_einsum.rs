@@ -23,8 +23,8 @@ struct MyConfig {
 #[derive(Clone)]
 struct MyCircuit<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
-    const LOOKUP_MIN: i128,
-    const LOOKUP_MAX: i128,
+    const LOOKUP_MIN: i64,
+    const LOOKUP_MAX: i64,
 > {
     // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
@@ -34,7 +34,7 @@ struct MyCircuit<
     _marker: PhantomData<F>,
 }
 
-impl<const LEN: usize, const LOOKUP_MIN: i128, const LOOKUP_MAX: i128> Circuit<F>
+impl<const LEN: usize, const LOOKUP_MIN: i64, const LOOKUP_MAX: i64> Circuit<F>
     for MyCircuit<LEN, LOOKUP_MIN, LOOKUP_MAX>
 {
     type Config = MyConfig;

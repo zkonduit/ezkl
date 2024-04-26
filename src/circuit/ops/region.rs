@@ -9,7 +9,7 @@ use halo2_proofs::{
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
-use portable_atomic::AtomicI128 as AtomicInt;
+use portable_atomic::AtomicI64 as AtomicInt;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -133,10 +133,11 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     shuffle_index: ShuffleIndex,
     used_lookups: HashSet<LookupOp>,
     used_range_checks: HashSet<Range>,
-    max_lookup_inputs: i128,
-    min_lookup_inputs: i128,
-    max_range_size: i128,
+    max_lookup_inputs: i64,
+    min_lookup_inputs: i64,
+    max_range_size: i64,
     witness_gen: bool,
+    check_lookup_range: bool,
     assigned_constants: ConstantsMap<F>,
 }
 
@@ -191,6 +192,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.witness_gen
     }
 
+    ///
+    pub fn check_lookup_range(&self) -> bool {
+        self.check_lookup_range
+    }
+
     /// Create a new region context
     pub fn new(region: Region<'a, F>, row: usize, num_inner_cols: usize) -> RegionCtx<'a, F> {
         let region = Some(RefCell::new(region));
@@ -209,6 +215,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             min_lookup_inputs: 0,
             max_range_size: 0,
             witness_gen: true,
+            check_lookup_range: true,
             assigned_constants: HashMap::new(),
         }
     }
@@ -246,12 +253,18 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             min_lookup_inputs: 0,
             max_range_size: 0,
             witness_gen: false,
+            check_lookup_range: false,
             assigned_constants: HashMap::new(),
         }
     }
 
     /// Create a new region context
-    pub fn new_dummy(row: usize, num_inner_cols: usize, witness_gen: bool) -> RegionCtx<'a, F> {
+    pub fn new_dummy(
+        row: usize,
+        num_inner_cols: usize,
+        witness_gen: bool,
+        check_lookup_range: bool,
+    ) -> RegionCtx<'a, F> {
         let region = None;
         let linear_coord = row * num_inner_cols;
 
@@ -268,6 +281,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             min_lookup_inputs: 0,
             max_range_size: 0,
             witness_gen,
+            check_lookup_range,
             assigned_constants: HashMap::new(),
         }
     }
@@ -278,6 +292,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         linear_coord: usize,
         num_inner_cols: usize,
         witness_gen: bool,
+        check_lookup_range: bool,
     ) -> RegionCtx<'a, F> {
         let region = None;
         RegionCtx {
@@ -293,6 +308,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             min_lookup_inputs: 0,
             max_range_size: 0,
             witness_gen,
+            check_lookup_range,
             assigned_constants: HashMap::new(),
         }
     }
@@ -364,6 +380,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                     starting_linear_coord,
                     self.num_inner_cols,
                     self.witness_gen,
+                    self.check_lookup_range,
                 );
                 let res = inner_loop_function(idx, &mut local_reg);
                 // we update the offset and constants
@@ -546,17 +563,17 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// max lookup inputs
-    pub fn max_lookup_inputs(&self) -> i128 {
+    pub fn max_lookup_inputs(&self) -> i64 {
         self.max_lookup_inputs
     }
 
     /// min lookup inputs
-    pub fn min_lookup_inputs(&self) -> i128 {
+    pub fn min_lookup_inputs(&self) -> i64 {
         self.min_lookup_inputs
     }
 
     /// max range check
-    pub fn max_range_size(&self) -> i128 {
+    pub fn max_range_size(&self) -> i64 {
         self.max_range_size
     }
 

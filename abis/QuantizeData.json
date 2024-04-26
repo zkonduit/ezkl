@@ -20,9 +20,9 @@
 		"name": "quantize_data",
 		"outputs": [
 			{
-				"internalType": "int128[]",
+				"internalType": "int64[]",
 				"name": "quantized_data",
-				"type": "int128[]"
+				"type": "int64[]"
 			}
 		],
 		"stateMutability": "pure",
@@ -31,9 +31,9 @@
 	{
 		"inputs": [
 			{
-				"internalType": "int128[]",
+				"internalType": "int64[]",
 				"name": "quantized_data",
-				"type": "int128[]"
+				"type": "int64[]"
 			}
 		],
 		"name": "to_field_element",

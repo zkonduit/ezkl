@@ -62,13 +62,13 @@ pub use vars::*;
 use crate::pfsys::field_to_string;
 
 /// The safety factor for the range of the lookup table.
-pub const RANGE_MULTIPLIER: i128 = 2;
+pub const RANGE_MULTIPLIER: i64 = 2;
 
 /// The maximum number of columns in a lookup table.
 pub const MAX_NUM_LOOKUP_COLS: usize = 12;
 
 /// Max representation of a lookup table input
-pub const MAX_LOOKUP_ABS: i128 = (MAX_NUM_LOOKUP_COLS as i128) * 2_i128.pow(MAX_PUBLIC_SRS);
+pub const MAX_LOOKUP_ABS: i64 = (MAX_NUM_LOOKUP_COLS as i64) * 2_i64.pow(MAX_PUBLIC_SRS);
 
 #[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
@@ -175,11 +175,11 @@ pub struct GraphWitness {
     /// Any hashes of outputs generated during the forward pass
     pub processed_outputs: Option<ModuleForwardResult>,
     /// max lookup input
-    pub max_lookup_inputs: i128,
+    pub max_lookup_inputs: i64,
     /// max lookup input
-    pub min_lookup_inputs: i128,
+    pub min_lookup_inputs: i64,
     /// max range check size
-    pub max_range_size: i128,
+    pub max_range_size: i64,
 }
 
 impl GraphWitness {
@@ -1098,14 +1098,14 @@ impl GraphCircuit {
         Ok(data)
     }
 
-    fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i128) -> Range {
+    fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i64) -> Range {
         (
             lookup_safety_margin * min_max_lookup.0,
             lookup_safety_margin * min_max_lookup.1,
         )
     }
 
-    fn calc_num_cols(range_len: i128, max_logrows: u32) -> usize {
+    fn calc_num_cols(range_len: i64, max_logrows: u32) -> usize {
         let max_col_size = Table::<Fp>::cal_col_size(max_logrows as usize, RESERVED_BLINDING_ROWS);
         num_cols_required(range_len, max_col_size)
     }
@@ -1113,7 +1113,7 @@ impl GraphCircuit {
     fn table_size_logrows(
         &self,
         safe_lookup_range: Range,
-        max_range_size: i128,
+        max_range_size: i64,
     ) -> Result<u32, Box<dyn std::error::Error>> {
         // pick the range with the largest absolute size safe_lookup_range or max_range_size
         let safe_range = std::cmp::max(
@@ -1132,9 +1132,9 @@ impl GraphCircuit {
     pub fn calc_min_logrows(
         &mut self,
         min_max_lookup: Range,
-        max_range_size: i128,
+        max_range_size: i64,
         max_logrows: Option<u32>,
-        lookup_safety_margin: i128,
+        lookup_safety_margin: i64,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // load the max logrows
         let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
@@ -1228,7 +1228,7 @@ impl GraphCircuit {
         &self,
         k: u32,
         safe_lookup_range: Range,
-        max_range_size: i128,
+        max_range_size: i64,
     ) -> bool {
         // if num cols is too large then the extended k is too large
         if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS
@@ -1287,6 +1287,7 @@ impl GraphCircuit {
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&Scheme::ParamsProver>,
         witness_gen: bool,
+        check_lookup: bool,
     ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
         let original_inputs = inputs.to_vec();
 
@@ -1335,7 +1336,7 @@ impl GraphCircuit {
 
         let mut model_results =
             self.model()
-                .forward(inputs, &self.settings().run_args, witness_gen)?;
+                .forward(inputs, &self.settings().run_args, witness_gen, check_lookup)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();

@@ -3,7 +3,7 @@
 mod native_tests {
 
     use ezkl::circuit::Tolerance;
-    use ezkl::fieldutils::{felt_to_i128, i128_to_felt};
+    use ezkl::fieldutils::{felt_to_i64, i64_to_felt};
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
@@ -908,7 +908,7 @@ mod native_tests {
                     prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testWasm", false);
-                    // test_dir.close().unwrap();
+                    test_dir.close().unwrap();
                 }
 
                 #(#[test_case(WASM_TESTS[N])])*
@@ -921,7 +921,7 @@ mod native_tests {
                     prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testWasm", false);
-                    // test_dir.close().unwrap();
+                    test_dir.close().unwrap();
                 }
 
                 #(#[test_case(WASM_TESTS[N])])*
@@ -1373,7 +1373,7 @@ mod native_tests {
             let witness = witness.clone();
             let outputs = witness.outputs.clone();
 
-            // get values as i128
+            // get values as i64
             let output_perturbed_safe: Vec<Vec<halo2curves::bn256::Fr>> = outputs
                 .iter()
                 .map(|sv| {
@@ -1383,10 +1383,10 @@ mod native_tests {
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
                                 halo2curves::bn256::Fr::zero()
                             } else {
-                                i128_to_felt(
-                                    (felt_to_i128(*v) as f32
+                                i64_to_felt(
+                                    (felt_to_i64(*v) as f32
                                         * (rand::thread_rng().gen_range(-0.01..0.01) * tolerance))
-                                        as i128,
+                                        as i64,
                                 )
                             };
 
@@ -1396,7 +1396,7 @@ mod native_tests {
                 })
                 .collect::<Vec<_>>();
 
-            // get values as i128
+            // get values as i64
             let output_perturbed_bad: Vec<Vec<halo2curves::bn256::Fr>> = outputs
                 .iter()
                 .map(|sv| {
@@ -1406,10 +1406,10 @@ mod native_tests {
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
                                 halo2curves::bn256::Fr::from(2)
                             } else {
-                                i128_to_felt(
-                                    (felt_to_i128(*v) as f32
+                                i64_to_felt(
+                                    (felt_to_i64(*v) as f32
                                         * (rand::thread_rng().gen_range(0.02..0.1) * tolerance))
-                                        as i128,
+                                        as i64,
                                 )
                             };
                             *v + perturbation

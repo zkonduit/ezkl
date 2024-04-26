@@ -5,7 +5,7 @@ pub mod val;
 /// A wrapper around a tensor of Halo2 Value types.
 pub mod var;
 
-use halo2curves::ff::PrimeField;
+use halo2curves::{bn256::Fr, ff::PrimeField};
 use maybe_rayon::{
     prelude::{
         IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator,
@@ -17,9 +17,12 @@ use serde::{Deserialize, Serialize};
 pub use val::*;
 pub use var::*;
 
+#[cfg(feature = "metal")]
+use instant::Instant;
+
 use crate::{
     circuit::utils,
-    fieldutils::{felt_to_i32, i128_to_felt, i32_to_felt},
+    fieldutils::{felt_to_i32, felt_to_i64, i32_to_felt, i64_to_felt},
     graph::Visibility,
 };
 
@@ -30,12 +33,18 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
+#[cfg(feature = "metal")]
+use metal::{Device, MTLResourceOptions, MTLSize};
 use std::error::Error;
 use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::{Add, Deref, DerefMut, Div, Mul, Neg, Range, Sub};
 use std::{cmp::max, ops::Rem};
 use thiserror::Error;
+
+#[cfg(feature = "metal")]
+use std::collections::HashMap;
+
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum TensorError {
@@ -63,6 +72,28 @@ pub enum TensorError {
     /// Overflow
     #[error("Unsigned integer overflow or underflow error in op: {0}")]
     Overflow(String),
+}
+
+#[cfg(feature = "metal")]
+const LIB_DATA: &[u8] = include_bytes!("metal/tensor_ops.metallib");
+
+#[cfg(feature = "metal")]
+lazy_static::lazy_static! {
+    static ref DEVICE: Device = Device::system_default().expect("no device found");
+
+    static ref LIB: metal::Library = DEVICE.new_library_with_data(LIB_DATA).unwrap();
+
+    static ref QUEUE: metal::CommandQueue = DEVICE.new_command_queue();
+
+    static ref PIPELINES: HashMap<String, metal::ComputePipelineState> = {
+        let mut map = HashMap::new();
+        for name in ["add", "sub", "mul"] {
+            let function = LIB.get_function(name, None).unwrap();
+            let pipeline = DEVICE.new_compute_pipeline_state_with_function(&function).unwrap();
+            map.insert(name.to_string(), pipeline);
+        }
+        map
+    };
 }
 
 /// The (inner) type of tensor elements.
@@ -145,7 +176,7 @@ impl TensorType for f64 {
 }
 
 tensor_type!(bool, Bool, false, true);
-tensor_type!(i128, Int128, 0, 1);
+tensor_type!(i64, Int64, 0, 1);
 tensor_type!(i32, Int32, 0, 1);
 tensor_type!(usize, USize, 0, 1);
 tensor_type!((), Empty, (), ());
@@ -311,6 +342,94 @@ impl<T: TensorType> DerefMut for Tensor<T> {
         self.inner.deref_mut()
     }
 }
+/// Convert to i64 trait
+pub trait IntoI64 {
+    /// Convert to i64
+    fn into_i64(self) -> i64;
+
+    /// From i64
+    fn from_i64(i: i64) -> Self;
+}
+
+impl IntoI64 for i64 {
+    fn into_i64(self) -> i64 {
+        self
+    }
+    fn from_i64(i: i64) -> i64 {
+        i
+    }
+}
+
+impl IntoI64 for i32 {
+    fn into_i64(self) -> i64 {
+        self as i64
+    }
+    fn from_i64(i: i64) -> Self {
+        i as i32
+    }
+}
+
+impl IntoI64 for usize {
+    fn into_i64(self) -> i64 {
+        self as i64
+    }
+    fn from_i64(i: i64) -> Self {
+        i as usize
+    }
+}
+
+impl IntoI64 for f32 {
+    fn into_i64(self) -> i64 {
+        self as i64
+    }
+    fn from_i64(i: i64) -> Self {
+        i as f32
+    }
+}
+
+impl IntoI64 for f64 {
+    fn into_i64(self) -> i64 {
+        self as i64
+    }
+    fn from_i64(i: i64) -> Self {
+        i as f64
+    }
+}
+
+impl IntoI64 for () {
+    fn into_i64(self) -> i64 {
+        0
+    }
+    fn from_i64(_: i64) -> Self {
+        ()
+    }
+}
+
+impl IntoI64 for Fr {
+    fn into_i64(self) -> i64 {
+        felt_to_i64(self)
+    }
+    fn from_i64(i: i64) -> Self {
+        i64_to_felt::<Fr>(i)
+    }
+}
+
+impl<F: PrimeField + IntoI64> IntoI64 for Value<F> {
+    fn into_i64(self) -> i64 {
+        let mut res = vec![];
+        self.map(|x| res.push(x.into_i64()));
+
+        if res.len() == 0 {
+            0
+        } else {
+            res[0]
+        }
+    }
+
+    fn from_i64(i: i64) -> Self {
+        Value::known(F::from_i64(i))
+    }
+}
 
 impl<T: PartialEq + TensorType> PartialEq for Tensor<T> {
     fn eq(&self, other: &Tensor<T>) -> bool {
@@ -427,10 +546,10 @@ impl<F: PrimeField + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> 
     }
 }
 
-impl<F: PrimeField + TensorType + Clone> From<Tensor<i128>> for Tensor<Value<F>> {
-    fn from(t: Tensor<i128>) -> Tensor<Value<F>> {
+impl<F: PrimeField + TensorType + Clone> From<Tensor<i64>> for Tensor<Value<F>> {
+    fn from(t: Tensor<i64>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
-            Tensor::from((0..t.len()).map(|i| Value::known(i128_to_felt::<F>(t[i]))));
+            Tensor::from((0..t.len()).map(|i| Value::known(i64_to_felt::<F>(t[i]))));
         // safe to unwrap as we know the dims are correct
         ta.reshape(t.dims()).unwrap();
         ta
@@ -1217,6 +1336,97 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 }
 
+#[cfg(feature = "metal")]
+#[allow(unsafe_code)]
+/// Perform a tensor operation on the GPU using Metal.
+pub fn metal_tensor_op<T: Clone + TensorType + IntoI64 + Send + Sync>(
+    v: &Tensor<T>,
+    w: &Tensor<T>,
+    op: &str,
+) -> Tensor<T> {
+    assert_eq!(v.dims(), w.dims());
+
+    log::trace!("------------------------------------------------");
+
+    let start = Instant::now();
+    let v = v
+        .par_enum_map(|_, x| Ok::<_, TensorError>(x.into_i64()))
+        .unwrap();
+    let w = w
+        .par_enum_map(|_, x| Ok::<_, TensorError>(x.into_i64()))
+        .unwrap();
+    log::trace!("Time to map tensors: {:?}", start.elapsed());
+
+    objc::rc::autoreleasepool(|| {
+        // create function pipeline.
+        // this compiles the function, so a pipline can't be created in performance sensitive code.
+
+        let pipeline = &PIPELINES[op];
+
+        let length = v.len() as u64;
+        let size = length * core::mem::size_of::<i64>() as u64;
+        assert_eq!(v.len(), w.len());
+
+        let start = Instant::now();
+
+        let buffer_a = DEVICE.new_buffer_with_data(
+            unsafe { std::mem::transmute(v.as_ptr()) },
+            size,
+            MTLResourceOptions::StorageModeShared,
+        );
+        let buffer_b = DEVICE.new_buffer_with_data(
+            unsafe { std::mem::transmute(w.as_ptr()) },
+            size,
+            MTLResourceOptions::StorageModeShared,
+        );
+        let buffer_result = DEVICE.new_buffer(
+            size, // the operation will return an array with the same size.
+            MTLResourceOptions::StorageModeShared,
+        );
+
+        log::trace!("Time to load buffers: {:?}", start.elapsed());
+
+        // for sending commands, a command buffer is needed.
+        let start = Instant::now();
+        let command_buffer = QUEUE.new_command_buffer();
+        log::trace!("Time to load command buffer: {:?}", start.elapsed());
+        // to write commands into a buffer an encoder is needed, in our case a compute encoder.
+        let start = Instant::now();
+        let compute_encoder = command_buffer.new_compute_command_encoder();
+        compute_encoder.set_compute_pipeline_state(&pipeline);
+        compute_encoder.set_buffers(
+            0,
+            &[Some(&buffer_a), Some(&buffer_b), Some(&buffer_result)],
+            &[0; 3],
+        );
+        log::trace!("Time to load compute encoder: {:?}", start.elapsed());
+
+        // specify thread count and organization
+        let start = Instant::now();
+        let grid_size = MTLSize::new(length, 1, 1);
+        let threadgroup_size = MTLSize::new(length, 1, 1);
+        compute_encoder.dispatch_threads(grid_size, threadgroup_size);
+        log::trace!("Time to dispatch threads: {:?}", start.elapsed());
+
+        // end encoding and execute commands
+        let start = Instant::now();
+        compute_encoder.end_encoding();
+        command_buffer.commit();
+
+        command_buffer.wait_until_completed();
+        log::trace!("Time to commit: {:?}", start.elapsed());
+
+        let start = Instant::now();
+        let ptr = buffer_result.contents() as *const i64;
+        let len = buffer_result.length() as usize / std::mem::size_of::<i64>();
+        let slice = unsafe { core::slice::from_raw_parts(ptr, len) };
+        let res = Tensor::new(Some(&slice.to_vec()), &v.dims()).unwrap();
+        log::trace!("Time to get result: {:?}", start.elapsed());
+
+        res.map(|x| T::from_i64(x))
+    })
+}
+
 impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// Flattens a tensor of tensors
     /// ```
@@ -1238,7 +1448,9 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     }
 }
 
-impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync> Add for Tensor<T> {
+impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync + IntoI64> Add
+    for Tensor<T>
+{
     type Output = Result<Tensor<T>, TensorError>;
     /// Adds tensors.
     /// # Arguments
@@ -1288,14 +1500,24 @@ impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync> Ad
     /// ```
     fn add(self, rhs: Self) -> Self::Output {
         let broadcasted_shape = get_broadcasted_shape(self.dims(), rhs.dims()).unwrap();
-        let mut lhs = self.expand(&broadcasted_shape).unwrap();
+        let lhs = self.expand(&broadcasted_shape).unwrap();
         let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
-            *o = o.clone() + r;
-        });
+        #[cfg(feature = "metal")]
+        let res = metal_tensor_op(&lhs, &rhs, "add");
 
-        Ok(lhs)
+        #[cfg(not(feature = "metal"))]
+        let res = {
+            let mut res: Tensor<T> = lhs
+                .par_iter()
+                .zip(rhs)
+                .map(|(o, r)| o.clone() + r)
+                .collect();
+            res.reshape(&broadcasted_shape).unwrap();
+            res
+        };
+
+        Ok(res)
     }
 }
 
@@ -1318,6 +1540,7 @@ impl<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync> Ne
     /// ```
     fn neg(self) -> Self {
         let mut output = self;
+
         output.par_iter_mut().for_each(|x| {
             *x = x.clone().neg();
         });
@@ -1325,7 +1548,9 @@ impl<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync> Ne
     }
 }
 
-impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync> Sub for Tensor<T> {
+impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync + IntoI64> Sub
+    for Tensor<T>
+{
     type Output = Result<Tensor<T>, TensorError>;
     /// Subtracts tensors.
     /// # Arguments
@@ -1376,18 +1601,30 @@ impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync> Su
     /// ```
     fn sub(self, rhs: Self) -> Self::Output {
         let broadcasted_shape = get_broadcasted_shape(self.dims(), rhs.dims()).unwrap();
-        let mut lhs = self.expand(&broadcasted_shape).unwrap();
+        let lhs = self.expand(&broadcasted_shape).unwrap();
         let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
-            *o = o.clone() - r;
-        });
+        #[cfg(feature = "metal")]
+        let res = metal_tensor_op(&lhs, &rhs, "sub");
 
-        Ok(lhs)
+        #[cfg(not(feature = "metal"))]
+        let res = {
+            let mut res: Tensor<T> = lhs
+                .par_iter()
+                .zip(rhs)
+                .map(|(o, r)| o.clone() - r)
+                .collect();
+            res.reshape(&broadcasted_shape).unwrap();
+            res
+        };
+
+        Ok(res)
     }
 }
 
-impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Mul for Tensor<T> {
+impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync + IntoI64> Mul
+    for Tensor<T>
+{
     type Output = Result<Tensor<T>, TensorError>;
     /// Elementwise multiplies tensors.
     /// # Arguments
@@ -1436,18 +1673,28 @@ impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Mu
     /// ```
     fn mul(self, rhs: Self) -> Self::Output {
         let broadcasted_shape = get_broadcasted_shape(self.dims(), rhs.dims()).unwrap();
-        let mut lhs = self.expand(&broadcasted_shape).unwrap();
+        let lhs = self.expand(&broadcasted_shape).unwrap();
         let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
-            *o = o.clone() * r;
-        });
+        #[cfg(feature = "metal")]
+        let res = metal_tensor_op(&lhs, &rhs, "mul");
 
-        Ok(lhs)
+        #[cfg(not(feature = "metal"))]
+        let res = {
+            let mut res: Tensor<T> = lhs
+                .par_iter()
+                .zip(rhs)
+                .map(|(o, r)| o.clone() * r)
+                .collect();
+            res.reshape(&broadcasted_shape).unwrap();
+            res
+        };
+
+        Ok(res)
     }
 }
 
-impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Tensor<T> {
+impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync + IntoI64> Tensor<T> {
     /// Elementwise raise a tensor to the nth power.
     /// # Arguments
     ///
@@ -1660,5 +1907,67 @@ mod tests {
         let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
         let b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
         assert_eq!(a.get_slice(&[0..2, 0..1]).unwrap(), b);
+    }
+
+    #[test]
+    #[cfg(feature = "metal")]
+    fn tensor_metal_int() {
+        let a = Tensor::<i64>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+        let b = Tensor::<i64>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+        let c = metal_tensor_op(&a, &b, "add");
+        assert_eq!(c, Tensor::new(Some(&[2, 4, 6, 8]), &[2, 2]).unwrap());
+
+        let c = metal_tensor_op(&a, &b, "sub");
+        assert_eq!(c, Tensor::new(Some(&[0, 0, 0, 0]), &[2, 2]).unwrap());
+
+        let c = metal_tensor_op(&a, &b, "mul");
+        assert_eq!(c, Tensor::new(Some(&[1, 4, 9, 16]), &[2, 2]).unwrap());
+    }
+
+    #[test]
+    #[cfg(feature = "metal")]
+    fn tensor_metal_felt() {
+        use halo2curves::bn256::Fr;
+
+        let a = Tensor::<Fr>::new(
+            Some(&[Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
+            &[2, 2],
+        )
+        .unwrap();
+        let b = Tensor::<Fr>::new(
+            Some(&[Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
+            &[2, 2],
+        )
+        .unwrap();
+
+        let c = metal_tensor_op(&a, &b, "add");
+        assert_eq!(
+            c,
+            Tensor::<Fr>::new(
+                Some(&[Fr::from(2), Fr::from(4), Fr::from(6), Fr::from(8)]),
+                &[2, 2],
+            )
+            .unwrap()
+        );
+
+        let c = metal_tensor_op(&a, &b, "sub");
+        assert_eq!(
+            c,
+            Tensor::<Fr>::new(
+                Some(&[Fr::from(0), Fr::from(0), Fr::from(0), Fr::from(0)]),
+                &[2, 2],
+            )
+            .unwrap()
+        );
+
+        let c = metal_tensor_op(&a, &b, "mul");
+        assert_eq!(
+            c,
+            Tensor::<Fr>::new(
+                Some(&[Fr::from(1), Fr::from(4), Fr::from(9), Fr::from(16)]),
+                &[2, 2],
+            )
+            .unwrap()
+        );
     }
 }

@@ -65,11 +65,11 @@ pub struct ForwardResult {
     /// The outputs of the forward pass.
     pub outputs: Vec<Tensor<Fp>>,
     /// The maximum value of any input to a lookup operation.
-    pub max_lookup_inputs: i128,
+    pub max_lookup_inputs: i64,
     /// The minimum value of any input to a lookup operation.
-    pub min_lookup_inputs: i128,
+    pub min_lookup_inputs: i64,
     /// The max range check size
-    pub max_range_size: i128,
+    pub max_range_size: i64,
 }
 
 impl From<DummyPassRes> for ForwardResult {
@@ -117,11 +117,11 @@ pub struct DummyPassRes {
     /// range checks
     pub range_checks: HashSet<Range>,
     /// max lookup inputs
-    pub max_lookup_inputs: i128,
+    pub max_lookup_inputs: i64,
     /// min lookup inputs
-    pub min_lookup_inputs: i128,
+    pub min_lookup_inputs: i64,
     /// min range check
-    pub max_range_size: i128,
+    pub max_range_size: i64,
     /// outputs
     pub outputs: Vec<Tensor<Fp>>,
 }
@@ -538,7 +538,7 @@ impl Model {
             })
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
-        let res = self.dummy_layout(run_args, &inputs, false)?;
+        let res = self.dummy_layout(run_args, &inputs, false, false)?;
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
 
@@ -582,12 +582,13 @@ impl Model {
         model_inputs: &[Tensor<Fp>],
         run_args: &RunArgs,
         witness_gen: bool,
+        check_lookup: bool,
     ) -> Result<ForwardResult, Box<dyn Error>> {
         let valtensor_inputs: Vec<ValTensor<Fp>> = model_inputs
             .iter()
             .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
             .collect();
-        let res = self.dummy_layout(run_args, &valtensor_inputs, witness_gen)?;
+        let res = self.dummy_layout(run_args, &valtensor_inputs, witness_gen, check_lookup)?;
         Ok(res.into())
     }
 
@@ -1392,6 +1393,7 @@ impl Model {
         run_args: &RunArgs,
         inputs: &[ValTensor<Fp>],
         witness_gen: bool,
+        check_lookup: bool,
     ) -> Result<DummyPassRes, Box<dyn Error>> {
         debug!("calculating num of constraints using dummy model layout...");
 
@@ -1410,7 +1412,8 @@ impl Model {
             vars: ModelVars::new_dummy(),
         };
 
-        let mut region = RegionCtx::new_dummy(0, run_args.num_inner_cols, witness_gen);
+        let mut region =
+            RegionCtx::new_dummy(0, run_args.num_inner_cols, witness_gen, check_lookup);
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
