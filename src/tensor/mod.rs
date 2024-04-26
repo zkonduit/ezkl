@@ -17,6 +17,9 @@ use serde::{Deserialize, Serialize};
 pub use val::*;
 pub use var::*;
 
+#[cfg(feature = "metal")]
+use instant::Instant;
+
 use crate::{
     circuit::utils,
     fieldutils::{felt_to_i32, felt_to_i64, i32_to_felt, i64_to_felt},
@@ -31,13 +34,16 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 #[cfg(feature = "metal")]
-use metal::{Device, DeviceRef, MTLResourceOptions, MTLSize};
+use metal::{Device, MTLResourceOptions, MTLSize};
 use std::error::Error;
 use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::{Add, Deref, DerefMut, Div, Mul, Neg, Range, Sub};
 use std::{cmp::max, ops::Rem};
 use thiserror::Error;
+
+#[cfg(feature = "metal")]
+use std::collections::HashMap;
 
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
@@ -66,6 +72,28 @@ pub enum TensorError {
     /// Overflow
     #[error("Unsigned integer overflow or underflow error in op: {0}")]
     Overflow(String),
+}
+
+#[cfg(feature = "metal")]
+const LIB_DATA: &[u8] = include_bytes!("metal/tensor_ops.metallib");
+
+#[cfg(feature = "metal")]
+lazy_static::lazy_static! {
+    static ref DEVICE: Device = Device::system_default().expect("no device found");
+
+    static ref LIB: metal::Library = DEVICE.new_library_with_data(LIB_DATA).unwrap();
+
+    static ref QUEUE: metal::CommandQueue = DEVICE.new_command_queue();
+
+    static ref PIPELINES: HashMap<String, metal::ComputePipelineState> = {
+        let mut map = HashMap::new();
+        for name in ["add", "sub", "mul"] {
+            let function = LIB.get_function(name, None).unwrap();
+            let pipeline = DEVICE.new_compute_pipeline_state_with_function(&function).unwrap();
+            map.insert(name.to_string(), pipeline);
+        }
+        map
+    };
 }
 
 /// The (inner) type of tensor elements.
@@ -1309,9 +1337,6 @@ impl<T: Clone + TensorType> Tensor<T> {
 }
 
 #[cfg(feature = "metal")]
-const LIB_DATA: &[u8] = include_bytes!("metal/tensor_ops.metallib");
-
-#[cfg(feature = "metal")]
 #[allow(unsafe_code)]
 /// Perform a tensor operation on the GPU using Metal.
 pub fn metal_tensor_op<T: Clone + TensorType + IntoI64 + Send + Sync>(
@@ -1321,53 +1346,52 @@ pub fn metal_tensor_op<T: Clone + TensorType + IntoI64 + Send + Sync>(
 ) -> Tensor<T> {
     assert_eq!(v.dims(), w.dims());
 
+    log::trace!("------------------------------------------------");
+
+    let start = Instant::now();
     let v = v
         .par_enum_map(|_, x| Ok::<_, TensorError>(x.into_i64()))
         .unwrap();
     let w = w
         .par_enum_map(|_, x| Ok::<_, TensorError>(x.into_i64()))
         .unwrap();
+    log::trace!("Time to map tensors: {:?}", start.elapsed());
 
     objc::rc::autoreleasepool(|| {
-        // will return a raw pointer to the result
-        // the system will assign a GPU to use.
-
-        let device: &DeviceRef = &Device::system_default().expect("No device found");
-
-        // represents the library which contains the kernel.
-        let lib = device.new_library_with_data(LIB_DATA).unwrap();
         // create function pipeline.
         // this compiles the function, so a pipline can't be created in performance sensitive code.
 
-        let function = lib.get_function(op, None).unwrap();
-        let pipeline = device
-            .new_compute_pipeline_state_with_function(&function)
-            .unwrap();
+        let pipeline = &PIPELINES[op];
 
         let length = v.len() as u64;
         let size = length * core::mem::size_of::<i64>() as u64;
         assert_eq!(v.len(), w.len());
 
-        let buffer_a = device.new_buffer_with_data(
+        let start = Instant::now();
+
+        let buffer_a = DEVICE.new_buffer_with_data(
             unsafe { std::mem::transmute(v.as_ptr()) },
             size,
             MTLResourceOptions::StorageModeShared,
         );
-        let buffer_b = device.new_buffer_with_data(
+        let buffer_b = DEVICE.new_buffer_with_data(
             unsafe { std::mem::transmute(w.as_ptr()) },
             size,
             MTLResourceOptions::StorageModeShared,
         );
-        let buffer_result = device.new_buffer(
+        let buffer_result = DEVICE.new_buffer(
             size, // the operation will return an array with the same size.
             MTLResourceOptions::StorageModeShared,
         );
 
-        // a command queue for sending instructions to the device.
-        let command_queue = device.new_command_queue();
+        log::trace!("Time to load buffers: {:?}", start.elapsed());
+
         // for sending commands, a command buffer is needed.
-        let command_buffer = command_queue.new_command_buffer();
+        let start = Instant::now();
+        let command_buffer = QUEUE.new_command_buffer();
+        log::trace!("Time to load command buffer: {:?}", start.elapsed());
         // to write commands into a buffer an encoder is needed, in our case a compute encoder.
+        let start = Instant::now();
         let compute_encoder = command_buffer.new_compute_command_encoder();
         compute_encoder.set_compute_pipeline_state(&pipeline);
         compute_encoder.set_buffers(
@@ -1375,24 +1399,29 @@ pub fn metal_tensor_op<T: Clone + TensorType + IntoI64 + Send + Sync>(
             &[Some(&buffer_a), Some(&buffer_b), Some(&buffer_result)],
             &[0; 3],
         );
+        log::trace!("Time to load compute encoder: {:?}", start.elapsed());
 
         // specify thread count and organization
-
+        let start = Instant::now();
         let grid_size = MTLSize::new(length, 1, 1);
         let threadgroup_size = MTLSize::new(length, 1, 1);
         compute_encoder.dispatch_threads(grid_size, threadgroup_size);
+        log::trace!("Time to dispatch threads: {:?}", start.elapsed());
 
         // end encoding and execute commands
-
+        let start = Instant::now();
         compute_encoder.end_encoding();
         command_buffer.commit();
 
         command_buffer.wait_until_completed();
+        log::trace!("Time to commit: {:?}", start.elapsed());
 
+        let start = Instant::now();
         let ptr = buffer_result.contents() as *const i64;
         let len = buffer_result.length() as usize / std::mem::size_of::<i64>();
         let slice = unsafe { core::slice::from_raw_parts(ptr, len) };
         let res = Tensor::new(Some(&slice.to_vec()), &v.dims()).unwrap();
+        log::trace!("Time to get result: {:?}", start.elapsed());
 
         res.map(|x| T::from_i64(x))
     })

@@ -237,7 +237,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + 
 /// use ezkl::circuit::layouts::dot;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -369,7 +369,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// // matmul case
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
@@ -822,7 +822,7 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -1754,7 +1754,7 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -1861,7 +1861,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2022,7 +2022,7 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2056,7 +2056,7 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Int
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2090,7 +2090,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2131,7 +2131,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + I
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
@@ -2165,7 +2165,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2210,7 +2210,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + I
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2400,7 +2400,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 /// Some(&[2, 15, 2, 1, 1, 0]),
@@ -2455,7 +2455,7 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let a = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///   Some(&[1, 12, 6, 4, 5, 6]),
@@ -2505,7 +2505,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 ///
 /// let a = ValTensor::from_i64_tensor(Tensor::<i64>::new(
@@ -2557,7 +2557,7 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let a = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///  Some(&[1, 0, 5, 4, 5, 1]),
@@ -2596,7 +2596,7 @@ pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let a = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///  Some(&[1, 0, 5, 4, 5, 1]),
@@ -2635,7 +2635,7 @@ pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + In
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let a = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///  Some(&[1, 1, 1, 1, 1, 0]),
@@ -2677,7 +2677,7 @@ pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let a = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///   Some(&[1, 1, 1, 1, 1, 0]),
@@ -2723,7 +2723,7 @@ pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let a = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 /// Some(&[1, 1, 1, 1, 1, 0]),
@@ -2795,7 +2795,7 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let a = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///  Some(&[1, 1, 1, 1, 1, 0]),
@@ -2849,7 +2849,7 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///    Some(&[1, 1, 1, 1, 1, 0]),
@@ -2890,7 +2890,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let mask = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///    Some(&[1, 0, 1, 0, 1, 0]),
@@ -2946,7 +2946,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
@@ -2976,7 +2976,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
@@ -3056,7 +3056,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
@@ -3155,7 +3155,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let c = ValTensor::from_i64_tensor(Tensor::<i64>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap());
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
@@ -3384,7 +3384,7 @@ pub fn deconv<
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -4289,7 +4289,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash 
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[2, 2, 3, 2, 2, 0]),
@@ -4335,7 +4335,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,true);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
 ///     Some(&[100, 200, 300, 400, 500, 600]),
