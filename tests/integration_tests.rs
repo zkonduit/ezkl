@@ -624,7 +624,7 @@ mod native_tests {
             #(#[test_case(TESTS[N])])*
             fn mock_large_batch_public_outputs_(test: &str) {
                 // currently variable output rank is not supported in ONNX
-                if test != "gather_nd" && test != "lstm_large" {
+                if test != "gather_nd" && test != "lstm_large"  && test != "lstm_medium" {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
