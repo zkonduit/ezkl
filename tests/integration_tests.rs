@@ -200,7 +200,7 @@ mod native_tests {
         "1l_tiny_div",
     ];
 
-    const TESTS: [&str; 92] = [
+    const TESTS: [&str; 93] = [
         "1l_mlp", //0
         "1l_slice",
         "1l_concat",
@@ -296,7 +296,8 @@ mod native_tests {
         "reducel1",
         "reducel2", // 89
         "1l_lppool",
-        "lstm_large", // 91
+        "lstm_large",  // 91
+        "lstm_medium", // 92
     ];
 
     const WASM_TESTS: [&str; 46] = [
@@ -535,7 +536,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=91 {
+            seq!(N in 0..=92 {
 
             #(#[test_case(TESTS[N])])*
             #[ignore]
@@ -623,7 +624,7 @@ mod native_tests {
             #(#[test_case(TESTS[N])])*
             fn mock_large_batch_public_outputs_(test: &str) {
                 // currently variable output rank is not supported in ONNX
-                if test != "gather_nd" && test != "lstm_large" {
+                if test != "gather_nd" && test != "lstm_large"  && test != "lstm_medium" {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
