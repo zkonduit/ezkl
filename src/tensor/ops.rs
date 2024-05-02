@@ -2458,7 +2458,7 @@ pub mod accumulated {
             .scan(T::one().unwrap(), |acc, mut chunk| {
                 let mut k = chunk.next().unwrap().clone();
                 while let Some(a_i) = chunk.next() {
-                    k = k.clone() + a_i.clone();
+                    k = k.clone() * a_i.clone();
                 }
                 *acc = acc.clone() * k.clone();
                 Some(acc.clone())
