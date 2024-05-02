@@ -2375,7 +2375,7 @@ pub mod accumulated {
     /// ).unwrap();
     /// assert_eq!(dot(&[x, y], 1).unwrap(), expected);
     /// ```
-    pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
+    pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync + IntoI64>(
         inputs: &[Tensor<T>; 2],
         chunk_size: usize,
     ) -> Result<Tensor<T>, TensorError> {
@@ -2384,21 +2384,8 @@ pub mod accumulated {
         }
         let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
 
-        let transcript: Tensor<T> = a
-            .iter()
-            .zip(b)
-            .chunks(chunk_size)
-            .into_iter()
-            .scan(T::zero().unwrap(), |acc, chunk| {
-                let k = chunk.fold(T::zero().unwrap(), |acc, (a_i, b_i)| {
-                    acc.clone() + a_i.clone() * b_i.clone()
-                });
-                *acc = acc.clone() + k.clone();
-                Some(acc.clone())
-            })
-            .collect();
-
-        Ok(transcript)
+        let prod = (a * b)?;
+        sum(&prod, chunk_size)
     }
 
     /// Sums a tensor.
@@ -2428,8 +2415,11 @@ pub mod accumulated {
             .iter()
             .chunks(chunk_size)
             .into_iter()
-            .scan(T::zero().unwrap(), |acc, chunk| {
-                let k = chunk.fold(T::zero().unwrap(), |acc, a_i| acc.clone() + a_i.clone());
+            .scan(T::zero().unwrap(), |acc, mut chunk| {
+                let mut k = chunk.next().unwrap().clone();
+                while let Some(a_i) = chunk.next() {
+                    k = k.clone() + a_i.clone();
+                }
                 *acc = acc.clone() + k.clone();
                 Some(acc.clone())
             })
@@ -2465,8 +2455,11 @@ pub mod accumulated {
             .iter()
             .chunks(chunk_size)
             .into_iter()
-            .scan(T::one().unwrap(), |acc, chunk| {
-                let k = chunk.fold(T::one().unwrap(), |acc, a_i| acc.clone() * a_i.clone());
+            .scan(T::one().unwrap(), |acc, mut chunk| {
+                let mut k = chunk.next().unwrap().clone();
+                while let Some(a_i) = chunk.next() {
+                    k = k.clone() + a_i.clone();
+                }
                 *acc = acc.clone() * k.clone();
                 Some(acc.clone())
             })

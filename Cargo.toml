@@ -81,7 +81,7 @@ pyo3-asyncio = { version = "0.20.0", features = [
     "tokio-runtime",
 ], default_features = false, optional = true }
 pyo3-log = { version = "0.9.0", default_features = false, optional = true }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev = "05ebf550aa9922b221af4635c21a67a8d2af12a9", default_features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev = "05ebf550aa9922b221af4635c21a67a8d2af12a9", optional = true }
 tabled = { version = "0.12.0", optional = true }
 
 objc = { version = "0.2.4", optional = true }
