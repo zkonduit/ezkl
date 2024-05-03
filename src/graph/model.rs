@@ -602,9 +602,7 @@ impl Model {
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
     ) -> Result<TractResult, Box<dyn Error>> {
-        use tract_onnx::{
-            tract_core::internal::IntoArcTensor, tract_hir::internal::GenericFactoid,
-        };
+        use tract_onnx::tract_hir::internal::GenericFactoid;
 
         let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
             error!("Error loading model: {}", e);
@@ -644,28 +642,10 @@ impl Model {
         }
 
         // Note: do not optimize the model, as the layout will depend on underlying hardware
-        let mut typed_model = model
+        let typed_model = model
             .into_typed()?
             .concretize_dims(&symbol_values)?
             .into_decluttered()?;
-
-        // concretize constants
-        for node in typed_model.eval_order()? {
-            let node = typed_model.node_mut(node);
-            if let Some(op) = node.op_as_mut::<tract_onnx::tract_core::ops::konst::Const>() {
-                if op.0.datum_type() == DatumType::TDim {
-                    // get inner value to Arc<Tensor>
-                    let mut constant = op.0.as_ref().clone();
-                    // Generally a shape or hyperparam
-                    constant
-                        .as_slice_mut::<tract_onnx::prelude::TDim>()?
-                        .iter_mut()
-                        .for_each(|x| *x = x.eval(&symbol_values));
-
-                    op.0 = constant.into_arc_tensor();
-                }
-            }
-        }
 
         Ok((typed_model, symbol_values))
     }
