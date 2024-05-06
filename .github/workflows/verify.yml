@@ -14,18 +14,17 @@ jobs:
   in-browser-evm-ver-publish:
     name: publish-in-browser-evm-verifier-package
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
       - name: Update version in package.json
         shell: bash
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: 'v10.4.2'
         run: |
-          sed -i "s|\"version\": \".*\"|\"version\": \"${{ github.ref_name }}\"|" in-browser-evm-verifier/package.json
+          sed -i "s|\"version\": \".*\"|\"version\": \"v10.4.2\"|" in-browser-evm-verifier/package.json
       - name: Prepare tag and fetch package integrity
         run: |
-          CLEANED_TAG=${{ github.ref_name }} # Get the tag from ref_name
+          CLEANED_TAG='v10.4.2' # Get the tag from ref_name
           CLEANED_TAG="${CLEANED_TAG#v}" # Remove leading 'v'
           echo "CLEANED_TAG=${CLEANED_TAG}" >> $GITHUB_ENV # Set it as an environment variable for later steps
           ENGINE_INTEGRITY=$(npm view @ezkljs/engine@$CLEANED_TAG dist.integrity)
@@ -33,7 +32,7 @@ jobs:
       - name: Update @ezkljs/engine version in package.json
         shell: bash
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: 'v10.4.2'
         run: |
           sed -i "s|\"@ezkljs/engine\": \".*\"|\"@ezkljs/engine\": \"$CLEANED_TAG\"|" in-browser-evm-verifier/package.json
       - name: Update the engine import in in-browser-evm-verifier to use @ezkljs/engine package instead of the local one;
