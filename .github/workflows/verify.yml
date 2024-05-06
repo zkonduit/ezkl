@@ -7,7 +7,6 @@ on:
         description: "The tag to release"
         required: true
   push:
-    branches: ["test-on-fork"]
     tags:
       - "*"
 
