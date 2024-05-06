@@ -5,7 +5,7 @@ on:
     branches: ["main"]
   push:
     tags:
-      - 'v10.200.2' 
+      - 'v10.4.2' 
 
 defaults:
   run:
