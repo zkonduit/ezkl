@@ -5,7 +5,7 @@ on:
     branches: ["main"]
   push:
     tags:
-      - 'v10.200.2' 
+      - v10.200.2 
 
 defaults:
   run:
@@ -14,7 +14,6 @@ jobs:
   in-browser-evm-ver-publish:
     name: publish-in-browser-evm-verifier-package
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
       - name: Update version in package.json
