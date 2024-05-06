@@ -62,11 +62,6 @@ jobs:
           cd in-browser-evm-verifier
           pnpm install --frozen-lockfile
           pnpm run build
+          pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        
-      - name: Archive in-browser-evm-verifier directory
-        uses: actions/upload-artifact@v3
-        with:
-          name: in-browser-evm-verifier-archive
-          path: in-browser-evm-verifier/
