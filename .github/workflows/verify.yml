@@ -1,14 +1,11 @@
 name: Build and Publish EZKL npm packages (wasm bindings and in-browser evm verifier)
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "The tag to release"
-        required: true
+  pull_request:
+    branches: ["main"]
   push:
     tags:
-      - "*"
+      - 'v10.200.2' 
 
 defaults:
   run:
@@ -63,5 +60,6 @@ jobs:
           cd in-browser-evm-verifier
           pnpm install --frozen-lockfile
           pnpm run build
+          pnpm publish 
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
