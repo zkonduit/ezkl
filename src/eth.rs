@@ -207,8 +207,7 @@ pub type EthersClient = Arc<
     >,
 >;
 
-pub type ContractFactory<M: 'static + Provider<Http<Client>, Ethereum>> =
-    CallBuilder<Http<Client>, Arc<M>, ()>;
+pub type ContractFactory<M> = CallBuilder<Http<Client>, Arc<M>, ()>;
 
 /// Return an instance of Anvil and a client for the given RPC URL. If none is provided, a local client is used.
 #[cfg(not(target_arch = "wasm32"))]
@@ -269,13 +268,12 @@ pub async fn deploy_contract_via_solidity(
     contract_name: &str,
 ) -> Result<H160, Box<dyn Error>> {
     // anvil instance must be alive at least until the factory completes the deploy
-    let (anvil, client, _) = setup_eth_backend(rpc_url, private_key).await?;
+    let (_anvil, client, _) = setup_eth_backend(rpc_url, private_key).await?;
 
-    let (abi, bytecode, runtime_bytecode) =
+    let (_, bytecode, runtime_bytecode) =
         get_contract_artifacts(sol_code_path, contract_name, runs)?;
 
-    let factory =
-        get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone(), None::<()>);
+    let factory = get_sol_contract_factory(bytecode, runtime_bytecode, client.clone(), None::<()>);
     let contract = factory.deploy().await?;
 
     Ok(contract)
@@ -378,11 +376,10 @@ pub async fn deploy_da_verifier_via_solidity(
         return Err("Data source for either input_data or output_data must be OnChain".into());
     };
 
-    let (abi, bytecode, runtime_bytecode) =
+    let (_, bytecode, runtime_bytecode) =
         get_contract_artifacts(sol_code_path, "DataAttestation", runs)?;
 
     let factory = get_sol_contract_factory(
-        abi,
         bytecode,
         runtime_bytecode,
         client.clone(),
@@ -410,11 +407,7 @@ pub async fn deploy_da_verifier_via_solidity(
                 decimals
                     .iter()
                     .map(|ints| {
-                        DynSeqToken(
-                            ints.into_iter()
-                                .map(|i| WordToken(B256::from(i)))
-                                .collect_vec(),
-                        )
+                        DynSeqToken(ints.iter().map(|i| WordToken(B256::from(*i))).collect_vec())
                     })
                     .collect::<Vec<_>>(),
             ),
@@ -493,7 +486,7 @@ pub async fn update_account_calls(
 
     let contract = DataAttestation::new(addr, client.clone());
 
-    contract
+    let _ = contract
         .updateAccountCalls(
             contract_addresses.clone(),
             call_data.clone(),
@@ -542,7 +535,7 @@ pub async fn verify_proof_via_solidity(
     let encoded: TransactionInput = encoded.into();
 
     let (_anvil, client, _) = setup_eth_backend(rpc_url, None).await?;
-    let tx = TransactionRequest::default().to(addr).input(encoded).into();
+    let tx = TransactionRequest::default().to(addr).input(encoded);
     debug!("transaction {:#?}", tx);
 
     let result = client.call(&tx).await;
@@ -602,7 +595,9 @@ pub async fn setup_test_contract<M: 'static + Provider<Http<Client>, Ethereum>>(
             let input = input.to_float() as f32;
             let decimal_places = count_decimal_places(input) as u8;
             let scaled_by_decimals = input * f32::powf(10., decimal_places.into());
-            scaled_by_decimals_data.push(I256::from(scaled_by_decimals as i64));
+            scaled_by_decimals_data.push(I256::from_dec_str(
+                &(scaled_by_decimals as i32).to_string(),
+            )?);
             decimals.push(decimal_places);
         } else if input.is_field() {
             let input = input.to_field(0);
@@ -684,10 +679,7 @@ pub async fn verify_proof_with_data_attestation(
     let encoded: TransactionInput = encoded.into();
 
     let (_anvil, client, _) = setup_eth_backend(rpc_url, None).await?;
-    let tx = TransactionRequest::default()
-        .to(addr_da)
-        .input(encoded)
-        .into();
+    let tx = TransactionRequest::default().to(addr_da).input(encoded);
     debug!("transaction {:#?}", tx);
     info!(
         "estimated verify gas cost: {:#?}",
@@ -724,7 +716,7 @@ pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
         let builder = contract.arr(U256::from(i));
         let call = builder.calldata();
         // Push (call, decimals) to the calldata vector.
-        calldata.push((hex::encode(&call), decimals[i]));
+        calldata.push((hex::encode(call), decimals[i]));
     }
     // Instantiate a new CallsToAccount struct
     let calls_to_account = CallsToAccount {
@@ -757,8 +749,7 @@ pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>
             let tx = TransactionRequest::default()
                 .to(contract_address)
                 .from(address)
-                .input(input)
-                .into();
+                .input(input);
             debug!("transaction {:#?}", tx);
 
             let result = client.call(&tx).await?;
@@ -841,7 +832,6 @@ pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
 
 /// Generates the contract factory for a solidity verifier, optionally compiling the code with optimizer runs set on the Solc compiler.
 fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T: TokenSeq<'a>>(
-    abi: JsonAbi,
     bytecode: Bytes,
     runtime_bytecode: Bytes,
     client: Arc<M>,
@@ -894,7 +884,7 @@ pub fn get_contract_artifacts(
         }
         input
     };
-    let compiled = Solc::new(&PathBuf::from("."))?.compile(&input)?;
+    let compiled = Solc::new(PathBuf::from("."))?.compile(&input)?;
 
     let (abi, bytecode, runtime_bytecode) = match compiled.find(contract_name) {
         Some(c) => c.into_parts_or_default(),
