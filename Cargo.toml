@@ -50,10 +50,13 @@ metal = { git = "https://github.com/gfx-rs/metal-rs", optional = true }
 ethers = { version = "2.0.11", default_features = false, features = [
     "ethers-solc",
 ] }
+alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", features = ["provider-http", "signers", "contract", "rpc-types-eth", "signer-wallet", "node-bindings"] }
+foundry-compilers = "0.4.0"
+ethabi = "18"
 indicatif = { version = "0.17.5", features = ["rayon"] }
 gag = { version = "1.0.0", default_features = false }
 instant = { version = "0.1" }
-reqwest = { version = "0.11.14", default-features = false, features = [
+reqwest = { version = "0.12.4", default-features = false, features = [
     "default-tls",
     "multipart",
     "stream",

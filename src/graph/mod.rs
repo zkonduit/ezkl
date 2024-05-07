@@ -1034,8 +1034,8 @@ impl GraphCircuit {
         scales: Vec<crate::Scale>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
-        let (_, client) = setup_eth_backend(Some(&source.rpc), None).await?;
-        let inputs = read_on_chain_inputs(client.clone(), client.address(), &source.calls).await?;
+        let (_, client, client_address) = setup_eth_backend(Some(&source.rpc), None).await?;
+        let inputs = read_on_chain_inputs(client.clone(), client_address, &source.calls).await?;
         // quantize the supplied data using the provided scale + QuantizeData.sol
         let quantized_evm_inputs = evm_quantize(client, scales, &inputs).await?;
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector

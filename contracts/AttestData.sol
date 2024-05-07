@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-import './LoadInstances.sol';
+import "./LoadInstances.sol";
 
 // This contract serves as a Data Attestation Verifier for the EZKL model.
 // It is designed to read and attest to instances of proofs generated from a specified circuit.
@@ -34,11 +34,14 @@ contract DataAttestation is LoadInstances {
     address public admin;
 
     /**
-     * @notice EZKL P value 
+     * @notice EZKL P value
      * @dev In order to prevent the verifier from accepting two version of the same pubInput, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
      * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
      */
-    uint256 constant ORDER = uint256(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001); 
+    uint256 constant ORDER =
+        uint256(
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
+        );
 
     uint256 constant INPUT_CALLS = 0;
 
@@ -69,7 +72,7 @@ contract DataAttestation is LoadInstances {
 
     function updateAdmin(address _admin) external {
         require(msg.sender == admin, "Only admin can update admin");
-        if(_admin == address(0)) {
+        if (_admin == address(0)) {
             revert();
         }
         admin = _admin;
@@ -111,7 +114,10 @@ contract DataAttestation is LoadInstances {
             // count the total number of storage reads across all of the accounts
             counter += _callData[i].length;
         }
-        require(counter == INPUT_CALLS + OUTPUT_CALLS, "Invalid number of calls");
+        require(
+            counter == INPUT_CALLS + OUTPUT_CALLS,
+            "Invalid number of calls"
+        );
     }
 
     function mulDiv(
@@ -167,7 +173,7 @@ contract DataAttestation is LoadInstances {
      * @dev Quantize the data returned from the account calls to the scale used by the EZKL model.
      * @param data - The data returned from the account calls.
      * @param decimals - The number of decimals the data returned from the account calls has (for floating point representation).
-     * @param scale - The scale used to convert the floating point value into a fixed point value. 
+     * @param scale - The scale used to convert the floating point value into a fixed point value.
      */
     function quantizeData(
         bytes memory data,
@@ -181,7 +187,7 @@ contract DataAttestation is LoadInstances {
         if (mulmod(uint256(x), scale, decimals) * 2 >= decimals) {
             output += 1;
         }
-        quantized_data = neg ? -int256(output): int256(output);
+        quantized_data = neg ? -int256(output) : int256(output);
     }
     /**
      * @dev Make a static call to the account to fetch the data that EZKL reads from.
@@ -211,7 +217,9 @@ contract DataAttestation is LoadInstances {
      * @param x - The quantized data.
      * @return field_element - The field element.
      */
-    function toFieldElement(int256 x) internal pure returns (uint256 field_element) {
+    function toFieldElement(
+        int256 x
+    ) internal pure returns (uint256 field_element) {
         // The casting down to uint256 is safe because the order is about 2^254, and the value
         // of x ranges of -2^127 to 2^127, so x + int(ORDER) is always positive.
         return uint256(x + int(ORDER)) % ORDER;
@@ -251,12 +259,11 @@ contract DataAttestation is LoadInstances {
         }
     }
 
-
     function verifyWithDataAttestation(
         address verifier,
         bytes calldata encoded
     ) public view returns (bool) {
-        require(verifier.code.length > 0,"Address: call to non-contract");
+        require(verifier.code.length > 0, "Address: call to non-contract");
         attestData(getInstancesCalldata(encoded));
         // static call the verifier contract to verify the proof
         (bool success, bytes memory returndata) = verifier.staticcall(encoded);

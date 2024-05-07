@@ -281,9 +281,7 @@ impl OnChainSource {
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
-        let (anvil, client) = crate::eth::setup_eth_backend(rpc, None).await?;
-
-        let address = client.address();
+        let (anvil, client, client_address) = crate::eth::setup_eth_backend(rpc, None).await?;
 
         let mut scales = scales;
         // set scales to 1 where data is a field element
@@ -296,7 +294,8 @@ impl OnChainSource {
 
         let calls_to_accounts = test_on_chain_data(client.clone(), data).await?;
         debug!("Calls to accounts: {:?}", calls_to_accounts);
-        let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
+        let inputs =
+            read_on_chain_inputs(client.clone(), client_address, &calls_to_accounts).await?;
         debug!("Inputs: {:?}", inputs);
 
         let mut quantized_evm_inputs = vec![];
