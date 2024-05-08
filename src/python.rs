@@ -1467,18 +1467,20 @@ fn create_evm_verifier(
     srs_path: Option<PathBuf>,
     render_vk_seperately: bool,
 ) -> Result<bool, PyErr> {
-    crate::execute::create_evm_verifier(
-        vk_path,
-        srs_path,
-        settings_path,
-        sol_code_path,
-        abi_path,
-        render_vk_seperately,
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to run create_evm_verifier: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+    Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::create_evm_verifier(
+            vk_path,
+            srs_path,
+            settings_path,
+            sol_code_path,
+            abi_path,
+            render_vk_seperately,
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to run create_evm_verifier: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
     Ok(true)
 }
@@ -1515,7 +1517,14 @@ fn create_evm_data_attestation(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    crate::execute::create_evm_data_attestation(settings_path, sol_code_path, abi_path, input_data)
+    Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::create_evm_data_attestation(
+            settings_path,
+            sol_code_path,
+            abi_path,
+            input_data,
+        ))
         .map_err(|e| {
             let err_str = format!("Failed to run create_evm_data_attestation: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -1801,19 +1810,21 @@ fn create_evm_verifier_aggr(
     srs_path: Option<PathBuf>,
     render_vk_seperately: bool,
 ) -> Result<bool, PyErr> {
-    crate::execute::create_evm_aggregate_verifier(
-        vk_path,
-        srs_path,
-        sol_code_path,
-        abi_path,
-        aggregation_settings,
-        logrows,
-        render_vk_seperately,
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+    Runtime::new()
+        .unwrap()
+        .block_on(crate::execute::create_evm_aggregate_verifier(
+            vk_path,
+            srs_path,
+            sol_code_path,
+            abi_path,
+            aggregation_settings,
+            logrows,
+            render_vk_seperately,
+        ))
+        .map_err(|e| {
+            let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
     Ok(true)
 }
 

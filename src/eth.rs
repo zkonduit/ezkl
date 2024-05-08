@@ -17,7 +17,9 @@ use alloy::prelude::Wallet;
 use alloy::json_abi::JsonAbi;
 use alloy::node_bindings::Anvil;
 use alloy::primitives::{B256, I256};
-use alloy::providers::fillers::{FillProvider, JoinFill, SignerFiller};
+use alloy::providers::fillers::{
+    ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller,
+};
 use alloy::providers::network::{Ethereum, EthereumSigner};
 use alloy::providers::{Identity, Provider, RootProvider};
 use alloy::rpc::types::eth::BlockId;
@@ -27,6 +29,7 @@ use alloy::signers::wallet::LocalWallet;
 use alloy::sol as abigen;
 use alloy::transports::http::Http;
 use alloy::{node_bindings::AnvilInstance, providers::ProviderBuilder};
+use foundry_compilers::artifacts::Settings as SolcSettings;
 use foundry_compilers::Solc;
 use halo2_solidity_verifier::encode_calldata;
 use halo2curves::bn256::{Fr, G1Affine};
@@ -200,7 +203,10 @@ const LOADINSTANCES_SOL: &str = include_str!("../contracts/LoadInstances.sol");
 
 pub type EthersClient = Arc<
     FillProvider<
-        JoinFill<Identity, SignerFiller<EthereumSigner>>,
+        JoinFill<
+            JoinFill<JoinFill<JoinFill<Identity, GasFiller>, NonceFiller>, ChainIdFiller>,
+            SignerFiller<EthereumSigner>,
+        >,
         RootProvider<Http<Client>>,
         Http<Client>,
         Ethereum,
@@ -249,6 +255,7 @@ pub async fn setup_eth_backend(
     // Connect to the network
     let client = Arc::new(
         ProviderBuilder::new()
+            .with_recommended_fillers()
             .signer(EthereumSigner::from(wallet))
             .on_http(endpoint.parse()?),
     );
@@ -270,10 +277,11 @@ pub async fn deploy_contract_via_solidity(
     // anvil instance must be alive at least until the factory completes the deploy
     let (_anvil, client, _) = setup_eth_backend(rpc_url, private_key).await?;
 
-    let (_, bytecode, runtime_bytecode) =
+    let (abi, bytecode, runtime_bytecode) =
         get_contract_artifacts(sol_code_path, contract_name, runs).await?;
 
-    let factory = get_sol_contract_factory(bytecode, runtime_bytecode, client.clone(), None::<()>);
+    let factory =
+        get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone(), None::<()>)?;
     let contract = factory.deploy().await?;
 
     Ok(contract)
@@ -376,10 +384,11 @@ pub async fn deploy_da_verifier_via_solidity(
         return Err("Data source for either input_data or output_data must be OnChain".into());
     };
 
-    let (_, bytecode, runtime_bytecode) =
+    let (abi, bytecode, runtime_bytecode) =
         get_contract_artifacts(sol_code_path, "DataAttestation", runs).await?;
 
     let factory = get_sol_contract_factory(
+        abi,
         bytecode,
         runtime_bytecode,
         client.clone(),
@@ -420,7 +429,7 @@ pub async fn deploy_da_verifier_via_solidity(
             WordToken(U256::from(contract_instance_offset as u32).into()),
             WordToken(client_address.into_word()),
         )),
-    );
+    )?;
 
     debug!("call_data: {:#?}", call_data);
     info!("contract_addresses: {:#?}", contract_addresses);
@@ -532,10 +541,10 @@ pub async fn verify_proof_via_solidity(
 
     debug!("encoded: {:#?}", hex::encode(&encoded));
 
-    let encoded: TransactionInput = encoded.into();
+    let input: TransactionInput = encoded.into();
 
     let (_anvil, client, _) = setup_eth_backend(rpc_url, None).await?;
-    let tx = TransactionRequest::default().to(addr).input(encoded);
+    let tx = TransactionRequest::default().to(addr).input(input);
     debug!("transaction {:#?}", tx);
 
     let result = client.call(&tx).await;
@@ -815,28 +824,14 @@ pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
     Ok(results.to_vec())
 }
 
-// /// Constructs the deployment transaction based on the provided constructor
-/// arguments and returns a `Deployer` instance. You must call `send()` in order
-/// to actually deploy the contract.
-///
-/// Notes:
-/// 1. If there are no constructor arguments, you should pass `()` as the argument.
-/// 1. The default poll duration is 7 seconds.
-/// 1. The default number of confirmations is 1 block.
-// pub fn deploy<T: Tokenize>(
-//     self,
-//     constructor_args: T,
-// ) -> Result<Deployer<B, M>, ContractError<M>> {
-//     self.deploy_tokens(constructor_args.into_tokens())
-// }
-
 /// Generates the contract factory for a solidity verifier, optionally compiling the code with optimizer runs set on the Solc compiler.
 fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T: TokenSeq<'a>>(
+    abi: JsonAbi,
     bytecode: Bytes,
     runtime_bytecode: Bytes,
     client: Arc<M>,
     params: Option<T>,
-) -> ContractFactory<M> {
+) -> Result<ContractFactory<M>, Box<dyn Error>> {
     const MAX_RUNTIME_BYTECODE_SIZE: usize = 24577;
     let size = runtime_bytecode.len();
     debug!("runtime bytecode size: {:#?}", size);
@@ -851,16 +846,24 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
         );
     }
 
-    let mut data = bytecode.to_vec();
+    // Encode the constructor args & concatenate with the bytecode if necessary
+    let data: Bytes = match (abi.constructor(), params.is_none()) {
+        (None, false) => {
+            return Err("Constructor arguments provided but no constructor found".into())
+        }
+        (None, true) => bytecode.clone(),
+        (Some(_), _) => {
+            let mut data = bytecode.to_vec();
 
-    if let Some(params) = params {
-        let params = alloy::sol_types::abi::encode_sequence(&params);
-        data.extend(params);
-    }
+            if let Some(params) = params {
+                let params = alloy::sol_types::abi::encode_sequence(&params);
+                data.extend(params);
+            }
+            data.into()
+        }
+    };
 
-    let data = Bytes::from(data);
-
-    CallBuilder::new_raw_deploy(client.clone(), data)
+    Ok(CallBuilder::new_raw_deploy(client.clone(), data))
 }
 
 /// Compiles a solidity verifier contract and returns the abi, bytecode, and runtime bytecode
@@ -870,26 +873,32 @@ pub async fn get_contract_artifacts(
     contract_name: &str,
     runs: usize,
 ) -> Result<(JsonAbi, Bytes, Bytes), Box<dyn Error>> {
-    use foundry_compilers::{compilers::CompilerInput, SolcInput, SHANGHAI_SOLC};
+    use foundry_compilers::{
+        artifacts::{output_selection::OutputSelection, Optimizer},
+        compilers::CompilerInput,
+        SolcInput, SHANGHAI_SOLC,
+    };
 
     if !sol_code_path.exists() {
         return Err("sol_code_path does not exist".into());
     }
 
-    let mut input = SolcInput::build(
+    let mut settings = SolcSettings::default();
+    settings.optimizer = Optimizer {
+        enabled: Some(true),
+        runs: Some(runs),
+        details: None,
+    };
+    settings.output_selection = OutputSelection::default_output_selection();
+
+    let input = SolcInput::build(
         std::collections::BTreeMap::from([(
             sol_code_path.clone(),
             foundry_compilers::artifacts::Source::read(sol_code_path)?,
         )]),
-        Default::default(),
+        settings,
         &SHANGHAI_SOLC,
     );
-
-    if runs > 0 {
-        for i in input.iter_mut() {
-            *i = i.clone().optimizer(runs);
-        }
-    }
 
     let solc_opt = Solc::find_svm_installed_version(&SHANGHAI_SOLC.to_string())?;
     let solc = match solc_opt {
@@ -900,7 +909,7 @@ pub async fn get_contract_artifacts(
         }
     };
 
-    let compiled = solc.compile(&input[0])?;
+    let compiled: foundry_compilers::CompilerOutput = solc.compile(&input[0])?;
 
     let (abi, bytecode, runtime_bytecode) = match compiled.find(contract_name) {
         Some(c) => c.into_parts_or_default(),
@@ -908,6 +917,7 @@ pub async fn get_contract_artifacts(
             return Err("could not find contract".into());
         }
     };
+
     Ok((abi, bytecode, runtime_bytecode))
 }
 
