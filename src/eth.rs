@@ -870,20 +870,26 @@ pub async fn get_contract_artifacts(
     contract_name: &str,
     runs: usize,
 ) -> Result<(JsonAbi, Bytes, Bytes), Box<dyn Error>> {
-    use foundry_compilers::{SolcInput, SHANGHAI_SOLC};
+    use foundry_compilers::{compilers::CompilerInput, SolcInput, SHANGHAI_SOLC};
 
     if !sol_code_path.exists() {
         return Err("sol_code_path does not exist".into());
     }
-    // Create the compiler input, enabling the optimizer and setting the optimzer runs.
-    let input: SolcInput = {
-        let mut input = SolcInput::default();
-        input = input.join_path(sol_code_path);
-        if runs > 0 {
-            input = input.optimizer(runs);
+
+    let mut input = SolcInput::build(
+        std::collections::BTreeMap::from([(
+            sol_code_path.clone(),
+            foundry_compilers::artifacts::Source::read(sol_code_path)?,
+        )]),
+        Default::default(),
+        &SHANGHAI_SOLC,
+    );
+
+    if runs > 0 {
+        for i in input.iter_mut() {
+            *i = i.clone().optimizer(runs);
         }
-        input
-    };
+    }
 
     let solc_opt = Solc::find_svm_installed_version(&SHANGHAI_SOLC.to_string())?;
     let solc = match solc_opt {
@@ -894,7 +900,7 @@ pub async fn get_contract_artifacts(
         }
     };
 
-    let compiled = solc.compile(&input)?;
+    let compiled = solc.compile(&input[0])?;
 
     let (abi, bytecode, runtime_bytecode) = match compiled.find(contract_name) {
         Some(c) => c.into_parts_or_default(),
