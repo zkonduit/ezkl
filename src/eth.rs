@@ -885,8 +885,16 @@ pub async fn get_contract_artifacts(
         input
     };
 
-    info!("installing required solc version if missing");
-    let compiled = Solc::install(&SHANGHAI_SOLC).await?.compile(&input)?;
+    let solc_opt = Solc::find_svm_installed_version(&SHANGHAI_SOLC.to_string())?;
+    let solc = match solc_opt {
+        Some(solc) => solc,
+        None => {
+            info!("required solc version is missing ... installing");
+            Solc::install(&SHANGHAI_SOLC).await?
+        }
+    };
+
+    let compiled = solc.compile(&input)?;
 
     let (abi, bytecode, runtime_bytecode) = match compiled.find(contract_name) {
         Some(c) => c.into_parts_or_default(),
