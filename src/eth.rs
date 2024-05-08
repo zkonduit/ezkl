@@ -271,7 +271,7 @@ pub async fn deploy_contract_via_solidity(
     let (_anvil, client, _) = setup_eth_backend(rpc_url, private_key).await?;
 
     let (_, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, contract_name, runs)?;
+        get_contract_artifacts(sol_code_path, contract_name, runs).await?;
 
     let factory = get_sol_contract_factory(bytecode, runtime_bytecode, client.clone(), None::<()>);
     let contract = factory.deploy().await?;
@@ -377,7 +377,7 @@ pub async fn deploy_da_verifier_via_solidity(
     };
 
     let (_, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestation", runs)?;
+        get_contract_artifacts(sol_code_path, "DataAttestation", runs).await?;
 
     let factory = get_sol_contract_factory(
         bytecode,
@@ -865,12 +865,12 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
 
 /// Compiles a solidity verifier contract and returns the abi, bytecode, and runtime bytecode
 #[cfg(not(target_arch = "wasm32"))]
-pub fn get_contract_artifacts(
+pub async fn get_contract_artifacts(
     sol_code_path: PathBuf,
     contract_name: &str,
     runs: usize,
 ) -> Result<(JsonAbi, Bytes, Bytes), Box<dyn Error>> {
-    use foundry_compilers::SolcInput;
+    use foundry_compilers::{SolcInput, SHANGHAI_SOLC};
 
     if !sol_code_path.exists() {
         return Err("sol_code_path does not exist".into());
@@ -884,7 +884,9 @@ pub fn get_contract_artifacts(
         }
         input
     };
-    let compiled = Solc::new(PathBuf::from("."))?.compile(&input)?;
+
+    info!("installing required solc version if missing");
+    let compiled = Solc::install(&SHANGHAI_SOLC).await?.compile(&input)?;
 
     let (abi, bytecode, runtime_bytecode) = match compiled.find(contract_name) {
         Some(c) => c.into_parts_or_default(),

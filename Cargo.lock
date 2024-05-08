@@ -1086,6 +1086,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "build_const"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4ae4235e6dac0694637c763029ecea1a2ec9e4e06ec2729bd21ba4d9c863eb7"
+
+[[package]]
 name = "bumpalo"
 version = "3.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2055,9 +2061,12 @@ dependencies = [
  "semver 1.0.22",
  "serde",
  "serde_json",
+ "sha2",
  "solang-parser",
  "svm-rs",
+ "svm-rs-builds",
  "thiserror",
+ "tokio",
  "tracing",
  "walkdir",
  "yansi 1.0.1",
@@ -4201,6 +4210,7 @@ checksum = "566cafdd92868e0939d3fb961bd0dc25fcfaaed179291093b3d43e6b3150ea10"
 dependencies = [
  "base64 0.22.1",
  "bytes",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "http",
@@ -4966,6 +4976,19 @@ dependencies = [
  "thiserror",
  "url",
  "zip",
+]
+
+[[package]]
+name = "svm-rs-builds"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1bb4806c96207e7cde40fc238f9a1d570f3090f850a742e1e96665440615a31"
+dependencies = [
+ "build_const",
+ "const-hex",
+ "semver 1.0.22",
+ "serde_json",
+ "svm-rs",
 ]
 
 [[package]]
