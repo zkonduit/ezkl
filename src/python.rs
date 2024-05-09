@@ -1514,7 +1514,7 @@ fn create_evm_data_attestation(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-) -> Result<bool, PyErr> {
+) -> PyResult<Bound<'_, PyAny>> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
         crate::execute::create_evm_data_attestation(
             settings_path,
