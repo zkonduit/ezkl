@@ -957,7 +957,7 @@ fn gen_witness(
                 let err_str = format!("Failed to generate witness: {}", e);
                 PyRuntimeError::new_err(err_str)
             })?;
-        Ok(output)
+        Python::with_gil(|py| Ok(output.to_object(py)))
     })
 }
 
