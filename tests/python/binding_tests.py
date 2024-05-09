@@ -470,7 +470,7 @@ async def test_deploy_evm_with_private_key():
         )
 
 
-def test_verify_evm():
+async def test_verify_evm():
     """
     Verifies an evm proof
     In order to run this you will need to install solc in your environment
