@@ -393,9 +393,7 @@ def test_prove_evm():
     assert os.path.isfile(proof_path)
 
 
-
-
-def test_create_evm_verifier():
+async def test_create_evm_verifier():
     """
     Create EVM verifier with solidity code
     In order to run this test you will need to install solc in your environment
