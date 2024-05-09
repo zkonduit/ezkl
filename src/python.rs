@@ -951,7 +951,12 @@ fn gen_witness(
     srs_path: Option<PathBuf>,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
-        let output = crate::execute::gen_witness(model, data, output, vk_path, srs_path).await?;
+        let output = crate::execute::gen_witness(model, data, output, vk_path, srs_path)
+            .await
+            .map_err(|e| {
+                let err_str = format!("Failed to generate witness: {}", e);
+                PyRuntimeError::new_err(err_str)
+            })?;
         Ok(output)
     })
 }
