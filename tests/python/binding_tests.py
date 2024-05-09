@@ -405,7 +405,7 @@ def test_create_evm_verifier():
     sol_code_path = os.path.join(folder_path, 'test.sol')
     abi_path = os.path.join(folder_path, 'test.abi')
 
-    res = ezkl.create_evm_verifier(
+    res = await ezkl.create_evm_verifier(
         vk_path,
         settings_path,
         sol_code_path,
@@ -698,7 +698,7 @@ async def test_evm_aggregate_and_verify_aggr():
     sol_code_path = os.path.join(folder_path, 'aggr_evm_1l_relu.sol')
     abi_path = os.path.join(folder_path, 'aggr_evm_1l_relu.abi')
 
-    res = ezkl.create_evm_verifier_aggr(
+    res = await ezkl.create_evm_verifier_aggr(
         [settings_path],
         aggregate_vk_path,
         sol_code_path,

@@ -1463,21 +1463,24 @@ fn create_evm_verifier(
     abi_path: PathBuf,
     srs_path: Option<PathBuf>,
     render_vk_seperately: bool,
-) -> Result<bool, PyErr> {
-    crate::execute::create_evm_verifier(
-        vk_path,
-        srs_path,
-        settings_path,
-        sol_code_path,
-        abi_path,
-        render_vk_seperately,
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to run create_evm_verifier: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::create_evm_verifier(
+            vk_path,
+            srs_path,
+            settings_path,
+            sol_code_path,
+            abi_path,
+            render_vk_seperately,
+        )
+        .await
+        .map_err(|e| {
+            let err_str = format!("Failed to run create_evm_verifier: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
-    Ok(true)
+        Ok(true)
+    })
 }
 
 /// Creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
@@ -1512,13 +1515,21 @@ fn create_evm_data_attestation(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    crate::execute::create_evm_data_attestation(settings_path, sol_code_path, abi_path, input_data)
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::create_evm_data_attestation(
+            settings_path,
+            sol_code_path,
+            abi_path,
+            input_data,
+        )
+        .await
         .map_err(|e| {
             let err_str = format!("Failed to run create_evm_data_attestation: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
 
-    Ok(true)
+        Ok(true)
+    })
 }
 
 /// Setup test evm witness
@@ -1801,21 +1812,25 @@ fn create_evm_verifier_aggr(
     logrows: u32,
     srs_path: Option<PathBuf>,
     render_vk_seperately: bool,
-) -> Result<bool, PyErr> {
-    crate::execute::create_evm_aggregate_verifier(
-        vk_path,
-        srs_path,
-        sol_code_path,
-        abi_path,
-        aggregation_settings,
-        logrows,
-        render_vk_seperately,
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
-    Ok(true)
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::create_evm_aggregate_verifier(
+            vk_path,
+            srs_path,
+            sol_code_path,
+            abi_path,
+            aggregation_settings,
+            logrows,
+            render_vk_seperately,
+        )
+        .await
+        .map_err(|e| {
+            let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+
+        Ok(true)
+    })
 }
 
 // Python Module

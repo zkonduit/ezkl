@@ -287,7 +287,7 @@ pub async fn deploy_contract_via_solidity(
     let (client, _) = setup_eth_backend(rpc_url, private_key).await?;
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, contract_name, runs)?;
+        get_contract_artifacts(sol_code_path, contract_name, runs).await?;
 
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone(), None::<()>)?;
@@ -395,7 +395,7 @@ pub async fn deploy_da_verifier_via_solidity(
     };
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestation", runs)?;
+        get_contract_artifacts(sol_code_path, "DataAttestation", runs).await?;
 
     let factory = get_sol_contract_factory(
         abi,
@@ -894,7 +894,7 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
 
 /// Compiles a solidity verifier contract and returns the abi, bytecode, and runtime bytecode
 #[cfg(not(target_arch = "wasm32"))]
-pub fn get_contract_artifacts(
+pub async fn get_contract_artifacts(
     sol_code_path: PathBuf,
     contract_name: &str,
     runs: usize,
@@ -931,7 +931,7 @@ pub fn get_contract_artifacts(
         Some(solc) => solc,
         None => {
             info!("required solc version is missing ... installing");
-            Solc::blocking_install(&SHANGHAI_SOLC)?
+            Solc::install(&SHANGHAI_SOLC).await?
         }
     };
 

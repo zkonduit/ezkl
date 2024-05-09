@@ -65,9 +65,9 @@ lazy_static = "1.4.0"
 colored_json = { version = "3.0.1", default_features = false, optional = true }
 plotters = { version = "0.3.0", default_features = false, optional = true }
 regex = { version = "1", default_features = false }
-tokio = { version = "1.26.0", default_features = false, features = [
+tokio = { version = "1.35", default_features = false, features = [
     "macros",
-    "rt",
+    "rt-multi-thread"
 ] }
 tokio-util = { version = "0.7.9", features = ["codec"] }
 pyo3 = { version = "0.21.2", features = [
