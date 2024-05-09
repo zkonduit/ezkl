@@ -486,7 +486,7 @@ def test_verify_evm():
     # TODO: without optimization there will be out of gas errors
     # sol_code_path = os.path.join(folder_path, 'test.sol')
 
-    res = ezkl.verify_evm(
+    res = await ezkl.verify_evm(
         addr,
         proof_path,
         rpc_url=anvil_url,
@@ -730,7 +730,7 @@ async def test_evm_aggregate_and_verify_aggr():
     # with open(addr_path, 'r') as file:
     #     addr_aggr = file.read().rstrip()
 
-    # res = ezkl.verify_evm(
+    # res = await ezkl.verify_evm(
     #     aggregate_proof_path,
     #     addr_aggr,
     #     rpc_url=anvil_url,
