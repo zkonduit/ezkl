@@ -1457,6 +1457,7 @@ fn verify_aggr(
     render_vk_seperately = DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap(),
 ))]
 fn create_evm_verifier(
+    py: Python,
     vk_path: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
@@ -1510,6 +1511,7 @@ fn create_evm_verifier(
     abi_path=PathBuf::from(DEFAULT_VERIFIER_DA_ABI),
 ))]
 fn create_evm_data_attestation(
+    py: Python,
     input_data: PathBuf,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
@@ -1805,6 +1807,7 @@ fn verify_evm<'a>(
     render_vk_seperately = DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap(),
 ))]
 fn create_evm_verifier_aggr(
+    py: Python,
     aggregation_settings: Vec<PathBuf>,
     vk_path: PathBuf,
     sol_code_path: PathBuf,
