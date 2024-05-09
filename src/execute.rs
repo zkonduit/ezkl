@@ -1643,7 +1643,6 @@ pub(crate) async fn setup_test_evm_witness(
 ) -> Result<String, Box<dyn Error>> {
     use crate::graph::TestOnChainData;
 
-    info!("run this command in background to keep the instance running for testing");
     let mut data = GraphData::from_path(data_path)?;
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 

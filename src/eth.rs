@@ -39,6 +39,7 @@ use log::{debug, info, warn};
 use reqwest::Client;
 use std::error::Error;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 // Generate contract bindings OUTSIDE the functions so they are part of library
@@ -63,7 +64,7 @@ abigen!(
 );
 abigen!(
     #[allow(missing_docs)]
-    #[sol(rpc, bytecode="608080604052346100165761065e908161001b8239f35b5f80fdfe6080604052600480361015610012575f80fd5b5f803560e01c80630a7e4b96146101a95763d3dc6d1f14610031575f80fd5b346101a657602090816003193601126101a65782359067ffffffffffffffff82116101a657366023830112156101a6578184013561007661007182610489565b61044f565b928484838152016024809360051b830101913683116101a2578301905b828210610185575050508251926100b86100af61007186610489565b94808652610489565b84860190601f1901368237835b8251811015610143576100d8818461051d565b5160070b7f30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f00000019081810190878383129112908015821691151617610131579061012c929106610126828961051d565b526104fb565b6100c5565b634e487b7160e01b875260118a528587fd5b8587838760405193838594850191818652518092526040850193925b82811061016e57505050500390f35b83518552869550938101939281019260010161015f565b81358060070b810361019e578152908601908601610093565b8580fd5b8480fd5b80fd5b50346101a65760603660031901126101a65781359067ffffffffffffffff80831161044b573660238401121561044b5782840135916101ea61007184610489565b92839481855260208095016024809360051b830101913683116101a257838101915b8383106103d2575050505080358381116103ce5761022d90369088016104a1565b926044359081116103ce5761024590369088016104a1565b9585519461026161025861007188610489565b96808852610489565b8682019790601f1901368937845b815181101561038c57610282818361051d565b5183818051810103126103885783015186811280610378575b6102a5838a61051d565b51604d81116103665790839291600a0a8d6102c3600196879261051d565b511b6102d0828286610555565b938215610354579082910980861b908082046002149015171561034257101561031b575b6103119350156103165761030790610545565b610126828b61051d565b61026f565b610307565b919281018091116103305761031192916102f4565b634e487b7160e01b8852601186528688fd5b634e487b7160e01b8b5260118952898bfd5b634e487b7160e01b8c5260128a528a8cfd5b634e487b7160e01b8952601187528789fd5b9061038290610545565b9061029b565b8680fd5b87838a8860405193838594850191818652518092526040850193925b8281106103b757505050500390f35b8351855286955093810193928101926001016103a8565b8280fd5b823587811161038857820136604382011215610388578581013588811161043957610405601f8201601f19168b0161044f565b9181835260449036828483010111610435578b838196948296948d9401838601378301015281520192019161020c565b8980fd5b634e487b7160e01b885260418c528688fd5b5080fd5b6040519190601f01601f1916820167ffffffffffffffff81118382101761047557604052565b634e487b7160e01b5f52604160045260245ffd5b67ffffffffffffffff81116104755760051b60200190565b9080601f830112156104f7578135906104bc61007183610489565b9182938184526020808095019260051b8201019283116104f7578301905b8282106104e8575050505090565b813581529083019083016104da565b5f80fd5b5f1981146105095760010190565b634e487b7160e01b5f52601160045260245ffd5b80518210156105315760209160051b010190565b634e487b7160e01b5f52603260045260245ffd5b600160ff1b8114610509575f0390565b915f19828409928281029283808610950394808603951461060657848311156105c95782910960018219018216809204600280826003021880830282030280830282030280830282030280830282030280830282030280920290030293600183805f03040190848311900302920304170290565b60405162461bcd60e51b81526020600482015260156024820152744d6174683a206d756c446976206f766572666c6f7760581b6044820152606490fd5b505080925015610614570490565b634e487b7160e01b5f52601260045260245ffdfea2646970667358221220dcf762b43d6e326747a25e0fba385db1c3a47bd2ee3846a15b7917679cb8fe4d64736f6c63430008140033")]
+    #[sol(rpc, bytecode="608060405234801561000f575f80fd5b506108b18061001d5f395ff3fe608060405234801561000f575f80fd5b5060043610610034575f3560e01c80630a7e4b9614610038578063d3dc6d1f14610061575b5f80fd5b61004b61004636600461047c565b610074565b60405161005891906105bc565b60405180910390f35b61004b61006f3660046105ff565b6101e5565b606083516001600160401b0381111561008f5761008f6103ae565b6040519080825280602002602001820160405280156100b8578160200160208202803683370190505b5090505f5b84518110156101dd575f8582815181106100d9576100d9610699565b60200260200101518060200190518101906100f491906106ad565b90505f8112801561010b57610108826106d8565b91505b5f86848151811061011e5761011e610699565b6020026020010151600a61013291906107d4565b90505f86858151811061014757610147610699565b60200260200101516001901b90505f6101618583856102bf565b9050828380610172576101726107df565b8387096101809060026107f3565b106101935761019060018261080a565b90505b8361019e57806101a7565b6101a7816106d8565b8787815181106101b9576101b9610699565b602002602001018181525050505050505080806101d59061081d565b9150506100bd565b509392505050565b606081516001600160401b03811115610200576102006103ae565b604051908082528060200260200182016040528015610229578160200160208202803683370190505b5090505f5b82518110156102b9577f30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f00000018084838151811061026b5761026b610699565b602002602001015160070b6102809190610835565b61028a919061085c565b82828151811061029c5761029c610699565b6020908102919091010152806102b18161081d565b91505061022e565b50919050565b5f80805f19858709858702925082811083820303915050805f036102f6578382816102ec576102ec6107df565b04925050506103a7565b8084116103415760405162461bcd60e51b81526020600482015260156024820152744d6174683a206d756c446976206f766572666c6f7760581b604482015260640160405180910390fd5b5f848688098519600190810187169687900496828603819004959092119093035f82900391909104909201919091029190911760038402600290811880860282030280860282030280860282030280860282030280860282030280860290910302029150505b9392505050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b03811182821017156103ea576103ea6103ae565b604052919050565b5f6001600160401b0382111561040a5761040a6103ae565b5060051b60200190565b5f82601f830112610423575f80fd5b81356020610438610433836103f2565b6103c2565b82815260059290921b84018101918181019086841115610456575f80fd5b8286015b84811015610471578035835291830191830161045a565b509695505050505050565b5f805f6060848603121561048e575f80fd5b83356001600160401b03808211156104a4575f80fd5b818601915086601f8301126104b7575f80fd5b813560206104c7610433836103f2565b82815260059290921b8401810191818101908a8411156104e5575f80fd5b8286015b8481101561056e57803586811115610500575f8081fd5b8701603f81018d13610511575f8081fd5b84810135604088821115610527576105276103ae565b610539601f8301601f191688016103c2565b8281528f8284860101111561054d575f8081fd5b82828501898301375f928101880192909252508452509183019183016104e9565b5097505087013592505080821115610584575f80fd5b61059087838801610414565b935060408601359150808211156105a5575f80fd5b506105b286828701610414565b9150509250925092565b602080825282518282018190525f9190848201906040850190845b818110156105f3578351835292840192918401916001016105d7565b50909695505050505050565b5f6020808385031215610610575f80fd5b82356001600160401b03811115610625575f80fd5b8301601f81018513610635575f80fd5b8035610643610433826103f2565b81815260059190911b82018301908381019087831115610661575f80fd5b928401925b8284101561068e5783358060070b811461067f575f8081fd5b82529284019290840190610666565b979650505050505050565b634e487b7160e01b5f52603260045260245ffd5b5f602082840312156106bd575f80fd5b5051919050565b634e487b7160e01b5f52601160045260245ffd5b5f600160ff1b82016106ec576106ec6106c4565b505f0390565b600181815b8085111561072c57815f1904821115610712576107126106c4565b8085161561071f57918102915b93841c93908002906106f7565b509250929050565b5f82610742575060016107ce565b8161074e57505f6107ce565b8160018114610764576002811461076e5761078a565b60019150506107ce565b60ff84111561077f5761077f6106c4565b50506001821b6107ce565b5060208310610133831016604e8410600b84101617156107ad575081810a6107ce565b6107b783836106f2565b805f19048211156107ca576107ca6106c4565b0290505b92915050565b5f6103a78383610734565b634e487b7160e01b5f52601260045260245ffd5b80820281158282048414176107ce576107ce6106c4565b808201808211156107ce576107ce6106c4565b5f6001820161082e5761082e6106c4565b5060010190565b8082018281125f831280158216821582161715610854576108546106c4565b505092915050565b5f8261087657634e487b7160e01b5f52601260045260245ffd5b50069056fea26469706673582212200b8a0a357f7d2a8895754f5b26e714ec153b59420bdab2d0ad696eb17a0f235164736f6c63430008140033")]
     contract QuantizeData {
         /**
          * @notice EZKL P value
@@ -187,7 +188,7 @@ abigen!(
         }
 
         function to_field_element(
-            int256[] memory quantized_data
+            int64[] memory quantized_data
         ) public pure returns (uint256[] memory output) {
             output = new uint256[](quantized_data.length);
             for (uint i; i < quantized_data.length; i++) {
@@ -199,7 +200,6 @@ abigen!(
 
 // we have to generate these two contract differently because they are generated dynamically ! and hence the static compilation from above does not suit
 const ATTESTDATA_SOL: &str = include_str!("../contracts/AttestData.sol");
-const LOADINSTANCES_SOL: &str = include_str!("../contracts/LoadInstances.sol");
 
 pub type EthersClient = Arc<
     FillProvider<
@@ -297,6 +297,7 @@ pub async fn deploy_da_verifier_via_solidity(
     private_key: Option<&str>,
 ) -> Result<H160, Box<dyn Error>> {
     let (_anvil, client, client_address) = setup_eth_backend(rpc_url, private_key).await?;
+    println!("client_address: {:?}", client_address);
 
     let input = GraphData::from_path(input)?;
 
@@ -393,12 +394,14 @@ pub async fn deploy_da_verifier_via_solidity(
         runtime_bytecode,
         client.clone(),
         Some((
+            // address[] memory _contractAddresses,
             DynSeqToken(
                 contract_addresses
                     .iter()
                     .map(|ca| WordToken(ca.into_word()))
                     .collect_vec(),
             ),
+            // bytes[][] memory _callData,
             DynSeqToken(
                 call_data
                     .iter()
@@ -412,6 +415,7 @@ pub async fn deploy_da_verifier_via_solidity(
                     })
                     .collect::<Vec<_>>(),
             ),
+            // uint256[][] memory _decimals,
             DynSeqToken(
                 decimals
                     .iter()
@@ -420,20 +424,23 @@ pub async fn deploy_da_verifier_via_solidity(
                     })
                     .collect::<Vec<_>>(),
             ),
+            // uint[] memory _scales,
             DynSeqToken(
                 scales
                     .into_iter()
                     .map(|i| WordToken(U256::from(i).into()))
                     .collect_vec(),
             ),
+            //  uint8 _instanceOffset,
             WordToken(U256::from(contract_instance_offset as u32).into()),
+            //address _admin
             WordToken(client_address.into_word()),
         )),
     )?;
 
     debug!("call_data: {:#?}", call_data);
-    info!("contract_addresses: {:#?}", contract_addresses);
-    info!("decimals: {:#?}", decimals);
+    debug!("contract_addresses: {:#?}", contract_addresses);
+    debug!("decimals: {:#?}", decimals);
 
     let contract = factory.deploy().await?;
 
@@ -491,9 +498,13 @@ pub async fn update_account_calls(
         return Err("Data source for either input_data or output_data must be OnChain".into());
     };
 
-    let (_anvil, client, _) = setup_eth_backend(rpc_url, None).await?;
+    let (_anvil, client, client_address) = setup_eth_backend(rpc_url, None).await?;
+
+    println!("client_address: {:?}", client_address);
 
     let contract = DataAttestation::new(addr, client.clone());
+
+    info!("contract_addresses: {:#?}", contract_addresses);
 
     let _ = contract
         .updateAccountCalls(
@@ -501,11 +512,14 @@ pub async fn update_account_calls(
             call_data.clone(),
             decimals.clone(),
         )
+        .from(client_address)
         .send()
         .await?;
 
     // update contract signer with non admin account
     let contract = DataAttestation::new(addr, client.clone());
+
+    info!("contract_addresses: {:#?}", contract_addresses);
 
     // call to update_account_calls should fail
 
@@ -553,7 +567,7 @@ pub async fn verify_proof_via_solidity(
         return Err(Box::new(EvmVerificationError::SolidityExecution));
     }
     let result = result?;
-    info!("result: {:#?}", result.to_vec());
+    debug!("result: {:#?}", result.to_vec());
     // decode return bytes value into uint8
     let result = result.to_vec().last().ok_or("no contract output")? == &1u8;
     if !result {
@@ -649,10 +663,10 @@ pub async fn verify_proof_with_data_attestation(
         &flattened_instances.collect::<Vec<_>>(),
     );
 
-    info!("encoded: {:#?}", hex::encode(&encoded_verifier));
+    debug!("encoded: {:#?}", hex::encode(&encoded_verifier));
 
-    info!("public_inputs: {:#?}", public_inputs);
-    info!("proof: {:#?}", Bytes::from(proof.proof.to_vec()));
+    debug!("public_inputs: {:#?}", public_inputs);
+    debug!("proof: {:#?}", Bytes::from(proof.proof.to_vec()));
 
     #[allow(deprecated)]
     let func = Function {
@@ -683,7 +697,7 @@ pub async fn verify_proof_with_data_attestation(
         Token::Bytes(encoded_verifier),
     ])?;
 
-    info!("encoded: {:#?}", hex::encode(&encoded));
+    debug!("encoded: {:#?}", hex::encode(&encoded));
 
     let encoded: TransactionInput = encoded.into();
 
@@ -700,7 +714,7 @@ pub async fn verify_proof_with_data_attestation(
         return Err(Box::new(EvmVerificationError::SolidityExecution));
     }
     let result = result?;
-    info!("result: {:#?}", result);
+    debug!("result: {:#?}", result);
     // decode return bytes value into uint8
     let result = result.to_vec().last().ok_or("no contract output")? == &1u8;
     if !result {
@@ -799,9 +813,9 @@ pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
         .map(|x| Ok(I256::from_dec_str(&x.to_string())?.unsigned_abs()))
         .collect::<Result<Vec<U256>, ParseSignedError>>()?;
 
-    info!("scales: {:#?}", scales);
-    info!("decimals: {:#?}", decimals);
-    info!("fetched_inputs: {:#?}", fetched_inputs);
+    debug!("scales: {:#?}", scales);
+    debug!("decimals: {:#?}", decimals);
+    debug!("fetched_inputs: {:#?}", fetched_inputs);
 
     let results = contract
         .quantize_data(fetched_inputs, decimals, scales)
@@ -809,18 +823,21 @@ pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
         .await?
         .quantized_data;
 
-    let felts = contract
-        .to_field_element(results.clone())
-        .call()
-        .await?
-        .output;
-    info!("evm quantization contract results: {:#?}", felts,);
+    debug!("evm quantization results: {:#?}", results);
+
+    let results_i64 = results
+        .iter()
+        .map(|x| i64::from_str(&x.to_string()).unwrap())
+        .collect::<Vec<i64>>();
+
+    let felts = contract.to_field_element(results_i64).call().await?.output;
+    debug!("evm quantization contract results: {:#?}", felts,);
 
     let results = felts
         .iter()
         .map(|x| PrimeField::from_str_vartime(&x.to_string()).unwrap())
         .collect::<Vec<Fr>>();
-    info!("evm quantization results: {:#?}", results,);
+    debug!("evm quantized felts: {:#?}", results,);
     Ok(results.to_vec())
 }
 
@@ -880,7 +897,7 @@ pub async fn get_contract_artifacts(
     };
 
     if !sol_code_path.exists() {
-        return Err("sol_code_path does not exist".into());
+        return Err(format!("file not found: {:#?}", sol_code_path).into());
     }
 
     let mut settings = SolcSettings::default();
@@ -928,15 +945,6 @@ pub fn fix_da_sol(
 ) -> Result<String, Box<dyn Error>> {
     let mut accounts_len = 0;
     let mut contract = ATTESTDATA_SOL.to_string();
-    let load_instances = LOADINSTANCES_SOL.to_string();
-    // replace the import statement with the load_instances contract, not including the
-    // `SPDX-License-Identifier: MIT pragma solidity ^0.8.20;` at the top of the file
-    contract = contract.replace(
-        "import './LoadInstances.sol';",
-        &load_instances[load_instances
-            .find("contract")
-            .ok_or("could not get load-instances contract")?..],
-    );
 
     // fill in the quantization params and total calls
     // as constants to the contract to save on gas
