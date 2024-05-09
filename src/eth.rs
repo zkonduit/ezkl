@@ -841,7 +841,7 @@ pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
     Ok(results.to_vec())
 }
 
-/// Generates the contract factory for a solidity verifier, optionally compiling the code with optimizer runs set on the Solc compiler.
+/// Generates the contract factory for a solidity verifier. The factory is used to deploy the contract
 fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T: TokenSeq<'a>>(
     abi: JsonAbi,
     bytecode: Bytes,
