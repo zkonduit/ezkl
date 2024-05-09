@@ -229,7 +229,7 @@ def test_forward():
     assert data["processed_outputs"]["poseidon_hash"] == res["processed_outputs"]["poseidon_hash"]
 
 
-def test_get_srs():
+async def test_get_srs():
     """
     Test for get_srs
     """
@@ -417,7 +417,7 @@ def test_create_evm_verifier():
     assert os.path.isfile(sol_code_path)
 
 
-def test_deploy_evm():
+async def test_deploy_evm():
     """
     Test deployment of the verifier smart contract
     In order to run this you will need to install solc in your environment
@@ -437,7 +437,7 @@ def test_deploy_evm():
     assert res == True
 
 
-def test_deploy_evm_with_private_key():
+async def test_deploy_evm_with_private_key():
     """
     Test deployment of the verifier smart contract using a custom private key
     In order to run this you will need to install solc in your environment
@@ -603,7 +603,7 @@ def test_aggregate_and_verify_aggr():
     assert res == True
 
 
-def test_evm_aggregate_and_verify_aggr():
+async def test_evm_aggregate_and_verify_aggr():
     data_path = os.path.join(
         examples_path,
         'onnx',
