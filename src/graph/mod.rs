@@ -958,7 +958,7 @@ impl GraphCircuit {
 
     ///
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_graph_input(
+    pub async fn load_graph_input(
         &mut self,
         data: &GraphData,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
@@ -968,6 +968,7 @@ impl GraphCircuit {
         debug!("input scales: {:?}", scales);
 
         self.process_data_source(&data.input_data, shapes, scales, input_types)
+            .await
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -991,7 +992,7 @@ impl GraphCircuit {
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Process the data source for the model
-    fn process_data_source(
+    async fn process_data_source(
         &mut self,
         data: &DataSource,
         shapes: Vec<Vec<usize>>,
@@ -1005,15 +1006,8 @@ impl GraphCircuit {
                     per_item_scale.extend(vec![scales[i]; shape.iter().product::<usize>()]);
                 }
 
-                // start runtime and fetch data
-                let runtime = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()?;
-
-                runtime.block_on(async {
-                    self.load_on_chain_data(source.clone(), &shapes, per_item_scale)
-                        .await
-                })
+                self.load_on_chain_data(source.clone(), &shapes, per_item_scale)
+                    .await
             }
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)

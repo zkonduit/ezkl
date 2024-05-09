@@ -217,7 +217,7 @@ def test_forward():
         'witness.json'
     )
 
-    res = ezkl.gen_witness(data_path, model_path, output_path)
+    res = await ezkl.gen_witness(data_path, model_path, output_path)
 
     with open(output_path, "r") as f:
         data = json.load(f)
@@ -546,7 +546,7 @@ def test_aggregate_and_verify_aggr():
         '1l_relu_aggr_witness.json'
     )
 
-    res = ezkl.gen_witness(data_path, compiled_model_path,
+    res = await ezkl.gen_witness(data_path, compiled_model_path,
                            output_path)
 
     ezkl.prove(
@@ -655,7 +655,7 @@ async def test_evm_aggregate_and_verify_aggr():
         '1l_relu_aggr_evm_witness.json'
     )
 
-    res = ezkl.gen_witness(data_path, compiled_model_path,
+    res = await ezkl.gen_witness(data_path, compiled_model_path,
                            output_path)
 
     ezkl.prove(
@@ -812,7 +812,7 @@ def test_all_examples(model_file, input_file):
     assert os.path.isfile(pk_path)
 
     print("Generating witness for example: ", model_file)
-    res = ezkl.gen_witness(input_file, compiled_model_path, witness_path)
+    res = await ezkl.gen_witness(input_file, compiled_model_path, witness_path)
     assert os.path.isfile(witness_path)
 
     print("Proving example: ", model_file)
