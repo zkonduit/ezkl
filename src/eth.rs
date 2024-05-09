@@ -21,6 +21,7 @@ use alloy::providers::fillers::{
     ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller,
 };
 use alloy::providers::network::{Ethereum, EthereumSigner};
+use alloy::providers::ProviderBuilder;
 use alloy::providers::{Identity, Provider, RootProvider};
 use alloy::rpc::types::eth::BlockId;
 use alloy::rpc::types::eth::TransactionInput;
@@ -28,7 +29,6 @@ use alloy::rpc::types::eth::TransactionRequest;
 use alloy::signers::wallet::LocalWallet;
 use alloy::sol as abigen;
 use alloy::transports::http::Http;
-use alloy::{node_bindings::AnvilInstance, providers::ProviderBuilder};
 use foundry_compilers::artifacts::Settings as SolcSettings;
 use foundry_compilers::Solc;
 use halo2_solidity_verifier::encode_calldata;
@@ -41,6 +41,11 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+
+const ANVIL_DEFAULT_PRIVATE_KEY: &str =
+    "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+
+pub const DEFAULT_ANVIL_ENDPOINT: &str = "http://localhost:8545";
 
 // Generate contract bindings OUTSIDE the functions so they are part of library
 abigen!(
@@ -220,17 +225,21 @@ pub type ContractFactory<M> = CallBuilder<Http<Client>, Arc<M>, ()>;
 pub async fn setup_eth_backend(
     rpc_url: Option<&str>,
     private_key: Option<&str>,
-) -> Result<(AnvilInstance, EthersClient, alloy::primitives::Address), Box<dyn Error>> {
+) -> Result<(EthersClient, alloy::primitives::Address), Box<dyn Error>> {
     // Launch anvil
-
-    let anvil = Anvil::new()
-        .args(["--code-size-limit=41943040", "--disable-block-gas-limit"])
-        .spawn();
 
     let endpoint: String;
     if let Some(rpc_url) = rpc_url {
         endpoint = rpc_url.to_string();
     } else {
+        let anvil = Anvil::new()
+            .args([
+                "--code-size-limit=41943040",
+                "--disable-block-gas-limit",
+                "-p",
+                "8545",
+            ])
+            .spawn();
         endpoint = anvil.endpoint();
     }
 
@@ -247,7 +256,7 @@ pub async fn setup_eth_backend(
         let private_key_buffer = hex::decode(private_key)?;
         wallet = LocalWallet::from_slice(&private_key_buffer)?;
     } else {
-        wallet = anvil.keys()[0].clone().into();
+        wallet = LocalWallet::from_str(ANVIL_DEFAULT_PRIVATE_KEY)?;
     }
 
     let wallet_address = wallet.address();
@@ -263,7 +272,7 @@ pub async fn setup_eth_backend(
     let chain_id = client.get_chain_id().await?;
     info!("using chain {}", chain_id);
 
-    Ok((anvil, client, wallet_address))
+    Ok((client, wallet_address))
 }
 
 ///
@@ -275,10 +284,10 @@ pub async fn deploy_contract_via_solidity(
     contract_name: &str,
 ) -> Result<H160, Box<dyn Error>> {
     // anvil instance must be alive at least until the factory completes the deploy
-    let (_anvil, client, _) = setup_eth_backend(rpc_url, private_key).await?;
+    let (client, _) = setup_eth_backend(rpc_url, private_key).await?;
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, contract_name, runs).await?;
+        get_contract_artifacts(sol_code_path, contract_name, runs)?;
 
     let factory =
         get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone(), None::<()>)?;
@@ -296,7 +305,7 @@ pub async fn deploy_da_verifier_via_solidity(
     runs: usize,
     private_key: Option<&str>,
 ) -> Result<H160, Box<dyn Error>> {
-    let (_anvil, client, client_address) = setup_eth_backend(rpc_url, private_key).await?;
+    let (client, client_address) = setup_eth_backend(rpc_url, private_key).await?;
     println!("client_address: {:?}", client_address);
 
     let input = GraphData::from_path(input)?;
@@ -386,7 +395,7 @@ pub async fn deploy_da_verifier_via_solidity(
     };
 
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestation", runs).await?;
+        get_contract_artifacts(sol_code_path, "DataAttestation", runs)?;
 
     let factory = get_sol_contract_factory(
         abi,
@@ -498,7 +507,7 @@ pub async fn update_account_calls(
         return Err("Data source for either input_data or output_data must be OnChain".into());
     };
 
-    let (_anvil, client, client_address) = setup_eth_backend(rpc_url, None).await?;
+    let (client, client_address) = setup_eth_backend(rpc_url, None).await?;
 
     println!("client_address: {:?}", client_address);
 
@@ -557,7 +566,7 @@ pub async fn verify_proof_via_solidity(
 
     let input: TransactionInput = encoded.into();
 
-    let (_anvil, client, _) = setup_eth_backend(rpc_url, None).await?;
+    let (client, _) = setup_eth_backend(rpc_url, None).await?;
     let tx = TransactionRequest::default().to(addr).input(input);
     debug!("transaction {:#?}", tx);
 
@@ -701,7 +710,7 @@ pub async fn verify_proof_with_data_attestation(
 
     let encoded: TransactionInput = encoded.into();
 
-    let (_anvil, client, _) = setup_eth_backend(rpc_url, None).await?;
+    let (client, _) = setup_eth_backend(rpc_url, None).await?;
     let tx = TransactionRequest::default().to(addr_da).input(encoded);
     debug!("transaction {:#?}", tx);
     info!(
@@ -885,7 +894,7 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
 
 /// Compiles a solidity verifier contract and returns the abi, bytecode, and runtime bytecode
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn get_contract_artifacts(
+pub fn get_contract_artifacts(
     sol_code_path: PathBuf,
     contract_name: &str,
     runs: usize,
@@ -922,7 +931,7 @@ pub async fn get_contract_artifacts(
         Some(solc) => solc,
         None => {
             info!("required solc version is missing ... installing");
-            Solc::install(&SHANGHAI_SOLC).await?
+            Solc::blocking_install(&SHANGHAI_SOLC)?
         }
     };
 

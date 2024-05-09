@@ -277,11 +277,13 @@ impl OnChainSource {
         mut shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
     ) -> Result<(Vec<Tensor<Fp>>, Self), Box<dyn std::error::Error>> {
-        use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
+        use crate::eth::{
+            evm_quantize, read_on_chain_inputs, test_on_chain_data, DEFAULT_ANVIL_ENDPOINT,
+        };
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
-        let (anvil, client, client_address) = crate::eth::setup_eth_backend(rpc, None).await?;
+        let (client, client_address) = crate::eth::setup_eth_backend(rpc, None).await?;
 
         let mut scales = scales;
         // set scales to 1 where data is a field element
@@ -324,7 +326,7 @@ impl OnChainSource {
             inputs.push(t);
         }
 
-        let used_rpc = rpc.unwrap_or(&anvil.endpoint()).to_string();
+        let used_rpc = rpc.unwrap_or(DEFAULT_ANVIL_ENDPOINT).to_string();
 
         // Fill the input_data field of the GraphData struct
         Ok((

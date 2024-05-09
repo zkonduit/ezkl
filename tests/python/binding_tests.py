@@ -234,7 +234,7 @@ def test_get_srs():
     Test for get_srs
     """
     settings_path = os.path.join(folder_path, 'settings.json')
-    res = ezkl.get_srs(settings_path, srs_path=srs_path)
+    res = await ezkl.get_srs(settings_path, srs_path=srs_path)
 
     assert res == True
 
@@ -242,7 +242,7 @@ def test_get_srs():
 
     another_srs_path = os.path.join(folder_path, "kzg_test_k8.params")
 
-    res = ezkl.get_srs(logrows=8, srs_path=another_srs_path, commitment=ezkl.PyCommitments.KZG)
+    res = await ezkl.get_srs(logrows=8, srs_path=another_srs_path, commitment=ezkl.PyCommitments.KZG)
 
     assert os.path.isfile(another_srs_path)
 
@@ -428,7 +428,7 @@ def test_deploy_evm():
     # TODO: without optimization there will be out of gas errors
     # sol_code_path = os.path.join(folder_path, 'test.sol')
 
-    res = ezkl.deploy_evm(
+    res = await ezkl.deploy_evm(
         addr_path,
         sol_code_path,
         rpc_url=anvil_url,
@@ -450,7 +450,7 @@ def test_deploy_evm_with_private_key():
 
     anvil_default_private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
-    res = ezkl.deploy_evm(
+    res = await ezkl.deploy_evm(
         addr_path,
         sol_code_path,
         rpc_url=anvil_url,
@@ -462,7 +462,7 @@ def test_deploy_evm_with_private_key():
     custom_zero_balance_private_key = "ff9dfe0b6d31e93ba13460a4d6f63b5e31dd9532b1304f1cbccea7092a042aa4"
 
     with pytest.raises(RuntimeError, match="Failed to run deploy_evm"):
-        res = ezkl.deploy_evm(
+        res = await ezkl.deploy_evm(
             addr_path,
             sol_code_path,
             rpc_url=anvil_url,
@@ -712,7 +712,7 @@ def test_evm_aggregate_and_verify_aggr():
 
     addr_path = os.path.join(folder_path, 'address_aggr.json')
 
-    res = ezkl.deploy_evm(
+    res = await ezkl.deploy_evm(
         addr_path,
         sol_code_path,
         rpc_url=anvil_url,

@@ -29,7 +29,6 @@ use pyo3_log;
 use snark_verifier::util::arithmetic::PrimeField;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
-use tokio::runtime::Runtime;
 
 type PyFelt = String;
 
@@ -779,29 +778,27 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
     commitment=None,
 ))]
 fn get_srs(
+    py: Python,
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
     srs_path: Option<PathBuf>,
     commitment: Option<PyCommitments>,
-) -> PyResult<bool> {
+) -> PyResult<Bound<'_, PyAny>> {
     let commitment: Option<Commitments> = match commitment {
         Some(c) => Some(c.into()),
         None => None,
     };
 
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::get_srs_cmd(
-            srs_path,
-            settings_path,
-            logrows,
-            commitment,
-        ))
-        .map_err(|e| {
-            let err_str = format!("Failed to get srs: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
-    Ok(true)
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::get_srs_cmd(srs_path, settings_path, logrows, commitment)
+            .await
+            .map_err(|e| {
+                let err_str = format!("Failed to get srs: {}", e);
+                PyRuntimeError::new_err(err_str)
+            })?;
+
+        Ok(true)
+    })
 }
 
 /// Generates the circuit settings
@@ -1467,20 +1464,18 @@ fn create_evm_verifier(
     srs_path: Option<PathBuf>,
     render_vk_seperately: bool,
 ) -> Result<bool, PyErr> {
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::create_evm_verifier(
-            vk_path,
-            srs_path,
-            settings_path,
-            sol_code_path,
-            abi_path,
-            render_vk_seperately,
-        ))
-        .map_err(|e| {
-            let err_str = format!("Failed to run create_evm_verifier: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+    crate::execute::create_evm_verifier(
+        vk_path,
+        srs_path,
+        settings_path,
+        sol_code_path,
+        abi_path,
+        render_vk_seperately,
+    )
+    .map_err(|e| {
+        let err_str = format!("Failed to run create_evm_verifier: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
     Ok(true)
 }
@@ -1517,14 +1512,7 @@ fn create_evm_data_attestation(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
 ) -> Result<bool, PyErr> {
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::create_evm_data_attestation(
-            settings_path,
-            sol_code_path,
-            abi_path,
-            input_data,
-        ))
+    crate::execute::create_evm_data_attestation(settings_path, sol_code_path, abi_path, input_data)
         .map_err(|e| {
             let err_str = format!("Failed to run create_evm_data_attestation: {}", e);
             PyRuntimeError::new_err(err_str)
@@ -1568,29 +1556,31 @@ fn create_evm_data_attestation(
     rpc_url=None,
 ))]
 fn setup_test_evm_witness(
+    py: Python,
     data_path: PathBuf,
     compiled_circuit_path: PathBuf,
     test_data: PathBuf,
     input_source: PyTestDataSource,
     output_source: PyTestDataSource,
     rpc_url: Option<String>,
-) -> Result<bool, PyErr> {
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::setup_test_evm_witness(
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::setup_test_evm_witness(
             data_path,
             compiled_circuit_path,
             test_data,
             rpc_url,
             input_source.into(),
             output_source.into(),
-        ))
+        )
+        .await
         .map_err(|e| {
             let err_str = format!("Failed to run setup_test_evm_witness: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
 
-    Ok(true)
+        Ok(true)
+    })
 }
 
 /// deploys the solidity verifier
@@ -1602,28 +1592,30 @@ fn setup_test_evm_witness(
     private_key=None,
 ))]
 fn deploy_evm(
+    py: Python,
     addr_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
     optimizer_runs: usize,
     private_key: Option<String>,
-) -> Result<bool, PyErr> {
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::deploy_evm(
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::deploy_evm(
             sol_code_path,
             rpc_url,
             addr_path,
             optimizer_runs,
             private_key,
             "Halo2Verifier",
-        ))
+        )
+        .await
         .map_err(|e| {
             let err_str = format!("Failed to run deploy_evm: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
 
-    Ok(true)
+        Ok(true)
+    })
 }
 
 /// deploys the solidity vk verifier
@@ -1635,28 +1627,30 @@ fn deploy_evm(
     private_key=None,
 ))]
 fn deploy_vk_evm(
+    py: Python,
     addr_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
     optimizer_runs: usize,
     private_key: Option<String>,
-) -> Result<bool, PyErr> {
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::deploy_evm(
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::deploy_evm(
             sol_code_path,
             rpc_url,
             addr_path,
             optimizer_runs,
             private_key,
             "Halo2VerifyingKey",
-        ))
+        )
+        .await
         .map_err(|e| {
             let err_str = format!("Failed to run deploy_evm: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
 
-    Ok(true)
+        Ok(true)
+    })
 }
 
 /// deploys the solidity da verifier
@@ -1670,6 +1664,7 @@ fn deploy_vk_evm(
     private_key=None
 ))]
 fn deploy_da_evm(
+    py: Python,
     addr_path: PathBuf,
     input_data: PathBuf,
     settings_path: PathBuf,
@@ -1677,10 +1672,9 @@ fn deploy_da_evm(
     rpc_url: Option<String>,
     optimizer_runs: usize,
     private_key: Option<String>,
-) -> Result<bool, PyErr> {
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::deploy_da_evm(
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::deploy_da_evm(
             input_data,
             settings_path,
             sol_code_path,
@@ -1688,13 +1682,15 @@ fn deploy_da_evm(
             addr_path,
             optimizer_runs,
             private_key,
-        ))
+        )
+        .await
         .map_err(|e| {
             let err_str = format!("Failed to run deploy_da_evm: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
 
-    Ok(true)
+        Ok(true)
+    })
 }
 /// verifies an evm compatible proof, you will need solc installed in your environment to run this
 ///
@@ -1725,13 +1721,14 @@ fn deploy_da_evm(
     addr_da = None,
     addr_vk = None,
 ))]
-fn verify_evm(
-    addr_verifier: &str,
+fn verify_evm<'a>(
+    py: Python<'a>,
+    addr_verifier: &'a str,
     proof_path: PathBuf,
     rpc_url: Option<String>,
-    addr_da: Option<&str>,
-    addr_vk: Option<&str>,
-) -> Result<bool, PyErr> {
+    addr_da: Option<&'a str>,
+    addr_vk: Option<&'a str>,
+) -> PyResult<Bound<'a, PyAny>> {
     let addr_verifier = H160Flag::from(addr_verifier);
     let addr_da = if let Some(addr_da) = addr_da {
         let addr_da = H160Flag::from(addr_da);
@@ -1746,21 +1743,16 @@ fn verify_evm(
         None
     };
 
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::verify_evm(
-            proof_path,
-            addr_verifier,
-            rpc_url,
-            addr_da,
-            addr_vk,
-        ))
-        .map_err(|e| {
-            let err_str = format!("Failed to run verify_evm: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::verify_evm(proof_path, addr_verifier, rpc_url, addr_da, addr_vk)
+            .await
+            .map_err(|e| {
+                let err_str = format!("Failed to run verify_evm: {}", e);
+                PyRuntimeError::new_err(err_str)
+            })?;
 
-    Ok(true)
+        Ok(true)
+    })
 }
 
 /// Creates an evm compatible aggregate verifier, you will need solc installed in your environment to run this
@@ -1810,21 +1802,19 @@ fn create_evm_verifier_aggr(
     srs_path: Option<PathBuf>,
     render_vk_seperately: bool,
 ) -> Result<bool, PyErr> {
-    Runtime::new()
-        .unwrap()
-        .block_on(crate::execute::create_evm_aggregate_verifier(
-            vk_path,
-            srs_path,
-            sol_code_path,
-            abi_path,
-            aggregation_settings,
-            logrows,
-            render_vk_seperately,
-        ))
-        .map_err(|e| {
-            let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+    crate::execute::create_evm_aggregate_verifier(
+        vk_path,
+        srs_path,
+        sol_code_path,
+        abi_path,
+        aggregation_settings,
+        logrows,
+        render_vk_seperately,
+    )
+    .map_err(|e| {
+        let err_str = format!("Failed to run create_evm_verifier_aggr: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
     Ok(true)
 }
 

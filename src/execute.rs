@@ -176,31 +176,28 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             sol_code_path,
             abi_path,
             render_vk_seperately,
-        } => {
-            create_evm_verifier(
-                vk_path,
-                srs_path,
-                settings_path,
-                sol_code_path,
-                abi_path,
-                render_vk_seperately,
-            )
-            .await
-        }
+        } => create_evm_verifier(
+            vk_path,
+            srs_path,
+            settings_path,
+            sol_code_path,
+            abi_path,
+            render_vk_seperately,
+        ),
         Commands::CreateEvmVK {
             vk_path,
             srs_path,
             settings_path,
             sol_code_path,
             abi_path,
-        } => create_evm_vk(vk_path, srs_path, settings_path, sol_code_path, abi_path).await,
+        } => create_evm_vk(vk_path, srs_path, settings_path, sol_code_path, abi_path),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmDataAttestation {
             settings_path,
             sol_code_path,
             abi_path,
             data,
-        } => create_evm_data_attestation(settings_path, sol_code_path, abi_path, data).await,
+        } => create_evm_data_attestation(settings_path, sol_code_path, abi_path, data),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmVerifierAggr {
             vk_path,
@@ -210,18 +207,15 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             aggregation_settings,
             logrows,
             render_vk_seperately,
-        } => {
-            create_evm_aggregate_verifier(
-                vk_path,
-                srs_path,
-                sol_code_path,
-                abi_path,
-                aggregation_settings,
-                logrows,
-                render_vk_seperately,
-            )
-            .await
-        }
+        } => create_evm_aggregate_verifier(
+            vk_path,
+            srs_path,
+            sol_code_path,
+            abi_path,
+            aggregation_settings,
+            logrows,
+            render_vk_seperately,
+        ),
         Commands::CompileCircuit {
             model,
             compiled_circuit,
@@ -1272,7 +1266,7 @@ pub(crate) fn mock(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) async fn create_evm_verifier(
+pub(crate) fn create_evm_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     settings_path: PathBuf,
@@ -1309,7 +1303,7 @@ pub(crate) async fn create_evm_verifier(
     File::create(sol_code_path.clone())?.write_all(verifier_solidity.as_bytes())?;
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0).await?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -1317,7 +1311,7 @@ pub(crate) async fn create_evm_verifier(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) async fn create_evm_vk(
+pub(crate) fn create_evm_vk(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     settings_path: PathBuf,
@@ -1350,7 +1344,7 @@ pub(crate) async fn create_evm_vk(
     File::create(sol_code_path.clone())?.write_all(vk_solidity.as_bytes())?;
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2VerifyingKey", 0).await?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2VerifyingKey", 0)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -1358,7 +1352,7 @@ pub(crate) async fn create_evm_vk(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) async fn create_evm_data_attestation(
+pub(crate) fn create_evm_data_attestation(
     settings_path: PathBuf,
     _sol_code_path: PathBuf,
     _abi_path: PathBuf,
@@ -1405,7 +1399,7 @@ pub(crate) async fn create_evm_data_attestation(
         let mut f = File::create(_sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0).await?;
+        let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0)?;
         // save abi to file
         serde_json::to_writer(std::fs::File::create(_abi_path)?, &abi)?;
     } else {
@@ -1509,7 +1503,7 @@ pub(crate) async fn verify_evm(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) async fn create_evm_aggregate_verifier(
+pub(crate) fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     sol_code_path: PathBuf,
@@ -1563,7 +1557,7 @@ pub(crate) async fn create_evm_aggregate_verifier(
     File::create(sol_code_path.clone())?.write_all(verifier_solidity.as_bytes())?;
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0).await?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0)?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
