@@ -891,7 +891,9 @@ pub(crate) async fn calibrate(
 
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
 
-    let chunks = data.split_into_batches(model.graph.input_shapes()?).await?;
+    let input_shapes = model.graph.input_shapes()?;
+
+    let chunks = data.split_into_batches(input_shapes).await?;
     info!("num calibration batches: {}", chunks.len());
 
     debug!("running onnx predictions...");
