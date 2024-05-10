@@ -21,8 +21,6 @@ use std::io::BufWriter;
 use std::io::Read;
 use std::panic::UnwindSafe;
 #[cfg(not(target_arch = "wasm32"))]
-use tokio_postgres::tls::NoTls;
-#[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_core::{
     tract_data::{prelude::Tensor as TractTensor, TVec},
     value::TValue,
@@ -236,7 +234,7 @@ impl PostgresSource {
             )
         };
 
-        let mut client = Client::connect(&config, NoTls).await?;
+        let mut client = Client::connect(&config).await?;
         let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
         // extract rows from query
         for row in client.query(&query, &[]).await? {

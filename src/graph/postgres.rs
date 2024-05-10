@@ -1,20 +1,17 @@
 use log::info;
-use std::fmt;
 use std::net::IpAddr;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use std::{fmt, pin::Pin};
 #[doc(inline)]
 pub use tokio_postgres::config::{
     ChannelBinding, Host, LoadBalanceHosts, SslMode, TargetSessionAttrs,
 };
-use tokio_postgres::{
-    error::DbError,
-    tls::{MakeTlsConnect, TlsConnect},
-    types::ToSql,
-    Error, Row, Socket, ToStatement,
-};
+use tokio_postgres::tls::NoTlsStream;
+use tokio_postgres::NoTls;
+use tokio_postgres::{error::DbError, types::ToSql, Error, Row, Socket, ToStatement};
 
 /// Connection configuration.
 ///
@@ -331,16 +328,12 @@ impl Config {
     }
 
     /// Opens a connection to a PostgreSQL database.
-    pub async fn connect<T>(&self, tls: T) -> Result<Client, Error>
-    where
-        T: MakeTlsConnect<Socket> + 'static + Send,
-        T::TlsConnect: Send,
-        T::Stream: Send,
-        <T::TlsConnect as TlsConnect<Socket>>::Future: Send,
-    {
-        let (client, _connection) = self.config.connect(tls).await?;
+    pub async fn connect(&self) -> Result<Client, Error> {
+        let (client, connection) = self.config.connect(NoTls).await?;
 
-        Ok(Client::new(client))
+        let connection = Connection::new(connection);
+
+        Ok(Client::new(client, connection))
     }
 }
 
@@ -363,9 +356,27 @@ impl From<tokio_postgres::Config> for Config {
     }
 }
 
-#[allow(missing_debug_implementations)]
+#[allow(missing_debug_implementations, dead_code)]
+/// An asynchronous PostgreSQL connection. We use this to keep the connection alive / keep it pinned so that it doesn't
+/// get dropped.
+pub struct Connection {
+    /// The underlying connection stream.
+    connection: Pin<Box<tokio_postgres::Connection<Socket, NoTlsStream>>>,
+}
+
+impl Connection {
+    /// Creates a new connection.
+    pub fn new(connection: tokio_postgres::Connection<Socket, NoTlsStream>) -> Self {
+        Connection {
+            connection: Box::pin(connection),
+        }
+    }
+}
+
+#[allow(missing_debug_implementations, dead_code)]
 /// An asynchronous PostgreSQL client.
 pub struct Client {
+    connection: Connection,
     client: tokio_postgres::Client,
 }
 
@@ -376,8 +387,8 @@ impl Drop for Client {
 }
 
 impl Client {
-    pub(crate) fn new(client: tokio_postgres::Client) -> Client {
-        Client { client }
+    pub(crate) fn new(client: tokio_postgres::Client, connection: Connection) -> Client {
+        Client { client, connection }
     }
 
     /// A convenience function which parses a configuration string into a `Config` and then connects to the database.
@@ -385,14 +396,8 @@ impl Client {
     /// See the documentation for [`Config`] for information about the connection syntax.
     ///
     /// [`Config`]: config/struct.Config.html
-    pub async fn connect<T>(params: &str, tls_mode: T) -> Result<Client, Error>
-    where
-        T: MakeTlsConnect<Socket> + 'static + Send,
-        T::TlsConnect: Send,
-        T::Stream: Send,
-        <T::TlsConnect as TlsConnect<Socket>>::Future: Send,
-    {
-        params.parse::<Config>()?.connect(tls_mode).await
+    pub async fn connect(params: &str) -> Result<Client, Error> {
+        params.parse::<Config>()?.connect().await
     }
 
     /// Returns a new `Config` object which can be used to configure and connect to a database.
