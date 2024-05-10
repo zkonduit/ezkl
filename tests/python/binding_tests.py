@@ -198,7 +198,7 @@ def test_model_compile():
     assert res == True
 
 
-def test_forward():
+async def test_forward():
     """
     Test for vanilla forward pass
     """
@@ -495,7 +495,7 @@ async def test_verify_evm():
     assert res == True
 
 
-def test_aggregate_and_verify_aggr():
+async def test_aggregate_and_verify_aggr():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -767,7 +767,7 @@ def get_examples():
 
 
 @pytest.mark.parametrize("model_file, input_file", get_examples())
-def test_all_examples(model_file, input_file):
+async def test_all_examples(model_file, input_file):
     """Tests all examples in the examples folder"""
     # gen settings
     settings_path = os.path.join(folder_path, "settings.json")
