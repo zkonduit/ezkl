@@ -59,8 +59,10 @@ reqwest = { version = "0.12.4", default-features = false, features = [
     "stream",
 ] }
 openssl = { version = "0.10.55", features = ["vendored"] }
+tokio-postgres = "0.7.10"
 postgres = "0.19.5"
 pg_bigdecimal = "0.1.5"
+futures-util = "0.3.30"
 lazy_static = "1.4.0"
 colored_json = { version = "3.0.1", default_features = false, optional = true }
 plotters = { version = "0.3.0", default_features = false, optional = true }

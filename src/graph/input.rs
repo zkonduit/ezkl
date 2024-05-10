@@ -3,11 +3,11 @@ use super::GraphError;
 use crate::circuit::InputType;
 use crate::fieldutils::i64_to_felt;
 #[cfg(not(target_arch = "wasm32"))]
+use crate::graph::postgres::Client;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::tensor::Tensor;
 use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
-#[cfg(not(target_arch = "wasm32"))]
-use postgres::{Client, NoTls};
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
@@ -20,6 +20,8 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::Read;
 use std::panic::UnwindSafe;
+#[cfg(not(target_arch = "wasm32"))]
+use tokio_postgres::tls::NoTls;
 #[cfg(not(target_arch = "wasm32"))]
 use tract_onnx::tract_core::{
     tract_data::{prelude::Tensor as TractTensor, TVec},
@@ -211,7 +213,9 @@ impl PostgresSource {
     }
 
     /// Fetch data from postgres
-    pub fn fetch(&self) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, Box<dyn std::error::Error>> {
+    pub async fn fetch(
+        &self,
+    ) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, Box<dyn std::error::Error>> {
         // clone to move into thread
         let user = self.user.clone();
         let host = self.host.clone();
@@ -235,7 +239,7 @@ impl PostgresSource {
         let mut client = Client::connect(&config, NoTls)?;
         let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
         // extract rows from query
-        for row in client.query(&query, &[])? {
+        for row in client.query(&query, &[]).await? {
             // extract features from row
             for i in 0..row.len() {
                 res.push(row.get(i));
@@ -245,11 +249,12 @@ impl PostgresSource {
     }
 
     /// Fetch data from postgres and format it as a FileSource
-    pub fn fetch_and_format_as_file(
+    pub async fn fetch_and_format_as_file(
         &self,
     ) -> Result<Vec<Vec<FileSourceInner>>, Box<dyn std::error::Error>> {
         Ok(self
-            .fetch()?
+            .fetch()
+            .await?
             .iter()
             .map(|d| {
                 d.iter()
@@ -503,7 +508,7 @@ impl GraphData {
     }
 
     ///
-    pub fn split_into_batches(
+    pub async fn split_into_batches(
         &self,
         input_shapes: Vec<Vec<usize>>,
     ) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
@@ -528,7 +533,7 @@ impl GraphData {
             GraphData {
                 input_data: DataSource::DB(data),
                 output_data: _,
-            } => data.fetch_and_format_as_file()?,
+            } => data.fetch_and_format_as_file().await?,
         };
 
         for (i, shape) in input_shapes.iter().enumerate() {

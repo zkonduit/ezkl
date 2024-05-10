@@ -158,6 +158,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             only_range_check_rebase,
             max_logrows,
         )
+        .await
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::GenWitness {
             data,
@@ -867,7 +868,7 @@ impl AccuracyResults {
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(trivial_casts)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn calibrate(
+pub(crate) async fn calibrate(
     model_path: PathBuf,
     data: PathBuf,
     settings_path: PathBuf,
@@ -890,7 +891,7 @@ pub(crate) fn calibrate(
 
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
 
-    let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
+    let chunks = data.split_into_batches(model.graph.input_shapes()?).await?;
     info!("num calibration batches: {}", chunks.len());
 
     debug!("running onnx predictions...");

@@ -136,7 +136,7 @@ def test_calibrate_over_user_range():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = ezkl.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources", 1, [0, 1, 2])
     assert res == True
     assert os.path.isfile(output_path)
@@ -170,7 +170,7 @@ def test_calibrate():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = ezkl.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources")
     assert res == True
     assert os.path.isfile(output_path)
@@ -524,7 +524,7 @@ async def test_aggregate_and_verify_aggr():
     res = ezkl.gen_settings(model_path, settings_path)
     assert res == True
 
-    res = ezkl.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         data_path, model_path, settings_path, "resources")
     assert res == True
     assert os.path.isfile(settings_path)
@@ -781,7 +781,7 @@ async def test_all_examples(model_file, input_file):
     res = ezkl.gen_settings(model_file, settings_path)
     assert res
 
-    res = ezkl.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         input_file, model_file, settings_path, "resources")
     assert res
 
