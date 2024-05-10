@@ -891,24 +891,27 @@ fn calibrate_settings(
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
     only_range_check_rebase: bool,
-) -> Result<bool, PyErr> {
-    crate::execute::calibrate(
-        model,
-        data,
-        settings,
-        target,
-        lookup_safety_margin,
-        scales,
-        scale_rebase_multiplier,
-        only_range_check_rebase,
-        max_logrows,
-    )
-    .map_err(|e| {
-        let err_str = format!("Failed to calibrate settings: {}", e);
-        PyRuntimeError::new_err(err_str)
-    })?;
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_asyncio::tokio::future_into_py(Python::acquire_gil(), async move {
+        crate::execute::calibrate(
+            model,
+            data,
+            settings,
+            target,
+            lookup_safety_margin,
+            scales,
+            scale_rebase_multiplier,
+            only_range_check_rebase,
+            max_logrows,
+        )
+        .await
+        .map_err(|e| {
+            let err_str = format!("Failed to calibrate settings: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
-    Ok(true)
+        Ok(true)
+    })
 }
 
 /// Runs the forward pass operation to generate a witness
