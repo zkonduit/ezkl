@@ -1,11 +1,5 @@
-use postgres::ToStatement;
-use tokio_postgres::tls::{MakeTlsConnect, TlsConnect};
-use tokio_postgres::types::ToSql;
-use tokio_postgres::{Error, Row, Socket};
-
 use futures_util::{future, pin_mut, Stream};
 use log::info;
-use postgres::{Error as pgError, Notification};
 use std::collections::VecDeque;
 use std::fmt;
 use std::future::Future;
@@ -24,8 +18,13 @@ use tokio::runtime::Runtime;
 pub use tokio_postgres::config::{
     ChannelBinding, Host, LoadBalanceHosts, SslMode, TargetSessionAttrs,
 };
-use tokio_postgres::error::DbError;
-use tokio_postgres::AsyncMessage;
+use tokio_postgres::Error as pgError;
+use tokio_postgres::{
+    error::DbError,
+    tls::{MakeTlsConnect, TlsConnect},
+    types::ToSql,
+    AsyncMessage, Error, Notification, Row, Socket, ToStatement,
+};
 
 /// Connection configuration.
 ///
@@ -342,7 +341,7 @@ impl Config {
     }
 
     /// Opens a connection to a PostgreSQL database.
-    pub fn connect<T>(&self, tls: T) -> Result<Client, Error>
+    pub async fn connect<T>(&self, tls: T) -> Result<Client, Error>
     where
         T: MakeTlsConnect<Socket> + 'static + Send,
         T::TlsConnect: Send,
@@ -354,7 +353,7 @@ impl Config {
             .build()
             .unwrap(); // FIXME don't unwrap
 
-        let (client, connection) = runtime.block_on(self.config.connect(tls))?;
+        let (client, connection) = self.config.connect(tls).await?;
 
         let connection = Connection::new(runtime, connection, self.notice_callback.clone());
         Ok(Client::new(connection, client))
@@ -535,14 +534,14 @@ impl Client {
     /// See the documentation for [`Config`] for information about the connection syntax.
     ///
     /// [`Config`]: config/struct.Config.html
-    pub fn connect<T>(params: &str, tls_mode: T) -> Result<Client, Error>
+    pub async fn connect<T>(params: &str, tls_mode: T) -> Result<Client, Error>
     where
         T: MakeTlsConnect<Socket> + 'static + Send,
         T::TlsConnect: Send,
         T::Stream: Send,
         <T::TlsConnect as TlsConnect<Socket>>::Future: Send,
     {
-        params.parse::<Config>()?.connect(tls_mode)
+        params.parse::<Config>()?.connect(tls_mode).await
     }
 
     /// Returns a new `Config` object which can be used to configure and connect to a database.

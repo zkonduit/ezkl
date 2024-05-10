@@ -626,7 +626,7 @@ async def test_evm_aggregate_and_verify_aggr():
         settings_path,
     )
 
-    ezkl.calibrate_settings(
+    await ezkl.calibrate_settings(
         data_path,
         model_path,
         settings_path,

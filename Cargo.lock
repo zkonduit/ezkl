@@ -1861,7 +1861,6 @@ dependencies = [
  "pg_bigdecimal",
  "plotters",
  "portable-atomic",
- "postgres",
  "pyo3",
  "pyo3-asyncio",
  "pyo3-log",

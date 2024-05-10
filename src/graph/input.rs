@@ -236,7 +236,7 @@ impl PostgresSource {
             )
         };
 
-        let mut client = Client::connect(&config, NoTls)?;
+        let mut client = Client::connect(&config, NoTls).await?;
         let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
         // extract rows from query
         for row in client.query(&query, &[]).await? {
