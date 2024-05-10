@@ -109,7 +109,7 @@ def test_gen_srs():
 
 
 
-def test_calibrate_over_user_range():
+async def test_calibrate_over_user_range():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -143,7 +143,7 @@ def test_calibrate_over_user_range():
 
 
 
-def test_calibrate():
+async def test_calibrate():
     data_path = os.path.join(
         examples_path,
         'onnx',
