@@ -560,25 +560,6 @@ impl Client {
     /// repeatedly executed (perhaps with different query parameters), consider preparing the statement up front
     /// with the `prepare` method.
     ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use postgres::{Client, NoTls};
-    ///
-    /// # fn main() -> Result<(), postgres::Error> {
-    /// let mut client = Client::connect("host=localhost user=postgres", NoTls)?;
-    ///
-    /// let bar = 1i32;
-    /// let baz = true;
-    /// let rows_updated = client.execute(
-    ///     "UPDATE foo SET bar = $1 WHERE baz = $2",
-    ///     &[&bar, &baz],
-    /// )?;
-    ///
-    /// println!("{} rows updated", rows_updated);
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn execute<T>(
         &mut self,
         query: &T,
@@ -601,20 +582,6 @@ impl Client {
     ///
     /// # Examples
     ///
-    /// ```no_run
-    /// use postgres::{Client, NoTls};
-    ///
-    /// # fn main() -> Result<(), postgres::Error> {
-    /// let mut client = Client::connect("host=localhost user=postgres", NoTls)?;
-    ///
-    /// let baz = true;
-    /// for row in client.query("SELECT foo FROM bar WHERE baz = $1", &[&baz])? {
-    ///     let foo: i32 = row.get("foo");
-    ///     println!("foo: {}", foo);
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn query<T>(
         &mut self,
         query: &T,
