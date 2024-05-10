@@ -1,10 +1,12 @@
-use log::info;
+use log::{debug, error, info};
+use std::fmt::Debug;
 use std::net::IpAddr;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt, pin::Pin};
+use tokio::task::JoinHandle;
 #[doc(inline)]
 pub use tokio_postgres::config::{
     ChannelBinding, Host, LoadBalanceHosts, SslMode, TargetSessionAttrs,
@@ -371,12 +373,19 @@ impl Connection {
             connection: Box::pin(connection),
         }
     }
+
+    /// start the connection
+    pub async fn start(self) {
+        if let Err(e) = self.connection.await {
+            error!("connection error: {}", e);
+        }
+    }
 }
 
 #[allow(missing_debug_implementations, dead_code)]
 /// An asynchronous PostgreSQL client.
 pub struct Client {
-    connection: Connection,
+    connection: JoinHandle<()>,
     client: tokio_postgres::Client,
 }
 
@@ -388,7 +397,16 @@ impl Drop for Client {
 
 impl Client {
     pub(crate) fn new(client: tokio_postgres::Client, connection: Connection) -> Client {
-        Client { client, connection }
+        // The connection object performs the actual communication with the database,
+        // so spawn it off to run on its own.
+        let thread = tokio::spawn(async move {
+            connection.start().await;
+        });
+
+        Client {
+            client,
+            connection: thread,
+        }
     }
 
     /// A convenience function which parses a configuration string into a `Config` and then connects to the database.
@@ -397,6 +415,7 @@ impl Client {
     ///
     /// [`Config`]: config/struct.Config.html
     pub async fn connect(params: &str) -> Result<Client, Error> {
+        debug!("Connecting to database with params: {}", params);
         params.parse::<Config>()?.connect().await
     }
 
@@ -422,8 +441,9 @@ impl Client {
         params: &[&(dyn ToSql + Sync)],
     ) -> Result<u64, Error>
     where
-        T: ?Sized + ToStatement,
+        T: ?Sized + ToStatement + Debug,
     {
+        debug!("Executing query: {:?}", query);
         self.client.execute(query, params).await
     }
 
@@ -444,8 +464,9 @@ impl Client {
         params: &[&(dyn ToSql + Sync)],
     ) -> Result<Vec<Row>, Error>
     where
-        T: ?Sized + ToStatement,
+        T: ?Sized + ToStatement + Debug,
     {
+        debug!("Executing query: {:?}", query);
         self.client.query(query, params).await
     }
 
