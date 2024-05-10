@@ -80,14 +80,18 @@ impl ToFlags for CheckMode {
 
 impl From<String> for CheckMode {
     fn from(value: String) -> Self {
-        match value.to_lowercase().as_str() {
-            "safe" => CheckMode::SAFE,
-            "unsafe" => CheckMode::UNSAFE,
-            _ => {
-                log::error!("Invalid value for CheckMode");
-                log::warn!("defaulting to SAFE");
-                CheckMode::SAFE
-            }
+        Self::from_str(value.as_str()).unwrap()
+    }
+}
+
+impl FromStr for CheckMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "safe" => Ok(CheckMode::SAFE),
+            "unsafe" => Ok(CheckMode::UNSAFE),
+            _ => Err("Invalid value for CheckMode".to_string()),
         }
     }
 }
