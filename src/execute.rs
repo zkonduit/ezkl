@@ -21,6 +21,8 @@ use crate::pfsys::{
 };
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::EZKL_BUF_CAPACITY;
 use crate::{Commitments, RunArgs};
 #[cfg(not(target_arch = "wasm32"))]
 use colored::Colorize;
@@ -64,19 +66,12 @@ use snark_verifier::system::halo2::Config;
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
+use std::io::BufWriter;
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
 use std::path::Path;
 use std::path::PathBuf;
-#[cfg(not(target_arch = "wasm32"))]
-use std::process::Command;
 use std::str::FromStr;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::OnceLock;
-
-#[cfg(not(target_arch = "wasm32"))]
-use crate::EZKL_BUF_CAPACITY;
-#[cfg(not(target_arch = "wasm32"))]
-use std::io::BufWriter;
 use std::time::Duration;
 use tabled::Tabled;
 use thiserror::Error;
@@ -198,39 +193,48 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             sol_code_path,
             abi_path,
             render_vk_seperately,
-        } => create_evm_verifier(
-            vk_path.unwrap_or(DEFAULT_VK.into()),
-            srs_path,
-            settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
-            sol_code_path.unwrap_or(DEFAULT_SOL_CODE.into()),
-            abi_path.unwrap_or(DEFAULT_VERIFIER_ABI.into()),
-            render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse()?),
-        ).await,
+        } => {
+            create_evm_verifier(
+                vk_path.unwrap_or(DEFAULT_VK.into()),
+                srs_path,
+                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+                sol_code_path.unwrap_or(DEFAULT_SOL_CODE.into()),
+                abi_path.unwrap_or(DEFAULT_VERIFIER_ABI.into()),
+                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse()?),
+            )
+            .await
+        }
         Commands::CreateEvmVK {
             vk_path,
             srs_path,
             settings_path,
             sol_code_path,
             abi_path,
-        } => create_evm_vk(
-            vk_path.unwrap_or(DEFAULT_VK.into()),
-            srs_path,
-            settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
-            sol_code_path.unwrap_or(DEFAULT_VK_SOL.into()),
-            abi_path.unwrap_or(DEFAULT_VK_ABI.into()),
-        ).await,
+        } => {
+            create_evm_vk(
+                vk_path.unwrap_or(DEFAULT_VK.into()),
+                srs_path,
+                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+                sol_code_path.unwrap_or(DEFAULT_VK_SOL.into()),
+                abi_path.unwrap_or(DEFAULT_VK_ABI.into()),
+            )
+            .await
+        }
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmDataAttestation {
             settings_path,
             sol_code_path,
             abi_path,
             data,
-        } => create_evm_data_attestation(
-            settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
-            sol_code_path.unwrap_or(DEFAULT_SOL_CODE_DA.into()),
-            abi_path.unwrap_or(DEFAULT_VERIFIER_DA_ABI.into()),
-            data.unwrap_or(DEFAULT_DATA.into()),
-        ).await,
+        } => {
+            create_evm_data_attestation(
+                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+                sol_code_path.unwrap_or(DEFAULT_SOL_CODE_DA.into()),
+                abi_path.unwrap_or(DEFAULT_VERIFIER_DA_ABI.into()),
+                data.unwrap_or(DEFAULT_DATA.into()),
+            )
+            .await
+        }
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmVerifierAggr {
             vk_path,
@@ -240,15 +244,18 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             aggregation_settings,
             logrows,
             render_vk_seperately,
-        } => create_evm_aggregate_verifier(
-            vk_path.unwrap_or(DEFAULT_VK.into()),
-            srs_path,
-            sol_code_path.unwrap_or(DEFAULT_SOL_CODE_AGGREGATED.into()),
-            abi_path.unwrap_or(DEFAULT_VERIFIER_AGGREGATED_ABI.into()),
-            aggregation_settings,
-            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
-            render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse()?),
-        ).await,
+        } => {
+            create_evm_aggregate_verifier(
+                vk_path.unwrap_or(DEFAULT_VK.into()),
+                srs_path,
+                sol_code_path.unwrap_or(DEFAULT_SOL_CODE_AGGREGATED.into()),
+                abi_path.unwrap_or(DEFAULT_VERIFIER_AGGREGATED_ABI.into()),
+                aggregation_settings,
+                logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
+                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse()?),
+            )
+            .await
+        }
         Commands::CompileCircuit {
             model,
             compiled_circuit,
