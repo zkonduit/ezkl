@@ -882,6 +882,7 @@ fn gen_settings(
     only_range_check_rebase = DEFAULT_ONLY_RANGE_CHECK_REBASE.parse().unwrap(),
 ))]
 fn calibrate_settings(
+    py: Python,
     data: PathBuf,
     model: PathBuf,
     settings: PathBuf,
@@ -892,7 +893,7 @@ fn calibrate_settings(
     max_logrows: Option<u32>,
     only_range_check_rebase: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(Python::acquire_gil(), async move {
+    pyo3_asyncio::tokio::future_into_py(py, async move {
         crate::execute::calibrate(
             model,
             data,
