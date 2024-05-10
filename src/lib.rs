@@ -201,13 +201,13 @@ pub struct RunArgs {
     /// Hand-written parser for graph variables, eg. batch_size=1
     #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size->1", value_delimiter = ',')]
     pub variables: Vec<(String, usize)>,
-    /// Flags whether inputs are public, private, hashed, fixed, kzgcommit
+    /// Flags whether inputs are public, private, fixed, hashed, polycommit
     #[arg(long, default_value = "private")]
     pub input_visibility: Visibility,
-    /// Flags whether outputs are public, private, fixed, hashed, kzgcommit
+    /// Flags whether outputs are public, private, fixed, hashed, polycommit
     #[arg(long, default_value = "public")]
     pub output_visibility: Visibility,
-    /// Flags whether params are fixed, private, hashed, kzgcommit
+    /// Flags whether params are fixed, private, hashed, polycommit
     #[arg(long, default_value = "private")]
     pub param_visibility: Visibility,
     #[arg(long, default_value = "false")]
