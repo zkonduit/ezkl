@@ -1,29 +1,19 @@
-use futures_util::{future, pin_mut, Stream};
 use log::info;
-use std::collections::VecDeque;
 use std::fmt;
-use std::future::Future;
 use std::net::IpAddr;
-use std::ops::{Deref, DerefMut};
 use std::path::Path;
-use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::runtime;
-use tokio::runtime::Runtime;
 #[doc(inline)]
 pub use tokio_postgres::config::{
     ChannelBinding, Host, LoadBalanceHosts, SslMode, TargetSessionAttrs,
 };
-use tokio_postgres::Error as pgError;
 use tokio_postgres::{
     error::DbError,
     tls::{MakeTlsConnect, TlsConnect},
     types::ToSql,
-    AsyncMessage, Error, Notification, Row, Socket, ToStatement,
+    Error, Row, Socket, ToStatement,
 };
 
 /// Connection configuration.
@@ -348,15 +338,9 @@ impl Config {
         T::Stream: Send,
         <T::TlsConnect as TlsConnect<Socket>>::Future: Send,
     {
-        let runtime = runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap(); // FIXME don't unwrap
+        let (client, _connection) = self.config.connect(tls).await?;
 
-        let (client, connection) = self.config.connect(tls).await?;
-
-        let connection = Connection::new(runtime, connection, self.notice_callback.clone());
-        Ok(Client::new(connection, client))
+        Ok(Client::new(client))
     }
 }
 
@@ -380,141 +364,8 @@ impl From<tokio_postgres::Config> for Config {
 }
 
 #[allow(missing_debug_implementations)]
-/// A connection to a PostgreSQL database.
-pub struct Connection {
-    /// The runtime used to drive the connection.
-    runtime: Runtime,
-    /// The underlying connection stream.
-    connection: Pin<Box<dyn Stream<Item = Result<AsyncMessage, pgError>> + Send>>,
-    /// Notifications received from the server.
-    notifications: VecDeque<Notification>,
-    /// The callback for notices.
-    notice_callback: Arc<dyn Fn(DbError) + Sync + Send>,
-}
-
-impl Connection {
-    /// Creates a new connection.
-    pub fn new<S, T>(
-        runtime: Runtime,
-        connection: tokio_postgres::Connection<S, T>,
-        notice_callback: Arc<dyn Fn(DbError) + Sync + Send>,
-    ) -> Connection
-    where
-        S: AsyncRead + AsyncWrite + Unpin + 'static + Send,
-        T: AsyncRead + AsyncWrite + Unpin + 'static + Send,
-    {
-        Connection {
-            runtime,
-            connection: Box::pin(ConnectionStream { connection }),
-            notifications: VecDeque::new(),
-            notice_callback,
-        }
-    }
-
-    /// Returns a reference to the underlying connection stream.
-    pub fn as_ref(&mut self) -> ConnectionRef<'_> {
-        ConnectionRef { connection: self }
-    }
-
-    /// Returns a reference to the underlying connection stream.
-    pub fn enter<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce() -> T,
-    {
-        let _guard = self.runtime.enter();
-        f()
-    }
-
-    /// Blocks the current thread on the future.
-    pub fn block_on<F, T>(&mut self, future: F) -> Result<T, Error>
-    where
-        F: Future<Output = Result<T, Error>>,
-    {
-        pin_mut!(future);
-        self.poll_block_on(|cx, _, _| future.as_mut().poll(cx))
-    }
-
-    /// Polls the future until completion.
-    pub fn poll_block_on<F, T>(&mut self, mut f: F) -> Result<T, pgError>
-    where
-        F: FnMut(&mut Context<'_>, &mut VecDeque<Notification>, bool) -> Poll<Result<T, pgError>>,
-    {
-        let connection = &mut self.connection;
-        let notifications = &mut self.notifications;
-        let notice_callback = &mut self.notice_callback;
-        self.runtime.block_on({
-            future::poll_fn(|cx| {
-                let done = loop {
-                    match connection.as_mut().poll_next(cx) {
-                        Poll::Ready(Some(Ok(AsyncMessage::Notification(notification)))) => {
-                            notifications.push_back(notification);
-                        }
-                        Poll::Ready(Some(Ok(AsyncMessage::Notice(notice)))) => {
-                            notice_callback(notice)
-                        }
-                        Poll::Ready(Some(Ok(_))) => {}
-                        Poll::Ready(Some(Err(e))) => return Poll::Ready(Err(e)),
-                        Poll::Ready(None) => break true,
-                        Poll::Pending => break false,
-                    }
-                };
-
-                f(cx, notifications, done)
-            })
-        })
-    }
-}
-
-#[allow(missing_debug_implementations)]
-/// A reference to a connection.
-pub struct ConnectionRef<'a> {
-    connection: &'a mut Connection,
-}
-
-// no-op impl to extend the borrow until drop
-impl Drop for ConnectionRef<'_> {
-    #[inline]
-    fn drop(&mut self) {}
-}
-
-impl Deref for ConnectionRef<'_> {
-    type Target = Connection;
-
-    #[inline]
-    fn deref(&self) -> &Connection {
-        self.connection
-    }
-}
-
-impl DerefMut for ConnectionRef<'_> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Connection {
-        self.connection
-    }
-}
-
-#[allow(missing_debug_implementations)]
-/// A stream of messages from the server.
-struct ConnectionStream<S, T> {
-    connection: tokio_postgres::Connection<S, T>,
-}
-
-impl<S, T> Stream for ConnectionStream<S, T>
-where
-    S: AsyncRead + AsyncWrite + Unpin,
-    T: AsyncRead + AsyncWrite + Unpin,
-{
-    type Item = Result<AsyncMessage, Error>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.connection.poll_message(cx)
-    }
-}
-
-#[allow(missing_debug_implementations)]
 /// An asynchronous PostgreSQL client.
 pub struct Client {
-    connection: Connection,
     client: tokio_postgres::Client,
 }
 
@@ -525,8 +376,8 @@ impl Drop for Client {
 }
 
 impl Client {
-    pub(crate) fn new(connection: Connection, client: tokio_postgres::Client) -> Client {
-        Client { connection, client }
+    pub(crate) fn new(client: tokio_postgres::Client) -> Client {
+        Client { client }
     }
 
     /// A convenience function which parses a configuration string into a `Config` and then connects to the database.
@@ -610,13 +461,6 @@ impl Client {
 
     fn close_inner(&mut self) -> Result<(), Error> {
         self.client.__private_api_close();
-
-        self.connection.poll_block_on(|_, _, done| {
-            if done {
-                Poll::Ready(Ok(()))
-            } else {
-                Poll::Pending
-            }
-        })
+        Ok(())
     }
 }
