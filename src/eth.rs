@@ -317,7 +317,6 @@ pub async fn deploy_da_verifier_via_solidity(
     private_key: Option<&str>,
 ) -> Result<H160, Box<dyn Error>> {
     let (client, client_address) = setup_eth_backend(rpc_url, private_key).await?;
-    println!("client_address: {:?}", client_address);
 
     let input = GraphData::from_path(input)?;
 
@@ -520,8 +519,6 @@ pub async fn update_account_calls(
 
     let (client, client_address) = setup_eth_backend(rpc_url, None).await?;
 
-    println!("client_address: {:?}", client_address);
-
     let contract = DataAttestation::new(addr, client.clone());
 
     info!("contract_addresses: {:#?}", contract_addresses);
@@ -647,8 +644,7 @@ pub async fn setup_test_contract<M: 'static + Provider<Http<Client>, Ethereum>>(
             let hex_str_fr = format!("{:?}", input);
             // remove the 0x prefix
             let hex_str_fr = &hex_str_fr[2..];
-            println!("hex_str_fr: {:#?}", hex_str_fr);
-            scaled_by_decimals_data.push(I256::from_raw(U256::from_str_radix(&hex_str_fr, 16)?));
+            scaled_by_decimals_data.push(I256::from_raw(U256::from_str_radix(hex_str_fr, 16)?));
             decimals.push(0);
         }
     }
@@ -944,7 +940,7 @@ pub async fn get_contract_artifacts(
         &SHANGHAI_SOLC,
     );
 
-    let solc_opt = Solc::find_svm_installed_version(&SHANGHAI_SOLC.to_string())?;
+    let solc_opt = Solc::find_svm_installed_version(SHANGHAI_SOLC.to_string())?;
     let solc = match solc_opt {
         Some(solc) => solc,
         None => {
