@@ -1,6 +1,97 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
-import './LoadInstances.sol';
+contract LoadInstances {
+    /**
+     * @dev Parse the instances array from the Halo2Verifier encoded calldata.
+     * @notice must pass encoded bytes from memory
+     * @param encoded - verifier calldata
+     */
+    function getInstancesMemory(
+        bytes memory encoded
+    ) internal pure returns (uint256[] memory instances) {
+        bytes4 funcSig;
+        uint256 instances_offset;
+        uint256 instances_length;
+        assembly {
+            // fetch function sig. Either `verifyProof(bytes,uint256[])` or `verifyProof(address,bytes,uint256[])`
+            funcSig := mload(add(encoded, 0x20))
+
+            // Fetch instances offset which is 4 + 32 + 32 bytes away from
+            // start of encoded for `verifyProof(bytes,uint256[])`,
+            // and 4 + 32 + 32 +32 away for `verifyProof(address,bytes,uint256[])`
+
+            instances_offset := mload(
+                add(encoded, add(0x44, mul(0x20, eq(funcSig, 0xaf83a18d))))
+            )
+
+            instances_length := mload(add(add(encoded, 0x24), instances_offset))
+        }
+        instances = new uint256[](instances_length); // Allocate memory for the instances array.
+        assembly {
+            // Now instances points to the start of the array data
+            // (right after the length field).
+            for {
+                let i := 0x20
+            } lt(i, add(mul(instances_length, 0x20), 0x20)) {
+                i := add(i, 0x20)
+            } {
+                mstore(
+                    add(instances, i),
+                    mload(add(add(encoded, add(i, 0x24)), instances_offset))
+                )
+            }
+        }
+    }
+    /**
+     * @dev Parse the instances array from the Halo2Verifier encoded calldata.
+     * @notice must pass encoded bytes from calldata
+     * @param encoded - verifier calldata
+     */
+    function getInstancesCalldata(
+        bytes calldata encoded
+    ) internal pure returns (uint256[] memory instances) {
+        bytes4 funcSig;
+        uint256 instances_offset;
+        uint256 instances_length;
+        assembly {
+            // fetch function sig. Either `verifyProof(bytes,uint256[])` or `verifyProof(address,bytes,uint256[])`
+            funcSig := calldataload(encoded.offset)
+
+            // Fetch instances offset which is 4 + 32 + 32 bytes away from
+            // start of encoded for `verifyProof(bytes,uint256[])`,
+            // and 4 + 32 + 32 +32 away for `verifyProof(address,bytes,uint256[])`
+
+            instances_offset := calldataload(
+                add(
+                    encoded.offset,
+                    add(0x24, mul(0x20, eq(funcSig, 0xaf83a18d)))
+                )
+            )
+
+            instances_length := calldataload(
+                add(add(encoded.offset, 0x04), instances_offset)
+            )
+        }
+        instances = new uint256[](instances_length); // Allocate memory for the instances array.
+        assembly {
+            // Now instances points to the start of the array data
+            // (right after the length field).
+
+            for {
+                let i := 0x20
+            } lt(i, add(mul(instances_length, 0x20), 0x20)) {
+                i := add(i, 0x20)
+            } {
+                mstore(
+                    add(instances, i),
+                    calldataload(
+                        add(add(encoded.offset, add(i, 0x04)), instances_offset)
+                    )
+                )
+            }
+        }
+    }
+}
 
 // This contract serves as a Data Attestation Verifier for the EZKL model.
 // It is designed to read and attest to instances of proofs generated from a specified circuit.
@@ -34,11 +125,14 @@ contract DataAttestation is LoadInstances {
     address public admin;
 
     /**
-     * @notice EZKL P value 
+     * @notice EZKL P value
      * @dev In order to prevent the verifier from accepting two version of the same pubInput, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
      * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
      */
-    uint256 constant ORDER = uint256(0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001); 
+    uint256 constant ORDER =
+        uint256(
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
+        );
 
     uint256 constant INPUT_CALLS = 0;
 
@@ -69,7 +163,7 @@ contract DataAttestation is LoadInstances {
 
     function updateAdmin(address _admin) external {
         require(msg.sender == admin, "Only admin can update admin");
-        if(_admin == address(0)) {
+        if (_admin == address(0)) {
             revert();
         }
         admin = _admin;
@@ -80,7 +174,7 @@ contract DataAttestation is LoadInstances {
         bytes[][] memory _callData,
         uint256[][] memory _decimals
     ) external {
-        require(msg.sender == admin, "Only admin can update instanceOffset");
+        require(msg.sender == admin, "Only admin can update account calls");
         populateAccountCalls(_contractAddresses, _callData, _decimals);
     }
 
@@ -111,7 +205,10 @@ contract DataAttestation is LoadInstances {
             // count the total number of storage reads across all of the accounts
             counter += _callData[i].length;
         }
-        require(counter == INPUT_CALLS + OUTPUT_CALLS, "Invalid number of calls");
+        require(
+            counter == INPUT_CALLS + OUTPUT_CALLS,
+            "Invalid number of calls"
+        );
     }
 
     function mulDiv(
@@ -167,7 +264,7 @@ contract DataAttestation is LoadInstances {
      * @dev Quantize the data returned from the account calls to the scale used by the EZKL model.
      * @param data - The data returned from the account calls.
      * @param decimals - The number of decimals the data returned from the account calls has (for floating point representation).
-     * @param scale - The scale used to convert the floating point value into a fixed point value. 
+     * @param scale - The scale used to convert the floating point value into a fixed point value.
      */
     function quantizeData(
         bytes memory data,
@@ -181,7 +278,7 @@ contract DataAttestation is LoadInstances {
         if (mulmod(uint256(x), scale, decimals) * 2 >= decimals) {
             output += 1;
         }
-        quantized_data = neg ? -int256(output): int256(output);
+        quantized_data = neg ? -int256(output) : int256(output);
     }
     /**
      * @dev Make a static call to the account to fetch the data that EZKL reads from.
@@ -211,7 +308,9 @@ contract DataAttestation is LoadInstances {
      * @param x - The quantized data.
      * @return field_element - The field element.
      */
-    function toFieldElement(int256 x) internal pure returns (uint256 field_element) {
+    function toFieldElement(
+        int256 x
+    ) internal pure returns (uint256 field_element) {
         // The casting down to uint256 is safe because the order is about 2^254, and the value
         // of x ranges of -2^127 to 2^127, so x + int(ORDER) is always positive.
         return uint256(x + int(ORDER)) % ORDER;
@@ -251,12 +350,11 @@ contract DataAttestation is LoadInstances {
         }
     }
 
-
     function verifyWithDataAttestation(
         address verifier,
         bytes calldata encoded
     ) public view returns (bool) {
-        require(verifier.code.length > 0,"Address: call to non-contract");
+        require(verifier.code.length > 0, "Address: call to non-contract");
         attestData(getInstancesCalldata(encoded));
         // static call the verifier contract to verify the proof
         (bool success, bytes memory returndata) = verifier.staticcall(encoded);

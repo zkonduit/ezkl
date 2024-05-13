@@ -3,11 +3,11 @@ use super::GraphError;
 use crate::circuit::InputType;
 use crate::fieldutils::i64_to_felt;
 #[cfg(not(target_arch = "wasm32"))]
+use crate::graph::postgres::Client;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::tensor::Tensor;
 use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
-#[cfg(not(target_arch = "wasm32"))]
-use postgres::{Client, NoTls};
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
@@ -211,7 +211,9 @@ impl PostgresSource {
     }
 
     /// Fetch data from postgres
-    pub fn fetch(&self) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, Box<dyn std::error::Error>> {
+    pub async fn fetch(
+        &self,
+    ) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, Box<dyn std::error::Error>> {
         // clone to move into thread
         let user = self.user.clone();
         let host = self.host.clone();
@@ -232,10 +234,10 @@ impl PostgresSource {
             )
         };
 
-        let mut client = Client::connect(&config, NoTls)?;
+        let mut client = Client::connect(&config).await?;
         let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
         // extract rows from query
-        for row in client.query(&query, &[])? {
+        for row in client.query(&query, &[]).await? {
             // extract features from row
             for i in 0..row.len() {
                 res.push(row.get(i));
@@ -245,11 +247,12 @@ impl PostgresSource {
     }
 
     /// Fetch data from postgres and format it as a FileSource
-    pub fn fetch_and_format_as_file(
+    pub async fn fetch_and_format_as_file(
         &self,
     ) -> Result<Vec<Vec<FileSourceInner>>, Box<dyn std::error::Error>> {
         Ok(self
-            .fetch()?
+            .fetch()
+            .await?
             .iter()
             .map(|d| {
                 d.iter()
@@ -277,13 +280,13 @@ impl OnChainSource {
         mut shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
     ) -> Result<(Vec<Tensor<Fp>>, Self), Box<dyn std::error::Error>> {
-        use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
+        use crate::eth::{
+            evm_quantize, read_on_chain_inputs, test_on_chain_data, DEFAULT_ANVIL_ENDPOINT,
+        };
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
-        let (anvil, client) = crate::eth::setup_eth_backend(rpc, None).await?;
-
-        let address = client.address();
+        let (client, client_address) = crate::eth::setup_eth_backend(rpc, None).await?;
 
         let mut scales = scales;
         // set scales to 1 where data is a field element
@@ -296,7 +299,8 @@ impl OnChainSource {
 
         let calls_to_accounts = test_on_chain_data(client.clone(), data).await?;
         debug!("Calls to accounts: {:?}", calls_to_accounts);
-        let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
+        let inputs =
+            read_on_chain_inputs(client.clone(), client_address, &calls_to_accounts).await?;
         debug!("Inputs: {:?}", inputs);
 
         let mut quantized_evm_inputs = vec![];
@@ -325,7 +329,7 @@ impl OnChainSource {
             inputs.push(t);
         }
 
-        let used_rpc = rpc.unwrap_or(&anvil.endpoint()).to_string();
+        let used_rpc = rpc.unwrap_or(DEFAULT_ANVIL_ENDPOINT).to_string();
 
         // Fill the input_data field of the GraphData struct
         Ok((
@@ -502,7 +506,7 @@ impl GraphData {
     }
 
     ///
-    pub fn split_into_batches(
+    pub async fn split_into_batches(
         &self,
         input_shapes: Vec<Vec<usize>>,
     ) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
@@ -527,7 +531,7 @@ impl GraphData {
             GraphData {
                 input_data: DataSource::DB(data),
                 output_data: _,
-            } => data.fetch_and_format_as_file()?,
+            } => data.fetch_and_format_as_file().await?,
         };
 
         for (i, shape) in input_shapes.iter().enumerate() {

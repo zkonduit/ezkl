@@ -1,6 +1,6 @@
-use clap::{Parser, Subcommand};
 #[cfg(not(target_arch = "wasm32"))]
-use ethers::types::H160;
+use alloy::primitives::Address as H160;
+use clap::{Parser, Subcommand};
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},
@@ -290,7 +290,7 @@ pub enum Commands {
     Table {
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
-        model: PathBuf,
+        model: Option<PathBuf>,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -300,13 +300,13 @@ pub enum Commands {
     GenWitness {
         /// The path to the .json data file
         #[arg(short = 'D', long, default_value = DEFAULT_DATA)]
-        data: PathBuf,
+        data: Option<PathBuf>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
-        compiled_circuit: PathBuf,
+        compiled_circuit: Option<PathBuf>,
         /// Path to output the witness .json file
         #[arg(short = 'O', long, default_value = DEFAULT_WITNESS)]
-        output: PathBuf,
+        output: Option<PathBuf>,
         /// Path to the verification key file (optional - solely used to generate kzg commits)
         #[arg(short = 'V', long)]
         vk_path: Option<PathBuf>,
@@ -319,10 +319,10 @@ pub enum Commands {
     GenSettings {
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
-        model: PathBuf,
+        model: Option<PathBuf>,
         /// The path to generate the circuit settings .json file to
         #[arg(short = 'O', long, default_value = DEFAULT_SETTINGS)]
-        settings_path: PathBuf,
+        settings_path: Option<PathBuf>,
         /// proving arguments
         #[clap(flatten)]
         args: RunArgs,
@@ -333,13 +333,13 @@ pub enum Commands {
     CalibrateSettings {
         /// The path to the .json calibration data file.
         #[arg(short = 'D', long, default_value = DEFAULT_CALIBRATION_FILE)]
-        data: PathBuf,
+        data: Option<PathBuf>,
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
-        model: PathBuf,
+        model: Option<PathBuf>,
         /// The path to load circuit settings .json file AND overwrite (generated using the gen-settings command).
         #[arg(short = 'O', long, default_value = DEFAULT_SETTINGS)]
-        settings_path: PathBuf,
+        settings_path: Option<PathBuf>,
         #[arg(long = "target", default_value = DEFAULT_CALIBRATION_TARGET)]
         /// Target for calibration. Set to "resources" to optimize for computational resource. Otherwise, set to "accuracy" to optimize for accuracy.
         target: CalibrationTarget,
@@ -361,8 +361,8 @@ pub enum Commands {
         #[arg(long)]
         max_logrows: Option<u32>,
         // whether to only range check rebases (instead of trying both range check and lookup)
-        #[arg(long, default_value = DEFAULT_ONLY_RANGE_CHECK_REBASE)]
-        only_range_check_rebase: bool,
+        #[arg(long, default_value = DEFAULT_ONLY_RANGE_CHECK_REBASE, action = clap::ArgAction::SetTrue)]
+        only_range_check_rebase: Option<bool>,
     },
 
     /// Generates a dummy SRS
@@ -376,7 +376,7 @@ pub enum Commands {
         logrows: usize,
         /// commitment used
         #[arg(long, default_value = DEFAULT_COMMITMENT)]
-        commitment: Commitments,
+        commitment: Option<Commitments>,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -400,10 +400,10 @@ pub enum Commands {
     Mock {
         /// The path to the .json witness file (generated using the gen-witness command)
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
-        witness: PathBuf,
+        witness: Option<PathBuf>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
-        model: PathBuf,
+        model: Option<PathBuf>,
     },
 
     /// Mock aggregate proofs
@@ -413,10 +413,10 @@ pub enum Commands {
         aggregation_snarks: Vec<PathBuf>,
         /// logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
-        logrows: u32,
+        logrows: Option<u32>,
         /// whether the accumulated are segments of a larger proof
-        #[arg(long, default_value = DEFAULT_SPLIT)]
-        split_proofs: bool,
+        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue)]
+        split_proofs: Option<bool>,
     },
 
     /// setup aggregation circuit :)
@@ -426,22 +426,22 @@ pub enum Commands {
         sample_snarks: Vec<PathBuf>,
         /// The path to save the desired verification key file to
         #[arg(long, default_value = DEFAULT_VK_AGGREGATED)]
-        vk_path: PathBuf,
+        vk_path: Option<PathBuf>,
         /// The path to save the proving key to
         #[arg(long, default_value = DEFAULT_PK_AGGREGATED)]
-        pk_path: PathBuf,
+        pk_path: Option<PathBuf>,
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
-        logrows: u32,
+        logrows: Option<u32>,
         /// whether the accumulated are segments of a larger proof
-        #[arg(long, default_value = DEFAULT_SPLIT)]
-        split_proofs: bool,
+        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue)]
+        split_proofs: Option<bool>,
         /// compress selectors
-        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION)]
-        disable_selector_compression: bool,
+        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue)]
+        disable_selector_compression: Option<bool>,
         /// commitment used
         #[arg(long, default_value = DEFAULT_COMMITMENT)]
         commitment: Option<Commitments>,
@@ -453,10 +453,10 @@ pub enum Commands {
         aggregation_snarks: Vec<PathBuf>,
         /// The path to load the desired proving key file (generated using the setup-aggregate command)
         #[arg(long, default_value = DEFAULT_PK_AGGREGATED)]
-        pk_path: PathBuf,
+        pk_path: Option<PathBuf>,
         /// The path to output the proof file to
         #[arg(long, default_value = DEFAULT_PROOF_AGGREGATED)]
-        proof_path: PathBuf,
+        proof_path: Option<PathBuf>,
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
@@ -470,13 +470,13 @@ pub enum Commands {
         transcript: TranscriptType,
         /// logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
-        logrows: u32,
+        logrows: Option<u32>,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = DEFAULT_CHECKMODE)]
-        check_mode: CheckMode,
+        check_mode: Option<CheckMode>,
         /// whether the accumulated proofs are segments of a larger circuit
-        #[arg(long, default_value = DEFAULT_SPLIT)]
-        split_proofs: bool,
+        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue)]
+        split_proofs: Option<bool>,
         /// commitment used
         #[arg(long, default_value = DEFAULT_COMMITMENT)]
         commitment: Option<Commitments>,
@@ -485,34 +485,34 @@ pub enum Commands {
     CompileCircuit {
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL)]
-        model: PathBuf,
+        model: Option<PathBuf>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(long, default_value = DEFAULT_COMPILED_CIRCUIT)]
-        compiled_circuit: PathBuf,
+        compiled_circuit: Option<PathBuf>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
-        settings_path: PathBuf,
+        settings_path: Option<PathBuf>,
     },
     /// Creates pk and vk
     Setup {
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
-        compiled_circuit: PathBuf,
+        compiled_circuit: Option<PathBuf>,
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// The path to output the verification key file to
         #[arg(long, default_value = DEFAULT_VK)]
-        vk_path: PathBuf,
+        vk_path: Option<PathBuf>,
         /// The path to output the proving key file to
         #[arg(long, default_value = DEFAULT_PK)]
-        pk_path: PathBuf,
+        pk_path: Option<PathBuf>,
         /// The graph witness (optional - used to override fixed values in the circuit)
         #[arg(short = 'W', long)]
         witness: Option<PathBuf>,
         /// compress selectors
-        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION)]
-        disable_selector_compression: bool,
+        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue)]
+        disable_selector_compression: Option<bool>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Deploys a test contact that the data attester reads from and creates a data attestation formatted input.json file that contains call data information
@@ -520,10 +520,10 @@ pub enum Commands {
     SetupTestEvmData {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long)]
-        data: PathBuf,
+        data: Option<PathBuf>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long)]
-        compiled_circuit: PathBuf,
+        compiled_circuit: Option<PathBuf>,
         /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
         /// derived from the file information in the data .json file.
         /// Should include both the network input (possibly private) and the network output (public input to the proof)
@@ -548,7 +548,7 @@ pub enum Commands {
         addr: H160Flag,
         /// The path to the .json data file.
         #[arg(short = 'D', long)]
-        data: PathBuf,
+        data: Option<PathBuf>,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
@@ -558,10 +558,10 @@ pub enum Commands {
     SwapProofCommitments {
         /// The path to the proof file
         #[arg(short = 'P', long, default_value = DEFAULT_PROOF)]
-        proof_path: PathBuf,
+        proof_path: Option<PathBuf>,
         /// The path to the witness file
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
-        witness_path: PathBuf,
+        witness_path: Option<PathBuf>,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -569,16 +569,16 @@ pub enum Commands {
     Prove {
         /// The path to the .json witness file (generated using the gen-witness command)
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS)]
-        witness: PathBuf,
+        witness: Option<PathBuf>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT)]
-        compiled_circuit: PathBuf,
+        compiled_circuit: Option<PathBuf>,
         /// The path to load the desired proving key file (generated using the setup command)
         #[arg(long, default_value = DEFAULT_PK)]
-        pk_path: PathBuf,
+        pk_path: Option<PathBuf>,
         /// The path to output the proof file to
         #[arg(long, default_value = DEFAULT_PROOF)]
-        proof_path: PathBuf,
+        proof_path: Option<PathBuf>,
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
@@ -592,7 +592,7 @@ pub enum Commands {
         proof_type: ProofType,
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = DEFAULT_CHECKMODE)]
-        check_mode: CheckMode,
+        check_mode: Option<CheckMode>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an Evm verifier for a single proof
@@ -603,21 +603,21 @@ pub enum Commands {
         srs_path: Option<PathBuf>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
-        settings_path: PathBuf,
+        settings_path: Option<PathBuf>,
         /// The path to load the desired verification key file
         #[arg(long, default_value = DEFAULT_VK)]
-        vk_path: PathBuf,
+        vk_path: Option<PathBuf>,
         /// The path to output the Solidity code
         #[arg(long, default_value = DEFAULT_SOL_CODE)]
-        sol_code_path: PathBuf,
+        sol_code_path: Option<PathBuf>,
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = DEFAULT_VERIFIER_ABI)]
-        abi_path: PathBuf,
+        abi_path: Option<PathBuf>,
         /// Whether the verifier key should be rendered as a separate contract.
         /// We recommend disabling selector compression if this is enabled.
         /// To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command.        
-        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY)]
-        render_vk_seperately: bool,
+        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY, action = clap::ArgAction::SetTrue)]
+        render_vk_seperately: Option<bool>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an Evm verifier for a single proof
@@ -628,16 +628,16 @@ pub enum Commands {
         srs_path: Option<PathBuf>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
-        settings_path: PathBuf,
+        settings_path: Option<PathBuf>,
         /// The path to load the desired verification key file
         #[arg(long, default_value = DEFAULT_VK)]
-        vk_path: PathBuf,
+        vk_path: Option<PathBuf>,
         /// The path to output the Solidity code
         #[arg(long, default_value = DEFAULT_VK_SOL)]
-        sol_code_path: PathBuf,
+        sol_code_path: Option<PathBuf>,
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = DEFAULT_VK_ABI)]
-        abi_path: PathBuf,
+        abi_path: Option<PathBuf>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an Evm verifier that attests to on-chain inputs for a single proof
@@ -645,20 +645,20 @@ pub enum Commands {
     CreateEvmDataAttestation {
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
-        settings_path: PathBuf,
+        settings_path: Option<PathBuf>,
         /// The path to output the Solidity code
         #[arg(long, default_value = DEFAULT_SOL_CODE_DA)]
-        sol_code_path: PathBuf,
+        sol_code_path: Option<PathBuf>,
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = DEFAULT_VERIFIER_DA_ABI)]
-        abi_path: PathBuf,
+        abi_path: Option<PathBuf>,
         /// The path to the .json data file, which should
         /// contain the necessary calldata and account addresses
         /// needed to read from all the on-chain
         /// view functions that return the data that the network
         /// ingests as inputs.
         #[arg(short = 'D', long, default_value = DEFAULT_DATA)]
-        data: PathBuf,
+        data: Option<PathBuf>,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -670,60 +670,60 @@ pub enum Commands {
         srs_path: Option<PathBuf>,
         /// The path to load the desired verification key file
         #[arg(long, default_value = DEFAULT_VK_AGGREGATED)]
-        vk_path: PathBuf,
+        vk_path: Option<PathBuf>,
         /// The path to the Solidity code
         #[arg(long, default_value = DEFAULT_SOL_CODE_AGGREGATED)]
-        sol_code_path: PathBuf,
+        sol_code_path: Option<PathBuf>,
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = DEFAULT_VERIFIER_AGGREGATED_ABI)]
-        abi_path: PathBuf,
+        abi_path: Option<PathBuf>,
         // aggregated circuit settings paths, used to calculate the number of instances in the aggregate proof
         #[arg(long, default_value = DEFAULT_SETTINGS, value_delimiter = ',', allow_hyphen_values = true)]
         aggregation_settings: Vec<PathBuf>,
         // logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
-        logrows: u32,
+        logrows: Option<u32>,
         /// Whether the verifier key should be rendered as a separate contract.
         /// We recommend disabling selector compression if this is enabled.
         /// To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command.        
-        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY)]
-        render_vk_seperately: bool,
+        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY, action = clap::ArgAction::SetTrue)]
+        render_vk_seperately: Option<bool>,
     },
     /// Verifies a proof, returning accept or reject
     Verify {
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS)]
-        settings_path: PathBuf,
+        settings_path: Option<PathBuf>,
         /// The path to the proof file (generated using the prove command)
         #[arg(long, default_value = DEFAULT_PROOF)]
-        proof_path: PathBuf,
+        proof_path: Option<PathBuf>,
         /// The path to the verification key file (generated using the setup command)
         #[arg(long, default_value = DEFAULT_VK)]
-        vk_path: PathBuf,
+        vk_path: Option<PathBuf>,
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// Reduce SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
-        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION)]
-        reduced_srs: bool,
+        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION, action = clap::ArgAction::SetTrue)]
+        reduced_srs: Option<bool>,
     },
     /// Verifies an aggregate proof, returning accept or reject
     VerifyAggr {
         /// The path to the proof file (generated using the prove command)
         #[arg(long, default_value = DEFAULT_PROOF_AGGREGATED)]
-        proof_path: PathBuf,
+        proof_path: Option<PathBuf>,
         /// The path to the verification key file (generated using the setup-aggregate command)
         #[arg(long, default_value = DEFAULT_VK_AGGREGATED)]
-        vk_path: PathBuf,
+        vk_path: Option<PathBuf>,
         /// reduced srs
-        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION)]
-        reduced_srs: bool,
+        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION, action = clap::ArgAction::SetTrue)]
+        reduced_srs: Option<bool>,
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS)]
-        logrows: u32,
+        logrows: Option<u32>,
         /// commitment
         #[arg(long, default_value = DEFAULT_COMMITMENT)]
         commitment: Option<Commitments>,
@@ -733,13 +733,13 @@ pub enum Commands {
     DeployEvmVerifier {
         /// The path to the Solidity code (generated using the create-evm-verifier command)
         #[arg(long, default_value = DEFAULT_SOL_CODE)]
-        sol_code_path: PathBuf,
+        sol_code_path: Option<PathBuf>,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS)]
         /// The path to output the contract address
-        addr_path: PathBuf,
+        addr_path: Option<PathBuf>,
         /// The optimizer runs to set on the verifier. Lower values optimize for deployment cost, while higher values optimize for gas cost.
         #[arg(long, default_value = DEFAULT_OPTIMIZER_RUNS)]
         optimizer_runs: usize,
@@ -752,13 +752,13 @@ pub enum Commands {
     DeployEvmVK {
         /// The path to the Solidity code (generated using the create-evm-verifier command)
         #[arg(long, default_value = DEFAULT_VK_SOL)]
-        sol_code_path: PathBuf,
+        sol_code_path: Option<PathBuf>,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS_VK)]
         /// The path to output the contract address
-        addr_path: PathBuf,
+        addr_path: Option<PathBuf>,
         /// The optimizer runs to set on the verifier. Lower values optimize for deployment cost, while higher values optimize for gas cost.
         #[arg(long, default_value = DEFAULT_OPTIMIZER_RUNS)]
         optimizer_runs: usize,
@@ -772,19 +772,19 @@ pub enum Commands {
     DeployEvmDataAttestation {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long, default_value = DEFAULT_DATA)]
-        data: PathBuf,
+        data: Option<PathBuf>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(long, default_value = DEFAULT_SETTINGS)]
-        settings_path: PathBuf,
+        settings_path: Option<PathBuf>,
         /// The path to the Solidity code
         #[arg(long, default_value = DEFAULT_SOL_CODE_DA)]
-        sol_code_path: PathBuf,
+        sol_code_path: Option<PathBuf>,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long)]
         rpc_url: Option<String>,
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS_DA)]
         /// The path to output the contract address
-        addr_path: PathBuf,
+        addr_path: Option<PathBuf>,
         /// The optimizer runs to set on the verifier. (Lower values optimize for deployment, while higher values optimize for execution)
         #[arg(long, default_value = DEFAULT_OPTIMIZER_RUNS)]
         optimizer_runs: usize,
@@ -798,7 +798,7 @@ pub enum Commands {
     VerifyEvm {
         /// The path to the proof file (generated using the prove command)
         #[arg(long, default_value = DEFAULT_PROOF)]
-        proof_path: PathBuf,
+        proof_path: Option<PathBuf>,
         /// The path to verifier contract's address
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS)]
         addr_verifier: H160Flag,

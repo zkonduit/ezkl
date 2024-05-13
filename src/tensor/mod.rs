@@ -401,7 +401,7 @@ impl IntoI64 for () {
         0
     }
     fn from_i64(_: i64) -> Self {
-        ()
+        
     }
 }
 
@@ -419,7 +419,7 @@ impl<F: PrimeField + IntoI64> IntoI64 for Value<F> {
         let mut res = vec![];
         self.map(|x| res.push(x.into_i64()));
 
-        if res.len() == 0 {
+        if res.is_empty() {
             0
         } else {
             res[0]

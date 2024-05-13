@@ -1,9 +1,7 @@
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::CalibrationTarget;
-use crate::commands::Commands;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::commands::H160Flag;
+use crate::commands::*;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
@@ -23,6 +21,8 @@ use crate::pfsys::{
 };
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::EZKL_BUF_CAPACITY;
 use crate::{Commitments, RunArgs};
 #[cfg(not(target_arch = "wasm32"))]
 use colored::Colorize;
@@ -66,47 +66,15 @@ use snark_verifier::system::halo2::Config;
 use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
+use std::io::BufWriter;
+#[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
 use std::path::Path;
 use std::path::PathBuf;
-#[cfg(not(target_arch = "wasm32"))]
-use std::process::Command;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::OnceLock;
-
-#[cfg(not(target_arch = "wasm32"))]
-use crate::EZKL_BUF_CAPACITY;
-#[cfg(not(target_arch = "wasm32"))]
-use std::io::BufWriter;
+use std::str::FromStr;
 use std::time::Duration;
 use tabled::Tabled;
 use thiserror::Error;
-
-#[cfg(not(target_arch = "wasm32"))]
-static _SOLC_REQUIREMENT: OnceLock<bool> = OnceLock::new();
-#[cfg(not(target_arch = "wasm32"))]
-fn check_solc_requirement() {
-    info!("checking solc installation..");
-    _SOLC_REQUIREMENT.get_or_init(|| match Command::new("solc").arg("--version").output() {
-        Ok(output) => {
-            debug!("solc output: {:#?}", output);
-            debug!("solc output success: {:#?}", output.status.success());
-            if !output.status.success() {
-                log::error!(
-                    "`solc` check failed: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
-                return false;
-            }
-            debug!("solc check passed, proceeding");
-            true
-        }
-        Err(_) => {
-            log::error!("`solc` check failed: solc not found");
-            false
-        }
-    });
-}
 
 use lazy_static::lazy_static;
 
@@ -152,7 +120,11 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             srs_path,
             logrows,
             commitment,
-        } => gen_srs_cmd(srs_path, logrows as u32, commitment),
+        } => gen_srs_cmd(
+            srs_path,
+            logrows as u32,
+            commitment.unwrap_or(Commitments::from_str(DEFAULT_COMMITMENT)?),
+        ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::GetSrs {
             srs_path,
@@ -160,12 +132,16 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             logrows,
             commitment,
         } => get_srs_cmd(srs_path, settings_path, logrows, commitment).await,
-        Commands::Table { model, args } => table(model, args),
+        Commands::Table { model, args } => table(model.unwrap_or(DEFAULT_MODEL.into()), args),
         Commands::GenSettings {
             model,
             settings_path,
             args,
-        } => gen_circuit_settings(model, settings_path, args),
+        } => gen_circuit_settings(
+            model.unwrap_or(DEFAULT_MODEL.into()),
+            settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+            args,
+        ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CalibrateSettings {
             model,
@@ -178,16 +154,17 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             max_logrows,
             only_range_check_rebase,
         } => calibrate(
-            model,
-            data,
-            settings_path,
+            model.unwrap_or(DEFAULT_MODEL.into()),
+            data.unwrap_or(DEFAULT_DATA.into()),
+            settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
             target,
             lookup_safety_margin,
             scales,
             scale_rebase_multiplier,
-            only_range_check_rebase,
+            only_range_check_rebase.unwrap_or(DEFAULT_ONLY_RANGE_CHECK_REBASE.parse()?),
             max_logrows,
         )
+        .await
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::GenWitness {
             data,
@@ -195,9 +172,19 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             output,
             vk_path,
             srs_path,
-        } => gen_witness(compiled_circuit, data, Some(output), vk_path, srs_path)
-            .map(|e| serde_json::to_string(&e).unwrap()),
-        Commands::Mock { model, witness } => mock(model, witness),
+        } => gen_witness(
+            compiled_circuit.unwrap_or(DEFAULT_COMPILED_CIRCUIT.into()),
+            data.unwrap_or(DEFAULT_DATA.into()),
+            Some(output.unwrap_or(DEFAULT_WITNESS.into())),
+            vk_path,
+            srs_path,
+        )
+        .await
+        .map(|e| serde_json::to_string(&e).unwrap()),
+        Commands::Mock { model, witness } => mock(
+            model.unwrap_or(DEFAULT_MODEL.into()),
+            witness.unwrap_or(DEFAULT_WITNESS.into()),
+        ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmVerifier {
             vk_path,
@@ -206,28 +193,48 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             sol_code_path,
             abi_path,
             render_vk_seperately,
-        } => create_evm_verifier(
-            vk_path,
-            srs_path,
-            settings_path,
-            sol_code_path,
-            abi_path,
-            render_vk_seperately,
-        ),
+        } => {
+            create_evm_verifier(
+                vk_path.unwrap_or(DEFAULT_VK.into()),
+                srs_path,
+                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+                sol_code_path.unwrap_or(DEFAULT_SOL_CODE.into()),
+                abi_path.unwrap_or(DEFAULT_VERIFIER_ABI.into()),
+                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse()?),
+            )
+            .await
+        }
         Commands::CreateEvmVK {
             vk_path,
             srs_path,
             settings_path,
             sol_code_path,
             abi_path,
-        } => create_evm_vk(vk_path, srs_path, settings_path, sol_code_path, abi_path),
+        } => {
+            create_evm_vk(
+                vk_path.unwrap_or(DEFAULT_VK.into()),
+                srs_path,
+                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+                sol_code_path.unwrap_or(DEFAULT_VK_SOL.into()),
+                abi_path.unwrap_or(DEFAULT_VK_ABI.into()),
+            )
+            .await
+        }
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmDataAttestation {
             settings_path,
             sol_code_path,
             abi_path,
             data,
-        } => create_evm_data_attestation(settings_path, sol_code_path, abi_path, data),
+        } => {
+            create_evm_data_attestation(
+                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+                sol_code_path.unwrap_or(DEFAULT_SOL_CODE_DA.into()),
+                abi_path.unwrap_or(DEFAULT_VERIFIER_DA_ABI.into()),
+                data.unwrap_or(DEFAULT_DATA.into()),
+            )
+            .await
+        }
         #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmVerifierAggr {
             vk_path,
@@ -237,20 +244,27 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             aggregation_settings,
             logrows,
             render_vk_seperately,
-        } => create_evm_aggregate_verifier(
-            vk_path,
-            srs_path,
-            sol_code_path,
-            abi_path,
-            aggregation_settings,
-            logrows,
-            render_vk_seperately,
-        ),
+        } => {
+            create_evm_aggregate_verifier(
+                vk_path.unwrap_or(DEFAULT_VK.into()),
+                srs_path,
+                sol_code_path.unwrap_or(DEFAULT_SOL_CODE_AGGREGATED.into()),
+                abi_path.unwrap_or(DEFAULT_VERIFIER_AGGREGATED_ABI.into()),
+                aggregation_settings,
+                logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
+                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse()?),
+            )
+            .await
+        }
         Commands::CompileCircuit {
             model,
             compiled_circuit,
             settings_path,
-        } => compile_circuit(model, compiled_circuit, settings_path),
+        } => compile_circuit(
+            model.unwrap_or(DEFAULT_MODEL.into()),
+            compiled_circuit.unwrap_or(DEFAULT_COMPILED_CIRCUIT.into()),
+            settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+        ),
         Commands::Setup {
             compiled_circuit,
             srs_path,
@@ -259,12 +273,12 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             witness,
             disable_selector_compression,
         } => setup(
-            compiled_circuit,
+            compiled_circuit.unwrap_or(DEFAULT_COMPILED_CIRCUIT.into()),
             srs_path,
-            vk_path,
-            pk_path,
+            vk_path.unwrap_or(DEFAULT_VK.into()),
+            pk_path.unwrap_or(DEFAULT_PK.into()),
             witness,
-            disable_selector_compression,
+            disable_selector_compression.unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse()?),
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::SetupTestEvmData {
@@ -276,8 +290,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             output_source,
         } => {
             setup_test_evm_witness(
-                data,
-                compiled_circuit,
+                data.unwrap_or(DEFAULT_DATA.into()),
+                compiled_circuit.unwrap_or(DEFAULT_COMPILED_CIRCUIT.into()),
                 test_data,
                 rpc_url,
                 input_source,
@@ -290,13 +304,17 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             addr,
             data,
             rpc_url,
-        } => test_update_account_calls(addr, data, rpc_url).await,
+        } => test_update_account_calls(addr, data.unwrap_or(DEFAULT_DATA.into()), rpc_url).await,
         #[cfg(not(target_arch = "wasm32"))]
         Commands::SwapProofCommitments {
             proof_path,
             witness_path,
-        } => swap_proof_commitments_cmd(proof_path, witness_path)
-            .map(|e| serde_json::to_string(&e).unwrap()),
+        } => swap_proof_commitments_cmd(
+            proof_path.unwrap_or(DEFAULT_PROOF.into()),
+            witness_path.unwrap_or(DEFAULT_WITNESS.into()),
+        )
+        .map(|e| serde_json::to_string(&e).unwrap()),
+
         #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             witness,
@@ -307,20 +325,24 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             proof_type,
             check_mode,
         } => prove(
-            witness,
-            compiled_circuit,
-            pk_path,
-            Some(proof_path),
+            witness.unwrap_or(DEFAULT_WITNESS.into()),
+            compiled_circuit.unwrap_or(DEFAULT_COMPILED_CIRCUIT.into()),
+            pk_path.unwrap_or(DEFAULT_PK.into()),
+            Some(proof_path.unwrap_or(DEFAULT_PROOF.into())),
             srs_path,
             proof_type,
-            check_mode,
+            check_mode.unwrap_or(DEFAULT_CHECKMODE.parse()?),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::MockAggregate {
             aggregation_snarks,
             logrows,
             split_proofs,
-        } => mock_aggregate(aggregation_snarks, logrows, split_proofs),
+        } => mock_aggregate(
+            aggregation_snarks,
+            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
+            split_proofs.unwrap_or(DEFAULT_SPLIT.parse()?),
+        ),
         Commands::SetupAggregate {
             sample_snarks,
             vk_path,
@@ -332,12 +354,12 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             commitment,
         } => setup_aggregate(
             sample_snarks,
-            vk_path,
-            pk_path,
+            vk_path.unwrap_or(DEFAULT_VK_AGGREGATED.into()),
+            pk_path.unwrap_or(DEFAULT_PK_AGGREGATED.into()),
             srs_path,
-            logrows,
-            split_proofs,
-            disable_selector_compression,
+            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
+            split_proofs.unwrap_or(DEFAULT_SPLIT.parse()?),
+            disable_selector_compression.unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse()?),
             commitment.into(),
         ),
         Commands::Aggregate {
@@ -351,14 +373,14 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             split_proofs,
             commitment,
         } => aggregate(
-            proof_path,
+            proof_path.unwrap_or(DEFAULT_PROOF_AGGREGATED.into()),
             aggregation_snarks,
-            pk_path,
+            pk_path.unwrap_or(DEFAULT_PK_AGGREGATED.into()),
             srs_path,
             transcript,
-            logrows,
-            check_mode,
-            split_proofs,
+            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
+            check_mode.unwrap_or(DEFAULT_CHECKMODE.parse()?),
+            split_proofs.unwrap_or(DEFAULT_SPLIT.parse()?),
             commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
@@ -368,8 +390,14 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             vk_path,
             srs_path,
             reduced_srs,
-        } => verify(proof_path, settings_path, vk_path, srs_path, reduced_srs)
-            .map(|e| serde_json::to_string(&e).unwrap()),
+        } => verify(
+            proof_path.unwrap_or(DEFAULT_PROOF.into()),
+            settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+            vk_path.unwrap_or(DEFAULT_VK.into()),
+            srs_path,
+            reduced_srs.unwrap_or(DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse()?),
+        )
+        .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::VerifyAggr {
             proof_path,
             vk_path,
@@ -378,11 +406,11 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             logrows,
             commitment,
         } => verify_aggr(
-            proof_path,
-            vk_path,
+            proof_path.unwrap_or(DEFAULT_PROOF_AGGREGATED.into()),
+            vk_path.unwrap_or(DEFAULT_VK_AGGREGATED.into()),
             srs_path,
-            logrows,
-            reduced_srs,
+            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
+            reduced_srs.unwrap_or(DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse()?),
             commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
@@ -395,9 +423,9 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             private_key,
         } => {
             deploy_evm(
-                sol_code_path,
+                sol_code_path.unwrap_or(DEFAULT_SOL_CODE.into()),
                 rpc_url,
-                addr_path,
+                addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS.into()),
                 optimizer_runs,
                 private_key,
                 "Halo2Verifier",
@@ -413,9 +441,9 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             private_key,
         } => {
             deploy_evm(
-                sol_code_path,
+                sol_code_path.unwrap_or(DEFAULT_VK_SOL.into()),
                 rpc_url,
-                addr_path,
+                addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS_VK.into()),
                 optimizer_runs,
                 private_key,
                 "Halo2VerifyingKey",
@@ -433,11 +461,11 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             private_key,
         } => {
             deploy_da_evm(
-                data,
-                settings_path,
-                sol_code_path,
+                data.unwrap_or(DEFAULT_DATA.into()),
+                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
+                sol_code_path.unwrap_or(DEFAULT_SOL_CODE_DA.into()),
                 rpc_url,
-                addr_path,
+                addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS_DA.into()),
                 optimizer_runs,
                 private_key,
             )
@@ -450,7 +478,16 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             rpc_url,
             addr_da,
             addr_vk,
-        } => verify_evm(proof_path, addr_verifier, rpc_url, addr_da, addr_vk).await,
+        } => {
+            verify_evm(
+                proof_path.unwrap_or(DEFAULT_PROOF.into()),
+                addr_verifier,
+                rpc_url,
+                addr_da,
+                addr_vk,
+            )
+            .await
+        }
     }
 }
 
@@ -636,7 +673,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, Box<dyn
     Ok(String::new())
 }
 
-pub(crate) fn gen_witness(
+pub(crate) async fn gen_witness(
     compiled_circuit_path: PathBuf,
     data: PathBuf,
     output: Option<PathBuf>,
@@ -659,7 +696,7 @@ pub(crate) fn gen_witness(
     };
 
     #[cfg(not(target_arch = "wasm32"))]
-    let mut input = circuit.load_graph_input(&data)?;
+    let mut input = circuit.load_graph_input(&data).await?;
     #[cfg(target_arch = "wasm32")]
     let mut input = circuit.load_graph_input(&data)?;
 
@@ -890,7 +927,7 @@ impl AccuracyResults {
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(trivial_casts)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn calibrate(
+pub(crate) async fn calibrate(
     model_path: PathBuf,
     data: PathBuf,
     settings_path: PathBuf,
@@ -913,7 +950,9 @@ pub(crate) fn calibrate(
 
     let model = Model::from_run_args(&settings.run_args, &model_path)?;
 
-    let chunks = data.split_into_batches(model.graph.input_shapes()?)?;
+    let input_shapes = model.graph.input_shapes()?;
+
+    let chunks = data.split_into_batches(input_shapes).await?;
     info!("num calibration batches: {}", chunks.len());
 
     debug!("running onnx predictions...");
@@ -1296,7 +1335,7 @@ pub(crate) fn mock(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn create_evm_verifier(
+pub(crate) async fn create_evm_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     settings_path: PathBuf,
@@ -1304,8 +1343,6 @@ pub(crate) fn create_evm_verifier(
     abi_path: PathBuf,
     render_vk_seperately: bool,
 ) -> Result<String, Box<dyn Error>> {
-    check_solc_requirement();
-
     let settings = GraphSettings::load(&settings_path)?;
     let commitment: Commitments = settings.run_args.commitment.into();
     let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
@@ -1335,7 +1372,7 @@ pub(crate) fn create_evm_verifier(
     File::create(sol_code_path.clone())?.write_all(verifier_solidity.as_bytes())?;
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0)?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0).await?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -1343,14 +1380,13 @@ pub(crate) fn create_evm_verifier(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn create_evm_vk(
+pub(crate) async fn create_evm_vk(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
 ) -> Result<String, Box<dyn Error>> {
-    check_solc_requirement();
     let settings = GraphSettings::load(&settings_path)?;
     let commitment: Commitments = settings.run_args.commitment.into();
     let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
@@ -1377,7 +1413,7 @@ pub(crate) fn create_evm_vk(
     File::create(sol_code_path.clone())?.write_all(vk_solidity.as_bytes())?;
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2VerifyingKey", 0)?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2VerifyingKey", 0).await?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -1385,7 +1421,7 @@ pub(crate) fn create_evm_vk(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn create_evm_data_attestation(
+pub(crate) async fn create_evm_data_attestation(
     settings_path: PathBuf,
     _sol_code_path: PathBuf,
     _abi_path: PathBuf,
@@ -1393,7 +1429,6 @@ pub(crate) fn create_evm_data_attestation(
 ) -> Result<String, Box<dyn Error>> {
     #[allow(unused_imports)]
     use crate::graph::{DataSource, VarVisibility};
-    check_solc_requirement();
 
     let settings = GraphSettings::load(&settings_path)?;
 
@@ -1433,7 +1468,7 @@ pub(crate) fn create_evm_data_attestation(
         let mut f = File::create(_sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0)?;
+        let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0).await?;
         // save abi to file
         serde_json::to_writer(std::fs::File::create(_abi_path)?, &abi)?;
     } else {
@@ -1454,7 +1489,6 @@ pub(crate) async fn deploy_da_evm(
     runs: usize,
     private_key: Option<String>,
 ) -> Result<String, Box<dyn Error>> {
-    check_solc_requirement();
     let contract_address = deploy_da_verifier_via_solidity(
         settings_path,
         data,
@@ -1481,7 +1515,6 @@ pub(crate) async fn deploy_evm(
     private_key: Option<String>,
     contract_name: &str,
 ) -> Result<String, Box<dyn Error>> {
-    check_solc_requirement();
     let contract_address = deploy_contract_via_solidity(
         sol_code_path,
         rpc_url.as_deref(),
@@ -1507,7 +1540,6 @@ pub(crate) async fn verify_evm(
     addr_vk: Option<H160Flag>,
 ) -> Result<String, Box<dyn Error>> {
     use crate::eth::verify_proof_with_data_attestation;
-    check_solc_requirement();
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
@@ -1540,7 +1572,7 @@ pub(crate) async fn verify_evm(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn create_evm_aggregate_verifier(
+pub(crate) async fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     sol_code_path: PathBuf,
@@ -1549,7 +1581,6 @@ pub(crate) fn create_evm_aggregate_verifier(
     logrows: u32,
     render_vk_seperately: bool,
 ) -> Result<String, Box<dyn Error>> {
-    check_solc_requirement();
     let srs_path = get_srs_path(logrows, srs_path, Commitments::KZG);
     let params: ParamsKZG<Bn256> = load_srs_verifier::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
@@ -1595,7 +1626,7 @@ pub(crate) fn create_evm_aggregate_verifier(
     File::create(sol_code_path.clone())?.write_all(verifier_solidity.as_bytes())?;
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0)?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0).await?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -1675,7 +1706,6 @@ pub(crate) async fn setup_test_evm_witness(
 ) -> Result<String, Box<dyn Error>> {
     use crate::graph::TestOnChainData;
 
-    info!("run this command in background to keep the instance running for testing");
     let mut data = GraphData::from_path(data_path)?;
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
@@ -1711,7 +1741,6 @@ pub(crate) async fn test_update_account_calls(
 ) -> Result<String, Box<dyn Error>> {
     use crate::eth::update_account_calls;
 
-    check_solc_requirement();
     update_account_calls(addr.into(), data, rpc_url.as_deref()).await?;
 
     Ok(String::new())
