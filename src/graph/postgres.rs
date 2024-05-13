@@ -1,6 +1,7 @@
 use log::{debug, error, info};
 use std::fmt::Debug;
 use std::net::IpAddr;
+#[cfg(unix)]
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
