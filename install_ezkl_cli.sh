@@ -126,7 +126,6 @@ elif [ "$PLATFORM" == "macos" ]; then
 
         echo "Cleaning up"
         rm "$EZKL_DIR/build-artifacts.ezkl-macos-aarch64.tar.gz"
-
     else
         JSON_RESPONSE=$(curl -s "$RELEASE_URL")
         FILE_URL=$(echo "$JSON_RESPONSE" | grep -o 'https://github.com[^"]*' | grep "build-artifacts.ezkl-macos.tar.gz")
@@ -155,7 +154,7 @@ elif [ "$PLATFORM" == "linux" ]; then
 
         echo "Cleaning up"
         rm "$EZKL_DIR/build-artifacts.ezkl-linux-gnu.tar.gz"
-    else if [ "$ARCHITECTURE" == "aarch64" ]; then
+    elif [ "$ARCHITECTURE" == "aarch64" ]; then
         JSON_RESPONSE=$(curl -s "$RELEASE_URL")
         FILE_URL=$(echo "$JSON_RESPONSE" | grep -o 'https://github.com[^"]*' | grep "build-artifacts.ezkl-linux-aarch64.tar.gz")
 
