@@ -91,9 +91,9 @@ You can install the library from source
 cargo install --locked --path .
 ```
 
-You will need a functioning installation of `solc` in order to run `ezkl` properly.
-[solc-select](https://github.com/crytic/solc-select) is recommended.
-Follow the instructions on [solc-select](https://github.com/crytic/solc-select) to activate `solc` in your environment.
+`ezkl` now auto-manages solc installation for you.
+
+
 
 
 #### building python bindings

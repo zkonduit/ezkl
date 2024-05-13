@@ -1,6 +1,6 @@
-use clap::{Parser, Subcommand};
 #[cfg(not(target_arch = "wasm32"))]
-use ethers::types::H160;
+use alloy::primitives::Address as H160;
+use clap::{Parser, Subcommand};
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},

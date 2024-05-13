@@ -109,7 +109,7 @@ def test_gen_srs():
 
 
 
-def test_calibrate_over_user_range():
+async def test_calibrate_over_user_range():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -136,14 +136,14 @@ def test_calibrate_over_user_range():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = ezkl.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources", 1, [0, 1, 2])
     assert res == True
     assert os.path.isfile(output_path)
 
 
 
-def test_calibrate():
+async def test_calibrate():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -170,7 +170,7 @@ def test_calibrate():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = ezkl.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources")
     assert res == True
     assert os.path.isfile(output_path)
@@ -198,7 +198,7 @@ def test_model_compile():
     assert res == True
 
 
-def test_forward():
+async def test_forward():
     """
     Test for vanilla forward pass
     """
@@ -217,7 +217,7 @@ def test_forward():
         'witness.json'
     )
 
-    res = ezkl.gen_witness(data_path, model_path, output_path)
+    res = await ezkl.gen_witness(data_path, model_path, output_path)
 
     with open(output_path, "r") as f:
         data = json.load(f)
@@ -229,12 +229,12 @@ def test_forward():
     assert data["processed_outputs"]["poseidon_hash"] == res["processed_outputs"]["poseidon_hash"]
 
 
-def test_get_srs():
+async def test_get_srs():
     """
     Test for get_srs
     """
     settings_path = os.path.join(folder_path, 'settings.json')
-    res = ezkl.get_srs(settings_path, srs_path=srs_path)
+    res = await ezkl.get_srs(settings_path, srs_path=srs_path)
 
     assert res == True
 
@@ -242,7 +242,7 @@ def test_get_srs():
 
     another_srs_path = os.path.join(folder_path, "kzg_test_k8.params")
 
-    res = ezkl.get_srs(logrows=8, srs_path=another_srs_path, commitment=ezkl.PyCommitments.KZG)
+    res = await ezkl.get_srs(logrows=8, srs_path=another_srs_path, commitment=ezkl.PyCommitments.KZG)
 
     assert os.path.isfile(another_srs_path)
 
@@ -393,9 +393,7 @@ def test_prove_evm():
     assert os.path.isfile(proof_path)
 
 
-
-
-def test_create_evm_verifier():
+async def test_create_evm_verifier():
     """
     Create EVM verifier with solidity code
     In order to run this test you will need to install solc in your environment
@@ -405,7 +403,7 @@ def test_create_evm_verifier():
     sol_code_path = os.path.join(folder_path, 'test.sol')
     abi_path = os.path.join(folder_path, 'test.abi')
 
-    res = ezkl.create_evm_verifier(
+    res = await ezkl.create_evm_verifier(
         vk_path,
         settings_path,
         sol_code_path,
@@ -417,7 +415,7 @@ def test_create_evm_verifier():
     assert os.path.isfile(sol_code_path)
 
 
-def test_deploy_evm():
+async def test_deploy_evm():
     """
     Test deployment of the verifier smart contract
     In order to run this you will need to install solc in your environment
@@ -428,7 +426,7 @@ def test_deploy_evm():
     # TODO: without optimization there will be out of gas errors
     # sol_code_path = os.path.join(folder_path, 'test.sol')
 
-    res = ezkl.deploy_evm(
+    res = await ezkl.deploy_evm(
         addr_path,
         sol_code_path,
         rpc_url=anvil_url,
@@ -437,7 +435,7 @@ def test_deploy_evm():
     assert res == True
 
 
-def test_deploy_evm_with_private_key():
+async def test_deploy_evm_with_private_key():
     """
     Test deployment of the verifier smart contract using a custom private key
     In order to run this you will need to install solc in your environment
@@ -450,7 +448,7 @@ def test_deploy_evm_with_private_key():
 
     anvil_default_private_key = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
-    res = ezkl.deploy_evm(
+    res = await ezkl.deploy_evm(
         addr_path,
         sol_code_path,
         rpc_url=anvil_url,
@@ -462,7 +460,7 @@ def test_deploy_evm_with_private_key():
     custom_zero_balance_private_key = "ff9dfe0b6d31e93ba13460a4d6f63b5e31dd9532b1304f1cbccea7092a042aa4"
 
     with pytest.raises(RuntimeError, match="Failed to run deploy_evm"):
-        res = ezkl.deploy_evm(
+        res = await ezkl.deploy_evm(
             addr_path,
             sol_code_path,
             rpc_url=anvil_url,
@@ -470,7 +468,7 @@ def test_deploy_evm_with_private_key():
         )
 
 
-def test_verify_evm():
+async def test_verify_evm():
     """
     Verifies an evm proof
     In order to run this you will need to install solc in your environment
@@ -486,7 +484,7 @@ def test_verify_evm():
     # TODO: without optimization there will be out of gas errors
     # sol_code_path = os.path.join(folder_path, 'test.sol')
 
-    res = ezkl.verify_evm(
+    res = await ezkl.verify_evm(
         addr,
         proof_path,
         rpc_url=anvil_url,
@@ -497,7 +495,7 @@ def test_verify_evm():
     assert res == True
 
 
-def test_aggregate_and_verify_aggr():
+async def test_aggregate_and_verify_aggr():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -526,7 +524,7 @@ def test_aggregate_and_verify_aggr():
     res = ezkl.gen_settings(model_path, settings_path)
     assert res == True
 
-    res = ezkl.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         data_path, model_path, settings_path, "resources")
     assert res == True
     assert os.path.isfile(settings_path)
@@ -548,7 +546,7 @@ def test_aggregate_and_verify_aggr():
         '1l_relu_aggr_witness.json'
     )
 
-    res = ezkl.gen_witness(data_path, compiled_model_path,
+    res = await ezkl.gen_witness(data_path, compiled_model_path,
                            output_path)
 
     ezkl.prove(
@@ -603,7 +601,7 @@ def test_aggregate_and_verify_aggr():
     assert res == True
 
 
-def test_evm_aggregate_and_verify_aggr():
+async def test_evm_aggregate_and_verify_aggr():
     data_path = os.path.join(
         examples_path,
         'onnx',
@@ -628,7 +626,7 @@ def test_evm_aggregate_and_verify_aggr():
         settings_path,
     )
 
-    ezkl.calibrate_settings(
+    await ezkl.calibrate_settings(
         data_path,
         model_path,
         settings_path,
@@ -657,7 +655,7 @@ def test_evm_aggregate_and_verify_aggr():
         '1l_relu_aggr_evm_witness.json'
     )
 
-    res = ezkl.gen_witness(data_path, compiled_model_path,
+    res = await ezkl.gen_witness(data_path, compiled_model_path,
                            output_path)
 
     ezkl.prove(
@@ -698,7 +696,7 @@ def test_evm_aggregate_and_verify_aggr():
     sol_code_path = os.path.join(folder_path, 'aggr_evm_1l_relu.sol')
     abi_path = os.path.join(folder_path, 'aggr_evm_1l_relu.abi')
 
-    res = ezkl.create_evm_verifier_aggr(
+    res = await ezkl.create_evm_verifier_aggr(
         [settings_path],
         aggregate_vk_path,
         sol_code_path,
@@ -712,7 +710,7 @@ def test_evm_aggregate_and_verify_aggr():
 
     addr_path = os.path.join(folder_path, 'address_aggr.json')
 
-    res = ezkl.deploy_evm(
+    res = await ezkl.deploy_evm(
         addr_path,
         sol_code_path,
         rpc_url=anvil_url,
@@ -730,7 +728,7 @@ def test_evm_aggregate_and_verify_aggr():
     # with open(addr_path, 'r') as file:
     #     addr_aggr = file.read().rstrip()
 
-    # res = ezkl.verify_evm(
+    # res = await ezkl.verify_evm(
     #     aggregate_proof_path,
     #     addr_aggr,
     #     rpc_url=anvil_url,
@@ -769,7 +767,7 @@ def get_examples():
 
 
 @pytest.mark.parametrize("model_file, input_file", get_examples())
-def test_all_examples(model_file, input_file):
+async def test_all_examples(model_file, input_file):
     """Tests all examples in the examples folder"""
     # gen settings
     settings_path = os.path.join(folder_path, "settings.json")
@@ -783,7 +781,7 @@ def test_all_examples(model_file, input_file):
     res = ezkl.gen_settings(model_file, settings_path)
     assert res
 
-    res = ezkl.calibrate_settings(
+    res = await ezkl.calibrate_settings(
         input_file, model_file, settings_path, "resources")
     assert res
 
@@ -814,7 +812,7 @@ def test_all_examples(model_file, input_file):
     assert os.path.isfile(pk_path)
 
     print("Generating witness for example: ", model_file)
-    res = ezkl.gen_witness(input_file, compiled_model_path, witness_path)
+    res = await ezkl.gen_witness(input_file, compiled_model_path, witness_path)
     assert os.path.isfile(witness_path)
 
     print("Proving example: ", model_file)

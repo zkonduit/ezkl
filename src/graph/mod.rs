@@ -6,10 +6,14 @@ pub mod model;
 pub mod modules;
 /// Inner elements of a computational graph that represent a single operation / constraints.
 pub mod node;
+/// postgres helper functions
+#[cfg(not(target_arch = "wasm32"))]
+pub mod postgres;
 /// Helper functions
 pub mod utilities;
 /// Representations of a computational graph's variables.
 pub mod vars;
+
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
 #[cfg(unix)]
@@ -958,7 +962,7 @@ impl GraphCircuit {
 
     ///
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_graph_input(
+    pub async fn load_graph_input(
         &mut self,
         data: &GraphData,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
@@ -968,6 +972,7 @@ impl GraphCircuit {
         debug!("input scales: {:?}", scales);
 
         self.process_data_source(&data.input_data, shapes, scales, input_types)
+            .await
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -991,7 +996,7 @@ impl GraphCircuit {
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Process the data source for the model
-    fn process_data_source(
+    async fn process_data_source(
         &mut self,
         data: &DataSource,
         shapes: Vec<Vec<usize>>,
@@ -1005,21 +1010,14 @@ impl GraphCircuit {
                     per_item_scale.extend(vec![scales[i]; shape.iter().product::<usize>()]);
                 }
 
-                // start runtime and fetch data
-                let runtime = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()?;
-
-                runtime.block_on(async {
-                    self.load_on_chain_data(source.clone(), &shapes, per_item_scale)
-                        .await
-                })
+                self.load_on_chain_data(source.clone(), &shapes, per_item_scale)
+                    .await
             }
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
             DataSource::DB(pg) => {
-                let data = pg.fetch_and_format_as_file()?;
+                let data = pg.fetch_and_format_as_file().await?;
                 self.load_file_data(&data, &shapes, scales, input_types)
             }
         }
@@ -1034,8 +1032,8 @@ impl GraphCircuit {
         scales: Vec<crate::Scale>,
     ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
-        let (_, client) = setup_eth_backend(Some(&source.rpc), None).await?;
-        let inputs = read_on_chain_inputs(client.clone(), client.address(), &source.calls).await?;
+        let (client, client_address) = setup_eth_backend(Some(&source.rpc), None).await?;
+        let inputs = read_on_chain_inputs(client.clone(), client_address, &source.calls).await?;
         // quantize the supplied data using the provided scale + QuantizeData.sol
         let quantized_evm_inputs = evm_quantize(client, scales, &inputs).await?;
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
