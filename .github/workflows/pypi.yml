@@ -50,6 +50,7 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --features python-bindings
       - name: Install built wheel
+        if: matrix.target == 'universal2-apple-darwin'
         run: |
           pip install ezkl --no-index --find-links dist --force-reinstall
           python -c "import ezkl"
