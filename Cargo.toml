@@ -71,12 +71,12 @@ tokio = { version = "1.35", default_features = false, features = [
     "rt-multi-thread"
 ] }
 tokio-util = { version = "0.7.9", features = ["codec"] }
-pyo3 = { version = "0.21.2", features = [
+pyo3 = { version = "0.20.2", features = [
     "extension-module",
     "abi3-py37",
     "macros",
 ], default_features = false, optional = true }
-pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio/", branch="migration-pyo3-0.21", features = [
+pyo3-asyncio = { version="0.20.0", features = [
     "attributes",
     "tokio-runtime",
 ], default_features = false, optional = true }
