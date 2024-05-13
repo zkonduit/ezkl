@@ -185,7 +185,7 @@ jobs:
         run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
 
       - name: Strip release binary
-        if: matrix.build != 'windows-msvc'
+        if: matrix.build != 'windows-msvc' && matrix.build != 'linux-aarch64'
         run: strip "target/${{ matrix.target }}/release/ezkl"
 
       - name: Strip release binary (Windows)

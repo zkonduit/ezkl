@@ -31,17 +31,17 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          sed -i "s|\"@ezkljs/engine\": \".*\"|\"@ezkljs/engine\": \"${{ github.ref_name }}\"|" in-browser-evm-verifier/package.json
+          sed -i "s|\"@ezkljs/engine\": \".*\"|\"@ezkljs/engine\": \"${{ github.ref_name#v }}\"|" in-browser-evm-verifier/package.json
       - name: Update the engine import in in-browser-evm-verifier to use @ezkljs/engine package instead of the local one;
         run: |
           sed -i "s|import { encodeVerifierCalldata } from '../nodejs/ezkl';|import { encodeVerifierCalldata } from '@ezkljs/engine';|" in-browser-evm-verifier/src/index.ts
       - name: Fetch integrity
         run: |
-          ENGINE_INTEGRITY=$(npm view @ezkljs/engine@${{ github.ref_name }} dist.integrity)
+          ENGINE_INTEGRITY=$(npm view @ezkljs/engine@${{ github.ref_name#v }} dist.integrity)
           echo "ENGINE_INTEGRITY=$ENGINE_INTEGRITY" >> $GITHUB_ENV
       - name: Update pnpm-lock.yaml versions and integrity
         run: |
-          awk -v integrity="$ENGINE_INTEGRITY" -v tag="${{ github.ref_name }}" '
+          awk -v integrity="$ENGINE_INTEGRITY" -v tag="${{ github.ref_name#v }}" '
           NR==30{$0="    specifier: \"" tag "\""}
           NR==31{$0="    version: \"" tag "\""}
           NR==400{$0="  /@ezkljs/engine@" tag ":"}
