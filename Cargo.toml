@@ -47,7 +47,7 @@ metal = { git = "https://github.com/gfx-rs/metal-rs", optional = true }
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", features = ["provider-http", "signers", "contract", "rpc-types-eth", "signer-wallet", "node-bindings"] }
+alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev="5fbf57bac99edef9d8475190109a7ea9fb7e5e83", features = ["provider-http", "signers", "contract", "rpc-types-eth", "signer-wallet", "node-bindings"] }
 foundry-compilers = {version = "0.4.1", features = ["svm-solc"]}
 ethabi = "18"
 indicatif = { version = "0.17.5", features = ["rayon"] }
