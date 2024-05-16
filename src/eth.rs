@@ -23,7 +23,6 @@ use alloy::providers::fillers::{
 use alloy::providers::network::{Ethereum, EthereumSigner};
 use alloy::providers::ProviderBuilder;
 use alloy::providers::{Identity, Provider, RootProvider};
-use alloy::rpc::types::eth::BlockId;
 use alloy::rpc::types::eth::TransactionInput;
 use alloy::rpc::types::eth::TransactionRequest;
 use alloy::signers::wallet::LocalWallet;
@@ -591,7 +590,7 @@ pub async fn verify_proof_via_solidity(
         return Err(Box::new(EvmVerificationError::InvalidProof));
     }
 
-    let gas = client.estimate_gas(&tx, BlockId::default()).await?;
+    let gas = client.estimate_gas(&tx).await?;
 
     info!("estimated verify gas cost: {:#?}", gas);
 
@@ -725,7 +724,7 @@ pub async fn verify_proof_with_data_attestation(
     debug!("transaction {:#?}", tx);
     info!(
         "estimated verify gas cost: {:#?}",
-        client.estimate_gas(&tx, BlockId::default()).await?
+        client.estimate_gas(&tx).await?
     );
 
     let result = client.call(&tx).await;
