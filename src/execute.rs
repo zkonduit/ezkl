@@ -1178,7 +1178,6 @@ pub(crate) async fn calibrate(
             );
             num_passed += 1;
         } else {
-            error!("calibration failed {}", res.err().unwrap());
             num_failed += 1;
         }
 
