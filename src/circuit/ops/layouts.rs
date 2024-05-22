@@ -3910,7 +3910,7 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
         let int_values = w.get_int_evals()?;
         for v in int_values.iter() {
             if v < &range.0 || v > &range.1 {
-                log::error!("Value ({:?}) out of range: {:?}", v, range);
+                log::warn!("Value ({:?}) out of range: {:?}", v, range);
                 return Err(Box::new(TensorError::TableLookupError));
             }
         }
