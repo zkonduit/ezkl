@@ -550,7 +550,7 @@ impl Node {
             .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
 
         let homogenous_inputs = opkind.requires_homogenous_input_scales();
-        // autoamtically increases a constant's scale if it is only used once and
+        // automatically increases a constant's scale if it is only used once and
         for input in homogenous_inputs
             .into_iter()
             .filter(|i| !deleted_indices.contains(i))
