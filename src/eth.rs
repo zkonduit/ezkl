@@ -922,7 +922,7 @@ pub async fn get_contract_artifacts(
         return Err(format!("file not found: {:#?}", sol_code_path).into());
     }
 
-    let mut settings = SolcSettings {
+    let settings = SolcSettings {
         optimizer: Optimizer {
             enabled: Some(true),
             runs: Some(runs),
