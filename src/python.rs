@@ -466,7 +466,7 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
 /// Arguments
 /// -------
 /// message: list[str]
-///     List of field elements represnted as strings
+///     List of field elements represented as strings
 ///
 /// Returns
 /// -------

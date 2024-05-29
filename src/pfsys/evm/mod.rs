@@ -21,7 +21,7 @@ pub enum EvmVerificationError {
     /// EVM verify errors
     #[error("evm deployment failed")]
     Deploy,
-    /// Invalid Visibilit
+    /// Invalid Visibility
     #[error("Invalid visibility")]
     InvalidVisibility,
 }

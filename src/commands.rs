@@ -78,7 +78,7 @@ pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
 pub const DEFAULT_LOOKUP_SAFETY_MARGIN: &str = "2";
 /// Default Compress selectors
 pub const DEFAULT_DISABLE_SELECTOR_COMPRESSION: &str = "false";
-/// Default render vk seperately
+/// Default render vk separately
 pub const DEFAULT_RENDER_VK_SEPERATELY: &str = "false";
 /// Default VK sol path
 pub const DEFAULT_VK_SOL: &str = "vk.sol";
