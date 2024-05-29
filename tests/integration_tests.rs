@@ -1816,7 +1816,7 @@ mod native_tests {
 
         // create encoded calldata
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(&[
+            .args([
                 "encode-evm-calldata",
                 "--proof-path",
                 &format!("{}/{}/aggr.pf", test_dir, example_name),
@@ -2050,7 +2050,7 @@ mod native_tests {
 
         // create encoded calldata
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(&[
+            .args([
                 "encode-evm-calldata",
                 "--proof-path",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
@@ -2231,7 +2231,7 @@ mod native_tests {
 
         // create encoded calldata
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(&[
+            .args([
                 "encode-evm-calldata",
                 "--proof-path",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
@@ -2415,7 +2415,7 @@ mod native_tests {
 
         // create encoded calldata
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(&[
+            .args([
                 "encode-evm-calldata",
                 "--proof-path",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
