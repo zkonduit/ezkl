@@ -52,6 +52,8 @@ pub const DEFAULT_VERIFIER_AGGREGATED_ABI: &str = "verifier_aggr_abi.json";
 pub const DEFAULT_VERIFIER_DA_ABI: &str = "verifier_da_abi.json";
 /// Default solidity code
 pub const DEFAULT_SOL_CODE: &str = "evm_deploy.sol";
+/// Default calldata path
+pub const DEFAULT_CALLDATA: &str = "calldata.bytes";
 /// Default solidity code for aggregated proofs
 pub const DEFAULT_SOL_CODE_AGGREGATED: &str = "evm_deploy_aggr.sol";
 /// Default solidity code for data attestation
@@ -593,6 +595,20 @@ pub enum Commands {
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = DEFAULT_CHECKMODE)]
         check_mode: Option<CheckMode>,
+    },
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Encodes a proof into evm calldata
+    #[command(name = "encode-evm-calldata")]
+    EncodeEvmCalldata {
+        /// The path to the proof file (generated using the prove command)
+        #[arg(long, default_value = DEFAULT_PROOF)]
+        proof_path: Option<PathBuf>,
+        /// The path to the Solidity code
+        #[arg(long, default_value = DEFAULT_CALLDATA)]
+        calldata_path: Option<PathBuf>,
+        /// The path to the verification key address (only used if the vk is rendered as a separate contract)
+        #[arg(long)]
+        addr_vk: Option<H160Flag>,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Creates an Evm verifier for a single proof

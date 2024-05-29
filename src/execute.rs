@@ -204,6 +204,18 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             )
             .await
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        Commands::EncodeEvmCalldata {
+            proof_path,
+            calldata_path,
+            addr_vk,
+        } => encode_evm_calldata(
+            proof_path.unwrap_or(DEFAULT_PROOF.into()),
+            calldata_path.unwrap_or(DEFAULT_CALLDATA.into()),
+            addr_vk,
+        )
+        .map(|e| serde_json::to_string(&e).unwrap()),
+
         Commands::CreateEvmVK {
             vk_path,
             srs_path,
@@ -1528,6 +1540,32 @@ pub(crate) async fn deploy_evm(
     let mut f = File::create(addr_path)?;
     write!(f, "{:#?}", contract_address)?;
     Ok(String::new())
+}
+
+/// Encodes the calldata for the EVM verifier (both aggregated and single proof)
+pub(crate) fn encode_evm_calldata(
+    proof_path: PathBuf,
+    calldata_path: PathBuf,
+    addr_vk: Option<H160Flag>,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let snark = Snark::load::<IPACommitmentScheme<G1Affine>>(&proof_path)?;
+
+    let flattened_instances = snark.instances.into_iter().flatten();
+
+    let encoded = halo2_solidity_verifier::encode_calldata(
+        addr_vk
+            .as_ref()
+            .map(|x| alloy::primitives::Address::from(*x).0)
+            .map(|x| x.0),
+        &snark.proof,
+        &flattened_instances.collect::<Vec<_>>(),
+    );
+
+    log::debug!("Encoded calldata: {:?}", encoded);
+
+    File::create(calldata_path)?.write_all(encoded.as_slice())?;
+
+    Ok(encoded)
 }
 
 #[cfg(not(target_arch = "wasm32"))]

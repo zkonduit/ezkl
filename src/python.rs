@@ -1430,6 +1430,47 @@ fn verify_aggr(
     Ok(true)
 }
 
+/// Creates encoded evm calldata from a proof file
+///
+/// Arguments
+/// ---------
+/// proof: str
+///     Path to the proof file
+///
+/// calldata: str
+///    Path to the calldata file to save
+///
+/// addr_vk: str
+///    The address of the verification key contract (if the verifier key is to be rendered as a separate contract)
+///
+/// Returns
+/// -------
+/// vec[u8]
+///    The encoded calldata
+///
+#[pyfunction(signature = (
+    proof=PathBuf::from(DEFAULT_PROOF),
+    calldata=PathBuf::from(DEFAULT_CALLDATA),
+    addr_vk=None,
+))]
+fn encode_evm_calldata<'a>(
+    proof: PathBuf,
+    calldata: PathBuf,
+    addr_vk: Option<&'a str>,
+) -> Result<Vec<u8>, PyErr> {
+    let addr_vk = if let Some(addr_vk) = addr_vk {
+        let addr_vk = H160Flag::from(addr_vk);
+        Some(addr_vk)
+    } else {
+        None
+    };
+
+    crate::execute::encode_evm_calldata(proof, calldata, addr_vk).map_err(|e| {
+        let err_str = format!("Failed to generate calldata: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })
+}
+
 /// Creates an EVM compatible verifier, you will need solc installed in your environment to run this
 ///
 /// Arguments
@@ -1888,6 +1929,6 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(setup_test_evm_witness, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
-
+    m.add_function(wrap_pyfunction!(encode_evm_calldata, m)?)?;
     Ok(())
 }
