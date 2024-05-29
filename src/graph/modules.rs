@@ -15,7 +15,7 @@ use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
 pub const POSEIDON_LEN_GRAPH: usize = 32;
-/// Poseidon number of instancess
+/// Poseidon number of instances
 pub const POSEIDON_INSTANCES: usize = 1;
 
 /// Poseidon module type

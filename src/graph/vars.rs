@@ -72,7 +72,7 @@ impl ToFlags for Visibility {
 impl<'a> From<&'a str> for Visibility {
     fn from(s: &'a str) -> Self {
         if s.contains("hashed/private") {
-            // split on last occurence of '/'
+            // split on last occurrence of '/'
             let (_, outlets) = s.split_at(s.rfind('/').unwrap());
             let outlets = outlets
                 .trim_start_matches('/')
