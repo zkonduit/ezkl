@@ -1,7 +1,8 @@
 // ignore file if compiling for wasm
 
 #[cfg(not(target_arch = "wasm32"))]
-use clap::Parser;
+use clap::{Command, CommandFactory, Parser};
+use clap_complete::{generate, Generator};
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
 #[cfg(not(target_arch = "wasm32"))]
@@ -20,6 +21,10 @@ use std::env;
 #[cfg(not(target_arch = "wasm32"))]
 use std::error::Error;
 
+fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
+    generate(gen, cmd, cmd.get_name().to_string(), &mut std::io::stdout());
+}
+
 #[tokio::main(flavor = "current_thread")]
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn main() -> Result<(), Box<dyn Error>> {
@@ -27,19 +32,28 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     init_logger();
     #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
     banner();
-    #[cfg(feature = "icicle")]
-    if env::var("ENABLE_ICICLE_GPU").is_ok() {
-        info!("Running with ICICLE GPU");
+
+    if let Some(generator) = args.generator {
+        info!("generator: {}", generator);
+        print_completions(generator, &mut Cli::command());
+        Ok(())
+    } else if let Some(command) = args.command {
+        #[cfg(feature = "icicle")]
+        if env::var("ENABLE_ICICLE_GPU").is_ok() {
+            info!("Running with ICICLE GPU");
+        } else {
+            info!("Running with CPU");
+        }
+        info!("command: \n {}", &command.as_json().to_colored_json_auto()?);
+        let res = run(command).await;
+        match &res {
+            Ok(_) => info!("succeeded"),
+            Err(e) => error!("failed: {}", e),
+        };
+        res.map(|_| ())
     } else {
-        info!("Running with CPU");
+        Err("No command provided".into())
     }
-    info!("command: \n {}", &args.as_json()?.to_colored_json_auto()?);
-    let res = run(args.command).await;
-    match &res {
-        Ok(_) => info!("succeeded"),
-        Err(e) => error!("failed: {}", e),
-    };
-    res.map(|_| ())
 }
 
 #[cfg(target_arch = "wasm32")]

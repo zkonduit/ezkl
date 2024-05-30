@@ -23,6 +23,7 @@ halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curv
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
 clap = { version = "4.5.3", features = ["derive"] }
+clap_complete = "4.5.2"
 serde = { version = "1.0.126", features = ["derive"], optional = true }
 serde_json = { version = "1.0.97", default_features = false, features = [
     "float_roundtrip",
