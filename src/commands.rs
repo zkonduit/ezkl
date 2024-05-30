@@ -391,7 +391,7 @@ pub enum Commands {
         #[arg(long, value_hint = clap::ValueHint::Other)]
         max_logrows: Option<u32>,
         // whether to only range check rebases (instead of trying both range check and lookup)
-        #[arg(long, default_value = DEFAULT_ONLY_RANGE_CHECK_REBASE, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_ONLY_RANGE_CHECK_REBASE, action = clap::ArgAction::SetTrue)]
         only_range_check_rebase: Option<bool>,
     },
 
@@ -445,7 +445,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
         logrows: Option<u32>,
         /// whether the accumulated are segments of a larger proof
-        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue)]
         split_proofs: Option<bool>,
     },
 
@@ -467,10 +467,10 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
         logrows: Option<u32>,
         /// whether the accumulated are segments of a larger proof
-        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue)]
         split_proofs: Option<bool>,
         /// compress selectors
-        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue)]
         disable_selector_compression: Option<bool>,
         /// commitment used
         #[arg(long, default_value = DEFAULT_COMMITMENT, value_hint = clap::ValueHint::Other)]
@@ -506,7 +506,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_CHECKMODE, value_hint = clap::ValueHint::Other)]
         check_mode: Option<CheckMode>,
         /// whether the accumulated proofs are segments of a larger circuit
-        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_SPLIT, action = clap::ArgAction::SetTrue)]
         split_proofs: Option<bool>,
         /// commitment used
         #[arg(long, default_value = DEFAULT_COMMITMENT, value_hint = clap::ValueHint::Other)]
@@ -542,7 +542,7 @@ pub enum Commands {
         #[arg(short = 'W', long, value_hint = clap::ValueHint::FilePath)]
         witness: Option<PathBuf>,
         /// compress selectors
-        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue)]
         disable_selector_compression: Option<bool>,
     },
     #[cfg(not(target_arch = "wasm32"))]
@@ -662,7 +662,7 @@ pub enum Commands {
         /// Whether the verifier key should be rendered as a separate contract.
         /// We recommend disabling selector compression if this is enabled.
         /// To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command.        
-        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY, action = clap::ArgAction::SetTrue)]
         render_vk_seperately: Option<bool>,
     },
     #[cfg(not(target_arch = "wasm32"))]
@@ -732,7 +732,7 @@ pub enum Commands {
         /// Whether the verifier key should be rendered as a separate contract.
         /// We recommend disabling selector compression if this is enabled.
         /// To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command.        
-        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY, action = clap::ArgAction::SetTrue)]
         render_vk_seperately: Option<bool>,
     },
     /// Verifies a proof, returning accept or reject
@@ -750,7 +750,7 @@ pub enum Commands {
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         /// Reduce SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
-        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION, action = clap::ArgAction::SetTrue)]
         reduced_srs: Option<bool>,
     },
     /// Verifies an aggregate proof, returning accept or reject
@@ -762,7 +762,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_VK_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
         vk_path: Option<PathBuf>,
         /// reduced srs
-        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION, action = clap::ArgAction::SetTrue, value_hint = clap::ValueHint::Other)]
+        #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION, action = clap::ArgAction::SetTrue)]
         reduced_srs: Option<bool>,
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
