@@ -1814,6 +1814,18 @@ mod native_tests {
         let settings_arg = format!("{}/{}/settings.json", test_dir, example_name);
         let private_key = format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
 
+        // create encoded calldata
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "encode-evm-calldata",
+                "--proof-path",
+                &format!("{}/{}/aggr.pf", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+
+        assert!(status.success());
+
         let base_args = vec![
             "create-evm-verifier-aggr",
             "--vk-path",
@@ -2036,6 +2048,18 @@ mod native_tests {
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
         let settings_arg = format!("--settings-path={}", settings_path);
 
+        // create encoded calldata
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "encode-evm-calldata",
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+
+        assert!(status.success());
+
         // create the verifier
         let mut args = vec!["create-evm-verifier", "--vk-path", &vk_arg, &settings_arg];
 
@@ -2204,6 +2228,19 @@ mod native_tests {
             .expect("failed to read address file");
 
         let deployed_addr_arg_vk = format!("--addr-vk={}", addr_vk);
+
+        // create encoded calldata
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "encode-evm-calldata",
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+                &deployed_addr_arg_vk,
+            ])
+            .status()
+            .expect("failed to execute process");
+
+        assert!(status.success());
 
         // now verify the proof
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
@@ -2375,6 +2412,18 @@ mod native_tests {
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
 
         let settings_arg = format!("--settings-path={}", settings_path);
+
+        // create encoded calldata
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "encode-evm-calldata",
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+
+        assert!(status.success());
 
         // create the verifier
         let mut args = vec!["create-evm-verifier", "--vk-path", &vk_arg, &settings_arg];

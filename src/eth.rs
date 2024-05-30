@@ -922,13 +922,15 @@ pub async fn get_contract_artifacts(
         return Err(format!("file not found: {:#?}", sol_code_path).into());
     }
 
-    let mut settings = SolcSettings::default();
-    settings.optimizer = Optimizer {
-        enabled: Some(true),
-        runs: Some(runs),
-        details: None,
+    let settings = SolcSettings {
+        optimizer: Optimizer {
+            enabled: Some(true),
+            runs: Some(runs),
+            details: None,
+        },
+        output_selection: OutputSelection::default_output_selection(),
+        ..Default::default()
     };
-    settings.output_selection = OutputSelection::default_output_selection();
 
     let input = SolcInput::build(
         std::collections::BTreeMap::from([(

@@ -402,6 +402,15 @@ async def test_create_evm_verifier():
     settings_path = os.path.join(folder_path, 'settings.json')
     sol_code_path = os.path.join(folder_path, 'test.sol')
     abi_path = os.path.join(folder_path, 'test.abi')
+    proof_path = os.path.join(folder_path, 'test_evm.pf')
+    calldata_path = os.path.join(folder_path, 'calldata.bytes')
+
+    # res is now a vector of bytes
+    res = ezkl.encode_evm_calldata(proof_path, calldata_path)
+
+    assert os.path.isfile(calldata_path)
+    assert len(res) > 0
+
 
     res = await ezkl.create_evm_verifier(
         vk_path,
