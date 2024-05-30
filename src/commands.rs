@@ -1,7 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use alloy::primitives::Address as H160;
-use clap::{Parser, Subcommand};
-use clap_complete::Shell;
+use clap::{Command, Parser, Subcommand};
+use clap_complete::{generate, Generator, Shell};
 #[cfg(feature = "python-bindings")]
 use pyo3::{
     conversion::{FromPyObject, PyTryFrom},
@@ -294,6 +294,13 @@ pub fn get_styles() -> clap::builder::Styles {
             clap::builder::styling::Style::new().fg_color(Some(clap::builder::styling::Color::Ansi(clap::builder::styling::AnsiColor::White))),
         )
 }
+
+
+/// Print completions for the given generator
+pub fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
+    generate(gen, cmd, cmd.get_name().to_string(), &mut std::io::stdout());
+}
+
 
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone)]

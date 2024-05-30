@@ -1,8 +1,7 @@
 // ignore file if compiling for wasm
 
 #[cfg(not(target_arch = "wasm32"))]
-use clap::{Command, CommandFactory, Parser};
-use clap_complete::{generate, Generator};
+use clap::{CommandFactory, Parser};
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
 #[cfg(not(target_arch = "wasm32"))]
@@ -21,10 +20,6 @@ use std::env;
 #[cfg(not(target_arch = "wasm32"))]
 use std::error::Error;
 
-fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
-    generate(gen, cmd, cmd.get_name().to_string(), &mut std::io::stdout());
-}
-
 #[tokio::main(flavor = "current_thread")]
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn main() -> Result<(), Box<dyn Error>> {
@@ -35,7 +30,7 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
 
     if let Some(generator) = args.generator {
         info!("generator: {}", generator);
-        print_completions(generator, &mut Cli::command());
+        ezkl::commands::print_completions(generator, &mut Cli::command());
         Ok(())
     } else if let Some(command) = args.command {
         #[cfg(feature = "icicle")]
