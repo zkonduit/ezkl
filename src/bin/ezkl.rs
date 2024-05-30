@@ -24,14 +24,14 @@ use std::error::Error;
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::parse();
-    init_logger();
-    #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
-    banner();
 
     if let Some(generator) = args.generator {
         ezkl::commands::print_completions(generator, &mut Cli::command());
         Ok(())
     } else if let Some(command) = args.command {
+        init_logger();
+        #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
+        banner();
         #[cfg(feature = "icicle")]
         if env::var("ENABLE_ICICLE_GPU").is_ok() {
             info!("Running with ICICLE GPU");
