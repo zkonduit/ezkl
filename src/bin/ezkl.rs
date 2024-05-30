@@ -29,7 +29,6 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
     banner();
 
     if let Some(generator) = args.generator {
-        info!("generator: {}", generator);
         ezkl::commands::print_completions(generator, &mut Cli::command());
         Ok(())
     } else if let Some(command) = args.command {
