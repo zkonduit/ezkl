@@ -640,7 +640,7 @@ pub enum Commands {
         /// The path to the proof file (generated using the prove command)
         #[arg(long, default_value = DEFAULT_PROOF, value_hint = clap::ValueHint::FilePath)]
         proof_path: Option<PathBuf>,
-        /// The path to the Solidity code
+        /// The path to save the calldata to
         #[arg(long, default_value = DEFAULT_CALLDATA, value_hint = clap::ValueHint::FilePath)]
         calldata_path: Option<PathBuf>,
         /// The path to the verification key address (only used if the vk is rendered as a separate contract)
