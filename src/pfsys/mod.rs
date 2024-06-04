@@ -639,7 +639,7 @@ where
 {
     let mut transcript_new: TW = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
 
-    // polycommit commitments are the first set of points in the proof, this we'll always be the first set of advice
+    // polycommit commitments are the first set of points in the proof, this will always be the first set of advice
     for commit in commitments {
         transcript_new
             .write_point(*commit)
