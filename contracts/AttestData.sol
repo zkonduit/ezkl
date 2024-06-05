@@ -117,9 +117,9 @@ contract SwapProofCommitments {
             // fetch function sig. Either `verifyProof(bytes,uint256[])` or `verifyProof(address,bytes,uint256[])`
             funcSig := calldataload(encoded.offset)
 
-            // Fetch instances offset which is 4 + 32 + 32 bytes away from
+            // Fetch proof offset which is 4 + 32 bytes away from
             // start of encoded for `verifyProof(bytes,uint256[])`,
-            // and 4 + 32 + 32 +32 away for `verifyPxroof(address,bytes,uint256[])`
+            // and 4 + 32 + 32 away for `verifyProof(address,bytes,uint256[])`
 
             proof_offset := calldataload(
                 add(
@@ -132,7 +132,7 @@ contract SwapProofCommitments {
                 add(add(encoded.offset, 0x04), proof_offset)
             )
         }
-        // Check the length of the commitment against the encoded data
+        // Check the length of the commitment against the proof bytes
         if (proof_length < COMMITMENT_KZG.length) {
             return false;
         }
@@ -140,7 +140,7 @@ contract SwapProofCommitments {
         // Load COMMITMENT_KZG into memory
         bytes memory commitment = COMMITMENT_KZG;
 
-        // Compare the first N bytes of encoded with COMMITMENT_KZG
+        // Compare the first N bytes of the proof with COMMITMENT_KZG
         uint words = (commitment.length + 31) / 32; // Calculate the number of 32-byte words
 
         assembly {
@@ -154,9 +154,7 @@ contract SwapProofCommitments {
                 let wordProof := calldataload(
                     add(add(encoded.offset, add(i, 0x04)), proof_offset)
                 )
-                let wordCommitment := mload(
-                    add(commitment, add(0x20, mul(i, 0x20)))
-                )
+                let wordCommitment := mload(add(commitment, i))
                 equal := eq(wordProof, wordCommitment)
                 if eq(equal, 0) {
                     return(0, 0)
@@ -179,6 +177,7 @@ contract SwapProofCommitments {
 // 4. Field Element Conversion: The fixed-point representation is then converted into a field element modulo P using the `toFieldElement` method.
 // 5. Data Attestation: The `attestData` method validates that the public instances match the data fetched and processed by the contract.
 // 6. Proof Verification: The `verifyWithDataAttestation` method parses the instances out of the encoded calldata and calls the `attestData` method to validate the public instances,
+// 6b. Optional KZG Commitment Verification: It also checks the KZG commitments in the proof against the expected commitments using the `checkKzgCommits` method.
 //  then calls the `verifyProof` method to verify the proof on the verifier.
 
 contract DataAttestation is LoadInstances, SwapProofCommitments {
@@ -436,7 +435,6 @@ contract DataAttestation is LoadInstances, SwapProofCommitments {
     ) public view returns (bool) {
         require(verifier.code.length > 0, "Address: call to non-contract");
         attestData(getInstancesCalldata(encoded));
-        // TODO: At the compiler level only render this line of code if there are kzg commitments we want to attest to.
         require(checkKzgCommits(encoded), "Invalid KZG commitments");
         // static call the verifier contract to verify the proof
         (bool success, bytes memory returndata) = verifier.staticcall(encoded);
