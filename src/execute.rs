@@ -1450,7 +1450,8 @@ pub(crate) async fn create_evm_data_attestation(
     let visibility = VarVisibility::from_args(&settings.run_args)?;
     trace!("params computed");
 
-    let data = GraphData::from_path(_input)?;
+    // if input is not provided, we just instantiate dummy input data
+    let data = GraphData::from_path(_input).unwrap_or(GraphData::new(DataSource::File(vec![])));
 
     let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
         if visibility.output.is_private() {
@@ -1498,19 +1499,14 @@ pub(crate) async fn create_evm_data_attestation(
         None
     };
 
-    if input_data.is_some() || output_data.is_some() {
-        let output = fix_da_sol(input_data, output_data, commitment_bytes)?;
-        let mut f = File::create(_sol_code_path.clone())?;
-        let _ = f.write(output.as_bytes());
-        // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0).await?;
-        // save abi to file
-        serde_json::to_writer(std::fs::File::create(_abi_path)?, &abi)?;
-    } else {
-        return Err(
-            "Neither input or output data source is on-chain. Atleast one must be on chain.".into(),
-        );
-    }
+    let output = fix_da_sol(input_data, output_data, commitment_bytes)?;
+    let mut f = File::create(_sol_code_path.clone())?;
+    let _ = f.write(output.as_bytes());
+    // fetch abi of the contract
+    let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0).await?;
+    // save abi to file
+    serde_json::to_writer(std::fs::File::create(_abi_path)?, &abi)?;
+
     Ok(String::new())
 }
 
