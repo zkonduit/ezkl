@@ -1558,6 +1558,7 @@ fn create_evm_verifier(
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
     abi_path=PathBuf::from(DEFAULT_VERIFIER_DA_ABI),
+    witness_path=None,
 ))]
 fn create_evm_data_attestation(
     py: Python,
@@ -1565,6 +1566,7 @@ fn create_evm_data_attestation(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
+    witness_path: Option<PathBuf>,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
         crate::execute::create_evm_data_attestation(
@@ -1572,6 +1574,7 @@ fn create_evm_data_attestation(
             sol_code_path,
             abi_path,
             input_data,
+            witness_path,
         )
         .await
         .map_err(|e| {

@@ -93,6 +93,79 @@ contract LoadInstances {
     }
 }
 
+// Contract that checks that the COMMITMENT_KZG bytes is equal to the first part of the proof.
+pragma solidity ^0.8.0;
+
+// The kzg commitments of a given model, all aggregated into a single bytes array.
+// At solidity generation time, the commitments are hardcoded into the contract via the COMMITMENT_KZG constant.
+// It will be used to check that the proof commitments match the expected commitments.
+bytes constant COMMITMENT_KZG = hex"";
+
+contract SwapProofCommitments {
+    /**
+     * @dev Swap the proof commitments
+     * @notice must pass encoded bytes from memory
+     * @param encoded - verifier calldata
+     */
+    function checkKzgCommits(
+        bytes calldata encoded
+    ) internal pure returns (bool equal) {
+        bytes4 funcSig;
+        uint256 proof_offset;
+        uint256 proof_length;
+        assembly {
+            // fetch function sig. Either `verifyProof(bytes,uint256[])` or `verifyProof(address,bytes,uint256[])`
+            funcSig := calldataload(encoded.offset)
+
+            // Fetch proof offset which is 4 + 32 bytes away from
+            // start of encoded for `verifyProof(bytes,uint256[])`,
+            // and 4 + 32 + 32 away for `verifyProof(address,bytes,uint256[])`
+
+            proof_offset := calldataload(
+                add(
+                    encoded.offset,
+                    add(0x04, mul(0x20, eq(funcSig, 0xaf83a18d)))
+                )
+            )
+
+            proof_length := calldataload(
+                add(add(encoded.offset, 0x04), proof_offset)
+            )
+        }
+        // Check the length of the commitment against the proof bytes
+        if (proof_length < COMMITMENT_KZG.length) {
+            return false;
+        }
+
+        // Load COMMITMENT_KZG into memory
+        bytes memory commitment = COMMITMENT_KZG;
+
+        // Compare the first N bytes of the proof with COMMITMENT_KZG
+        uint words = (commitment.length + 31) / 32; // Calculate the number of 32-byte words
+
+        assembly {
+            // Now we compare the commitment with the proof,
+            // ensuring that the commitments divided up into 32 byte words are all equal.
+            for {
+                let i := 0x20
+            } lt(i, add(mul(words, 0x20), 0x20)) {
+                i := add(i, 0x20)
+            } {
+                let wordProof := calldataload(
+                    add(add(encoded.offset, add(i, 0x04)), proof_offset)
+                )
+                let wordCommitment := mload(add(commitment, i))
+                equal := eq(wordProof, wordCommitment)
+                if eq(equal, 0) {
+                    return(0, 0)
+                }
+            }
+        }
+
+        return equal; // Return true if the commitment comparison passed
+    }
+}
+
 // This contract serves as a Data Attestation Verifier for the EZKL model.
 // It is designed to read and attest to instances of proofs generated from a specified circuit.
 // It is particularly constructed to read only int256 data from specified on-chain contracts' view functions.
@@ -104,9 +177,10 @@ contract LoadInstances {
 // 4. Field Element Conversion: The fixed-point representation is then converted into a field element modulo P using the `toFieldElement` method.
 // 5. Data Attestation: The `attestData` method validates that the public instances match the data fetched and processed by the contract.
 // 6. Proof Verification: The `verifyWithDataAttestation` method parses the instances out of the encoded calldata and calls the `attestData` method to validate the public instances,
+// 6b. Optional KZG Commitment Verification: It also checks the KZG commitments in the proof against the expected commitments using the `checkKzgCommits` method.
 //  then calls the `verifyProof` method to verify the proof on the verifier.
 
-contract DataAttestation is LoadInstances {
+contract DataAttestation is LoadInstances, SwapProofCommitments {
     /**
      * @notice Struct used to make view only calls to accounts to fetch the data that EZKL reads from.
      * @param the address of the account to make calls to
@@ -350,12 +424,18 @@ contract DataAttestation is LoadInstances {
         }
     }
 
+    /**
+     * @dev Verify the proof with the data attestation.
+     * @param verifier - The address of the verifier contract.
+     * @param encoded - The verifier calldata.
+     */
     function verifyWithDataAttestation(
         address verifier,
         bytes calldata encoded
     ) public view returns (bool) {
         require(verifier.code.length > 0, "Address: call to non-contract");
         attestData(getInstancesCalldata(encoded));
+        require(checkKzgCommits(encoded), "Invalid KZG commitments");
         // static call the verifier contract to verify the proof
         (bool success, bytes memory returndata) = verifier.staticcall(encoded);
 

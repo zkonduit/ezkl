@@ -966,6 +966,7 @@ pub async fn get_contract_artifacts(
 pub fn fix_da_sol(
     input_data: Option<Vec<CallsToAccount>>,
     output_data: Option<Vec<CallsToAccount>>,
+    commitment_bytes: Option<Vec<u8>>,
 ) -> Result<String, Box<dyn Error>> {
     let mut accounts_len = 0;
     let mut contract = ATTESTDATA_SOL.to_string();
@@ -989,6 +990,22 @@ pub fn fix_da_sol(
         );
     }
     contract = contract.replace("AccountCall[]", &format!("AccountCall[{}]", accounts_len));
+
+    if commitment_bytes.clone().is_some() && !commitment_bytes.clone().unwrap().is_empty() {
+        let commitment_bytes = commitment_bytes.unwrap();
+        let hex_string = hex::encode(commitment_bytes);
+        contract = contract.replace(
+            "bytes constant COMMITMENT_KZG = hex\"\";",
+            &format!("bytes constant COMMITMENT_KZG = hex\"{}\";", hex_string),
+        );
+    } else {
+        // Remove the SwapProofCommitments inheritance and the checkKzgCommits function call if no commitment is provided
+        contract = contract.replace(", SwapProofCommitments", "");
+        contract = contract.replace(
+            "require(checkKzgCommits(encoded), \"Invalid KZG commitments\");",
+            "",
+        );
+    }
 
     Ok(contract)
 }

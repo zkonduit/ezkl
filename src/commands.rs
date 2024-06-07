@@ -712,6 +712,9 @@ pub enum Commands {
         /// ingests as inputs.
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
         data: Option<PathBuf>,
+        /// The path to the witness file. This is needed for proof swapping for kzg commitments.
+        #[arg(short = 'W', long, default_value = DEFAULT_WITNESS, value_hint = clap::ValueHint::FilePath)]
+        witness: Option<PathBuf>,
     },
 
     #[cfg(not(target_arch = "wasm32"))]
