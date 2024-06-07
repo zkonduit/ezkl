@@ -1,7 +1,6 @@
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::CalibrationTarget;
-use crate::commands::*;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity};
 #[cfg(not(target_arch = "wasm32"))]
@@ -23,6 +22,7 @@ use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::EZKL_BUF_CAPACITY;
+use crate::{commands::*, EZKLError};
 use crate::{Commitments, RunArgs};
 #[cfg(not(target_arch = "wasm32"))]
 use colored::Colorize;
@@ -63,7 +63,6 @@ use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::compile;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use snark_verifier::system::halo2::Config;
-use std::error::Error;
 use std::fs::File;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::BufWriter;
@@ -92,12 +91,15 @@ lazy_static! {
 
 }
 
-/// A wrapper for tensor related errors.
+/// A wrapper for execution errors
 #[derive(Debug, Error)]
 pub enum ExecutionError {
-    /// Shape mismatch in a operation
+    /// verification failed
     #[error("verification failed")]
     VerifyError(Vec<VerifyFailure>),
+    /// Prover error
+    #[error("Mock prover error: {0}")]
+    MockProverError(String),
 }
 
 lazy_static::lazy_static! {
@@ -109,7 +111,7 @@ lazy_static::lazy_static! {
 }
 
 /// Run an ezkl command with given args
-pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
+pub async fn run(command: Commands) -> Result<String, EZKLError> {
     // set working dir
     std::env::set_current_dir(WORKING_DIR.as_path())?;
 
@@ -123,7 +125,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
         } => gen_srs_cmd(
             srs_path,
             logrows as u32,
-            commitment.unwrap_or(Commitments::from_str(DEFAULT_COMMITMENT)?),
+            commitment.unwrap_or(Commitments::from_str(DEFAULT_COMMITMENT).unwrap()),
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::GetSrs {
@@ -161,7 +163,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             lookup_safety_margin,
             scales,
             scale_rebase_multiplier,
-            only_range_check_rebase.unwrap_or(DEFAULT_ONLY_RANGE_CHECK_REBASE.parse()?),
+            only_range_check_rebase.unwrap_or(DEFAULT_ONLY_RANGE_CHECK_REBASE.parse().unwrap()),
             max_logrows,
         )
         .await
@@ -200,7 +202,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
                 settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
                 sol_code_path.unwrap_or(DEFAULT_SOL_CODE.into()),
                 abi_path.unwrap_or(DEFAULT_VERIFIER_ABI.into()),
-                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse()?),
+                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap()),
             )
             .await
         }
@@ -265,8 +267,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
                 sol_code_path.unwrap_or(DEFAULT_SOL_CODE_AGGREGATED.into()),
                 abi_path.unwrap_or(DEFAULT_VERIFIER_AGGREGATED_ABI.into()),
                 aggregation_settings,
-                logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
-                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse()?),
+                logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse().unwrap()),
+                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap()),
             )
             .await
         }
@@ -292,7 +294,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             vk_path.unwrap_or(DEFAULT_VK.into()),
             pk_path.unwrap_or(DEFAULT_PK.into()),
             witness,
-            disable_selector_compression.unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse()?),
+            disable_selector_compression
+                .unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap()),
         ),
         #[cfg(not(target_arch = "wasm32"))]
         Commands::SetupTestEvmData {
@@ -345,7 +348,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             Some(proof_path.unwrap_or(DEFAULT_PROOF.into())),
             srs_path,
             proof_type,
-            check_mode.unwrap_or(DEFAULT_CHECKMODE.parse()?),
+            check_mode.unwrap_or(DEFAULT_CHECKMODE.parse().unwrap()),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::MockAggregate {
@@ -354,8 +357,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             split_proofs,
         } => mock_aggregate(
             aggregation_snarks,
-            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
-            split_proofs.unwrap_or(DEFAULT_SPLIT.parse()?),
+            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse().unwrap()),
+            split_proofs.unwrap_or(DEFAULT_SPLIT.parse().unwrap()),
         ),
         Commands::SetupAggregate {
             sample_snarks,
@@ -371,9 +374,10 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             vk_path.unwrap_or(DEFAULT_VK_AGGREGATED.into()),
             pk_path.unwrap_or(DEFAULT_PK_AGGREGATED.into()),
             srs_path,
-            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
-            split_proofs.unwrap_or(DEFAULT_SPLIT.parse()?),
-            disable_selector_compression.unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse()?),
+            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse().unwrap()),
+            split_proofs.unwrap_or(DEFAULT_SPLIT.parse().unwrap()),
+            disable_selector_compression
+                .unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap()),
             commitment.into(),
         ),
         Commands::Aggregate {
@@ -392,9 +396,9 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             pk_path.unwrap_or(DEFAULT_PK_AGGREGATED.into()),
             srs_path,
             transcript,
-            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
-            check_mode.unwrap_or(DEFAULT_CHECKMODE.parse()?),
-            split_proofs.unwrap_or(DEFAULT_SPLIT.parse()?),
+            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse().unwrap()),
+            check_mode.unwrap_or(DEFAULT_CHECKMODE.parse().unwrap()),
+            split_proofs.unwrap_or(DEFAULT_SPLIT.parse().unwrap()),
             commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
@@ -409,7 +413,7 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
             vk_path.unwrap_or(DEFAULT_VK.into()),
             srs_path,
-            reduced_srs.unwrap_or(DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse()?),
+            reduced_srs.unwrap_or(DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse().unwrap()),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::VerifyAggr {
@@ -423,8 +427,8 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             proof_path.unwrap_or(DEFAULT_PROOF_AGGREGATED.into()),
             vk_path.unwrap_or(DEFAULT_VK_AGGREGATED.into()),
             srs_path,
-            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse()?),
-            reduced_srs.unwrap_or(DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse()?),
+            logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse().unwrap()),
+            reduced_srs.unwrap_or(DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse().unwrap()),
             commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
@@ -507,13 +511,13 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
 }
 
 /// Assert that the version is valid
-fn assert_version_is_valid(version: &str) -> Result<(), Box<dyn Error>> {
+fn assert_version_is_valid(version: &str) -> Result<(), EZKLError> {
     let err_string = "Invalid version string. Must be in the format v0.0.0";
     if version.is_empty() {
         return Err(err_string.into());
     }
     // safe to unwrap since we know the length is not 0
-    if version.chars().nth(0).unwrap() != 'v' {
+    if !version.starts_with('v') {
         return Err(err_string.into());
     }
 
@@ -525,7 +529,7 @@ fn assert_version_is_valid(version: &str) -> Result<(), Box<dyn Error>> {
 
 const INSTALL_BYTES: &[u8] = include_bytes!("../install_ezkl_cli.sh");
 
-fn update_ezkl_binary(version: &Option<String>) -> Result<String, Box<dyn Error>> {
+fn update_ezkl_binary(version: &Option<String>) -> Result<String, EZKLError> {
     // run the install script with the version
     let install_script = std::str::from_utf8(INSTALL_BYTES)?;
     //  now run as sh script with the version as an argument
@@ -574,7 +578,7 @@ pub(crate) fn gen_srs_cmd(
     srs_path: PathBuf,
     logrows: u32,
     commitment: Commitments,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     match commitment {
         Commitments::KZG => {
             let params = gen_srs::<KZGCommitmentScheme<Bn256>>(logrows);
@@ -589,7 +593,7 @@ pub(crate) fn gen_srs_cmd(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+async fn fetch_srs(uri: &str) -> Result<Vec<u8>, EZKLError> {
     let pb = {
         let pb = init_spinner();
         pb.set_message("Downloading SRS (this may take a while) ...");
@@ -609,7 +613,7 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn get_file_hash(path: &PathBuf) -> Result<String, Box<dyn Error>> {
+pub(crate) fn get_file_hash(path: &PathBuf) -> Result<String, EZKLError> {
     use std::io::Read;
     let file = std::fs::File::open(path)?;
     let mut reader = std::io::BufReader::new(file);
@@ -632,7 +636,7 @@ fn check_srs_hash(
     logrows: u32,
     srs_path: Option<PathBuf>,
     commitment: Commitments,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let path = get_srs_path(logrows, srs_path, commitment);
     let hash = get_file_hash(&path)?;
 
@@ -659,7 +663,7 @@ pub(crate) async fn get_srs_cmd(
     settings_path: Option<PathBuf>,
     logrows: Option<u32>,
     commitment: Option<Commitments>,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     // logrows overrides settings
 
     let err_string = "You will need to provide a valid settings file to use the settings option. You should run gen-settings to generate a settings file (and calibrate-settings to pick optimal logrows).";
@@ -727,7 +731,7 @@ pub(crate) async fn get_srs_cmd(
     Ok(String::new())
 }
 
-pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, Box<dyn Error>> {
+pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, EZKLError> {
     let model = Model::from_run_args(&run_args, &model)?;
     info!("\n {}", model.table_nodes());
     Ok(String::new())
@@ -739,7 +743,7 @@ pub(crate) async fn gen_witness(
     output: Option<PathBuf>,
     vk_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
-) -> Result<GraphWitness, Box<dyn Error>> {
+) -> Result<GraphWitness, EZKLError> {
     // these aren't real values so the sanity checks are mostly meaningless
 
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
@@ -840,7 +844,7 @@ pub(crate) fn gen_circuit_settings(
     model_path: PathBuf,
     params_output: PathBuf,
     run_args: RunArgs,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let circuit = GraphCircuit::from_run_args(&run_args, &model_path)?;
     let params = circuit.settings();
     params.save(&params_output)?;
@@ -908,7 +912,7 @@ impl AccuracyResults {
     pub fn new(
         mut original_preds: Vec<crate::tensor::Tensor<f32>>,
         mut calibrated_preds: Vec<crate::tensor::Tensor<f32>>,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, EZKLError> {
         let mut errors = vec![];
         let mut abs_errors = vec![];
         let mut squared_errors = vec![];
@@ -997,7 +1001,7 @@ pub(crate) async fn calibrate(
     scale_rebase_multiplier: Vec<u32>,
     only_range_check_rebase: bool,
     max_logrows: Option<u32>,
-) -> Result<GraphSettings, Box<dyn Error>> {
+) -> Result<GraphSettings, EZKLError> {
     use log::error;
     use std::collections::HashMap;
     use tabled::Table;
@@ -1369,7 +1373,7 @@ pub(crate) async fn calibrate(
 pub(crate) fn mock(
     compiled_circuit_path: PathBuf,
     data_path: PathBuf,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     // mock should catch any issues by default so we set it to safe
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
@@ -1386,10 +1390,8 @@ pub(crate) fn mock(
         &circuit,
         vec![public_inputs],
     )
-    .map_err(Box::<dyn Error>::from)?;
-    prover
-        .verify()
-        .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
+    .map_err(|e| ExecutionError::MockProverError(e.to_string()))?;
+    prover.verify().map_err(ExecutionError::VerifyError)?;
     Ok(String::new())
 }
 
@@ -1401,7 +1403,7 @@ pub(crate) async fn create_evm_verifier(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
     render_vk_seperately: bool,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let settings = GraphSettings::load(&settings_path)?;
     let commitment: Commitments = settings.run_args.commitment.into();
     let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
@@ -1445,7 +1447,7 @@ pub(crate) async fn create_evm_vk(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let settings = GraphSettings::load(&settings_path)?;
     let commitment: Commitments = settings.run_args.commitment.into();
     let params = load_params_verifier::<KZGCommitmentScheme<Bn256>>(
@@ -1486,7 +1488,7 @@ pub(crate) async fn create_evm_data_attestation(
     _abi_path: PathBuf,
     _input: PathBuf,
     _witness: Option<PathBuf>,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     #[allow(unused_imports)]
     use crate::graph::{DataSource, VarVisibility};
     use crate::{graph::Visibility, pfsys::get_proof_commitments};
@@ -1565,7 +1567,7 @@ pub(crate) async fn deploy_da_evm(
     addr_path: PathBuf,
     runs: usize,
     private_key: Option<String>,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let contract_address = deploy_da_verifier_via_solidity(
         settings_path,
         data,
@@ -1591,7 +1593,7 @@ pub(crate) async fn deploy_evm(
     runs: usize,
     private_key: Option<String>,
     contract_name: &str,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let contract_address = deploy_contract_via_solidity(
         sol_code_path,
         rpc_url.as_deref(),
@@ -1613,7 +1615,7 @@ pub(crate) fn encode_evm_calldata(
     proof_path: PathBuf,
     calldata_path: PathBuf,
     addr_vk: Option<H160Flag>,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+) -> Result<Vec<u8>, EZKLError> {
     let snark = Snark::load::<IPACommitmentScheme<G1Affine>>(&proof_path)?;
 
     let flattened_instances = snark.instances.into_iter().flatten();
@@ -1641,7 +1643,7 @@ pub(crate) async fn verify_evm(
     rpc_url: Option<String>,
     addr_da: Option<H160Flag>,
     addr_vk: Option<H160Flag>,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     use crate::eth::verify_proof_with_data_attestation;
 
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
@@ -1683,7 +1685,7 @@ pub(crate) async fn create_evm_aggregate_verifier(
     circuit_settings: Vec<PathBuf>,
     logrows: u32,
     render_vk_seperately: bool,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let srs_path = get_srs_path(logrows, srs_path, Commitments::KZG);
     let params: ParamsKZG<Bn256> = load_srs_verifier::<KZGCommitmentScheme<Bn256>>(srs_path)?;
 
@@ -1740,7 +1742,7 @@ pub(crate) fn compile_circuit(
     model_path: PathBuf,
     compiled_circuit: PathBuf,
     settings_path: PathBuf,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let settings = GraphSettings::load(&settings_path)?;
     let circuit = GraphCircuit::from_settings(&settings, &model_path, CheckMode::UNSAFE)?;
     circuit.save(compiled_circuit)?;
@@ -1754,7 +1756,7 @@ pub(crate) fn setup(
     pk_path: PathBuf,
     witness: Option<PathBuf>,
     disable_selector_compression: bool,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     // these aren't real values so the sanity checks are mostly meaningless
 
     let mut circuit = GraphCircuit::load(compiled_circuit)?;
@@ -1806,7 +1808,7 @@ pub(crate) async fn setup_test_evm_witness(
     rpc_url: Option<String>,
     input_source: TestDataSource,
     output_source: TestDataSource,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     use crate::graph::TestOnChainData;
 
     let mut data = GraphData::from_path(data_path)?;
@@ -1841,7 +1843,7 @@ pub(crate) async fn test_update_account_calls(
     addr: H160Flag,
     data: PathBuf,
     rpc_url: Option<String>,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     use crate::eth::update_account_calls;
 
     update_account_calls(addr.into(), data, rpc_url.as_deref()).await?;
@@ -1859,7 +1861,7 @@ pub(crate) fn prove(
     srs_path: Option<PathBuf>,
     proof_type: ProofType,
     check_mode: CheckMode,
-) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
+) -> Result<Snark<Fr, G1Affine>, EZKLError> {
     let data = GraphWitness::from_path(data_path)?;
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
@@ -2011,7 +2013,7 @@ pub(crate) fn prove(
 pub(crate) fn swap_proof_commitments_cmd(
     proof_path: PathBuf,
     witness: PathBuf,
-) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
+) -> Result<Snark<Fr, G1Affine>, EZKLError> {
     let snark = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
     let witness = GraphWitness::from_path(witness)?;
     let commitments = witness.get_polycommitments();
@@ -2030,7 +2032,7 @@ pub(crate) fn mock_aggregate(
     aggregation_snarks: Vec<PathBuf>,
     logrows: u32,
     split_proofs: bool,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
         match Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path) {
@@ -2057,10 +2059,8 @@ pub(crate) fn mock_aggregate(
     let circuit = AggregationCircuit::new(&G1Affine::generator().into(), snarks, split_proofs)?;
 
     let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, vec![circuit.instances()])
-        .map_err(Box::<dyn Error>::from)?;
-    prover
-        .verify()
-        .map_err(|e| Box::<dyn Error>::from(ExecutionError::VerifyError(e)))?;
+        .map_err(|e| ExecutionError::MockProverError(e.to_string()))?;
+    prover.verify().map_err(ExecutionError::VerifyError)?;
     #[cfg(not(target_arch = "wasm32"))]
     pb.finish_with_message("Done.");
     Ok(String::new())
@@ -2075,7 +2075,7 @@ pub(crate) fn setup_aggregate(
     split_proofs: bool,
     disable_selector_compression: bool,
     commitment: Commitments,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EZKLError> {
     let mut snarks = vec![];
     for proof_path in sample_snarks.iter() {
         match Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path) {
@@ -2138,7 +2138,7 @@ pub(crate) fn aggregate(
     check_mode: CheckMode,
     split_proofs: bool,
     commitment: Commitments,
-) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
+) -> Result<Snark<Fr, G1Affine>, EZKLError> {
     let mut snarks = vec![];
     for proof_path in aggregation_snarks.iter() {
         match Snark::load::<KZGCommitmentScheme<Bn256>>(proof_path) {
@@ -2318,7 +2318,7 @@ pub(crate) fn verify(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     reduced_srs: bool,
-) -> Result<bool, Box<dyn Error>> {
+) -> Result<bool, EZKLError> {
     let circuit_settings = GraphSettings::load(&settings_path)?;
 
     let logrows = circuit_settings.run_args.logrows;
@@ -2412,7 +2412,7 @@ fn verify_commitment<
     vk_path: PathBuf,
     params: &'a Scheme::ParamsVerifier,
     logrows: u32,
-) -> Result<bool, Box<dyn Error>>
+) -> Result<bool, EZKLError>
 where
     Scheme::Scalar: FromUniformBytes<64>
         + SerdeObject
@@ -2448,7 +2448,7 @@ pub(crate) fn verify_aggr(
     logrows: u32,
     reduced_srs: bool,
     commitment: Commitments,
-) -> Result<bool, Box<dyn Error>> {
+) -> Result<bool, EZKLError> {
     match commitment {
         Commitments::KZG => {
             let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
@@ -2523,7 +2523,7 @@ pub(crate) fn load_params_verifier<Scheme: CommitmentScheme>(
     srs_path: Option<PathBuf>,
     logrows: u32,
     commitment: Commitments,
-) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
+) -> Result<Scheme::ParamsVerifier, EZKLError> {
     let srs_path = get_srs_path(logrows, srs_path, commitment);
     let mut params = load_srs_verifier::<Scheme>(srs_path)?;
     info!("downsizing params to {} logrows", logrows);
@@ -2538,7 +2538,7 @@ pub(crate) fn load_params_prover<Scheme: CommitmentScheme>(
     srs_path: Option<PathBuf>,
     logrows: u32,
     commitment: Commitments,
-) -> Result<Scheme::ParamsProver, Box<dyn Error>> {
+) -> Result<Scheme::ParamsProver, EZKLError> {
     let srs_path = get_srs_path(logrows, srs_path, commitment);
     let mut params = load_srs_prover::<Scheme>(srs_path)?;
     info!("downsizing params to {} logrows", logrows);

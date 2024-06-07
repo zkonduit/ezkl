@@ -28,6 +28,56 @@
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
 
+/// Error type
+#[derive(thiserror::Error, Debug)]
+#[allow(missing_docs)]
+pub enum EZKLError {
+    #[error("aggregation error: {0}")]
+    AggregationError(#[from] pfsys::evm::aggregation_kzg::AggregationError),
+    #[error("eth error: {0}")]
+    EthError(#[from] eth::EthError),
+    #[error("graph error: {0}")]
+    GraphError(#[from] graph::errors::GraphError),
+    #[error("pfsys error: {0}")]
+    PfsysError(#[from] pfsys::errors::PfsysError),
+    #[error("circuit error: {0}")]
+    CircuitError(#[from] circuit::errors::CircuitError),
+    #[error("tensor error: {0}")]
+    TensorError(#[from] tensor::errors::TensorError),
+    #[error("module error: {0}")]
+    ModuleError(#[from] circuit::modules::errors::ModuleError),
+    #[error("io error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("json error: {0}")]
+    JsonError(#[from] serde_json::Error),
+    #[error("utf8 error: {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+    #[error("reqwest error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("fmt error: {0}")]
+    FmtError(#[from] std::fmt::Error),
+    #[error("Halo2 error: {0}")]
+    Halo2Error(#[from] halo2_proofs::plonk::Error),
+    #[error("Uncategorized error: {0}")]
+    UncategorizedError(String),
+    #[error("execution error: {0}")]
+    ExecutionError(#[from] execute::ExecutionError),
+    #[error("srs error: {0}")]
+    SrsError(#[from] pfsys::srs::SrsError),
+}
+
+impl From<&str> for EZKLError {
+    fn from(s: &str) -> Self {
+        EZKLError::UncategorizedError(s.to_string())
+    }
+}
+
+impl From<String> for EZKLError {
+    fn from(s: String) -> Self {
+        EZKLError::UncategorizedError(s)
+    }
+}
+
 use std::str::FromStr;
 
 use circuit::{table::Range, CheckMode, Tolerance};
@@ -248,7 +298,7 @@ impl Default for RunArgs {
 
 impl RunArgs {
     ///
-    pub fn validate(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn validate(&self) -> Result<(), String> {
         if self.param_visibility == Visibility::Public {
             return Err(
                 "params cannot be public instances, you are probably trying to use `fixed` or `kzgcommit`"

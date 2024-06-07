@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    error::Error,
     ops::Range,
 };
 
@@ -16,10 +15,7 @@ use maybe_rayon::{
 
 use self::tensor::{create_constant_tensor, create_zero_tensor, IntoI64};
 
-use super::{
-    chip::{BaseConfig, CircuitError},
-    region::RegionCtx,
-};
+use super::{chip::BaseConfig, region::RegionCtx};
 use crate::{
     circuit::{ops::base::BaseOp, utils},
     fieldutils::{felt_to_i64, i64_to_felt},
@@ -39,7 +35,7 @@ pub(crate) fn loop_div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     region: &mut RegionCtx<F>,
     value: &[ValTensor<F>; 1],
     divisor: F,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     if divisor == F::ONE {
         return Ok(value[0].clone());
     }
@@ -74,7 +70,7 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + In
     region: &mut RegionCtx<F>,
     value: &[ValTensor<F>; 1],
     div: F,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     if div == F::ONE {
         return Ok(value[0].clone());
     }
@@ -140,7 +136,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + 
     value: &[ValTensor<F>; 1],
     input_scale: F,
     output_scale: F,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let input = value[0].clone();
     let input_dims = input.dims();
 
@@ -253,7 +249,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     region.flush()?;
     // time this entire function run
     let global_start = instant::Instant::now();
@@ -275,7 +271,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     trace!("filtering const zero indices took: {:?}", elapsed);
 
     if values[0].len() != values[1].len() {
-        return Err(Box::new(TensorError::DimMismatch("dot".to_string())));
+        return Err(TensorError::DimMismatch("dot".to_string()).into());
     }
 
     // if empty return a const
@@ -344,7 +340,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
 
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
     let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
@@ -539,7 +535,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI6
     region: &mut RegionCtx<F>,
     inputs: &[ValTensor<F>],
     equation: &str,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut equation = equation.split("->");
     let inputs_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
     let output_eq = equation.next().ok_or(CircuitError::InvalidEinsum)?;
@@ -547,7 +543,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI6
 
     // Check that the number of inputs matches the number of inputs in the equation
     if inputs.len() != inputs_eq.len() {
-        return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
+        return Err(TensorError::DimMismatch("einsum".to_string()).into());
     }
 
     let mut indices_to_size = HashMap::new();
@@ -560,7 +556,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI6
             if let std::collections::hash_map::Entry::Vacant(e) = indices_to_size.entry(c) {
                 e.insert(input.dims()[j]);
             } else if indices_to_size[&c] != input.dims()[j] {
-                return Err(Box::new(TensorError::DimMismatch("einsum".to_string())));
+                return Err(TensorError::DimMismatch("einsum".to_string()).into());
             }
         }
     }
@@ -641,7 +637,7 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI6
                 Ok(0..*indices_to_size.get(d).ok_or(CircuitError::InvalidEinsum)?)
             }
         })
-        .collect::<Result<Vec<Range<_>>, Box<dyn Error>>>()?
+        .collect::<Result<Vec<Range<_>>, CircuitError>>()?
         .into_iter()
         .multi_cartesian_product()
         .collect::<Vec<_>>();
@@ -736,12 +732,10 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI6
                     }
                 }
             }
-            Ok::<_, region::RegionError>(
-                prod_res
-                    .ok_or(Into::<region::RegionError>::into("missing prod"))?
-                    .get_inner_tensor()?[0]
-                    .clone(),
-            )
+            Ok(prod_res
+                .ok_or(CircuitError::MissingEinsumProduct)?
+                .get_inner_tensor()?[0]
+                .clone())
         }
     };
 
@@ -757,7 +751,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + I
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut input = values[0].clone();
     input.flatten();
 
@@ -803,12 +797,12 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
     values: &[ValTensor<F>; 1],
     k: usize,
     largest: bool,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut sorted = _sort_ascending(config, region, values)?;
     if largest {
         sorted.reverse()?;
     }
-    sorted.get_slice(&[0..k])
+    Ok(sorted.get_slice(&[0..k])?)
 }
 
 /// Returns top K values.
@@ -842,11 +836,11 @@ pub fn topk_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Int
     k: usize,
     dim: usize,
     largest: bool,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let topk_at_k = move |config: &BaseConfig<F>,
                           region: &mut RegionCtx<F>,
                           values: &[ValTensor<F>; 1]|
-          -> Result<ValTensor<F>, Box<dyn Error>> {
+          -> Result<ValTensor<F>, CircuitError> {
         _select_topk(config, region, values, k, largest)
     };
 
@@ -859,7 +853,7 @@ fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let start = instant::Instant::now();
     let (mut input, index) = (values[0].clone(), values[1].clone());
     input.flatten();
@@ -899,7 +893,7 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     num_classes: usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // assert values is flat
     assert_eq!(values[0].dims().len(), 1);
     // assert its a single elelemnt
@@ -953,16 +947,22 @@ pub(crate) fn dynamic_lookup<
     region: &mut RegionCtx<F>,
     lookups: &[ValTensor<F>; 2],
     tables: &[ValTensor<F>; 2],
-) -> Result<(ValTensor<F>, ValTensor<F>), Box<dyn Error>> {
+) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
     let start = instant::Instant::now();
     // if not all lookups same length err
     if lookups[0].len() != lookups[1].len() {
-        return Err("lookups must be same length".into());
+        return Err(CircuitError::MismatchedLookupLength(
+            lookups[0].len(),
+            lookups[1].len(),
+        ));
     }
 
     // if not all inputs same length err
     if tables[0].len() != tables[1].len() {
-        return Err("tables must be same length".into());
+        return Err(CircuitError::MismatchedLookupTableLength(
+            tables[0].len(),
+            tables[1].len(),
+        ));
     }
 
     let dynamic_lookup_index = region.dynamic_lookup_index();
@@ -1005,7 +1005,7 @@ pub(crate) fn dynamic_lookup<
                 region.enable(Some(&table_selector), z)?;
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
     if !region.is_dummy() {
@@ -1018,13 +1018,13 @@ pub(crate) fn dynamic_lookup<
                     .dynamic_lookups
                     .lookup_selectors
                     .get(&(x, y))
-                    .ok_or("missing selectors")?;
+                    .ok_or(CircuitError::MissingSelectors(format!("{:?}", (x, y))))?;
 
                 region.enable(Some(lookup_selector), z)?;
 
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
     region.increment_dynamic_lookup_col_coord(table_len);
@@ -1043,13 +1043,16 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     region: &mut RegionCtx<F>,
     input: &[ValTensor<F>; 1],
     reference: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let shuffle_index = region.shuffle_index();
     let (input, reference) = (input[0].clone(), reference[0].clone());
 
     // assert input and reference are same length
     if input.len() != reference.len() {
-        return Err("input and reference must be same length".into());
+        return Err(CircuitError::MismatchedShuffleLength(
+            input.len(),
+            reference.len(),
+        ));
     }
 
     let reference = region.assign_shuffle(&config.shuffles.references[0], &reference)?;
@@ -1071,7 +1074,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
                 region.enable(Some(&ref_selector), z)?;
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
     if !region.is_dummy() {
@@ -1084,13 +1087,13 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
                     .shuffles
                     .input_selectors
                     .get(&(x, y))
-                    .ok_or("missing selectors")?;
+                    .ok_or(CircuitError::MissingSelectors(format!("{:?}", (x, y))))?;
 
                 region.enable(Some(input_selector), z)?;
 
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
     region.increment_shuffle_col_coord(reference_len);
@@ -1107,7 +1110,7 @@ pub(crate) fn one_hot_axis<F: PrimeField + TensorType + PartialOrd + std::hash::
     values: &[ValTensor<F>; 1],
     num_classes: usize,
     dim: usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let input = values[0].clone();
     let input_inner = input.get_inner_tensor()?;
 
@@ -1121,7 +1124,7 @@ pub(crate) fn one_hot_axis<F: PrimeField + TensorType + PartialOrd + std::hash::
             let inp = input_inner[i].clone();
             let tensor = Tensor::new(Some(&[inp.clone()]), &[1])?;
 
-            Ok(one_hot(config, region, &[tensor.into()], num_classes)?)
+            one_hot(config, region, &[tensor.into()], num_classes)
         };
 
     region.apply_in_loop(&mut op_tensors, inner_loop_function)?;
@@ -1147,7 +1150,7 @@ pub(crate) fn one_hot_axis<F: PrimeField + TensorType + PartialOrd + std::hash::
 
         let one_hot_val = op_tensor.get(&coord_at_dims).clone();
 
-        Ok::<_, region::RegionError>(one_hot_val)
+        Ok::<_, CircuitError>(one_hot_val)
     })?;
 
     Ok(output.into())
@@ -1159,7 +1162,7 @@ pub(crate) fn gather<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
     dim: usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let (input, mut index_clone) = (values[0].clone(), values[1].clone());
     index_clone.flatten();
     if index_clone.is_singleton() {
@@ -1189,7 +1192,7 @@ pub(crate) fn gather_elements<
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
     dim: usize,
-) -> Result<(ValTensor<F>, ValTensor<F>), Box<dyn Error>> {
+) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
     let (input, index) = (values[0].clone(), values[1].clone());
 
     assert_eq!(input.dims().len(), index.dims().len());
@@ -1212,7 +1215,7 @@ pub(crate) fn gather_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
     batch_dims: usize,
-) -> Result<(ValTensor<F>, ValTensor<F>), Box<dyn Error>> {
+) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
     let (input, index) = (values[0].clone(), values[1].clone());
 
     let index_dims = index.dims().to_vec();
@@ -1267,7 +1270,7 @@ pub(crate) fn linearize_element_index<
     dims: &[usize],
     dim: usize,
     is_flat_index: bool,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let start_time = instant::Instant::now();
     let index = values[0].clone();
     if !is_flat_index {
@@ -1286,7 +1289,7 @@ pub(crate) fn linearize_element_index<
             res *= dim;
         }
 
-        Ok::<_, region::RegionError>(F::from(res as u64))
+        Ok::<_, CircuitError>(F::from(res as u64))
     })?;
 
     let iteration_dims = if is_flat_index {
@@ -1373,7 +1376,7 @@ pub(crate) fn linearize_nd_index<
     values: &[ValTensor<F>; 1],
     dims: &[usize],
     batch_dims: usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let index = values[0].clone();
     let index_dims = index.dims().to_vec();
 
@@ -1386,7 +1389,7 @@ pub(crate) fn linearize_nd_index<
         for dim in dims.iter().skip(i + 1) {
             res *= dim;
         }
-        Ok::<_, region::RegionError>(F::from(res as u64))
+        Ok::<_, CircuitError>(F::from(res as u64))
     })?;
 
     let iteration_dims = index.dims()[0..batch_dims].to_vec();
@@ -1455,7 +1458,7 @@ pub(crate) fn linearize_nd_index<
                         })
                         .collect::<Result<Vec<_>, TensorError>>()?)
                 })
-                .collect::<Result<Vec<_>, Box<dyn Error>>>()?
+                .collect::<Result<Vec<_>, CircuitError>>()?
                 .into_iter()
                 .flatten()
                 .collect::<Vec<_>>()
@@ -1466,7 +1469,7 @@ pub(crate) fn linearize_nd_index<
                     let slice = x.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
                     index_slice.get_slice(&slice)
                 })
-                .collect::<Result<Vec<_>, Box<dyn Error>>>()?
+                .collect::<Result<Vec<_>, TensorError>>()?
         };
 
         let mut const_offset = F::ZERO;
@@ -1523,7 +1526,7 @@ pub(crate) fn get_missing_set_elements<
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
     ordered: bool,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let (mut input, fullset) = (values[0].clone(), values[1].clone());
     let set_len = fullset.len();
     input.flatten();
@@ -1589,7 +1592,7 @@ pub(crate) fn scatter_elements<
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 3],
     dim: usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let (input, mut index, src) = (values[0].clone(), values[1].clone(), values[2].clone());
 
     assert_eq!(input.dims().len(), index.dims().len());
@@ -1670,7 +1673,7 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 3],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let (input, mut index, src) = (values[0].clone(), values[1].clone(), values[2].clone());
 
     if !index.all_prev_assigned() {
@@ -1768,7 +1771,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     region.flush()?;
     // time this entire function run
     let global_start = instant::Instant::now();
@@ -1875,7 +1878,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     region.flush()?;
     // time this entire function run
     let global_start = instant::Instant::now();
@@ -1939,7 +1942,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>
                 region.enable(selector, z)?;
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
     let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
@@ -1961,10 +1964,10 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
             &BaseConfig<F>,
             &mut RegionCtx<F>,
             &[ValTensor<F>; 1],
-        ) -> Result<ValTensor<F>, Box<dyn Error>>
+        ) -> Result<ValTensor<F>, CircuitError>
         + Send
         + Sync,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
 
     let a = &values[0];
@@ -2040,7 +2043,7 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Int
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
     axes_wise_op(config, region, values, axes, prod)
 }
@@ -2074,7 +2077,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
     axes_wise_op(config, region, values, axes, sum)
 }
@@ -2108,13 +2111,12 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + I
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     dim: usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // these will be assigned as constants
-    let argmax =
-        move |config: &BaseConfig<F>,
-              region: &mut RegionCtx<F>,
-              values: &[ValTensor<F>; 1]|
-              -> Result<ValTensor<F>, Box<dyn Error>> { argmax(config, region, values) };
+    let argmax = move |config: &BaseConfig<F>,
+                       region: &mut RegionCtx<F>,
+                       values: &[ValTensor<F>; 1]|
+          -> Result<ValTensor<F>, CircuitError> { argmax(config, region, values) };
 
     // calculate value of output
     axes_wise_op(config, region, values, &[dim], argmax)
@@ -2148,7 +2150,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
 
     axes_wise_op(config, region, values, axes, max)
@@ -2183,14 +2185,13 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + I
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     dim: usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
 
-    let argmin =
-        move |config: &BaseConfig<F>,
-              region: &mut RegionCtx<F>,
-              values: &[ValTensor<F>; 1]|
-              -> Result<ValTensor<F>, Box<dyn Error>> { argmin(config, region, values) };
+    let argmin = move |config: &BaseConfig<F>,
+                       region: &mut RegionCtx<F>,
+                       values: &[ValTensor<F>; 1]|
+          -> Result<ValTensor<F>, CircuitError> { argmin(config, region, values) };
 
     axes_wise_op(config, region, values, &[dim], argmin)
 }
@@ -2228,7 +2229,7 @@ pub fn min_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
 
     axes_wise_op(config, region, values, axes, min)
@@ -2240,7 +2241,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
     op: BaseOp,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // time to calculate the value of the output
     let global_start = instant::Instant::now();
 
@@ -2265,7 +2266,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
             removal_indices
         }
         BaseOp::Sub => second_zero_indices.clone(),
-        _ => return Err(Box::new(CircuitError::UnsupportedOp)),
+        _ => return Err(CircuitError::UnsupportedOp),
     };
     removal_indices.dedup();
 
@@ -2273,10 +2274,10 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     let removal_indices_ptr = &removal_indices;
 
     if lhs.len() != rhs.len() {
-        return Err(Box::new(CircuitError::DimMismatch(format!(
+        return Err(CircuitError::DimMismatch(format!(
             "pairwise {} layout",
             op.as_str()
-        ))));
+        )));
     }
 
     let mut inputs = vec![];
@@ -2301,7 +2302,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         BaseOp::Add => add(&inputs),
         BaseOp::Sub => sub(&inputs),
         BaseOp::Mult => mult(&inputs),
-        _ => return Err(Box::new(CircuitError::UnsupportedOp)),
+        _ => return Err(CircuitError::UnsupportedOp),
     }
     .map_err(|e| {
         error!("{}", e);
@@ -2329,7 +2330,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
     region.increment(assigned_len);
 
@@ -2418,7 +2419,7 @@ pub fn mean_of_squares_axes<F: PrimeField + TensorType + PartialOrd + std::hash:
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     axes: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let squared = pow(config, region, values, 2)?;
     let sum_squared = sum_axes(config, region, &[squared], axes)?;
 
@@ -2434,7 +2435,7 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     shape: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut assigned_input = region.assign(&config.custom_gates.inputs[0], &values[0])?;
     assigned_input.expand(shape)?;
     region.increment(assigned_input.len());
@@ -2473,7 +2474,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
@@ -2524,7 +2525,7 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
 
     let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
@@ -2576,7 +2577,7 @@ pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // just flip the order and use greater
     greater(config, region, &[values[1].clone(), values[0].clone()])
 }
@@ -2615,7 +2616,7 @@ pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + In
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // just flip the order and use greater
     greater_equal(config, region, &[values[1].clone(), values[0].clone()])
 }
@@ -2653,7 +2654,7 @@ pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let a = boolean_identity(config, region, &[values[0].clone()], true)?;
     let b = boolean_identity(config, region, &[values[1].clone()], true)?;
 
@@ -2695,7 +2696,7 @@ pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let a = values[0].clone();
     let b = values[1].clone();
 
@@ -2741,7 +2742,7 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI6
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let diff = pairwise(config, region, values, BaseOp::Sub)?;
     equals_zero(config, region, &[diff])
 }
@@ -2751,7 +2752,7 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let values = values[0].clone();
     let values_inverse = values.inverse()?;
     let product_values_and_invert = pairwise(
@@ -2814,7 +2815,7 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let lhs = values[0].clone();
     let rhs = values[1].clone();
 
@@ -2863,7 +2864,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mask = values[0].clone();
 
     let unit = create_unit_tensor(1);
@@ -2912,7 +2913,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 3],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // if mask > 0 then output a else output b
     let (mask, a, b) = (&values[0], &values[1], &values[2]);
 
@@ -2960,7 +2961,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let nil = create_zero_tensor(1);
     pairwise(config, region, &[nil, values[0].clone()], BaseOp::Sub)
 }
@@ -3000,7 +3001,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI
     stride: &[usize],
     kernel_shape: &[usize],
     normalized: bool,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let batch_size = values[0].dims()[0];
     let image_channels = values[0].dims()[1];
 
@@ -3031,7 +3032,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI
             res.push(output);
             Ok(())
         })
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+        .collect::<Result<Vec<_>, CircuitError>>()?;
 
     let shape = &res[0].dims()[2..];
     let mut last_elem = res[1..]
@@ -3075,7 +3076,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
     padding: &[(usize, usize)],
     stride: &[usize],
     pool_dims: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let image = values[0].clone();
 
     let image_dims = image.dims();
@@ -3135,7 +3136,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
             *o = max_w.get_inner_tensor()?[0].clone();
             Ok(())
         })
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+        .collect::<Result<Vec<_>, CircuitError>>()?;
 
     let res: ValTensor<F> = output.into();
 
@@ -3283,14 +3284,15 @@ pub fn deconv<
     padding: &[(usize, usize)],
     output_padding: &[usize],
     stride: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = inputs.len() == 3;
     let (image, kernel) = (&inputs[0], &inputs[1]);
 
     if stride.iter().any(|&s| s == 0) {
-        return Err(Box::new(TensorError::DimMismatch(
+        return Err(TensorError::DimMismatch(
             "non-positive stride is not supported for deconv".to_string(),
-        )));
+        )
+        .into());
     }
 
     let null_val = ValType::Constant(F::ZERO);
@@ -3453,14 +3455,15 @@ pub fn conv<
     values: &[ValTensor<F>],
     padding: &[(usize, usize)],
     stride: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = values.len() == 3;
     let (mut image, mut kernel) = (values[0].clone(), values[1].clone());
 
     if stride.iter().any(|&s| s == 0) {
-        return Err(Box::new(TensorError::DimMismatch(
+        return Err(TensorError::DimMismatch(
             "non-positive stride is not supported for conv".to_string(),
-        )));
+        )
+        .into());
     }
 
     // we specifically want to use the same kernel and image for all the convolutions and need to enforce this by assigning them
@@ -3527,10 +3530,11 @@ pub fn conv<
     );
 
     if output_channels_per_group == 0 {
-        return Err(Box::new(TensorError::DimMismatch(format!(
+        return Err(TensorError::DimMismatch(format!(
             "Given groups={}, expected kernel to be at least {} at dimension 0 but got {} instead",
             num_groups, num_groups, output_channels_per_group
-        ))));
+        ))
+        .into());
     }
 
     let num_outputs =
@@ -3623,7 +3627,7 @@ pub(crate) fn pow<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + In
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     exponent: u32,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut t = values[0].clone();
 
     for _ in 1..exponent {
@@ -3639,7 +3643,7 @@ pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd + std::hash::Hash 
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>],
     scales: &[(usize, u128)],
-) -> Result<Vec<ValTensor<F>>, Box<dyn Error>> {
+) -> Result<Vec<ValTensor<F>>, CircuitError> {
     let mut rescaled_inputs = vec![];
     for (i, ri) in values.iter().enumerate() {
         if scales[i].1 == 1 {
@@ -3659,7 +3663,7 @@ pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd + std::hash::Hash 
 pub(crate) fn reshape<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     values: &[ValTensor<F>; 1],
     new_dims: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut t = values[0].clone();
     t.reshape(new_dims)?;
     Ok(t)
@@ -3670,7 +3674,7 @@ pub(crate) fn move_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     values: &[ValTensor<F>; 1],
     source: usize,
     destination: usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut t = values[0].clone();
     t.move_axis(source, destination)?;
     Ok(t)
@@ -3682,7 +3686,7 @@ pub(crate) fn resize<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     scales: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut output = region.assign(&config.custom_gates.output, &values[0])?;
     region.increment(output.len());
     output.resize(scales)?;
@@ -3698,7 +3702,7 @@ pub(crate) fn slice<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + 
     axis: &usize,
     start: &usize,
     end: &usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // assigns the instance to the advice.
     let mut output = values[0].clone();
 
@@ -3720,7 +3724,7 @@ pub(crate) fn trilu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + 
     values: &[ValTensor<F>; 1],
     k: &i32,
     upper: &bool,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // assigns the instance to the advice.
     let mut output = values[0].clone();
 
@@ -3741,7 +3745,7 @@ pub(crate) fn trilu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + 
 pub(crate) fn concat<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     values: &[ValTensor<F>],
     axis: &usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let collected_inner: Result<Vec<&Tensor<_>>, _> =
         values.iter().map(|e| e.get_inner_tensor()).collect();
     let collected_inner = collected_inner?;
@@ -3754,7 +3758,7 @@ pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut output = values[0].clone();
     if !output.all_prev_assigned() {
         output = region.assign(&config.custom_gates.output, &values[0])?;
@@ -3772,7 +3776,7 @@ pub(crate) fn boolean_identity<
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     assign: bool,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let output = if assign || !values[0].get_const_indices()?.is_empty() {
         // get zero constants indices
         let output = region.assign(&config.custom_gates.output, &values[0])?;
@@ -3796,7 +3800,7 @@ pub(crate) fn boolean_identity<
                 region.enable(selector, z)?;
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
     Ok(output)
@@ -3810,7 +3814,7 @@ pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     axis: &usize,
     stride: &usize,
     modulo: &usize,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let input = region.assign(&config.custom_gates.inputs[0], &values[0])?;
     let processed_output =
         tensor::ops::downsample(input.get_inner_tensor()?, *axis, *stride, *modulo)?;
@@ -3826,12 +3830,10 @@ pub(crate) fn enforce_equality<
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // assert of same len
     if values[0].len() != values[1].len() {
-        return Err(Box::new(TensorError::DimMismatch(
-            "enforce_equality".to_string(),
-        )));
+        return Err(TensorError::DimMismatch("enforce_equality".to_string()).into());
     }
 
     // assigns the instance to the advice.
@@ -3853,7 +3855,7 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     range: &crate::circuit::table::Range,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     region.add_used_range_check(*range)?;
 
     // time the entire operation
@@ -3870,13 +3872,11 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
     let table_index: ValTensor<F> = w
         .get_inner_tensor()?
         .par_enum_map(|_, e| {
-            Ok::<ValType<F>, TensorError>(if let Some(f) = e.get_felt_eval() {
+            Ok::<ValType<F>, CircuitError>(if let Some(f) = e.get_felt_eval() {
                 let col_idx = if !is_dummy {
-                    let table = config
-                        .range_checks
-                        .ranges
-                        .get(range)
-                        .ok_or(TensorError::TableLookupError)?;
+                    let table = config.range_checks.ranges.get(range).ok_or(
+                        CircuitError::RangeCheckNotConfigured(format!("{:?}", range)),
+                    )?;
                     table.get_col_index(f)
                 } else {
                     F::ZERO
@@ -3901,7 +3901,7 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
                 region.enable(selector, z)?;
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
     let is_assigned = !w.any_unknowns()?;
@@ -3910,8 +3910,7 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
         let int_values = w.get_int_evals()?;
         for v in int_values.iter() {
             if v < &range.0 || v > &range.1 {
-                log::warn!("Value ({:?}) out of range: {:?}", v, range);
-                return Err(Box::new(TensorError::TableLookupError));
+                return Err(CircuitError::TableOOR(*v, range.0, range.1));
             }
         }
     }
@@ -3935,7 +3934,7 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     nl: &LookupOp,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     region.add_used_lookup(nl.clone(), values)?;
 
     // time the entire operation
@@ -3973,13 +3972,13 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
     let table_index: ValTensor<F> = w
         .get_inner_tensor()?
         .par_enum_map(|i, e| {
-            Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
+            Ok::<_, CircuitError>(if let Some(f) = e.get_felt_eval() {
                 let col_idx = if !is_dummy {
                     let table = config
                         .static_lookups
                         .tables
                         .get(nl)
-                        .ok_or(TensorError::TableLookupError)?;
+                        .ok_or(CircuitError::LookupNotConfigured(Op::<F>::as_string(nl)))?;
                     table.get_col_index(f)
                 } else {
                     F::ZERO
@@ -4012,7 +4011,7 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
                 region.enable(selector, z)?;
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
     region.increment(assigned_len);
@@ -4036,7 +4035,7 @@ pub(crate) fn argmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // this is safe because we later constrain it
     let argmax = values[0]
         .get_int_evals()?
@@ -4072,7 +4071,7 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // this is safe because we later constrain it
     let argmin = values[0]
         .get_int_evals()?
@@ -4108,9 +4107,11 @@ pub(crate) fn max<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + In
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let input_len = values[0].len();
-    _sort_ascending(config, region, values)?.get_slice(&[input_len - 1..input_len])
+    _sort_ascending(config, region, values)?
+        .get_slice(&[input_len - 1..input_len])
+        .map_err(|e| e.into())
 }
 
 /// min layout
@@ -4118,8 +4119,10 @@ pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + In
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
-    _sort_ascending(config, region, values)?.get_slice(&[0..1])
+) -> Result<ValTensor<F>, CircuitError> {
+    _sort_ascending(config, region, values)?
+        .get_slice(&[0..1])
+        .map_err(|e| e.into())
 }
 
 fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
@@ -4131,10 +4134,10 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
             &BaseConfig<F>,
             &mut RegionCtx<F>,
             &[ValTensor<F>; 1],
-        ) -> Result<ValTensor<F>, Box<dyn Error>>
+        ) -> Result<ValTensor<F>, CircuitError>
         + Send
         + Sync,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let mut input = values[0].clone();
 
     if !input.all_prev_assigned() {
@@ -4178,7 +4181,7 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
         let mut sliced_input = input.get_slice(&slice)?;
         sliced_input.flatten();
 
-        Ok(op(config, region, &[sliced_input])?)
+        op(config, region, &[sliced_input])
     };
 
     region.apply_in_loop(&mut op_tensors, inner_loop_function)?;
@@ -4218,7 +4221,7 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash +
             .get(&coord_at_dims)
             .clone();
 
-        Ok::<_, region::RegionError>(topk_elem)
+        Ok::<_, CircuitError>(topk_elem)
     })?;
 
     Ok(output.into())
@@ -4232,11 +4235,11 @@ pub(crate) fn softmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::
     input_scale: utils::F32,
     output_scale: utils::F32,
     axes: &[usize],
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let soft_max_at_scale = move |config: &BaseConfig<F>,
                                   region: &mut RegionCtx<F>,
                                   values: &[ValTensor<F>; 1]|
-          -> Result<ValTensor<F>, Box<dyn Error>> {
+          -> Result<ValTensor<F>, CircuitError> {
         softmax(config, region, values, input_scale, output_scale)
     };
 
@@ -4252,7 +4255,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash 
     values: &[ValTensor<F>; 1],
     input_scale: utils::F32,
     output_scale: utils::F32,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     let is_assigned = values[0].all_prev_assigned();
     let mut input = values[0].clone();
     if !is_assigned {
@@ -4306,7 +4309,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI
     values: &[ValTensor<F>; 1],
     input_scale: utils::F32,
     output_scale: utils::F32,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     // get the max then subtract it
     let max_val = max(config, region, values)?;
     // rebase the input to 0
@@ -4353,7 +4356,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::
     values: &[ValTensor<F>; 2],
     scale: utils::F32,
     tol: f32,
-) -> Result<ValTensor<F>, Box<dyn Error>> {
+) -> Result<ValTensor<F>, CircuitError> {
     if tol == 0.0 {
         // regular equality constraint
         return enforce_equality(config, region, values);

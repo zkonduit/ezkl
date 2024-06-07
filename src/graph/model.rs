@@ -1,8 +1,8 @@
+use super::errors::GraphError;
 use super::extract_const_quantized_values;
 use super::node::*;
 use super::scale_to_multiplier;
 use super::vars::*;
-use super::GraphError;
 use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::ConstantsMap;
@@ -37,7 +37,6 @@ use std::collections::BTreeMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::error::Error;
 use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
@@ -396,7 +395,7 @@ impl ParsedNodes {
     }
 
     ///  Returns shapes of the computational graph's inputs
-    pub fn input_shapes(&self) -> Result<Vec<Vec<usize>>, Box<dyn Error>> {
+    pub fn input_shapes(&self) -> Result<Vec<Vec<usize>>, GraphError> {
         let mut inputs = vec![];
 
         for input in self.inputs.iter() {
@@ -470,7 +469,7 @@ impl Model {
     /// * `reader` - A reader for an Onnx file.
     /// * `run_args` - [RunArgs]
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn new(reader: &mut dyn std::io::Read, run_args: &RunArgs) -> Result<Self, Box<dyn Error>> {
+    pub fn new(reader: &mut dyn std::io::Read, run_args: &RunArgs) -> Result<Self, GraphError> {
         let visibility = VarVisibility::from_args(run_args)?;
 
         let graph = Self::load_onnx_model(reader, run_args, &visibility)?;
@@ -483,7 +482,7 @@ impl Model {
     }
 
     ///
-    pub fn save(&self, path: PathBuf) -> Result<(), Box<dyn Error>> {
+    pub fn save(&self, path: PathBuf) -> Result<(), GraphError> {
         let f = std::fs::File::create(path)?;
         let writer = std::io::BufWriter::new(f);
         bincode::serialize_into(writer, &self)?;
@@ -491,7 +490,7 @@ impl Model {
     }
 
     ///
-    pub fn load(path: PathBuf) -> Result<Self, Box<dyn Error>> {
+    pub fn load(path: PathBuf) -> Result<Self, GraphError> {
         // read bytes from file
         let mut f = std::fs::File::open(&path)?;
         let metadata = fs::metadata(&path)?;
@@ -506,7 +505,7 @@ impl Model {
         &self,
         run_args: &RunArgs,
         check_mode: CheckMode,
-    ) -> Result<GraphSettings, Box<dyn Error>> {
+    ) -> Result<GraphSettings, GraphError> {
         let instance_shapes = self.instance_shapes()?;
         #[cfg(not(target_arch = "wasm32"))]
         debug!(
@@ -536,7 +535,7 @@ impl Model {
                 t.reshape(shape)?;
                 Ok(t)
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, GraphError>>()?;
 
         let res = self.dummy_layout(run_args, &inputs, false, false)?;
 
@@ -583,7 +582,7 @@ impl Model {
         run_args: &RunArgs,
         witness_gen: bool,
         check_lookup: bool,
-    ) -> Result<ForwardResult, Box<dyn Error>> {
+    ) -> Result<ForwardResult, GraphError> {
         let valtensor_inputs: Vec<ValTensor<Fp>> = model_inputs
             .iter()
             .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
@@ -601,15 +600,12 @@ impl Model {
     fn load_onnx_using_tract(
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
-    ) -> Result<TractResult, Box<dyn Error>> {
+    ) -> Result<TractResult, GraphError> {
         use tract_onnx::{
             tract_core::internal::IntoArcTensor, tract_hir::internal::GenericFactoid,
         };
 
-        let mut model = tract_onnx::onnx().model_for_read(reader).map_err(|e| {
-            error!("Error loading model: {}", e);
-            GraphError::ModelLoad
-        })?;
+        let mut model = tract_onnx::onnx().model_for_read(reader)?;
 
         let variables: std::collections::HashMap<String, usize> =
             std::collections::HashMap::from_iter(run_args.variables.clone());
@@ -622,7 +618,7 @@ impl Model {
                 if matches!(x, GenericFactoid::Any) {
                     let batch_size = match variables.get("batch_size") {
                         Some(x) => x,
-                        None => return Err("Unknown dimension batch_size in model inputs, set batch_size in variables".into()),
+                        None => return Err(GraphError::MissingBatchSize),
                     };
                     fact.shape
                         .set_dim(i, tract_onnx::prelude::TDim::Val(*batch_size as i64));
@@ -680,12 +676,12 @@ impl Model {
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
         visibility: &VarVisibility,
-    ) -> Result<ParsedNodes, Box<dyn Error>> {
+    ) -> Result<ParsedNodes, GraphError> {
         let start_time = instant::Instant::now();
 
         let (model, symbol_values) = Self::load_onnx_using_tract(reader, run_args)?;
 
-        let scales = VarScales::from_args(run_args)?;
+        let scales = VarScales::from_args(run_args);
         let nodes = Self::nodes_from_graph(
             &model,
             run_args,
@@ -762,7 +758,7 @@ impl Model {
         symbol_values: &SymbolValues,
         override_input_scales: Option<Vec<crate::Scale>>,
         override_output_scales: Option<HashMap<usize, crate::Scale>>,
-    ) -> Result<BTreeMap<usize, NodeType>, Box<dyn Error>> {
+    ) -> Result<BTreeMap<usize, NodeType>, GraphError> {
         use crate::graph::node_output_shapes;
 
         let mut nodes = BTreeMap::<usize, NodeType>::new();
@@ -976,14 +972,11 @@ impl Model {
         model_path: &std::path::Path,
         data_chunks: &[GraphData],
         input_shapes: Vec<Vec<usize>>,
-    ) -> Result<Vec<Vec<Tensor<f32>>>, Box<dyn Error>> {
+    ) -> Result<Vec<Vec<Tensor<f32>>>, GraphError> {
         use tract_onnx::tract_core::internal::IntoArcTensor;
 
-        let (model, _) = Model::load_onnx_using_tract(
-            &mut std::fs::File::open(model_path)
-                .map_err(|_| format!("failed to load {}", model_path.display()))?,
-            run_args,
-        )?;
+        let (model, _) =
+            Model::load_onnx_using_tract(&mut std::fs::File::open(model_path)?, run_args)?;
 
         let datum_types: Vec<DatumType> = model
             .input_outlets()?
@@ -1011,15 +1004,8 @@ impl Model {
     /// # Arguments
     /// * `params` - A [GraphSettings] struct holding parsed CLI arguments.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn from_run_args(
-        run_args: &RunArgs,
-        model: &std::path::Path,
-    ) -> Result<Self, Box<dyn Error>> {
-        Model::new(
-            &mut std::fs::File::open(model)
-                .map_err(|_| format!("failed to load {}", model.display()))?,
-            run_args,
-        )
+    pub fn from_run_args(run_args: &RunArgs, model: &std::path::Path) -> Result<Self, GraphError> {
+        Model::new(&mut std::fs::File::open(model)?, run_args)
     }
 
     /// Configures a model for the circuit
@@ -1031,7 +1017,7 @@ impl Model {
         meta: &mut ConstraintSystem<Fp>,
         vars: &ModelVars<Fp>,
         settings: &GraphSettings,
-    ) -> Result<PolyConfig<Fp>, Box<dyn Error>> {
+    ) -> Result<PolyConfig<Fp>, GraphError> {
         debug!("configuring model");
 
         let lookup_range = settings.run_args.lookup_range;
@@ -1093,7 +1079,7 @@ impl Model {
         vars: &mut ModelVars<Fp>,
         witnessed_outputs: &[ValTensor<Fp>],
         constants: &mut ConstantsMap<Fp>,
-    ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
+    ) -> Result<Vec<ValTensor<Fp>>, GraphError> {
         info!("model layout...");
 
         let start_time = instant::Instant::now();
@@ -1103,7 +1089,11 @@ impl Model {
         let input_shapes = self.graph.input_shapes()?;
         for (i, input_idx) in self.graph.inputs.iter().enumerate() {
             if self.visibility.input.is_public() {
-                let instance = vars.instance.as_ref().ok_or("no instance")?.clone();
+                let instance = vars
+                    .instance
+                    .as_ref()
+                    .ok_or(GraphError::MissingInstances)?
+                    .clone();
                 results.insert(*input_idx, vec![instance]);
                 vars.increment_instance_idx();
             } else {
@@ -1123,7 +1113,12 @@ impl Model {
         let outputs = layouter.assign_region(
             || "model",
             |region| {
-                let mut thread_safe_region = RegionCtx::new_with_constants(region, 0, run_args.num_inner_cols, original_constants.clone());
+                let mut thread_safe_region = RegionCtx::new_with_constants(
+                    region,
+                    0,
+                    run_args.num_inner_cols,
+                    original_constants.clone(),
+                );
                 // we need to do this as this loop is called multiple times
                 vars.set_instance_idx(instance_idx);
 
@@ -1147,24 +1142,31 @@ impl Model {
                             tolerance.scale = scale_to_multiplier(output_scales[i]).into();
 
                             let comparators = if run_args.output_visibility == Visibility::Public {
-                                let res = vars.instance.as_ref().ok_or("no instance")?.clone();
+                                let res = vars
+                                    .instance
+                                    .as_ref()
+                                    .ok_or(GraphError::MissingInstances)?
+                                    .clone();
                                 vars.increment_instance_idx();
                                 res
                             } else {
                                 // if witnessed_outputs is of len less than i  error
                                 if witnessed_outputs.len() <= i {
-                                    return Err("you provided insufficient witness values to generate a fixed output".into());
+                                    return Err(GraphError::InsufficientWitnessValues);
                                 }
                                 witnessed_outputs[i].clone()
                             };
 
-                            config.base.layout(
-                                &mut thread_safe_region,
-                                &[output.clone(), comparators],
-                                Box::new(HybridOp::RangeCheck(tolerance)),
-                            )
+                            config
+                                .base
+                                .layout(
+                                    &mut thread_safe_region,
+                                    &[output.clone(), comparators],
+                                    Box::new(HybridOp::RangeCheck(tolerance)),
+                                )
+                                .map_err(|e| e.into())
                         })
-                        .collect::<Result<Vec<_>,_>>();
+                        .collect::<Result<Vec<_>, GraphError>>();
                     res.map_err(|e| {
                         error!("{}", e);
                         halo2_proofs::plonk::Error::Synthesis
@@ -1178,7 +1180,6 @@ impl Model {
 
                 Ok(outputs)
             },
-
         )?;
 
         let duration = start_time.elapsed();
@@ -1192,7 +1193,7 @@ impl Model {
         config: &mut ModelConfig,
         region: &mut RegionCtx<Fp>,
         results: &mut BTreeMap<usize, Vec<ValTensor<Fp>>>,
-    ) -> Result<Vec<ValTensor<Fp>>, Box<dyn Error>> {
+    ) -> Result<Vec<ValTensor<Fp>>, GraphError> {
         // index over results to get original inputs
         let orig_inputs: BTreeMap<usize, _> = results
             .clone()
@@ -1237,7 +1238,10 @@ impl Model {
                     let res = if node.is_constant() && node.num_uses() == 1 {
                         log::debug!("node {} is a constant with 1 use", n.idx);
                         let mut node = n.clone();
-                        let c = node.opkind.get_mutable_constant().ok_or("no constant")?;
+                        let c = node
+                            .opkind
+                            .get_mutable_constant()
+                            .ok_or(GraphError::MissingConstants)?;
                         Some(c.quantized_values.clone().try_into()?)
                     } else {
                         config
@@ -1394,7 +1398,7 @@ impl Model {
         inputs: &[ValTensor<Fp>],
         witness_gen: bool,
         check_lookup: bool,
-    ) -> Result<DummyPassRes, Box<dyn Error>> {
+    ) -> Result<DummyPassRes, GraphError> {
         debug!("calculating num of constraints using dummy model layout...");
 
         let start_time = instant::Instant::now();
@@ -1549,7 +1553,7 @@ impl Model {
     }
 
     /// Shapes of the computational graph's public inputs (if any)
-    pub fn instance_shapes(&self) -> Result<Vec<Vec<usize>>, Box<dyn Error>> {
+    pub fn instance_shapes(&self) -> Result<Vec<Vec<usize>>, GraphError> {
         let mut instance_shapes = vec![];
         if self.visibility.input.is_public() {
             instance_shapes.extend(self.graph.input_shapes()?);

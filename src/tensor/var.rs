@@ -31,6 +31,15 @@ pub enum VarTensor {
 }
 
 impl VarTensor {
+    /// name of the tensor
+    pub fn name(&self) -> &'static str {
+        match self {
+            VarTensor::Advice { .. } => "Advice",
+            VarTensor::Dummy { .. } => "Dummy",
+            VarTensor::Empty => "Empty",
+        }
+    }
+
     ///
     pub fn is_advice(&self) -> bool {
         matches!(self, VarTensor::Advice { .. })

@@ -21,6 +21,7 @@ use std::marker::PhantomData;
 use crate::circuit::region::ConstantsMap;
 use crate::tensor::{Tensor, ValTensor, ValType};
 
+use super::errors::ModuleError;
 use super::Module;
 
 /// The number of instance columns used by the Poseidon hash function
@@ -174,7 +175,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         layouter: &mut impl Layouter<Fp>,
         message: &[ValTensor<Fp>],
         constants: &mut ConstantsMap<Fp>,
-    ) -> Result<Self::InputAssignments, Error> {
+    ) -> Result<Self::InputAssignments, ModuleError> {
         assert_eq!(message.len(), 1);
         let message = message[0].clone();
 
@@ -185,78 +186,82 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         let res = layouter.assign_region(
             || "load message",
             |mut region| {
-                let assigned_message: Result<Vec<AssignedCell<Fp, Fp>>, Error> = match &message {
-                    ValTensor::Value { inner: v, .. } => v
-                        .iter()
-                        .enumerate()
-                        .map(|(i, value)| {
-                            let x = i % WIDTH;
-                            let y = i / WIDTH;
+                let assigned_message: Result<Vec<AssignedCell<Fp, Fp>>, ModuleError> =
+                    match &message {
+                        ValTensor::Value { inner: v, .. } => {
+                            v.iter()
+                                .enumerate()
+                                .map(|(i, value)| {
+                                    let x = i % WIDTH;
+                                    let y = i / WIDTH;
 
-                            match value {
-                                ValType::Value(v) => region.assign_advice(
-                                    || format!("load message_{}", i),
-                                    self.config.hash_inputs[x],
-                                    y,
-                                    || *v,
-                                ),
-                                ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
-                                    Ok(v.clone())
-                                }
-                                ValType::Constant(f) => {
-                                    if local_constants.contains_key(f) {
-                                        Ok(constants.get(f).unwrap().assigned_cell().ok_or({
-                                            log::error!("constant not previously assigned");
-                                            Error::Synthesis
-                                        })?)
-                                    } else {
-                                        let res = region.assign_advice_from_constant(
-                                            || format!("load message_{}", i),
-                                            self.config.hash_inputs[x],
-                                            y,
-                                            *f,
-                                        )?;
+                                    match value {
+                                        ValType::Value(v) => region
+                                            .assign_advice(
+                                                || format!("load message_{}", i),
+                                                self.config.hash_inputs[x],
+                                                y,
+                                                || *v,
+                                            )
+                                            .map_err(|e| e.into()),
+                                        ValType::PrevAssigned(v)
+                                        | ValType::AssignedConstant(v, ..) => Ok(v.clone()),
+                                        ValType::Constant(f) => {
+                                            if local_constants.contains_key(f) {
+                                                Ok(constants
+                                                    .get(f)
+                                                    .unwrap()
+                                                    .assigned_cell()
+                                                    .ok_or(ModuleError::ConstantNotAssigned)?)
+                                            } else {
+                                                let res = region.assign_advice_from_constant(
+                                                    || format!("load message_{}", i),
+                                                    self.config.hash_inputs[x],
+                                                    y,
+                                                    *f,
+                                                )?;
 
-                                        constants
-                                            .insert(*f, ValType::AssignedConstant(res.clone(), *f));
+                                                constants.insert(
+                                                    *f,
+                                                    ValType::AssignedConstant(res.clone(), *f),
+                                                );
 
-                                        Ok(res)
+                                                Ok(res)
+                                            }
+                                        }
+                                        e => Err(ModuleError::WrongInputType(
+                                            format!("{:?}", e),
+                                            "PrevAssigned".to_string(),
+                                        )),
                                     }
-                                }
-                                e => {
-                                    log::error!(
-                                        "wrong input type {:?}, must be previously assigned",
-                                        e
-                                    );
-                                    Err(Error::Synthesis)
-                                }
-                            }
-                        })
-                        .collect(),
-                    ValTensor::Instance {
-                        dims,
-                        inner: col,
-                        idx,
-                        initial_offset,
-                        ..
-                    } => {
-                        // this should never ever fail
-                        let num_elems = dims[*idx].iter().product::<usize>();
-                        (0..num_elems)
-                            .map(|i| {
-                                let x = i % WIDTH;
-                                let y = i / WIDTH;
-                                region.assign_advice_from_instance(
-                                    || "pub input anchor",
-                                    *col,
-                                    initial_offset + i,
-                                    self.config.hash_inputs[x],
-                                    y,
-                                )
-                            })
-                            .collect()
-                    }
-                };
+                                })
+                                .collect()
+                        }
+                        ValTensor::Instance {
+                            dims,
+                            inner: col,
+                            idx,
+                            initial_offset,
+                            ..
+                        } => {
+                            // this should never ever fail
+                            let num_elems = dims[*idx].iter().product::<usize>();
+                            (0..num_elems)
+                                .map(|i| {
+                                    let x = i % WIDTH;
+                                    let y = i / WIDTH;
+                                    region.assign_advice_from_instance(
+                                        || "pub input anchor",
+                                        *col,
+                                        initial_offset + i,
+                                        self.config.hash_inputs[x],
+                                        y,
+                                    )
+                                })
+                                .collect::<Result<Vec<_>, _>>()
+                                .map_err(|e| e.into())
+                        }
+                    };
 
                 let offset = message.len() / WIDTH + 1;
 
@@ -277,7 +282,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
             message.len(),
             start_time.elapsed()
         );
-        res
+        res.map_err(|e| e.into())
     }
 
     /// L is the number of inputs to the hash function
@@ -289,7 +294,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         input: &[ValTensor<Fp>],
         row_offset: usize,
         constants: &mut ConstantsMap<Fp>,
-    ) -> Result<ValTensor<Fp>, Error> {
+    ) -> Result<ValTensor<Fp>, ModuleError> {
         let (mut input_cells, zero_val) = self.layout_inputs(layouter, input, constants)?;
         // extract the values from the input cells
         let mut assigned_input: Tensor<ValType<Fp>> =
@@ -301,7 +306,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         let mut one_iter = false;
         // do the Tree dance baby
         while input_cells.len() > 1 || !one_iter {
-            let hashes: Result<Vec<AssignedCell<Fp, Fp>>, Error> = input_cells
+            let hashes: Result<Vec<AssignedCell<Fp, Fp>>, ModuleError> = input_cells
                 .chunks(L)
                 .enumerate()
                 .map(|(i, block)| {
@@ -332,7 +337,8 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
 
                     hash
                 })
-                .collect();
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.into());
 
             log::trace!("hashes (N={:?}) took: {:?}", len, start_time.elapsed());
             one_iter = true;
@@ -348,7 +354,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
             ValType::PrevAssigned(v) => v,
             _ => {
                 log::error!("wrong input type, must be previously assigned");
-                return Err(Error::Synthesis);
+                return Err(Error::Synthesis.into());
             }
         };
 
@@ -380,7 +386,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     }
 
     ///
-    fn run(message: Vec<Fp>) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
+    fn run(message: Vec<Fp>) -> Result<Vec<Vec<Fp>>, ModuleError> {
         let mut hash_inputs = message;
 
         let len = hash_inputs.len();
@@ -400,7 +406,11 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                         block.extend(vec![Fp::ZERO; L - remainder].iter());
                     }
 
-                    let message = block.try_into().map_err(|_| Error::Synthesis)?;
+                    let block_len = block.len();
+
+                    let message = block
+                        .try_into()
+                        .map_err(|_| ModuleError::InputWrongLength(block_len))?;
 
                     Ok(halo2_gadgets::poseidon::primitives::Hash::<
                         _,
@@ -411,7 +421,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                     >::init()
                     .hash(message))
                 })
-                .collect::<Result<Vec<_>, Error>>()?;
+                .collect::<Result<Vec<_>, ModuleError>>()?;
             one_iter = true;
             hash_inputs = hashes;
         }

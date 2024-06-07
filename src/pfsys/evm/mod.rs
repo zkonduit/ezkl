@@ -10,17 +10,14 @@ pub enum EvmVerificationError {
     #[error("Solidity verifier found the proof invalid")]
     InvalidProof,
     /// If the Solidity verifier threw and error (e.g. OutOfGas)
-    #[error("Execution of Solidity code failed")]
-    SolidityExecution,
-    /// EVM execution errors
-    #[error("EVM execution of raw code failed")]
-    RawExecution,
+    #[error("Execution of Solidity code failed: {0}")]
+    SolidityExecution(String),
     /// EVM verify errors
-    #[error("evm verification reverted")]
-    Reverted,
+    #[error("evm verification reverted: {0}")]
+    Reverted(String),
     /// EVM verify errors
-    #[error("evm deployment failed")]
-    Deploy,
+    #[error("evm deployment failed: {0}")]
+    DeploymentFailed(String),
     /// Invalid Visibility
     #[error("Invalid visibility")]
     InvalidVisibility,

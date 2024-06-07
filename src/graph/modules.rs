@@ -11,6 +11,7 @@ use halo2curves::bn256::{Fr as Fp, G1Affine};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
+use super::errors::GraphError;
 use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
@@ -295,7 +296,7 @@ impl GraphModules {
         element_visibility: &Visibility,
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&Scheme::ParamsProver>,
-    ) -> Result<ModuleForwardResult, Box<dyn std::error::Error>> {
+    ) -> Result<ModuleForwardResult, GraphError> {
         let mut poseidon_hash = None;
         let mut polycommit = None;
 

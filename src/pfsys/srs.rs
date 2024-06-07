@@ -2,7 +2,6 @@ use halo2_proofs::poly::commitment::CommitmentScheme;
 use halo2_proofs::poly::commitment::Params;
 use halo2_proofs::poly::commitment::ParamsProver;
 use log::info;
-use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -16,24 +15,33 @@ pub fn gen_srs<Scheme: CommitmentScheme>(k: u32) -> Scheme::ParamsProver {
     Scheme::ParamsProver::new(k)
 }
 
+#[derive(thiserror::Error, Debug)]
+#[allow(missing_docs)]
+pub enum SrsError {
+    #[error("failed to download srs from {0}")]
+    DownloadError(String),
+    #[error("failed to load srs from {0}")]
+    LoadError(PathBuf),
+    #[error("failed to read srs {0}")]
+    ReadError(String),
+}
+
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
 pub fn load_srs_verifier<Scheme: CommitmentScheme>(
     path: PathBuf,
-) -> Result<Scheme::ParamsVerifier, Box<dyn Error>> {
+) -> Result<Scheme::ParamsVerifier, SrsError> {
     info!("loading srs from {:?}", path);
-    let f = File::open(path.clone())
-        .map_err(|_| format!("failed to load srs at {}", path.display()))?;
+    let f = File::open(path.clone()).map_err(|_| SrsError::LoadError(path))?;
     let mut reader = BufReader::new(f);
-    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
+    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(|e| SrsError::ReadError(e.to_string()))
 }
 
 /// Loads the [CommitmentScheme::ParamsVerifier] at `path`.
 pub fn load_srs_prover<Scheme: CommitmentScheme>(
     path: PathBuf,
-) -> Result<Scheme::ParamsProver, Box<dyn Error>> {
+) -> Result<Scheme::ParamsProver, SrsError> {
     info!("loading srs from {:?}", path);
-    let f = File::open(path.clone())
-        .map_err(|_| format!("failed to load srs at {}", path.display()))?;
+    let f = File::open(path.clone()).map_err(|_| SrsError::LoadError(path.clone()))?;
     let mut reader = BufReader::new(f);
-    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(Box::<dyn Error>::from)
+    Params::<'_, Scheme::Curve>::read(&mut reader).map_err(|e| SrsError::ReadError(e.to_string()))
 }
