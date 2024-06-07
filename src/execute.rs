@@ -238,12 +238,14 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             sol_code_path,
             abi_path,
             data,
+            witness,
         } => {
             create_evm_data_attestation(
                 settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
                 sol_code_path.unwrap_or(DEFAULT_SOL_CODE_DA.into()),
                 abi_path.unwrap_or(DEFAULT_VERIFIER_DA_ABI.into()),
                 data.unwrap_or(DEFAULT_DATA.into()),
+                witness,
             )
             .await
         }
@@ -695,7 +697,7 @@ pub(crate) async fn gen_witness(
     // these aren't real values so the sanity checks are mostly meaningless
 
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
-    let data = GraphData::from_path(data)?;
+    let data: GraphData = GraphData::from_path(data)?;
     let settings = circuit.settings().clone();
 
     let vk = if let Some(vk) = vk_path {
@@ -1437,16 +1439,19 @@ pub(crate) async fn create_evm_data_attestation(
     _sol_code_path: PathBuf,
     _abi_path: PathBuf,
     _input: PathBuf,
+    _witness: Option<PathBuf>,
 ) -> Result<String, Box<dyn Error>> {
     #[allow(unused_imports)]
     use crate::graph::{DataSource, VarVisibility};
+    use crate::{graph::Visibility, pfsys::get_proof_commitments};
 
     let settings = GraphSettings::load(&settings_path)?;
 
     let visibility = VarVisibility::from_args(&settings.run_args)?;
     trace!("params computed");
 
-    let data = GraphData::from_path(_input)?;
+    // if input is not provided, we just instantiate dummy input data
+    let data = GraphData::from_path(_input).unwrap_or(GraphData::new(DataSource::File(vec![])));
 
     let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
         if visibility.output.is_private() {
@@ -1474,19 +1479,34 @@ pub(crate) async fn create_evm_data_attestation(
         None
     };
 
-    if input_data.is_some() || output_data.is_some() {
-        let output = fix_da_sol(input_data, output_data)?;
-        let mut f = File::create(_sol_code_path.clone())?;
-        let _ = f.write(output.as_bytes());
-        // fetch abi of the contract
-        let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0).await?;
-        // save abi to file
-        serde_json::to_writer(std::fs::File::create(_abi_path)?, &abi)?;
+    // Read the settings file. Look if either the run_ars.input_visibility, run_args.output_visibility or run_args.param_visibility is KZGCommit
+    // if so, then we need to load the witness
+
+    let commitment_bytes = if settings.run_args.input_visibility == Visibility::KZGCommit
+        || settings.run_args.output_visibility == Visibility::KZGCommit
+        || settings.run_args.param_visibility == Visibility::KZGCommit
+    {
+        let witness = GraphWitness::from_path(_witness.unwrap_or(DEFAULT_WITNESS.into()))?;
+        let commitments = witness.get_polycommitments();
+        let proof_first_bytes = get_proof_commitments::<
+            KZGCommitmentScheme<Bn256>,
+            _,
+            EvmTranscript<G1Affine, _, _, _>,
+        >(&commitments);
+
+        Some(proof_first_bytes.unwrap())
     } else {
-        return Err(
-            "Neither input or output data source is on-chain. Atleast one must be on chain.".into(),
-        );
-    }
+        None
+    };
+
+    let output = fix_da_sol(input_data, output_data, commitment_bytes)?;
+    let mut f = File::create(_sol_code_path.clone())?;
+    let _ = f.write(output.as_bytes());
+    // fetch abi of the contract
+    let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0).await?;
+    // save abi to file
+    serde_json::to_writer(std::fs::File::create(_abi_path)?, &abi)?;
+
     Ok(String::new())
 }
 
@@ -1949,10 +1969,6 @@ pub(crate) fn swap_proof_commitments_cmd(
     let snark = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
     let witness = GraphWitness::from_path(witness)?;
     let commitments = witness.get_polycommitments();
-
-    if commitments.is_empty() {
-        log::warn!("no commitments found in witness");
-    }
 
     let snark_new = swap_proof_commitments_polycommit(&snark, &commitments)?;
 

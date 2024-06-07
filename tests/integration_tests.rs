@@ -1015,7 +1015,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, hardfork);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private", "private");
                     // test_dir.close().unwrap();
                 }
 
@@ -1025,7 +1025,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public", "private");
                     // test_dir.close().unwrap();
                 }
 
@@ -1035,7 +1035,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "public", "public");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "public", "public", "private");
                     test_dir.close().unwrap();
                 }
 
@@ -1045,7 +1045,25 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed", "private");
+                    test_dir.close().unwrap();
+                }
+                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
+                fn kzg_evm_on_chain_input_kzg_output_kzg_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "polycommit", "polycommit");
+                    test_dir.close().unwrap();
+                }
+                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
+                fn kzg_evm_on_chain_output_kzg_input_kzg_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "polycommit", "public", "polycommit");
                     test_dir.close().unwrap();
                 }
             });
@@ -2291,12 +2309,13 @@ mod native_tests {
         output_source: &str,
         input_visibility: &str,
         output_visibility: &str,
+        param_visibility: &str,
     ) {
         gen_circuit_settings_and_witness(
             test_dir,
             example_name.clone(),
             input_visibility,
-            "private",
+            param_visibility,
             output_visibility,
             1,
             "resources",
@@ -2462,15 +2481,23 @@ mod native_tests {
 
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
 
+        let mut create_da_args = vec![
+            "create-evm-da",
+            &settings_arg,
+            "--sol-code-path",
+            sol_arg.as_str(),
+            "-W",
+            &witness_path,
+        ];
+
+        // if there is a on-chain source we add the data
+        if input_source != "file" || output_source != "file" {
+            create_da_args.push("-D");
+            create_da_args.push(test_on_chain_data_path.as_str());
+        }
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "create-evm-da",
-                &settings_arg,
-                "--sol-code-path",
-                sol_arg.as_str(),
-                "-D",
-                test_on_chain_data_path.as_str(),
-            ])
+            .args(&create_da_args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());

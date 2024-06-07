@@ -637,9 +637,37 @@ where
         + DeserializeOwned,
     Scheme::Curve: Serialize + DeserializeOwned,
 {
+    let proof_first_bytes = get_proof_commitments::<Scheme, E, TW>(commitments)?;
+
+    let mut snark_new = snark.clone();
+    // swap the proof bytes for the new ones
+    snark_new.proof[..proof_first_bytes.len()].copy_from_slice(&proof_first_bytes);
+    snark_new.create_hex_proof();
+
+    Ok(snark_new)
+}
+
+/// Returns the bytes encoded proof commitments
+pub fn get_proof_commitments<
+    Scheme: CommitmentScheme,
+    E: EncodedChallenge<Scheme::Curve>,
+    TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
+>(
+    commitments: &[Scheme::Curve],
+) -> Result<Vec<u8>, Box<dyn Error>>
+where
+    Scheme::Scalar: SerdeObject
+        + PrimeField
+        + FromUniformBytes<64>
+        + WithSmallOrderMulGroup<3>
+        + Ord
+        + Serialize
+        + DeserializeOwned,
+    Scheme::Curve: Serialize + DeserializeOwned,
+{
     let mut transcript_new: TW = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
 
-    // polycommit commitments are the first set of points in the proof, this we'll always be the first set of advice
+    // polycommit commitments are the first set of points in the proof, this will always be the first set of advice
     for commit in commitments {
         transcript_new
             .write_point(*commit)
@@ -648,12 +676,11 @@ where
 
     let proof_first_bytes = transcript_new.finalize();
 
-    let mut snark_new = snark.clone();
-    // swap the proof bytes for the new ones
-    snark_new.proof[..proof_first_bytes.len()].copy_from_slice(&proof_first_bytes);
-    snark_new.create_hex_proof();
+    if commitments.is_empty() {
+        log::warn!("no commitments found in witness");
+    }
 
-    Ok(snark_new)
+    Ok(proof_first_bytes)
 }
 
 /// Swap the proof commitments to a new set in the proof for KZG
