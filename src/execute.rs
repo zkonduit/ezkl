@@ -500,6 +500,52 @@ pub async fn run(command: Commands) -> Result<String, Box<dyn Error>> {
             )
             .await
         }
+        Commands::Update { version } => update_ezkl_binary(&version).map(|e| e.to_string()),
+    }
+}
+
+/// Assert that the version is valid
+fn assert_version_is_valid(version: &str) -> Result<(), Box<dyn Error>> {
+    let err_string = "Invalid version string. Must be in the format v0.0.0";
+    if version.is_empty() {
+        return Err(err_string.into());
+    }
+    // safe to unwrap since we know the length is not 0
+    if version.chars().nth(0).unwrap() != 'v' {
+        return Err(err_string.into());
+    }
+
+    semver::Version::parse(&version[1..])
+        .map_err(|_| "Invalid version string. Must be in the format v0.0.0")?;
+
+    Ok(())
+}
+
+const INSTALL_BYTES: &[u8] = include_bytes!("../install_ezkl_cli.sh");
+
+fn update_ezkl_binary(version: &Option<String>) -> Result<String, Box<dyn Error>> {
+    // run the install script with the version
+    let install_script = std::str::from_utf8(INSTALL_BYTES)?;
+    //  now run as sh script with the version as an argument
+    let mut command = std::process::Command::new("sh");
+    let mut command = command.arg("-c").arg(install_script);
+
+    if let Some(version) = version {
+        assert_version_is_valid(version)?;
+        command = command.arg(version)
+    };
+    let output = command.output()?;
+
+    if output.status.success() {
+        info!("updated binary");
+        Ok("".to_string())
+    } else {
+        Err(format!(
+            "failed to update binary: {}, {}",
+            std::str::from_utf8(&output.stdout)?,
+            std::str::from_utf8(&output.stderr)?
+        )
+        .into())
     }
 }
 
