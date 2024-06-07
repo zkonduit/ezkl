@@ -99,6 +99,10 @@ fi
 echo "Removing old ezkl binary if it exists"
 [ -e file ] && rm file
 
+# echo platform and architecture
+echo "Platform: $PLATFORM"
+echo "Architecture: $ARCHITECTURE"
+
 # download the release and unpack the right tarball
 if [ "$PLATFORM" == "windows-msvc" ]; then
     JSON_RESPONSE=$(curl -s "$RELEASE_URL")

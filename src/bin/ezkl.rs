@@ -17,17 +17,14 @@ use rand::prelude::SliceRandom;
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "icicle")]
 use std::env;
-#[cfg(not(target_arch = "wasm32"))]
-use std::error::Error;
 
 #[tokio::main(flavor = "current_thread")]
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn main() -> Result<(), Box<dyn Error>> {
+pub async fn main() {
     let args = Cli::parse();
 
     if let Some(generator) = args.generator {
         ezkl::commands::print_completions(generator, &mut Cli::command());
-        Ok(())
     } else if let Some(command) = args.command {
         init_logger();
         #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
@@ -38,15 +35,17 @@ pub async fn main() -> Result<(), Box<dyn Error>> {
         } else {
             info!("Running with CPU");
         }
-        info!("command: \n {}", &command.as_json().to_colored_json_auto()?);
+        info!(
+            "command: \n {}",
+            &command.as_json().to_colored_json_auto().unwrap()
+        );
         let res = run(command).await;
         match &res {
             Ok(_) => info!("succeeded"),
             Err(e) => error!("failed: {}", e),
         };
-        res.map(|_| ())
     } else {
-        Err("No command provided".into())
+        error!("no command provided");
     }
 }
 
