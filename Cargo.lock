@@ -1878,6 +1878,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "reqwest",
+ "semver 1.0.22",
  "seq-macro",
  "serde",
  "serde-wasm-bindgen",
