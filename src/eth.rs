@@ -397,14 +397,29 @@ pub async fn deploy_da_verifier_via_solidity(
         }
     }
 
+    let (abi, bytecode, runtime_bytecode) =
+        get_contract_artifacts(sol_code_path, "DataAttestation", runs).await?;
+
     let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
         parse_calls_to_accounts(calls_to_accounts)?
     } else {
-        return Err("Data source for either input_data or output_data must be OnChain".into());
+        // if calls to accounts is empty then we know need to check that atleast there kzg visibility in the settings file
+        let kzg_visibility = settings.run_args.input_visibility.is_polycommit()
+            || settings.run_args.output_visibility.is_polycommit()
+            || settings.run_args.param_visibility.is_polycommit();
+        if !kzg_visibility {
+            return Err("Data source for either input_data or output_data must be OnChain / or one there must be atleast one kzg_commit visibility".into());
+        }
+        let factory = get_sol_contract_factory::<_, ()>(
+            abi,
+            bytecode,
+            runtime_bytecode,
+            client.clone(),
+            None,
+        )?;
+        let contract = factory.deploy().await?;
+        return Ok(contract);
     };
-
-    let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestation", runs).await?;
 
     let factory = get_sol_contract_factory(
         abi,
@@ -451,7 +466,7 @@ pub async fn deploy_da_verifier_via_solidity(
             ),
             //  uint8 _instanceOffset,
             WordToken(U256::from(contract_instance_offset as u32).into()),
-            //address _admin
+            // address _admin
             WordToken(client_address.into_word()),
         )),
     )?;
@@ -973,7 +988,7 @@ pub fn fix_da_sol(
 
     // fill in the quantization params and total calls
     // as constants to the contract to save on gas
-    if let Some(input_data) = input_data {
+    if let Some(input_data) = input_data.clone() {
         let input_calls: usize = input_data.iter().map(|v| v.call_data.len()).sum();
         accounts_len = input_data.len();
         contract = contract.replace(
@@ -981,7 +996,7 @@ pub fn fix_da_sol(
             &format!("uint256 constant INPUT_CALLS = {};", input_calls),
         );
     }
-    if let Some(output_data) = output_data {
+    if let Some(output_data) = output_data.clone() {
         let output_calls: usize = output_data.iter().map(|v| v.call_data.len()).sum();
         accounts_len += output_data.len();
         contract = contract.replace(
@@ -991,8 +1006,9 @@ pub fn fix_da_sol(
     }
     contract = contract.replace("AccountCall[]", &format!("AccountCall[{}]", accounts_len));
 
+    // The case where a combination of on-chain data source + kzg commit is provided.
     if commitment_bytes.clone().is_some() && !commitment_bytes.clone().unwrap().is_empty() {
-        let commitment_bytes = commitment_bytes.unwrap();
+        let commitment_bytes = commitment_bytes.clone().unwrap();
         let hex_string = hex::encode(commitment_bytes);
         contract = contract.replace(
             "bytes constant COMMITMENT_KZG = hex\"\";",
@@ -1004,6 +1020,45 @@ pub fn fix_da_sol(
         contract = contract.replace(
             "require(checkKzgCommits(encoded), \"Invalid KZG commitments\");",
             "",
+        );
+    }
+
+    // if both input and output data is none then we will only deploy the DataAttest contract, adding in the verifyWithDataAttestation function
+    if input_data.is_none()
+        && output_data.is_none()
+        && commitment_bytes.clone().is_some()
+        && !commitment_bytes.clone().unwrap().is_empty()
+    {
+        contract = contract.replace(
+            "contract SwapProofCommitments {",
+            "contract DataAttestation {",
+        );
+
+        // Remove everything past the end of the checkKzgCommits function
+        if let Some(pos) = contract.find("    } /// end checkKzgCommits") {
+            contract.truncate(pos);
+            contract.push_str("}");
+        }
+
+        // Add the Solidity function below checkKzgCommits
+        contract.push_str(
+            r#"
+    function verifyWithDataAttestation(
+        address verifier,
+        bytes calldata encoded
+    ) public view returns (bool) {
+        require(verifier.code.length > 0, "Address: call to non-contract");
+        require(checkKzgCommits(encoded), "Invalid KZG commitments");
+        // static call the verifier contract to verify the proof
+        (bool success, bytes memory returndata) = verifier.staticcall(encoded);
+
+        if (success) {
+            return abi.decode(returndata, (bool));
+        } else {
+            revert("low-level call to verifier failed");
+        }
+    }
+}"#,
         );
     }
 
