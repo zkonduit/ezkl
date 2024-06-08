@@ -920,9 +920,7 @@ impl GraphCircuit {
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
-            DataSource::OnChain(_) => {
-                Err("Cannot use on-chain data source as input for this method.".into())
-            }
+            DataSource::OnChain(_) => Err(GraphError::OnChainDataSource),
         }
     }
 
@@ -1077,11 +1075,15 @@ impl GraphCircuit {
         let lookup_size = (safe_lookup_range.1 - safe_lookup_range.0).abs();
         // check if has overflowed max lookup input
         if lookup_size > MAX_LOOKUP_ABS / lookup_safety_margin {
-            return Err(GraphError::LookupRangeTooLarge(lookup_size.unsigned_abs() as usize));
+            return Err(GraphError::LookupRangeTooLarge(
+                lookup_size.unsigned_abs() as usize
+            ));
         }
 
         if max_range_size.abs() > MAX_LOOKUP_ABS {
-            return Err(GraphError::RangeCheckTooLarge(max_range_size.unsigned_abs() as usize));
+            return Err(GraphError::RangeCheckTooLarge(
+                max_range_size.unsigned_abs() as usize,
+            ));
         }
 
         // These are hard lower limits, we can't overflow instances or modules constraints

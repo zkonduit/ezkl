@@ -8,10 +8,10 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum CircuitError {
     /// Halo 2 error
-    #[error("Halo 2 error: {0}")]
+    #[error("[halo2] {0}")]
     Halo2Error(#[from] PlonkError),
     /// Tensor error
-    #[error("Tensor error: {0}")]
+    #[error("[tensor] {0}")]
     TensorError(#[from] TensorError),
     /// Shape mismatch in circuit construction
     #[error("dimension mismatch in circuit construction for op: {0}")]

@@ -2,8 +2,6 @@ use std::convert::Infallible;
 
 use thiserror::Error;
 
-use crate::eth::EthError;
-
 /// circuit related errors.
 #[derive(Debug, Error)]
 pub enum GraphError {
@@ -47,10 +45,11 @@ pub enum GraphError {
     #[error("failed to load model")]
     ModelLoad(#[from] std::io::Error),
     /// Model serialization error
-    #[error("failed to serialize model: {0}")]
+    #[error("failed to ser/deser model: {0}")]
     ModelSerialize(#[from] bincode::Error),
     /// Tract error
-    #[error("tract error: {0}")]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[tract] {0}")]
     TractError(#[from] tract_onnx::tract_core::anyhow::Error),
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
@@ -62,7 +61,7 @@ pub enum GraphError {
     #[error("missing results")]
     MissingResults,
     /// Tensor error
-    #[error("tensor error: {0}")]
+    #[error("[tensor] {0}")]
     TensorError(#[from] crate::tensor::TensorError),
     /// Public visibility for params is deprecated
     #[error("public visibility for params is deprecated, please use `fixed` instead")]
@@ -74,25 +73,27 @@ pub enum GraphError {
     #[error("invalid conversion: {0}")]
     InvalidConversion(#[from] Infallible),
     /// Circuit error
-    #[error("circuit error: {0}")]
+    #[error("[circuit] {0}")]
     CircuitError(#[from] crate::circuit::CircuitError),
     /// Halo2 error
-    #[error("halo2 error: {0}")]
+    #[error("[halo2] {0}")]
     Halo2Error(#[from] halo2_proofs::plonk::Error),
     /// System time error
-    #[error("system time error: {0}")]
+    #[error("[system time] {0}")]
     SystemTimeError(#[from] std::time::SystemTimeError),
     /// Missing Batch Size
     #[error("unknown dimension batch_size in model inputs, set batch_size in variables")]
     MissingBatchSize,
     /// Tokio postgres error
-    #[error("tokio postgres error: {0}")]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[tokio postgres] {0}")]
     TokioPostgresError(#[from] tokio_postgres::Error),
     /// Eth error
-    #[error("eth error: {0}")]
-    EthError(#[from] EthError),
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[eth] {0}")]
+    EthError(#[from] crate::eth::EthError),
     /// Json error
-    #[error("json error: {0}")]
+    #[error("[json] {0}")]
     JsonError(#[from] serde_json::Error),
     /// Missing instances
     #[error("missing instances")]
@@ -104,10 +105,10 @@ pub enum GraphError {
     #[error("missing input for node {0}")]
     MissingInput(usize),
     ///
-    #[error("Range only supports constant inputs in a zk circuit")]
+    #[error("range only supports constant inputs in a zk circuit")]
     NonConstantRange,
     ///
-    #[error("Trilu only supports constant diagonals in a zk circuit")]
+    #[error("trilu only supports constant diagonals in a zk circuit")]
     NonConstantTrilu,
     ///
     #[error("insufficient witness values to generate a fixed output")]
@@ -125,7 +126,7 @@ pub enum GraphError {
     #[error("range check {0} is too large")]
     RangeCheckTooLarge(usize),
     ///Cannot use on-chain data source as private data
-    #[error("Cannot use on-chain data source as output for on-chain test or as private data.")]
+    #[error("cannot use on-chain data source as 1) output for on-chain test 2) as private data 3) as input when using wasm.")]
     OnChainDataSource,
     /// Missing data source
     #[error("missing data source")]

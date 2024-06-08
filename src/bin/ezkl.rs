@@ -42,7 +42,7 @@ pub async fn main() {
         let res = run(command).await;
         match &res {
             Ok(_) => info!("succeeded"),
-            Err(e) => error!("failed: {}", e),
+            Err(e) => error!("{}", e),
         };
     } else {
         error!("no command provided");

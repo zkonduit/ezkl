@@ -32,37 +32,40 @@
 #[derive(thiserror::Error, Debug)]
 #[allow(missing_docs)]
 pub enum EZKLError {
-    #[error("aggregation error: {0}")]
+    #[error("[aggregation] {0}")]
     AggregationError(#[from] pfsys::evm::aggregation_kzg::AggregationError),
-    #[error("eth error: {0}")]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[eth] {0}")]
     EthError(#[from] eth::EthError),
-    #[error("graph error: {0}")]
+    #[error("[graph] {0}")]
     GraphError(#[from] graph::errors::GraphError),
-    #[error("pfsys error: {0}")]
+    #[error("[pfsys] {0}")]
     PfsysError(#[from] pfsys::errors::PfsysError),
-    #[error("circuit error: {0}")]
+    #[error("[circuit] {0}")]
     CircuitError(#[from] circuit::errors::CircuitError),
-    #[error("tensor error: {0}")]
+    #[error("[tensor] {0}")]
     TensorError(#[from] tensor::errors::TensorError),
-    #[error("module error: {0}")]
+    #[error("[module] {0}")]
     ModuleError(#[from] circuit::modules::errors::ModuleError),
-    #[error("io error: {0}")]
+    #[error("[io] {0}")]
     IoError(#[from] std::io::Error),
-    #[error("json error: {0}")]
+    #[error("[json] {0}")]
     JsonError(#[from] serde_json::Error),
-    #[error("utf8 error: {0}")]
+    #[error("[utf8] {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
-    #[error("reqwest error: {0}")]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[reqwest] {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("fmt error: {0}")]
+    #[error("[fmt] {0}")]
     FmtError(#[from] std::fmt::Error),
-    #[error("Halo2 error: {0}")]
+    #[error("[halo2] {0}")]
     Halo2Error(#[from] halo2_proofs::plonk::Error),
-    #[error("Uncategorized error: {0}")]
+    #[error("[Uncategorized] {0}")]
     UncategorizedError(String),
-    #[error("execution error: {0}")]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[execute] {0}")]
     ExecutionError(#[from] execute::ExecutionError),
-    #[error("srs error: {0}")]
+    #[error("[srs] {0}")]
     SrsError(#[from] pfsys::srs::SrsError),
 }
 

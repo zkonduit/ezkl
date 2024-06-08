@@ -13,18 +13,18 @@ pub enum TensorError {
     #[error("wrong method called")]
     WrongMethod,
     /// Significant bit truncation when instantiating
-    #[error("Significant bit truncation when instantiating, try lowering the scale")]
+    #[error("significant bit truncation when instantiating, try lowering the scale")]
     SigBitTruncationError,
     /// Failed to convert to field element tensor
-    #[error("Failed to convert to field element tensor")]
+    #[error("failed to convert to field element tensor")]
     FeltError,
     /// Unsupported operation
-    #[error("Unsupported operation on a tensor type")]
+    #[error("unsupported operation on a tensor type")]
     Unsupported,
     /// Overflow
-    #[error("Unsigned integer overflow or underflow error in op: {0}")]
+    #[error("unsigned integer overflow or underflow error in op: {0}")]
     Overflow(String),
     /// Unset visibility
-    #[error("Unset visibility")]
+    #[error("unset visibility")]
     UnsetVisibility,
 }

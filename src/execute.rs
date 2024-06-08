@@ -95,10 +95,10 @@ lazy_static! {
 #[derive(Debug, Error)]
 pub enum ExecutionError {
     /// verification failed
-    #[error("verification failed")]
+    #[error("verification failed:\n{}", .0.iter().map(|e| e.to_string()).collect::<Vec<_>>().join("\n"))]
     VerifyError(Vec<VerifyFailure>),
     /// Prover error
-    #[error("Mock prover error: {0}")]
+    #[error("[mock] {0}")]
     MockProverError(String),
 }
 
@@ -1391,6 +1391,7 @@ pub(crate) fn mock(
         vec![public_inputs],
     )
     .map_err(|e| ExecutionError::MockProverError(e.to_string()))?;
+
     prover.verify().map_err(ExecutionError::VerifyError)?;
     Ok(String::new())
 }
