@@ -20,12 +20,11 @@ use std::env;
 
 #[tokio::main(flavor = "current_thread")]
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn main() -> Result<(), ()> {
+pub async fn main() {
     let args = Cli::parse();
 
     if let Some(generator) = args.generator {
         ezkl::commands::print_completions(generator, &mut Cli::command());
-        Ok(())
     } else if let Some(command) = args.command {
         init_logger();
         #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
@@ -44,16 +43,16 @@ pub async fn main() -> Result<(), ()> {
         match &res {
             Ok(_) => {
                 info!("succeeded");
-                Ok(())
             }
             Err(e) => {
                 error!("{}", e);
-                Err(())
+                std::process::exit(1)
             }
         }
     } else {
-        error!("no command provided");
-        Err(())
+        init_logger();
+        error!("No command provided");
+        std::process::exit(1)
     }
 }
 
