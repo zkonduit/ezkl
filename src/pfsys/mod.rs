@@ -775,7 +775,7 @@ where
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
-    info!("loading verification key from {:?}", path);
+    debug!("loading verification key from {:?}", path);
     let f = File::open(path.clone()).map_err(|e| PfsysError::LoadVk(format!("{}", e)))?;
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     let vk = VerifyingKey::<Scheme::Curve>::read::<_, C>(
@@ -784,7 +784,7 @@ where
         params,
     )
     .map_err(|e| PfsysError::LoadVk(format!("{}", e)))?;
-    info!("done loading verification key ✅");
+    info!("loaded verification key ✅");
     Ok(vk)
 }
 
@@ -798,7 +798,7 @@ where
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
-    info!("loading proving key from {:?}", path);
+    debug!("loading proving key from {:?}", path);
     let f = File::open(path.clone()).map_err(|e| PfsysError::LoadPk(format!("{}", e)))?;
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     let pk = ProvingKey::<Scheme::Curve>::read::<_, C>(
@@ -807,7 +807,7 @@ where
         params,
     )
     .map_err(|e| PfsysError::LoadPk(format!("{}", e)))?;
-    info!("done loading proving key ✅");
+    info!("loaded proving key ✅");
     Ok(pk)
 }
 
@@ -819,7 +819,7 @@ pub fn save_pk<C: SerdeObject + CurveAffine>(
 where
     C::ScalarExt: FromUniformBytes<64> + SerdeObject,
 {
-    info!("saving proving key 💾");
+    debug!("saving proving key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     pk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
@@ -836,7 +836,7 @@ pub fn save_vk<C: CurveAffine + SerdeObject>(
 where
     C::ScalarExt: FromUniformBytes<64> + SerdeObject,
 {
-    info!("saving verification key 💾");
+    debug!("saving verification key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     vk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
@@ -850,7 +850,7 @@ pub fn save_params<Scheme: CommitmentScheme>(
     path: &PathBuf,
     params: &'_ Scheme::ParamsVerifier,
 ) -> Result<(), io::Error> {
-    info!("saving parameters 💾");
+    debug!("saving parameters 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     params.write(&mut writer)?;

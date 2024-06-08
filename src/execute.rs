@@ -2527,8 +2527,8 @@ pub(crate) fn load_params_verifier<Scheme: CommitmentScheme>(
 ) -> Result<Scheme::ParamsVerifier, EZKLError> {
     let srs_path = get_srs_path(logrows, srs_path, commitment);
     let mut params = load_srs_verifier::<Scheme>(srs_path)?;
-    info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {
+        info!("downsizing params to {} logrows", logrows);
         params.downsize(logrows);
     }
     Ok(params)
@@ -2542,8 +2542,8 @@ pub(crate) fn load_params_prover<Scheme: CommitmentScheme>(
 ) -> Result<Scheme::ParamsProver, EZKLError> {
     let srs_path = get_srs_path(logrows, srs_path, commitment);
     let mut params = load_srs_prover::<Scheme>(srs_path)?;
-    info!("downsizing params to {} logrows", logrows);
     if logrows < params.k() {
+        info!("downsizing params to {} logrows", logrows);
         params.downsize(logrows);
     }
     Ok(params)
