@@ -1,6 +1,5 @@
 use super::*;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 
 use crate::{
     circuit::{layouts, table::Range, utils},
@@ -295,7 +294,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(layouts::nonlinearity(
             config,
             region,
@@ -305,7 +304,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
     }
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, inputs_scale: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, inputs_scale: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         let scale = match self {
             LookupOp::Cast { scale } => {
                 let in_scale = inputs_scale[0];

@@ -28,6 +28,59 @@
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
 
+/// Error type
+#[derive(thiserror::Error, Debug)]
+#[allow(missing_docs)]
+pub enum EZKLError {
+    #[error("[aggregation] {0}")]
+    AggregationError(#[from] pfsys::evm::aggregation_kzg::AggregationError),
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[eth] {0}")]
+    EthError(#[from] eth::EthError),
+    #[error("[graph] {0}")]
+    GraphError(#[from] graph::errors::GraphError),
+    #[error("[pfsys] {0}")]
+    PfsysError(#[from] pfsys::errors::PfsysError),
+    #[error("[circuit] {0}")]
+    CircuitError(#[from] circuit::errors::CircuitError),
+    #[error("[tensor] {0}")]
+    TensorError(#[from] tensor::errors::TensorError),
+    #[error("[module] {0}")]
+    ModuleError(#[from] circuit::modules::errors::ModuleError),
+    #[error("[io] {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("[json] {0}")]
+    JsonError(#[from] serde_json::Error),
+    #[error("[utf8] {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[reqwest] {0}")]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("[fmt] {0}")]
+    FmtError(#[from] std::fmt::Error),
+    #[error("[halo2] {0}")]
+    Halo2Error(#[from] halo2_proofs::plonk::Error),
+    #[error("[Uncategorized] {0}")]
+    UncategorizedError(String),
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[execute] {0}")]
+    ExecutionError(#[from] execute::ExecutionError),
+    #[error("[srs] {0}")]
+    SrsError(#[from] pfsys::srs::SrsError),
+}
+
+impl From<&str> for EZKLError {
+    fn from(s: &str) -> Self {
+        EZKLError::UncategorizedError(s.to_string())
+    }
+}
+
+impl From<String> for EZKLError {
+    fn from(s: String) -> Self {
+        EZKLError::UncategorizedError(s)
+    }
+}
+
 use std::str::FromStr;
 
 use circuit::{table::Range, CheckMode, Tolerance};
@@ -248,7 +301,7 @@ impl Default for RunArgs {
 
 impl RunArgs {
     ///
-    pub fn validate(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn validate(&self) -> Result<(), String> {
         if self.param_visibility == Visibility::Public {
             return Err(
                 "params cannot be public instances, you are probably trying to use `fixed` or `kzgcommit`"

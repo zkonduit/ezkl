@@ -1,4 +1,4 @@
-use std::{error::Error, marker::PhantomData};
+use std::marker::PhantomData;
 
 use halo2curves::ff::PrimeField;
 
@@ -194,9 +194,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Table<
         &mut self,
         layouter: &mut impl Layouter<F>,
         preassigned_input: bool,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), CircuitError> {
         if self.is_assigned {
-            return Err(Box::new(CircuitError::TableAlreadyAssigned));
+            return Err(CircuitError::TableAlreadyAssigned);
         }
 
         let smallest = self.range.0;
@@ -342,9 +342,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> RangeC
     }
 
     /// Assigns values to the constraints generated when calling `configure`.
-    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
+    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), CircuitError> {
         if self.is_assigned {
-            return Err(Box::new(CircuitError::TableAlreadyAssigned));
+            return Err(CircuitError::TableAlreadyAssigned);
         }
 
         let smallest = self.range.0;

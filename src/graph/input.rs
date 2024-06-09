@@ -1,5 +1,5 @@
+use super::errors::GraphError;
 use super::quantize_float;
-use super::GraphError;
 use crate::circuit::InputType;
 use crate::fieldutils::i64_to_felt;
 #[cfg(not(target_arch = "wasm32"))]
@@ -211,9 +211,7 @@ impl PostgresSource {
     }
 
     /// Fetch data from postgres
-    pub async fn fetch(
-        &self,
-    ) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, Box<dyn std::error::Error>> {
+    pub async fn fetch(&self) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, GraphError> {
         // clone to move into thread
         let user = self.user.clone();
         let host = self.host.clone();
@@ -247,9 +245,7 @@ impl PostgresSource {
     }
 
     /// Fetch data from postgres and format it as a FileSource
-    pub async fn fetch_and_format_as_file(
-        &self,
-    ) -> Result<Vec<Vec<FileSourceInner>>, Box<dyn std::error::Error>> {
+    pub async fn fetch_and_format_as_file(&self) -> Result<Vec<Vec<FileSourceInner>>, GraphError> {
         Ok(self
             .fetch()
             .await?
@@ -279,7 +275,7 @@ impl OnChainSource {
         scales: Vec<crate::Scale>,
         mut shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
-    ) -> Result<(Vec<Tensor<Fp>>, Self), Box<dyn std::error::Error>> {
+    ) -> Result<(Vec<Tensor<Fp>>, Self), GraphError> {
         use crate::eth::{
             evm_quantize, read_on_chain_inputs, test_on_chain_data, DEFAULT_ANVIL_ENDPOINT,
         };
@@ -455,7 +451,7 @@ impl GraphData {
         &self,
         shapes: &[Vec<usize>],
         datum_types: &[tract_onnx::prelude::DatumType],
-    ) -> Result<TVec<TValue>, Box<dyn std::error::Error>> {
+    ) -> Result<TVec<TValue>, GraphError> {
         let mut inputs = TVec::new();
         match &self.input_data {
             DataSource::File(data) => {
@@ -470,10 +466,10 @@ impl GraphData {
                 }
             }
             _ => {
-                return Err(Box::new(GraphError::InvalidDims(
+                return Err(GraphError::InvalidDims(
                     0,
                     "non file data cannot be split into batches".to_string(),
-                )))
+                ))
             }
         }
         Ok(inputs)
@@ -488,7 +484,7 @@ impl GraphData {
     }
 
     /// Load the model input from a file
-    pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_path(path: std::path::PathBuf) -> Result<Self, GraphError> {
         let reader = std::fs::File::open(path)?;
         let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, reader);
         let mut buf = String::new();
@@ -498,7 +494,7 @@ impl GraphData {
     }
 
     /// Save the model input to a file
-    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save(&self, path: std::path::PathBuf) -> Result<(), GraphError> {
         // buf writer
         let writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::create(path)?);
         serde_json::to_writer(writer, self)?;
@@ -509,7 +505,7 @@ impl GraphData {
     pub async fn split_into_batches(
         &self,
         input_shapes: Vec<Vec<usize>>,
-    ) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Self>, GraphError> {
         // split input data into batches
         let mut batched_inputs = vec![];
 
@@ -522,10 +518,10 @@ impl GraphData {
                 input_data: DataSource::OnChain(_),
                 output_data: _,
             } => {
-                return Err(Box::new(GraphError::InvalidDims(
+                return Err(GraphError::InvalidDims(
                     0,
                     "on-chain data cannot be split into batches".to_string(),
-                )))
+                ))
             }
             #[cfg(not(target_arch = "wasm32"))]
             GraphData {
@@ -539,11 +535,11 @@ impl GraphData {
             let input_size = shape.clone().iter().product::<usize>();
             let input = &iterable[i];
             if input.len() % input_size != 0 {
-                return Err(Box::new(GraphError::InvalidDims(
+                return Err(GraphError::InvalidDims(
                     0,
                     "calibration data length must be evenly divisible by the original input_size"
                         .to_string(),
-                )));
+                ));
             }
             let mut batches = vec![];
             for batch in input.chunks(input_size) {

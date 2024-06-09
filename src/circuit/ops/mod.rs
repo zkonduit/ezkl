@@ -1,4 +1,4 @@
-use std::{any::Any, error::Error};
+use std::any::Any;
 
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +15,8 @@ pub mod base;
 ///
 pub mod chip;
 ///
+pub mod errors;
+///
 pub mod hybrid;
 /// Layouts for specific functions (composed of base ops)
 pub mod layouts;
@@ -24,6 +26,8 @@ pub mod lookup;
 pub mod poly;
 ///
 pub mod region;
+
+pub use errors::CircuitError;
 
 /// A struct representing the result of a forward pass.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -44,10 +48,10 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
+    ) -> Result<Option<ValTensor<F>>, CircuitError>;
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>>;
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError>;
 
     /// Do any of the inputs to this op require homogenous input scales?
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
@@ -139,7 +143,7 @@ pub struct Input {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> for Input {
-    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         Ok(self.scale)
     }
 
@@ -156,7 +160,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
         let value = values[0].clone();
         if !value.all_prev_assigned() {
             match self.datum_type {
@@ -194,7 +198,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
 pub struct Unknown;
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> for Unknown {
-    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         Ok(0)
     }
     fn as_any(&self) -> &dyn Any {
@@ -209,8 +213,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
         _: &mut crate::circuit::BaseConfig<F>,
         _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Err(Box::new(super::CircuitError::UnsupportedOp))
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
+        Err(super::CircuitError::UnsupportedOp)
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
@@ -240,7 +244,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Consta
         }
     }
     /// Rebase the scale of the constant
-    pub fn rebase_scale(&mut self, new_scale: crate::Scale) -> Result<(), Box<dyn Error>> {
+    pub fn rebase_scale(&mut self, new_scale: crate::Scale) -> Result<(), CircuitError> {
         let visibility = self.quantized_values.visibility().unwrap();
         self.quantized_values = quantize_tensor(self.raw_values.clone(), new_scale, &visibility)?;
         Ok(())
@@ -279,7 +283,7 @@ impl<
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
         let value = if let Some(value) = &self.pre_assigned_val {
             value.clone()
         } else {
@@ -293,7 +297,7 @@ impl<
         Box::new(self.clone()) // Forward to the derive(Clone) impl
     }
 
-    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         Ok(self.quantized_values.scale().unwrap())
     }
 

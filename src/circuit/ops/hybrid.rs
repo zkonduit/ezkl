@@ -155,7 +155,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
             HybridOp::SumPool {
                 padding,
@@ -287,7 +287,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         let scale = match self {
             HybridOp::Greater { .. }
             | HybridOp::GreaterEqual { .. }

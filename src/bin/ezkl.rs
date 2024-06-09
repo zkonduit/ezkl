@@ -41,11 +41,18 @@ pub async fn main() {
         );
         let res = run(command).await;
         match &res {
-            Ok(_) => info!("succeeded"),
-            Err(e) => error!("failed: {}", e),
-        };
+            Ok(_) => {
+                info!("succeeded");
+            }
+            Err(e) => {
+                error!("{}", e);
+                std::process::exit(1)
+            }
+        }
     } else {
-        error!("no command provided");
+        init_logger();
+        error!("No command provided");
+        std::process::exit(1)
     }
 }
 

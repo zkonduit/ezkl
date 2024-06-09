@@ -16,7 +16,8 @@ use alloy::prelude::Wallet;
 // use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
 use alloy::node_bindings::Anvil;
-use alloy::primitives::{B256, I256};
+use alloy::primitives::ruint::ParseError;
+use alloy::primitives::{ParseSignedError, B256, I256};
 use alloy::providers::fillers::{
     ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller,
 };
@@ -25,10 +26,13 @@ use alloy::providers::ProviderBuilder;
 use alloy::providers::{Identity, Provider, RootProvider};
 use alloy::rpc::types::eth::TransactionInput;
 use alloy::rpc::types::eth::TransactionRequest;
-use alloy::signers::wallet::LocalWallet;
+use alloy::signers::k256::ecdsa;
+use alloy::signers::wallet::{LocalWallet, WalletError};
 use alloy::sol as abigen;
 use alloy::transports::http::Http;
+use alloy::transports::{RpcError, TransportErrorKind};
 use foundry_compilers::artifacts::Settings as SolcSettings;
+use foundry_compilers::error::{SolcError, SolcIoError};
 use foundry_compilers::Solc;
 use halo2_solidity_verifier::encode_calldata;
 use halo2curves::bn256::{Fr, G1Affine};
@@ -36,7 +40,6 @@ use halo2curves::group::ff::PrimeField;
 use itertools::Itertools;
 use log::{debug, info, warn};
 use reqwest::Client;
-use std::error::Error;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -213,6 +216,57 @@ abigen!(
     }
 );
 
+#[derive(Debug, thiserror::Error)]
+pub enum EthError {
+    #[error("a transport error occurred: {0}")]
+    Transport(#[from] RpcError<TransportErrorKind>),
+    #[error("a contract error occurred: {0}")]
+    Contract(#[from] alloy::contract::Error),
+    #[error("a wallet error occurred: {0}")]
+    Wallet(#[from] WalletError),
+    #[error("failed to parse url {0}")]
+    UrlParse(String),
+    #[error("evm verification error: {0}")]
+    EvmVerification(#[from] EvmVerificationError),
+    #[error("Private key must be in hex format, 64 chars, without 0x prefix")]
+    PrivateKeyFormat,
+    #[error("failed to parse hex: {0}")]
+    HexParse(#[from] hex::FromHexError),
+    #[error("ecdsa error: {0}")]
+    Ecdsa(#[from] ecdsa::Error),
+    #[error("failed to load graph data")]
+    GraphData,
+    #[error("failed to load graph settings")]
+    GraphSettings,
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Data source for either input_data or output_data must be OnChain")]
+    OnChainDataSource,
+    #[error("failed to parse signed integer: {0}")]
+    SignedIntegerParse(#[from] ParseSignedError),
+    #[error("failed to parse unsigned integer: {0}")]
+    UnSignedIntegerParse(#[from] ParseError),
+    #[error("updateAccountCalls should have failed")]
+    UpdateAccountCalls,
+    #[error("ethabi error: {0}")]
+    EthAbi(#[from] ethabi::Error),
+    #[error("conversion error: {0}")]
+    Conversion(#[from] std::convert::Infallible),
+    // Constructor arguments provided but no constructor found
+    #[error("constructor arguments provided but no constructor found")]
+    NoConstructor,
+    #[error("contract not found at path: {0}")]
+    ContractNotFound(String),
+    #[error("solc error: {0}")]
+    Solc(#[from] SolcError),
+    #[error("solc io error: {0}")]
+    SolcIo(#[from] SolcIoError),
+    #[error("svm error: {0}")]
+    Svm(String),
+    #[error("no contract output found")]
+    NoContractOutput,
+}
+
 // we have to generate these two contract differently because they are generated dynamically ! and hence the static compilation from above does not suit
 const ATTESTDATA_SOL: &str = include_str!("../contracts/AttestData.sol");
 
@@ -235,7 +289,7 @@ pub type ContractFactory<M> = CallBuilder<Http<Client>, Arc<M>, ()>;
 pub async fn setup_eth_backend(
     rpc_url: Option<&str>,
     private_key: Option<&str>,
-) -> Result<(EthersClient, alloy::primitives::Address), Box<dyn Error>> {
+) -> Result<(EthersClient, alloy::primitives::Address), EthError> {
     // Launch anvil
 
     let endpoint: String;
@@ -257,11 +311,8 @@ pub async fn setup_eth_backend(
     let wallet: LocalWallet;
     if let Some(private_key) = private_key {
         debug!("using private key {}", private_key);
-        // Sanity checks for private_key
-        let private_key_format_error =
-            "Private key must be in hex format, 64 chars, without 0x prefix";
         if private_key.len() != 64 {
-            return Err(private_key_format_error.into());
+            return Err(EthError::PrivateKeyFormat);
         }
         let private_key_buffer = hex::decode(private_key)?;
         wallet = LocalWallet::from_slice(&private_key_buffer)?;
@@ -276,7 +327,11 @@ pub async fn setup_eth_backend(
         ProviderBuilder::new()
             .with_recommended_fillers()
             .signer(EthereumSigner::from(wallet))
-            .on_http(endpoint.parse()?),
+            .on_http(
+                endpoint
+                    .parse()
+                    .map_err(|_| EthError::UrlParse(endpoint.clone()))?,
+            ),
     );
 
     let chain_id = client.get_chain_id().await?;
@@ -292,7 +347,7 @@ pub async fn deploy_contract_via_solidity(
     runs: usize,
     private_key: Option<&str>,
     contract_name: &str,
-) -> Result<H160, Box<dyn Error>> {
+) -> Result<H160, EthError> {
     // anvil instance must be alive at least until the factory completes the deploy
     let (client, _) = setup_eth_backend(rpc_url, private_key).await?;
 
@@ -314,12 +369,12 @@ pub async fn deploy_da_verifier_via_solidity(
     rpc_url: Option<&str>,
     runs: usize,
     private_key: Option<&str>,
-) -> Result<H160, Box<dyn Error>> {
+) -> Result<H160, EthError> {
     let (client, client_address) = setup_eth_backend(rpc_url, private_key).await?;
 
-    let input = GraphData::from_path(input)?;
+    let input = GraphData::from_path(input).map_err(|_| EthError::GraphData)?;
 
-    let settings = GraphSettings::load(&settings_path)?;
+    let settings = GraphSettings::load(&settings_path).map_err(|_| EthError::GraphSettings)?;
 
     let mut scales: Vec<u32> = vec![];
     // The data that will be stored in the test contracts that will eventually be read from.
@@ -339,7 +394,7 @@ pub async fn deploy_da_verifier_via_solidity(
     }
 
     if settings.run_args.param_visibility.is_hashed() {
-        return Err(Box::new(EvmVerificationError::InvalidVisibility));
+        return Err(EvmVerificationError::InvalidVisibility.into());
     }
 
     if settings.run_args.output_visibility.is_hashed() {
@@ -400,7 +455,7 @@ pub async fn deploy_da_verifier_via_solidity(
     let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
         parse_calls_to_accounts(calls_to_accounts)?
     } else {
-        return Err("Data source for either input_data or output_data must be OnChain".into());
+        return Err(EthError::OnChainDataSource);
     };
 
     let (abi, bytecode, runtime_bytecode) =
@@ -469,7 +524,7 @@ type ParsedCallsToAccount = (Vec<H160>, Vec<Vec<Bytes>>, Vec<Vec<U256>>);
 
 fn parse_calls_to_accounts(
     calls_to_accounts: Vec<CallsToAccount>,
-) -> Result<ParsedCallsToAccount, Box<dyn Error>> {
+) -> Result<ParsedCallsToAccount, EthError> {
     let mut contract_addresses = vec![];
     let mut call_data = vec![];
     let mut decimals: Vec<Vec<U256>> = vec![];
@@ -492,8 +547,8 @@ pub async fn update_account_calls(
     addr: H160,
     input: PathBuf,
     rpc_url: Option<&str>,
-) -> Result<(), Box<dyn Error>> {
-    let input = GraphData::from_path(input)?;
+) -> Result<(), EthError> {
+    let input = GraphData::from_path(input).map_err(|_| EthError::GraphData)?;
 
     // The data that will be stored in the test contracts that will eventually be read from.
     let mut calls_to_accounts = vec![];
@@ -513,7 +568,7 @@ pub async fn update_account_calls(
     let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
         parse_calls_to_accounts(calls_to_accounts)?
     } else {
-        return Err("Data source for either input_data or output_data must be OnChain".into());
+        return Err(EthError::OnChainDataSource);
     };
 
     let (client, client_address) = setup_eth_backend(rpc_url, None).await?;
@@ -547,7 +602,7 @@ pub async fn update_account_calls(
     {
         info!("updateAccountCalls failed as expected");
     } else {
-        return Err("updateAccountCalls should have failed".into());
+        return Err(EthError::UpdateAccountCalls);
     }
 
     Ok(())
@@ -560,7 +615,7 @@ pub async fn verify_proof_via_solidity(
     addr: H160,
     addr_vk: Option<H160>,
     rpc_url: Option<&str>,
-) -> Result<bool, Box<dyn Error>> {
+) -> Result<bool, EthError> {
     let flattened_instances = proof.instances.into_iter().flatten();
 
     let encoded = encode_calldata(
@@ -579,15 +634,15 @@ pub async fn verify_proof_via_solidity(
 
     let result = client.call(&tx).await;
 
-    if result.is_err() {
-        return Err(Box::new(EvmVerificationError::SolidityExecution));
+    if let Err(e) = result {
+        return Err(EvmVerificationError::SolidityExecution(e.to_string()).into());
     }
     let result = result?;
     debug!("result: {:#?}", result.to_vec());
     // decode return bytes value into uint8
-    let result = result.to_vec().last().ok_or("no contract output")? == &1u8;
+    let result = result.to_vec().last().ok_or(EthError::NoContractOutput)? == &1u8;
     if !result {
-        return Err(Box::new(EvmVerificationError::InvalidProof));
+        return Err(EvmVerificationError::InvalidProof.into());
     }
 
     let gas = client.estimate_gas(&tx).await?;
@@ -626,7 +681,7 @@ fn count_decimal_places(num: f32) -> usize {
 pub async fn setup_test_contract<M: 'static + Provider<Http<Client>, Ethereum>>(
     client: Arc<M>,
     data: &[Vec<FileSourceInner>],
-) -> Result<(TestReads::TestReadsInstance<Http<Client>, Arc<M>>, Vec<u8>), Box<dyn Error>> {
+) -> Result<(TestReads::TestReadsInstance<Http<Client>, Arc<M>>, Vec<u8>), EthError> {
     let mut decimals = vec![];
     let mut scaled_by_decimals_data = vec![];
     for input in &data[0] {
@@ -663,7 +718,7 @@ pub async fn verify_proof_with_data_attestation(
     addr_da: H160,
     addr_vk: Option<H160>,
     rpc_url: Option<&str>,
-) -> Result<bool, Box<dyn Error>> {
+) -> Result<bool, EthError> {
     use ethabi::{Function, Param, ParamType, StateMutability, Token};
 
     let mut public_inputs: Vec<U256> = vec![];
@@ -728,15 +783,15 @@ pub async fn verify_proof_with_data_attestation(
     );
 
     let result = client.call(&tx).await;
-    if result.is_err() {
-        return Err(Box::new(EvmVerificationError::SolidityExecution));
+    if let Err(e) = result {
+        return Err(EvmVerificationError::SolidityExecution(e.to_string()).into());
     }
     let result = result?;
     debug!("result: {:#?}", result);
     // decode return bytes value into uint8
-    let result = result.to_vec().last().ok_or("no contract output")? == &1u8;
+    let result = result.to_vec().last().ok_or(EthError::NoContractOutput)? == &1u8;
     if !result {
-        return Err(Box::new(EvmVerificationError::InvalidProof));
+        return Err(EvmVerificationError::InvalidProof.into());
     }
 
     Ok(true)
@@ -748,7 +803,7 @@ pub async fn verify_proof_with_data_attestation(
 pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
     client: Arc<M>,
     data: &[Vec<FileSourceInner>],
-) -> Result<Vec<CallsToAccount>, Box<dyn Error>> {
+) -> Result<Vec<CallsToAccount>, EthError> {
     let (contract, decimals) = setup_test_contract(client.clone(), data).await?;
 
     // Get the encoded call data for each input
@@ -774,7 +829,7 @@ pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>
     client: Arc<M>,
     address: H160,
     data: &Vec<CallsToAccount>,
-) -> Result<(Vec<Bytes>, Vec<u8>), Box<dyn Error>> {
+) -> Result<(Vec<Bytes>, Vec<u8>), EthError> {
     // Iterate over all on-chain inputs
 
     let mut fetched_inputs = vec![];
@@ -808,9 +863,7 @@ pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
     client: Arc<M>,
     scales: Vec<crate::Scale>,
     data: &(Vec<Bytes>, Vec<u8>),
-) -> Result<Vec<Fr>, Box<dyn Error>> {
-    use alloy::primitives::ParseSignedError;
-
+) -> Result<Vec<Fr>, EthError> {
     let contract = QuantizeData::deploy(&client).await?;
 
     let fetched_inputs = data.0.clone();
@@ -870,7 +923,7 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
     runtime_bytecode: Bytes,
     client: Arc<M>,
     params: Option<T>,
-) -> Result<ContractFactory<M>, Box<dyn Error>> {
+) -> Result<ContractFactory<M>, EthError> {
     const MAX_RUNTIME_BYTECODE_SIZE: usize = 24577;
     let size = runtime_bytecode.len();
     debug!("runtime bytecode size: {:#?}", size);
@@ -888,7 +941,7 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
     // Encode the constructor args & concatenate with the bytecode if necessary
     let data: Bytes = match (abi.constructor(), params.is_none()) {
         (None, false) => {
-            return Err("Constructor arguments provided but no constructor found".into())
+            return Err(EthError::NoConstructor);
         }
         (None, true) => bytecode.clone(),
         (Some(_), _) => {
@@ -911,7 +964,7 @@ pub async fn get_contract_artifacts(
     sol_code_path: PathBuf,
     contract_name: &str,
     runs: usize,
-) -> Result<(JsonAbi, Bytes, Bytes), Box<dyn Error>> {
+) -> Result<(JsonAbi, Bytes, Bytes), EthError> {
     use foundry_compilers::{
         artifacts::{output_selection::OutputSelection, Optimizer},
         compilers::CompilerInput,
@@ -919,7 +972,9 @@ pub async fn get_contract_artifacts(
     };
 
     if !sol_code_path.exists() {
-        return Err(format!("file not found: {:#?}", sol_code_path).into());
+        return Err(EthError::ContractNotFound(
+            sol_code_path.to_string_lossy().to_string(),
+        ));
     }
 
     let settings = SolcSettings {
@@ -946,7 +1001,9 @@ pub async fn get_contract_artifacts(
         Some(solc) => solc,
         None => {
             info!("required solc version is missing ... installing");
-            Solc::install(&SHANGHAI_SOLC).await?
+            Solc::install(&SHANGHAI_SOLC)
+                .await
+                .map_err(|e| EthError::Svm(e.to_string()))?
         }
     };
 
@@ -955,7 +1012,7 @@ pub async fn get_contract_artifacts(
     let (abi, bytecode, runtime_bytecode) = match compiled.find(contract_name) {
         Some(c) => c.into_parts_or_default(),
         None => {
-            return Err("could not find contract".into());
+            return Err(EthError::ContractNotFound(contract_name.to_string()));
         }
     };
 
@@ -967,7 +1024,7 @@ pub fn fix_da_sol(
     input_data: Option<Vec<CallsToAccount>>,
     output_data: Option<Vec<CallsToAccount>>,
     commitment_bytes: Option<Vec<u8>>,
-) -> Result<String, Box<dyn Error>> {
+) -> Result<String, EthError> {
     let mut accounts_len = 0;
     let mut contract = ATTESTDATA_SOL.to_string();
 

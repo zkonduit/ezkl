@@ -1,7 +1,5 @@
 use std::str::FromStr;
 
-use thiserror::Error;
-
 use halo2_proofs::{
     circuit::Layouter,
     plonk::{ConstraintSystem, Constraints, Expression, Selector},
@@ -26,30 +24,10 @@ use crate::{
     },
     tensor::{IntoI64, Tensor, TensorType, ValTensor, VarTensor},
 };
-use std::{collections::BTreeMap, error::Error, marker::PhantomData};
+use std::{collections::BTreeMap, marker::PhantomData};
 
-use super::{lookup::LookupOp, region::RegionCtx, Op};
+use super::{lookup::LookupOp, region::RegionCtx, CircuitError, Op};
 use halo2curves::ff::{Field, PrimeField};
-
-/// circuit related errors.
-#[derive(Debug, Error)]
-pub enum CircuitError {
-    /// Shape mismatch in circuit construction
-    #[error("dimension mismatch in circuit construction for op: {0}")]
-    DimMismatch(String),
-    /// Error when instantiating lookup tables
-    #[error("failed to instantiate lookup tables")]
-    LookupInstantiation,
-    /// A lookup table was was already assigned
-    #[error("attempting to initialize an already instantiated lookup table")]
-    TableAlreadyAssigned,
-    /// This operation is unsupported
-    #[error("unsupported operation in graph")]
-    UnsupportedOp,
-    ///
-    #[error("invalid einsum expression")]
-    InvalidEinsum,
-}
 
 #[allow(missing_docs)]
 /// An enum representing activating the sanity checks we can perform on the accumulated arguments
@@ -513,18 +491,18 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> BaseCo
         lookup_range: Range,
         logrows: usize,
         nl: &LookupOp,
-    ) -> Result<(), Box<dyn Error>>
+    ) -> Result<(), CircuitError>
     where
         F: Field,
     {
         if !index.is_advice() {
-            return Err("wrong input type for lookup index".into());
+            return Err(CircuitError::WrongColumnType(index.name().to_string()));
         }
         if !input.is_advice() {
-            return Err("wrong input type for lookup input".into());
+            return Err(CircuitError::WrongColumnType(input.name().to_string()));
         }
         if !output.is_advice() {
-            return Err("wrong input type for lookup output".into());
+            return Err(CircuitError::WrongColumnType(output.name().to_string()));
         }
 
         // we borrow mutably twice so we need to do this dance
@@ -654,19 +632,19 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> BaseCo
         cs: &mut ConstraintSystem<F>,
         lookups: &[VarTensor; 3],
         tables: &[VarTensor; 3],
-    ) -> Result<(), Box<dyn Error>>
+    ) -> Result<(), CircuitError>
     where
         F: Field,
     {
         for l in lookups.iter() {
             if !l.is_advice() {
-                return Err("wrong input type for dynamic lookup".into());
+                return Err(CircuitError::WrongDynamicColumnType(l.name().to_string()));
             }
         }
 
         for t in tables.iter() {
             if !t.is_advice() || t.num_blocks() > 1 || t.num_inner_cols() > 1 {
-                return Err("wrong table type for dynamic lookup".into());
+                return Err(CircuitError::WrongDynamicColumnType(t.name().to_string()));
             }
         }
 
@@ -737,19 +715,19 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> BaseCo
         cs: &mut ConstraintSystem<F>,
         inputs: &[VarTensor; 2],
         references: &[VarTensor; 2],
-    ) -> Result<(), Box<dyn Error>>
+    ) -> Result<(), CircuitError>
     where
         F: Field,
     {
         for l in inputs.iter() {
             if !l.is_advice() {
-                return Err("wrong input type for dynamic lookup".into());
+                return Err(CircuitError::WrongDynamicColumnType(l.name().to_string()));
             }
         }
 
         for t in references.iter() {
             if !t.is_advice() || t.num_blocks() > 1 || t.num_inner_cols() > 1 {
-                return Err("wrong table type for dynamic lookup".into());
+                return Err(CircuitError::WrongDynamicColumnType(t.name().to_string()));
             }
         }
 
@@ -822,12 +800,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> BaseCo
         index: &VarTensor,
         range: Range,
         logrows: usize,
-    ) -> Result<(), Box<dyn Error>>
+    ) -> Result<(), CircuitError>
     where
         F: Field,
     {
         if !input.is_advice() {
-            return Err("wrong input type for lookup input".into());
+            return Err(CircuitError::WrongColumnType(input.name().to_string()));
         }
 
         // we borrow mutably twice so we need to do this dance
@@ -918,7 +896,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> BaseCo
     }
 
     /// layout_tables must be called before layout.
-    pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
+    pub fn layout_tables(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), CircuitError> {
         for (i, table) in self.static_lookups.tables.values_mut().enumerate() {
             if !table.is_assigned {
                 debug!(
@@ -939,7 +917,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> BaseCo
     pub fn layout_range_checks(
         &mut self,
         layouter: &mut impl Layouter<F>,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), CircuitError> {
         for range_check in self.range_checks.ranges.values_mut() {
             if !range_check.is_assigned {
                 debug!("laying out range check for {:?}", range_check.range);
@@ -959,7 +937,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> BaseCo
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
         op: Box<dyn Op<F>>,
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
         op.layout(self, region, values)
     }
 }
