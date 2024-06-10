@@ -533,7 +533,20 @@ fn update_ezkl_binary(version: &Option<String>) -> Result<String, EZKLError> {
     // run the install script with the version
     let install_script = std::str::from_utf8(INSTALL_BYTES)?;
     //  now run as sh script with the version as an argument
-    let mut command = std::process::Command::new("sh");
+
+    // check if bash is installed
+    let command = if std::process::Command::new("bash")
+        .arg("--version")
+        .status()
+        .is_err()
+    {
+        log::warn!("bash is not installed on this system, trying to run the install script with sh (may fail)");
+        "sh"
+    } else {
+        "bash"
+    };
+
+    let mut command = std::process::Command::new(command);
     let mut command = command.arg("-c").arg(install_script);
 
     if let Some(version) = version {
