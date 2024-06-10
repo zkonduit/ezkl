@@ -327,11 +327,7 @@ pub async fn setup_eth_backend(
         ProviderBuilder::new()
             .with_recommended_fillers()
             .signer(EthereumSigner::from(wallet))
-            .on_http(
-                endpoint
-                    .parse()
-                    .map_err(|_| EthError::UrlParse(endpoint.clone()))?,
-            ),
+            .on_http(endpoint.parse().map_err(|_| EthError::UrlParse(endpoint))?),
     );
 
     let chain_id = client.get_chain_id().await?;
@@ -354,8 +350,7 @@ pub async fn deploy_contract_via_solidity(
     let (abi, bytecode, runtime_bytecode) =
         get_contract_artifacts(sol_code_path, contract_name, runs).await?;
 
-    let factory =
-        get_sol_contract_factory(abi, bytecode, runtime_bytecode, client.clone(), None::<()>)?;
+    let factory = get_sol_contract_factory(abi, bytecode, runtime_bytecode, client, None::<()>)?;
     let contract = factory.deploy().await?;
 
     Ok(contract)
@@ -465,13 +460,8 @@ pub async fn deploy_da_verifier_via_solidity(
         if !kzg_visibility {
             return Err(EthError::OnChainDataSource);
         }
-        let factory = get_sol_contract_factory::<_, ()>(
-            abi,
-            bytecode,
-            runtime_bytecode,
-            client.clone(),
-            None,
-        )?;
+        let factory =
+            get_sol_contract_factory::<_, ()>(abi, bytecode, runtime_bytecode, client, None)?;
         let contract = factory.deploy().await?;
         return Ok(contract);
     };
@@ -480,7 +470,7 @@ pub async fn deploy_da_verifier_via_solidity(
         abi,
         bytecode,
         runtime_bytecode,
-        client.clone(),
+        client,
         Some((
             // address[] memory _contractAddresses,
             DynSeqToken(
@@ -544,7 +534,7 @@ fn parse_calls_to_accounts(
     let mut call_data = vec![];
     let mut decimals: Vec<Vec<U256>> = vec![];
     for (i, val) in calls_to_accounts.iter().enumerate() {
-        let contract_address_bytes = hex::decode(val.address.clone())?;
+        let contract_address_bytes = hex::decode(&val.address)?;
         let contract_address = H160::from_slice(&contract_address_bytes);
         contract_addresses.push(contract_address);
         call_data.push(vec![]);
@@ -588,7 +578,7 @@ pub async fn update_account_calls(
 
     let (client, client_address) = setup_eth_backend(rpc_url, None).await?;
 
-    let contract = DataAttestation::new(addr, client.clone());
+    let contract = DataAttestation::new(addr, &client);
 
     info!("contract_addresses: {:#?}", contract_addresses);
 
@@ -819,7 +809,7 @@ pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
     client: Arc<M>,
     data: &[Vec<FileSourceInner>],
 ) -> Result<Vec<CallsToAccount>, EthError> {
-    let (contract, decimals) = setup_test_contract(client.clone(), data).await?;
+    let (contract, decimals) = setup_test_contract(client, data).await?;
 
     // Get the encoded call data for each input
     let mut calldata = vec![];
@@ -851,10 +841,10 @@ pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>
     let mut decimals = vec![];
     for on_chain_data in data {
         // Construct the address
-        let contract_address_bytes = hex::decode(on_chain_data.address.clone())?;
+        let contract_address_bytes = hex::decode(&on_chain_data.address)?;
         let contract_address = H160::from_slice(&contract_address_bytes);
         for (call_data, decimal) in &on_chain_data.call_data {
-            let call_data_bytes = hex::decode(call_data.clone())?;
+            let call_data_bytes = hex::decode(&call_data)?;
             let input: TransactionInput = call_data_bytes.into();
 
             let tx = TransactionRequest::default()
@@ -881,8 +871,8 @@ pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
 ) -> Result<Vec<Fr>, EthError> {
     let contract = QuantizeData::deploy(&client).await?;
 
-    let fetched_inputs = data.0.clone();
-    let decimals = data.1.clone();
+    let fetched_inputs = &data.0;
+    let decimals = &data.1;
 
     let fetched_inputs = fetched_inputs
         .iter()
@@ -958,7 +948,7 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
         (None, false) => {
             return Err(EthError::NoConstructor);
         }
-        (None, true) => bytecode.clone(),
+        (None, true) => bytecode,
         (Some(_), _) => {
             let mut data = bytecode.to_vec();
 
@@ -970,7 +960,7 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
         }
     };
 
-    Ok(CallBuilder::new_raw_deploy(client.clone(), data))
+    Ok(CallBuilder::new_raw_deploy(client, data))
 }
 
 /// Compiles a solidity verifier contract and returns the abi, bytecode, and runtime bytecode
@@ -1045,7 +1035,7 @@ pub fn fix_da_sol(
 
     // fill in the quantization params and total calls
     // as constants to the contract to save on gas
-    if let Some(input_data) = input_data.clone() {
+    if let Some(input_data) = &input_data {
         let input_calls: usize = input_data.iter().map(|v| v.call_data.len()).sum();
         accounts_len = input_data.len();
         contract = contract.replace(
@@ -1053,7 +1043,7 @@ pub fn fix_da_sol(
             &format!("uint256 constant INPUT_CALLS = {};", input_calls),
         );
     }
-    if let Some(output_data) = output_data.clone() {
+    if let Some(output_data) = &output_data {
         let output_calls: usize = output_data.iter().map(|v| v.call_data.len()).sum();
         accounts_len += output_data.len();
         contract = contract.replace(
@@ -1064,8 +1054,8 @@ pub fn fix_da_sol(
     contract = contract.replace("AccountCall[]", &format!("AccountCall[{}]", accounts_len));
 
     // The case where a combination of on-chain data source + kzg commit is provided.
-    if commitment_bytes.clone().is_some() && !commitment_bytes.clone().unwrap().is_empty() {
-        let commitment_bytes = commitment_bytes.clone().unwrap();
+    if commitment_bytes.is_some() && !commitment_bytes.as_ref().unwrap().is_empty() {
+        let commitment_bytes = commitment_bytes.as_ref().unwrap();
         let hex_string = hex::encode(commitment_bytes);
         contract = contract.replace(
             "bytes constant COMMITMENT_KZG = hex\"\";",
@@ -1083,8 +1073,8 @@ pub fn fix_da_sol(
     // if both input and output data is none then we will only deploy the DataAttest contract, adding in the verifyWithDataAttestation function
     if input_data.is_none()
         && output_data.is_none()
-        && commitment_bytes.clone().is_some()
-        && !commitment_bytes.clone().unwrap().is_empty()
+        && commitment_bytes.as_ref().is_some()
+        && !commitment_bytes.as_ref().unwrap().is_empty()
     {
         contract = contract.replace(
             "contract SwapProofCommitments {",
@@ -1094,7 +1084,7 @@ pub fn fix_da_sol(
         // Remove everything past the end of the checkKzgCommits function
         if let Some(pos) = contract.find("    } /// end checkKzgCommits") {
             contract.truncate(pos);
-            contract.push_str("}");
+            contract.push('}');
         }
 
         // Add the Solidity function below checkKzgCommits
