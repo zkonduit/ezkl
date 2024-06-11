@@ -203,6 +203,7 @@ det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
 empty-cmd = []
 no-banner = []
+no-update = []
 metal = ["dep:metal", "dep:objc"]
 
 # icicle patch to 0.1.0 if feature icicle is enabled

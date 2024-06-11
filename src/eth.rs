@@ -844,7 +844,7 @@ pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>
         let contract_address_bytes = hex::decode(&on_chain_data.address)?;
         let contract_address = H160::from_slice(&contract_address_bytes);
         for (call_data, decimal) in &on_chain_data.call_data {
-            let call_data_bytes = hex::decode(&call_data)?;
+            let call_data_bytes = hex::decode(call_data)?;
             let input: TransactionInput = call_data_bytes.into();
 
             let tx = TransactionRequest::default()

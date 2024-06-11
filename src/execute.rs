@@ -506,10 +506,12 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(not(feature = "no-update"))]
         Commands::Update { version } => update_ezkl_binary(&version).map(|e| e.to_string()),
     }
 }
 
+#[cfg(not(feature = "no-update"))]
 /// Assert that the version is valid
 fn assert_version_is_valid(version: &str) -> Result<(), EZKLError> {
     let err_string = "Invalid version string. Must be in the format v0.0.0";
@@ -527,8 +529,10 @@ fn assert_version_is_valid(version: &str) -> Result<(), EZKLError> {
     Ok(())
 }
 
+#[cfg(not(feature = "no-update"))]
 const INSTALL_BYTES: &[u8] = include_bytes!("../install_ezkl_cli.sh");
 
+#[cfg(not(feature = "no-update"))]
 fn update_ezkl_binary(version: &Option<String>) -> Result<String, EZKLError> {
     // run the install script with the version
     let install_script = std::str::from_utf8(INSTALL_BYTES)?;
