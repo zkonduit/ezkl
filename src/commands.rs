@@ -868,6 +868,7 @@ pub enum Commands {
         #[arg(long, value_hint = clap::ValueHint::Other)]
         addr_vk: Option<H160Flag>,
     },
+    #[cfg(not(feature = "no-update"))]
     /// Updates ezkl binary to version specified (or latest if not specified)
     Update {
         /// The version to update to
