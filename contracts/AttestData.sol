@@ -93,9 +93,6 @@ contract LoadInstances {
     }
 }
 
-// Contract that checks that the COMMITMENT_KZG bytes is equal to the first part of the proof.
-pragma solidity ^0.8.0;
-
 // The kzg commitments of a given model, all aggregated into a single bytes array.
 // At solidity generation time, the commitments are hardcoded into the contract via the COMMITMENT_KZG constant.
 // It will be used to check that the proof commitments match the expected commitments.
@@ -163,7 +160,7 @@ contract SwapProofCommitments {
         }
 
         return equal; // Return true if the commitment comparison passed
-    }
+    } /// end checkKzgCommits
 }
 
 // This contract serves as a Data Attestation Verifier for the EZKL model.

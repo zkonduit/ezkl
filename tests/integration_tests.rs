@@ -1066,6 +1066,15 @@ mod native_tests {
                     kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "polycommit", "public", "polycommit");
                     test_dir.close().unwrap();
                 }
+                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
+                fn kzg_evm_on_chain_all_kzg_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "file", "polycommit", "polycommit", "polycommit");
+                    test_dir.close().unwrap();
+                }
             });
 
 
@@ -2330,7 +2339,6 @@ mod native_tests {
 
         let model_path = format!("{}/{}/network.compiled", test_dir, example_name);
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
-
         init_params(settings_path.clone().into());
 
         let data_path = format!("{}/{}/input.json", test_dir, example_name);
@@ -2341,62 +2349,6 @@ mod native_tests {
 
         let test_input_source = format!("--input-source={}", input_source);
         let test_output_source = format!("--output-source={}", output_source);
-
-        // load witness
-        let witness: GraphWitness = GraphWitness::from_path(witness_path.clone().into()).unwrap();
-        let mut input: GraphData = GraphData::from_path(data_path.clone().into()).unwrap();
-
-        if input_visibility == "hashed" {
-            let hashes = witness.processed_inputs.unwrap().poseidon_hash.unwrap();
-            input.input_data = DataSource::File(
-                hashes
-                    .iter()
-                    .map(|h| vec![FileSourceInner::Field(*h)])
-                    .collect(),
-            );
-        }
-        if output_visibility == "hashed" {
-            let hashes = witness.processed_outputs.unwrap().poseidon_hash.unwrap();
-            input.output_data = Some(DataSource::File(
-                hashes
-                    .iter()
-                    .map(|h| vec![FileSourceInner::Field(*h)])
-                    .collect(),
-            ));
-        } else {
-            input.output_data = Some(DataSource::File(
-                witness
-                    .pretty_elements
-                    .unwrap()
-                    .rescaled_outputs
-                    .iter()
-                    .map(|o| {
-                        o.iter()
-                            .map(|f| FileSourceInner::Float(f.parse().unwrap()))
-                            .collect()
-                    })
-                    .collect(),
-            ));
-        }
-
-        input.save(data_path.clone().into()).unwrap();
-
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "setup-test-evm-data",
-                "-D",
-                data_path.as_str(),
-                "-M",
-                &model_path,
-                "--test-data",
-                test_on_chain_data_path.as_str(),
-                rpc_arg.as_str(),
-                test_input_source.as_str(),
-                test_output_source.as_str(),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -2411,6 +2363,82 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        // generate the witness, passing the vk path to generate the necessary kzg commits
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-witness",
+                "-D",
+                &data_path,
+                "-M",
+                &model_path,
+                "-O",
+                &witness_path,
+                "--vk-path",
+                &format!("{}/{}/key.vk", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // load witness
+        let witness: GraphWitness = GraphWitness::from_path(witness_path.clone().into()).unwrap();
+        // print out the witness
+        println!("WITNESS: {:?}", witness);
+        let mut input: GraphData = GraphData::from_path(data_path.clone().into()).unwrap();
+        if input_source != "file" || output_source != "file" {
+            println!("on chain input");
+            if input_visibility == "hashed" {
+                let hashes = witness.processed_inputs.unwrap().poseidon_hash.unwrap();
+                input.input_data = DataSource::File(
+                    hashes
+                        .iter()
+                        .map(|h| vec![FileSourceInner::Field(*h)])
+                        .collect(),
+                );
+            }
+            if output_visibility == "hashed" {
+                let hashes = witness.processed_outputs.unwrap().poseidon_hash.unwrap();
+                input.output_data = Some(DataSource::File(
+                    hashes
+                        .iter()
+                        .map(|h| vec![FileSourceInner::Field(*h)])
+                        .collect(),
+                ));
+            } else {
+                input.output_data = Some(DataSource::File(
+                    witness
+                        .pretty_elements
+                        .unwrap()
+                        .rescaled_outputs
+                        .iter()
+                        .map(|o| {
+                            o.iter()
+                                .map(|f| FileSourceInner::Float(f.parse().unwrap()))
+                                .collect()
+                        })
+                        .collect(),
+                ));
+            }
+            input.save(data_path.clone().into()).unwrap();
+
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "setup-test-evm-data",
+                    "-D",
+                    data_path.as_str(),
+                    "-M",
+                    &model_path,
+                    "--test-data",
+                    test_on_chain_data_path.as_str(),
+                    rpc_arg.as_str(),
+                    test_input_source.as_str(),
+                    test_output_source.as_str(),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+        }
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -2502,13 +2530,19 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
+        let deploy_evm_data_path = if input_source != "file" || output_source != "file" {
+            test_on_chain_data_path.clone()
+        } else {
+            data_path.clone()
+        };
+
         let addr_path_da_arg = format!("--addr-path={}/{}/addr_da.txt", test_dir, example_name);
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
                 "deploy-evm-da",
                 format!("--settings-path={}", settings_path).as_str(),
                 "-D",
-                test_on_chain_data_path.as_str(),
+                deploy_evm_data_path.as_str(),
                 "--sol-code-path",
                 sol_arg.as_str(),
                 rpc_arg.as_str(),
@@ -2546,40 +2580,42 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-        // Create a new set of test on chain data
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "setup-test-evm-data",
+        // Create a new set of test on chain data only for the on-chain input source
+        if input_source != "file" || output_source != "file" {
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "setup-test-evm-data",
+                    "-D",
+                    data_path.as_str(),
+                    "-M",
+                    &model_path,
+                    "--test-data",
+                    test_on_chain_data_path.as_str(),
+                    rpc_arg.as_str(),
+                    test_input_source.as_str(),
+                    test_output_source.as_str(),
+                ])
+                .status()
+                .expect("failed to execute process");
+
+            assert!(status.success());
+
+            let deployed_addr_arg = format!("--addr={}", addr_da);
+
+            let args: Vec<&str> = vec![
+                "test-update-account-calls",
+                deployed_addr_arg.as_str(),
                 "-D",
-                data_path.as_str(),
-                "-M",
-                &model_path,
-                "--test-data",
                 test_on_chain_data_path.as_str(),
                 rpc_arg.as_str(),
-                test_input_source.as_str(),
-                test_output_source.as_str(),
-            ])
-            .status()
-            .expect("failed to execute process");
+            ];
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args(&args)
+                .status()
+                .expect("failed to execute process");
 
-        assert!(status.success());
-
-        let deployed_addr_arg = format!("--addr={}", addr_da);
-
-        let args = vec![
-            "test-update-account-calls",
-            deployed_addr_arg.as_str(),
-            "-D",
-            test_on_chain_data_path.as_str(),
-            rpc_arg.as_str(),
-        ];
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(&args)
-            .status()
-            .expect("failed to execute process");
-
-        assert!(status.success());
+            assert!(status.success());
+        }
         // As sanity check, add example that should fail.
         let args = vec![
             "verify-evm",
