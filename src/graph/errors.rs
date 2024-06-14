@@ -41,9 +41,9 @@ pub enum GraphError {
     /// Error when attempting to rescale an operation
     #[error("failed to rescale inputs for {0}")]
     RescalingError(String),
-    /// Error when attempting to load a model from a file
-    #[error("failed to load model")]
-    ModelLoad(#[from] std::io::Error),
+    /// Reading a file failed
+    #[error("[io] ({0}) {1}")]
+    ReadWriteFileError(String, String),
     /// Model serialization error
     #[error("failed to ser/deser model: {0}")]
     ModelSerialize(#[from] bincode::Error),

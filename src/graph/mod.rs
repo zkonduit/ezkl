@@ -267,7 +267,9 @@ impl GraphWitness {
 
     /// Load the model input from a file
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, GraphError> {
-        let file = std::fs::File::open(path.clone())?;
+        let file = std::fs::File::open(path.clone()).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
 
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
         serde_json::from_reader(reader).map_err(|e| e.into())
@@ -275,9 +277,11 @@ impl GraphWitness {
 
     /// Save the model input to a file
     pub fn save(&self, path: std::path::PathBuf) -> Result<(), GraphError> {
+        let file = std::fs::File::create(path.clone()).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         // use buf writer
-        let writer =
-            std::io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::create(path)?);
+        let writer = std::io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, file);
 
         serde_json::to_writer(writer, &self).map_err(|e| e.into())
     }
@@ -640,7 +644,9 @@ impl GraphCircuit {
     }
     ///
     pub fn save(&self, path: std::path::PathBuf) -> Result<(), GraphError> {
-        let f = std::fs::File::create(path)?;
+        let f = std::fs::File::create(&path).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let writer = std::io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
         bincode::serialize_into(writer, &self)?;
         Ok(())
@@ -649,7 +655,9 @@ impl GraphCircuit {
     ///
     pub fn load(path: std::path::PathBuf) -> Result<Self, GraphError> {
         // read bytes from file
-        let f = std::fs::File::open(path)?;
+        let f = std::fs::File::open(&path).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
         let result: GraphCircuit = bincode::deserialize_from(reader)?;
 

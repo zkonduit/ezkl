@@ -485,18 +485,25 @@ impl GraphData {
 
     /// Load the model input from a file
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, GraphError> {
-        let reader = std::fs::File::open(path)?;
+        let reader = std::fs::File::open(&path).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, reader);
         let mut buf = String::new();
-        reader.read_to_string(&mut buf)?;
+        reader.read_to_string(&mut buf).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let graph_input = serde_json::from_str(&buf)?;
         Ok(graph_input)
     }
 
     /// Save the model input to a file
     pub fn save(&self, path: std::path::PathBuf) -> Result<(), GraphError> {
+        let file = std::fs::File::create(path.clone()).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         // buf writer
-        let writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::create(path)?);
+        let writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, file);
         serde_json::to_writer(writer, self)?;
         Ok(())
     }
