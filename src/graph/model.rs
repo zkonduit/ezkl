@@ -483,7 +483,9 @@ impl Model {
 
     ///
     pub fn save(&self, path: PathBuf) -> Result<(), GraphError> {
-        let f = std::fs::File::create(path)?;
+        let f = std::fs::File::create(&path).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let writer = std::io::BufWriter::new(f);
         bincode::serialize_into(writer, &self)?;
         Ok(())
@@ -492,10 +494,16 @@ impl Model {
     ///
     pub fn load(path: PathBuf) -> Result<Self, GraphError> {
         // read bytes from file
-        let mut f = std::fs::File::open(&path)?;
-        let metadata = fs::metadata(&path)?;
+        let mut f = std::fs::File::open(&path).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
+        let metadata = fs::metadata(&path).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let mut buffer = vec![0; metadata.len() as usize];
-        f.read_exact(&mut buffer)?;
+        f.read_exact(&mut buffer).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let result = bincode::deserialize(&buffer)?;
         Ok(result)
     }
@@ -975,8 +983,11 @@ impl Model {
     ) -> Result<Vec<Vec<Tensor<f32>>>, GraphError> {
         use tract_onnx::tract_core::internal::IntoArcTensor;
 
-        let (model, _) =
-            Model::load_onnx_using_tract(&mut std::fs::File::open(model_path)?, run_args)?;
+        let mut file = std::fs::File::open(model_path).map_err(|e| {
+            GraphError::ReadWriteFileError(model_path.display().to_string(), e.to_string())
+        })?;
+
+        let (model, _) = Model::load_onnx_using_tract(&mut file, run_args)?;
 
         let datum_types: Vec<DatumType> = model
             .input_outlets()?
@@ -1005,7 +1016,10 @@ impl Model {
     /// * `params` - A [GraphSettings] struct holding parsed CLI arguments.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_run_args(run_args: &RunArgs, model: &std::path::Path) -> Result<Self, GraphError> {
-        Model::new(&mut std::fs::File::open(model)?, run_args)
+        let mut file = std::fs::File::open(model).map_err(|e| {
+            GraphError::ReadWriteFileError(model.display().to_string(), e.to_string())
+        })?;
+        Model::new(&mut file, run_args)
     }
 
     /// Configures a model for the circuit
