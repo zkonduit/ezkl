@@ -1,0 +1,87 @@
+[*] [2024-06-14 08:08:47, gen_settings_testing] - Starting the application...
+[D] [2024-06-14 08:08:47, tract_onnx::model] - ONNX operator set version: 12
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - set batch_size to 1
+[D] [2024-06-14 08:08:48, tract_hir::infer::analyser] -   Refined 3/0>: ..,? -> 1,3136,F32
+[D] [2024-06-14 08:08:48, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 0/0>, op: Rm(0 }
+[D] [2024-06-14 08:08:48, tract_core::optim::change_axes] -     Change AxisChange { outlet: 0/0>, op: Rm(0 } blocked by locked interface 0/0>
+[D] [2024-06-14 08:08:48, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 2/0>, op: Rm(0 }
+[D] [2024-06-14 08:08:48, tract_core::optim::change_axes] -     Change AxisChange { outlet: 2/0>, op: Rm(0 } blocked by locked interface 4/0>
+[D] [2024-06-14 08:08:48, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 3/0>, op: Rm(0 }
+[D] [2024-06-14 08:08:48, tract_core::optim::change_axes] -     Change AxisChange { outlet: 3/0>, op: Rm(0 } blocked by locked interface 4/0>
+[D] [2024-06-14 08:08:48, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 4/0>, op: Rm(0 }
+[D] [2024-06-14 08:08:48, tract_core::optim::change_axes] -     Change AxisChange { outlet: 4/0>, op: Rm(0 } blocked by locked interface 4/0>
+[D] [2024-06-14 08:08:48, ezkl::graph::utilities] - Loading node: Node { id: 0, name: "input_0", inputs: [], op: TypedSource { fact: 1,100,F32 }, outputs: [1,100,F32 >2/0] }
+[D] [2024-06-14 08:08:48, ezkl::graph::utilities] - Loading node: Node { id: 1, name: "model_1/dense_2/MatMul/ReadVariableOp:0.0", inputs: [], op: Const(100,3136,F32 0.00046522572, 0.007372593, -0.03599597, 0.0023159164, -0.033711392, -0.036277454, -0.020366581, 0.029136641, 0.01795219, 0.025517544, -0.028796678, -0.017426522...), outputs: [100,3136,F32 0.00046522572, 0.007372593, -0.03599597, 0.0023159164, -0.033711392, -0.036277454, -0.020366581, 0.029136641, 0.01795219, 0.025517544, -0.028796678, -0.017426522... >2/1] }
+[D] [2024-06-14 08:08:48, ezkl::graph::utilities] - Loading node: Node { id: 2, name: "model_1/dense_2/MatMul_Gemm__21.ab", inputs: [0/0>, 1/0>], op: EinSum mk,kn->mn (F32), outputs: [1,3136,F32 >4/0] }
+[D] [2024-06-14 08:08:48, ezkl::graph::utilities] - Loading node: Node { id: 3, name: "model_1/dense_2/MatMul_Gemm__21.c_add_axis_1", inputs: [], op: Const(1,3136,F32 0.000000001378522, -0.00000000019393276, -0.0000000007727794, 0.0000000005769579, 0.000000011025698, -0.0000000017748868, 0.0000000001669296, -0.0000000069650987, 0.0000000074215993, -0.0000000006215792, -0.0000000028768485, 0.000000000034017844...), outputs: [1,3136,F32 0.000000001378522, -0.00000000019393276, -0.0000000007727794, 0.0000000005769579, 0.000000011025698, -0.0000000017748868, 0.0000000001669296, -0.0000000069650987, 0.0000000074215993, -0.0000000006215792, -0.0000000028768485, 0.000000000034017844... >4/1] }
+[D] [2024-06-14 08:08:48, ezkl::graph::utilities] - Loading node: Node { id: 4, name: "model_1/dense_2/MatMul_Gemm__21", inputs: [2/0>, 3/0>], op: TypedBinOp(Add, None), outputs: [1,3136,F32 ] }
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - 
+ |       0 |                   -> >2/0              | Source                    input_0                                            [] => [1,100,F32]
+ |      1 |                   -> >2/1              | Const                     model_1/dense_2/MatMul/ReadVariableOp:0.0          [] => [100,3136,F32 0.00046522572, 0.007372593, -0.03599597, 0.0023159164, -0.033711392, -0.036277454, -0.020366581, 0.029136641, 0.01795219, 0.025517544, -0.028796678, -0.017426522...]
+ |      2 | 0/0>     1/0>     -> >4/0              | EinSum                    model_1/dense_2/MatMul_Gemm__21.ab                 [1,100,F32, 100,3136,F32 0.00046522572, 0.007372593, -0.03599597, 0.0023159164, -0.033711392, -0.036277454, -0.020366581, 0.029136641, 0.01795219, 0.025517544, -0.028796678, -0.017426522...] => [1,3136,F32]
+ |      3 |                   -> >4/1              | Const                     model_1/dense_2/MatMul_Gemm__21.c_add_axis_1       [] => [1,3136,F32 0.000000001378522, -0.00000000019393276, -0.0000000007727794, 0.0000000005769579, 0.000000011025698, -0.0000000017748868, 0.0000000001669296, -0.0000000069650987, 0.0000000074215993, -0.0000000006215792, -0.0000000028768485, 0.000000000034017844...]
+ |      4 | 2/0>     3/0>     ->                   | Add                       model_1/dense_2/MatMul_Gemm__21                    [1,3136,F32, 1,3136,F32 0.000000001378522, -0.00000000019393276, -0.0000000007727794, 0.0000000005769579, 0.000000011025698, -0.0000000017748868, 0.0000000001669296, -0.0000000069650987, 0.0000000074215993, -0.0000000006215792, -0.0000000028768485, 0.000000000034017844...] => [1,3136,F32]
+ |  outputs: 4/0>
+ |  
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - 
+ |    
+ |  ┌─────┬───────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬──────────────────┬─────────────┐
+ |  │ idx │ opkind                                                                                            │ out_scale │ inputs           │ out_dims    │
+ |  ├─────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼──────────────────┼─────────────┤
+ |  │ 0   │ Input                                                                                             │ 7         │                  │ [1, 100]    │
+ |  ├─────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼──────────────────┼─────────────┤
+ |  │ 1   │ CONST (scale=7)                                                                                   │ 7         │                  │ [100, 3136] │
+ |  ├─────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼──────────────────┼─────────────┤
+ |  │ 2   │ REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (EINSUM mk,kn->mn) │ 7         │ [(0, 0), (1, 0)] │ [1, 3136]   │
+ |  ├─────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼──────────────────┼─────────────┤
+ |  │ 3   │ CONST (scale=7)                                                                                   │ 7         │                  │ [1, 3136]   │
+ |  ├─────┼───────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼──────────────────┼─────────────┤
+ |  │ 4   │ ADD                                                                                               │ 7         │ [(2, 0), (3, 0)] │ [1, 3136]   │
+ |  └─────┴───────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴──────────────────┴─────────────┘
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - model has 1 instances
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - calculating num of constraints using dummy model layout...
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - laying out 0: Input
+[D] [2024-06-14 08:08:48, ezkl::circuit::ops::region] - (rows=0, coord=0, constants=0, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=0, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - output dims: [[1, 100]]
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - input dims [[1, 100]]
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - ------------ output node 0: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - laying out 1: CONST (scale=7)
+[D] [2024-06-14 08:08:48, ezkl::circuit::ops::region] - (rows=50, coord=100, constants=0, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=0, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - output dims: [[100, 3136]]
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:08:48, ezkl::graph::model] - node 1 is a constant with 1 use
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - ------------ output node 1: "[0, 1, -5, 0, -4 ... 3, 3, 2, 4, 5]"
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - laying out 2: REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (EINSUM mk,kn->mn)
+[D] [2024-06-14 08:08:49, ezkl::circuit::ops::region] - (rows=50, coord=100, constants=0, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=0, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - input indices: [(0, 0), (1, 0)]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - input dims [[1, 100], [100, 3136]]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - ------------ output node 2: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - laying out 3: CONST (scale=7)
+[D] [2024-06-14 08:08:49, ezkl::circuit::ops::region] - (rows=163123, coord=326247, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - node 3 is a constant with 1 use
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - ------------ output node 3: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - laying out 4: ADD
+[D] [2024-06-14 08:08:49, ezkl::circuit::ops::region] - (rows=163123, coord=326247, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - input indices: [(2, 0), (3, 0)]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - input dims [[1, 3136], [1, 3136]]
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - ------------ output node 4: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:08:49, ezkl::graph::model] - model outputs are nodes: [(4, 0)]
+[D] [2024-06-14 08:08:49, ezkl::circuit::ops::region] - (rows=166259, coord=332519, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+Function executed successfully: Settings generated successfully

@@ -1,0 +1,91 @@
+[*] [2024-06-14 07:19:26, gen_settings_testing] - Starting the application...
+[D] [2024-06-14 07:19:27, tract_onnx::model] - ONNX operator set version: 10
+[D] [2024-06-14 07:19:27, ezkl::graph::model] - set batch_size to 1
+[D] [2024-06-14 07:19:28, tract_hir::infer::analyser] -   Refined 1/0>: ..,? -> batch_size,3,4,4,F32
+[D] [2024-06-14 07:19:28, tract_hir::infer::analyser] -   Refined 2/0>: ..,? -> batch_size,3,3,3,F32
+[D] [2024-06-14 07:19:28, tract_hir::infer::analyser] -   Refined 3/0>: ..,? -> ,I64 0
+[D] [2024-06-14 07:19:28, tract_hir::infer::analyser] -   Refined 4/0>: ..,? -> 3,3,3,F32
+[D] [2024-06-14 07:19:28, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 0/0>, op: Rm(0 }
+[D] [2024-06-14 07:19:28, tract_core::optim::change_axes] -     Change AxisChange { outlet: 0/0>, op: Rm(0 } blocked by locked interface 0/0>
+[D] [2024-06-14 07:19:28, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 1/0>, op: Rm(0 }
+[D] [2024-06-14 07:19:28, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 1/0>, op: Rm(0 } blocked by #1 "/layer/Pad" Pad
+[D] [2024-06-14 07:19:28, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 2/0>, op: Rm(0 }
+[D] [2024-06-14 07:19:28, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 2/0>, op: Rm(0 } blocked by #2 "/layer/AveragePool" SumPool
+[D] [2024-06-14 07:19:28, ezkl::graph::utilities] - Loading node: Node { id: 0, name: "input", inputs: [], op: TypedSource { fact: 1,3,2,2,F32 }, outputs: [1,3,2,2,F32 >1/0] }
+[D] [2024-06-14 07:19:28, ezkl::graph::utilities] - Loading node: Node { id: 1, name: "/layer/Pad", inputs: [0/0>], op: Pad { pads: [(0, 0), (0, 0), (1, 1), (1, 1)], mode: Constant(,F32 0) }, outputs: [1,3,4,4,F32 >2/0] }
+[D] [2024-06-14 07:19:28, ezkl::graph::utilities] - Loading node: Node { id: 2, name: "/layer/AveragePool", inputs: [1/0>], op: SumPool { pool_spec: PoolSpec { data_format: NCHW, kernel_shape: [2, 2], padding: ExplicitOnnxPool([0, 0], [0, 0], false), dilations: None, strides: Some([1, 1]), input_channels: 3, output_channels: 3 }, count_include_pad: false, normalize: true }, outputs: [1,3,3,3,F32 >4/0] }
+[D] [2024-06-14 07:19:28, ezkl::graph::utilities] - Loading node: Node { id: 3, name: "/Constant.0", inputs: [], op: Const(,I64 0), outputs: [,I64 0 >4/1] }
+[D] [2024-06-14 07:19:28, ezkl::graph::utilities] - Loading node: Node { id: 4, name: "/Gather", inputs: [2/0>, 3/0>], op: Gather { axis: 0 }, outputs: [3,3,3,F32 ] }
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - 
+ |       0 |                   -> >1/0              | Source                    input                                              [] => [1,3,2,2,F32]
+ |      1 | 0/0>              -> >2/0              | Pad                       /layer/Pad                                         [1,3,2,2,F32] => [1,3,4,4,F32]
+ |                                                 |   * output #0: /layer/Pad_output_0 >2/0
+ |      2 | 1/0>              -> >4/0              | SumPool                   /layer/AveragePool                                 [1,3,4,4,F32] => [1,3,3,3,F32]
+ |                                                 |   * output #0: /layer/AveragePool_output_0 >4/0
+ |      3 |                   -> >4/1              | Const                     /Constant.0                                        [] => [,I64 0]
+ |                                                 |   * output #0: /Constant_output_0 >4/1
+ |      4 | 2/0>     3/0>     ->                   | Gather                    /Gather                                            [1,3,3,3,F32, ,I64 0] => [3,3,3,F32]
+ |  outputs: 4/0>
+ |  
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - 
+ |    
+ |  ┌─────┬─────────────────────────────────────────────────────────────────────────────────────────┬───────────┬──────────┬──────────────┐
+ |  │ idx │ opkind                                                                                  │ out_scale │ inputs   │ out_dims     │
+ |  ├─────┼─────────────────────────────────────────────────────────────────────────────────────────┼───────────┼──────────┼──────────────┤
+ |  │ 0   │ Input                                                                                   │ 7         │          │ [1, 3, 2, 2] │
+ |  ├─────┼─────────────────────────────────────────────────────────────────────────────────────────┼───────────┼──────────┼──────────────┤
+ |  │ 1   │ PAD (pads=[(0, 0), (0, 0), (1, 1), (1, 1)])                                             │ 7         │ [(0, 0)] │ [1, 3, 4, 4] │
+ |  ├─────┼─────────────────────────────────────────────────────────────────────────────────────────┼───────────┼──────────┼──────────────┤
+ |  │ 2   │ SUMPOOL (padding=[(0, 0), (0, 0)], stride=[1, 1], kernel_shape=[2, 2], normalized=true) │ 7         │ [(1, 0)] │ [1, 3, 3, 3] │
+ |  ├─────┼─────────────────────────────────────────────────────────────────────────────────────────┼───────────┼──────────┼──────────────┤
+ |  │ 4   │ GATHER (dim=0)                                                                          │ 7         │ [(2, 0)] │ [3, 3, 3]    │
+ |  └─────┴─────────────────────────────────────────────────────────────────────────────────────────┴───────────┴──────────┴──────────────┘
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - model has 1 instances
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - calculating num of constraints using dummy model layout...
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - laying out 0: Input
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::region] - (rows=0, coord=0, constants=0, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=0, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - output dims: [[1, 3, 2, 2]]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input dims [[1, 3, 2, 2]]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - ------------ output node 0: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - laying out 1: PAD (pads=[(0, 0), (0, 0), (1, 1), (1, 1)])
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::region] - (rows=6, coord=12, constants=0, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=0, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input indices: [(0, 0)]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input scales: [7]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - output dims: [[1, 3, 4, 4]]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input dims [[1, 3, 2, 2]]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - ------------ output node 1: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - laying out 2: SUMPOOL (padding=[(0, 0), (0, 0)], stride=[1, 1], kernel_shape=[2, 2], normalized=true)
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::region] - (rows=6, coord=12, constants=0, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=0, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input indices: [(1, 0)]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input scales: [7]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - output dims: [[1, 3, 3, 3]]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input dims [[1, 3, 4, 4]]
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - batch_size: 1, output_channels: 1, input_channels: 1
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - slides: [3, 3]
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - num_groups: 1, input_channels_per_group: 1, output_channels_per_group: 1
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - num_outputs: 9
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - batch_size: 1, output_channels: 1, input_channels: 1
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - slides: [3, 3]
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - num_groups: 1, input_channels_per_group: 1, output_channels_per_group: 1
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - num_outputs: 9
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - batch_size: 1, output_channels: 1, input_channels: 1
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - slides: [3, 3]
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - num_groups: 1, input_channels_per_group: 1, output_channels_per_group: 1
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::layouts] - num_outputs: 9
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - ------------ output node 2: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - laying out 4: GATHER (dim=0)
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::region] - (rows=116, coord=233, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=4, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input indices: [(2, 0)]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input scales: [7]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - output dims: [[3, 3, 3]]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - input dims [[1, 3, 3, 3]]
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - ------------ output node 4: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 07:19:28, ezkl::graph::model] - model outputs are nodes: [(4, 0)]
+[D] [2024-06-14 07:19:28, ezkl::circuit::ops::region] - (rows=130, coord=260, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=4, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+Function executed successfully: Settings generated successfully

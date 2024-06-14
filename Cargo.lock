@@ -2648,7 +2648,7 @@ dependencies = [
 [[package]]
 name = "icicle"
 version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/icicle?rev=45b00fb?branch=fix/vhnat/ezkl-build-fix#45b00fb1966cb236979f03f9068f6db9bf59f41e"
+source = "git+https://github.com/ingonyama-zk/icicle.git?branch=rust/large-bucket-factor-msm#bd72fb7be1a8cfbb95f5080ba752dafeddeb71f2"
 dependencies = [
  "ark-bls12-377",
  "ark-bls12-381",

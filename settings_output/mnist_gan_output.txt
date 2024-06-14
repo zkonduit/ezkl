@@ -1,0 +1,691 @@
+[*] [2024-06-14 08:33:18, gen_settings_testing] - Starting the application...
+[D] [2024-06-14 08:33:18, tract_onnx::model] - ONNX operator set version: 12
+[D] [2024-06-14 08:33:18, ezkl::graph::model] - set batch_size to 1
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 15/0>: ..,? -> 1,3136,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 16/0>: ..,? -> 1,3136,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 17/0>: ..,? -> 1,3136,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 18/0>: ..,? -> 1,3136,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 19/0>: ..,? -> 1,7,7,64,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 20/0>: ..,? -> 1,64,7,7,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 21/0>: ..,? -> 1,128,14,14,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 22/0>: ..,? -> 1,128,14,14,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 23/0>: ..,? -> 1,128,14,14,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 24/0>: ..,? -> 1,1,28,28,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 25/0>: ..,? -> 1,1,28,28,F32
+[D] [2024-06-14 08:33:18, tract_hir::infer::analyser] -   Refined 26/0>: ..,? -> 1,28,28,F32
+[D] [2024-06-14 08:33:19, tract_core::optim] - applying patch #0: declutter/0 >> declutter #14 "model_1/elu_3/Elu.mul_alpha" Mul
+[D] [2024-06-14 08:33:19, tract_core::optim] - applying patch #1: declutter/0 >> declutter #30 "model_1/elu_4/Elu.mul_alpha" Mul
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 0/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Change AxisChange { outlet: 0/0>, op: Rm(0 } blocked by locked interface 0/0>
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 2/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 2/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 3/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 3/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 4/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 4/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 5/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 5/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 6/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 6/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 7/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 7/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 8/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 8/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 9/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 9/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 9/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 9/0>, op: Rm(1 } blocked by #10 "model_1/elu_3/Elu.test" Less
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 10/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 10/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 11/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 11/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 12/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 12/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 12/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 12/0>, op: Rm(1 } blocked by #13 "model_1/elu_3/Elu.minus_one" Sub
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 13/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 13/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 14/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 14/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 15/0>, op: Reshape(1, [7,7,64], [3136]) }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 15/0>, op: Reshape(1, [7,7,64], [3136]) } blocked by #16 "model_1/conv2d_transpose/BiasAdd__23.MoveAxis-0" MoveAxis
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 14/0>, op: Reshape(1, [3136], [7,7,64]) }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 14/0>, op: Reshape(1, [3136], [7,7,64]) } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 15/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 15/0>, op: Rm(0 } blocked by #19 "model_1/conv2d_transpose/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 16/0>, op: Move(1,3) }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 16/0>, op: Move(1,3) } blocked by #19 "model_1/conv2d_transpose/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 15/0>, op: Move(3,1) }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 15/0>, op: Move(3,1) } blocked by #15 "model_1/reshape_1/Reshape.0" Reshape
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 16/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 16/0>, op: Rm(0 } blocked by #19 "model_1/conv2d_transpose/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 19/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 19/0>, op: Rm(0 } blocked by #19 "model_1/conv2d_transpose/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 20/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 20/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 20/0>, op: Rm(2 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 20/0>, op: Rm(2 } blocked by #21 "model_1/batch_normalization_4/FusedBatchNormV3.mul" Mul
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 20/0>, op: Rm(3 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 20/0>, op: Rm(3 } blocked by #21 "model_1/batch_normalization_4/FusedBatchNormV3.mul" Mul
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 21/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 21/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 22/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 22/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 22/0>, op: Rm(2 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 22/0>, op: Rm(2 } blocked by #23 "model_1/batch_normalization_4/FusedBatchNormV3" Add
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 22/0>, op: Rm(3 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 22/0>, op: Rm(3 } blocked by #23 "model_1/batch_normalization_4/FusedBatchNormV3" Add
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 23/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 23/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 24/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 24/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 24/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 24/0>, op: Rm(1 } blocked by #25 "model_1/elu_4/Elu.test" Less
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 24/0>, op: Rm(2 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 24/0>, op: Rm(2 } blocked by #25 "model_1/elu_4/Elu.test" Less
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 24/0>, op: Rm(3 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 24/0>, op: Rm(3 } blocked by #25 "model_1/elu_4/Elu.test" Less
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 25/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 25/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 26/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 26/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 27/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 27/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 27/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 27/0>, op: Rm(1 } blocked by #28 "model_1/elu_4/Elu.minus_one" Sub
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 27/0>, op: Rm(2 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 27/0>, op: Rm(2 } blocked by #28 "model_1/elu_4/Elu.minus_one" Sub
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 27/0>, op: Rm(3 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 27/0>, op: Rm(3 } blocked by #28 "model_1/elu_4/Elu.minus_one" Sub
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 28/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 28/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 29/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 29/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 30/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 30/0>, op: Rm(0 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 31/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 31/0>, op: Rm(0 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 32/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 32/0>, op: Rm(0 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 32/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 32/0>, op: Rm(1 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 33/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Change AxisChange { outlet: 33/0>, op: Rm(0 } blocked by locked interface 34/0>
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 33/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 33/0>, op: Rm(1 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 34/0>, op: Add(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Change AxisChange { outlet: 34/0>, op: Add(1 } blocked by locked interface 34/0>
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 34/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Change AxisChange { outlet: 34/0>, op: Rm(0 } blocked by locked interface 34/0>
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 0/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Change AxisChange { outlet: 0/0>, op: Rm(0 } blocked by locked interface 0/0>
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 2/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 2/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 3/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 3/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 4/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 4/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 5/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 5/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 6/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 6/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 7/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 7/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 8/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 8/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 9/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 9/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 9/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 9/0>, op: Rm(1 } blocked by #10 "model_1/elu_3/Elu.test" Less
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 10/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 10/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 11/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 11/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 12/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 12/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 12/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 12/0>, op: Rm(1 } blocked by #13 "model_1/elu_3/Elu.minus_one" Sub
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 13/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 13/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 14/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 14/0>, op: Rm(0 } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 15/0>, op: Reshape(1, [7,7,64], [3136]) }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 15/0>, op: Reshape(1, [7,7,64], [3136]) } blocked by #16 "model_1/conv2d_transpose/BiasAdd__23.MoveAxis-0" MoveAxis
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 14/0>, op: Reshape(1, [3136], [7,7,64]) }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 14/0>, op: Reshape(1, [3136], [7,7,64]) } blocked by #14 "model_1/elu_3/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 15/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 15/0>, op: Rm(0 } blocked by #19 "model_1/conv2d_transpose/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 16/0>, op: Move(1,3) }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 16/0>, op: Move(1,3) } blocked by #19 "model_1/conv2d_transpose/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 15/0>, op: Move(3,1) }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 15/0>, op: Move(3,1) } blocked by #15 "model_1/reshape_1/Reshape.0" Reshape
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 16/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 16/0>, op: Rm(0 } blocked by #19 "model_1/conv2d_transpose/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 19/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 19/0>, op: Rm(0 } blocked by #19 "model_1/conv2d_transpose/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 20/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 20/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 20/0>, op: Rm(2 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 20/0>, op: Rm(2 } blocked by #21 "model_1/batch_normalization_4/FusedBatchNormV3.mul" Mul
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 20/0>, op: Rm(3 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 20/0>, op: Rm(3 } blocked by #21 "model_1/batch_normalization_4/FusedBatchNormV3.mul" Mul
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 21/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 21/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 22/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 22/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 22/0>, op: Rm(2 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 22/0>, op: Rm(2 } blocked by #23 "model_1/batch_normalization_4/FusedBatchNormV3" Add
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 22/0>, op: Rm(3 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 22/0>, op: Rm(3 } blocked by #23 "model_1/batch_normalization_4/FusedBatchNormV3" Add
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 23/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 23/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 24/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 24/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 24/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 24/0>, op: Rm(1 } blocked by #25 "model_1/elu_4/Elu.test" Less
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 24/0>, op: Rm(2 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 24/0>, op: Rm(2 } blocked by #25 "model_1/elu_4/Elu.test" Less
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 24/0>, op: Rm(3 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 24/0>, op: Rm(3 } blocked by #25 "model_1/elu_4/Elu.test" Less
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 25/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 25/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 26/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 26/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 27/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 27/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 27/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 27/0>, op: Rm(1 } blocked by #28 "model_1/elu_4/Elu.minus_one" Sub
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 27/0>, op: Rm(2 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 27/0>, op: Rm(2 } blocked by #28 "model_1/elu_4/Elu.minus_one" Sub
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 27/0>, op: Rm(3 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 27/0>, op: Rm(3 } blocked by #28 "model_1/elu_4/Elu.minus_one" Sub
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 28/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 28/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 29/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 29/0>, op: Rm(0 } blocked by #29 "model_1/elu_4/Elu.iff" Iff
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 30/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 30/0>, op: Rm(0 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 31/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 31/0>, op: Rm(0 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 32/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 32/0>, op: Rm(0 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 32/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 32/0>, op: Rm(1 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 33/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Change AxisChange { outlet: 33/0>, op: Rm(0 } blocked by locked interface 34/0>
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 33/0>, op: Rm(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Propagation of AxisChange { outlet: 33/0>, op: Rm(1 } blocked by #32 "model_1/conv2d_transpose_1/BiasAdd" Deconv
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 34/0>, op: Add(1 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Change AxisChange { outlet: 34/0>, op: Add(1 } blocked by locked interface 34/0>
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -   Considering change AxisChange { outlet: 34/0>, op: Rm(0 }
+[D] [2024-06-14 08:33:19, tract_core::optim::change_axes] -     Change AxisChange { outlet: 34/0>, op: Rm(0 } blocked by locked interface 34/0>
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 0, name: "input_0", inputs: [], op: TypedSource { fact: 1,100,F32 }, outputs: [1,100,F32 >2/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 1, name: "model_1/dense_2/MatMul/ReadVariableOp:0.0", inputs: [], op: Const(100,3136,F32 0.00046522572, 0.007372593, -0.03599597, 0.0023159164, -0.033711392, -0.036277454, -0.020366581, 0.029136641, 0.01795219, 0.025517544, -0.028796678, -0.017426522...), outputs: [100,3136,F32 0.00046522572, 0.007372593, -0.03599597, 0.0023159164, -0.033711392, -0.036277454, -0.020366581, 0.029136641, 0.01795219, 0.025517544, -0.028796678, -0.017426522... >2/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 2, name: "model_1/dense_2/MatMul_Gemm__21.ab", inputs: [0/0>, 1/0>], op: EinSum mk,kn->mn (F32), outputs: [1,3136,F32 >4/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 3, name: "model_1/dense_2/MatMul_Gemm__21.c_add_axis_1", inputs: [], op: Const(1,3136,F32 0.000000001378522, -0.00000000019393276, -0.0000000007727794, 0.0000000005769579, 0.000000011025698, -0.0000000017748868, 0.0000000001669296, -0.0000000069650987, 0.0000000074215993, -0.0000000006215792, -0.0000000028768485, 0.000000000034017844...), outputs: [1,3136,F32 0.000000001378522, -0.00000000019393276, -0.0000000007727794, 0.0000000005769579, 0.000000011025698, -0.0000000017748868, 0.0000000001669296, -0.0000000069650987, 0.0000000074215993, -0.0000000006215792, -0.0000000028768485, 0.000000000034017844... >4/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 4, name: "model_1/dense_2/MatMul_Gemm__21", inputs: [2/0>, 3/0>], op: TypedBinOp(Add, None), outputs: [1,3136,F32 >6/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 5, name: "model_1/batch_normalization_3/batchnorm/mul_1.fix-rank-1-1", inputs: [], op: Const(1,3136,F32 1.0078473, 1.007701, 1.0100713, 1.0080483, 1.0101416, 1.0099714, 1.0098463, 1.0101209, 1.0102105, 1.0093755, 1.0080891, 1.0082749...), outputs: [1,3136,F32 1.0078473, 1.007701, 1.0100713, 1.0080483, 1.0101416, 1.0099714, 1.0098463, 1.0101209, 1.0102105, 1.0093755, 1.0080891, 1.0082749... >6/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 6, name: "model_1/batch_normalization_3/batchnorm/mul_1", inputs: [4/0>, 5/0>], op: TypedBinOp(Mul, None), outputs: [1,3136,F32 >8/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 7, name: "model_1/batch_normalization_3/batchnorm/add_1.fix-rank-1-1", inputs: [], op: Const(1,3136,F32 -0.0011507514, -0.0011982792, 0.0013113134, -0.0011506195, 0.0014688966, 0.0011996519, 0.0009827774, 0.0013847228, 0.0015732785, 0.0013810921, -0.0011029075, 0.00032242524...), outputs: [1,3136,F32 -0.0011507514, -0.0011982792, 0.0013113134, -0.0011506195, 0.0014688966, 0.0011996519, 0.0009827774, 0.0013847228, 0.0015732785, 0.0013810921, -0.0011029075, 0.00032242524... >8/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 8, name: "model_1/batch_normalization_3/batchnorm/add_1", inputs: [6/0>, 7/0>], op: TypedBinOp(Add, None), outputs: [1,3136,F32 >10/1 >11/0 >14/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 9, name: "model_1/elu_3/Elu.zero", inputs: [], op: Const(1,1,F32 0), outputs: [1,1,F32 0 >10/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 10, name: "model_1/elu_3/Elu.test", inputs: [9/0>, 8/0>], op: TypedBinOp(Less, None), outputs: [1,3136,Bool >14/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 11, name: "model_1/elu_3/Elu.exp", inputs: [8/0>], op: ElementWiseOp(Exp, None), outputs: [1,3136,F32 >13/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 12, name: "model_1/dense_2/MatMul_Gemm__21.beta_c.cst", inputs: [], op: Const(1,1,F32 1), outputs: [1,1,F32 1 >13/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 13, name: "model_1/elu_3/Elu.minus_one", inputs: [11/0>, 12/0>], op: TypedBinOp(Sub, None), outputs: [1,3136,F32 >14/2] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 14, name: "model_1/elu_3/Elu.iff", inputs: [10/0>, 8/0>, 13/0>], op: Iff, outputs: [1,3136,F32 >15/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 15, name: "model_1/reshape_1/Reshape.0", inputs: [14/0>], op: Reshape(1, [3136], [7,7,64]), outputs: [1,7,7,64,F32 >16/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 16, name: "model_1/conv2d_transpose/BiasAdd__23.MoveAxis-0", inputs: [15/0>], op: Move(3,1), outputs: [1,64,7,7,F32 >19/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 17, name: "model_1/conv2d_transpose/BiasAdd.kernel_merge_group", inputs: [], op: Const(128,64,5,5,F32 0.02013835, 0.03249903, -0.02048089, 0.011205934, 0.022748267, -0.03214426, 0.034064643, 0.00015757431, 0.000028300681, -0.033285152, -0.016801436, 0.030353792...), outputs: [128,64,5,5,F32 0.02013835, 0.03249903, -0.02048089, 0.011205934, 0.022748267, -0.03214426, 0.034064643, 0.00015757431, 0.000028300681, -0.033285152, -0.016801436, 0.030353792... >19/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 18, name: "model_1/conv2d_transpose/BiasAdd/ReadVariableOp:0.0", inputs: [], op: Const(128,F32 0.0000012675074, 0.0000012500279, -0.000025125344, -0.0000011023952, 0.0000015413236, -0.000005424754, 0.0000008175034, 0.0000011176903, 0.00000076087315, 0.000019470874, 0.0000003619524, 0.00000042565415...), outputs: [128,F32 0.0000012675074, 0.0000012500279, -0.000025125344, -0.0000011023952, 0.0000015413236, -0.000005424754, 0.0000008175034, 0.0000011176903, 0.00000076087315, 0.000019470874, 0.0000003619524, 0.00000042565415... >19/2] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 19, name: "model_1/conv2d_transpose/BiasAdd", inputs: [16/0>, 17/0>, 18/0>], op: Deconv { pool_spec: PoolSpec { data_format: NCHW, kernel_shape: [5, 5], padding: Explicit([1, 1], [2, 2]), dilations: Some([1, 1]), strides: Some([2, 2]), input_channels: 64, output_channels: 128 }, kernel_format: OIHW, adjustments: [0, 0], group: 1 }, outputs: [1,128,14,14,F32 >21/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 20, name: "model_1/batch_normalization_4/FusedBatchNormV3.slope", inputs: [], op: Const(1,128,1,1,F32 1.0101058, 1.010053, 1.0101391, 1.00744, 1.0100523, 1.0100818, 1.0100064, 1.0081625, 1.0100806, 1.0072352, 1.0100464, 1.0073328...), outputs: [1,128,1,1,F32 1.0101058, 1.010053, 1.0101391, 1.00744, 1.0100523, 1.0100818, 1.0100064, 1.0081625, 1.0100806, 1.0072352, 1.0100464, 1.0073328... >21/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 21, name: "model_1/batch_normalization_4/FusedBatchNormV3.mul", inputs: [20/0>, 19/0>], op: TypedBinOp(Mul, None), outputs: [1,128,14,14,F32 >23/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 22, name: "model_1/batch_normalization_4/FusedBatchNormV3.inter", inputs: [], op: Const(1,128,1,1,F32 0.00070582173, 0.0002803636, 0.00054470485, -0.000898233, 0.0017245933, 0.0019175173, 0.0021936004, 0.0012010228, 0.0015529846, -0.0020687422, -0.00076319254, -0.00054724904...), outputs: [1,128,1,1,F32 0.00070582173, 0.0002803636, 0.00054470485, -0.000898233, 0.0017245933, 0.0019175173, 0.0021936004, 0.0012010228, 0.0015529846, -0.0020687422, -0.00076319254, -0.00054724904... >23/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 23, name: "model_1/batch_normalization_4/FusedBatchNormV3", inputs: [22/0>, 21/0>], op: TypedBinOp(Add, None), outputs: [1,128,14,14,F32 >25/1 >26/0 >29/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 24, name: "model_1/elu_4/Elu.zero", inputs: [], op: Const(1,1,1,1,F32 0), outputs: [1,1,1,1,F32 0 >25/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 25, name: "model_1/elu_4/Elu.test", inputs: [24/0>, 23/0>], op: TypedBinOp(Less, None), outputs: [1,128,14,14,Bool >29/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 26, name: "model_1/elu_4/Elu.exp", inputs: [23/0>], op: ElementWiseOp(Exp, None), outputs: [1,128,14,14,F32 >28/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 27, name: "model_1/elu_4/Elu.one", inputs: [], op: Const(1,1,1,1,F32 1), outputs: [1,1,1,1,F32 1 >28/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 28, name: "model_1/elu_4/Elu.minus_one", inputs: [26/0>, 27/0>], op: TypedBinOp(Sub, None), outputs: [1,128,14,14,F32 >29/2] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 29, name: "model_1/elu_4/Elu.iff", inputs: [25/0>, 23/0>, 28/0>], op: Iff, outputs: [1,128,14,14,F32 >32/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 30, name: "model_1/conv2d_transpose_1/BiasAdd.kernel_merge_group", inputs: [], op: Const(1,128,5,5,F32 0.023290912, -0.040068943, -0.009926893, -0.038297392, 0.013342973, 0.01555148, 0.02605238, -0.0269873, 0.026033191, -0.020342087, 0.018410455, 0.012950887...), outputs: [1,128,5,5,F32 0.023290912, -0.040068943, -0.009926893, -0.038297392, 0.013342973, 0.01555148, 0.02605238, -0.0269873, 0.026033191, -0.020342087, 0.018410455, 0.012950887... >32/1] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 31, name: "model_1/conv2d_transpose_1/BiasAdd/ReadVariableOp:0.0", inputs: [], op: Const(1,F32 0.0014065428), outputs: [1,F32 0.0014065428 >32/2] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 32, name: "model_1/conv2d_transpose_1/BiasAdd", inputs: [29/0>, 30/0>, 31/0>], op: Deconv { pool_spec: PoolSpec { data_format: NCHW, kernel_shape: [5, 5], padding: Explicit([1, 1], [2, 2]), dilations: Some([1, 1]), strides: Some([2, 2]), input_channels: 128, output_channels: 1 }, kernel_format: OIHW, adjustments: [0, 0], group: 1 }, outputs: [1,1,28,28,F32 >33/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 33, name: "model_1/activation/Sigmoid", inputs: [32/0>], op: ElementWiseOp(Sigmoid, None), outputs: [1,1,28,28,F32 >34/0] }
+[D] [2024-06-14 08:33:19, ezkl::graph::utilities] - Loading node: Node { id: 34, name: "model_1/reshape_2/Reshape.0", inputs: [33/0>], op: Rm(1, outputs: [1,28,28,F32 ] }
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - 
+ |       0 |                   -> >2/0              | Source                    input_0                                            [] => [1,100,F32]
+ |      1 |                   -> >2/1              | Const                     model_1/dense_2/MatMul/ReadVariableOp:0.0          [] => [100,3136,F32 0.00046522572, 0.007372593, -0.03599597, 0.0023159164, -0.033711392, -0.036277454, -0.020366581, 0.029136641, 0.01795219, 0.025517544, -0.028796678, -0.017426522...]
+ |      2 | 0/0>     1/0>     -> >4/0              | EinSum                    model_1/dense_2/MatMul_Gemm__21.ab                 [1,100,F32, 100,3136,F32 0.00046522572, 0.007372593, -0.03599597, 0.0023159164, -0.033711392, -0.036277454, -0.020366581, 0.029136641, 0.01795219, 0.025517544, -0.028796678, -0.017426522...] => [1,3136,F32]
+ |      3 |                   -> >4/1              | Const                     model_1/dense_2/MatMul_Gemm__21.c_add_axis_1       [] => [1,3136,F32 0.000000001378522, -0.00000000019393276, -0.0000000007727794, 0.0000000005769579, 0.000000011025698, -0.0000000017748868, 0.0000000001669296, -0.0000000069650987, 0.0000000074215993, -0.0000000006215792, -0.0000000028768485, 0.000000000034017844...]
+ |      4 | 2/0>     3/0>     -> >6/0              | Add                       model_1/dense_2/MatMul_Gemm__21                    [1,3136,F32, 1,3136,F32 0.000000001378522, -0.00000000019393276, -0.0000000007727794, 0.0000000005769579, 0.000000011025698, -0.0000000017748868, 0.0000000001669296, -0.0000000069650987, 0.0000000074215993, -0.0000000006215792, -0.0000000028768485, 0.000000000034017844...] => [1,3136,F32]
+ |                                                 |   * output #0: model_1/dense_2/MatMul_Gemm__21:0 >6/0
+ |      5 |                   -> >6/1              | Const                     model_1/batch_normalization_3/batchnorm/mul_1.fix-rank-1-1 [] => [1,3136,F32 1.0078473, 1.007701, 1.0100713, 1.0080483, 1.0101416, 1.0099714, 1.0098463, 1.0101209, 1.0102105, 1.0093755, 1.0080891, 1.0082749...]
+ |      6 | 4/0>     5/0>     -> >8/0              | Mul                       model_1/batch_normalization_3/batchnorm/mul_1      [1,3136,F32, 1,3136,F32 1.0078473, 1.007701, 1.0100713, 1.0080483, 1.0101416, 1.0099714, 1.0098463, 1.0101209, 1.0102105, 1.0093755, 1.0080891, 1.0082749...] => [1,3136,F32]
+ |                                                 |   * output #0: model_1/batch_normalization_3/batchnorm/mul_1:0 >8/0
+ |      7 |                   -> >8/1              | Const                     model_1/batch_normalization_3/batchnorm/add_1.fix-rank-1-1 [] => [1,3136,F32 -0.0011507514, -0.0011982792, 0.0013113134, -0.0011506195, 0.0014688966, 0.0011996519, 0.0009827774, 0.0013847228, 0.0015732785, 0.0013810921, -0.0011029075, 0.00032242524...]
+ |      8 | 6/0>     7/0>     -> >10/1    >11/0    | Add                       model_1/batch_normalization_3/batchnorm/add_1      [1,3136,F32, 1,3136,F32 -0.0011507514, -0.0011982792, 0.0013113134, -0.0011506195, 0.0014688966, 0.0011996519, 0.0009827774, 0.0013847228, 0.0015732785, 0.0013810921, -0.0011029075, 0.00032242524...] => [1,3136,F32]
+ |                                                 |   * output #0: model_1/batch_normalization_3/batchnorm/add_1:0 >10/1, >11/0, >14/1
+ |      9 |                   -> >10/0             | Const                     model_1/elu_3/Elu.zero                             [] => [1,1,F32 0]
+ |     10 | 9/0>     8/0>     -> >14/0             | Less                      model_1/elu_3/Elu.test                             [1,1,F32 0, 1,3136,F32] => [1,3136,Bool]
+ |     11 | 8/0>              -> >13/0             | Exp                       model_1/elu_3/Elu.exp                              [1,3136,F32] => [1,3136,F32]
+ |     12 |                   -> >13/1             | Const                     model_1/dense_2/MatMul_Gemm__21.beta_c.cst         [] => [1,1,F32 1]
+ |     13 | 11/0>    12/0>    -> >14/2             | Sub                       model_1/elu_3/Elu.minus_one                        [1,3136,F32, 1,1,F32 1] => [1,3136,F32]
+ |     14 | 10/0>    8/0>     -> >15/0             | Iff                       model_1/elu_3/Elu.iff                              [1,3136,Bool, 1,3136,F32, 1,3136,F32] => [1,3136,F32]
+ |                                                 |   * inputs: 10/0>, 8/0>, 13/0>
+ |                                                 |   * output #0: model_1/elu_3/Elu:0 >15/0
+ |     15 | 14/0>             -> >16/0             | Reshape                   model_1/reshape_1/Reshape.0                        [1,3136,F32] => [1,7,7,64,F32]
+ |                                                 |   * output #0: model_1/reshape_1/Reshape:0 >16/0
+ |     16 | 15/0>             -> >19/0             | MoveAxis                  model_1/conv2d_transpose/BiasAdd__23.MoveAxis-0    [1,7,7,64,F32] => [1,64,7,7,F32]
+ |                                                 |   * output #0: model_1/conv2d_transpose/BiasAdd__23:0 >19/0
+ |     17 |                   -> >19/1             | Const                     model_1/conv2d_transpose/BiasAdd.kernel_merge_group [] => [128,64,5,5,F32 0.02013835, 0.03249903, -0.02048089, 0.011205934, 0.022748267, -0.03214426, 0.034064643, 0.00015757431, 0.000028300681, -0.033285152, -0.016801436, 0.030353792...]
+ |     18 |                   -> >19/2             | Const                     model_1/conv2d_transpose/BiasAdd/ReadVariableOp:0.0 [] => [128,F32 0.0000012675074, 0.0000012500279, -0.000025125344, -0.0000011023952, 0.0000015413236, -0.000005424754, 0.0000008175034, 0.0000011176903, 0.00000076087315, 0.000019470874, 0.0000003619524, 0.00000042565415...]
+ |     19 | 16/0>    17/0>    -> >21/1             | Deconv                    model_1/conv2d_transpose/BiasAdd                   [1,64,7,7,F32, 128,64,5,5,F32 0.02013835, 0.03249903, -0.02048089, 0.011205934, 0.022748267, -0.03214426, 0.034064643, 0.00015757431, 0.000028300681, -0.033285152, -0.016801436, 0.030353792..., 128,F32 0.0000012675074, 0.0000012500279, -0.000025125344, -0.0000011023952, 0.0000015413236, -0.000005424754, 0.0000008175034, 0.0000011176903, 0.00000076087315, 0.000019470874, 0.0000003619524, 0.00000042565415...] => [1,128,14,14,F32]
+ |                                                 |   * inputs: 16/0>, 17/0>, 18/0>
+ |                                                 |   * output #0: model_1/conv2d_transpose/BiasAdd:0 >21/1
+ |     20 |                   -> >21/0             | Const                     model_1/batch_normalization_4/FusedBatchNormV3.slope [] => [1,128,1,1,F32 1.0101058, 1.010053, 1.0101391, 1.00744, 1.0100523, 1.0100818, 1.0100064, 1.0081625, 1.0100806, 1.0072352, 1.0100464, 1.0073328...]
+ |     21 | 20/0>    19/0>    -> >23/1             | Mul                       model_1/batch_normalization_4/FusedBatchNormV3.mul [1,128,1,1,F32 1.0101058, 1.010053, 1.0101391, 1.00744, 1.0100523, 1.0100818, 1.0100064, 1.0081625, 1.0100806, 1.0072352, 1.0100464, 1.0073328..., 1,128,14,14,F32] => [1,128,14,14,F32]
+ |     22 |                   -> >23/0             | Const                     model_1/batch_normalization_4/FusedBatchNormV3.inter [] => [1,128,1,1,F32 0.00070582173, 0.0002803636, 0.00054470485, -0.000898233, 0.0017245933, 0.0019175173, 0.0021936004, 0.0012010228, 0.0015529846, -0.0020687422, -0.00076319254, -0.00054724904...]
+ |     23 | 22/0>    21/0>    -> >25/1    >26/0    | Add                       model_1/batch_normalization_4/FusedBatchNormV3     [1,128,1,1,F32 0.00070582173, 0.0002803636, 0.00054470485, -0.000898233, 0.0017245933, 0.0019175173, 0.0021936004, 0.0012010228, 0.0015529846, -0.0020687422, -0.00076319254, -0.00054724904..., 1,128,14,14,F32] => [1,128,14,14,F32]
+ |                                                 |   * output #0: model_1/batch_normalization_4/FusedBatchNormV3:0 >25/1, >26/0, >29/1
+ |     24 |                   -> >25/0             | Const                     model_1/elu_4/Elu.zero                             [] => [1,1,1,1,F32 0]
+ |     25 | 24/0>    23/0>    -> >29/0             | Less                      model_1/elu_4/Elu.test                             [1,1,1,1,F32 0, 1,128,14,14,F32] => [1,128,14,14,Bool]
+ |     26 | 23/0>             -> >28/0             | Exp                       model_1/elu_4/Elu.exp                              [1,128,14,14,F32] => [1,128,14,14,F32]
+ |     27 |                   -> >28/1             | Const                     model_1/elu_4/Elu.one                              [] => [1,1,1,1,F32 1]
+ |     28 | 26/0>    27/0>    -> >29/2             | Sub                       model_1/elu_4/Elu.minus_one                        [1,128,14,14,F32, 1,1,1,1,F32 1] => [1,128,14,14,F32]
+ |     29 | 25/0>    23/0>    -> >32/0             | Iff                       model_1/elu_4/Elu.iff                              [1,128,14,14,Bool, 1,128,14,14,F32, 1,128,14,14,F32] => [1,128,14,14,F32]
+ |                                                 |   * inputs: 25/0>, 23/0>, 28/0>
+ |                                                 |   * output #0: model_1/elu_4/Elu:0 >32/0
+ |     30 |                   -> >32/1             | Const                     model_1/conv2d_transpose_1/BiasAdd.kernel_merge_group [] => [1,128,5,5,F32 0.023290912, -0.040068943, -0.009926893, -0.038297392, 0.013342973, 0.01555148, 0.02605238, -0.0269873, 0.026033191, -0.020342087, 0.018410455, 0.012950887...]
+ |     31 |                   -> >32/2             | Const                     model_1/conv2d_transpose_1/BiasAdd/ReadVariableOp:0.0 [] => [1,F32 0.0014065428]
+ |     32 | 29/0>    30/0>    -> >33/0             | Deconv                    model_1/conv2d_transpose_1/BiasAdd                 [1,128,14,14,F32, 1,128,5,5,F32 0.023290912, -0.040068943, -0.009926893, -0.038297392, 0.013342973, 0.01555148, 0.02605238, -0.0269873, 0.026033191, -0.020342087, 0.018410455, 0.012950887..., 1,F32 0.0014065428] => [1,1,28,28,F32]
+ |                                                 |   * inputs: 29/0>, 30/0>, 31/0>
+ |                                                 |   * output #0: model_1/conv2d_transpose_1/BiasAdd:0 >33/0
+ |     33 | 32/0>             -> >34/0             | Sigmoid                   model_1/activation/Sigmoid                         [1,1,28,28,F32] => [1,1,28,28,F32]
+ |                                                 |   * output #0: model_1/activation/Sigmoid:0 >34/0
+ |     34 | 33/0>             ->                   | RmAxis                    model_1/reshape_2/Reshape.0                        [1,1,28,28,F32] => [1,28,28,F32]
+ |  outputs: 34/0>
+ |  
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - 
+ |    
+ |  ┌─────┬──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┬───────────┬─────────────────────────────┬──────────────────┐
+ |  │ idx │ opkind                                                                                                                                                   │ out_scale │ inputs                      │ out_dims         │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 0   │ Input                                                                                                                                                    │ 7         │                             │ [1, 100]         │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 1   │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [100, 3136]      │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 2   │ REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (EINSUM mk,kn->mn)                                                        │ 7         │ [(0, 0), (1, 0)]            │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 3   │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 4   │ ADD                                                                                                                                                      │ 7         │ [(2, 0), (3, 0)]            │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 5   │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 6   │ REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (MULT)                                                                    │ 7         │ [(4, 0), (5, 0)]            │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 7   │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 8   │ ADD                                                                                                                                                      │ 7         │ [(6, 0), (7, 0)]            │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 9   │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 1]           │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 10  │ LESS                                                                                                                                                     │ 0         │ [(9, 0), (8, 0)]            │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 11  │ EXP(scale=128)                                                                                                                                           │ 7         │ [(8, 0)]                    │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 12  │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 1]           │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 13  │ SUB                                                                                                                                                      │ 7         │ [(11, 0), (12, 0)]          │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 14  │ IFF                                                                                                                                                      │ 7         │ [(10, 0), (8, 0), (13, 0)]  │ [1, 3136]        │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 15  │ RESHAPE (shape=[1, 7, 7, 64])                                                                                                                            │ 7         │ [(14, 0)]                   │ [1, 7, 7, 64]    │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 16  │ MOVEAXIS                                                                                                                                                 │ 7         │ [(15, 0)]                   │ [1, 64, 7, 7]    │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 17  │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [128, 64, 5, 5]  │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 18  │ CONST (scale=14)                                                                                                                                         │ 14        │                             │ [128]            │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 19  │ REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (DECONV (stride=[2, 2], padding=[(1, 2), (1, 2)], output_padding=[0, 0])) │ 7         │ [(16, 0), (17, 0), (18, 0)] │ [1, 128, 14, 14] │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 20  │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 128, 1, 1]   │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 21  │ REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (MULT)                                                                    │ 7         │ [(20, 0), (19, 0)]          │ [1, 128, 14, 14] │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 22  │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 128, 1, 1]   │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 23  │ ADD                                                                                                                                                      │ 7         │ [(22, 0), (21, 0)]          │ [1, 128, 14, 14] │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 24  │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 1, 1, 1]     │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 25  │ LESS                                                                                                                                                     │ 0         │ [(24, 0), (23, 0)]          │ [1, 128, 14, 14] │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 26  │ EXP(scale=128)                                                                                                                                           │ 7         │ [(23, 0)]                   │ [1, 128, 14, 14] │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 27  │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 1, 1, 1]     │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 28  │ SUB                                                                                                                                                      │ 7         │ [(26, 0), (27, 0)]          │ [1, 128, 14, 14] │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 29  │ IFF                                                                                                                                                      │ 7         │ [(25, 0), (23, 0), (28, 0)] │ [1, 128, 14, 14] │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 30  │ CONST (scale=7)                                                                                                                                          │ 7         │                             │ [1, 128, 5, 5]   │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 31  │ CONST (scale=14)                                                                                                                                         │ 14        │                             │ [1]              │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 32  │ REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (DECONV (stride=[2, 2], padding=[(1, 2), (1, 2)], output_padding=[0, 0])) │ 7         │ [(29, 0), (30, 0), (31, 0)] │ [1, 1, 28, 28]   │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 33  │ SIGMOID(scale=128)                                                                                                                                       │ 7         │ [(32, 0)]                   │ [1, 1, 28, 28]   │
+ |  ├─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┼───────────┼─────────────────────────────┼──────────────────┤
+ |  │ 34  │ RESHAPE (shape=[1, 28, 28])                                                                                                                              │ 7         │ [(33, 0)]                   │ [1, 28, 28]      │
+ |  └─────┴──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┴───────────┴─────────────────────────────┴──────────────────┘
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - model has 1 instances
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - calculating num of constraints using dummy model layout...
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - laying out 0: Input
+[D] [2024-06-14 08:33:19, ezkl::circuit::ops::region] - (rows=0, coord=0, constants=0, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=0, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - output dims: [[1, 100]]
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - input dims [[1, 100]]
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - ------------ output node 0: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - laying out 1: CONST (scale=7)
+[D] [2024-06-14 08:33:19, ezkl::circuit::ops::region] - (rows=50, coord=100, constants=0, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=0, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - output dims: [[100, 3136]]
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:19, ezkl::graph::model] - node 1 is a constant with 1 use
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 1: "[0, 1, -5, 0, -4 ... 3, 3, 2, 4, 5]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 2: REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (EINSUM mk,kn->mn)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=50, coord=100, constants=0, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=0, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(0, 0), (1, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 100], [100, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 2: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 3: CONST (scale=7)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=163123, coord=326247, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - node 3 is a constant with 1 use
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 3: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 4: ADD
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=163123, coord=326247, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(2, 0), (3, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 3136], [1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 4: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 5: CONST (scale=7)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=164691, coord=329383, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - node 5 is a constant with 1 use
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 5: "[129, 129, 129, 129, 129 ... 129, 129, 129, 129, 129]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 6: REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (MULT)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=164691, coord=329383, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(4, 0), (5, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 3136], [1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 6: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 7: CONST (scale=7)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=172532, coord=345064, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - node 7 is a constant with 1 use
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 7: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 8: ADD
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=172532, coord=345064, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(6, 0), (7, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 3136], [1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 8: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 9: CONST (scale=7)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=174100, coord=348200, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 1]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - node 9 is a constant with 1 use
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 9: "Tensor { inner: [0], dims: [1, 1], scale: None, visibility: None }"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 10: LESS
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=174100, coord=348200, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(9, 0), (8, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [0]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 1], [1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 10: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 11: EXP(scale=128)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=177236, coord=354472, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(8, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 11: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 12: CONST (scale=7)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=178804, coord=357608, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 1]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - node 12 is a constant with 1 use
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 12: "Tensor { inner: [128], dims: [1, 1], scale: None, visibility: None }"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 13: SUB
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=178804, coord=357608, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(11, 0), (12, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 3136], [1, 1]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 13: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 14: IFF
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=180372, coord=360744, constants=1, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(10, 0), (8, 0), (13, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [0, 7, 7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 3136], [1, 3136], [1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 14: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 15: RESHAPE (shape=[1, 7, 7, 64])
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=188212, coord=376424, constants=2, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(14, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 7, 7, 64]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 3136]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 15: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 16: MOVEAXIS
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=188212, coord=376424, constants=2, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: [(15, 0)]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[1, 64, 7, 7]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims [[1, 7, 7, 64]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 16: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 17: CONST (scale=7)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=188212, coord=376424, constants=2, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[128, 64, 5, 5]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - node 17 is a constant with 1 use
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - ------------ output node 17: "[3, 4, -3, 1, 3 ... 1, -1, -3, 4, -5]"
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - laying out 18: CONST (scale=14)
+[D] [2024-06-14 08:33:20, ezkl::circuit::ops::region] - (rows=188212, coord=376424, constants=2, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output scales: [14]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - output dims: [[128]]
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:20, ezkl::graph::model] - node 18 is a constant with 1 use
+[D] [2024-06-14 08:33:21, ezkl::graph::model] - ------------ output node 18: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:21, ezkl::graph::model] - laying out 19: REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (DECONV (stride=[2, 2], padding=[(1, 2), (1, 2)], output_padding=[0, 0]))
+[D] [2024-06-14 08:33:21, ezkl::circuit::ops::region] - (rows=188212, coord=376424, constants=2, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:21, ezkl::graph::model] - input indices: [(16, 0), (17, 0), (18, 0)]
+[D] [2024-06-14 08:33:21, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:21, ezkl::graph::model] - input scales: [7, 7, 14]
+[D] [2024-06-14 08:33:21, ezkl::graph::model] - output dims: [[1, 128, 14, 14]]
+[D] [2024-06-14 08:33:21, ezkl::graph::model] - input dims [[1, 64, 7, 7], [128, 64, 5, 5], [128]]
+[D] [2024-06-14 08:33:24, ezkl::circuit::ops::layouts] - batch_size: 1, output_channels: 128, input_channels: 64
+[D] [2024-06-14 08:33:24, ezkl::circuit::ops::layouts] - slides: [14, 14]
+[D] [2024-06-14 08:33:24, ezkl::circuit::ops::layouts] - num_groups: 1, input_channels_per_group: 64, output_channels_per_group: 128
+[D] [2024-06-14 08:33:24, ezkl::circuit::ops::layouts] - num_outputs: 25088
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - ------------ output node 19: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - laying out 20: CONST (scale=7)
+[D] [2024-06-14 08:33:33, ezkl::circuit::ops::region] - (rows=4560212, coord=9120425, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - output dims: [[1, 128, 1, 1]]
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - node 20 is a constant with 1 use
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - ------------ output node 20: "[129, 129, 129, 129, 129 ... 129, 129, 129, 129, 129]"
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - laying out 21: REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (MULT)
+[D] [2024-06-14 08:33:33, ezkl::circuit::ops::region] - (rows=4560212, coord=9120425, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - input indices: [(20, 0), (19, 0)]
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - output dims: [[1, 128, 14, 14]]
+[D] [2024-06-14 08:33:33, ezkl::graph::model] - input dims [[1, 128, 1, 1], [1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 21: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 22: CONST (scale=7)
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4622933, coord=9245866, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 128, 1, 1]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - node 22 is a constant with 1 use
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 22: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 23: ADD
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4622933, coord=9245866, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: [(22, 0), (21, 0)]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims [[1, 128, 1, 1], [1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 23: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 24: CONST (scale=7)
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4635477, coord=9270954, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 1, 1, 1]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - node 24 is a constant with 1 use
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 24: "Tensor { inner: [0], dims: [1, 1, 1, 1], scale: None, visibility: None }"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 25: LESS
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4635477, coord=9270954, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: [(24, 0), (23, 0)]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [0]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims [[1, 1, 1, 1], [1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 25: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 26: EXP(scale=128)
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4660565, coord=9321130, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: [(23, 0)]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims [[1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 26: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 27: CONST (scale=7)
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4673109, coord=9346218, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 1, 1, 1]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - node 27 is a constant with 1 use
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 27: "Tensor { inner: [128], dims: [1, 1, 1, 1], scale: None, visibility: None }"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 28: SUB
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4673109, coord=9346218, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: [(26, 0), (27, 0)]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: [7, 7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims [[1, 128, 14, 14], [1, 1, 1, 1]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 28: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 29: IFF
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4685653, coord=9371306, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: [(25, 0), (23, 0), (28, 0)]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: [0, 7, 7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims [[1, 128, 14, 14], [1, 128, 14, 14], [1, 128, 14, 14]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 29: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 30: CONST (scale=7)
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4748373, coord=9496746, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 128, 5, 5]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - node 30 is a constant with 1 use
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 30: "[3, -5, -1, -5, 2 ... 3, -1, 5, -1, 1]"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 31: CONST (scale=14)
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4748373, coord=9496746, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [14]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims []
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - node 31 is a constant with 1 use
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - ------------ output node 31: "Tensor { inner: [23], dims: [1], scale: None, visibility: None }"
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - laying out 32: REBASED (div=128.0, rebasing_op=DIV (denom=128, use_range_check_for_int=true)) (DECONV (stride=[2, 2], padding=[(1, 2), (1, 2)], output_padding=[0, 0]))
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::region] - (rows=4748373, coord=9496746, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input indices: [(29, 0), (30, 0), (31, 0)]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input scales: [7, 7, 14]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - output dims: [[1, 1, 28, 28]]
+[D] [2024-06-14 08:33:34, ezkl::graph::model] - input dims [[1, 128, 14, 14], [1, 128, 5, 5], [1]]
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::layouts] - batch_size: 1, output_channels: 1, input_channels: 128
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::layouts] - slides: [28, 28]
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::layouts] - num_groups: 1, input_channels_per_group: 128, output_channels_per_group: 1
+[D] [2024-06-14 08:33:34, ezkl::circuit::ops::layouts] - num_outputs: 784
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - ------------ output node 32: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - laying out 33: SIGMOID(scale=128)
+[D] [2024-06-14 08:33:35, ezkl::circuit::ops::region] - (rows=5103559, coord=10207119, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - input indices: [(32, 0)]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - input scales: [7]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - output dims: [[1, 1, 28, 28]]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - input dims [[1, 1, 28, 28]]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - ------------ output node 33: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - laying out 34: RESHAPE (shape=[1, 28, 28])
+[D] [2024-06-14 08:33:35, ezkl::circuit::ops::region] - (rows=5103951, coord=10207903, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - input indices: [(33, 0)]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - output scales: [7]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - input scales: [7]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - output dims: [[1, 28, 28]]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - input dims [[1, 1, 28, 28]]
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - ------------ output node 34: "[0, 0, 0, 0, 0 ... 0, 0, 0, 0, 0]"
+[D] [2024-06-14 08:33:35, ezkl::graph::model] - model outputs are nodes: [(34, 0)]
+[D] [2024-06-14 08:33:35, ezkl::circuit::ops::region] - (rows=5104343, coord=10208687, constants=3, max_lookup_inputs=0, min_lookup_inputs=0, max_range_size=128, dynamic_lookup_col_coord=0, shuffle_col_coord=0)
+Function executed successfully: Settings generated successfully
