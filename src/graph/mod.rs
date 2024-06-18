@@ -1082,7 +1082,7 @@ impl GraphCircuit {
 
         let lookup_size = (safe_lookup_range.1 - safe_lookup_range.0).abs();
         // check if has overflowed max lookup input
-        if lookup_size > MAX_LOOKUP_ABS / lookup_safety_margin {
+        if lookup_size > (MAX_LOOKUP_ABS as f64 / lookup_safety_margin).ceil() as i64 {
             return Err(GraphError::LookupRangeTooLarge(
                 lookup_size.unsigned_abs() as usize
             ));
