@@ -887,7 +887,7 @@ fn calibrate_settings(
     model: PathBuf,
     settings: PathBuf,
     target: CalibrationTarget,
-    lookup_safety_margin: i64,
+    lookup_safety_margin: f64,
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
