@@ -1034,10 +1034,10 @@ impl GraphCircuit {
         Ok(data)
     }
 
-    fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i64) -> Range {
+    fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: f64) -> Range {
         (
-            lookup_safety_margin * min_max_lookup.0,
-            lookup_safety_margin * min_max_lookup.1,
+            (lookup_safety_margin * min_max_lookup.0 as f64).floor() as i64,
+            (lookup_safety_margin * min_max_lookup.1 as f64).ceil() as i64,
         )
     }
 
@@ -1070,7 +1070,7 @@ impl GraphCircuit {
         min_max_lookup: Range,
         max_range_size: i64,
         max_logrows: Option<u32>,
-        lookup_safety_margin: i64,
+        lookup_safety_margin: f64,
     ) -> Result<(), GraphError> {
         // load the max logrows
         let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
