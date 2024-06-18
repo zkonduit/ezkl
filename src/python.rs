@@ -1533,6 +1533,56 @@ fn create_evm_verifier(
     })
 }
 
+/// Creates an Evm VK
+///
+/// Arguments
+/// ---------
+/// vk_path: str
+///     The path to the verification key file
+///
+/// settings_path: str
+///     The path to the settings file
+///
+/// sol_code_path: str
+///     The path to the create the solidity VK
+///
+/// abi_path: str
+///     The path to create the ABI for the solidity verifier
+///
+/// srs_path: str
+///     The path to the SRS file
+///
+/// Returns
+/// -------
+/// bool
+///
+#[pyfunction(signature = (
+    vk_path=PathBuf::from(DEFAULT_VK),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
+    abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
+    srs_path=None
+))]
+fn create_evm_vk(
+    py: Python,
+    vk_path: PathBuf,
+    settings_path: PathBuf,
+    sol_code_path: PathBuf,
+    abi_path: PathBuf,
+    srs_path: Option<PathBuf>,
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::create_evm_vk(vk_path, srs_path, settings_path, sol_code_path, abi_path)
+            .await
+            .map_err(|e| {
+                let err_str = format!("Failed to run create_evm_verifier: {}", e);
+                PyRuntimeError::new_err(err_str)
+            })?;
+
+        Ok(true)
+    })
+}
+
 /// Creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
 ///
 /// Arguments
@@ -1762,7 +1812,7 @@ fn deploy_da_evm(
 /// Arguments
 /// ---------
 /// addr_verifier: str
-///     The path to verifier contract's address
+///     The verifier contract's address as a hex string
 ///
 /// proof_path: str
 ///     The path to the proof file (generated using the prove command)
@@ -1774,7 +1824,7 @@ fn deploy_da_evm(
 ///     does the verifier use data attestation ?
 ///
 /// addr_vk: str
-///
+///     The addess of the separate VK contract (if the verifier key is rendered as a separate contract)
 /// Returns
 /// -------
 /// bool
@@ -1925,6 +1975,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_circuit, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
+    m.add_function(wrap_pyfunction!(create_evm_vk, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_vk_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
