@@ -27,7 +27,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.py[cod]
-bin/
 build/
 develop-eggs/
 dist/
