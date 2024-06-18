@@ -607,6 +607,13 @@ impl Model {
 
         let mut model = tract_onnx::onnx().model_for_read(reader)?;
 
+        // let file_path = "tract_model.onnx";
+        // let output_file = File::create(file_path)?;
+        // let mut writer: BufWriter<&str> = BufWriter::new(output_file);
+        // tract_onnx::export::to_writer(&model, &mut writer)?;
+        // println!("Model saved to {}", file_path);
+
+
         let variables: std::collections::HashMap<String, usize> =
             std::collections::HashMap::from_iter(run_args.variables.clone());
 
@@ -666,6 +673,8 @@ impl Model {
         Ok((typed_model, symbol_values))
     }
 
+ 
+
     /// Loads an Onnx model from a specified path.
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
@@ -680,6 +689,14 @@ impl Model {
         let start_time = instant::Instant::now();
 
         let (model, symbol_values) = Self::load_onnx_using_tract(reader, run_args)?;
+        
+        // Specify the path to save the model
+        // let file_path = "tract_model.onnx";
+        // let mut file = File::create(file_path)?;
+        // let mut model_bytes = vec![];
+        // model.write_to(&mut model_bytes)?;
+        // file.write_all(&model_bytes)?;
+        // println!("Model saved to {}", model_path);
 
         let scales = VarScales::from_args(run_args);
         let nodes = Self::nodes_from_graph(

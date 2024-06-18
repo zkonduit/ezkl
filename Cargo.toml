@@ -178,6 +178,9 @@ test = false
 bench = false
 required-features = ["ezkl"]
 
+[profile.dev]
+incremental = true
+
 [features]
 web = ["wasm-bindgen-rayon"]
 default = ["ezkl", "mv-lookup", "no-banner"]

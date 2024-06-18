@@ -85,7 +85,9 @@ pub fn init_logger() {
         )
     });
     builder.target(env_logger::Target::Stdout);
-    builder.filter(None, LevelFilter::Info);
+    builder.filter(None, LevelFilter::Trace); // Set the default log level to Trace
+
+    // builder.filter(None, LevelFilter::Info);
     if env::var("RUST_LOG").is_ok() {
         builder.parse_filters(&env::var("RUST_LOG").unwrap());
     }
