@@ -1491,7 +1491,7 @@ fn encode_evm_calldata<'a>(
 ///     The path to the SRS file
 ///
 /// render_vk_separately: bool
-///     Whether the verifier key should be rendered as a separate contract. We recommend disabling selector compression if this is enabled. To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command
+///     Whether the verifier key should be rendered as a separate contract. We recommend disabling selector compression if this is enabled. To save the verifier key as a separate contract, set this to true and then call the create_evm_vk command
 ///
 /// Returns
 /// -------
@@ -1533,7 +1533,7 @@ fn create_evm_verifier(
     })
 }
 
-/// Creates an Evm VK
+/// Creates an Evm verifer key. This command should be called after create_evm_verifier with the render_vk_separately arg set to true. By rendering a verification key separately you can reuse the same verifier for similar circuit setups with different verifying keys, helping to reduce the amount of state our verifiers store on the blockchain.
 ///
 /// Arguments
 /// ---------
@@ -1544,7 +1544,7 @@ fn create_evm_verifier(
 ///     The path to the settings file
 ///
 /// sol_code_path: str
-///     The path to the create the solidity VK
+///     The path to the create the solidity verifying key.
 ///
 /// abi_path: str
 ///     The path to create the ABI for the solidity verifier
@@ -1559,7 +1559,7 @@ fn create_evm_verifier(
 #[pyfunction(signature = (
     vk_path=PathBuf::from(DEFAULT_VK),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
-    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
+    sol_code_path=PathBuf::from(DEFAULT_VK_SOL),
     abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
     srs_path=None
 ))]
