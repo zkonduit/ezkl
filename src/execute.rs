@@ -1013,7 +1013,7 @@ pub(crate) async fn calibrate(
     data: PathBuf,
     settings_path: PathBuf,
     target: CalibrationTarget,
-    lookup_safety_margin: i64,
+    lookup_safety_margin: f64,
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     only_range_check_rebase: bool,
