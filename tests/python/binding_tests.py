@@ -453,7 +453,7 @@ async def test_create_evm_verifier_separate_vk():
         render_vk_seperately=True
     )
 
-    res = ezkl.create_evm_vk(
+    res = await ezkl.create_evm_vk(
         vk_path,
         settings_path,
         vk_code_path,
