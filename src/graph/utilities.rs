@@ -1161,7 +1161,8 @@ pub fn new_op_from_onnx(
             let padding = match &conv_node.pool_spec.padding {
                 PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
                     b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
-                }
+                },
+                PaddingSpec::Valid => vec![(0, 0); conv_node.pool_spec.input_channels],
                 _ => {
                     return Err(GraphError::MissingParams("padding".to_string()));
                 }
