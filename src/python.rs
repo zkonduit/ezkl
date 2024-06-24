@@ -1491,7 +1491,7 @@ fn encode_evm_calldata<'a>(
 ///     The path to the SRS file
 ///
 /// render_vk_separately: bool
-///     Whether the verifier key should be rendered as a separate contract. We recommend disabling selector compression if this is enabled. To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command
+///     Whether the verifier key should be rendered as a separate contract. We recommend disabling selector compression if this is enabled. To save the verifier key as a separate contract, set this to true and then call the create_evm_vk command
 ///
 /// Returns
 /// -------
@@ -1528,6 +1528,56 @@ fn create_evm_verifier(
             let err_str = format!("Failed to run create_evm_verifier: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
+
+        Ok(true)
+    })
+}
+
+/// Creates an Evm verifer key. This command should be called after create_evm_verifier with the render_vk_separately arg set to true. By rendering a verification key separately you can reuse the same verifier for similar circuit setups with different verifying keys, helping to reduce the amount of state our verifiers store on the blockchain.
+///
+/// Arguments
+/// ---------
+/// vk_path: str
+///     The path to the verification key file
+///
+/// settings_path: str
+///     The path to the settings file
+///
+/// sol_code_path: str
+///     The path to the create the solidity verifying key.
+///
+/// abi_path: str
+///     The path to create the ABI for the solidity verifier
+///
+/// srs_path: str
+///     The path to the SRS file
+///
+/// Returns
+/// -------
+/// bool
+///
+#[pyfunction(signature = (
+    vk_path=PathBuf::from(DEFAULT_VK),
+    settings_path=PathBuf::from(DEFAULT_SETTINGS),
+    sol_code_path=PathBuf::from(DEFAULT_VK_SOL),
+    abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
+    srs_path=None
+))]
+fn create_evm_vk(
+    py: Python,
+    vk_path: PathBuf,
+    settings_path: PathBuf,
+    sol_code_path: PathBuf,
+    abi_path: PathBuf,
+    srs_path: Option<PathBuf>,
+) -> PyResult<Bound<'_, PyAny>> {
+    pyo3_asyncio::tokio::future_into_py(py, async move {
+        crate::execute::create_evm_vk(vk_path, srs_path, settings_path, sol_code_path, abi_path)
+            .await
+            .map_err(|e| {
+                let err_str = format!("Failed to run create_evm_verifier: {}", e);
+                PyRuntimeError::new_err(err_str)
+            })?;
 
         Ok(true)
     })
@@ -1762,7 +1812,7 @@ fn deploy_da_evm(
 /// Arguments
 /// ---------
 /// addr_verifier: str
-///     The path to verifier contract's address
+///     The verifier contract's address as a hex string
 ///
 /// proof_path: str
 ///     The path to the proof file (generated using the prove command)
@@ -1774,7 +1824,7 @@ fn deploy_da_evm(
 ///     does the verifier use data attestation ?
 ///
 /// addr_vk: str
-///
+///     The addess of the separate VK contract (if the verifier key is rendered as a separate contract)
 /// Returns
 /// -------
 /// bool
@@ -1925,6 +1975,7 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_circuit, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
+    m.add_function(wrap_pyfunction!(create_evm_vk, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_vk_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;

@@ -423,6 +423,74 @@ async def test_create_evm_verifier():
     assert res == True
     assert os.path.isfile(sol_code_path)
 
+async def test_create_evm_verifier_separate_vk():
+    """
+    Create EVM a verifier with solidity code and separate vk
+    In order to run this test you will need to install solc in your environment
+    """
+    vk_path = os.path.join(folder_path, 'test_evm.vk')
+    settings_path = os.path.join(folder_path, 'settings.json')
+    sol_code_path = os.path.join(folder_path, 'test_separate.sol')
+    vk_code_path = os.path.join(folder_path, 'test_vk.sol')
+    abi_path = os.path.join(folder_path, 'test_separate.abi')
+    abi_vk_path = os.path.join(folder_path, 'test_vk_separate.abi')
+    proof_path = os.path.join(folder_path, 'test_evm.pf')
+    calldata_path = os.path.join(folder_path, 'calldata.bytes')
+
+    # # res is now a vector of bytes
+    # res = ezkl.encode_evm_calldata(proof_path, calldata_path)
+
+    # assert os.path.isfile(calldata_path)
+    # assert len(res) > 0
+
+
+    res = await ezkl.create_evm_verifier(
+        vk_path,
+        settings_path,
+        sol_code_path,
+        abi_path,
+        srs_path=srs_path,
+        render_vk_seperately=True
+    )
+
+    res = await ezkl.create_evm_vk(
+        vk_path,
+        settings_path,
+        vk_code_path,
+        abi_vk_path,
+        srs_path=srs_path,
+    )
+
+    assert res == True
+    assert os.path.isfile(sol_code_path)
+
+
+async def test_deploy_evm_separate_vk():
+    """
+    Test deployment of the separate verifier smart contract + vk
+    In order to run this you will need to install solc in your environment
+    """
+    addr_path_verifier = os.path.join(folder_path, 'address_separate.json')
+    addr_path_vk = os.path.join(folder_path, 'address_vk.json')
+    sol_code_path = os.path.join(folder_path, 'test_separate.sol')
+    vk_code_path = os.path.join(folder_path, 'test_vk.sol')
+
+    # TODO: without optimization there will be out of gas errors
+    # sol_code_path = os.path.join(folder_path, 'test.sol')
+
+    res = await ezkl.deploy_evm(
+        addr_path_verifier,
+        sol_code_path,
+        rpc_url=anvil_url,
+    )
+
+    res = await ezkl.deploy_vk_evm(
+        addr_path_vk,
+        vk_code_path,
+        rpc_url=anvil_url,
+    )
+
+    assert res == True
 
 async def test_deploy_evm():
     """
@@ -497,6 +565,47 @@ async def test_verify_evm():
         addr,
         proof_path,
         rpc_url=anvil_url,
+        # sol_code_path
+        # optimizer_runs
+    )
+
+    assert res == True
+
+async def test_verify_evm_separate_vk():
+    """
+    Verifies an evm proof
+    In order to run this you will need to install solc in your environment
+    """
+    proof_path = os.path.join(folder_path, 'test_evm.pf')
+    addr_path_verifier = os.path.join(folder_path, 'address_separate.json')
+    addr_path_vk = os.path.join(folder_path, 'address_vk.json')
+    proof_path = os.path.join(folder_path, 'test_evm.pf')
+    calldata_path = os.path.join(folder_path, 'calldata_separate.bytes')
+
+    with open(addr_path_verifier, 'r') as file:
+        addr_verifier = file.read().rstrip()
+
+    print(addr_verifier)
+
+    with open(addr_path_vk, 'r') as file:
+        addr_vk = file.read().rstrip()
+
+    print(addr_vk)
+
+    # res is now a vector of bytes
+    res = ezkl.encode_evm_calldata(proof_path, calldata_path, addr_vk=addr_vk)
+
+    assert os.path.isfile(calldata_path)
+    assert len(res) > 0
+
+    # TODO: without optimization there will be out of gas errors
+    # sol_code_path = os.path.join(folder_path, 'test.sol')
+
+    res = await ezkl.verify_evm(
+        addr_verifier,
+        proof_path,
+        rpc_url=anvil_url,
+        addr_vk=addr_vk,
         # sol_code_path
         # optimizer_runs
     )
