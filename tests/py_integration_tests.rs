@@ -202,6 +202,18 @@ mod py_tests {
             }
 
             #[test]
+            fn reusable_verifier_notebook_() {
+                crate::py_tests::init_binary();
+                let mut anvil_child = crate::py_tests::start_anvil(false);
+                let test_dir: TempDir = TempDir::new("reusable_verifier").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "reusable_verifier.ipynb");
+                run_notebook(path, "reusable_verifier.ipynb");
+                test_dir.close().unwrap();
+                anvil_child.kill().unwrap();
+            }
+
+            #[test]
             fn postgres_notebook_() {
                 crate::py_tests::init_binary();
                 let test_dir: TempDir = TempDir::new("mean_postgres").unwrap();
