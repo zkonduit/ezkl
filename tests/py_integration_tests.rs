@@ -11,7 +11,7 @@ mod py_tests {
     static ENV_SETUP: Once = Once::new();
     static DOWNLOAD_VOICE_DATA: Once = Once::new();
 
-    //Sure to run this once
+    // Sure to run this once
 
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =

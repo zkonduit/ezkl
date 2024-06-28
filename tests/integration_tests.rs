@@ -982,6 +982,51 @@ mod native_tests {
             use tempdir::TempDir;
             use crate::native_tests::Hardfork;
             use crate::native_tests::run_js_tests;
+            use std::collections::{HashMap, HashSet};
+            use std::fs;
+            use std::hash::{Hash, Hasher};
+            use ezkl::logger::init_logger;
+
+            // Global variables to store verifier hashes and identical verifiers
+            lazy_static! {
+                static ref VERIFIER_HASHES: std::sync::Mutex<HashMap<u64, HashSet<String>>> = std::sync::Mutex::new(HashMap::new());
+                static ref IDENTICAL_VERIFIERS: std::sync::Mutex<Vec<HashSet<String>>> = std::sync::Mutex::new(Vec::new());
+            }
+
+            fn hash_file_content<P: AsRef<std::path::Path>>(path: P) -> u64 {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                let content = fs::read_to_string(path).expect("failed to read file");
+                content.hash(&mut hasher);
+                hasher.finish()
+            }
+
+            fn update_verifier_sets(hash: u64, test_name: String) {
+                match VERIFIER_HASHES.try_lock() {
+                    Ok(mut verifier_hashes) => {
+                        if let Some(set) = verifier_hashes.get_mut(&hash) {
+                            set.insert(test_name.clone());
+                            log::error!("Updated set of identical verifiers: {:?}", set);
+                        } else {
+                            let mut new_set: HashSet<String> = HashSet::new();
+                            new_set.insert(test_name);
+                            verifier_hashes.insert(hash, new_set.clone());
+                            match IDENTICAL_VERIFIERS.try_lock() {
+                                Ok(mut identical_verifiers) => {
+                                    identical_verifiers.push(new_set.clone());
+                                    log::error!("New set of identical verifiers: {:?}", new_set);
+                                }
+                                Err(_) => {
+                                    log::error!("Failed to acquire lock on IDENTICAL_VERIFIERS");
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        log::error!("Failed to acquire lock on VERIFIER_HASHES");
+                    }
+                }
+            }
+
 
             /// Currently only on chain inputs that return a non-negative value are supported.
             const TESTS_ON_CHAIN_INPUT: [&str; 17] = [
@@ -1115,7 +1160,19 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
+                    init_logger();
+                    log::error!("Running kzg_evm_prove_and_verify_render_seperately_ for test: {}", test);
                     kzg_evm_prove_and_verify_render_seperately(2, path, test.to_string(), "private", "private", "public");
+
+                    // Check for identical verifiers and store the test name
+                    let verifier_path = format!("{}/{}/kzg.sol", path, test);
+                    let hash = hash_file_content(&verifier_path);
+
+                    let test_name = test.clone().to_string(); // Clone test name
+
+                    update_verifier_sets(hash, test_name);
+
+
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", true);
                     test_dir.close().unwrap();
