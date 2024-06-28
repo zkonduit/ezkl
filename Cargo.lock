@@ -1839,9 +1839,7 @@ dependencies = [
  "env_logger",
  "ethabi",
  "foundry-compilers",
- "futures-util",
  "gag",
- "getrandom",
  "halo2_gadgets",
  "halo2_proofs",
  "halo2_solidity_verifier",
@@ -1857,9 +1855,7 @@ dependencies = [
  "mnist",
  "num",
  "objc",
- "openssl",
  "pg_bigdecimal",
- "plotters",
  "portable-atomic",
  "pyo3",
  "pyo3-asyncio",
@@ -1882,7 +1878,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-postgres",
- "tokio-util",
  "tosubcommand",
  "tract-onnx",
  "unzip-n",
@@ -2219,10 +2214,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "190092ea657667030ac6a35e305e62fc4dd69fd98ac98631e5d3a2b1575a12b5"
 dependencies = [
  "cfg-if",
- "js-sys",
  "libc",
  "wasi",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -3390,15 +3383,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
-name = "openssl-src"
-version = "300.2.3+3.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cff92b6f71555b61bb9315f7c64da3ca43d87531622120fea0195fc761b4843"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "openssl-sys"
 version = "0.9.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3406,7 +3390,6 @@ checksum = "dda2b0f344e78efc2facf7d195d098df0dd72151b26ab98da807afc26c198dff"
 dependencies = [
  "cc",
  "libc",
- "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
