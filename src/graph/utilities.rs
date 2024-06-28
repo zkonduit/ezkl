@@ -85,6 +85,7 @@ pub fn multiplier_to_scale(mult: f64) -> crate::Scale {
     mult.log2().round() as crate::Scale
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// extract padding from a onnx node.
 pub fn extract_padding(
     pool_spec: &PoolSpec,
@@ -102,6 +103,7 @@ pub fn extract_padding(
     Ok(padding)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Extracts the strides from a onnx node.
 pub fn extract_strides(pool_spec: &PoolSpec) -> Result<Vec<usize>, GraphError> {
     Ok(pool_spec

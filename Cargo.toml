@@ -103,8 +103,10 @@ console_error_panic_hook = "0.1.7"
 wasm-bindgen-console-logger = "0.1.1"
 
 
-[dev-dependencies]
+[target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
+
+[dev-dependencies]
 tempfile = "3.3.0"
 lazy_static = "1.4.0"
 mnist = "0.5"
