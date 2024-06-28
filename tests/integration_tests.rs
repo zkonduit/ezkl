@@ -986,6 +986,7 @@ mod native_tests {
             use std::fs;
             use std::hash::{Hash, Hasher};
             use ezkl::logger::init_logger;
+            use crate::native_tests::lazy_static;
 
             // Global variables to store verifier hashes and identical verifiers
             lazy_static! {
