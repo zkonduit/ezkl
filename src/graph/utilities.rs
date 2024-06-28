@@ -281,7 +281,11 @@ pub fn new_op_from_onnx(
         .flat_map(|x| x.out_scales())
         .collect::<Vec<_>>();
 
-    let input_dims = inputs.iter().map(|x| x.out_dims()).collect::<Vec<_>>();
+    let input_dims = inputs
+        .iter()
+        .map(|x| x.out_dims())
+        .flatten()
+        .collect::<Vec<_>>();
 
     let mut replace_const = |scale: crate::Scale,
                              index: usize,
