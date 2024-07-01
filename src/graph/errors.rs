@@ -50,7 +50,7 @@ pub enum GraphError {
     /// Tract error
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     #[error("[tract] {0}")]
-    TractError(#[from] tract_onnx::tract_core::anyhow::Error),
+    TractError(#[from] tract_onnx::prelude::TractError),
     /// Packing exponent is too large
     #[error("largest packing exponent exceeds max. try reducing the scale")]
     PackingExponent,

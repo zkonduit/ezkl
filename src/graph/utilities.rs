@@ -85,6 +85,34 @@ pub fn multiplier_to_scale(mult: f64) -> crate::Scale {
     mult.log2().round() as crate::Scale
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+/// extract padding from a onnx node.
+pub fn extract_padding(
+    pool_spec: &PoolSpec,
+    num_dims: usize,
+) -> Result<Vec<(usize, usize)>, GraphError> {
+    let padding = match &pool_spec.padding {
+        PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
+            b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
+        }
+        PaddingSpec::Valid => vec![(0, 0); num_dims],
+        _ => {
+            return Err(GraphError::MissingParams("padding".to_string()));
+        }
+    };
+    Ok(padding)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Extracts the strides from a onnx node.
+pub fn extract_strides(pool_spec: &PoolSpec) -> Result<Vec<usize>, GraphError> {
+    Ok(pool_spec
+        .strides
+        .clone()
+        .ok_or(GraphError::MissingParams("stride".to_string()))?
+        .to_vec())
+}
+
 /// Gets the shape of a onnx node's outlets.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn node_output_shapes(
@@ -253,6 +281,12 @@ pub fn new_op_from_onnx(
     let input_scales = inputs
         .iter()
         .flat_map(|x| x.out_scales())
+        .collect::<Vec<_>>();
+
+    let input_dims = inputs
+        .iter()
+        .map(|x| x.out_dims())
+        .flatten()
         .collect::<Vec<_>>();
 
     let mut replace_const = |scale: crate::Scale,
@@ -1073,18 +1107,8 @@ pub fn new_op_from_onnx(
                 ));
             }
 
-            let stride = pool_spec
-                .strides
-                .clone()
-                .ok_or(GraphError::MissingParams("stride".to_string()))?;
-            let padding = match &pool_spec.padding {
-                PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
-                }
-                _ => {
-                    return Err(GraphError::MissingParams("padding".to_string()));
-                }
-            };
+            let stride = extract_strides(&pool_spec)?;
+            let padding = extract_padding(&pool_spec, input_dims[0].len())?;
             let kernel_shape = &pool_spec.kernel_shape;
 
             SupportedOp::Hybrid(HybridOp::MaxPool {
@@ -1151,21 +1175,10 @@ pub fn new_op_from_onnx(
                 ));
             }
 
-            let stride = match conv_node.pool_spec.strides.clone() {
-                Some(s) => s.to_vec(),
-                None => {
-                    return Err(GraphError::MissingParams("strides".to_string()));
-                }
-            };
+            let pool_spec = &conv_node.pool_spec;
 
-            let padding = match &conv_node.pool_spec.padding {
-                PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
-                }
-                _ => {
-                    return Err(GraphError::MissingParams("padding".to_string()));
-                }
-            };
+            let stride = extract_strides(&pool_spec)?;
+            let padding = extract_padding(&pool_spec, input_dims[0].len())?;
 
             // if bias exists then rescale it to the input + kernel scale
             if input_scales.len() == 3 {
@@ -1214,21 +1227,10 @@ pub fn new_op_from_onnx(
                 ));
             }
 
-            let stride = match deconv_node.pool_spec.strides.clone() {
-                Some(s) => s.to_vec(),
-                None => {
-                    return Err(GraphError::MissingParams("strides".to_string()));
-                }
-            };
-            let padding = match &deconv_node.pool_spec.padding {
-                PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
-                }
-                _ => {
-                    return Err(GraphError::MissingParams("padding".to_string()));
-                }
-            };
+            let pool_spec = &deconv_node.pool_spec;
 
+            let stride = extract_strides(&pool_spec)?;
+            let padding = extract_padding(&pool_spec, input_dims[0].len())?;
             // if bias exists then rescale it to the input + kernel scale
             if input_scales.len() == 3 {
                 let bias_scale = input_scales[2];
@@ -1339,18 +1341,8 @@ pub fn new_op_from_onnx(
                 ));
             }
 
-            let stride = pool_spec
-                .strides
-                .clone()
-                .ok_or(GraphError::MissingParams("stride".to_string()))?;
-            let padding = match &pool_spec.padding {
-                PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
-                }
-                _ => {
-                    return Err(GraphError::MissingParams("padding".to_string()));
-                }
-            };
+            let stride = extract_strides(&pool_spec)?;
+            let padding = extract_padding(&pool_spec, input_dims[0].len())?;
 
             SupportedOp::Hybrid(HybridOp::SumPool {
                 padding,
