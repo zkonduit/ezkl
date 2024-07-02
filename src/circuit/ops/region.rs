@@ -9,6 +9,7 @@ use halo2_proofs::{
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
+use maybe_rayon::iter::ParallelExtend;
 use portable_atomic::AtomicI64 as AtomicInt;
 use std::{
     cell::RefCell,
@@ -526,7 +527,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         } else {
             if !values.is_instance() {
                 let values_map = values.create_constants_map_iterator();
-                self.assigned_constants.extend(values_map);
+                self.assigned_constants.par_extend(values_map);
             }
             Ok(values.clone())
         }
@@ -553,7 +554,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         } else {
             if !values.is_instance() {
                 let values_map = values.create_constants_map_iterator();
-                self.assigned_constants.extend(values_map);
+                self.assigned_constants.par_extend(values_map);
             }
             Ok(values.clone())
         }
@@ -573,7 +574,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
-        ommissions: &HashSet<&usize>,
+        ommissions: &HashSet<usize>,
     ) -> Result<ValTensor<F>, Error> {
         if let Some(region) = &self.region {
             var.assign_with_omissions(
@@ -588,12 +589,12 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             let mut values_map = values.create_constants_map();
 
             for o in ommissions {
-                if let ValType::Constant(value) = inner_tensor.get_flat_index(**o) {
+                if let ValType::Constant(value) = inner_tensor.get_flat_index(*o) {
                     values_map.remove(&value);
                 }
             }
 
-            self.assigned_constants.extend(values_map);
+            self.assigned_constants.par_extend(values_map);
 
             Ok(values.clone())
         }

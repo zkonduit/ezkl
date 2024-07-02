@@ -1,12 +1,12 @@
-use core::{iter::FilterMap, slice::Iter};
-
 use crate::circuit::region::ConstantsMap;
+use maybe_rayon::slice::Iter;
 
 use super::{
     ops::{intercalate_values, pad, resize},
     *,
 };
 use halo2_proofs::{arithmetic::Field, circuit::Cell, plonk::Instance};
+use maybe_rayon::iter::{FilterMap, IntoParallelIterator, ParallelIterator};
 
 pub(crate) fn create_constant_tensor<
     F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd,
@@ -460,7 +460,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         &self,
     ) -> FilterMap<Iter<'_, ValType<F>>, fn(&ValType<F>) -> Option<(F, ValType<F>)>> {
         match self {
-            ValTensor::Value { inner, .. } => inner.iter().filter_map(|x| {
+            ValTensor::Value { inner, .. } => inner.par_iter().filter_map(|x| {
                 if let ValType::Constant(v) = x {
                     Some((*v, x.clone()))
                 } else {
@@ -571,6 +571,27 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             }
         };
         Ok(())
+    }
+
+    /// Calls `get_slice` on the inner tensor.
+    pub fn last(&self) -> Result<ValTensor<F>, TensorError> {
+        let slice = match self {
+            ValTensor::Value {
+                inner: v,
+                dims: _,
+                scale,
+            } => {
+                let inner = v.last()?;
+                let dims = inner.dims().to_vec();
+                ValTensor::Value {
+                    inner,
+                    dims,
+                    scale: *scale,
+                }
+            }
+            _ => return Err(TensorError::WrongMethod),
+        };
+        Ok(slice)
     }
 
     /// Calls `get_slice` on the inner tensor.
@@ -753,11 +774,37 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         Ok(())
     }
 
-    /// gets constants
-    pub fn get_const_zero_indices(&self) -> Result<Vec<usize>, TensorError> {
+    /// remove constant zero values constants
+    pub fn remove_const_zero_values(&mut self) {
         match self {
             ValTensor::Value { inner: v, .. } => {
-                let mut indices = vec![];
+                *v = v
+                    .clone()
+                    .into_par_iter()
+                    .filter_map(|e| {
+                        if let ValType::Constant(r) = e {
+                            if r == F::ZERO {
+                                return None;
+                            }
+                        } else if let ValType::AssignedConstant(_, r) = e {
+                            if r == F::ZERO {
+                                return None;
+                            }
+                        }
+                        Some(e)
+                    })
+                    .collect();
+            }
+            ValTensor::Instance { .. } => {}
+        }
+    }
+
+    /// gets constants
+    #[inline(always)]
+    pub fn get_const_zero_indices(&self) -> Vec<usize> {
+        match self {
+            ValTensor::Value { inner: v, .. } => {
+                let mut indices = Vec::with_capacity(v.len());
                 for (i, e) in v.iter().enumerate() {
                     if let ValType::Constant(r) = e {
                         if *r == F::ZERO {
@@ -769,9 +816,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                         }
                     }
                 }
-                Ok(indices)
+                indices
             }
-            ValTensor::Instance { .. } => Ok(vec![]),
+            ValTensor::Instance { .. } => vec![],
         }
     }
 

@@ -250,6 +250,10 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
+    if values[0].len() != values[1].len() {
+        return Err(TensorError::DimMismatch("dot".to_string()).into());
+    }
+
     region.flush()?;
     // time this entire function run
     let global_start = instant::Instant::now();
@@ -257,27 +261,19 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     let mut values = values.clone();
 
     // this section has been optimized to death, don't mess with it
-    let mut removal_indices = values[0].get_const_zero_indices()?;
-    let second_zero_indices = values[1].get_const_zero_indices()?;
+    let mut removal_indices = values[0].get_const_zero_indices();
+    let second_zero_indices = values[1].get_const_zero_indices();
     removal_indices.extend(second_zero_indices);
     removal_indices.par_sort_unstable();
     removal_indices.dedup();
 
-    // is already sorted
-    values[0].remove_indices(&mut removal_indices, true)?;
-    values[1].remove_indices(&mut removal_indices, true)?;
+    // if empty return a const
+    if removal_indices.len() == values[0].len() {
+        return Ok(create_zero_tensor(1));
+    }
 
     let elapsed = global_start.elapsed();
     trace!("filtering const zero indices took: {:?}", elapsed);
-
-    if values[0].len() != values[1].len() {
-        return Err(TensorError::DimMismatch("dot".to_string()).into());
-    }
-
-    // if empty return a const
-    if values[0].is_empty() && values[1].is_empty() {
-        return Ok(create_zero_tensor(1));
-    }
 
     let start = instant::Instant::now();
     let mut inputs = vec![];
@@ -343,7 +339,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
             .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
-    let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
+    let last_elem = output.last()?;
 
     region.increment(assigned_len);
 
@@ -1779,12 +1775,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     let mut values = values.clone();
 
     // this section has been optimized to death, don't mess with it
-    let mut removal_indices = values[0].get_const_zero_indices()?;
-    removal_indices.par_sort_unstable();
-    removal_indices.dedup();
-
-    // is already sorted
-    values[0].remove_indices(&mut removal_indices, true)?;
+    values[0].remove_const_zero_values();
 
     let elapsed = global_start.elapsed();
     trace!("filtering const zero indices took: {:?}", elapsed);
@@ -1841,7 +1832,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
         }
     }
 
-    let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
+    let last_elem = output.last()?;
 
     region.increment(assigned_len);
 
@@ -1884,7 +1875,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>
     let global_start = instant::Instant::now();
 
     // this section has been optimized to death, don't mess with it
-    let removal_indices = values[0].get_const_zero_indices()?;
+    let removal_indices = values[0].get_const_zero_indices();
 
     let elapsed = global_start.elapsed();
     trace!("finding const zero indices took: {:?}", elapsed);
@@ -1945,7 +1936,7 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>
             .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
-    let last_elem = output.get_slice(&[output.len() - 1..output.len()])?;
+    let last_elem = output.last()?;
 
     region.increment(assigned_len);
 
@@ -2256,22 +2247,22 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     let orig_lhs = lhs.clone();
     let orig_rhs = rhs.clone();
 
-    // get indices of zeros
-    let first_zero_indices = lhs.get_const_zero_indices()?;
-    let second_zero_indices = rhs.get_const_zero_indices()?;
-    let mut removal_indices = match op {
+    let start = instant::Instant::now();
+    let first_zero_indices = HashSet::from_iter(lhs.get_const_zero_indices());
+    let second_zero_indices = HashSet::from_iter(rhs.get_const_zero_indices());
+
+    let removal_indices = match op {
         BaseOp::Add | BaseOp::Mult => {
-            let mut removal_indices = first_zero_indices.clone();
-            removal_indices.extend(second_zero_indices.clone());
-            removal_indices
+            // join the zero indices
+            first_zero_indices
+                .union(&second_zero_indices)
+                .cloned()
+                .collect()
         }
         BaseOp::Sub => second_zero_indices.clone(),
         _ => return Err(CircuitError::UnsupportedOp),
     };
-    removal_indices.dedup();
-
-    let removal_indices: HashSet<&usize> = HashSet::from_iter(removal_indices.iter());
-    let removal_indices_ptr = &removal_indices;
+    trace!("setting up indices took {:?}", start.elapsed());
 
     if lhs.len() != rhs.len() {
         return Err(CircuitError::DimMismatch(format!(
@@ -2280,20 +2271,19 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         )));
     }
 
-    let mut inputs = vec![];
-    for (i, input) in [lhs.clone(), rhs.clone()].iter().enumerate() {
-        let inp = {
+    let inputs = [lhs.clone(), rhs.clone()]
+        .iter()
+        .enumerate()
+        .map(|(i, input)| {
             let res = region.assign_with_omissions(
                 &config.custom_gates.inputs[i],
                 input,
-                removal_indices_ptr,
+                &removal_indices,
             )?;
 
-            res.get_inner()?
-        };
-
-        inputs.push(inp);
-    }
+            Ok(res.get_inner()?)
+        })
+        .collect::<Result<Vec<_>, CircuitError>>()?;
 
     // Now we can assign the dot product
     // time the calc
@@ -2308,15 +2298,20 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         error!("{}", e);
         halo2_proofs::plonk::Error::Synthesis
     })?;
-    let elapsed = start.elapsed();
+    trace!("pairwise {} calc took {:?}", op.as_str(), start.elapsed());
 
+    let start = instant::Instant::now();
     let assigned_len = inputs[0].len() - removal_indices.len();
     let mut output = region.assign_with_omissions(
         &config.custom_gates.output,
         &op_result.into(),
-        removal_indices_ptr,
+        &removal_indices,
     )?;
-    trace!("pairwise {} calc took {:?}", op.as_str(), elapsed);
+    trace!(
+        "pairwise {} input assign took {:?}",
+        op.as_str(),
+        start.elapsed()
+    );
 
     // Enable the selectors
     if !region.is_dummy() {
@@ -2337,16 +2332,11 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     let a_tensor = orig_lhs.get_inner_tensor()?;
     let b_tensor = orig_rhs.get_inner_tensor()?;
 
-    let first_zero_indices: HashSet<&usize> = HashSet::from_iter(first_zero_indices.iter());
-    let second_zero_indices: HashSet<&usize> = HashSet::from_iter(second_zero_indices.iter());
-
-    trace!("setting up indices took {:?}", start.elapsed());
-
     // infill the zero indices with the correct values from values[0] or values[1]
-    if !removal_indices_ptr.is_empty() {
+    if !removal_indices.is_empty() {
         output
             .get_inner_tensor_mut()?
-            .par_enum_map_mut_filtered(removal_indices_ptr, |i| {
+            .par_enum_map_mut_filtered(&removal_indices, |i| {
                 let val = match op {
                     BaseOp::Add => {
                         let a_is_null = first_zero_indices.contains(&i);
@@ -2386,6 +2376,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         end,
         region.row()
     );
+    trace!("----------------------------");
 
     Ok(output)
 }
@@ -3943,10 +3934,9 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
     let x = values[0].clone();
 
     let removal_indices = values[0].get_const_indices()?;
-    let removal_indices: HashSet<&usize> = HashSet::from_iter(removal_indices.iter());
-    let removal_indices_ptr = &removal_indices;
+    let removal_indices: HashSet<usize> = HashSet::from_iter(removal_indices.into_iter());
 
-    let w = region.assign_with_omissions(&config.static_lookups.input, &x, removal_indices_ptr)?;
+    let w = region.assign_with_omissions(&config.static_lookups.input, &x, &removal_indices)?;
 
     let output = w.get_inner_tensor()?.par_enum_map(|i, e| {
         Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
@@ -3964,7 +3954,7 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
     let mut output = region.assign_with_omissions(
         &config.static_lookups.output,
         &output.into(),
-        removal_indices_ptr,
+        &removal_indices,
     )?;
 
     let is_dummy = region.is_dummy();
@@ -3994,11 +3984,7 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
         })?
         .into();
 
-    region.assign_with_omissions(
-        &config.static_lookups.index,
-        &table_index,
-        removal_indices_ptr,
-    )?;
+    region.assign_with_omissions(&config.static_lookups.index, &table_index, &removal_indices)?;
 
     if !is_dummy {
         (0..assigned_len)

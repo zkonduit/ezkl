@@ -1281,6 +1281,30 @@ impl<T: Clone + TensorType> Tensor<T> {
         Ok(t)
     }
 
+    /// Get last elem from Tensor
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+    /// let mut b = Tensor::<i32>::new(Some(&[3]), &[1]).unwrap();
+    ///
+    /// assert_eq!(a.last().unwrap(), b);
+    /// ```
+    pub fn last(&self) -> Result<Tensor<T>, TensorError>
+    where
+        T: Send + Sync,
+    {
+        let res = match self.inner.last() {
+            Some(e) => e.clone(),
+            None => {
+                return Err(TensorError::DimError(
+                    "Cannot get last element of empty tensor".to_string(),
+                ))
+            }
+        };
+
+        Tensor::new(Some(&vec![res]), &[1])
+    }
+
     /// Maps a function to tensors and enumerates in parallel
     /// ```
     /// use ezkl::tensor::{Tensor, TensorError};
@@ -1293,7 +1317,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         E: Error + std::marker::Send + std::marker::Sync,
     >(
         &mut self,
-        filter_indices: &std::collections::HashSet<&usize>,
+        filter_indices: &std::collections::HashSet<usize>,
         f: F,
     ) -> Result<(), E>
     where
