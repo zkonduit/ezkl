@@ -800,43 +800,45 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// gets constants
-    #[inline(always)]
     pub fn get_const_zero_indices(&self) -> Vec<usize> {
         match self {
-            ValTensor::Value { inner: v, .. } => {
-                let mut indices = Vec::with_capacity(v.len());
-                for (i, e) in v.iter().enumerate() {
+            ValTensor::Value { inner: v, .. } => v
+                .par_iter()
+                .enumerate()
+                .filter_map(|(i, e)| {
                     if let ValType::Constant(r) = e {
                         if *r == F::ZERO {
-                            indices.push(i);
+                            return Some(i);
                         }
                     } else if let ValType::AssignedConstant(_, r) = e {
                         if *r == F::ZERO {
-                            indices.push(i);
+                            return Some(i);
                         }
                     }
-                }
-                indices
-            }
+                    None
+                })
+                .collect(),
             ValTensor::Instance { .. } => vec![],
         }
     }
 
     /// gets constants
-    pub fn get_const_indices(&self) -> Result<Vec<usize>, TensorError> {
+    pub fn get_const_indices(&self) -> Vec<usize> {
         match self {
-            ValTensor::Value { inner: v, .. } => {
-                let mut indices = vec![];
-                for (i, e) in v.iter().enumerate() {
+            ValTensor::Value { inner: v, .. } => v
+                .par_iter()
+                .enumerate()
+                .filter_map(|(i, e)| {
                     if let ValType::Constant(_) = e {
-                        indices.push(i);
+                        Some(i)
                     } else if let ValType::AssignedConstant(_, _) = e {
-                        indices.push(i);
+                        Some(i)
+                    } else {
+                        None
                     }
-                }
-                Ok(indices)
-            }
-            ValTensor::Instance { .. } => Ok(vec![]),
+                })
+                .collect(),
+            ValTensor::Instance { .. } => vec![],
         }
     }
 

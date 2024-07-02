@@ -3768,7 +3768,7 @@ pub(crate) fn boolean_identity<
     values: &[ValTensor<F>; 1],
     assign: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let output = if assign || !values[0].get_const_indices()?.is_empty() {
+    let output = if assign || !values[0].get_const_indices().is_empty() {
         // get zero constants indices
         let output = region.assign(&config.custom_gates.output, &values[0])?;
         region.increment(output.len());
@@ -3933,7 +3933,7 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
 
     let x = values[0].clone();
 
-    let removal_indices = values[0].get_const_indices()?;
+    let removal_indices = values[0].get_const_indices();
     let removal_indices: HashSet<usize> = HashSet::from_iter(removal_indices.into_iter());
 
     let w = region.assign_with_omissions(&config.static_lookups.input, &x, &removal_indices)?;
