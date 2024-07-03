@@ -586,9 +586,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 &mut self.assigned_constants,
             )?)
         } else {
-            let mut values = values.clone();
+            let mut values_clone = values.clone();
             let mut indices = ommissions.clone().into_iter().collect_vec();
-            values.remove_indices(&mut indices, false)?;
+            values_clone.remove_indices(&mut indices, false)?;
 
             let values_map = values.create_constants_map();
 

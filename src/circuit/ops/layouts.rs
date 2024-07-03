@@ -2305,7 +2305,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     trace!("pairwise {} calc took {:?}", op.as_str(), start.elapsed());
 
     let start = instant::Instant::now();
-    let assigned_len = inputs[0].len() - removal_indices.len();
+    let assigned_len = op_result.len() - removal_indices.len();
     let mut output = region.assign_with_omissions(
         &config.custom_gates.output,
         &op_result.into(),
