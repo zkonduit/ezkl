@@ -209,7 +209,7 @@ metal = ["dep:metal", "dep:objc"]
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#13e0333fe042c3f8b528952c173adc99438249f0", package = "halo2_proofs" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#8cfca221f53069a0374687654882b99e729041d7", package = "halo2_proofs" }
 
 
 [profile.release]
