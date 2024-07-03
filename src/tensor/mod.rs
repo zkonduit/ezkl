@@ -958,7 +958,7 @@ impl<T: Clone + TensorType> Tensor<T> {
         }
         // remove indices
         for elem in indices.iter().rev() {
-            inner.swap_remove(*elem);
+            inner.remove(*elem);
         }
 
         Tensor::new(Some(&inner), &[inner.len()])
