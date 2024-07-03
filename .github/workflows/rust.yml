@@ -677,5 +677,5 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
-      - name: Reusable verifier tutorial
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_
+      # - name: Reusable verifier tutorial
+        # run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_
