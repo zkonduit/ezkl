@@ -567,7 +567,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         var: &VarTensor,
         values: &ValTensor<F>,
     ) -> Result<ValTensor<F>, CircuitError> {
-        Ok(self.assign_dynamic_lookup(var, values)?)
+        self.assign_dynamic_lookup(var, values)
     }
 
     /// Assign a valtensor to a vartensor

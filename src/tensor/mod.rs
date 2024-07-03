@@ -1302,7 +1302,7 @@ impl<T: Clone + TensorType> Tensor<T> {
             }
         };
 
-        Tensor::new(Some(&vec![res]), &[1])
+        Tensor::new(Some(&[res]), &[1])
     }
 
     /// Maps a function to tensors and enumerates in parallel

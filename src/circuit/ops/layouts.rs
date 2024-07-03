@@ -3938,7 +3938,7 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
     let x = values[0].clone();
 
     let removal_indices = values[0].get_const_indices();
-    let removal_indices: HashSet<usize> = HashSet::from_iter(removal_indices.into_iter());
+    let removal_indices: HashSet<usize> = HashSet::from_iter(removal_indices);
 
     let w = region.assign_with_omissions(&config.static_lookups.input, &x, &removal_indices)?;
 
