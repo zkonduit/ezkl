@@ -177,7 +177,7 @@ required-features = ["ezkl"]
 
 [features]
 web = ["wasm-bindgen-rayon"]
-default = ["ezkl", "mv-lookup", "no-banner"]
+default = ["ezkl", "mv-lookup", "no-banner", "parallel-poly-read"]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
 ezkl = [
@@ -191,6 +191,7 @@ ezkl = [
     "colored_json",
     "halo2_proofs/circuit-params",
 ]
+parallel-poly-read = ["halo2_proofs/parallel-poly-read"]
 mv-lookup = [
     "halo2_proofs/mv-lookup",
     "snark-verifier/mv-lookup",
@@ -208,7 +209,7 @@ metal = ["dep:metal", "dep:objc"]
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a", package = "halo2_proofs", branch = "ac/optional-selector-poly" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#010eda91ecaa91b9389c8ce2dc92737d1d69d991", package = "halo2_proofs" }
 
 
 [profile.release]

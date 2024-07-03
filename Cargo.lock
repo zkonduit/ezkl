@@ -2282,7 +2282,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a"
+source = "git+https://github.com/zkonduit/halo2#010eda91ecaa91b9389c8ce2dc92737d1d69d991#010eda91ecaa91b9389c8ce2dc92737d1d69d991"
 dependencies = [
  "blake2b_simd",
  "env_logger",
