@@ -267,6 +267,10 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64>(
     removal_indices.par_sort_unstable();
     removal_indices.dedup();
 
+    // is already sorted
+    values[0].remove_indices(&mut removal_indices, true)?;
+    values[1].remove_indices(&mut removal_indices, true)?;
+
     // if empty return a const
     if removal_indices.len() == values[0].len() {
         return Ok(create_zero_tensor(1));
