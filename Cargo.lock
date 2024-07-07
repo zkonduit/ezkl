@@ -2302,7 +2302,7 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=cache-lookup-consts-vk#85a0d2c9c4be4f91e468bc900bafbaf44d754406"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=cache-lookup-consts-vk#57a969b0815761288995120684fbab40e9e83896"
 dependencies = [
  "askama",
  "blake2b_simd",
