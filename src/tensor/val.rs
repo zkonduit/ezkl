@@ -777,7 +777,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// remove constant zero values constants
     pub fn remove_const_zero_values(&mut self) {
         match self {
-            ValTensor::Value { inner: v, .. } => {
+            ValTensor::Value { inner: v, dims, .. } => {
                 *v = v
                     .clone()
                     .into_par_iter()
@@ -794,6 +794,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                         Some(e)
                     })
                     .collect();
+                *dims = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {}
         }
