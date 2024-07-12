@@ -609,9 +609,7 @@ impl Model {
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
     ) -> Result<TractResult, GraphError> {
-        use tract_onnx::{
-            tract_core::internal::IntoArcTensor, tract_hir::internal::GenericFactoid,
-        };
+        use tract_onnx::tract_hir::internal::GenericFactoid;
 
         let mut model = tract_onnx::onnx().model_for_read(reader)?;
 
