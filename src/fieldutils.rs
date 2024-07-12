@@ -16,7 +16,7 @@ pub fn i64_to_felt<F: PrimeField>(x: i64) -> F {
     if x >= 0 {
         F::from_u128(x as u128)
     } else {
-        -F::from_u128((-x) as u128)
+        -F::from_u128(x.saturating_neg() as u128)
     }
 }
 
