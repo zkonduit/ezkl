@@ -319,7 +319,7 @@ impl VarTensor {
         region: &mut Region<F>,
         offset: usize,
         values: &ValTensor<F>,
-        omissions: &HashSet<&usize>,
+        omissions: &HashSet<usize>,
         constants: &mut ConstantsMap<F>,
     ) -> Result<ValTensor<F>, halo2_proofs::plonk::Error> {
         let mut assigned_coord = 0;

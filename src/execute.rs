@@ -1502,10 +1502,10 @@ pub(crate) async fn create_evm_vk(
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn create_evm_data_attestation(
     settings_path: PathBuf,
-    _sol_code_path: PathBuf,
-    _abi_path: PathBuf,
-    _input: PathBuf,
-    _witness: Option<PathBuf>,
+    sol_code_path: PathBuf,
+    abi_path: PathBuf,
+    input: PathBuf,
+    witness: Option<PathBuf>,
 ) -> Result<String, EZKLError> {
     #[allow(unused_imports)]
     use crate::graph::{DataSource, VarVisibility};
@@ -1517,7 +1517,7 @@ pub(crate) async fn create_evm_data_attestation(
     trace!("params computed");
 
     // if input is not provided, we just instantiate dummy input data
-    let data = GraphData::from_path(_input).unwrap_or(GraphData::new(DataSource::File(vec![])));
+    let data = GraphData::from_path(input).unwrap_or(GraphData::new(DataSource::File(vec![])));
 
     let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
         if visibility.output.is_private() {
@@ -1552,7 +1552,7 @@ pub(crate) async fn create_evm_data_attestation(
         || settings.run_args.output_visibility == Visibility::KZGCommit
         || settings.run_args.param_visibility == Visibility::KZGCommit
     {
-        let witness = GraphWitness::from_path(_witness.unwrap_or(DEFAULT_WITNESS.into()))?;
+        let witness = GraphWitness::from_path(witness.unwrap_or(DEFAULT_WITNESS.into()))?;
         let commitments = witness.get_polycommitments();
         let proof_first_bytes = get_proof_commitments::<
             KZGCommitmentScheme<Bn256>,
@@ -1566,12 +1566,12 @@ pub(crate) async fn create_evm_data_attestation(
     };
 
     let output = fix_da_sol(input_data, output_data, commitment_bytes)?;
-    let mut f = File::create(_sol_code_path.clone())?;
+    let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(output.as_bytes());
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(_sol_code_path, "DataAttestation", 0).await?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestation", 0).await?;
     // save abi to file
-    serde_json::to_writer(std::fs::File::create(_abi_path)?, &abi)?;
+    serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
     Ok(String::new())
 }
