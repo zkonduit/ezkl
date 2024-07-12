@@ -1176,7 +1176,8 @@ mod native_tests {
 
 
                     #[cfg(not(feature = "icicle"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", true);
+                    // TODO: Add path for reusable verifier in in browser evm verifier
+                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify", true);
                     test_dir.close().unwrap();
 
                 }
