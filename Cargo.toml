@@ -23,6 +23,7 @@ halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curv
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
 clap = { version = "4.5.3", features = ["derive"] }
+clap_complete = "4.5.2"
 serde = { version = "1.0.126", features = ["derive"], optional = true }
 serde_json = { version = "1.0.97", default_features = false, features = [
     "float_roundtrip",
@@ -38,52 +39,48 @@ snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = 
 halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", branch = "main" }
 maybe-rayon = { version = "0.1.1", default_features = false }
 bincode = { version = "1.3.3", default_features = false }
-ark-std = { version = "^0.3.0", default-features = false }
 unzip-n = "0.1.2"
 num = "0.4.1"
 portable-atomic = "1.6.0"
 tosubcommand = { git = "https://github.com/zkonduit/enum_to_subcommand", package = "tosubcommand" }
 metal = { git = "https://github.com/gfx-rs/metal-rs", optional = true }
-
+semver = "1.0.22"
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ethers = { version = "2.0.11", default_features = false, features = [
-    "ethers-solc",
-] }
+alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev="5fbf57bac99edef9d8475190109a7ea9fb7e5e83", features = ["provider-http", "signers", "contract", "rpc-types-eth", "signer-wallet", "node-bindings"] }
+foundry-compilers = {version = "0.4.1", features = ["svm-solc"]}
+ethabi = "18"
 indicatif = { version = "0.17.5", features = ["rayon"] }
 gag = { version = "1.0.0", default_features = false }
 instant = { version = "0.1" }
-reqwest = { version = "0.11.14", default-features = false, features = [
+reqwest = { version = "0.12.4", default-features = false, features = [
     "default-tls",
     "multipart",
     "stream",
 ] }
 openssl = { version = "0.10.55", features = ["vendored"] }
-postgres = "0.19.5"
+tokio-postgres = "0.7.10"
 pg_bigdecimal = "0.1.5"
 lazy_static = "1.4.0"
 colored_json = { version = "3.0.1", default_features = false, optional = true }
-plotters = { version = "0.3.0", default_features = false, optional = true }
 regex = { version = "1", default_features = false }
-tokio = { version = "1.26.0", default_features = false, features = [
+tokio = { version = "1.35", default_features = false, features = [
     "macros",
-    "rt",
+    "rt-multi-thread"
 ] }
-tokio-util = { version = "0.7.9", features = ["codec"] }
-pyo3 = { version = "0.20.2", features = [
+pyo3 = { version = "0.21.2", features = [
     "extension-module",
     "abi3-py37",
     "macros",
 ], default_features = false, optional = true }
-pyo3-asyncio = { version = "0.20.0", features = [
+pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio/", branch="migration-pyo3-0.21", features = [
     "attributes",
     "tokio-runtime",
 ], default_features = false, optional = true }
-pyo3-log = { version = "0.9.0", default_features = false, optional = true }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev = "05ebf550aa9922b221af4635c21a67a8d2af12a9", optional = true }
+pyo3-log = { version = "0.10.0", default_features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev = "7bf303b2ae9bddd5fa6951ae95848c0d52fb7f50", default_features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
-
 objc = { version = "0.2.4", optional = true }
 
 
@@ -106,8 +103,10 @@ console_error_panic_hook = "0.1.7"
 wasm-bindgen-console-logger = "0.1.1"
 
 
+[target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+
 [dev-dependencies]
-criterion = { version = "0.3", features = ["html_reports"] }
 tempfile = "3.3.0"
 lazy_static = "1.4.0"
 mnist = "0.5"
@@ -178,7 +177,7 @@ required-features = ["ezkl"]
 
 [features]
 web = ["wasm-bindgen-rayon"]
-default = ["ezkl", "mv-lookup"]
+default = ["ezkl", "mv-lookup", "no-banner", "parallel-poly-read"]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
 ezkl = [
@@ -192,6 +191,7 @@ ezkl = [
     "colored_json",
     "halo2_proofs/circuit-params",
 ]
+parallel-poly-read = ["halo2_proofs/parallel-poly-read"]
 mv-lookup = [
     "halo2_proofs/mv-lookup",
     "snark-verifier/mv-lookup",
@@ -201,6 +201,7 @@ det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
 empty-cmd = []
 no-banner = []
+no-update = []
 metal = ["dep:metal", "dep:objc"]
 
 # icicle patch to 0.1.0 if feature icicle is enabled
@@ -208,7 +209,7 @@ metal = ["dep:metal", "dep:objc"]
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a", package = "halo2_proofs", branch = "ac/optional-selector-poly" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#8cfca221f53069a0374687654882b99e729041d7", package = "halo2_proofs" }
 
 
 [profile.release]

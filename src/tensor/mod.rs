@@ -1,9 +1,13 @@
+/// Tensor related errors.
+pub mod errors;
 /// Implementations of common operations on tensors.
 pub mod ops;
 /// A wrapper around a tensor of circuit variables / advices.
 pub mod val;
 /// A wrapper around a tensor of Halo2 Value types.
 pub mod var;
+
+pub use errors::TensorError;
 
 use halo2curves::{bn256::Fr, ff::PrimeField};
 use maybe_rayon::{
@@ -40,39 +44,9 @@ use std::fmt::Debug;
 use std::iter::Iterator;
 use std::ops::{Add, Deref, DerefMut, Div, Mul, Neg, Range, Sub};
 use std::{cmp::max, ops::Rem};
-use thiserror::Error;
 
 #[cfg(feature = "metal")]
 use std::collections::HashMap;
-
-/// A wrapper for tensor related errors.
-#[derive(Debug, Error)]
-pub enum TensorError {
-    /// Shape mismatch in a operation
-    #[error("dimension mismatch in tensor op: {0}")]
-    DimMismatch(String),
-    /// Shape when instantiating
-    #[error("dimensionality error when manipulating a tensor: {0}")]
-    DimError(String),
-    /// wrong method was called on a tensor-like struct
-    #[error("wrong method called")]
-    WrongMethod,
-    /// Significant bit truncation when instantiating
-    #[error("Significant bit truncation when instantiating, try lowering the scale")]
-    SigBitTruncationError,
-    /// Failed to convert to field element tensor
-    #[error("Failed to convert to field element tensor")]
-    FeltError,
-    /// Table lookup error
-    #[error("Table lookup error")]
-    TableLookupError,
-    /// Unsupported operation
-    #[error("Unsupported operation on a tensor type")]
-    Unsupported,
-    /// Overflow
-    #[error("Unsigned integer overflow or underflow error in op: {0}")]
-    Overflow(String),
-}
 
 #[cfg(feature = "metal")]
 const LIB_DATA: &[u8] = include_bytes!("metal/tensor_ops.metallib");
@@ -400,9 +374,7 @@ impl IntoI64 for () {
     fn into_i64(self) -> i64 {
         0
     }
-    fn from_i64(_: i64) -> Self {
-        ()
-    }
+    fn from_i64(_: i64) -> Self {}
 }
 
 impl IntoI64 for Fr {
@@ -419,7 +391,7 @@ impl<F: PrimeField + IntoI64> IntoI64 for Value<F> {
         let mut res = vec![];
         self.map(|x| res.push(x.into_i64()));
 
-        if res.len() == 0 {
+        if res.is_empty() {
             0
         } else {
             res[0]
@@ -1852,7 +1824,7 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync> Re
 pub fn get_broadcasted_shape(
     shape_a: &[usize],
     shape_b: &[usize],
-) -> Result<Vec<usize>, Box<dyn Error>> {
+) -> Result<Vec<usize>, TensorError> {
     let num_dims_a = shape_a.len();
     let num_dims_b = shape_b.len();
 
@@ -1867,9 +1839,9 @@ pub fn get_broadcasted_shape(
         }
         (a, b) if a < b => Ok(shape_b.to_vec()),
         (a, b) if a > b => Ok(shape_a.to_vec()),
-        _ => Err(Box::new(TensorError::DimError(
+        _ => Err(TensorError::DimError(
             "Unknown condition for broadcasting".to_string(),
-        ))),
+        )),
     }
 }
 ////////////////////////

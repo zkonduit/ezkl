@@ -1,7 +1,7 @@
 // ignore file if compiling for wasm
 
 #[cfg(not(target_arch = "wasm32"))]
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
 #[cfg(not(target_arch = "wasm32"))]
@@ -11,35 +11,49 @@ use ezkl::execute::run;
 #[cfg(not(target_arch = "wasm32"))]
 use ezkl::logger::init_logger;
 #[cfg(not(target_arch = "wasm32"))]
-use log::{debug, error, info};
+use log::{error, info};
 #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
 use rand::prelude::SliceRandom;
 #[cfg(not(target_arch = "wasm32"))]
 #[cfg(feature = "icicle")]
 use std::env;
-#[cfg(not(target_arch = "wasm32"))]
-use std::error::Error;
 
 #[tokio::main(flavor = "current_thread")]
 #[cfg(not(target_arch = "wasm32"))]
-pub async fn main() -> Result<(), Box<dyn Error>> {
+pub async fn main() {
     let args = Cli::parse();
-    init_logger();
-    #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
-    banner();
-    #[cfg(feature = "icicle")]
-    if env::var("ENABLE_ICICLE_GPU").is_ok() {
-        info!("Running with ICICLE GPU");
+
+    if let Some(generator) = args.generator {
+        ezkl::commands::print_completions(generator, &mut Cli::command());
+    } else if let Some(command) = args.command {
+        init_logger();
+        #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
+        banner();
+        #[cfg(feature = "icicle")]
+        if env::var("ENABLE_ICICLE_GPU").is_ok() {
+            info!("Running with ICICLE GPU");
+        } else {
+            info!("Running with CPU");
+        }
+        info!(
+            "command: \n {}",
+            &command.as_json().to_colored_json_auto().unwrap()
+        );
+        let res = run(command).await;
+        match &res {
+            Ok(_) => {
+                info!("succeeded");
+            }
+            Err(e) => {
+                error!("{}", e);
+                std::process::exit(1)
+            }
+        }
     } else {
-        info!("Running with CPU");
+        init_logger();
+        error!("No command provided");
+        std::process::exit(1)
     }
-    debug!("command: \n {}", &args.as_json()?.to_colored_json_auto()?);
-    let res = run(args.command).await;
-    match &res {
-        Ok(_) => info!("succeeded"),
-        Err(e) => error!("failed: {}", e),
-    };
-    res.map(|_| ())
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -1,6 +1,6 @@
 use crate::{
     circuit::table::Range,
-    tensor::{Tensor, TensorError, TensorType, ValTensor, ValType, VarTensor},
+    tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor},
 };
 #[cfg(not(target_arch = "wasm32"))]
 use colored::Colorize;
@@ -19,7 +19,7 @@ use std::{
     },
 };
 
-use super::lookup::LookupOp;
+use super::{lookup::LookupOp, CircuitError};
 
 /// Constants map
 pub type ConstantsMap<F> = HashMap<F, ValType<F>>;
@@ -81,44 +81,6 @@ impl ShuffleIndex {
     pub fn update(&mut self, other: &ShuffleIndex) {
         self.index += other.index;
         self.col_coord += other.col_coord;
-    }
-}
-
-/// Region error
-#[derive(Debug, thiserror::Error)]
-pub enum RegionError {
-    /// wrap other regions
-    #[error("Wrapped region: {0}")]
-    Wrapped(String),
-}
-
-impl From<String> for RegionError {
-    fn from(e: String) -> Self {
-        Self::Wrapped(e)
-    }
-}
-
-impl From<&str> for RegionError {
-    fn from(e: &str) -> Self {
-        Self::Wrapped(e.to_string())
-    }
-}
-
-impl From<TensorError> for RegionError {
-    fn from(e: TensorError) -> Self {
-        Self::Wrapped(format!("{:?}", e))
-    }
-}
-
-impl From<Error> for RegionError {
-    fn from(e: Error) -> Self {
-        Self::Wrapped(format!("{:?}", e))
-    }
-}
-
-impl From<Box<dyn std::error::Error>> for RegionError {
-    fn from(e: Box<dyn std::error::Error>) -> Self {
-        Self::Wrapped(format!("{:?}", e))
     }
 }
 
@@ -317,10 +279,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     pub fn apply_in_loop<T: TensorType + Send + Sync>(
         &mut self,
         output: &mut Tensor<T>,
-        inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, RegionError>
+        inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, CircuitError>
             + Send
             + Sync,
-    ) -> Result<(), RegionError> {
+    ) -> Result<(), CircuitError> {
         if self.is_dummy() {
             self.dummy_loop(output, inner_loop_function)?;
         } else {
@@ -333,8 +295,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     pub fn real_loop<T: TensorType + Send + Sync>(
         &mut self,
         output: &mut Tensor<T>,
-        inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, RegionError>,
-    ) -> Result<(), RegionError> {
+        inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, CircuitError>,
+    ) -> Result<(), CircuitError> {
         output
             .iter_mut()
             .enumerate()
@@ -342,7 +304,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 *o = inner_loop_function(i, self)?;
                 Ok(())
             })
-            .collect::<Result<Vec<_>, RegionError>>()?;
+            .collect::<Result<Vec<_>, CircuitError>>()?;
 
         Ok(())
     }
@@ -353,10 +315,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     pub fn dummy_loop<T: TensorType + Send + Sync>(
         &mut self,
         output: &mut Tensor<T>,
-        inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, RegionError>
+        inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, CircuitError>
             + Send
             + Sync,
-    ) -> Result<(), RegionError> {
+    ) -> Result<(), CircuitError> {
         let row = AtomicUsize::new(self.row());
         let linear_coord = AtomicUsize::new(self.linear_coord());
         let max_lookup_inputs = AtomicInt::new(self.max_lookup_inputs());
@@ -367,50 +329,48 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         let shuffle_index = Arc::new(Mutex::new(self.shuffle_index.clone()));
         let constants = Arc::new(Mutex::new(self.assigned_constants.clone()));
 
-        *output = output
-            .par_enum_map(|idx, _| {
-                // we kick off the loop with the current offset
-                let starting_offset = row.load(Ordering::SeqCst);
-                let starting_linear_coord = linear_coord.load(Ordering::SeqCst);
-                // get inner value of the locked lookups
+        *output = output.par_enum_map(|idx, _| {
+            // we kick off the loop with the current offset
+            let starting_offset = row.load(Ordering::SeqCst);
+            let starting_linear_coord = linear_coord.load(Ordering::SeqCst);
+            // get inner value of the locked lookups
 
-                // we need to make sure that the region is not shared between threads
-                let mut local_reg = Self::new_dummy_with_linear_coord(
-                    starting_offset,
-                    starting_linear_coord,
-                    self.num_inner_cols,
-                    self.witness_gen,
-                    self.check_lookup_range,
-                );
-                let res = inner_loop_function(idx, &mut local_reg);
-                // we update the offset and constants
-                row.fetch_add(local_reg.row() - starting_offset, Ordering::SeqCst);
-                linear_coord.fetch_add(
-                    local_reg.linear_coord() - starting_linear_coord,
-                    Ordering::SeqCst,
-                );
+            // we need to make sure that the region is not shared between threads
+            let mut local_reg = Self::new_dummy_with_linear_coord(
+                starting_offset,
+                starting_linear_coord,
+                self.num_inner_cols,
+                self.witness_gen,
+                self.check_lookup_range,
+            );
+            let res = inner_loop_function(idx, &mut local_reg);
+            // we update the offset and constants
+            row.fetch_add(local_reg.row() - starting_offset, Ordering::SeqCst);
+            linear_coord.fetch_add(
+                local_reg.linear_coord() - starting_linear_coord,
+                Ordering::SeqCst,
+            );
 
-                max_lookup_inputs.fetch_max(local_reg.max_lookup_inputs(), Ordering::SeqCst);
-                min_lookup_inputs.fetch_min(local_reg.min_lookup_inputs(), Ordering::SeqCst);
-                // update the lookups
-                let mut lookups = lookups.lock().unwrap();
-                lookups.extend(local_reg.used_lookups());
-                // update the range checks
-                let mut range_checks = range_checks.lock().unwrap();
-                range_checks.extend(local_reg.used_range_checks());
-                // update the dynamic lookup index
-                let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
-                dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
-                // update the shuffle index
-                let mut shuffle_index = shuffle_index.lock().unwrap();
-                shuffle_index.update(&local_reg.shuffle_index);
-                // update the constants
-                let mut constants = constants.lock().unwrap();
-                constants.extend(local_reg.assigned_constants);
+            max_lookup_inputs.fetch_max(local_reg.max_lookup_inputs(), Ordering::SeqCst);
+            min_lookup_inputs.fetch_min(local_reg.min_lookup_inputs(), Ordering::SeqCst);
+            // update the lookups
+            let mut lookups = lookups.lock().unwrap();
+            lookups.extend(local_reg.used_lookups());
+            // update the range checks
+            let mut range_checks = range_checks.lock().unwrap();
+            range_checks.extend(local_reg.used_range_checks());
+            // update the dynamic lookup index
+            let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
+            dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
+            // update the shuffle index
+            let mut shuffle_index = shuffle_index.lock().unwrap();
+            shuffle_index.update(&local_reg.shuffle_index);
+            // update the constants
+            let mut constants = constants.lock().unwrap();
+            constants.extend(local_reg.assigned_constants);
 
-                res
-            })
-            .map_err(|e| RegionError::from(format!("dummy_loop: {:?}", e)))?;
+            res
+        })?;
         self.linear_coord = linear_coord.into_inner();
         #[allow(trivial_numeric_casts)]
         {
@@ -419,49 +379,25 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         }
         self.row = row.into_inner();
         self.used_lookups = Arc::try_unwrap(lookups)
-            .map_err(|e| RegionError::from(format!("dummy_loop: failed to get lookups: {:?}", e)))?
+            .map_err(|e| CircuitError::GetLookupsError(format!("{:?}", e)))?
             .into_inner()
-            .map_err(|e| {
-                RegionError::from(format!("dummy_loop: failed to get lookups: {:?}", e))
-            })?;
+            .map_err(|e| CircuitError::GetLookupsError(format!("{:?}", e)))?;
         self.used_range_checks = Arc::try_unwrap(range_checks)
-            .map_err(|e| {
-                RegionError::from(format!("dummy_loop: failed to get range checks: {:?}", e))
-            })?
+            .map_err(|e| CircuitError::GetRangeChecksError(format!("{:?}", e)))?
             .into_inner()
-            .map_err(|e| {
-                RegionError::from(format!("dummy_loop: failed to get range checks: {:?}", e))
-            })?;
+            .map_err(|e| CircuitError::GetRangeChecksError(format!("{:?}", e)))?;
         self.dynamic_lookup_index = Arc::try_unwrap(dynamic_lookup_index)
-            .map_err(|e| {
-                RegionError::from(format!(
-                    "dummy_loop: failed to get dynamic lookup index: {:?}",
-                    e
-                ))
-            })?
+            .map_err(|e| CircuitError::GetDynamicLookupError(format!("{:?}", e)))?
             .into_inner()
-            .map_err(|e| {
-                RegionError::from(format!(
-                    "dummy_loop: failed to get dynamic lookup index: {:?}",
-                    e
-                ))
-            })?;
+            .map_err(|e| CircuitError::GetDynamicLookupError(format!("{:?}", e)))?;
         self.shuffle_index = Arc::try_unwrap(shuffle_index)
-            .map_err(|e| {
-                RegionError::from(format!("dummy_loop: failed to get shuffle index: {:?}", e))
-            })?
+            .map_err(|e| CircuitError::GetShuffleError(format!("{:?}", e)))?
             .into_inner()
-            .map_err(|e| {
-                RegionError::from(format!("dummy_loop: failed to get shuffle index: {:?}", e))
-            })?;
+            .map_err(|e| CircuitError::GetShuffleError(format!("{:?}", e)))?;
         self.assigned_constants = Arc::try_unwrap(constants)
-            .map_err(|e| {
-                RegionError::from(format!("dummy_loop: failed to get constants: {:?}", e))
-            })?
+            .map_err(|e| CircuitError::GetConstantsError(format!("{:?}", e)))?
             .into_inner()
-            .map_err(|e| {
-                RegionError::from(format!("dummy_loop: failed to get constants: {:?}", e))
-            })?;
+            .map_err(|e| CircuitError::GetConstantsError(format!("{:?}", e)))?;
 
         Ok(())
     }
@@ -470,7 +406,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     pub fn update_max_min_lookup_inputs(
         &mut self,
         inputs: &[ValTensor<F>],
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CircuitError> {
         let (mut min, mut max) = (0, 0);
         for i in inputs {
             max = max.max(i.get_int_evals()?.into_iter().max().unwrap_or_default());
@@ -482,12 +418,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// Update the max and min from inputs
-    pub fn update_max_min_lookup_range(
-        &mut self,
-        range: Range,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn update_max_min_lookup_range(&mut self, range: Range) -> Result<(), CircuitError> {
         if range.0 > range.1 {
-            return Err(format!("update_max_min_lookup_range: invalid range {:?}", range).into());
+            return Err(CircuitError::InvalidMinMaxRange(range.0, range.1));
         }
 
         let range_size = (range.1 - range.0).abs();
@@ -506,13 +439,13 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         lookup: LookupOp,
         inputs: &[ValTensor<F>],
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), CircuitError> {
         self.used_lookups.insert(lookup);
         self.update_max_min_lookup_inputs(inputs)
     }
 
     /// add used range check
-    pub fn add_used_range_check(&mut self, range: Range) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn add_used_range_check(&mut self, range: Range) -> Result<(), CircuitError> {
         self.used_range_checks.insert(range);
         self.update_max_min_lookup_range(range)
     }
@@ -707,7 +640,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// constrain equal
-    pub fn constrain_equal(&mut self, a: &ValTensor<F>, b: &ValTensor<F>) -> Result<(), Error> {
+    pub fn constrain_equal(
+        &mut self,
+        a: &ValTensor<F>,
+        b: &ValTensor<F>,
+    ) -> Result<(), CircuitError> {
         if let Some(region) = &self.region {
             let a = a.get_inner_tensor().unwrap();
             let b = b.get_inner_tensor().unwrap();
@@ -717,12 +654,12 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 let b = b.get_prev_assigned();
                 // if they're both assigned, we can constrain them
                 if let (Some(a), Some(b)) = (&a, &b) {
-                    region.borrow_mut().constrain_equal(a.cell(), b.cell())
+                    region
+                        .borrow_mut()
+                        .constrain_equal(a.cell(), b.cell())
+                        .map_err(|e| e.into())
                 } else if a.is_some() || b.is_some() {
-                    log::error!(
-                        "constrain_equal: one of the tensors is assigned and the other is not"
-                    );
-                    return Err(Error::Synthesis);
+                    return Err(CircuitError::ConstrainError);
                 } else {
                     Ok(())
                 }
@@ -748,7 +685,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// flush row to the next row
-    pub fn flush(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn flush(&mut self) -> Result<(), CircuitError> {
         // increment by the difference between the current linear coord and the next row
         let remainder = self.linear_coord % self.num_inner_cols;
         if remainder != 0 {
@@ -756,7 +693,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             self.increment(diff);
         }
         if self.linear_coord % self.num_inner_cols != 0 {
-            return Err("flush: linear coord is not aligned with the next row".into());
+            return Err(CircuitError::FlushError);
         }
         Ok(())
     }

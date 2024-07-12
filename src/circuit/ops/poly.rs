@@ -179,7 +179,7 @@ impl<
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
             PolyOp::MultiBroadcastTo { shape } => {
                 layouts::expand(config, region, values[..].try_into()?, shape)?
@@ -278,9 +278,10 @@ impl<
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
             PolyOp::Pad(p) => {
                 if values.len() != 1 {
-                    return Err(Box::new(TensorError::DimError(
+                    return Err(TensorError::DimError(
                         "Pad operation requires a single input".to_string(),
-                    )));
+                    )
+                    .into());
                 }
                 let mut input = values[0].clone();
                 input.pad(p.clone(), 0)?;
@@ -297,7 +298,7 @@ impl<
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         let scale = match self {
             PolyOp::MeanOfSquares { .. } => 2 * in_scales[0],
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,

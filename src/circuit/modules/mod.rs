@@ -6,10 +6,11 @@ pub mod polycommit;
 
 ///
 pub mod planner;
-use halo2_proofs::{
-    circuit::Layouter,
-    plonk::{ConstraintSystem, Error},
-};
+
+///
+pub mod errors;
+
+use halo2_proofs::{circuit::Layouter, plonk::ConstraintSystem};
 use halo2curves::ff::PrimeField;
 pub use planner::*;
 
@@ -35,14 +36,14 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
     /// Name
     fn name(&self) -> &'static str;
     /// Run the operation the module represents
-    fn run(input: Self::RunInputs) -> Result<Vec<Vec<F>>, Box<dyn std::error::Error>>;
+    fn run(input: Self::RunInputs) -> Result<Vec<Vec<F>>, errors::ModuleError>;
     /// Layout inputs
     fn layout_inputs(
         &self,
         layouter: &mut impl Layouter<F>,
         input: &[ValTensor<F>],
         constants: &mut ConstantsMap<F>,
-    ) -> Result<Self::InputAssignments, Error>;
+    ) -> Result<Self::InputAssignments, errors::ModuleError>;
     /// Layout
     fn layout(
         &self,
@@ -50,7 +51,7 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
         input: &[ValTensor<F>],
         row_offset: usize,
         constants: &mut ConstantsMap<F>,
-    ) -> Result<ValTensor<F>, Error>;
+    ) -> Result<ValTensor<F>, errors::ModuleError>;
     /// Number of instance values the module uses every time it is applied
     fn instance_increment_input(&self) -> Vec<usize>;
     /// Number of rows used by the module

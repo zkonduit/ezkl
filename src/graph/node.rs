@@ -8,10 +8,13 @@ use super::Visibility;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
+use crate::circuit::CircuitError;
 use crate::circuit::Constant;
 use crate::circuit::Input;
 use crate::circuit::Op;
 use crate::circuit::Unknown;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::graph::errors::GraphError;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::graph::new_op_from_onnx;
 use crate::tensor::TensorError;
@@ -22,7 +25,6 @@ use serde::Deserialize;
 use serde::Serialize;
 #[cfg(not(target_arch = "wasm32"))]
 use std::collections::BTreeMap;
-use std::error::Error;
 #[cfg(not(target_arch = "wasm32"))]
 use std::fmt;
 #[cfg(not(target_arch = "wasm32"))]
@@ -65,7 +67,7 @@ impl Op<Fp> for Rescaled {
         format!("RESCALED INPUT ({})", self.inner.as_string())
     }
 
-    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         let in_scales = in_scales
             .into_iter()
             .zip(self.scale.iter())
@@ -80,11 +82,9 @@ impl Op<Fp> for Rescaled {
         config: &mut crate::circuit::BaseConfig<Fp>,
         region: &mut crate::circuit::region::RegionCtx<Fp>,
         values: &[crate::tensor::ValTensor<Fp>],
-    ) -> Result<Option<crate::tensor::ValTensor<Fp>>, Box<dyn Error>> {
+    ) -> Result<Option<crate::tensor::ValTensor<Fp>>, CircuitError> {
         if self.scale.len() != values.len() {
-            return Err(Box::new(TensorError::DimMismatch(
-                "rescaled inputs".to_string(),
-            )));
+            return Err(TensorError::DimMismatch("rescaled inputs".to_string()).into());
         }
 
         let res =
@@ -210,7 +210,7 @@ impl Op<Fp> for RebaseScale {
         )
     }
 
-    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         Ok(self.target_scale)
     }
 
@@ -219,11 +219,11 @@ impl Op<Fp> for RebaseScale {
         config: &mut crate::circuit::BaseConfig<Fp>,
         region: &mut crate::circuit::region::RegionCtx<Fp>,
         values: &[crate::tensor::ValTensor<Fp>],
-    ) -> Result<Option<crate::tensor::ValTensor<Fp>>, Box<dyn Error>> {
+    ) -> Result<Option<crate::tensor::ValTensor<Fp>>, CircuitError> {
         let original_res = self
             .inner
             .layout(config, region, values)?
-            .ok_or("no inner layout")?;
+            .ok_or(CircuitError::MissingLayout(self.as_string()))?;
         self.rebase_op.layout(config, region, &[original_res])
     }
 
@@ -306,7 +306,7 @@ impl SupportedOp {
     fn homogenous_rescale(
         &self,
         in_scales: Vec<crate::Scale>,
-    ) -> Result<Box<dyn Op<Fp>>, Box<dyn Error>> {
+    ) -> Result<Box<dyn Op<Fp>>, GraphError> {
         let inputs_to_scale = self.requires_homogenous_input_scales();
         // creates a rescaled op if the inputs are not homogenous
         let op = self.clone_dyn();
@@ -372,7 +372,7 @@ impl Op<Fp> for SupportedOp {
         config: &mut crate::circuit::BaseConfig<Fp>,
         region: &mut crate::circuit::region::RegionCtx<Fp>,
         values: &[crate::tensor::ValTensor<Fp>],
-    ) -> Result<Option<crate::tensor::ValTensor<Fp>>, Box<dyn Error>> {
+    ) -> Result<Option<crate::tensor::ValTensor<Fp>>, CircuitError> {
         self.as_op().layout(config, region, values)
     }
 
@@ -400,7 +400,7 @@ impl Op<Fp> for SupportedOp {
         self
     }
 
-    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         self.as_op().out_scale(in_scales)
     }
 }
@@ -478,7 +478,7 @@ impl Node {
         symbol_values: &SymbolValues,
         div_rebasing: bool,
         rebase_frac_zero_constants: bool,
-    ) -> Result<Self, Box<dyn Error>> {
+    ) -> Result<Self, GraphError> {
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
 
@@ -504,10 +504,15 @@ impl Node {
         input_ids
             .iter()
             .map(|(i, _)| {
-                inputs.push(other_nodes.get(i).ok_or("input not found")?.clone());
+                inputs.push(
+                    other_nodes
+                        .get(i)
+                        .ok_or(GraphError::MissingInput(idx))?
+                        .clone(),
+                );
                 Ok(())
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, GraphError>>()?;
 
         let (mut opkind, deleted_indices) = new_op_from_onnx(
             idx,
@@ -544,13 +549,13 @@ impl Node {
                 let idx = inputs
                     .iter()
                     .position(|x| *idx == x.idx())
-                    .ok_or("input not found")?;
+                    .ok_or(GraphError::MissingInput(*idx))?;
                 Ok(inputs[idx].out_scales()[*outlet])
             })
-            .collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<_>, GraphError>>()?;
 
         let homogenous_inputs = opkind.requires_homogenous_input_scales();
-        // autoamtically increases a constant's scale if it is only used once and
+        // automatically increases a constant's scale if it is only used once and
         for input in homogenous_inputs
             .into_iter()
             .filter(|i| !deleted_indices.contains(i))
@@ -558,7 +563,7 @@ impl Node {
             if inputs.len() > input {
                 let input_node = other_nodes
                     .get_mut(&inputs[input].idx())
-                    .ok_or("input not found")?;
+                    .ok_or(GraphError::MissingInput(idx))?;
                 let input_opkind = &mut input_node.opkind();
                 if let Some(constant) = input_opkind.get_mutable_constant() {
                     rescale_const_with_single_use(
@@ -615,10 +620,10 @@ fn rescale_const_with_single_use(
     in_scales: Vec<crate::Scale>,
     param_visibility: &Visibility,
     num_uses: usize,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), GraphError> {
     if num_uses == 1 {
         let current_scale = constant.out_scale(vec![])?;
-        let scale_max = in_scales.iter().max().ok_or("no scales")?;
+        let scale_max = in_scales.iter().max().ok_or(GraphError::MissingScale)?;
         if scale_max > &current_scale {
             let raw_values = constant.raw_values.clone();
             constant.quantized_values =

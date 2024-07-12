@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::fmt::Display;
 
 use crate::tensor::TensorType;
@@ -16,6 +15,8 @@ use pyo3::{
 
 use serde::{Deserialize, Serialize};
 use tosubcommand::ToFlags;
+
+use self::errors::GraphError;
 
 use super::*;
 
@@ -72,7 +73,7 @@ impl ToFlags for Visibility {
 impl<'a> From<&'a str> for Visibility {
     fn from(s: &'a str) -> Self {
         if s.contains("hashed/private") {
-            // split on last occurence of '/'
+            // split on last occurrence of '/'
             let (_, outlets) = s.split_at(s.rfind('/').unwrap());
             let outlets = outlets
                 .trim_start_matches('/')
@@ -261,12 +262,12 @@ impl VarScales {
     }
 
     /// Place in [VarScales] struct.
-    pub fn from_args(args: &RunArgs) -> Result<Self, Box<dyn Error>> {
-        Ok(Self {
+    pub fn from_args(args: &RunArgs) -> Self {
+        Self {
             input: args.input_scale,
             params: args.param_scale,
             rebase_multiplier: args.scale_rebase_multiplier,
-        })
+        }
     }
 }
 
@@ -303,15 +304,13 @@ impl Default for VarVisibility {
 impl VarVisibility {
     /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
     /// Place in [VarVisibility] struct.
-    pub fn from_args(args: &RunArgs) -> Result<Self, Box<dyn Error>> {
+    pub fn from_args(args: &RunArgs) -> Result<Self, GraphError> {
         let input_vis = &args.input_visibility;
         let params_vis = &args.param_visibility;
         let output_vis = &args.output_visibility;
 
         if params_vis.is_public() {
-            return Err(
-                "public visibility for params is deprecated, please use `fixed` instead".into(),
-            );
+            return Err(GraphError::ParamsPublicVisibility);
         }
 
         if !output_vis.is_public()
@@ -327,7 +326,7 @@ impl VarVisibility {
             & !params_vis.is_polycommit()
             & !input_vis.is_polycommit()
         {
-            return Err(Box::new(GraphError::Visibility));
+            return Err(GraphError::Visibility);
         }
         Ok(Self {
             input: input_vis.clone(),

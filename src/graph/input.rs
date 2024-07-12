@@ -1,13 +1,13 @@
+use super::errors::GraphError;
 use super::quantize_float;
-use super::GraphError;
 use crate::circuit::InputType;
 use crate::fieldutils::i64_to_felt;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::graph::postgres::Client;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::tensor::Tensor;
 use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
-#[cfg(not(target_arch = "wasm32"))]
-use postgres::{Client, NoTls};
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
@@ -211,7 +211,7 @@ impl PostgresSource {
     }
 
     /// Fetch data from postgres
-    pub fn fetch(&self) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, Box<dyn std::error::Error>> {
+    pub async fn fetch(&self) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, GraphError> {
         // clone to move into thread
         let user = self.user.clone();
         let host = self.host.clone();
@@ -232,10 +232,10 @@ impl PostgresSource {
             )
         };
 
-        let mut client = Client::connect(&config, NoTls)?;
+        let mut client = Client::connect(&config).await?;
         let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
         // extract rows from query
-        for row in client.query(&query, &[])? {
+        for row in client.query(&query, &[]).await? {
             // extract features from row
             for i in 0..row.len() {
                 res.push(row.get(i));
@@ -245,11 +245,10 @@ impl PostgresSource {
     }
 
     /// Fetch data from postgres and format it as a FileSource
-    pub fn fetch_and_format_as_file(
-        &self,
-    ) -> Result<Vec<Vec<FileSourceInner>>, Box<dyn std::error::Error>> {
+    pub async fn fetch_and_format_as_file(&self) -> Result<Vec<Vec<FileSourceInner>>, GraphError> {
         Ok(self
-            .fetch()?
+            .fetch()
+            .await?
             .iter()
             .map(|d| {
                 d.iter()
@@ -276,14 +275,14 @@ impl OnChainSource {
         scales: Vec<crate::Scale>,
         mut shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
-    ) -> Result<(Vec<Tensor<Fp>>, Self), Box<dyn std::error::Error>> {
-        use crate::eth::{evm_quantize, read_on_chain_inputs, test_on_chain_data};
+    ) -> Result<(Vec<Tensor<Fp>>, Self), GraphError> {
+        use crate::eth::{
+            evm_quantize, read_on_chain_inputs, test_on_chain_data, DEFAULT_ANVIL_ENDPOINT,
+        };
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
-        let (anvil, client) = crate::eth::setup_eth_backend(rpc, None).await?;
-
-        let address = client.address();
+        let (client, client_address) = crate::eth::setup_eth_backend(rpc, None).await?;
 
         let mut scales = scales;
         // set scales to 1 where data is a field element
@@ -296,7 +295,8 @@ impl OnChainSource {
 
         let calls_to_accounts = test_on_chain_data(client.clone(), data).await?;
         debug!("Calls to accounts: {:?}", calls_to_accounts);
-        let inputs = read_on_chain_inputs(client.clone(), address, &calls_to_accounts).await?;
+        let inputs =
+            read_on_chain_inputs(client.clone(), client_address, &calls_to_accounts).await?;
         debug!("Inputs: {:?}", inputs);
 
         let mut quantized_evm_inputs = vec![];
@@ -325,7 +325,7 @@ impl OnChainSource {
             inputs.push(t);
         }
 
-        let used_rpc = rpc.unwrap_or(&anvil.endpoint()).to_string();
+        let used_rpc = rpc.unwrap_or(DEFAULT_ANVIL_ENDPOINT).to_string();
 
         // Fill the input_data field of the GraphData struct
         Ok((
@@ -451,7 +451,7 @@ impl GraphData {
         &self,
         shapes: &[Vec<usize>],
         datum_types: &[tract_onnx::prelude::DatumType],
-    ) -> Result<TVec<TValue>, Box<dyn std::error::Error>> {
+    ) -> Result<TVec<TValue>, GraphError> {
         let mut inputs = TVec::new();
         match &self.input_data {
             DataSource::File(data) => {
@@ -466,10 +466,10 @@ impl GraphData {
                 }
             }
             _ => {
-                return Err(Box::new(GraphError::InvalidDims(
+                return Err(GraphError::InvalidDims(
                     0,
                     "non file data cannot be split into batches".to_string(),
-                )))
+                ))
             }
         }
         Ok(inputs)
@@ -484,28 +484,35 @@ impl GraphData {
     }
 
     /// Load the model input from a file
-    pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let reader = std::fs::File::open(path)?;
+    pub fn from_path(path: std::path::PathBuf) -> Result<Self, GraphError> {
+        let reader = std::fs::File::open(&path).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, reader);
         let mut buf = String::new();
-        reader.read_to_string(&mut buf)?;
+        reader.read_to_string(&mut buf).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let graph_input = serde_json::from_str(&buf)?;
         Ok(graph_input)
     }
 
     /// Save the model input to a file
-    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save(&self, path: std::path::PathBuf) -> Result<(), GraphError> {
+        let file = std::fs::File::create(path.clone()).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         // buf writer
-        let writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::create(path)?);
+        let writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, file);
         serde_json::to_writer(writer, self)?;
         Ok(())
     }
 
     ///
-    pub fn split_into_batches(
+    pub async fn split_into_batches(
         &self,
         input_shapes: Vec<Vec<usize>>,
-    ) -> Result<Vec<Self>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Self>, GraphError> {
         // split input data into batches
         let mut batched_inputs = vec![];
 
@@ -518,16 +525,16 @@ impl GraphData {
                 input_data: DataSource::OnChain(_),
                 output_data: _,
             } => {
-                return Err(Box::new(GraphError::InvalidDims(
+                return Err(GraphError::InvalidDims(
                     0,
                     "on-chain data cannot be split into batches".to_string(),
-                )))
+                ))
             }
             #[cfg(not(target_arch = "wasm32"))]
             GraphData {
                 input_data: DataSource::DB(data),
                 output_data: _,
-            } => data.fetch_and_format_as_file()?,
+            } => data.fetch_and_format_as_file().await?,
         };
 
         for (i, shape) in input_shapes.iter().enumerate() {
@@ -535,11 +542,11 @@ impl GraphData {
             let input_size = shape.clone().iter().product::<usize>();
             let input = &iterable[i];
             if input.len() % input_size != 0 {
-                return Err(Box::new(GraphError::InvalidDims(
+                return Err(GraphError::InvalidDims(
                     0,
                     "calibration data length must be evenly divisible by the original input_size"
                         .to_string(),
-                )));
+                ));
             }
             let mut batches = vec![];
             for batch in input.chunks(input_size) {

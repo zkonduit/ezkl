@@ -99,6 +99,10 @@ fi
 echo "Removing old ezkl binary if it exists"
 [ -e file ] && rm file
 
+# echo platform and architecture
+echo "Platform: $PLATFORM"
+echo "Architecture: $ARCHITECTURE"
+
 # download the release and unpack the right tarball
 if [ "$PLATFORM" == "windows-msvc" ]; then
     JSON_RESPONSE=$(curl -s "$RELEASE_URL")
@@ -126,7 +130,6 @@ elif [ "$PLATFORM" == "macos" ]; then
 
         echo "Cleaning up"
         rm "$EZKL_DIR/build-artifacts.ezkl-macos-aarch64.tar.gz"
-
     else
         JSON_RESPONSE=$(curl -s "$RELEASE_URL")
         FILE_URL=$(echo "$JSON_RESPONSE" | grep -o 'https://github.com[^"]*' | grep "build-artifacts.ezkl-macos.tar.gz")
@@ -143,7 +146,7 @@ elif [ "$PLATFORM" == "macos" ]; then
     fi
 
 elif [ "$PLATFORM" == "linux" ]; then
-    if [ "${ARCHITECTURE}" = "amd64" ]; then
+    if [ "$ARCHITECTURE" == "amd64" ]; then
         JSON_RESPONSE=$(curl -s "$RELEASE_URL")
         FILE_URL=$(echo "$JSON_RESPONSE" | grep -o 'https://github.com[^"]*' | grep "build-artifacts.ezkl-linux-gnu.tar.gz")
 
@@ -155,9 +158,20 @@ elif [ "$PLATFORM" == "linux" ]; then
 
         echo "Cleaning up"
         rm "$EZKL_DIR/build-artifacts.ezkl-linux-gnu.tar.gz"
+    elif [ "$ARCHITECTURE" == "aarch64" ]; then
+        JSON_RESPONSE=$(curl -s "$RELEASE_URL")
+        FILE_URL=$(echo "$JSON_RESPONSE" | grep -o 'https://github.com[^"]*' | grep "build-artifacts.ezkl-linux-aarch64.tar.gz")
 
+        echo "Downloading package"
+        curl -L "$FILE_URL" -o "$EZKL_DIR/build-artifacts.ezkl-linux-aarch64.tar.gz"
+
+        echo "Unpacking package"
+        tar -xzf "$EZKL_DIR/build-artifacts.ezkl-linux-aarch64.tar.gz" -C "$EZKL_DIR"
+
+        echo "Cleaning up"
+        rm "$EZKL_DIR/build-artifacts.ezkl-linux-aarch64.tar.gz"
     else
-        echo "ARM architectures are not supported for Linux at the moment. If you would need support for the ARM architectures on linux please submit an issue https://github.com/zkonduit/ezkl/issues/new/choose"
+        echo "Non aarch ARM architectures are not supported for Linux at the moment. If you would need support for the ARM architectures on linux please submit an issue https://github.com/zkonduit/ezkl/issues/new/choose"
         exit 1
     fi
 else
