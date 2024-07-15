@@ -342,12 +342,9 @@ pub fn new_op_from_onnx(
             }
         }
         "MultiBroadcastTo" => {
-            let op = load_op::<MultiBroadcastTo>(node.op(), idx, node.op().name().to_string())?;
-            let shape = op.shape.clone();
-            let shape = shape
-                .iter()
-                .map(|x| x.to_usize())
-                .collect::<Result<Vec<_>, _>>()?;
+            let _op = load_op::<MultiBroadcastTo>(node.op(), idx, node.op().name().to_string())?;
+            let shapes = node_output_shapes(&node, symbol_values)?;
+            let shape = shapes[0].clone();
             SupportedOp::Linear(PolyOp::MultiBroadcastTo { shape })
         }
 
