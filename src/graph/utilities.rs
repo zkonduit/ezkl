@@ -285,8 +285,7 @@ pub fn new_op_from_onnx(
 
     let input_dims = inputs
         .iter()
-        .map(|x| x.out_dims())
-        .flatten()
+        .flat_map(|x| x.out_dims())
         .collect::<Vec<_>>();
 
     let mut replace_const = |scale: crate::Scale,
@@ -1104,8 +1103,8 @@ pub fn new_op_from_onnx(
                 ));
             }
 
-            let stride = extract_strides(&pool_spec)?;
-            let padding = extract_padding(&pool_spec, input_dims[0].len())?;
+            let stride = extract_strides(pool_spec)?;
+            let padding = extract_padding(pool_spec, input_dims[0].len())?;
             let kernel_shape = &pool_spec.kernel_shape;
 
             SupportedOp::Hybrid(HybridOp::MaxPool {
@@ -1174,8 +1173,8 @@ pub fn new_op_from_onnx(
 
             let pool_spec = &conv_node.pool_spec;
 
-            let stride = extract_strides(&pool_spec)?;
-            let padding = extract_padding(&pool_spec, input_dims[0].len())?;
+            let stride = extract_strides(pool_spec)?;
+            let padding = extract_padding(pool_spec, input_dims[0].len())?;
 
             // if bias exists then rescale it to the input + kernel scale
             if input_scales.len() == 3 {
@@ -1226,8 +1225,8 @@ pub fn new_op_from_onnx(
 
             let pool_spec = &deconv_node.pool_spec;
 
-            let stride = extract_strides(&pool_spec)?;
-            let padding = extract_padding(&pool_spec, input_dims[0].len())?;
+            let stride = extract_strides(pool_spec)?;
+            let padding = extract_padding(pool_spec, input_dims[0].len())?;
             // if bias exists then rescale it to the input + kernel scale
             if input_scales.len() == 3 {
                 let bias_scale = input_scales[2];
@@ -1338,8 +1337,8 @@ pub fn new_op_from_onnx(
                 ));
             }
 
-            let stride = extract_strides(&pool_spec)?;
-            let padding = extract_padding(&pool_spec, input_dims[0].len())?;
+            let stride = extract_strides(pool_spec)?;
+            let padding = extract_padding(pool_spec, input_dims[0].len())?;
 
             SupportedOp::Hybrid(HybridOp::SumPool {
                 padding,

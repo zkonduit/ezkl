@@ -9,6 +9,8 @@ use halo2_proofs::{
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
+use itertools::Itertools;
+use maybe_rayon::iter::ParallelExtend;
 use portable_atomic::AtomicI64 as AtomicInt;
 use std::{
     cell::RefCell,
@@ -515,18 +517,18 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
-    ) -> Result<ValTensor<F>, Error> {
+    ) -> Result<ValTensor<F>, CircuitError> {
         if let Some(region) = &self.region {
-            var.assign(
+            Ok(var.assign(
                 &mut region.borrow_mut(),
                 self.linear_coord,
                 values,
                 &mut self.assigned_constants,
-            )
+            )?)
         } else {
             if !values.is_instance() {
                 let values_map = values.create_constants_map_iterator();
-                self.assigned_constants.extend(values_map);
+                self.assigned_constants.par_extend(values_map);
             }
             Ok(values.clone())
         }
@@ -542,18 +544,18 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
-    ) -> Result<ValTensor<F>, Error> {
+    ) -> Result<ValTensor<F>, CircuitError> {
         if let Some(region) = &self.region {
-            var.assign(
+            Ok(var.assign(
                 &mut region.borrow_mut(),
                 self.combined_dynamic_shuffle_coord(),
                 values,
                 &mut self.assigned_constants,
-            )
+            )?)
         } else {
             if !values.is_instance() {
                 let values_map = values.create_constants_map_iterator();
-                self.assigned_constants.extend(values_map);
+                self.assigned_constants.par_extend(values_map);
             }
             Ok(values.clone())
         }
@@ -564,7 +566,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
-    ) -> Result<ValTensor<F>, Error> {
+    ) -> Result<ValTensor<F>, CircuitError> {
         self.assign_dynamic_lookup(var, values)
     }
 
@@ -573,27 +575,24 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
-        ommissions: &HashSet<&usize>,
-    ) -> Result<ValTensor<F>, Error> {
+        ommissions: &HashSet<usize>,
+    ) -> Result<ValTensor<F>, CircuitError> {
         if let Some(region) = &self.region {
-            var.assign_with_omissions(
+            Ok(var.assign_with_omissions(
                 &mut region.borrow_mut(),
                 self.linear_coord,
                 values,
                 ommissions,
                 &mut self.assigned_constants,
-            )
+            )?)
         } else {
-            let inner_tensor = values.get_inner_tensor().unwrap();
-            let mut values_map = values.create_constants_map();
+            let mut values_clone = values.clone();
+            let mut indices = ommissions.clone().into_iter().collect_vec();
+            values_clone.remove_indices(&mut indices, false)?;
 
-            for o in ommissions {
-                if let ValType::Constant(value) = inner_tensor.get_flat_index(**o) {
-                    values_map.remove(&value);
-                }
-            }
+            let values_map = values.create_constants_map();
 
-            self.assigned_constants.extend(values_map);
+            self.assigned_constants.par_extend(values_map);
 
             Ok(values.clone())
         }
