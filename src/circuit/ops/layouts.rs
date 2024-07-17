@@ -3484,7 +3484,7 @@ pub fn conv<
     }
 
     // if image is 3d add a dummy batch dimension
-    if image.dims().len() == 3 && kernel.dims().len() == 4 {
+    if image.dims().len() == kernel.dims().len() - 1 {
         image.reshape(&[1, image.dims()[0], image.dims()[1], image.dims()[2]])?;
     }
 
