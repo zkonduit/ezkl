@@ -3397,7 +3397,7 @@ pub fn deconv<
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2]).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3415,7 +3415,7 @@ pub fn deconv<
 ///     &[2],
 /// ).unwrap());
 ///
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2]).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 2).unwrap();
 /// let expected =  Tensor::<i64>::new(Some(&[32, 17, 9, 27, 34, 20, 13, 26]), &[1, 2, 2, 2]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3433,7 +3433,7 @@ pub fn deconv<
 ///     &[4],
 /// ).unwrap());
 ///
-/// let result =conv(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2]).unwrap();
+/// let result =conv(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[65, 36, 21, 52, 73, 48, 37, 48, 65, 36, 21, 52, 73, 48, 37, 48]), &[1, 4, 2, 2]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
