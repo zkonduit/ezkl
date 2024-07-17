@@ -3023,7 +3023,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI
         .map(|coord| {
             let (b, i) = (coord[0], coord[1]);
             let input = values[0].get_slice(&[b..b + 1, i..i + 1])?;
-            let output = conv(config, region, &[input, kernel.clone()], padding, stride)?;
+            let output = conv(config, region, &[input, kernel.clone()], padding, stride, 1)?;
             res.push(output);
             Ok(())
         })
@@ -3279,6 +3279,7 @@ pub fn deconv<
     padding: &[(usize, usize)],
     output_padding: &[usize],
     stride: &[usize],
+    num_groups: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = inputs.len() == 3;
     let (image, kernel) = (&inputs[0], &inputs[1]);
@@ -3364,6 +3365,7 @@ pub fn deconv<
         &conv_input,
         &vec![(0, 0); conv_dim],
         &vec![1; conv_dim],
+        num_groups,
     )?;
 
     Ok(output)
@@ -3450,6 +3452,7 @@ pub fn conv<
     values: &[ValTensor<F>],
     padding: &[(usize, usize)],
     stride: &[usize],
+    num_groups: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = values.len() == 3;
     let (mut image, mut kernel) = (values[0].clone(), values[1].clone());
@@ -3478,6 +3481,11 @@ pub fn conv<
     if !assigned_len.is_empty() {
         // safe to unwrap since we've just checked it has at least one element
         region.increment(*assigned_len.iter().max().unwrap());
+    }
+
+    // if image is 3d add a dummy batch dimension
+    if image.dims().len() == 3 && kernel.dims().len() == 4 {
+        image.reshape(&[1, image.dims()[0], image.dims()[1], image.dims()[2]])?;
     }
 
     let image_dims = image.dims();
@@ -3513,9 +3521,16 @@ pub fn conv<
 
     log::debug!("slides: {:?}", slides);
 
-    let num_groups = input_channels / kernel_dims[1];
     let input_channels_per_group = input_channels / num_groups;
     let output_channels_per_group = output_channels / num_groups;
+
+    if output_channels_per_group == 0 || input_channels_per_group == 0 {
+        return Err(TensorError::DimMismatch(format!(
+            "Given groups={}, expected input channels and output channels to be divisible by groups, but got input_channels={}, output_channels={}",
+            num_groups, input_channels, output_channels
+        ))
+        .into());
+    }
 
     log::debug!(
         "num_groups: {}, input_channels_per_group: {}, output_channels_per_group: {}",
@@ -3523,14 +3538,6 @@ pub fn conv<
         input_channels_per_group,
         output_channels_per_group
     );
-
-    if output_channels_per_group == 0 {
-        return Err(TensorError::DimMismatch(format!(
-            "Given groups={}, expected kernel to be at least {} at dimension 0 but got {} instead",
-            num_groups, num_groups, output_channels_per_group
-        ))
-        .into());
-    }
 
     let num_outputs =
         batch_size * num_groups * output_channels_per_group * slides.iter().product::<usize>();

@@ -283,10 +283,7 @@ pub fn new_op_from_onnx(
         .flat_map(|x| x.out_scales())
         .collect::<Vec<_>>();
 
-    let input_dims = inputs
-        .iter()
-        .flat_map(|x| x.out_dims())
-        .collect::<Vec<_>>();
+    let input_dims = inputs.iter().flat_map(|x| x.out_dims()).collect::<Vec<_>>();
 
     let mut replace_const = |scale: crate::Scale,
                              index: usize,
@@ -1192,7 +1189,13 @@ pub fn new_op_from_onnx(
                 }
             }
 
-            SupportedOp::Linear(PolyOp::Conv { padding, stride })
+            let group = conv_node.group;
+
+            SupportedOp::Linear(PolyOp::Conv {
+                padding,
+                stride,
+                group,
+            })
         }
         "Not" => SupportedOp::Linear(PolyOp::Not),
         "And" => SupportedOp::Linear(PolyOp::And),
@@ -1247,6 +1250,7 @@ pub fn new_op_from_onnx(
                 padding,
                 output_padding: deconv_node.adjustments.to_vec(),
                 stride,
+                group: deconv_node.group,
             })
         }
         "Downsample" => {
