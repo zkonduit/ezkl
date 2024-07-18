@@ -33,6 +33,7 @@ pub enum PolyOp {
     Conv {
         padding: Vec<(usize, usize)>,
         stride: Vec<usize>,
+        group: usize,
     },
     Downsample {
         axis: usize,
@@ -43,6 +44,7 @@ pub enum PolyOp {
         padding: Vec<(usize, usize)>,
         output_padding: Vec<usize>,
         stride: Vec<usize>,
+        group: usize,
     },
     Add,
     Sub,
@@ -148,17 +150,25 @@ impl<
             PolyOp::Sum { axes } => format!("SUM (axes={:?})", axes),
             PolyOp::Prod { .. } => "PROD".into(),
             PolyOp::Pow(_) => "POW".into(),
-            PolyOp::Conv { stride, padding } => {
-                format!("CONV (stride={:?}, padding={:?})", stride, padding)
+            PolyOp::Conv {
+                stride,
+                padding,
+                group,
+            } => {
+                format!(
+                    "CONV (stride={:?}, padding={:?}, group={})",
+                    stride, padding, group
+                )
             }
             PolyOp::DeConv {
                 stride,
                 padding,
                 output_padding,
+                group,
             } => {
                 format!(
-                    "DECONV (stride={:?}, padding={:?}, output_padding={:?})",
-                    stride, padding, output_padding
+                    "DECONV (stride={:?}, padding={:?}, output_padding={:?}, group={})",
+                    stride, padding, output_padding, group
                 )
             }
             PolyOp::Concat { axis } => format!("CONCAT (axis={})", axis),
@@ -212,9 +222,18 @@ impl<
             PolyOp::Prod { axes, .. } => {
                 layouts::prod_axes(config, region, values[..].try_into()?, axes)?
             }
-            PolyOp::Conv { padding, stride } => {
-                layouts::conv(config, region, values[..].try_into()?, padding, stride)?
-            }
+            PolyOp::Conv {
+                padding,
+                stride,
+                group,
+            } => layouts::conv(
+                config,
+                region,
+                values[..].try_into()?,
+                padding,
+                stride,
+                *group,
+            )?,
             PolyOp::GatherElements { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
                     tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
@@ -261,6 +280,7 @@ impl<
                 padding,
                 output_padding,
                 stride,
+                group,
             } => layouts::deconv(
                 config,
                 region,
@@ -268,6 +288,7 @@ impl<
                 padding,
                 output_padding,
                 stride,
+                *group,
             )?,
             PolyOp::Add => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?,
             PolyOp::Sub => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub)?,

@@ -1050,6 +1050,7 @@ mod conv {
                                 Box::new(PolyOp::Conv {
                                     padding: vec![(1, 1); 2],
                                     stride: vec![2; 2],
+                                    group: 1,
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1200,6 +1201,7 @@ mod conv_col_ultra_overflow {
                                 Box::new(PolyOp::Conv {
                                     padding: vec![(1, 1); 2],
                                     stride: vec![2; 2],
+                                    group: 1,
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1345,6 +1347,7 @@ mod conv_relu_col_ultra_overflow {
                                 Box::new(PolyOp::Conv {
                                     padding: vec![(1, 1); 2],
                                     stride: vec![2; 2],
+                                    group: 1,
                                 }),
                             )
                             .map_err(|_| Error::Synthesis);

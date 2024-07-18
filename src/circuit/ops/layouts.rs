@@ -3023,7 +3023,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI
         .map(|coord| {
             let (b, i) = (coord[0], coord[1]);
             let input = values[0].get_slice(&[b..b + 1, i..i + 1])?;
-            let output = conv(config, region, &[input, kernel.clone()], padding, stride)?;
+            let output = conv(config, region, &[input, kernel.clone()], padding, stride, 1)?;
             res.push(output);
             Ok(())
         })
@@ -3159,7 +3159,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
 ///
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![1;2], &vec![2;2]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![1;2], &vec![2;2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[0, 32, 0, 32, 0, 6, 0, 12, 0, 4, 0, 8, 0, 4, 0, 8, 0, 0, 0, 3, 0, 0, 0, 2]), &[1, 2, 3, 4]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3171,7 +3171,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[6, 14, 4, 2, 17, 21, 0, 1, 5]), &[1, 1, 3, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3184,7 +3184,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[17]), &[1, 1, 1, 1]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3197,7 +3197,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[10, 4, 0, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3209,7 +3209,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3221,7 +3221,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[0, 0]), &[1, 1, 2, 1]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3233,7 +3233,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 1, 4, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3244,7 +3244,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
 ///
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// let x = ValTensor::from_i64_tensor(Tensor::<i64>::new(
@@ -3259,7 +3259,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Into
 ///     Some(&[1]),
 ///     &[1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(1, 1); 2], &vec![0;2], &vec![1;2]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3279,6 +3279,7 @@ pub fn deconv<
     padding: &[(usize, usize)],
     output_padding: &[usize],
     stride: &[usize],
+    num_groups: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = inputs.len() == 3;
     let (image, kernel) = (&inputs[0], &inputs[1]);
@@ -3364,6 +3365,7 @@ pub fn deconv<
         &conv_input,
         &vec![(0, 0); conv_dim],
         &vec![1; conv_dim],
+        num_groups,
     )?;
 
     Ok(output)
@@ -3395,7 +3397,7 @@ pub fn deconv<
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2]).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3413,7 +3415,7 @@ pub fn deconv<
 ///     &[2],
 /// ).unwrap());
 ///
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2]).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 2).unwrap();
 /// let expected =  Tensor::<i64>::new(Some(&[32, 17, 9, 27, 34, 20, 13, 26]), &[1, 2, 2, 2]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 ///
@@ -3431,7 +3433,7 @@ pub fn deconv<
 ///     &[4],
 /// ).unwrap());
 ///
-/// let result =conv(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2]).unwrap();
+/// let result =conv(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1).unwrap();
 /// let expected = Tensor::<i64>::new(Some(&[65, 36, 21, 52, 73, 48, 37, 48, 65, 36, 21, 52, 73, 48, 37, 48]), &[1, 4, 2, 2]).unwrap();
 /// assert_eq!(result.get_int_evals().unwrap(), expected);
 /// ```
@@ -3450,6 +3452,7 @@ pub fn conv<
     values: &[ValTensor<F>],
     padding: &[(usize, usize)],
     stride: &[usize],
+    num_groups: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = values.len() == 3;
     let (mut image, mut kernel) = (values[0].clone(), values[1].clone());
@@ -3478,6 +3481,11 @@ pub fn conv<
     if !assigned_len.is_empty() {
         // safe to unwrap since we've just checked it has at least one element
         region.increment(*assigned_len.iter().max().unwrap());
+    }
+
+    // if image is 3d add a dummy batch dimension
+    if image.dims().len() == kernel.dims().len() - 1 {
+        image.reshape(&[1, image.dims()[0], image.dims()[1], image.dims()[2]])?;
     }
 
     let image_dims = image.dims();
@@ -3513,9 +3521,16 @@ pub fn conv<
 
     log::debug!("slides: {:?}", slides);
 
-    let num_groups = input_channels / kernel_dims[1];
     let input_channels_per_group = input_channels / num_groups;
     let output_channels_per_group = output_channels / num_groups;
+
+    if output_channels_per_group == 0 || input_channels_per_group == 0 {
+        return Err(TensorError::DimMismatch(format!(
+            "Given groups={}, expected input channels and output channels to be divisible by groups, but got input_channels={}, output_channels={}",
+            num_groups, input_channels, output_channels
+        ))
+        .into());
+    }
 
     log::debug!(
         "num_groups: {}, input_channels_per_group: {}, output_channels_per_group: {}",
@@ -3523,14 +3538,6 @@ pub fn conv<
         input_channels_per_group,
         output_channels_per_group
     );
-
-    if output_channels_per_group == 0 {
-        return Err(TensorError::DimMismatch(format!(
-            "Given groups={}, expected kernel to be at least {} at dimension 0 but got {} instead",
-            num_groups, num_groups, output_channels_per_group
-        ))
-        .into());
-    }
 
     let num_outputs =
         batch_size * num_groups * output_channels_per_group * slides.iter().product::<usize>();

@@ -72,6 +72,7 @@ impl Circuit<Fr> for MyCircuit {
                         Box::new(PolyOp::Conv {
                             padding: vec![(0, 0)],
                             stride: vec![1; 2],
+                            group: 1,
                         }),
                     )
                     .unwrap();
