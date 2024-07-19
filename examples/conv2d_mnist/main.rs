@@ -205,6 +205,7 @@ where
                     let op = PolyOp::Conv {
                         padding: vec![(PADDING, PADDING); 2],
                         stride: vec![STRIDE; 2],
+                        group: 1,
                     };
                     let x = config
                         .layer_config
