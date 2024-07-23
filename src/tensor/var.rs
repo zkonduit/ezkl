@@ -533,11 +533,11 @@ impl VarTensor {
                 if matches!(check_mode, CheckMode::SAFE) {
                      // during key generation this will be 0 so we use this as a flag to check
                      // TODO: this isn't very safe and would be better to get the phase directly
-                     let res_evals = res.int_evals().unwrap();
+                    let res_evals = res.int_evals().unwrap();
                     let is_assigned = res_evals
                     .iter()
                     .all(|&x| x == 0);
-                    if is_assigned {
+                    if !is_assigned {
                         assert_eq!(
                            values.int_evals().unwrap(),
                            res_evals

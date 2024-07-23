@@ -6,7 +6,7 @@ use crate::circuit::modules::poseidon::{
 use crate::circuit::modules::Module;
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::*;
-use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt};
+use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
 use crate::graph::TestDataSource;
 use crate::graph::{
@@ -331,7 +331,7 @@ fn felt_to_big_endian(felt: PyFelt) -> PyResult<String> {
 #[pyfunction(signature = (
     felt,
 ))]
-fn felt_to_int(felt: PyFelt) -> PyResult<i64> {
+fn felt_to_int(felt: PyFelt) -> PyResult<IntegerRep> {
     let felt = crate::pfsys::string_to_field::<Fr>(&felt);
     let int_rep = felt_to_integer_rep(felt);
     Ok(int_rep)

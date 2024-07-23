@@ -1097,6 +1097,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Maps a function to tensors and enumerates
     /// ```
     /// use ezkl::tensor::{Tensor, TensorError};
+    /// use ezkl::fieldutils::IntegerRep;
     /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2]).unwrap();
     /// let mut c = a.enum_map::<_,_,TensorError>(|i, x| Ok(IntegerRep::pow(x + i as IntegerRep, 2))).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
@@ -1120,6 +1121,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Maps a function to tensors and enumerates in parallel
     /// ```
     /// use ezkl::tensor::{Tensor, TensorError};
+    /// use ezkl::fieldutils::IntegerRep;
     /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2]).unwrap();
     /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(IntegerRep::pow(x + i as IntegerRep, 2))).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
@@ -1175,6 +1177,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Maps a function to tensors and enumerates in parallel
     /// ```
     /// use ezkl::tensor::{Tensor, TensorError};
+    /// use ezkl::fieldutils::IntegerRep;
     /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2]).unwrap();
     /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(IntegerRep::pow(x + i as IntegerRep, 2))).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
