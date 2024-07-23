@@ -326,7 +326,7 @@ jobs:
           pnpm build:commonjs
           cd ..
       - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+        run: cargo install svm-rs && svm install 0.8.26 && svm use 0.8.26 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
       - name: KZG prove and verify tests (EVM + VK rendered seperately)
@@ -535,7 +535,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+        run: cargo install svm-rs && svm install 0.8.26 && svm use 0.8.26 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
       - name: KZG prove and verify aggr tests
@@ -574,7 +574,7 @@ jobs:
       - name: Install cmake
         run: sudo apt-get install -y cmake
       - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+        run: cargo install svm-rs && svm install 0.8.26 && svm use 0.8.26 && solc --version
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
@@ -651,7 +651,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+        run: cargo install svm-rs && svm install 0.8.26 && svm use 0.8.26 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
       - name: Install pip
