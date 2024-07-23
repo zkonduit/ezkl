@@ -1,3 +1,4 @@
+use crate::circuit::region::RegionSettings;
 use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::CalibrationTarget;
@@ -785,6 +786,8 @@ pub(crate) async fn gen_witness(
 
     let commitment: Commitments = settings.run_args.commitment.into();
 
+    let region_settings = RegionSettings::all_true();
+
     let start_time = Instant::now();
     let witness = if settings.module_requires_polycommit() {
         if get_srs_path(settings.run_args.logrows, srs_path.clone(), commitment).exists() {
@@ -799,8 +802,7 @@ pub(crate) async fn gen_witness(
                         &mut input,
                         vk.as_ref(),
                         Some(&srs),
-                        true,
-                        true,
+                        region_settings,
                     )?
                 }
                 Commitments::IPA => {
@@ -814,8 +816,7 @@ pub(crate) async fn gen_witness(
                         &mut input,
                         vk.as_ref(),
                         Some(&srs),
-                        true,
-                        true,
+                        region_settings,
                     )?
                 }
             }
@@ -825,12 +826,16 @@ pub(crate) async fn gen_witness(
                 &mut input,
                 vk.as_ref(),
                 None,
-                true,
-                true,
+                region_settings,
             )?
         }
     } else {
-        circuit.forward::<KZGCommitmentScheme<Bn256>>(&mut input, vk.as_ref(), None, true, true)?
+        circuit.forward::<KZGCommitmentScheme<Bn256>>(
+            &mut input,
+            vk.as_ref(),
+            None,
+            region_settings,
+        )?
     };
 
     // print each variable tuple (symbol, value) as symbol=value
@@ -1173,8 +1178,7 @@ pub(crate) async fn calibrate(
                         &mut data.clone(),
                         None,
                         None,
-                        true,
-                        false,
+                        RegionSettings::all_true(),
                     )
                     .map_err(|e| format!("failed to forward: {}", e))?;
 

@@ -7,6 +7,7 @@ use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::ConstantsMap;
 use crate::circuit::region::RegionCtx;
+use crate::circuit::region::RegionSettings;
 use crate::circuit::table::Range;
 use crate::circuit::Input;
 use crate::circuit::InputType;
@@ -546,7 +547,7 @@ impl Model {
             })
             .collect::<Result<Vec<_>, GraphError>>()?;
 
-        let res = self.dummy_layout(run_args, &inputs, false, false)?;
+        let res = self.dummy_layout(run_args, &inputs, RegionSettings::all_false())?;
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
 
@@ -589,14 +590,13 @@ impl Model {
         &self,
         model_inputs: &[Tensor<Fp>],
         run_args: &RunArgs,
-        witness_gen: bool,
-        check_lookup: bool,
+        region_settings: RegionSettings,
     ) -> Result<ForwardResult, GraphError> {
         let valtensor_inputs: Vec<ValTensor<Fp>> = model_inputs
             .iter()
             .map(|x| x.map(|elem| ValType::Value(Value::known(elem))).into())
             .collect();
-        let res = self.dummy_layout(run_args, &valtensor_inputs, witness_gen, check_lookup)?;
+        let res = self.dummy_layout(run_args, &valtensor_inputs, region_settings)?;
         Ok(res.into())
     }
 
@@ -1391,8 +1391,7 @@ impl Model {
         &self,
         run_args: &RunArgs,
         inputs: &[ValTensor<Fp>],
-        witness_gen: bool,
-        check_lookup: bool,
+        region_settings: RegionSettings,
     ) -> Result<DummyPassRes, GraphError> {
         debug!("calculating num of constraints using dummy model layout...");
 
@@ -1411,8 +1410,7 @@ impl Model {
             vars: ModelVars::new_dummy(),
         };
 
-        let mut region =
-            RegionCtx::new_dummy(0, run_args.num_inner_cols, witness_gen, check_lookup);
+        let mut region = RegionCtx::new_dummy(0, run_args.num_inner_cols, region_settings);
 
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 

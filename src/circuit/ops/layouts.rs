@@ -3913,7 +3913,7 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
     }
 
     let is_assigned = !w.any_unknowns()?;
-    if is_assigned && region.check_lookup_range() {
+    if is_assigned && region.check_range() {
         // assert is within range
         let int_values = w.int_evals()?;
         for v in int_values.iter() {

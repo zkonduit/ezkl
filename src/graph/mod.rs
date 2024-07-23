@@ -34,7 +34,7 @@ use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::region::ConstantsMap;
+use crate::circuit::region::{ConstantsMap, RegionSettings};
 use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
 use crate::fieldutils::{felt_to_f64, IntegerRep};
@@ -1233,8 +1233,7 @@ impl GraphCircuit {
         inputs: &mut [Tensor<Fp>],
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&Scheme::ParamsProver>,
-        witness_gen: bool,
-        check_lookup: bool,
+        region_settings: RegionSettings,
     ) -> Result<GraphWitness, GraphError> {
         let original_inputs = inputs.to_vec();
 
@@ -1283,7 +1282,7 @@ impl GraphCircuit {
 
         let mut model_results =
             self.model()
-                .forward(inputs, &self.settings().run_args, witness_gen, check_lookup)?;
+                .forward(inputs, &self.settings().run_args, region_settings)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();
