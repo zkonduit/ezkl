@@ -316,6 +316,12 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
+    /// Allocate a new [ValTensor::Value] from the given [Tensor] of [i64].
+    pub fn from_integer_rep_tensor(t: Tensor<IntegerRep>) -> ValTensor<F> {
+        let inner = t.map(|x| ValType::Value(Value::known(integer_rep_to_felt(x))));
+        inner.into()
+    }
+
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
     pub fn new_instance(
         cs: &mut ConstraintSystem<F>,

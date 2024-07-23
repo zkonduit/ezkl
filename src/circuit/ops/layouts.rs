@@ -230,6 +230,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Dot product of two tensors.
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::einsum;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -240,11 +241,11 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 3, 3],
 /// ).unwrap());
-/// let y = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let y = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 5, 10, -4, 2, -1, 2, 0, 1]),
 ///     &[1, 3, 3],
 /// ).unwrap());
@@ -363,6 +364,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Computes the einstein sum of a set of tensors.
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::einsum;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -373,164 +375,164 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 /// // matmul case
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[2, 1, 2, 1, 1, 1]),
 ///  &[2, 3],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[2, 3, 2, 1, 1, 1]),
 /// &[3, 2],
 /// ).unwrap());
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "ij,jk->ik").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[8, 9, 5, 5]), &[2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[8, 9, 5, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // element wise multiplication
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
 ///  &[3, 3],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
 ///  &[3, 3],
 /// ).unwrap());
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "ij,ij->ij").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[1, 4, 9, 2, 6, 12, 3, 8, 15]), &[3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 9, 2, 6, 12, 3, 8, 15]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 ///
 /// // dot product of A with the transpose of B.
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
 ///  &[3, 3],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
 ///  &[3, 3],
 /// ).unwrap());
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "ik,jk->ij").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[14, 14, 14, 20, 20, 20, 26, 26, 26]), &[3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[14, 14, 14, 20, 20, 20, 26, 26, 26]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // dot product
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
 ///  &[3, 3],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
 ///  &[3, 3],
 /// ).unwrap());
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "ik,ik->i").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[14, 20, 26]), &[3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[14, 20, 26]), &[3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 ///
 /// // dot product
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3]),
 ///  &[3],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3]),
 ///  &[3],
 /// ).unwrap());
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "i,i->").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[14]), &[1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[14]), &[1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 ///
 /// // wut ?
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
 ///  &[3, 3, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[4, 5, 7, 8]),
 ///  &[2, 2],
 /// ).unwrap());
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "anm,bm->ba").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[68, 80, 95, 113, 134, 158]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[68, 80, 95, 113, 134, 158]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // wutttttt ?
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
 ///  &[3, 3, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[4, 5, 7, 8]),
 ///  &[2, 2],
 /// ).unwrap());
-/// let z =  ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let z =  ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[4, 5, 7, 8, 9, 9]),
 ///  &[2, 3],
 /// ).unwrap());
 ///
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[z, x, k], "bn,anm,bm->ba").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[390, 414, 534, 994, 1153, 1384]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[390, 414, 534, 994, 1153, 1384]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 ///
 /// // contraction with a single common axis
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
 ///  &[3, 3, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[4, 5, 7, 8]),
 ///  &[2, 2],
 /// ).unwrap());
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "abc,cd->").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[648]), &[1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[648]), &[1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // contraction with no common axes (outer product)
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
 ///  &[3, 3, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[4, 5, 7, 8]),
 ///  &[2, 2],
 /// ).unwrap());
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "abc,ed->").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[1296]), &[1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1296]), &[1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // trivial axes mapping
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[4, 5, 7, 8]),
 ///  &[2, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[4, 5]),
 ///  &[2],
 /// ).unwrap());
 ///
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x.clone(), k.clone()], "mk,k->m").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[41, 68]), &[2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[41, 68]), &[2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x, k], "mk,k->mn").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[41, 68]), &[2, 1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[41, 68]), &[2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[0, 0, 0, 3]),
 ///  &[1, 4],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[213, 227, 74, 77]),
 ///  &[4],
 /// ).unwrap());
 ///
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x.clone(), k.clone()], "mk,k->ma").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[231]), &[1, 1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[231]), &[1, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// // subtle difference
 /// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[x.clone(), k.clone()], "mk,n->ma").unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[1773]), &[1, 1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1773]), &[1, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// ```
@@ -814,6 +816,7 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::topk_axes;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -823,12 +826,12 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2,3],
 /// ).unwrap());
 /// let result = topk_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], 2, 1, true).unwrap();
-/// let expected = Tensor::<i64>::new(
+/// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[15, 2, 1, 1]),
 ///     &[2,2],
 /// ).unwrap();
@@ -1745,6 +1748,7 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::sum;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -1754,7 +1758,7 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
@@ -1847,6 +1851,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::prod;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -1856,7 +1861,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
@@ -2008,6 +2013,7 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::prod_axes;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2017,12 +2023,12 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
 /// let result = prod_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
-/// let expected = Tensor::<i64>::new(
+/// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[60, 0]),
 ///     &[2, 1],
 /// ).unwrap();
@@ -2042,6 +2048,7 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::sum_axes;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2051,12 +2058,12 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
 /// let result = sum_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
-/// let expected = Tensor::<i64>::new(
+/// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[19, 2]),
 ///     &[2, 1],
 /// ).unwrap();
@@ -2076,6 +2083,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::argmax_axes;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2085,12 +2093,12 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
 /// let result = argmax_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], 1).unwrap();
-/// let expected = Tensor::<i64>::new(
+/// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[1, 0]),
 ///     &[2, 1],
 /// ).unwrap();
@@ -2116,6 +2124,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::max_axes;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2124,12 +2133,12 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
 /// let result = max_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
-/// let expected = Tensor::<i64>::new(
+/// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[15, 1]),
 ///     &[2, 1],
 /// ).unwrap();
@@ -2150,6 +2159,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::argmin_axes;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2159,12 +2169,12 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
 /// let result = argmin_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], 1).unwrap();
-/// let expected = Tensor::<i64>::new(
+/// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[0, 2]),
 ///     &[2, 1],
 /// ).unwrap();
@@ -2194,6 +2204,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::min_axes;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2203,12 +2214,12 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
 /// ).unwrap());
 /// let result = min_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
-/// let expected = Tensor::<i64>::new(
+/// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 0]),
 ///     &[2, 1],
 /// ).unwrap();
@@ -2384,6 +2395,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::mean_of_squares_axes;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2393,12 +2405,12 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[2, 15, 2, 1, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = mean_of_squares_axes::<Fp>(&dummy_config, &mut dummy_region, &[x], &[1]).unwrap();
-/// let expected = Tensor::<i64>::new(
+/// let expected = Tensor::<IntegerRep>::new(
 /// Some(&[78, 1]),
 /// &[2, 1],
 /// ).unwrap();
@@ -2439,6 +2451,7 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::greater;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2448,16 +2461,16 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let a = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[1, 12, 6, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = greater::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -2489,6 +2502,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::greater_equal;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2499,16 +2513,16 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 ///
-/// let a = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[1, 12, 6, 4, 3, 2]),
 /// &[2, 3],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 2, 3, 4, 5, 4]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = greater_equal::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[1, 1, 1, 1, 0, 0]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -2540,6 +2554,7 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::less;
 ///
 /// use halo2curves::bn256::Fr as Fp;
@@ -2550,16 +2565,16 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let a = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 0, 5, 4, 5, 1]),
 /// &[2, 3],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = less::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[0, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 ///
@@ -2579,6 +2594,7 @@ pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::less_equal;
 ///
 /// use halo2curves::bn256::Fr as Fp;
@@ -2589,16 +2605,16 @@ pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let a = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 0, 5, 4, 5, 1]),
 /// &[2, 3],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = less_equal::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[1, 1, 0, 1, 1, 1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 0, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 ///
@@ -2618,6 +2634,7 @@ pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::and;
 ///
 /// use halo2curves::bn256::Fr as Fp;
@@ -2628,16 +2645,16 @@ pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let a = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 1, 1, 1, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = and::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[1, 0, 1, 0, 1, 0]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 1, 0, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -2660,6 +2677,7 @@ pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::or;
 ///
 /// use halo2curves::bn256::Fr as Fp;
@@ -2670,16 +2688,16 @@ pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let a = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[1, 1, 1, 1, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = or::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -2706,6 +2724,7 @@ pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::equals;
 ///
 /// use halo2curves::bn256::Fr as Fp;
@@ -2716,16 +2735,16 @@ pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let a = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[1, 1, 1, 1, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = equals::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[1, 0, 1, 0, 1, 1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 1, 0, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn equals<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -2778,6 +2797,7 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::xor;
 ///
 /// use halo2curves::bn256::Fr as Fp;
@@ -2788,16 +2808,16 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let a = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 1, 1, 1, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = xor::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[0, 1, 0, 1, 0, 0]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 0, 1, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 ///
@@ -2832,6 +2852,7 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::not;
 ///
 /// use halo2curves::bn256::Fr as Fp;
@@ -2842,12 +2863,12 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 1, 1, 1, 1, 0]),
 ///   &[2, 3],
 /// ).unwrap());
 /// let result = not::<Fp>(&dummy_config, &mut dummy_region, &[x]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -2873,6 +2894,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::iff;
 ///
 /// use halo2curves::bn256::Fr as Fp;
@@ -2883,20 +2905,20 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let mask = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let mask = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 0, 1, 0, 1, 0]),
 /// &[2, 3],
 /// ).unwrap());
-/// let a = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[7, 8, 9, 10, 11, 12]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = iff::<Fp>(&dummy_config, &mut dummy_region, &[mask, a, b]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[1, 8, 3, 10, 5, 12]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 8, 3, 10, 5, 12]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -2929,6 +2951,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::neg;
 ///
 /// use halo2curves::bn256::Fr as Fp;
@@ -2939,12 +2962,12 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap());
 /// let result = neg::<Fp>(&dummy_config, &mut dummy_region, &[x]).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -2960,6 +2983,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::sumpool;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -2970,17 +2994,17 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
 /// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x.clone()], &vec![(0, 0); 2], &vec![1;2], &vec![2, 2], false).unwrap();
-/// let expected: Tensor<i64> = Tensor::<i64>::new(Some(&[11, 8, 8, 10]), &[1, 1, 2, 2]).unwrap();
+/// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[11, 8, 8, 10]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 ///
 /// // This time with normalization
 /// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2],  &vec![2, 2], true).unwrap();
-/// let expected: Tensor<i64> = Tensor::<i64>::new(Some(&[3, 2, 2, 3]), &[1, 1, 2, 2]).unwrap();
+/// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[3, 2, 2, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 /// ```
 pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -3040,6 +3064,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::max_pool;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -3050,12 +3075,12 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
 /// let pooled = max_pool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2], &vec![2;2]).unwrap();
-/// let expected: Tensor<i64> = Tensor::<i64>::new(Some(&[5, 4, 4, 6]), &[1, 1, 2, 2]).unwrap();
+/// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[5, 4, 4, 6]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 ///
 /// ```
@@ -3139,6 +3164,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 // // expected ouputs are taken from pytorch torch.nn.functional.conv_transpose2d
 ///
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::deconv;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -3148,114 +3174,114 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let c = ValTensor::from_i128_tensor(Tensor::<i64>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap());
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let c = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap());
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
 ///
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![1;2], &vec![2;2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[0, 32, 0, 32, 0, 6, 0, 12, 0, 4, 0, 8, 0, 4, 0, 8, 0, 0, 0, 3, 0, 0, 0, 2]), &[1, 2, 3, 4]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 32, 0, 32, 0, 6, 0, 12, 0, 4, 0, 8, 0, 4, 0, 8, 0, 0, 0, 3, 0, 0, 0, 2]), &[1, 2, 3, 4]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[6, 14, 4, 2, 17, 21, 0, 1, 5]), &[1, 1, 3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[6, 14, 4, 2, 17, 21, 0, 1, 5]), &[1, 1, 3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[17]), &[1, 1, 1, 1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[17]), &[1, 1, 1, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[10, 4, 0, 3]), &[1, 1, 2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[10, 4, 0, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap());
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[0, 0]), &[1, 1, 2, 1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0]), &[1, 1, 2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap());
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 1, 4, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 1, 4, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 ///
-/// let c = ValTensor::from_i128_tensor(Tensor::<i64>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap());
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let c = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap());
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
 ///
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[3, 8, 0, 8, 4, 9, 8, 1, 8]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[1, 0, 4, 6]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[1]),
 ///     &[1],
 /// ).unwrap());
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// ```
@@ -3365,6 +3391,7 @@ pub fn deconv<
 /// // expected ouputs are taken from pytorch torch.nn.functional.conv2d
 ///
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::conv;
 /// use ezkl::tensor::val::ValTensor;
 /// use halo2curves::bn256::Fr as Fp;
@@ -3374,56 +3401,56 @@ pub fn deconv<
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 1, 1, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap());
 /// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // Now test single channel
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 2, 3, 3],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 1, 1, 1, 5, 2, 1, 1]),
 ///     &[2, 1, 2, 2],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[1, 1]),
 ///     &[2],
 /// ).unwrap());
 ///
 /// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 2).unwrap();
-/// let expected =  Tensor::<i64>::new(Some(&[32, 17, 9, 27, 34, 20, 13, 26]), &[1, 2, 2, 2]).unwrap();
+/// let expected =  Tensor::<IntegerRep>::new(Some(&[32, 17, 9, 27, 34, 20, 13, 26]), &[1, 2, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // Now test multi channel
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 2, 3, 3],
 /// ).unwrap());
-/// let k = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 1, 1, 1, 5, 2, 1, 1, 5, 3, 1, 1, 5, 4, 1, 1, 5, 1, 1, 1, 5, 2, 1, 1, 5, 3, 1, 1, 5, 4, 1, 1]),
 ///     &[4, 2, 2, 2],
 /// ).unwrap());
-/// let b = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[1, 1, 1, 1]),
 ///     &[4],
 /// ).unwrap());
 ///
 /// let result =conv(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1).unwrap();
-/// let expected = Tensor::<i64>::new(Some(&[65, 36, 21, 52, 73, 48, 37, 48, 65, 36, 21, 52, 73, 48, 37, 48]), &[1, 4, 2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[65, 36, 21, 52, 73, 48, 37, 48, 65, 36, 21, 52, 73, 48, 37, 48]), &[1, 4, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 ///
@@ -4261,6 +4288,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::softmax;
 /// use ezkl::tensor::val::ValTensor;
 /// use halo2curves::bn256::Fr as Fp;
@@ -4270,13 +4298,13 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 2, 3, 2, 2, 0]),
 ///     &[2, 3],
 /// ).unwrap());
 /// let result = softmax::<Fp>(&dummy_config, &mut dummy_region, &[x], 128.0.into(), (128.0 * 128.0).into()).unwrap();
 /// // doubles the scale of the input
-/// let expected = Tensor::<i64>::new(Some(&[2734, 2734, 2756, 2734, 2734, 2691]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2734, 2734, 2756, 2734, 2734, 2691]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -4307,6 +4335,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::range_check_percent;
 ///  use ezkl::tensor::val::ValTensor;
 /// use halo2curves::bn256::Fr as Fp;
@@ -4316,11 +4345,11 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,true,true);
 ///
-/// let x = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[100, 200, 300, 400, 500, 600]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let y = ValTensor::from_i128_tensor(Tensor::<i64>::new(
+/// let y = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[101, 201, 302, 403, 503, 603]),
 ///   &[2, 3],
 /// ).unwrap());
