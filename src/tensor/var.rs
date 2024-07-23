@@ -368,7 +368,7 @@ impl VarTensor {
                             .sum::<usize>();
                     let dims = &dims[*idx];
                     // this should never ever fail
-                    let t: Tensor<i32> = Tensor::new(None, dims).unwrap();
+                    let t: Tensor<IntegerRep> = Tensor::new(None, dims).unwrap();
                     Ok(t.enum_map(|coord, _| {
                         let (x, y, z) = self.cartesian_coord(offset + coord);
                         region.assign_advice_from_instance(
@@ -497,7 +497,7 @@ impl VarTensor {
                     let (x, y, z) = self.cartesian_coord(offset + coord * step);
                     if matches!(check_mode, CheckMode::SAFE) && coord > 0 && z == 0 && y == 0 {
                         // assert that duplication occurred correctly
-                        assert_eq!(Into::<i32>::into(k.clone()), Into::<i32>::into(v[coord - 1].clone()));
+                        assert_eq!(Into::<IntegerRep>::into(k.clone()), Into::<IntegerRep>::into(v[coord - 1].clone()));
                     };
 
                     let cell = self.assign_value(region, offset, k.clone(), coord * step, constants)?;
@@ -533,13 +533,14 @@ impl VarTensor {
                 if matches!(check_mode, CheckMode::SAFE) {
                      // during key generation this will be 0 so we use this as a flag to check
                      // TODO: this isn't very safe and would be better to get the phase directly
-                    let is_assigned = !Into::<Tensor<i32>>::into(res.clone().get_inner().unwrap())
+                     let res_evals = res.int_evals().unwrap();
+                    let is_assigned = res_evals
                     .iter()
                     .all(|&x| x == 0);
                     if is_assigned {
                         assert_eq!(
-                            Into::<Tensor<i32>>::into(values.get_inner().unwrap()),
-                            Into::<Tensor<i32>>::into(res.get_inner().unwrap())
+                           values.int_evals().unwrap(),
+                           res_evals
                     )};
                 }
 

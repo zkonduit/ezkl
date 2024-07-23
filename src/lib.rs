@@ -85,6 +85,7 @@ use std::str::FromStr;
 
 use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
+use fieldutils::IntegerRep;
 use graph::Visibility;
 use halo2_proofs::poly::{
     ipa::commitment::IPACommitmentScheme, kzg::commitment::KZGCommitmentScheme,
@@ -243,7 +244,7 @@ pub struct RunArgs {
     #[arg(long, default_value = "1",  value_hint = clap::ValueHint::Other)]
     pub scale_rebase_multiplier: u32,
     /// The min and max elements in the lookup table input column
-    #[arg(short = 'B', long, value_parser = parse_key_val::<i64, i64>, default_value = "-32768->32768")]
+    #[arg(short = 'B', long, value_parser = parse_key_val::<IntegerRep, IntegerRep>, default_value = "-32768->32768")]
     pub lookup_range: Range,
     /// The log_2 number of rows
     #[arg(short = 'K', long, default_value = "17", value_hint = clap::ValueHint::Other)]

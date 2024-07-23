@@ -2,8 +2,8 @@ use crate::circuit::modules::polycommit::PolyCommitChip;
 use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
 use crate::circuit::modules::poseidon::PoseidonChip;
 use crate::circuit::modules::Module;
-use crate::fieldutils::felt_to_i64;
-use crate::fieldutils::i64_to_felt;
+use crate::fieldutils::felt_to_integer_rep;
+use crate::fieldutils::integer_rep_to_felt;
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
 use crate::graph::quantize_float;
 use crate::graph::scale_to_multiplier;
@@ -113,7 +113,7 @@ pub fn feltToInt(
     let felt: Fr = serde_json::from_slice(&array[..])
         .map_err(|e| JsError::new(&format!("Failed to deserialize field element: {}", e)))?;
     Ok(wasm_bindgen::Clamped(
-        serde_json::to_vec(&felt_to_i64(felt))
+        serde_json::to_vec(&felt_to_integer_rep(felt))
             .map_err(|e| JsError::new(&format!("Failed to serialize integer: {}", e)))?,
     ))
 }
@@ -127,7 +127,7 @@ pub fn feltToFloat(
 ) -> Result<f64, JsError> {
     let felt: Fr = serde_json::from_slice(&array[..])
         .map_err(|e| JsError::new(&format!("Failed to deserialize field element: {}", e)))?;
-    let int_rep = felt_to_i64(felt);
+    let int_rep = felt_to_integer_rep(felt);
     let multiplier = scale_to_multiplier(scale);
     Ok(int_rep as f64 / multiplier)
 }
@@ -141,7 +141,7 @@ pub fn floatToFelt(
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
     let int_rep =
         quantize_float(&input, 0.0, scale).map_err(|e| JsError::new(&format!("{}", e)))?;
-    let felt = i64_to_felt(int_rep);
+    let felt = integer_rep_to_felt(int_rep);
     let vec = crate::pfsys::field_to_string::<halo2curves::bn256::Fr>(&felt);
     Ok(wasm_bindgen::Clamped(serde_json::to_vec(&vec).map_err(
         |e| JsError::new(&format!("Failed to serialize a float to felt{}", e)),

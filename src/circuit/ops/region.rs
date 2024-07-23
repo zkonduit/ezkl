@@ -1,5 +1,6 @@
 use crate::{
     circuit::table::Range,
+    fieldutils::IntegerRep,
     tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor},
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -11,7 +12,7 @@ use halo2_proofs::{
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use maybe_rayon::iter::ParallelExtend;
-use portable_atomic::AtomicI64 as AtomicInt;
+use portable_atomic::AtomicI128 as AtomicInt;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -97,9 +98,9 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     shuffle_index: ShuffleIndex,
     used_lookups: HashSet<LookupOp>,
     used_range_checks: HashSet<Range>,
-    max_lookup_inputs: i64,
-    min_lookup_inputs: i64,
-    max_range_size: i64,
+    max_lookup_inputs: IntegerRep,
+    min_lookup_inputs: IntegerRep,
+    max_range_size: IntegerRep,
     witness_gen: bool,
     check_lookup_range: bool,
     assigned_constants: ConstantsMap<F>,
@@ -411,8 +412,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     ) -> Result<(), CircuitError> {
         let (mut min, mut max) = (0, 0);
         for i in inputs {
-            max = max.max(i.get_int_evals()?.into_iter().max().unwrap_or_default());
-            min = min.min(i.get_int_evals()?.into_iter().min().unwrap_or_default());
+            max = max.max(i.int_evals()?.into_iter().max().unwrap_or_default());
+            min = min.min(i.int_evals()?.into_iter().min().unwrap_or_default());
         }
         self.max_lookup_inputs = self.max_lookup_inputs.max(max);
         self.min_lookup_inputs = self.min_lookup_inputs.min(min);
@@ -498,17 +499,17 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// max lookup inputs
-    pub fn max_lookup_inputs(&self) -> i64 {
+    pub fn max_lookup_inputs(&self) -> IntegerRep {
         self.max_lookup_inputs
     }
 
     /// min lookup inputs
-    pub fn min_lookup_inputs(&self) -> i64 {
+    pub fn min_lookup_inputs(&self) -> IntegerRep {
         self.min_lookup_inputs
     }
 
     /// max range check
-    pub fn max_range_size(&self) -> i64 {
+    pub fn max_range_size(&self) -> IntegerRep {
         self.max_range_size
     }
 

@@ -1023,6 +1023,8 @@ pub(crate) async fn calibrate(
     use std::collections::HashMap;
     use tabled::Table;
 
+    use crate::fieldutils::IntegerRep;
+
     let data = GraphData::from_path(data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
@@ -1131,7 +1133,7 @@ pub(crate) async fn calibrate(
             param_scale,
             scale_rebase_multiplier,
             div_rebasing,
-            lookup_range: (i64::MIN, i64::MAX),
+            lookup_range: (IntegerRep::MIN, IntegerRep::MAX),
             ..settings.run_args.clone()
         };
 

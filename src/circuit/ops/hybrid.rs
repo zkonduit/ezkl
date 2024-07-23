@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     circuit::{layouts, utils, Tolerance},
-    fieldutils::i64_to_felt,
+    fieldutils::integer_rep_to_felt,
     graph::multiplier_to_scale,
     tensor::{self, Tensor, TensorType, ValTensor},
 };
@@ -71,7 +71,7 @@ pub enum HybridOp {
     },
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> for HybridOp {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash > Op<F> for HybridOp {
     ///
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         match self {
@@ -184,8 +184,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
                         config,
                         region,
                         values[..].try_into()?,
-                        i64_to_felt(input_scale.0 as i64),
-                        i64_to_felt(output_scale.0 as i64),
+                        integer_rep_to_felt(input_scale.0 as i128),
+                        integer_rep_to_felt(output_scale.0 as i128),
                     )?
                 } else {
                     layouts::nonlinearity(
@@ -209,7 +209,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + IntoI64> Op<F> 
                         config,
                         region,
                         values[..].try_into()?,
-                        i64_to_felt(denom.0 as i64),
+                        integer_rep_to_felt(denom.0 as i128),
                     )?
                 } else {
                     layouts::nonlinearity(

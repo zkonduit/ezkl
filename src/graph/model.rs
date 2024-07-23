@@ -11,6 +11,7 @@ use crate::circuit::table::Range;
 use crate::circuit::Input;
 use crate::circuit::InputType;
 use crate::circuit::Unknown;
+use crate::fieldutils::IntegerRep;
 use crate::tensor::ValType;
 use crate::{
     circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
@@ -64,11 +65,11 @@ pub struct ForwardResult {
     /// The outputs of the forward pass.
     pub outputs: Vec<Tensor<Fp>>,
     /// The maximum value of any input to a lookup operation.
-    pub max_lookup_inputs: i64,
+    pub max_lookup_inputs: IntegerRep,
     /// The minimum value of any input to a lookup operation.
-    pub min_lookup_inputs: i64,
+    pub min_lookup_inputs: IntegerRep,
     /// The max range check size
-    pub max_range_size: i64,
+    pub max_range_size: IntegerRep,
 }
 
 impl From<DummyPassRes> for ForwardResult {
@@ -116,11 +117,11 @@ pub struct DummyPassRes {
     /// range checks
     pub range_checks: HashSet<Range>,
     /// max lookup inputs
-    pub max_lookup_inputs: i64,
+    pub max_lookup_inputs: IntegerRep,
     /// min lookup inputs
-    pub min_lookup_inputs: i64,
+    pub min_lookup_inputs: IntegerRep,
     /// min range check
-    pub max_range_size: i64,
+    pub max_range_size: IntegerRep,
     /// outputs
     pub outputs: Vec<Tensor<Fp>>,
 }

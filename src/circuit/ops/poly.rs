@@ -100,7 +100,7 @@ impl<
             + std::hash::Hash
             + Serialize
             + for<'de> Deserialize<'de>
-            + IntoI64,
+            ,
     > Op<F> for PolyOp
 {
     /// Returns a reference to the Any trait.
