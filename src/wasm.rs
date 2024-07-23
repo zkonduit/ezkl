@@ -1,41 +1,52 @@
-use crate::circuit::modules::polycommit::PolyCommitChip;
-use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
-use crate::circuit::modules::poseidon::PoseidonChip;
-use crate::circuit::modules::Module;
-use crate::fieldutils::felt_to_integer_rep;
-use crate::fieldutils::integer_rep_to_felt;
-use crate::graph::modules::POSEIDON_LEN_GRAPH;
-use crate::graph::quantize_float;
-use crate::graph::scale_to_multiplier;
-use crate::graph::{GraphCircuit, GraphSettings};
-use crate::pfsys::create_proof_circuit;
-use crate::pfsys::evm::aggregation_kzg::AggregationCircuit;
-use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
-use crate::pfsys::verify_proof_circuit;
-use crate::pfsys::TranscriptType;
-use crate::tensor::TensorType;
-use crate::CheckMode;
-use crate::Commitments;
+use crate::{
+    circuit::{
+        modules::{
+            polycommit::PolyCommitChip,
+            poseidon::{
+                spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
+                PoseidonChip,
+            },
+            Module,
+        },
+        region::RegionSettings,
+    },
+    fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
+    graph::{
+        modules::POSEIDON_LEN_GRAPH, quantize_float, scale_to_multiplier, GraphCircuit,
+        GraphSettings,
+    },
+    pfsys::{
+        create_proof_circuit,
+        evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript},
+        verify_proof_circuit, TranscriptType,
+    },
+    tensor::TensorType,
+    CheckMode, Commitments,
+};
 use console_error_panic_hook;
-use halo2_proofs::plonk::*;
-use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
-use halo2_proofs::poly::ipa::multiopen::{ProverIPA, VerifierIPA};
-use halo2_proofs::poly::ipa::{
-    commitment::{IPACommitmentScheme, ParamsIPA},
-    strategy::SingleStrategy as IPASingleStrategy,
+use halo2_proofs::{
+    plonk::*,
+    poly::{
+        commitment::{CommitmentScheme, ParamsProver},
+        ipa::{
+            commitment::{IPACommitmentScheme, ParamsIPA},
+            multiopen::{ProverIPA, VerifierIPA},
+            strategy::SingleStrategy as IPASingleStrategy,
+        },
+        kzg::{
+            commitment::{KZGCommitmentScheme, ParamsKZG},
+            multiopen::{ProverSHPLONK, VerifierSHPLONK},
+            strategy::SingleStrategy as KZGSingleStrategy,
+        },
+        VerificationStrategy,
+    },
 };
-use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
-use halo2_proofs::poly::kzg::multiopen::VerifierSHPLONK;
-use halo2_proofs::poly::kzg::{
-    commitment::{KZGCommitmentScheme, ParamsKZG},
-    strategy::SingleStrategy as KZGSingleStrategy,
-};
-use halo2_proofs::poly::VerificationStrategy;
 use halo2_solidity_verifier::encode_calldata;
-use halo2curves::bn256::{Bn256, Fr, G1Affine};
-use halo2curves::ff::{FromUniformBytes, PrimeField};
-use snark_verifier::loader::native::NativeLoader;
-use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
+use halo2curves::{
+    bn256::{Bn256, Fr, G1Affine},
+    ff::{FromUniformBytes, PrimeField},
+};
+use snark_verifier::{loader::native::NativeLoader, system::halo2::transcript::evm::EvmTranscript};
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_console_logger::DEFAULT_LOGGER;
@@ -275,7 +286,7 @@ pub fn genWitness(
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let witness = circuit
-        .forward::<KZGCommitmentScheme<Bn256>>(&mut input, None, None, false, false)
+        .forward::<KZGCommitmentScheme<Bn256>>(&mut input, None, None, RegionSettings::all_false())
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     serde_json::to_vec(&witness)
