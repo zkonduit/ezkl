@@ -9,6 +9,7 @@ use crate::circuit::lookup::LookupOp;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::poly::PolyOp;
 use crate::circuit::Op;
+use crate::fieldutils::IntegerRep;
 use crate::tensor::{Tensor, TensorError, TensorType};
 use halo2curves::bn256::Fr as Fp;
 use halo2curves::ff::PrimeField;
@@ -50,16 +51,20 @@ use tract_onnx::tract_hir::{
 /// * `dims` - the dimensionality of the resulting [Tensor].
 /// * `shift` - offset used in the fixed point representation.
 /// * `scale` - `2^scale` used in the fixed point representation.
-pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i64, TensorError> {
+pub fn quantize_float(
+    elem: &f64,
+    shift: f64,
+    scale: crate::Scale,
+) -> Result<IntegerRep, TensorError> {
     let mult = scale_to_multiplier(scale);
-    let max_value = ((i64::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
+    let max_value = ((IntegerRep::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
     if *elem > max_value {
         return Err(TensorError::SigBitTruncationError);
     }
 
     // we parallelize the quantization process as it seems to be quite slow at times
-    let scaled = (mult * *elem + shift).round() as i64;
+    let scaled = (mult * *elem + shift).round() as IntegerRep;
 
     Ok(scaled)
 }
@@ -70,7 +75,7 @@ pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i64
 /// * `scale` - `2^scale` used in the fixed point representation.
 /// * `shift` - offset used in the fixed point representation.
 pub fn dequantize(felt: Fp, scale: crate::Scale, shift: f64) -> f64 {
-    let int_rep = crate::fieldutils::felt_to_i64(felt);
+    let int_rep = crate::fieldutils::felt_to_integer_rep(felt);
     let multiplier = scale_to_multiplier(scale);
     int_rep as f64 / multiplier - shift
 }
@@ -1424,7 +1429,7 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     visibility: &Visibility,
 ) -> Result<Tensor<F>, TensorError> {
     let mut value: Tensor<F> = const_value.par_enum_map(|_, x| {
-        Ok::<_, TensorError>(crate::fieldutils::i64_to_felt::<F>(quantize_float(
+        Ok::<_, TensorError>(crate::fieldutils::integer_rep_to_felt::<F>(quantize_float(
             &(x).into(),
             0.0,
             scale,

@@ -9,7 +9,7 @@ pub mod var;
 
 pub use errors::TensorError;
 
-use halo2curves::{bn256::Fr, ff::PrimeField};
+use halo2curves::ff::PrimeField;
 use maybe_rayon::{
     prelude::{
         IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator,
@@ -26,7 +26,7 @@ use instant::Instant;
 
 use crate::{
     circuit::utils,
-    fieldutils::{felt_to_i32, felt_to_i64, i32_to_felt, i64_to_felt},
+    fieldutils::{integer_rep_to_felt, IntegerRep},
     graph::Visibility,
 };
 
@@ -108,7 +108,7 @@ impl TensorType for f32 {
         Some(0.0)
     }
 
-    // f32 doesnt impl Ord so we cant just use max like we can for i32, usize.
+    // f32 doesnt impl Ord so we cant just use max like we can for IntegerRep, usize.
     // A comparison between f32s needs to handle NAN values.
     fn tmax(&self, other: &Self) -> Option<Self> {
         match (self.is_nan(), other.is_nan()) {
@@ -131,7 +131,7 @@ impl TensorType for f64 {
         Some(0.0)
     }
 
-    // f32 doesnt impl Ord so we cant just use max like we can for i32, usize.
+    // f32 doesnt impl Ord so we cant just use max like we can for IntegerRep, usize.
     // A comparison between f32s needs to handle NAN values.
     fn tmax(&self, other: &Self) -> Option<Self> {
         match (self.is_nan(), other.is_nan()) {
@@ -150,8 +150,7 @@ impl TensorType for f64 {
 }
 
 tensor_type!(bool, Bool, false, true);
-tensor_type!(i64, Int64, 0, 1);
-tensor_type!(i32, Int32, 0, 1);
+tensor_type!(IntegerRep, IntegerRep, 0, 1);
 tensor_type!(usize, USize, 0, 1);
 tensor_type!((), Empty, (), ());
 tensor_type!(utils::F32, F32, utils::F32(0.0), utils::F32(1.0));
@@ -316,92 +315,6 @@ impl<T: TensorType> DerefMut for Tensor<T> {
         self.inner.deref_mut()
     }
 }
-/// Convert to i64 trait
-pub trait IntoI64 {
-    /// Convert to i64
-    fn into_i64(self) -> i64;
-
-    /// From i64
-    fn from_i64(i: i64) -> Self;
-}
-
-impl IntoI64 for i64 {
-    fn into_i64(self) -> i64 {
-        self
-    }
-    fn from_i64(i: i64) -> i64 {
-        i
-    }
-}
-
-impl IntoI64 for i32 {
-    fn into_i64(self) -> i64 {
-        self as i64
-    }
-    fn from_i64(i: i64) -> Self {
-        i as i32
-    }
-}
-
-impl IntoI64 for usize {
-    fn into_i64(self) -> i64 {
-        self as i64
-    }
-    fn from_i64(i: i64) -> Self {
-        i as usize
-    }
-}
-
-impl IntoI64 for f32 {
-    fn into_i64(self) -> i64 {
-        self as i64
-    }
-    fn from_i64(i: i64) -> Self {
-        i as f32
-    }
-}
-
-impl IntoI64 for f64 {
-    fn into_i64(self) -> i64 {
-        self as i64
-    }
-    fn from_i64(i: i64) -> Self {
-        i as f64
-    }
-}
-
-impl IntoI64 for () {
-    fn into_i64(self) -> i64 {
-        0
-    }
-    fn from_i64(_: i64) -> Self {}
-}
-
-impl IntoI64 for Fr {
-    fn into_i64(self) -> i64 {
-        felt_to_i64(self)
-    }
-    fn from_i64(i: i64) -> Self {
-        i64_to_felt::<Fr>(i)
-    }
-}
-
-impl<F: PrimeField + IntoI64> IntoI64 for Value<F> {
-    fn into_i64(self) -> i64 {
-        let mut res = vec![];
-        self.map(|x| res.push(x.into_i64()));
-
-        if res.is_empty() {
-            0
-        } else {
-            res[0]
-        }
-    }
-
-    fn from_i64(i: i64) -> Self {
-        Value::known(F::from_i64(i))
-    }
-}
 
 impl<T: PartialEq + TensorType> PartialEq for Tensor<T> {
     fn eq(&self, other: &Tensor<T>) -> bool {
@@ -432,42 +345,6 @@ where
 }
 
 impl<F: PrimeField + Clone + TensorType + PartialOrd> From<Tensor<AssignedCell<Assigned<F>, F>>>
-    for Tensor<i32>
-{
-    fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<i32> {
-        let mut output = Vec::new();
-        value.map(|x| {
-            x.evaluate().value().map(|y| {
-                let e = felt_to_i32(*y);
-                output.push(e);
-                e
-            })
-        });
-        Tensor::new(Some(&output), value.dims()).unwrap()
-    }
-}
-
-impl<F: PrimeField + Clone + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>>
-    for Tensor<i32>
-{
-    fn from(value: Tensor<AssignedCell<F, F>>) -> Tensor<i32> {
-        let mut output = Vec::new();
-        value.map(|x| {
-            let mut i = 0;
-            x.value().map(|y| {
-                let e = felt_to_i32(*y);
-                output.push(e);
-                i += 1;
-            });
-            if i == 0 {
-                output.push(0);
-            }
-        });
-        Tensor::new(Some(&output), value.dims()).unwrap()
-    }
-}
-
-impl<F: PrimeField + Clone + TensorType + PartialOrd> From<Tensor<AssignedCell<Assigned<F>, F>>>
     for Tensor<Value<F>>
 {
     fn from(value: Tensor<AssignedCell<Assigned<F>, F>>) -> Tensor<Value<F>> {
@@ -476,24 +353,6 @@ impl<F: PrimeField + Clone + TensorType + PartialOrd> From<Tensor<AssignedCell<A
             output.push(x.value_field().evaluate());
         }
         Tensor::new(Some(&output), value.dims()).unwrap()
-    }
-}
-
-impl<F: PrimeField + TensorType + Clone + PartialOrd> From<Tensor<Value<F>>> for Tensor<i32> {
-    fn from(t: Tensor<Value<F>>) -> Tensor<i32> {
-        let mut output = Vec::new();
-        t.map(|x| {
-            let mut i = 0;
-            x.map(|y| {
-                let e = felt_to_i32(y);
-                output.push(e);
-                i += 1;
-            });
-            if i == 0 {
-                output.push(0);
-            }
-        });
-        Tensor::new(Some(&output), t.dims()).unwrap()
     }
 }
 
@@ -508,20 +367,10 @@ impl<F: PrimeField + TensorType + Clone + PartialOrd> From<Tensor<Value<F>>>
     }
 }
 
-impl<F: PrimeField + TensorType + Clone> From<Tensor<i32>> for Tensor<Value<F>> {
-    fn from(t: Tensor<i32>) -> Tensor<Value<F>> {
+impl<F: PrimeField + TensorType + Clone> From<Tensor<IntegerRep>> for Tensor<Value<F>> {
+    fn from(t: Tensor<IntegerRep>) -> Tensor<Value<F>> {
         let mut ta: Tensor<Value<F>> =
-            Tensor::from((0..t.len()).map(|i| Value::known(i32_to_felt::<F>(t[i]))));
-        // safe to unwrap as we know the dims are correct
-        ta.reshape(t.dims()).unwrap();
-        ta
-    }
-}
-
-impl<F: PrimeField + TensorType + Clone> From<Tensor<i64>> for Tensor<Value<F>> {
-    fn from(t: Tensor<i64>) -> Tensor<Value<F>> {
-        let mut ta: Tensor<Value<F>> =
-            Tensor::from((0..t.len()).map(|i| Value::known(i64_to_felt::<F>(t[i]))));
+            Tensor::from((0..t.len()).map(|i| Value::known(integer_rep_to_felt::<F>(t[i]))));
         // safe to unwrap as we know the dims are correct
         ta.reshape(t.dims()).unwrap();
         ta
@@ -633,7 +482,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(None, &[3, 3, 3]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(None, &[3, 3, 3]).unwrap();
     ///
     /// a.set(&[0, 0, 1], 10);
     /// assert_eq!(a[0 + 0 + 1], 10);
@@ -650,7 +500,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(None, &[2, 3, 5]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(None, &[2, 3, 5]).unwrap();
     ///
     /// a[1*15 + 1*5 + 1] = 5;
     /// assert_eq!(a.get(&[1, 1, 1]), 5);
@@ -664,7 +515,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(None, &[2, 3, 5]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(None, &[2, 3, 5]).unwrap();
     ///
     /// a[1*15 + 1*5 + 1] = 5;
     /// assert_eq!(a.get(&[1, 1, 1]), 5);
@@ -684,11 +536,12 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Pad to a length that is divisible by n
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1,2,3,4,5,6]), &[2, 3]).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0]), &[8]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1,2,3,4,5,6]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0]), &[8]).unwrap();
     /// assert_eq!(a.pad_to_zero_rem(4, 0).unwrap(), expected);
     ///
-    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0, 0]), &[9]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0, 0]), &[9]).unwrap();
     /// assert_eq!(a.pad_to_zero_rem(9, 0).unwrap(), expected);
     /// ```
     pub fn pad_to_zero_rem(&self, n: usize, pad: T) -> Result<Tensor<T>, TensorError> {
@@ -704,7 +557,8 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(None, &[2, 3, 5]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(None, &[2, 3, 5]).unwrap();
     ///
     /// let flat_index = 1*15 + 1*5 + 1;
     /// a[1*15 + 1*5 + 1] = 5;
@@ -731,8 +585,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Get a slice from the Tensor.
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
-    /// let mut b = Tensor::<i32>::new(Some(&[1, 2]), &[2]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+    /// let mut b = Tensor::<IntegerRep>::new(Some(&[1, 2]), &[2]).unwrap();
     ///
     /// assert_eq!(a.get_slice(&[0..2]).unwrap(), b);
     /// ```
@@ -782,9 +637,10 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Set a slice of the Tensor.
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
-    /// let b = Tensor::<i32>::new(Some(&[1, 2, 3, 1, 2, 3]), &[2, 3]).unwrap();
-    /// a.set_slice(&[1..2], &Tensor::<i32>::new(Some(&[1, 2, 3]), &[1, 3]).unwrap()).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
+    /// let b = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 1, 2, 3]), &[2, 3]).unwrap();
+    /// a.set_slice(&[1..2], &Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[1, 3]).unwrap()).unwrap();
     /// assert_eq!(a, b);
     /// ```
     pub fn set_slice(
@@ -845,6 +701,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// let a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     ///
     /// assert_eq!(a.get_index(&[2, 2, 2]), 26);
@@ -868,12 +725,13 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 5, 6]), &[8]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 3, 4, 5, 5, 6]), &[8]).unwrap();
     /// assert_eq!(a.duplicate_every_n(3, 1, 0).unwrap(), expected);
     /// assert_eq!(a.duplicate_every_n(7, 1, 0).unwrap(), a);
     ///
-    /// let expected = Tensor::<i32>::new(Some(&[1, 1, 2, 3, 3, 4, 5, 5, 6]), &[9]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 2, 3, 3, 4, 5, 5, 6]), &[9]).unwrap();
     /// assert_eq!(a.duplicate_every_n(3, 1, 2).unwrap(), expected);
     ///
     /// ```
@@ -900,8 +758,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 4, 5, 6, 6]), &[8]).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 3, 5, 6, 6]), &[7]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 3, 4, 5, 6, 6]), &[8]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 3, 5, 6, 6]), &[7]).unwrap();
     /// assert_eq!(a.remove_every_n(4, 1, 0).unwrap(), expected);
     ///
     ///
@@ -935,14 +794,15 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// WARN: assumes indices are in ascending order for speed
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[1, 2, 3, 6]), &[4]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 6]), &[4]).unwrap();
     /// let mut indices = vec![3, 4];
     /// assert_eq!(a.remove_indices(&mut indices, true).unwrap(), expected);
     ///
     ///
-    /// let a = Tensor::<i32>::new(Some(&[52, -245, 153, 13, -4, -56, -163, 249, -128, -172, 396, 143, 2, -96, 504, -44, -158, -393, 61, 95, 191, 74, 64, -219, 553, 104, 235, 222, 44, -216, 63, -251, 40, -140, 112, -355, 60, 123, 26, -116, -89, -200, -109, 168, 135, -34, -99, -54, 5, -81, 322, 87, 4, -139, 420, 92, -295, -12, 262, -1, 26, -48, 231, 1, -335, 244, 188, -4, 5, -362, 57, -198, -184, -117, 40, 305, 49, 30, -59, -26, -37, 96]), &[82]).unwrap();
-    /// let b = Tensor::<i32>::new(Some(&[52, -245, 153, 13, -4, -56, -163, 249, -128, -172, 396, 143, 2, -96, 504, -44, -158, -393, 61, 95, 191, 74, 64, -219, 553, 104, 235, 222, 44, -216, 63, -251, 40, -140, 112, -355, 60, 123, 26, -116, -89, -200, -109, 168, 135, -34, -99, -54, 5, -81, 322, 87, 4, -139, 420, 92, -295, -12, 262, -1, 26, -48, 231, -335, 244, 188, 5, -362, 57, -198, -184, -117, 40, 305, 49, 30, -59, -26, -37, 96]), &[80]).unwrap();
+    /// let a = Tensor::<IntegerRep>::new(Some(&[52, -245, 153, 13, -4, -56, -163, 249, -128, -172, 396, 143, 2, -96, 504, -44, -158, -393, 61, 95, 191, 74, 64, -219, 553, 104, 235, 222, 44, -216, 63, -251, 40, -140, 112, -355, 60, 123, 26, -116, -89, -200, -109, 168, 135, -34, -99, -54, 5, -81, 322, 87, 4, -139, 420, 92, -295, -12, 262, -1, 26, -48, 231, 1, -335, 244, 188, -4, 5, -362, 57, -198, -184, -117, 40, 305, 49, 30, -59, -26, -37, 96]), &[82]).unwrap();
+    /// let b = Tensor::<IntegerRep>::new(Some(&[52, -245, 153, 13, -4, -56, -163, 249, -128, -172, 396, 143, 2, -96, 504, -44, -158, -393, 61, 95, 191, 74, 64, -219, 553, 104, 235, 222, 44, -216, 63, -251, 40, -140, 112, -355, 60, 123, 26, -116, -89, -200, -109, 168, 135, -34, -99, -54, 5, -81, 322, 87, 4, -139, 420, 92, -295, -12, 262, -1, 26, -48, 231, -335, 244, 188, 5, -362, 57, -198, -184, -117, 40, 305, 49, 30, -59, -26, -37, 96]), &[80]).unwrap();
     /// let mut indices = vec![63, 67];
     /// assert_eq!(a.remove_indices(&mut indices, true).unwrap(), b);
     /// ```
@@ -972,6 +832,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///Reshape the tensor
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     /// a.reshape(&[9, 3]);
     /// assert_eq!(a.dims(), &[9, 3]);
@@ -1006,22 +867,23 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Move axis of the tensor
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     /// let b = a.move_axis(0, 2).unwrap();
     /// assert_eq!(b.dims(), &[3, 3, 3]);
     ///
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 1, 2]).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6]), &[1, 2, 3]).unwrap();
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 1, 2]).unwrap();
+    /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 5, 2, 4, 6]), &[1, 2, 3]).unwrap();
     /// let b = a.move_axis(0, 2).unwrap();
     /// assert_eq!(b, expected);
     ///
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
+    /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
     /// let b = a.move_axis(1, 2).unwrap();
     /// assert_eq!(b, expected);
     ///
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
+    /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
     /// let b = a.move_axis(2, 1).unwrap();
     /// assert_eq!(b, expected);
     /// ```
@@ -1086,22 +948,23 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Swap axes of the tensor
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     /// let b = a.swap_axes(0, 2).unwrap();
     /// assert_eq!(b.dims(), &[3, 3, 3]);
     ///
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 1, 2]).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6]), &[2, 1, 3]).unwrap();
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 1, 2]).unwrap();
+    /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 5, 2, 4, 6]), &[2, 1, 3]).unwrap();
     /// let b = a.swap_axes(0, 2).unwrap();
     /// assert_eq!(b, expected);
     ///
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
+    /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
     /// let b = a.swap_axes(1, 2).unwrap();
     /// assert_eq!(b, expected);
     ///
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 3, 2]).unwrap();
+    /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 5, 2, 4, 6, 7, 9, 11, 8, 10, 12]), &[2, 2, 3]).unwrap();
     /// let b = a.swap_axes(2, 1).unwrap();
     /// assert_eq!(b, expected);
     /// ```
@@ -1148,9 +1011,10 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Broadcasts the tensor to a given shape
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3, 1]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3, 1]).unwrap();
     ///
-    /// let mut expected = Tensor::<i32>::new(Some(&[1, 1, 1, 2, 2, 2, 3, 3, 3]), &[3, 3]).unwrap();
+    /// let mut expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 2, 2, 2, 3, 3, 3]), &[3, 3]).unwrap();
     /// assert_eq!(a.expand(&[3, 3]).unwrap(), expected);
     ///
     /// ```
@@ -1204,6 +1068,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///Flatten the tensor shape
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// let mut a = Tensor::<f32>::new(None, &[3, 3, 3]).unwrap();
     /// a.flatten();
     /// assert_eq!(a.dims(), &[27]);
@@ -1217,8 +1082,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Maps a function to tensors
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.map(|x| i32::pow(x,2));
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.map(|x| IntegerRep::pow(x,2));
     /// assert_eq!(c, Tensor::from([1, 16].into_iter()))
     /// ```
     pub fn map<F: FnMut(T) -> G, G: TensorType>(&self, mut f: F) -> Tensor<G> {
@@ -1231,8 +1097,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Maps a function to tensors and enumerates
     /// ```
     /// use ezkl::tensor::{Tensor, TensorError};
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.enum_map::<_,_,TensorError>(|i, x| Ok(i32::pow(x + i as i32, 2))).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.enum_map::<_,_,TensorError>(|i, x| Ok(IntegerRep::pow(x + i as IntegerRep, 2))).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
     pub fn enum_map<F: FnMut(usize, T) -> Result<G, E>, G: TensorType, E: Error>(
@@ -1254,8 +1121,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Maps a function to tensors and enumerates in parallel
     /// ```
     /// use ezkl::tensor::{Tensor, TensorError};
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(i32::pow(x + i as i32, 2))).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(IntegerRep::pow(x + i as IntegerRep, 2))).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
     pub fn par_enum_map<
@@ -1284,8 +1152,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Get last elem from Tensor
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
-    /// let mut b = Tensor::<i32>::new(Some(&[3]), &[1]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+    /// let mut b = Tensor::<IntegerRep>::new(Some(&[3]), &[1]).unwrap();
     ///
     /// assert_eq!(a.last().unwrap(), b);
     /// ```
@@ -1308,8 +1177,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// Maps a function to tensors and enumerates in parallel
     /// ```
     /// use ezkl::tensor::{Tensor, TensorError};
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(i32::pow(x + i as i32, 2))).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(IntegerRep::pow(x + i as IntegerRep, 2))).unwrap();
     /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
     /// ```
     pub fn par_enum_map_mut_filtered<
@@ -1332,103 +1202,13 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 }
 
-#[cfg(feature = "metal")]
-#[allow(unsafe_code)]
-/// Perform a tensor operation on the GPU using Metal.
-pub fn metal_tensor_op<T: Clone + TensorType + IntoI64 + Send + Sync>(
-    v: &Tensor<T>,
-    w: &Tensor<T>,
-    op: &str,
-) -> Tensor<T> {
-    assert_eq!(v.dims(), w.dims());
-
-    log::trace!("------------------------------------------------");
-
-    let start = Instant::now();
-    let v = v
-        .par_enum_map(|_, x| Ok::<_, TensorError>(x.into_i64()))
-        .unwrap();
-    let w = w
-        .par_enum_map(|_, x| Ok::<_, TensorError>(x.into_i64()))
-        .unwrap();
-    log::trace!("Time to map tensors: {:?}", start.elapsed());
-
-    objc::rc::autoreleasepool(|| {
-        // create function pipeline.
-        // this compiles the function, so a pipline can't be created in performance sensitive code.
-
-        let pipeline = &PIPELINES[op];
-
-        let length = v.len() as u64;
-        let size = length * core::mem::size_of::<i64>() as u64;
-        assert_eq!(v.len(), w.len());
-
-        let start = Instant::now();
-
-        let buffer_a = DEVICE.new_buffer_with_data(
-            unsafe { std::mem::transmute(v.as_ptr()) },
-            size,
-            MTLResourceOptions::StorageModeShared,
-        );
-        let buffer_b = DEVICE.new_buffer_with_data(
-            unsafe { std::mem::transmute(w.as_ptr()) },
-            size,
-            MTLResourceOptions::StorageModeShared,
-        );
-        let buffer_result = DEVICE.new_buffer(
-            size, // the operation will return an array with the same size.
-            MTLResourceOptions::StorageModeShared,
-        );
-
-        log::trace!("Time to load buffers: {:?}", start.elapsed());
-
-        // for sending commands, a command buffer is needed.
-        let start = Instant::now();
-        let command_buffer = QUEUE.new_command_buffer();
-        log::trace!("Time to load command buffer: {:?}", start.elapsed());
-        // to write commands into a buffer an encoder is needed, in our case a compute encoder.
-        let start = Instant::now();
-        let compute_encoder = command_buffer.new_compute_command_encoder();
-        compute_encoder.set_compute_pipeline_state(&pipeline);
-        compute_encoder.set_buffers(
-            0,
-            &[Some(&buffer_a), Some(&buffer_b), Some(&buffer_result)],
-            &[0; 3],
-        );
-        log::trace!("Time to load compute encoder: {:?}", start.elapsed());
-
-        // specify thread count and organization
-        let start = Instant::now();
-        let grid_size = MTLSize::new(length, 1, 1);
-        let threadgroup_size = MTLSize::new(length, 1, 1);
-        compute_encoder.dispatch_threads(grid_size, threadgroup_size);
-        log::trace!("Time to dispatch threads: {:?}", start.elapsed());
-
-        // end encoding and execute commands
-        let start = Instant::now();
-        compute_encoder.end_encoding();
-        command_buffer.commit();
-
-        command_buffer.wait_until_completed();
-        log::trace!("Time to commit: {:?}", start.elapsed());
-
-        let start = Instant::now();
-        let ptr = buffer_result.contents() as *const i64;
-        let len = buffer_result.length() as usize / std::mem::size_of::<i64>();
-        let slice = unsafe { core::slice::from_raw_parts(ptr, len) };
-        let res = Tensor::new(Some(&slice.to_vec()), &v.dims()).unwrap();
-        log::trace!("Time to get result: {:?}", start.elapsed());
-
-        res.map(|x| T::from_i64(x))
-    })
-}
-
 impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     /// Flattens a tensor of tensors
     /// ```
     /// use ezkl::tensor::Tensor;
-    /// let mut a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
-    /// let mut b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
+    /// let mut b = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2, 1]).unwrap();
     /// let mut c = Tensor::new(Some(&[a,b]), &[2]).unwrap();
     /// let mut d = c.combine().unwrap();
     /// assert_eq!(d.dims(), &[8]);
@@ -1444,9 +1224,7 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     }
 }
 
-impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync + IntoI64> Add
-    for Tensor<T>
-{
+impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync> Add for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
     /// Adds tensors.
     /// # Arguments
@@ -1456,42 +1234,43 @@ impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync + I
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use std::ops::Add;
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = Tensor::<i32>::new(
+    /// let k = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 3, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = x.add(k).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     /// // Now test 1D casting
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = Tensor::<i32>::new(
+    /// let k = Tensor::<IntegerRep>::new(
     ///     Some(&[2]),
     ///     &[1]).unwrap();
     /// let result = x.add(k).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     ///
     /// // Now test 2D casting
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = Tensor::<i32>::new(
+    /// let k = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 3]),
     ///     &[2]).unwrap();
     /// let result = x.add(k).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 4, 4, 4]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 3, 4, 4, 4, 4]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     fn add(self, rhs: Self) -> Self::Output {
@@ -1525,13 +1304,14 @@ impl<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync> Ne
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use std::ops::Neg;
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[2, 1, 2, 1, 1, 1]),
     ///   &[2, 3],
     /// ).unwrap();
     /// let result = x.neg();
-    /// let expected = Tensor::<i32>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     fn neg(self) -> Self {
@@ -1544,9 +1324,7 @@ impl<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync> Ne
     }
 }
 
-impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync + IntoI64> Sub
-    for Tensor<T>
-{
+impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync> Sub for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
     /// Subtracts tensors.
     /// # Arguments
@@ -1556,43 +1334,44 @@ impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync + I
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use std::ops::Sub;
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = Tensor::<i32>::new(
+    /// let k = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 3, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = x.sub(k).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     /// // Now test 1D sub
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = Tensor::<i32>::new(
+    /// let k = Tensor::<IntegerRep>::new(
     ///     Some(&[2]),
     ///     &[1],
     /// ).unwrap();
     /// let result = x.sub(k).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     /// // Now test 2D sub
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = Tensor::<i32>::new(
+    /// let k = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 3]),
     ///     &[2],
     /// ).unwrap();
     /// let result = x.sub(k).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[0, -1, 0, -2, -2, -2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, -1, 0, -2, -2, -2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     fn sub(self, rhs: Self) -> Self::Output {
@@ -1618,9 +1397,7 @@ impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync + I
     }
 }
 
-impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync + IntoI64> Mul
-    for Tensor<T>
-{
+impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Mul for Tensor<T> {
     type Output = Result<Tensor<T>, TensorError>;
     /// Elementwise multiplies tensors.
     /// # Arguments
@@ -1630,41 +1407,42 @@ impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync + I
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use std::ops::Mul;
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = Tensor::<i32>::new(
+    /// let k = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 3, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = x.mul(k).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     /// // Now test 1D mult
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = Tensor::<i32>::new(
+    /// let k = Tensor::<IntegerRep>::new(
     ///     Some(&[2]),
     ///     &[1]).unwrap();
     /// let result = x.mul(k).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     /// // Now test 2D mult
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let k = Tensor::<i32>::new(
+    /// let k = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 2]),
     ///     &[2]).unwrap();
     /// let result = x.mul(k).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     fn mul(self, rhs: Self) -> Self::Output {
@@ -1690,7 +1468,7 @@ impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync + I
     }
 }
 
-impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync + IntoI64> Tensor<T> {
+impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Tensor<T> {
     /// Elementwise raise a tensor to the nth power.
     /// # Arguments
     ///
@@ -1699,13 +1477,14 @@ impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync + I
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use std::ops::Mul;
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = x.pow(3).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[8, 3375, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[8, 3375, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn pow(&self, mut exp: u32) -> Result<Self, TensorError> {
@@ -1739,30 +1518,31 @@ impl<T: TensorType + Div<Output = T> + std::marker::Send + std::marker::Sync> Di
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use std::ops::Div;
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[4, 1, 4, 1, 1, 4]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let y = Tensor::<i32>::new(
+    /// let y = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = x.div(y).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[2, 1, 2, 1, 1, 4]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 1, 2, 1, 1, 4]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     /// // test 1D casting
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[4, 1, 4, 1, 1, 4]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let y = Tensor::<i32>::new(
+    /// let y = Tensor::<IntegerRep>::new(
     ///     Some(&[2]),
     ///     &[1],
     /// ).unwrap();
     /// let result = x.div(y).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[2, 0, 2, 0, 0, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 0, 2, 0, 0, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     fn div(self, rhs: Self) -> Self::Output {
@@ -1789,17 +1569,18 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync> Re
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use std::ops::Rem;
-    /// let x = Tensor::<i32>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 1, 4, 1, 1, 4]),
     ///   &[2, 3],
     /// ).unwrap();
-    /// let y = Tensor::<i32>::new(
+    /// let y = Tensor::<IntegerRep>::new(
     ///    Some(&[2, 1, 2, 1, 1, 1]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = x.rem(y).unwrap();
-    /// let expected = Tensor::<i32>::new(Some(&[0, 0, 0, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 0, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     fn rem(self, rhs: Self) -> Self::Output {
@@ -1883,25 +1664,25 @@ mod tests {
 
     #[test]
     fn tensor_clone() {
-        let x = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+        let x = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
         assert_eq!(x, x.clone());
     }
 
     #[test]
     fn tensor_eq() {
-        let a = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3]).unwrap();
-        let mut b = Tensor::<i32>::new(Some(&[1, 2, 3]), &[3, 1]).unwrap();
+        let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+        let mut b = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3, 1]).unwrap();
         b.reshape(&[3]).unwrap();
-        let c = Tensor::<i32>::new(Some(&[1, 2, 4]), &[3]).unwrap();
-        let d = Tensor::<i32>::new(Some(&[1, 2, 4]), &[3, 1]).unwrap();
+        let c = Tensor::<IntegerRep>::new(Some(&[1, 2, 4]), &[3]).unwrap();
+        let d = Tensor::<IntegerRep>::new(Some(&[1, 2, 4]), &[3, 1]).unwrap();
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert_ne!(a, d);
     }
     #[test]
     fn tensor_slice() {
-        let a = Tensor::<i32>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
-        let b = Tensor::<i32>::new(Some(&[1, 4]), &[2, 1]).unwrap();
+        let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
+        let b = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2, 1]).unwrap();
         assert_eq!(a.get_slice(&[0..2, 0..1]).unwrap(), b);
     }
 

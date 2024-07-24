@@ -1,5 +1,6 @@
 use crate::{
     circuit::table::Range,
+    fieldutils::IntegerRep,
     tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor},
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -11,7 +12,6 @@ use halo2_proofs::{
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 use maybe_rayon::iter::ParallelExtend;
-use portable_atomic::AtomicI64 as AtomicInt;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -86,6 +86,78 @@ impl ShuffleIndex {
     }
 }
 
+#[derive(Debug, Clone)]
+/// Some settings for a region to differentiate it across the different phases of proof generation
+pub struct RegionSettings {
+    /// whether we are in witness generation mode
+    pub witness_gen: bool,
+    /// whether we should check range checks for validity
+    pub check_range: bool,
+}
+
+#[allow(unsafe_code)]
+unsafe impl Sync for RegionSettings {}
+#[allow(unsafe_code)]
+unsafe impl Send for RegionSettings {}
+
+impl RegionSettings {
+    /// Create a new region settings
+    pub fn new(witness_gen: bool, check_range: bool) -> RegionSettings {
+        RegionSettings {
+            witness_gen,
+            check_range,
+        }
+    }
+
+    /// Create a new region settings with all true
+    pub fn all_true() -> RegionSettings {
+        RegionSettings {
+            witness_gen: true,
+            check_range: true,
+        }
+    }
+
+    /// Create a new region settings with all false
+    pub fn all_false() -> RegionSettings {
+        RegionSettings {
+            witness_gen: false,
+            check_range: false,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+/// Region statistics
+pub struct RegionStatistics {
+    /// the current maximum value of the lookup inputs
+    pub max_lookup_inputs: IntegerRep,
+    /// the current minimum value of the lookup inputs
+    pub min_lookup_inputs: IntegerRep,
+    /// the current maximum value of the range size
+    pub max_range_size: IntegerRep,
+    /// the current set of used lookups
+    pub used_lookups: HashSet<LookupOp>,
+    /// the current set of used range checks
+    pub used_range_checks: HashSet<Range>,
+}
+
+impl RegionStatistics {
+    /// update the statistics with another set of statistics
+    pub fn update(&mut self, other: &RegionStatistics) {
+        self.max_lookup_inputs = self.max_lookup_inputs.max(other.max_lookup_inputs);
+        self.min_lookup_inputs = self.min_lookup_inputs.min(other.min_lookup_inputs);
+        self.max_range_size = self.max_range_size.max(other.max_range_size);
+        self.used_lookups.extend(other.used_lookups.clone());
+        self.used_range_checks
+            .extend(other.used_range_checks.clone());
+    }
+}
+
+#[allow(unsafe_code)]
+unsafe impl Sync for RegionStatistics {}
+#[allow(unsafe_code)]
+unsafe impl Send for RegionStatistics {}
+
 #[derive(Debug)]
 /// A context for a region
 pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
@@ -95,13 +167,8 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     num_inner_cols: usize,
     dynamic_lookup_index: DynamicLookupIndex,
     shuffle_index: ShuffleIndex,
-    used_lookups: HashSet<LookupOp>,
-    used_range_checks: HashSet<Range>,
-    max_lookup_inputs: i64,
-    min_lookup_inputs: i64,
-    max_range_size: i64,
-    witness_gen: bool,
-    check_lookup_range: bool,
+    statistics: RegionStatistics,
+    settings: RegionSettings,
     assigned_constants: ConstantsMap<F>,
 }
 
@@ -153,12 +220,17 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
 
     ///
     pub fn witness_gen(&self) -> bool {
-        self.witness_gen
+        self.settings.witness_gen
     }
 
     ///
-    pub fn check_lookup_range(&self) -> bool {
-        self.check_lookup_range
+    pub fn check_range(&self) -> bool {
+        self.settings.check_range
+    }
+
+    ///
+    pub fn statistics(&self) -> &RegionStatistics {
+        &self.statistics
     }
 
     /// Create a new region context
@@ -173,13 +245,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             linear_coord,
             dynamic_lookup_index: DynamicLookupIndex::default(),
             shuffle_index: ShuffleIndex::default(),
-            used_lookups: HashSet::new(),
-            used_range_checks: HashSet::new(),
-            max_lookup_inputs: 0,
-            min_lookup_inputs: 0,
-            max_range_size: 0,
-            witness_gen: true,
-            check_lookup_range: true,
+            statistics: RegionStatistics::default(),
+            settings: RegionSettings::all_true(),
             assigned_constants: HashMap::new(),
         }
     }
@@ -195,39 +262,12 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         new_self.assigned_constants = constants;
         new_self
     }
-    /// Create a new region context from a wrapped region
-    pub fn from_wrapped_region(
-        region: Option<RefCell<Region<'a, F>>>,
-        row: usize,
-        num_inner_cols: usize,
-        dynamic_lookup_index: DynamicLookupIndex,
-        shuffle_index: ShuffleIndex,
-    ) -> RegionCtx<'a, F> {
-        let linear_coord = row * num_inner_cols;
-        RegionCtx {
-            region,
-            num_inner_cols,
-            linear_coord,
-            row,
-            dynamic_lookup_index,
-            shuffle_index,
-            used_lookups: HashSet::new(),
-            used_range_checks: HashSet::new(),
-            max_lookup_inputs: 0,
-            min_lookup_inputs: 0,
-            max_range_size: 0,
-            witness_gen: false,
-            check_lookup_range: false,
-            assigned_constants: HashMap::new(),
-        }
-    }
 
     /// Create a new region context
     pub fn new_dummy(
         row: usize,
         num_inner_cols: usize,
-        witness_gen: bool,
-        check_lookup_range: bool,
+        settings: RegionSettings,
     ) -> RegionCtx<'a, F> {
         let region = None;
         let linear_coord = row * num_inner_cols;
@@ -239,13 +279,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             row,
             dynamic_lookup_index: DynamicLookupIndex::default(),
             shuffle_index: ShuffleIndex::default(),
-            used_lookups: HashSet::new(),
-            used_range_checks: HashSet::new(),
-            max_lookup_inputs: 0,
-            min_lookup_inputs: 0,
-            max_range_size: 0,
-            witness_gen,
-            check_lookup_range,
+            statistics: RegionStatistics::default(),
+            settings,
             assigned_constants: HashMap::new(),
         }
     }
@@ -255,8 +290,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         row: usize,
         linear_coord: usize,
         num_inner_cols: usize,
-        witness_gen: bool,
-        check_lookup_range: bool,
+        settings: RegionSettings,
     ) -> RegionCtx<'a, F> {
         let region = None;
         RegionCtx {
@@ -266,13 +300,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             row,
             dynamic_lookup_index: DynamicLookupIndex::default(),
             shuffle_index: ShuffleIndex::default(),
-            used_lookups: HashSet::new(),
-            used_range_checks: HashSet::new(),
-            max_lookup_inputs: 0,
-            min_lookup_inputs: 0,
-            max_range_size: 0,
-            witness_gen,
-            check_lookup_range,
+            statistics: RegionStatistics::default(),
+            settings,
             assigned_constants: HashMap::new(),
         }
     }
@@ -323,12 +352,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     ) -> Result<(), CircuitError> {
         let row = AtomicUsize::new(self.row());
         let linear_coord = AtomicUsize::new(self.linear_coord());
-        let max_lookup_inputs = AtomicInt::new(self.max_lookup_inputs());
-        let min_lookup_inputs = AtomicInt::new(self.min_lookup_inputs());
-        let lookups = Arc::new(Mutex::new(self.used_lookups.clone()));
-        let range_checks = Arc::new(Mutex::new(self.used_range_checks.clone()));
-        let dynamic_lookup_index = Arc::new(Mutex::new(self.dynamic_lookup_index.clone()));
+        let statistics = Arc::new(Mutex::new(self.statistics.clone()));
         let shuffle_index = Arc::new(Mutex::new(self.shuffle_index.clone()));
+        let dynamic_lookup_index = Arc::new(Mutex::new(self.dynamic_lookup_index.clone()));
         let constants = Arc::new(Mutex::new(self.assigned_constants.clone()));
 
         *output = output.par_enum_map(|idx, _| {
@@ -342,8 +368,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 starting_offset,
                 starting_linear_coord,
                 self.num_inner_cols,
-                self.witness_gen,
-                self.check_lookup_range,
+                self.settings.clone(),
             );
             let res = inner_loop_function(idx, &mut local_reg);
             // we update the offset and constants
@@ -353,14 +378,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 Ordering::SeqCst,
             );
 
-            max_lookup_inputs.fetch_max(local_reg.max_lookup_inputs(), Ordering::SeqCst);
-            min_lookup_inputs.fetch_min(local_reg.min_lookup_inputs(), Ordering::SeqCst);
             // update the lookups
-            let mut lookups = lookups.lock().unwrap();
-            lookups.extend(local_reg.used_lookups());
-            // update the range checks
-            let mut range_checks = range_checks.lock().unwrap();
-            range_checks.extend(local_reg.used_range_checks());
+            let mut statistics = statistics.lock().unwrap();
+            statistics.update(local_reg.statistics());
             // update the dynamic lookup index
             let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
             dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
@@ -374,20 +394,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             res
         })?;
         self.linear_coord = linear_coord.into_inner();
-        #[allow(trivial_numeric_casts)]
-        {
-            self.max_lookup_inputs = max_lookup_inputs.into_inner();
-            self.min_lookup_inputs = min_lookup_inputs.into_inner();
-        }
         self.row = row.into_inner();
-        self.used_lookups = Arc::try_unwrap(lookups)
+        self.statistics = Arc::try_unwrap(statistics)
             .map_err(|e| CircuitError::GetLookupsError(format!("{:?}", e)))?
             .into_inner()
             .map_err(|e| CircuitError::GetLookupsError(format!("{:?}", e)))?;
-        self.used_range_checks = Arc::try_unwrap(range_checks)
-            .map_err(|e| CircuitError::GetRangeChecksError(format!("{:?}", e)))?
-            .into_inner()
-            .map_err(|e| CircuitError::GetRangeChecksError(format!("{:?}", e)))?;
         self.dynamic_lookup_index = Arc::try_unwrap(dynamic_lookup_index)
             .map_err(|e| CircuitError::GetDynamicLookupError(format!("{:?}", e)))?
             .into_inner()
@@ -411,11 +422,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     ) -> Result<(), CircuitError> {
         let (mut min, mut max) = (0, 0);
         for i in inputs {
-            max = max.max(i.get_int_evals()?.into_iter().max().unwrap_or_default());
-            min = min.min(i.get_int_evals()?.into_iter().min().unwrap_or_default());
+            max = max.max(i.int_evals()?.into_iter().max().unwrap_or_default());
+            min = min.min(i.int_evals()?.into_iter().min().unwrap_or_default());
         }
-        self.max_lookup_inputs = self.max_lookup_inputs.max(max);
-        self.min_lookup_inputs = self.min_lookup_inputs.min(min);
+        self.statistics.max_lookup_inputs = self.statistics.max_lookup_inputs.max(max);
+        self.statistics.min_lookup_inputs = self.statistics.min_lookup_inputs.min(min);
         Ok(())
     }
 
@@ -427,7 +438,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
 
         let range_size = (range.1 - range.0).abs();
 
-        self.max_range_size = self.max_range_size.max(range_size);
+        self.statistics.max_range_size = self.statistics.max_range_size.max(range_size);
         Ok(())
     }
 
@@ -442,13 +453,13 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         lookup: LookupOp,
         inputs: &[ValTensor<F>],
     ) -> Result<(), CircuitError> {
-        self.used_lookups.insert(lookup);
+        self.statistics.used_lookups.insert(lookup);
         self.update_max_min_lookup_inputs(inputs)
     }
 
     /// add used range check
     pub fn add_used_range_check(&mut self, range: Range) -> Result<(), CircuitError> {
-        self.used_range_checks.insert(range);
+        self.statistics.used_range_checks.insert(range);
         self.update_max_min_lookup_range(range)
     }
 
@@ -489,27 +500,27 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
 
     /// get used lookups
     pub fn used_lookups(&self) -> HashSet<LookupOp> {
-        self.used_lookups.clone()
+        self.statistics.used_lookups.clone()
     }
 
     /// get used range checks
     pub fn used_range_checks(&self) -> HashSet<Range> {
-        self.used_range_checks.clone()
+        self.statistics.used_range_checks.clone()
     }
 
     /// max lookup inputs
-    pub fn max_lookup_inputs(&self) -> i64 {
-        self.max_lookup_inputs
+    pub fn max_lookup_inputs(&self) -> IntegerRep {
+        self.statistics.max_lookup_inputs
     }
 
     /// min lookup inputs
-    pub fn min_lookup_inputs(&self) -> i64 {
-        self.min_lookup_inputs
+    pub fn min_lookup_inputs(&self) -> IntegerRep {
+        self.statistics.min_lookup_inputs
     }
 
     /// max range check
-    pub fn max_range_size(&self) -> i64 {
-        self.max_range_size
+    pub fn max_range_size(&self) -> IntegerRep {
+        self.statistics.max_range_size
     }
 
     /// Assign a valtensor to a vartensor

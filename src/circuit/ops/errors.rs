@@ -1,6 +1,6 @@
 use std::convert::Infallible;
 
-use crate::tensor::TensorError;
+use crate::{fieldutils::IntegerRep, tensor::TensorError};
 use halo2_proofs::plonk::Error as PlonkError;
 use thiserror::Error;
 
@@ -57,7 +57,7 @@ pub enum CircuitError {
     InvalidConversion(#[from] Infallible),
     /// Invalid min/max lookup range
     #[error("invalid min/max lookup range: min: {0}, max: {1}")]
-    InvalidMinMaxRange(i64, i64),
+    InvalidMinMaxRange(IntegerRep, IntegerRep),
     /// Missing product in einsum
     #[error("missing product in einsum")]
     MissingEinsumProduct,
@@ -81,7 +81,7 @@ pub enum CircuitError {
     MissingSelectors(String),
     /// Table lookup error
     #[error("value ({0}) out of range: ({1}, {2})")]
-    TableOOR(i64, i64, i64),
+    TableOOR(IntegerRep, IntegerRep, IntegerRep),
     /// Loookup not configured
     #[error("lookup not configured: {0}")]
     LookupNotConfigured(String),

@@ -260,6 +260,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_hashed_input_::t  --test-threads 32
       - name: hashed params
         run: cargo nextest run --release --verbose tests::mock_hashed_params_::t  --test-threads 32
+      - name: hashed params public inputs
+        run: cargo nextest run --release --verbose tests::mock_hashed_params_public_inputs_::t  --test-threads 32
       - name: hashed outputs
         run: cargo nextest run --release --verbose tests::mock_hashed_output_::t  --test-threads 32
       - name: hashed inputs + params + outputs

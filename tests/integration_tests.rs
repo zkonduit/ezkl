@@ -3,7 +3,7 @@
 mod native_tests {
 
     use ezkl::circuit::Tolerance;
-    use ezkl::fieldutils::{felt_to_i64, i64_to_felt};
+    use ezkl::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
@@ -643,6 +643,15 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                 mock(path, test.to_string(), "public", "private", "private", 1, "resources", None, 0.0);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_params_public_inputs_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                mock(path, test.to_string(), "public", "hashed", "private", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -1413,10 +1422,10 @@ mod native_tests {
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
                                 halo2curves::bn256::Fr::zero()
                             } else {
-                                i64_to_felt(
-                                    (felt_to_i64(*v) as f32
+                                integer_rep_to_felt(
+                                    (felt_to_integer_rep(*v) as f32
                                         * (rand::thread_rng().gen_range(-0.01..0.01) * tolerance))
-                                        as i64,
+                                        as IntegerRep,
                                 )
                             };
 
@@ -1436,10 +1445,10 @@ mod native_tests {
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
                                 halo2curves::bn256::Fr::from(2)
                             } else {
-                                i64_to_felt(
-                                    (felt_to_i64(*v) as f32
+                                integer_rep_to_felt(
+                                    (felt_to_integer_rep(*v) as f32
                                         * (rand::thread_rng().gen_range(0.02..0.1) * tolerance))
-                                        as i64,
+                                        as IntegerRep,
                                 )
                             };
                             *v + perturbation

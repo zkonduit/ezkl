@@ -6,7 +6,7 @@ use crate::circuit::modules::poseidon::{
 use crate::circuit::modules::Module;
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::*;
-use crate::fieldutils::{felt_to_i64, i64_to_felt};
+use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
 use crate::graph::modules::POSEIDON_LEN_GRAPH;
 use crate::graph::TestDataSource;
 use crate::graph::{
@@ -331,9 +331,9 @@ fn felt_to_big_endian(felt: PyFelt) -> PyResult<String> {
 #[pyfunction(signature = (
     felt,
 ))]
-fn felt_to_int(felt: PyFelt) -> PyResult<i64> {
+fn felt_to_int(felt: PyFelt) -> PyResult<IntegerRep> {
     let felt = crate::pfsys::string_to_field::<Fr>(&felt);
-    let int_rep = felt_to_i64(felt);
+    let int_rep = felt_to_integer_rep(felt);
     Ok(int_rep)
 }
 
@@ -357,7 +357,7 @@ fn felt_to_int(felt: PyFelt) -> PyResult<i64> {
 ))]
 fn felt_to_float(felt: PyFelt, scale: crate::Scale) -> PyResult<f64> {
     let felt = crate::pfsys::string_to_field::<Fr>(&felt);
-    let int_rep = felt_to_i64(felt);
+    let int_rep = felt_to_integer_rep(felt);
     let multiplier = scale_to_multiplier(scale);
     let float_rep = int_rep as f64 / multiplier;
     Ok(float_rep)
@@ -385,7 +385,7 @@ fn felt_to_float(felt: PyFelt, scale: crate::Scale) -> PyResult<f64> {
 fn float_to_felt(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
-    let felt = i64_to_felt(int_rep);
+    let felt = integer_rep_to_felt(int_rep);
     Ok(crate::pfsys::field_to_string::<Fr>(&felt))
 }
 
