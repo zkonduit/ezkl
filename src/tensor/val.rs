@@ -1,4 +1,4 @@
-use crate::circuit::region::ConstantsMap;
+use crate::{circuit::region::ConstantsMap, fieldutils::felt_to_integer_rep};
 use maybe_rayon::slice::Iter;
 
 use super::{
@@ -52,6 +52,44 @@ pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::S
     Constant(F),
     /// assigned constant
     AssignedConstant(AssignedCell<F, F>, F),
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for IntegerRep {
+    fn from(val: ValType<F>) -> Self {
+        match val {
+            ValType::Value(v) => {
+                let mut output = 0;
+                let mut i = 0;
+                v.map(|y| {
+                    let e = felt_to_integer_rep(y);
+                    output = e;
+                    i += 1;
+                });
+                output
+            }
+            ValType::AssignedValue(v) => {
+                let mut output = 0;
+                let mut i = 0;
+                v.evaluate().map(|y| {
+                    let e = felt_to_integer_rep(y);
+                    output = e;
+                    i += 1;
+                });
+                output
+            }
+            ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                let mut output = 0;
+                let mut i = 0;
+                v.value().map(|y| {
+                    let e = felt_to_integer_rep(*y);
+                    output = e;
+                    i += 1;
+                });
+                output
+            }
+            ValType::Constant(v) => felt_to_integer_rep(v),
+        }
+    }
 }
 
 impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd> ValType<F> {
@@ -117,44 +155,6 @@ impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + Partia
             ValType::PrevAssigned(v) => Some(v.clone()),
             ValType::AssignedConstant(v, _) => Some(v.clone()),
             _ => None,
-        }
-    }
-}
-
-impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
-    fn from(val: ValType<F>) -> Self {
-        match val {
-            ValType::Value(v) => {
-                let mut output = 0_i32;
-                let mut i = 0;
-                v.map(|y| {
-                    let e = felt_to_i32(y);
-                    output = e;
-                    i += 1;
-                });
-                output
-            }
-            ValType::AssignedValue(v) => {
-                let mut output = 0_i32;
-                let mut i = 0;
-                v.evaluate().map(|y| {
-                    let e = felt_to_i32(y);
-                    output = e;
-                    i += 1;
-                });
-                output
-            }
-            ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
-                let mut output = 0_i32;
-                let mut i = 0;
-                v.value().map(|y| {
-                    let e = felt_to_i32(*y);
-                    output = e;
-                    i += 1;
-                });
-                output
-            }
-            ValType::Constant(v) => felt_to_i32(v),
         }
     }
 }
@@ -317,8 +317,8 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// Allocate a new [ValTensor::Value] from the given [Tensor] of [i64].
-    pub fn from_i64_tensor(t: Tensor<i64>) -> ValTensor<F> {
-        let inner = t.map(|x| ValType::Value(Value::known(i64_to_felt(x))));
+    pub fn from_integer_rep_tensor(t: Tensor<IntegerRep>) -> ValTensor<F> {
+        let inner = t.map(|x| ValType::Value(Value::known(integer_rep_to_felt(x))));
         inner.into()
     }
 
@@ -521,9 +521,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// Calls `int_evals` on the inner tensor.
-    pub fn get_int_evals(&self) -> Result<Tensor<i64>, TensorError> {
+    pub fn int_evals(&self) -> Result<Tensor<IntegerRep>, TensorError> {
         // finally convert to vector of integers
-        let mut integer_evals: Vec<i64> = vec![];
+        let mut integer_evals: Vec<IntegerRep> = vec![];
         match self {
             ValTensor::Value {
                 inner: v, dims: _, ..
@@ -531,25 +531,26 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
                 let _ = v.map(|vaf| match vaf {
                     ValType::Value(v) => v.map(|f| {
-                        integer_evals.push(crate::fieldutils::felt_to_i64(f));
+                        integer_evals.push(crate::fieldutils::felt_to_integer_rep(f));
                     }),
                     ValType::AssignedValue(v) => v.map(|f| {
-                        integer_evals.push(crate::fieldutils::felt_to_i64(f.evaluate()));
+                        integer_evals.push(crate::fieldutils::felt_to_integer_rep(f.evaluate()));
                     }),
                     ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
                         v.value_field().map(|f| {
-                            integer_evals.push(crate::fieldutils::felt_to_i64(f.evaluate()));
+                            integer_evals
+                                .push(crate::fieldutils::felt_to_integer_rep(f.evaluate()));
                         })
                     }
                     ValType::Constant(v) => {
-                        integer_evals.push(crate::fieldutils::felt_to_i64(v));
+                        integer_evals.push(crate::fieldutils::felt_to_integer_rep(v));
                         Value::unknown()
                     }
                 });
             }
             _ => return Err(TensorError::WrongMethod),
         };
-        let mut tensor: Tensor<i64> = integer_evals.into_iter().into();
+        let mut tensor: Tensor<IntegerRep> = integer_evals.into_iter().into();
         match tensor.reshape(self.dims()) {
             _ => {}
         };
@@ -1002,25 +1003,22 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
     /// A [String] representation of the [ValTensor] for display, for example in showing intermediate values in a computational graph.
     pub fn show(&self) -> String {
-        match self.clone() {
-            ValTensor::Value {
-                inner: v, dims: _, ..
-            } => {
-                let r: Tensor<i32> = v.map(|x| x.into());
-                if r.len() > 10 {
-                    let start = r[..5].to_vec();
-                    let end = r[r.len() - 5..].to_vec();
-                    // print the two split by ... in the middle
-                    format!(
-                        "[{} ... {}]",
-                        start.iter().map(|x| format!("{}", x)).join(", "),
-                        end.iter().map(|x| format!("{}", x)).join(", ")
-                    )
-                } else {
-                    format!("{:?}", r)
-                }
-            }
-            _ => "ValTensor not PrevAssigned".into(),
+        let r = match self.int_evals() {
+            Ok(v) => v,
+            Err(_) => return "ValTensor not PrevAssigned".into(),
+        };
+
+        if r.len() > 10 {
+            let start = r[..5].to_vec();
+            let end = r[r.len() - 5..].to_vec();
+            // print the two split by ... in the middle
+            format!(
+                "[{} ... {}]",
+                start.iter().map(|x| format!("{}", x)).join(", "),
+                end.iter().map(|x| format!("{}", x)).join(", ")
+            )
+        } else {
+            format!("{:?}", r)
         }
     }
 }

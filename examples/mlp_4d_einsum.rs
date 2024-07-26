@@ -2,7 +2,7 @@ use ezkl::circuit::region::RegionCtx;
 use ezkl::circuit::{
     ops::lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode,
 };
-use ezkl::fieldutils::i32_to_felt;
+use ezkl::fieldutils::{integer_rep_to_felt, IntegerRep};
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::{
@@ -23,8 +23,8 @@ struct MyConfig {
 #[derive(Clone)]
 struct MyCircuit<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
-    const LOOKUP_MIN: i64,
-    const LOOKUP_MAX: i64,
+    const LOOKUP_MIN: IntegerRep,
+    const LOOKUP_MAX: IntegerRep,
 > {
     // Given the stateless MyConfig type information, a DNN trace is determined by its input and the parameters of its layers.
     // Computing the trace still requires a forward pass. The intermediate activations are stored only by the layouter.
@@ -34,7 +34,7 @@ struct MyCircuit<
     _marker: PhantomData<F>,
 }
 
-impl<const LEN: usize, const LOOKUP_MIN: i64, const LOOKUP_MAX: i64> Circuit<F>
+impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRep> Circuit<F>
     for MyCircuit<LEN, LOOKUP_MIN, LOOKUP_MAX>
 {
     type Config = MyConfig;
@@ -215,33 +215,33 @@ pub fn runmlp() {
     #[cfg(not(target_arch = "wasm32"))]
     env_logger::init();
     // parameters
-    let mut l0_kernel: Tensor<F> = Tensor::<i32>::new(
+    let mut l0_kernel: Tensor<F> = Tensor::<IntegerRep>::new(
         Some(&[10, 0, 0, -1, 0, 10, 1, 0, 0, 1, 10, 0, 1, 0, 0, 10]),
         &[4, 4],
     )
     .unwrap()
-    .map(i32_to_felt);
+    .map(integer_rep_to_felt);
     l0_kernel.set_visibility(&ezkl::graph::Visibility::Private);
 
-    let mut l0_bias: Tensor<F> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
+    let mut l0_bias: Tensor<F> = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 1]), &[4, 1])
         .unwrap()
-        .map(i32_to_felt);
+        .map(integer_rep_to_felt);
     l0_bias.set_visibility(&ezkl::graph::Visibility::Private);
 
-    let mut l2_kernel: Tensor<F> = Tensor::<i32>::new(
+    let mut l2_kernel: Tensor<F> = Tensor::<IntegerRep>::new(
         Some(&[0, 3, 10, -1, 0, 10, 1, 0, 0, 1, 0, 12, 1, -2, 32, 0]),
         &[4, 4],
     )
     .unwrap()
-    .map(i32_to_felt);
+    .map(integer_rep_to_felt);
     l2_kernel.set_visibility(&ezkl::graph::Visibility::Private);
     // input data, with 1 padding to allow for bias
-    let input: Tensor<Value<F>> = Tensor::<i32>::new(Some(&[-30, -21, 11, 40]), &[4, 1])
+    let input: Tensor<Value<F>> = Tensor::<IntegerRep>::new(Some(&[-30, -21, 11, 40]), &[4, 1])
         .unwrap()
         .into();
-    let mut l2_bias: Tensor<F> = Tensor::<i32>::new(Some(&[0, 0, 0, 1]), &[4, 1])
+    let mut l2_bias: Tensor<F> = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 1]), &[4, 1])
         .unwrap()
-        .map(i32_to_felt);
+        .map(integer_rep_to_felt);
     l2_bias.set_visibility(&ezkl::graph::Visibility::Private);
 
     let circuit = MyCircuit::<4, -8192, 8192> {
@@ -251,12 +251,12 @@ pub fn runmlp() {
         _marker: PhantomData,
     };
 
-    let public_input: Vec<i32> = unsafe {
+    let public_input: Vec<IntegerRep> = unsafe {
         vec![
-            (531f32 / 128f32).round().to_int_unchecked::<i32>(),
-            (103f32 / 128f32).round().to_int_unchecked::<i32>(),
-            (4469f32 / 128f32).round().to_int_unchecked::<i32>(),
-            (2849f32 / 128f32).to_int_unchecked::<i32>(),
+            (531f32 / 128f32).round().to_int_unchecked::<IntegerRep>(),
+            (103f32 / 128f32).round().to_int_unchecked::<IntegerRep>(),
+            (4469f32 / 128f32).round().to_int_unchecked::<IntegerRep>(),
+            (2849f32 / 128f32).to_int_unchecked::<IntegerRep>(),
         ]
     };
 
@@ -265,7 +265,10 @@ pub fn runmlp() {
     let prover = MockProver::run(
         K as u32,
         &circuit,
-        vec![public_input.iter().map(|x| i32_to_felt::<F>(*x)).collect()],
+        vec![public_input
+            .iter()
+            .map(|x| integer_rep_to_felt::<F>(*x))
+            .collect()],
     )
     .unwrap();
     prover.assert_satisfied();

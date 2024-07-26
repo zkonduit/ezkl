@@ -34,10 +34,10 @@ use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::region::ConstantsMap;
+use crate::circuit::region::{ConstantsMap, RegionSettings};
 use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
-use crate::fieldutils::felt_to_f64;
+use crate::fieldutils::{felt_to_f64, IntegerRep};
 use crate::pfsys::PrettyElements;
 use crate::tensor::{Tensor, ValTensor};
 use crate::{RunArgs, EZKL_BUF_CAPACITY};
@@ -69,13 +69,14 @@ pub use vars::*;
 use crate::pfsys::field_to_string;
 
 /// The safety factor for the range of the lookup table.
-pub const RANGE_MULTIPLIER: i64 = 2;
+pub const RANGE_MULTIPLIER: IntegerRep = 2;
 
 /// The maximum number of columns in a lookup table.
 pub const MAX_NUM_LOOKUP_COLS: usize = 12;
 
 /// Max representation of a lookup table input
-pub const MAX_LOOKUP_ABS: i64 = (MAX_NUM_LOOKUP_COLS as i64) * 2_i64.pow(MAX_PUBLIC_SRS);
+pub const MAX_LOOKUP_ABS: IntegerRep =
+    (MAX_NUM_LOOKUP_COLS as IntegerRep) * 2_i128.pow(MAX_PUBLIC_SRS);
 
 #[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
@@ -126,11 +127,11 @@ pub struct GraphWitness {
     /// Any hashes of outputs generated during the forward pass
     pub processed_outputs: Option<ModuleForwardResult>,
     /// max lookup input
-    pub max_lookup_inputs: i64,
+    pub max_lookup_inputs: IntegerRep,
     /// max lookup input
-    pub min_lookup_inputs: i64,
+    pub min_lookup_inputs: IntegerRep,
     /// max range check size
-    pub max_range_size: i64,
+    pub max_range_size: IntegerRep,
 }
 
 impl GraphWitness {
@@ -804,18 +805,26 @@ impl GraphCircuit {
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
         let mut public_inputs: Vec<Fp> = vec![];
-        if self.settings().run_args.input_visibility.is_public() {
-            public_inputs.extend(self.graph_witness.inputs.clone().into_iter().flatten())
-        } else if let Some(processed_inputs) = &data.processed_inputs {
+
+        // we first process the inputs
+        if let Some(processed_inputs) = &data.processed_inputs {
             public_inputs.extend(processed_inputs.get_instances().into_iter().flatten());
         }
 
+        // we then process the params
         if let Some(processed_params) = &data.processed_params {
             public_inputs.extend(processed_params.get_instances().into_iter().flatten());
         }
 
+        // if the inputs are public, we add them to the public inputs AFTER the processed params as they are configured in that order as Column<Instances>
+        if self.settings().run_args.input_visibility.is_public() {
+            public_inputs.extend(self.graph_witness.inputs.clone().into_iter().flatten())
+        }
+
+        // if the outputs are public, we add them to the public inputs
         if self.settings().run_args.output_visibility.is_public() {
             public_inputs.extend(self.graph_witness.outputs.clone().into_iter().flatten());
+        // if the outputs are processed, we add the processed outputs to the public inputs
         } else if let Some(processed_outputs) = &data.processed_outputs {
             public_inputs.extend(processed_outputs.get_instances().into_iter().flatten());
         }
@@ -1036,12 +1045,12 @@ impl GraphCircuit {
 
     fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: f64) -> Range {
         (
-            (lookup_safety_margin * min_max_lookup.0 as f64).floor() as i64,
-            (lookup_safety_margin * min_max_lookup.1 as f64).ceil() as i64,
+            (lookup_safety_margin * min_max_lookup.0 as f64).floor() as IntegerRep,
+            (lookup_safety_margin * min_max_lookup.1 as f64).ceil() as IntegerRep,
         )
     }
 
-    fn calc_num_cols(range_len: i64, max_logrows: u32) -> usize {
+    fn calc_num_cols(range_len: IntegerRep, max_logrows: u32) -> usize {
         let max_col_size = Table::<Fp>::cal_col_size(max_logrows as usize, RESERVED_BLINDING_ROWS);
         num_cols_required(range_len, max_col_size)
     }
@@ -1049,7 +1058,7 @@ impl GraphCircuit {
     fn table_size_logrows(
         &self,
         safe_lookup_range: Range,
-        max_range_size: i64,
+        max_range_size: IntegerRep,
     ) -> Result<u32, GraphError> {
         // pick the range with the largest absolute size safe_lookup_range or max_range_size
         let safe_range = std::cmp::max(
@@ -1068,7 +1077,7 @@ impl GraphCircuit {
     pub fn calc_min_logrows(
         &mut self,
         min_max_lookup: Range,
-        max_range_size: i64,
+        max_range_size: IntegerRep,
         max_logrows: Option<u32>,
         lookup_safety_margin: f64,
     ) -> Result<(), GraphError> {
@@ -1086,7 +1095,7 @@ impl GraphCircuit {
             (safe_lookup_range.1.saturating_sub(safe_lookup_range.0)).saturating_abs();
         // check if has overflowed max lookup input
 
-        if lookup_size > (MAX_LOOKUP_ABS as f64 / lookup_safety_margin).floor() as i64 {
+        if lookup_size > (MAX_LOOKUP_ABS as f64 / lookup_safety_margin).floor() as IntegerRep {
             return Err(GraphError::LookupRangeTooLarge(
                 lookup_size.unsigned_abs() as usize
             ));
@@ -1166,7 +1175,7 @@ impl GraphCircuit {
         &self,
         k: u32,
         safe_lookup_range: Range,
-        max_range_size: i64,
+        max_range_size: IntegerRep,
     ) -> bool {
         // if num cols is too large then the extended k is too large
         if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS
@@ -1224,8 +1233,7 @@ impl GraphCircuit {
         inputs: &mut [Tensor<Fp>],
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&Scheme::ParamsProver>,
-        witness_gen: bool,
-        check_lookup: bool,
+        region_settings: RegionSettings,
     ) -> Result<GraphWitness, GraphError> {
         let original_inputs = inputs.to_vec();
 
@@ -1274,7 +1282,7 @@ impl GraphCircuit {
 
         let mut model_results =
             self.model()
-                .forward(inputs, &self.settings().run_args, witness_gen, check_lookup)?;
+                .forward(inputs, &self.settings().run_args, region_settings)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();
