@@ -2306,7 +2306,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2#8cfca221f53069a0374687654882b99e729041d7#8cfca221f53069a0374687654882b99e729041d7"
+source = "git+https://github.com/zkonduit/halo2#8cfca221f53069a0374687654882b99e729041d7#098ac0ef3b29255e0e2524ecbb4e7e325ae6e7fd"
 dependencies = [
  "blake2b_simd",
  "env_logger",
@@ -2319,6 +2319,7 @@ dependencies = [
  "rand_chacha",
  "rand_core 0.6.4",
  "rustacuda",
+ "rustc-hash 2.0.0",
  "sha3 0.9.1",
  "tracing",
 ]
@@ -4029,7 +4030,7 @@ dependencies = [
  "pin-project-lite",
  "quinn-proto",
  "quinn-udp",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "rustls",
  "thiserror",
  "tokio",
@@ -4045,7 +4046,7 @@ dependencies = [
  "bytes",
  "rand 0.8.5",
  "ring",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "rustls",
  "slab",
  "thiserror",
@@ -4468,6 +4469,12 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-hash"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583034fd73374156e66797ed8e5b0d5690409c9226b22d87cb7f19821c05d152"
 
 [[package]]
 name = "rustc-hex"
