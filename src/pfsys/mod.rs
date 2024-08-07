@@ -550,7 +550,7 @@ where
         + PrimeField
         + FromUniformBytes<64>
         + WithSmallOrderMulGroup<3>,
-    Scheme::Curve: Serialize + DeserializeOwned,
+    Scheme::Curve: Serialize + DeserializeOwned + SerdeObject,
 {
     let strategy = Strategy::new(params.verifier_params());
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);

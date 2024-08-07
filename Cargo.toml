@@ -80,7 +80,7 @@ pyo3-asyncio = { version = "0.20.0", features = [
     "tokio-runtime",
 ], default_features = false, optional = true }
 pyo3-log = { version = "0.9.0", default_features = false, optional = true }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev = "7b1aa33b2f7d1f19b80e270c83320f0f94daff69", default_features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev = "40c64319291184814d9fea5fdf4fa16f5a4f7116", default_features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
 
 
@@ -204,7 +204,7 @@ no-banner = []
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a", package = "halo2_proofs", branch = "ac/optional-selector-poly" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=cache-lookup-commitments#14079450cb29f48f7d9519b8232abbe6b8b79dee", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 
 
 [profile.release]
