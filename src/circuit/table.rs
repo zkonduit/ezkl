@@ -27,6 +27,13 @@ pub const RANGE_MULTIPLIER: i128 = 2;
 /// The safety factor offset for the number of rows in the lookup table.
 pub const RESERVED_BLINDING_ROWS_PAD: usize = 3;
 
+lazy_static::lazy_static! {
+    /// an optional directory to read and write the lookup table cache
+    static ref LOOKUP_CACHE: Option<std::path::PathBuf> = std::env::var("LOOKUP_CACHE")
+        .ok()
+        .map(std::path::PathBuf::from);
+}
+
 #[derive(Debug, Clone)]
 ///
 pub struct SelectorConstructor<F: PrimeField> {
@@ -205,9 +212,41 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         let smallest = self.range.0;
         let largest = self.range.1;
 
-        let inputs = Tensor::from(smallest..=largest)
-            .par_enum_map(|_, x| Ok::<_, halo2_proofs::plonk::Error>(i128_to_felt(x)))?;
-        let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
+        let gen_table = || -> Result<(Tensor<F>, Tensor<F>), crate::tensor::TensorError> {
+            let inputs = Tensor::from(smallest..=largest)
+                .par_enum_map(|_, x| Ok::<_, crate::tensor::TensorError>(i128_to_felt(x)))?;
+            let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
+            Ok((inputs, evals.output))
+        };
+
+        let (inputs, evals) = if let Some(cache) = &*LOOKUP_CACHE {
+            let cache_path = cache.join(self.nonlinearity.as_path());
+            let input_path = cache_path.join("inputs");
+            let output_path = cache_path.join("outputs");
+            if cache_path.exists() {
+                log::info!("Loading lookup table from cache: {:?}", cache_path);
+                let (input_cache, output_cache) =
+                    (Tensor::load(&input_path)?, Tensor::load(&output_path)?);
+                (input_cache, output_cache)
+            } else {
+                log::info!(
+                    "Generating lookup table and saving to cache: {:?}",
+                    cache_path
+                );
+
+                // mkdir -p cache_path
+                std::fs::create_dir_all(&cache_path)?;
+
+                let (inputs, evals) = gen_table()?;
+                inputs.save(&input_path)?;
+                evals.save(&output_path)?;
+
+                (inputs, evals)
+            }
+        } else {
+            gen_table()?
+        };
+
         let chunked_inputs = inputs.chunks(self.col_size);
 
         self.is_assigned = true;
@@ -239,7 +278,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
                                     )?;
                                 }
 
-                                let output = evals.output[row_offset];
+                                let output = evals[row_offset];
 
                                 table.assign_cell(
                                     || format!("nl_o_col row {}", row_offset),
@@ -277,6 +316,11 @@ pub struct RangeCheck<F: PrimeField> {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
+    /// as path
+    pub fn as_path(&self) -> String {
+        format!("rangecheck_{}_{}", self.range.0, self.range.1)
+    }
+
     /// get first_element of column
     pub fn get_first_element(&self, chunk: usize) -> F {
         let chunk = chunk as i128;
@@ -354,7 +398,29 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
         let smallest = self.range.0;
         let largest = self.range.1;
 
-        let inputs: Tensor<F> = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+        let inputs: Tensor<F> = if let Some(cache) = &*LOOKUP_CACHE {
+            let cache_path = cache.join(self.as_path());
+            let input_path = cache_path.join("inputs");
+            if cache_path.exists() {
+                log::info!("Loading range check table from cache: {:?}", cache_path);
+                Tensor::load(&input_path)?
+            } else {
+                log::info!(
+                    "Generating range check table and saving to cache: {:?}",
+                    cache_path
+                );
+
+                // mkdir -p cache_path
+                std::fs::create_dir_all(&cache_path)?;
+
+                let inputs = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+                inputs.save(&input_path)?;
+                inputs
+            }
+        } else {
+            Tensor::from(smallest..=largest).map(|x| i128_to_felt(x))
+        };
+
         let chunked_inputs = inputs.chunks(self.col_size);
 
         self.is_assigned = true;
