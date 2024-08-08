@@ -2327,13 +2327,14 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=main#eb04be1f7d005e5b9dd3ff41efa30aeb5e0c34a3"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=cache-lookup-consts-vk#18ed00ae867c6234837471a3eedbf53d1d77f2d9"
 dependencies = [
  "askama",
  "blake2b_simd",
  "halo2_proofs",
  "hex",
  "itertools 0.11.0",
+ "regex",
  "ruint",
  "sha3 0.10.8",
 ]
