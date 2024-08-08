@@ -204,7 +204,7 @@ no-banner = []
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#ef2607e622ab438bb58b8b98f0d2d2c95197a6cc", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#c629df8667387082fb39fcdacd7e76712e9c9709", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 
 
 [profile.release]
