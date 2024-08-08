@@ -205,7 +205,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         let smallest = self.range.0;
         let largest = self.range.1;
 
-        let inputs = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+        let inputs = Tensor::from(smallest..=largest)
+            .par_enum_map(|_, x| Ok::<_, halo2_proofs::plonk::Error>(i128_to_felt(x)))?;
         let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
         let chunked_inputs = inputs.chunks(self.col_size);
 
