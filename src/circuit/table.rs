@@ -244,6 +244,11 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
                 (inputs, evals)
             }
         } else {
+            log::info!(
+                "Generating lookup table {} without cache",
+                self.nonlinearity.as_path()
+            );
+
             gen_table()?
         };
 
@@ -418,6 +423,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
                 inputs
             }
         } else {
+            log::info!("Generating range check {} without cache", self.as_path());
+
             Tensor::from(smallest..=largest).map(|x| i128_to_felt(x))
         };
 
