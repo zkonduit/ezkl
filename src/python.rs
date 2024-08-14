@@ -1756,7 +1756,7 @@ fn deploy_vk_evm(
             addr_path,
             optimizer_runs,
             private_key,
-            "Halo2VerifyingKey",
+            "Halo2VerifyingArtifact",
         )
         .await
         .map_err(|e| {

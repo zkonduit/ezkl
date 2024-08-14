@@ -465,7 +465,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
                 addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS_VK.into()),
                 optimizer_runs,
                 private_key,
-                "Halo2VerifyingKey",
+                "Halo2VerifyingArtifact",
             )
             .await
         }
@@ -1498,7 +1498,7 @@ pub(crate) async fn create_evm_vk(
     File::create(sol_code_path.clone())?.write_all(vk_solidity.as_bytes())?;
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2VerifyingKey", 0).await?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2VerifyingArtifact", 0).await?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
