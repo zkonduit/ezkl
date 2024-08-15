@@ -1308,6 +1308,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
 
 [[package]]
+name = "dyn-hash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a650a461c6a8ff1ef205ed9a2ad56579309853fecefc2423f73dced342f92258"
+
+[[package]]
 name = "ecc"
 version = "0.1.0"
 source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#b43ebe30e84825d0d004fa27803d99c4187d419f"
@@ -2176,10 +2182,11 @@ checksum = "1b43ede17f21864e81be2fa654110bf1e793774238d86ef8555c37e6519c0403"
 
 [[package]]
 name = "half"
-version = "2.2.1"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02b4af3693f1b705df946e9fe5631932443781d0aabb423b62fcd4d73f6d2fd0"
+checksum = "6dd08c532ae367adf81c312a4580bc67f1d0fe8bc9c460520283f4c0ff277888"
 dependencies = [
+ "cfg-if",
  "crunchy",
  "num-traits",
 ]
@@ -2205,18 +2212,21 @@ dependencies = [
 name = "halo2_proofs"
 version = "0.3.0"
 dependencies = [
+ "bincode",
  "blake2b_simd",
  "env_logger",
  "ff",
  "group",
  "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=9fff22c)",
  "icicle",
+ "lazy_static",
  "log",
  "maybe-rayon",
  "rand_chacha",
  "rand_core 0.6.4",
  "rustacuda",
  "rustc-hash",
+ "serde",
  "sha3 0.9.1",
  "tracing",
 ]
@@ -2700,6 +2710,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2968,9 +2987,9 @@ checksum = "523dc4f511e55ab87b694dc30d0f820d60906ef06413f93d4d7a1385599cc149"
 
 [[package]]
 name = "memmap2"
-version = "0.5.10"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
+checksum = "fe751422e4a8caa417e13c3ea66452215d7d63e19e604f4980461212f3ae1322"
 dependencies = [
  "libc",
 ]
@@ -4049,9 +4068,9 @@ checksum = "60a357793950651c4ed0f3f52338f53b2f809f32d83a07f72909fa13e4c6c1e3"
 
 [[package]]
 name = "rayon"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4963ed1bc86e4f3ee217022bd855b297cef07fb9eac5dfa1f788b220b49b3bd"
+checksum = "b418a60154510ca1a002a752ca9714984e21e4241e804d32555251faf8b78ffa"
 dependencies = [
  "either",
  "rayon-core",
@@ -4851,12 +4870,12 @@ checksum = "fe895eb47f22e2ddd4dabc02bce419d2e643c8e3b585c78158b349195bc24d82"
 
 [[package]]
 name = "string-interner"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91e2531d8525b29b514d25e275a43581320d587b86db302b9a7e464bac579648"
+checksum = "07f9fdfdd31a0ff38b59deb401be81b73913d76c9cc5b1aed4e1330a223420b9"
 dependencies = [
  "cfg-if",
- "hashbrown 0.11.2",
+ "hashbrown 0.14.3",
  "serde",
 ]
 
@@ -5395,8 +5414,8 @@ dependencies = [
 
 [[package]]
 name = "tract-core"
-version = "0.20.23-pre"
-source = "git+https://github.com/sonos/tract/?rev=7b1aa33b2f7d1f19b80e270c83320f0f94daff69#7b1aa33b2f7d1f19b80e270c83320f0f94daff69"
+version = "0.21.6-pre"
+source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
 dependencies = [
  "anyhow",
  "bit-set",
@@ -5419,12 +5438,15 @@ dependencies = [
 
 [[package]]
 name = "tract-data"
-version = "0.20.23-pre"
-source = "git+https://github.com/sonos/tract/?rev=7b1aa33b2f7d1f19b80e270c83320f0f94daff69#7b1aa33b2f7d1f19b80e270c83320f0f94daff69"
+version = "0.21.6-pre"
+source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
 dependencies = [
  "anyhow",
- "half 2.2.1",
- "itertools 0.10.5",
+ "downcast-rs",
+ "dyn-clone",
+ "dyn-hash",
+ "half 2.4.1",
+ "itertools 0.12.1",
  "lazy_static",
  "maplit",
  "ndarray",
@@ -5438,8 +5460,8 @@ dependencies = [
 
 [[package]]
 name = "tract-hir"
-version = "0.20.23-pre"
-source = "git+https://github.com/sonos/tract/?rev=7b1aa33b2f7d1f19b80e270c83320f0f94daff69#7b1aa33b2f7d1f19b80e270c83320f0f94daff69"
+version = "0.21.6-pre"
+source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
 dependencies = [
  "derive-new",
  "log",
@@ -5448,20 +5470,23 @@ dependencies = [
 
 [[package]]
 name = "tract-linalg"
-version = "0.20.23-pre"
-source = "git+https://github.com/sonos/tract/?rev=7b1aa33b2f7d1f19b80e270c83320f0f94daff69#7b1aa33b2f7d1f19b80e270c83320f0f94daff69"
+version = "0.21.6-pre"
+source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
 dependencies = [
+ "byteorder",
  "cc",
  "derive-new",
  "downcast-rs",
  "dyn-clone",
- "half 2.2.1",
+ "dyn-hash",
+ "half 2.4.1",
  "lazy_static",
  "liquid",
  "liquid-core",
  "log",
  "num-traits",
  "paste",
+ "rayon",
  "scan_fmt",
  "smallvec",
  "time",
@@ -5472,8 +5497,8 @@ dependencies = [
 
 [[package]]
 name = "tract-nnef"
-version = "0.20.23-pre"
-source = "git+https://github.com/sonos/tract/?rev=7b1aa33b2f7d1f19b80e270c83320f0f94daff69#7b1aa33b2f7d1f19b80e270c83320f0f94daff69"
+version = "0.21.6-pre"
+source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
 dependencies = [
  "byteorder",
  "flate2",
@@ -5486,8 +5511,8 @@ dependencies = [
 
 [[package]]
 name = "tract-onnx"
-version = "0.20.23-pre"
-source = "git+https://github.com/sonos/tract/?rev=7b1aa33b2f7d1f19b80e270c83320f0f94daff69#7b1aa33b2f7d1f19b80e270c83320f0f94daff69"
+version = "0.21.6-pre"
+source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
 dependencies = [
  "bytes",
  "derive-new",
@@ -5503,8 +5528,8 @@ dependencies = [
 
 [[package]]
 name = "tract-onnx-opl"
-version = "0.20.23-pre"
-source = "git+https://github.com/sonos/tract/?rev=7b1aa33b2f7d1f19b80e270c83320f0f94daff69#7b1aa33b2f7d1f19b80e270c83320f0f94daff69"
+version = "0.21.6-pre"
+source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
 dependencies = [
  "getrandom",
  "log",

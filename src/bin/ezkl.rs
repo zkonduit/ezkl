@@ -1,4 +1,6 @@
 // ignore file if compiling for wasm
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[cfg(not(target_arch = "wasm32"))]
 use clap::Parser;

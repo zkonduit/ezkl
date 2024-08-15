@@ -15,9 +15,9 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
+mimalloc = "0.1"
 halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/optional-selector-poly" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#7cbcf5ef42717edf5f54863a533bd3e78c273dd1", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
-halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "9fff22c", features = [
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#7cbcf5ef42717edf5f54863a533bd3e78c273dd1", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "9fff22c", features = [
     "derive_serde",
 ] }
 rand = { version = "0.8", default_features = false }
@@ -206,6 +206,5 @@ icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package =
 
 [patch.'https://github.com/zkonduit/halo2']
 halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#7cbcf5ef42717edf5f54863a533bd3e78c273dd1", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
-
 [profile.release]
 rustflags = ["-C", "relocation-model=pic"]
