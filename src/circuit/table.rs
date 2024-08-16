@@ -11,6 +11,7 @@ use maybe_rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     circuit::CircuitError,
+    execute::EZKL_REPO_PATH,
     fieldutils::{integer_rep_to_felt, IntegerRep},
     tensor::{Tensor, TensorType},
 };
@@ -27,9 +28,7 @@ pub const RESERVED_BLINDING_ROWS_PAD: usize = 3;
 
 lazy_static::lazy_static! {
     /// an optional directory to read and write the lookup table cache
-    static ref LOOKUP_CACHE: Option<std::path::PathBuf> = std::env::var("LOOKUP_CACHE")
-        .ok()
-        .map(std::path::PathBuf::from);
+    pub static ref LOOKUP_CACHE: String = format!("{}/cache", *EZKL_REPO_PATH);
 }
 
 #[derive(Debug, Clone)]
@@ -212,12 +211,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
 
         let gen_table = || -> Result<(Tensor<F>, Tensor<F>), crate::tensor::TensorError> {
             let inputs = Tensor::from(smallest..=largest)
-                .par_enum_map(|_, x| Ok::<_, crate::tensor::TensorError>(i128_to_felt(x)))?;
-            let evals = Op::<F>::f(&self.nonlinearity, &[inputs.clone()])?;
+                .par_enum_map(|_, x| Ok::<_, crate::tensor::TensorError>(integer_rep_to_felt(x)))?;
+            let evals = self.nonlinearity.f(&[inputs.clone()])?;
             Ok((inputs, evals.output))
         };
 
-        let (inputs, evals) = if let Some(cache) = &*LOOKUP_CACHE {
+        let (inputs, evals) = if !LOOKUP_CACHE.is_empty() {
+            let cache = std::path::Path::new(&*LOOKUP_CACHE);
             let cache_path = cache.join(self.nonlinearity.as_path());
             let input_path = cache_path.join("inputs");
             let output_path = cache_path.join("outputs");
@@ -233,7 +233,11 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
                 );
 
                 // mkdir -p cache_path
-                std::fs::create_dir_all(&cache_path)?;
+                std::fs::create_dir_all(&cache_path).map_err(|e| {
+                    CircuitError::TensorError(crate::tensor::TensorError::FileSaveError(
+                        e.to_string(),
+                    ))
+                })?;
 
                 let (inputs, evals) = gen_table()?;
                 inputs.save(&input_path)?;
@@ -401,7 +405,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
         let smallest = self.range.0;
         let largest = self.range.1;
 
-        let inputs: Tensor<F> = if let Some(cache) = &*LOOKUP_CACHE {
+        let inputs: Tensor<F> = if !LOOKUP_CACHE.is_empty() {
+            let cache = std::path::Path::new(&*LOOKUP_CACHE);
             let cache_path = cache.join(self.as_path());
             let input_path = cache_path.join("inputs");
             if cache_path.exists() {
@@ -416,14 +421,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
                 // mkdir -p cache_path
                 std::fs::create_dir_all(&cache_path)?;
 
-                let inputs = Tensor::from(smallest..=largest).map(|x| i128_to_felt(x));
+                let inputs = Tensor::from(smallest..=largest).map(|x| integer_rep_to_felt(x));
                 inputs.save(&input_path)?;
                 inputs
             }
         } else {
             log::info!("Generating range check {} without cache", self.as_path());
 
-            Tensor::from(smallest..=largest).map(|x| i128_to_felt(x))
+            Tensor::from(smallest..=largest).map(|x| integer_rep_to_felt(x))
         };
 
         let chunked_inputs = inputs.chunks(self.col_size);

@@ -181,7 +181,6 @@ impl LookupOp {
             LookupOp::HardSwish { scale } => format!("hardswish_{}", scale),
         }
     }
-}
 
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     pub(crate) fn f<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
