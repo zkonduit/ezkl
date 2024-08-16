@@ -15,7 +15,6 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-mimalloc = "0.1"
 halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/optional-selector-poly" }
 halo2_proofs = { git = "https://github.com/zkonduit/halo2#098ac0ef3b29255e0e2524ecbb4e7e325ae6e7fd", package = "halo2_proofs" }
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "9fff22c", features = [
@@ -90,6 +89,7 @@ colored = { version = "2.0.0", default_features = false, optional = true }
 env_logger = { version = "0.10.0", default_features = false, optional = true }
 chrono = "0.4.31"
 sha256 = "1.4.0"
+mimalloc = "0.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["js"] }

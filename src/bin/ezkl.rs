@@ -1,5 +1,6 @@
 // ignore file if compiling for wasm
 #[global_allocator]
+#[cfg(not(target_arch = "wasm32"))]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[cfg(not(target_arch = "wasm32"))]

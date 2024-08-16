@@ -11,10 +11,12 @@ use maybe_rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     circuit::CircuitError,
-    execute::EZKL_REPO_PATH,
     fieldutils::{integer_rep_to_felt, IntegerRep},
     tensor::{Tensor, TensorType},
 };
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::execute::EZKL_REPO_PATH;
 
 use crate::circuit::lookup::LookupOp;
 
@@ -29,12 +31,12 @@ pub const RESERVED_BLINDING_ROWS_PAD: usize = 3;
 #[cfg(not(target_arch = "wasm32"))]
 lazy_static::lazy_static! {
     /// an optional directory to read and write the lookup table cache
-    // not wasm
     pub static ref LOOKUP_CACHE: String = format!("{}/cache", *EZKL_REPO_PATH);
 }
 
+/// The lookup table cache is disabled on wasm32 target.
 #[cfg(target_arch = "wasm32")]
-pub const LOOKUP_CACHE: String = "".to_string();
+pub const LOOKUP_CACHE: &str = "";
 
 #[derive(Debug, Clone)]
 ///
