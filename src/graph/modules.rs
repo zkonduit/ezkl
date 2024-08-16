@@ -11,11 +11,12 @@ use halo2curves::bn256::{Fr as Fp, G1Affine};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
+use super::errors::GraphError;
 use super::{VarVisibility, Visibility};
 
 /// poseidon len to hash in tree
 pub const POSEIDON_LEN_GRAPH: usize = 32;
-/// Poseidon number of instancess
+/// Poseidon number of instances
 pub const POSEIDON_INSTANCES: usize = 1;
 
 /// Poseidon module type
@@ -295,7 +296,7 @@ impl GraphModules {
         element_visibility: &Visibility,
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&Scheme::ParamsProver>,
-    ) -> Result<ModuleForwardResult, Box<dyn std::error::Error>> {
+    ) -> Result<ModuleForwardResult, GraphError> {
         let mut poseidon_hash = None;
         let mut polycommit = None;
 
@@ -314,7 +315,6 @@ impl GraphModules {
                     let commitments = inputs.iter().fold(vec![], |mut acc, x| {
                         let res = PolyCommitChip::commit::<Scheme>(
                             x.to_vec(),
-                            vk.cs().degree() as u32,
                             (vk.cs().blinding_factors() + 1) as u32,
                             srs,
                         );

@@ -1,6 +1,5 @@
 target
 pkg
-data
 *.csv
 !examples/notebooks/eth_price.csv
 *.ipynb_checkpoints
@@ -49,4 +48,5 @@ node_modules
 timingData.json
 !tests/wasm/pk.key
 !tests/wasm/vk.key
+docs/python/build
 !tests/wasm/vk_aggr.key

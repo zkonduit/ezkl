@@ -2,7 +2,7 @@ attrs==23.2.0
 exceptiongroup==1.2.0
 importlib-metadata==7.1.0
 iniconfig==2.0.0
-maturin==1.5.0
+maturin==1.5.1
 packaging==24.0
 pluggy==1.4.0
 pytest==8.1.1

@@ -104,5 +104,5 @@ json.dump(data, open("input.json", 'w'))
 # ezkl.gen_settings("network.onnx", "settings.json")
 
 # !RUST_LOG = full
-# res = ezkl.calibrate_settings(
+# res = await ezkl.calibrate_settings(
 #     "input.json", "network.onnx", "settings.json", "resources")

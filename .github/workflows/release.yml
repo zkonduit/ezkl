@@ -45,7 +45,7 @@ jobs:
     steps:
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - name: Checkout repo
@@ -102,28 +102,32 @@ jobs:
       PCRE2_SYS_STATIC: 1
     strategy:
       matrix:
-        build: [windows-msvc, macos, macos-aarch64, linux-musl, linux-gnu]
+        build: [windows-msvc, macos, macos-aarch64, linux-musl, linux-gnu, linux-aarch64]
         include:
           - build: windows-msvc
             os: windows-latest
-            rust: nightly-2023-06-27
+            rust: nightly-2024-07-18
             target: x86_64-pc-windows-msvc
           - build: macos
             os: macos-13
-            rust: nightly-2023-06-27
+            rust: nightly-2024-07-18
             target: x86_64-apple-darwin
           - build: macos-aarch64
             os: macos-13
-            rust: nightly-2023-06-27
+            rust: nightly-2024-07-18
             target: aarch64-apple-darwin
           - build: linux-musl
             os: ubuntu-22.04
-            rust: nightly-2023-06-27
+            rust: nightly-2024-07-18
             target: x86_64-unknown-linux-musl
           - build: linux-gnu
             os: ubuntu-22.04
-            rust: nightly-2023-06-27
+            rust: nightly-2024-07-18
             target: x86_64-unknown-linux-gnu
+          - build: linux-aarch64
+            os: ubuntu-22.04
+            rust: nightly-2024-07-18
+            target: aarch64-unknown-linux-gnu
 
     steps:
       - name: Checkout repo
@@ -181,7 +185,7 @@ jobs:
         run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
 
       - name: Strip release binary
-        if: matrix.build != 'windows-msvc'
+        if: matrix.build != 'windows-msvc' && matrix.build != 'linux-aarch64'
         run: strip "target/${{ matrix.target }}/release/ezkl"
 
       - name: Strip release binary (Windows)

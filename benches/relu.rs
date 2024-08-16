@@ -2,6 +2,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use ezkl::circuit::region::RegionCtx;
 use ezkl::circuit::table::Range;
 use ezkl::circuit::{ops::lookup::LookupOp, BaseConfig as Config, CheckMode};
+use ezkl::fieldutils::IntegerRep;
 use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
@@ -84,7 +85,7 @@ fn runrelu(c: &mut Criterion) {
         };
 
         let input: Tensor<Value<Fr>> =
-            Tensor::<i32>::from((0..len).map(|_| rng.gen_range(0..10))).into();
+            Tensor::<IntegerRep>::from((0..len).map(|_| rng.gen_range(0..10))).into();
 
         let circuit = NLCircuit {
             input: ValTensor::from(input.clone()),

@@ -6,10 +6,17 @@ pub mod model;
 pub mod modules;
 /// Inner elements of a computational graph that represent a single operation / constraints.
 pub mod node;
+/// postgres helper functions
+#[cfg(not(target_arch = "wasm32"))]
+pub mod postgres;
 /// Helper functions
 pub mod utilities;
 /// Representations of a computational graph's variables.
 pub mod vars;
+
+/// errors for the graph
+pub mod errors;
+
 #[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
 #[cfg(unix)]
@@ -20,16 +27,17 @@ pub use input::DataSource;
 use itertools::Itertools;
 use tosubcommand::ToFlags;
 
+use self::errors::GraphError;
 #[cfg(not(target_arch = "wasm32"))]
 use self::input::OnChainSource;
 use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
-use crate::circuit::region::ConstantsMap;
+use crate::circuit::region::{ConstantsMap, RegionSettings};
 use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
-use crate::fieldutils::felt_to_f64;
+use crate::fieldutils::{felt_to_f64, IntegerRep};
 use crate::pfsys::PrettyElements;
 use crate::tensor::{Tensor, ValTensor};
 use crate::{RunArgs, EZKL_BUF_CAPACITY};
@@ -54,7 +62,6 @@ use pyo3::types::PyDict;
 use pyo3::ToPyObject;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
-use thiserror::Error;
 pub use utilities::*;
 pub use vars::*;
 
@@ -62,13 +69,14 @@ pub use vars::*;
 use crate::pfsys::field_to_string;
 
 /// The safety factor for the range of the lookup table.
-pub const RANGE_MULTIPLIER: i128 = 2;
+pub const RANGE_MULTIPLIER: IntegerRep = 2;
 
 /// The maximum number of columns in a lookup table.
 pub const MAX_NUM_LOOKUP_COLS: usize = 12;
 
 /// Max representation of a lookup table input
-pub const MAX_LOOKUP_ABS: i128 = (MAX_NUM_LOOKUP_COLS as i128) * 2_i128.pow(MAX_PUBLIC_SRS);
+pub const MAX_LOOKUP_ABS: IntegerRep =
+    (MAX_NUM_LOOKUP_COLS as IntegerRep) * 2_i128.pow(MAX_PUBLIC_SRS);
 
 #[cfg(not(target_arch = "wasm32"))]
 lazy_static! {
@@ -83,62 +91,6 @@ lazy_static! {
 
 #[cfg(target_arch = "wasm32")]
 const EZKL_MAX_CIRCUIT_AREA: Option<usize> = None;
-
-/// circuit related errors.
-#[derive(Debug, Error)]
-pub enum GraphError {
-    /// The wrong inputs were passed to a lookup node
-    #[error("invalid inputs for a lookup node")]
-    InvalidLookupInputs,
-    /// Shape mismatch in circuit construction
-    #[error("invalid dimensions used for node {0} ({1})")]
-    InvalidDims(usize, String),
-    /// Wrong method was called to configure an op
-    #[error("wrong method was called to configure node {0} ({1})")]
-    WrongMethod(usize, String),
-    /// A requested node is missing in the graph
-    #[error("a requested node is missing in the graph: {0}")]
-    MissingNode(usize),
-    /// The wrong method was called on an operation
-    #[error("an unsupported method was called on node {0} ({1})")]
-    OpMismatch(usize, String),
-    /// This operation is unsupported
-    #[error("unsupported operation in graph")]
-    UnsupportedOp,
-    /// This operation is unsupported
-    #[error("unsupported datatype in graph")]
-    UnsupportedDataType,
-    /// A node has missing parameters
-    #[error("a node is missing required params: {0}")]
-    MissingParams(String),
-    /// A node has missing parameters
-    #[error("a node is has misformed params: {0}")]
-    MisformedParams(String),
-    /// Error in the configuration of the visibility of variables
-    #[error("there should be at least one set of public variables")]
-    Visibility,
-    /// Ezkl only supports divisions by constants
-    #[error("ezkl currently only supports division by constants")]
-    NonConstantDiv,
-    /// Ezkl only supports constant powers
-    #[error("ezkl currently only supports constant exponents")]
-    NonConstantPower,
-    /// Error when attempting to rescale an operation
-    #[error("failed to rescale inputs for {0}")]
-    RescalingError(String),
-    /// Error when attempting to load a model
-    #[error("failed to load")]
-    ModelLoad,
-    /// Packing exponent is too large
-    #[error("largest packing exponent exceeds max. try reducing the scale")]
-    PackingExponent,
-    /// Invalid Input Types
-    #[error("invalid input types")]
-    InvalidInputTypes,
-    /// Missing results
-    #[error("missing results")]
-    MissingResults,
-}
 
 ///
 pub const ASSUMED_BLINDING_FACTORS: usize = 5;
@@ -175,11 +127,11 @@ pub struct GraphWitness {
     /// Any hashes of outputs generated during the forward pass
     pub processed_outputs: Option<ModuleForwardResult>,
     /// max lookup input
-    pub max_lookup_inputs: i128,
+    pub max_lookup_inputs: IntegerRep,
     /// max lookup input
-    pub min_lookup_inputs: i128,
+    pub min_lookup_inputs: IntegerRep,
     /// max range check size
-    pub max_range_size: i128,
+    pub max_range_size: IntegerRep,
 }
 
 impl GraphWitness {
@@ -306,30 +258,31 @@ impl GraphWitness {
     }
 
     /// Export the ezkl witness as json
-    pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn as_json(&self) -> Result<String, GraphError> {
         let serialized = match serde_json::to_string(&self) {
             Ok(s) => s,
-            Err(e) => {
-                return Err(Box::new(e));
-            }
+            Err(e) => return Err(e.into()),
         };
         Ok(serialized)
     }
 
     /// Load the model input from a file
-    pub fn from_path(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
-        let file = std::fs::File::open(path.clone())
-            .map_err(|_| format!("failed to load {}", path.display()))?;
+    pub fn from_path(path: std::path::PathBuf) -> Result<Self, GraphError> {
+        let file = std::fs::File::open(path.clone()).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
 
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
         serde_json::from_reader(reader).map_err(|e| e.into())
     }
 
     /// Save the model input to a file
-    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save(&self, path: std::path::PathBuf) -> Result<(), GraphError> {
+        let file = std::fs::File::create(path.clone()).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         // use buf writer
-        let writer =
-            std::io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::create(path)?);
+        let writer = std::io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, file);
 
         serde_json::to_writer(writer, &self).map_err(|e| e.into())
     }
@@ -483,7 +436,22 @@ pub struct GraphSettings {
 }
 
 impl GraphSettings {
-    fn model_constraint_logrows(&self) -> u32 {
+    /// Calc the number of rows required for lookup tables
+    pub fn lookup_log_rows(&self) -> u32 {
+        ((self.run_args.lookup_range.1 - self.run_args.lookup_range.0) as f32)
+            .log2()
+            .ceil() as u32
+    }
+
+    /// Calc the number of rows required for lookup tables
+    pub fn lookup_log_rows_with_blinding(&self) -> u32 {
+        ((self.run_args.lookup_range.1 - self.run_args.lookup_range.0) as f32
+            + RESERVED_BLINDING_ROWS as f32)
+            .log2()
+            .ceil() as u32
+    }
+
+    fn model_constraint_logrows_with_blinding(&self) -> u32 {
         (self.num_rows as f64 + RESERVED_BLINDING_ROWS as f64)
             .log2()
             .ceil() as u32
@@ -495,12 +463,29 @@ impl GraphSettings {
             .ceil() as u32
     }
 
+    /// calculate the number of rows required for the dynamic lookup and shuffle
+    pub fn dynamic_lookup_and_shuffle_logrows_with_blinding(&self) -> u32 {
+        (self.total_dynamic_col_size as f64
+            + self.total_shuffle_col_size as f64
+            + RESERVED_BLINDING_ROWS as f64)
+            .log2()
+            .ceil() as u32
+    }
+
     fn dynamic_lookup_and_shuffle_col_size(&self) -> usize {
         self.total_dynamic_col_size + self.total_shuffle_col_size
     }
 
-    fn module_constraint_logrows(&self) -> u32 {
+    /// calculate the number of rows required for the module constraints
+    pub fn module_constraint_logrows(&self) -> u32 {
         (self.module_sizes.max_constraints() as f64).log2().ceil() as u32
+    }
+
+    /// calculate the number of rows required for the module constraints
+    pub fn module_constraint_logrows_with_blinding(&self) -> u32 {
+        (self.module_sizes.max_constraints() as f64 + RESERVED_BLINDING_ROWS as f64)
+            .log2()
+            .ceil() as u32
     }
 
     fn constants_logrows(&self) -> u32 {
@@ -529,6 +514,14 @@ impl GraphSettings {
         std::cmp::max((sum as f64).log2().ceil() as u32, 1)
     }
 
+    /// calculate the log2 of the total number of instances
+    pub fn log2_total_instances_with_blinding(&self) -> u32 {
+        let sum = self.total_instances().iter().sum::<usize>() + RESERVED_BLINDING_ROWS;
+
+        // max between 1 and the log2 of the sums
+        std::cmp::max((sum as f64).log2().ceil() as u32, 1)
+    }
+
     /// save params to file
     pub fn save(&self, path: &std::path::PathBuf) -> Result<(), std::io::Error> {
         // buf writer
@@ -551,11 +544,11 @@ impl GraphSettings {
     }
 
     /// Export the ezkl configuration as json
-    pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn as_json(&self) -> Result<String, GraphError> {
         let serialized = match serde_json::to_string(&self) {
             Ok(s) => s,
             Err(e) => {
-                return Err(Box::new(e));
+                return Err(e.into());
             }
         };
         Ok(serialized)
@@ -651,17 +644,21 @@ impl GraphCircuit {
         &self.core.model
     }
     ///
-    pub fn save(&self, path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-        let f = std::fs::File::create(path)?;
+    pub fn save(&self, path: std::path::PathBuf) -> Result<(), GraphError> {
+        let f = std::fs::File::create(&path).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let writer = std::io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
         bincode::serialize_into(writer, &self)?;
         Ok(())
     }
 
     ///
-    pub fn load(path: std::path::PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load(path: std::path::PathBuf) -> Result<Self, GraphError> {
         // read bytes from file
-        let f = std::fs::File::open(path)?;
+        let f = std::fs::File::open(&path).map_err(|e| {
+            GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
+        })?;
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
         let result: GraphCircuit = bincode::deserialize_from(reader)?;
 
@@ -726,10 +723,7 @@ pub struct TestOnChainData {
 
 impl GraphCircuit {
     ///
-    pub fn new(
-        model: Model,
-        run_args: &RunArgs,
-    ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
+    pub fn new(model: Model, run_args: &RunArgs) -> Result<GraphCircuit, GraphError> {
         // // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
         let mut inputs: Vec<Vec<Fp>> = vec![];
         for shape in model.graph.input_shapes()? {
@@ -776,7 +770,7 @@ impl GraphCircuit {
         model: Model,
         mut settings: GraphSettings,
         check_mode: CheckMode,
-    ) -> Result<GraphCircuit, Box<dyn std::error::Error>> {
+    ) -> Result<GraphCircuit, GraphError> {
         // placeholder dummy inputs - must call prepare_public_inputs to load data afterwards
         let mut inputs: Vec<Vec<Fp>> = vec![];
         for shape in model.graph.input_shapes()? {
@@ -800,35 +794,37 @@ impl GraphCircuit {
     }
 
     /// load inputs and outputs for the model
-    pub fn load_graph_witness(
-        &mut self,
-        data: &GraphWitness,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_graph_witness(&mut self, data: &GraphWitness) -> Result<(), GraphError> {
         self.graph_witness = data.clone();
         // load the module settings
         Ok(())
     }
 
     /// Prepare the public inputs for the circuit.
-    pub fn prepare_public_inputs(
-        &self,
-        data: &GraphWitness,
-    ) -> Result<Vec<Fp>, Box<dyn std::error::Error>> {
+    pub fn prepare_public_inputs(&self, data: &GraphWitness) -> Result<Vec<Fp>, GraphError> {
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
         let mut public_inputs: Vec<Fp> = vec![];
-        if self.settings().run_args.input_visibility.is_public() {
-            public_inputs.extend(self.graph_witness.inputs.clone().into_iter().flatten())
-        } else if let Some(processed_inputs) = &data.processed_inputs {
+
+        // we first process the inputs
+        if let Some(processed_inputs) = &data.processed_inputs {
             public_inputs.extend(processed_inputs.get_instances().into_iter().flatten());
         }
 
+        // we then process the params
         if let Some(processed_params) = &data.processed_params {
             public_inputs.extend(processed_params.get_instances().into_iter().flatten());
         }
 
+        // if the inputs are public, we add them to the public inputs AFTER the processed params as they are configured in that order as Column<Instances>
+        if self.settings().run_args.input_visibility.is_public() {
+            public_inputs.extend(self.graph_witness.inputs.clone().into_iter().flatten())
+        }
+
+        // if the outputs are public, we add them to the public inputs
         if self.settings().run_args.output_visibility.is_public() {
             public_inputs.extend(self.graph_witness.outputs.clone().into_iter().flatten());
+        // if the outputs are processed, we add the processed outputs to the public inputs
         } else if let Some(processed_outputs) = &data.processed_outputs {
             public_inputs.extend(processed_outputs.get_instances().into_iter().flatten());
         }
@@ -846,7 +842,7 @@ impl GraphCircuit {
     pub fn pretty_public_inputs(
         &self,
         data: &GraphWitness,
-    ) -> Result<Option<PrettyElements>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<PrettyElements>, GraphError> {
         // dequantize the supplied data using the provided scale.
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
@@ -888,10 +884,7 @@ impl GraphCircuit {
 
     ///
     #[cfg(target_arch = "wasm32")]
-    pub fn load_graph_input(
-        &mut self,
-        data: &GraphData,
-    ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+    pub fn load_graph_input(&mut self, data: &GraphData) -> Result<Vec<Tensor<Fp>>, GraphError> {
         let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
@@ -902,7 +895,7 @@ impl GraphCircuit {
     pub fn load_graph_from_file_exclusively(
         &mut self,
         data: &GraphData,
-    ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
@@ -912,7 +905,7 @@ impl GraphCircuit {
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
-            _ => Err("Cannot use non-file data source as input for this method.".into()),
+            _ => unreachable!("cannot load from on-chain data"),
         }
     }
 
@@ -921,7 +914,7 @@ impl GraphCircuit {
     pub async fn load_graph_input(
         &mut self,
         data: &GraphData,
-    ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
@@ -939,14 +932,12 @@ impl GraphCircuit {
         shapes: Vec<Vec<usize>>,
         scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,
-    ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         match &data {
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
-            DataSource::OnChain(_) => {
-                Err("Cannot use on-chain data source as input for this method.".into())
-            }
+            DataSource::OnChain(_) => Err(GraphError::OnChainDataSource),
         }
     }
 
@@ -958,13 +949,14 @@ impl GraphCircuit {
         shapes: Vec<Vec<usize>>,
         scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,
-    ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         match &data {
             DataSource::OnChain(source) => {
                 let mut per_item_scale = vec![];
                 for (i, shape) in shapes.iter().enumerate() {
                     per_item_scale.extend(vec![scales[i]; shape.iter().product::<usize>()]);
                 }
+
                 self.load_on_chain_data(source.clone(), &shapes, per_item_scale)
                     .await
             }
@@ -972,7 +964,7 @@ impl GraphCircuit {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
             DataSource::DB(pg) => {
-                let data = pg.fetch_and_format_as_file()?;
+                let data = pg.fetch_and_format_as_file().await?;
                 self.load_file_data(&data, &shapes, scales, input_types)
             }
         }
@@ -985,10 +977,10 @@ impl GraphCircuit {
         source: OnChainSource,
         shapes: &Vec<Vec<usize>>,
         scales: Vec<crate::Scale>,
-    ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
-        let (_, client) = setup_eth_backend(Some(&source.rpc), None).await?;
-        let inputs = read_on_chain_inputs(client.clone(), client.address(), &source.calls).await?;
+        let (client, client_address) = setup_eth_backend(Some(&source.rpc), None).await?;
+        let inputs = read_on_chain_inputs(client.clone(), client_address, &source.calls).await?;
         // quantize the supplied data using the provided scale + QuantizeData.sol
         let quantized_evm_inputs = evm_quantize(client, scales, &inputs).await?;
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
@@ -1009,7 +1001,7 @@ impl GraphCircuit {
         shapes: &Vec<Vec<usize>>,
         scales: Vec<crate::Scale>,
         input_types: Vec<InputType>,
-    ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         // quantize the supplied data using the provided scale.
         let mut data: Vec<Tensor<Fp>> = vec![];
         for (((d, shape), scale), input_type) in file_data
@@ -1040,7 +1032,7 @@ impl GraphCircuit {
         &mut self,
         file_data: &[Vec<Fp>],
         shapes: &[Vec<usize>],
-    ) -> Result<Vec<Tensor<Fp>>, Box<dyn std::error::Error>> {
+    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         // quantize the supplied data using the provided scale.
         let mut data: Vec<Tensor<Fp>> = vec![];
         for (d, shape) in file_data.iter().zip(shapes) {
@@ -1051,14 +1043,14 @@ impl GraphCircuit {
         Ok(data)
     }
 
-    fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: i128) -> Range {
+    fn calc_safe_lookup_range(min_max_lookup: Range, lookup_safety_margin: f64) -> Range {
         (
-            lookup_safety_margin * min_max_lookup.0,
-            lookup_safety_margin * min_max_lookup.1,
+            (lookup_safety_margin * min_max_lookup.0 as f64).floor() as IntegerRep,
+            (lookup_safety_margin * min_max_lookup.1 as f64).ceil() as IntegerRep,
         )
     }
 
-    fn calc_num_cols(range_len: i128, max_logrows: u32) -> usize {
+    fn calc_num_cols(range_len: IntegerRep, max_logrows: u32) -> usize {
         let max_col_size = Table::<Fp>::cal_col_size(max_logrows as usize, RESERVED_BLINDING_ROWS);
         num_cols_required(range_len, max_col_size)
     }
@@ -1066,8 +1058,8 @@ impl GraphCircuit {
     fn table_size_logrows(
         &self,
         safe_lookup_range: Range,
-        max_range_size: i128,
-    ) -> Result<u32, Box<dyn std::error::Error>> {
+        max_range_size: IntegerRep,
+    ) -> Result<u32, GraphError> {
         // pick the range with the largest absolute size safe_lookup_range or max_range_size
         let safe_range = std::cmp::max(
             (safe_lookup_range.1 - safe_lookup_range.0).abs(),
@@ -1085,10 +1077,10 @@ impl GraphCircuit {
     pub fn calc_min_logrows(
         &mut self,
         min_max_lookup: Range,
-        max_range_size: i128,
+        max_range_size: IntegerRep,
         max_logrows: Option<u32>,
-        lookup_safety_margin: i128,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+        lookup_safety_margin: f64,
+    ) -> Result<(), GraphError> {
         // load the max logrows
         let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
         let max_logrows = std::cmp::min(max_logrows, MAX_PUBLIC_SRS);
@@ -1097,15 +1089,22 @@ impl GraphCircuit {
 
         let safe_lookup_range = Self::calc_safe_lookup_range(min_max_lookup, lookup_safety_margin);
 
+        // check if subtraction overflows
+
+        let lookup_size =
+            (safe_lookup_range.1.saturating_sub(safe_lookup_range.0)).saturating_abs();
         // check if has overflowed max lookup input
-        if (min_max_lookup.1 - min_max_lookup.0).abs() > MAX_LOOKUP_ABS / lookup_safety_margin {
-            let err_string = format!("max lookup input {:?} is too large", min_max_lookup);
-            return Err(err_string.into());
+
+        if lookup_size > (MAX_LOOKUP_ABS as f64 / lookup_safety_margin).floor() as IntegerRep {
+            return Err(GraphError::LookupRangeTooLarge(
+                lookup_size.unsigned_abs() as usize
+            ));
         }
 
         if max_range_size.abs() > MAX_LOOKUP_ABS {
-            let err_string = format!("max range check size {:?} is too large", max_range_size);
-            return Err(err_string.into());
+            return Err(GraphError::RangeCheckTooLarge(
+                max_range_size.unsigned_abs() as usize,
+            ));
         }
 
         // These are hard lower limits, we can't overflow instances or modules constraints
@@ -1126,7 +1125,7 @@ impl GraphCircuit {
         );
 
         // These are upper limits, going above these is wasteful, but they are not hard limits
-        let model_constraint_logrows = self.settings().model_constraint_logrows();
+        let model_constraint_logrows = self.settings().model_constraint_logrows_with_blinding();
         let min_bits = self.table_size_logrows(safe_lookup_range, max_range_size)?;
         let constants_logrows = self.settings().constants_logrows();
         max_logrows = std::cmp::min(
@@ -1149,12 +1148,7 @@ impl GraphCircuit {
         }
 
         if !self.extended_k_is_small_enough(max_logrows, safe_lookup_range, max_range_size) {
-            let err_string = format!(
-                "extended k is too large to accommodate the quotient polynomial with logrows {}",
-                max_logrows
-            );
-            debug!("{}", err_string);
-            return Err(err_string.into());
+            return Err(GraphError::ExtendedKTooLarge(max_logrows));
         }
 
         let logrows = max_logrows;
@@ -1181,7 +1175,7 @@ impl GraphCircuit {
         &self,
         k: u32,
         safe_lookup_range: Range,
-        max_range_size: i128,
+        max_range_size: IntegerRep,
     ) -> bool {
         // if num cols is too large then the extended k is too large
         if Self::calc_num_cols(safe_lookup_range.1 - safe_lookup_range.0, k) > MAX_NUM_LOOKUP_COLS
@@ -1239,8 +1233,8 @@ impl GraphCircuit {
         inputs: &mut [Tensor<Fp>],
         vk: Option<&VerifyingKey<G1Affine>>,
         srs: Option<&Scheme::ParamsProver>,
-        witness_gen: bool,
-    ) -> Result<GraphWitness, Box<dyn std::error::Error>> {
+        region_settings: RegionSettings,
+    ) -> Result<GraphWitness, GraphError> {
         let original_inputs = inputs.to_vec();
 
         let visibility = VarVisibility::from_args(&self.settings().run_args)?;
@@ -1288,7 +1282,7 @@ impl GraphCircuit {
 
         let mut model_results =
             self.model()
-                .forward(inputs, &self.settings().run_args, witness_gen)?;
+                .forward(inputs, &self.settings().run_args, region_settings)?;
 
         if visibility.output.requires_processing() {
             let module_outlets = visibility.output.overwrites_inputs();
@@ -1355,7 +1349,7 @@ impl GraphCircuit {
     pub fn from_run_args(
         run_args: &RunArgs,
         model_path: &std::path::Path,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, GraphError> {
         let model = Model::from_run_args(run_args, model_path)?;
         Self::new(model, run_args)
     }
@@ -1366,8 +1360,11 @@ impl GraphCircuit {
         params: &GraphSettings,
         model_path: &std::path::Path,
         check_mode: CheckMode,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        params.run_args.validate()?;
+    ) -> Result<Self, GraphError> {
+        params
+            .run_args
+            .validate()
+            .map_err(GraphError::InvalidRunArgs)?;
         let model = Model::from_run_args(&params.run_args, model_path)?;
         Self::new_from_settings(model, params.clone(), check_mode)
     }
@@ -1378,7 +1375,7 @@ impl GraphCircuit {
         &mut self,
         data: &mut GraphData,
         test_on_chain_data: TestOnChainData,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), GraphError> {
         // Set up local anvil instance for reading on-chain data
 
         let input_scales = self.model().graph.get_input_scales();
@@ -1392,15 +1389,13 @@ impl GraphCircuit {
         ) {
             // if not public then fail
             if self.settings().run_args.input_visibility.is_private() {
-                return Err("Cannot use on-chain data source as private data".into());
+                return Err(GraphError::OnChainDataSource);
             }
 
             let input_data = match &data.input_data {
                 DataSource::File(input_data) => input_data,
                 _ => {
-                    return Err("Cannot use non file source as input for on-chain test.
-                    Manually populate on-chain data from file source instead"
-                        .into())
+                    return Err(GraphError::OnChainDataSource);
                 }
             };
             // Get the flatten length of input_data
@@ -1421,19 +1416,13 @@ impl GraphCircuit {
         ) {
             // if not public then fail
             if self.settings().run_args.output_visibility.is_private() {
-                return Err("Cannot use on-chain data source as private data".into());
+                return Err(GraphError::OnChainDataSource);
             }
 
             let output_data = match &data.output_data {
                 Some(DataSource::File(output_data)) => output_data,
-                Some(DataSource::OnChain(_)) => {
-                    return Err(
-                        "Cannot use on-chain data source as output for on-chain test. 
-                    Will manually populate on-chain data from file source instead"
-                            .into(),
-                    )
-                }
-                _ => return Err("No output data found".into()),
+                Some(DataSource::OnChain(_)) => return Err(GraphError::OnChainDataSource),
+                _ => return Err(GraphError::MissingDataSource),
             };
             let datum: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
                 output_data,
@@ -1476,12 +1465,10 @@ impl CircuitSize {
 
     #[cfg(not(target_arch = "wasm32"))]
     /// Export the ezkl configuration as json
-    pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn as_json(&self) -> Result<String, GraphError> {
         let serialized = match serde_json::to_string(&self) {
             Ok(s) => s,
-            Err(e) => {
-                return Err(Box::new(e));
-            }
+            Err(e) => return Err(e.into()),
         };
         Ok(serialized)
     }

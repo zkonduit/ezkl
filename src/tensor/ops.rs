@@ -1,12 +1,11 @@
 use super::TensorError;
-use crate::tensor::{Tensor, TensorType};
-use itertools::Itertools;
-use maybe_rayon::{
-    iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
-    prelude::IntoParallelRefIterator,
+use crate::{
+    fieldutils::IntegerRep,
+    tensor::{Tensor, TensorType},
 };
-use std::collections::{HashMap, HashSet};
-pub use std::ops::{Add, Div, Mul, Neg, Sub};
+use itertools::Itertools;
+use maybe_rayon::{iter::ParallelIterator, prelude::IntoParallelRefIterator};
+pub use std::ops::{Add, Mul, Neg, Sub};
 
 /// Trilu operation.
 /// # Arguments
@@ -16,89 +15,90 @@ pub use std::ops::{Add, Div, Mul, Neg, Sub};
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::trilu;
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[1, 3, 2],
 /// ).unwrap();
 /// let result = trilu(&a, 1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 2, 0, 0, 0, 0]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 2, 0, 0, 0, 0]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 0, 0]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 0, 4, 0, 0]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);  
 ///
 /// let result = trilu(&a, -1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 0, 6]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 0, 6]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, -1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0, 3, 0, 5, 6]), &[1, 3, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 3, 0, 5, 6]), &[1, 3, 2]).unwrap();
 /// assert_eq!(result, expected);  
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[1, 2, 3],
 /// ).unwrap();
 /// let result = trilu(&a, 1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 2, 3, 0, 0, 6]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 2, 3, 0, 0, 6]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 5, 6]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 0, 4, 5, 6]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 0, 5, 6]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 0, 5, 6]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 4, 5, 0]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 0, 4, 5, 0]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);  
 ///
 /// let result = trilu(&a, -1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, -1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 4, 0, 0]), &[1, 2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 4, 0, 0]), &[1, 2, 3]).unwrap();
 /// assert_eq!(result, expected);  
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9]),
 /// &[1, 3, 3],
 /// ).unwrap();
 /// let result = trilu(&a, 1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 2, 3, 0, 0, 6, 0, 0, 0]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 2, 3, 0, 0, 6, 0, 0, 0]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 0, 4, 5, 6, 7, 8, 9]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 0, 4, 5, 6, 7, 8, 9]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 0, 5, 6, 0, 0, 9]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 0, 5, 6, 0, 0, 9]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, 0, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 4, 5, 0, 7, 8, 9]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 0, 4, 5, 0, 7, 8, 9]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);  
 ///
 /// let result = trilu(&a, -1, true).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 8, 9]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 8, 9]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, -1, false).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 4, 0, 0, 7, 8, 0]), &[1, 3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 4, 0, 0, 7, 8, 0]), &[1, 3, 3]).unwrap();
 /// assert_eq!(result, expected);  
 /// ```
 pub fn trilu<T: TensorType + std::marker::Send + std::marker::Sync>(
@@ -144,429 +144,6 @@ pub fn trilu<T: TensorType + std::marker::Send + std::marker::Sync>(
     Ok(output)
 }
 
-/// IFF operation.
-/// # Arguments
-/// * `mask` - Tensor of 0s and 1s
-/// * `a` - Tensor
-/// * `b` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::iff;
-/// let mask = Tensor::<i128>::new(
-///    Some(&[1, 0, 1, 0, 1, 0]),
-/// &[2, 3],
-/// ).unwrap();
-/// let a = Tensor::<i128>::new(
-///   Some(&[1, 2, 3, 4, 5, 6]),
-/// &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///   Some(&[7, 8, 9, 10, 11, 12]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = iff(&mask, &a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 8, 3, 10, 5, 12]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn iff<
-    T: TensorType
-        + Add<Output = T>
-        + Mul<Output = T>
-        + Sub<Output = T>
-        + std::marker::Send
-        + std::marker::Sync
-        + std::cmp::PartialEq,
->(
-    mask: &Tensor<T>,
-    a: &Tensor<T>,
-    b: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    // assert is boolean
-    if !mask
-        .par_iter()
-        .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap())
-    {
-        return Err(TensorError::WrongMethod);
-    }
-
-    let masked_a = (mask.clone() * a.clone())?;
-
-    let masked_b = ((Tensor::from(vec![T::one().ok_or(TensorError::Unsupported)?].into_iter())
-        - mask.clone())?
-        * b.clone())?;
-
-    masked_a + masked_b
-}
-
-/// Elementwise applies not to a tensor of integers.
-/// # Arguments
-/// * `a` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::not;
-/// let x = Tensor::<i128>::new(
-///    Some(&[1, 1, 1, 1, 1, 0]),
-///   &[2, 3],
-/// ).unwrap();
-/// let result = not(&x).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn not<
-    T: TensorType
-        + Add<Output = T>
-        + Mul<Output = T>
-        + Sub<Output = T>
-        + std::marker::Send
-        + std::marker::Sync
-        + std::cmp::PartialEq,
->(
-    a: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    iff(
-        a,
-        &Tensor::from(vec![T::zero().unwrap()].into_iter()),
-        &Tensor::from(vec![T::one().unwrap()].into_iter()),
-    )
-}
-
-/// Elementwise applies or to two tensors of integers.
-/// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::or;
-/// let a = Tensor::<i128>::new(
-///   Some(&[1, 1, 1, 1, 1, 0]),
-/// &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///  Some(&[1, 0, 1, 0, 1, 0]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = or(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn or<
-    T: TensorType
-        + Add<Output = T>
-        + Mul<Output = T>
-        + Sub<Output = T>
-        + std::marker::Send
-        + std::marker::Sync
-        + std::cmp::PartialEq,
->(
-    a: &Tensor<T>,
-    b: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    if !b
-        .par_iter()
-        .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap())
-    {
-        return Err(TensorError::WrongMethod);
-    }
-
-    iff(a, a, b)
-}
-
-/// Elementwise applies xor to two tensors
-/// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::xor;
-/// let a = Tensor::<i128>::new(
-///  Some(&[1, 1, 1, 1, 1, 0]),
-/// &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-/// Some(&[1, 0, 1, 0, 1, 0]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = xor(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 1, 0, 0]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-///
-pub fn xor<
-    T: TensorType
-        + Add<Output = T>
-        + Mul<Output = T>
-        + Sub<Output = T>
-        + std::marker::Send
-        + std::marker::Sync
-        + std::cmp::PartialEq,
->(
-    a: &Tensor<T>,
-    b: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    let a_not_b = (a.clone() * not(b)?)?;
-    let b_not_a = (b.clone() * not(a)?)?;
-    a_not_b + b_not_a
-}
-
-/// Elementwise applies and to two tensors
-/// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::and;
-/// let a = Tensor::<i128>::new(
-///  Some(&[1, 1, 1, 1, 1, 0]),
-/// &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-/// Some(&[1, 0, 1, 0, 1, 0]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = and(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 0, 1, 0]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn and<
-    T: TensorType
-        + Add<Output = T>
-        + Mul<Output = T>
-        + Sub<Output = T>
-        + std::marker::Send
-        + std::marker::Sync
-        + std::cmp::PartialEq,
->(
-    a: &Tensor<T>,
-    b: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    // assert is boolean
-    if !b
-        .par_iter()
-        .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap())
-    {
-        return Err(TensorError::WrongMethod);
-    }
-
-    // assert is boolean
-    if !a
-        .par_iter()
-        .all(|x| *x == T::one().unwrap() || *x == T::zero().unwrap())
-    {
-        return Err(TensorError::WrongMethod);
-    }
-
-    a.clone() * b.clone()
-}
-
-/// Elementwise applies equals to two tensors of integers.
-/// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::equals;
-/// let a = Tensor::<i128>::new(
-/// Some(&[1, 1, 1, 1, 1, 0]),
-/// &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-/// Some(&[1, 0, 1, 0, 1, 0]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = equals(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 0, 1, 1]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn equals<
-    T: TensorType
-        + std::marker::Send
-        + std::marker::Sync
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + Add<Output = T>
-        + std::cmp::PartialEq
-        + std::cmp::PartialOrd
-        + std::convert::From<u64>,
->(
-    a: &Tensor<T>,
-    b: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    let a = a.clone();
-    let b = b.clone();
-
-    let diff = (a - b)?;
-
-    let result = nonlinearities::kronecker_delta(&diff);
-
-    Ok(result)
-}
-
-/// Greater than operation.
-/// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::greater;
-/// let a = Tensor::<i128>::new(
-///   Some(&[1, 12, 6, 4, 5, 6]),
-/// &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///  Some(&[1, 2, 3, 4, 5, 6]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = greater(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn greater<
-    T: TensorType
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + std::marker::Send
-        + std::marker::Sync
-        + std::cmp::PartialOrd
-        + std::convert::TryFrom<u64>,
->(
-    a: &Tensor<T>,
-    b: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    let mask_inter = (a.clone() - b.clone())?;
-    let mask = mask_inter.map(|x| {
-        if x > T::zero().ok_or(TensorError::Unsupported).unwrap() {
-            T::one().ok_or(TensorError::Unsupported).unwrap()
-        } else {
-            T::zero().ok_or(TensorError::Unsupported).unwrap()
-        }
-    });
-    Ok(mask)
-}
-
-/// Greater equals than operation.
-/// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::greater_equal;
-/// let a = Tensor::<i128>::new(
-///   Some(&[1, 12, 6, 4, 3, 2]),
-/// &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///  Some(&[1, 2, 3, 4, 5, 4]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = greater_equal(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 1, 0, 0]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn greater_equal<
-    T: TensorType
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + std::marker::Send
-        + std::marker::Sync
-        + std::cmp::PartialOrd
-        + std::convert::TryFrom<u64>,
->(
-    a: &Tensor<T>,
-    b: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    let mask_inter = (a.clone() - b.clone())?;
-    let mask = mask_inter.map(|x| {
-        if x >= T::zero().ok_or(TensorError::Unsupported).unwrap() {
-            T::one().ok_or(TensorError::Unsupported).unwrap()
-        } else {
-            T::zero().ok_or(TensorError::Unsupported).unwrap()
-        }
-    });
-    Ok(mask)
-}
-
-/// Less than to operation.
-/// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::less;
-/// let a = Tensor::<i128>::new(
-///  Some(&[1, 0, 5, 4, 5, 1]),
-/// &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-/// Some(&[1, 2, 3, 4, 5, 6]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = less(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-///
-pub fn less<
-    T: TensorType
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + std::marker::Send
-        + std::marker::Sync
-        + std::cmp::PartialOrd
-        + std::convert::TryFrom<u64>,
->(
-    a: &Tensor<T>,
-    b: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    // a < b <=> b > a
-    greater(b, a)
-}
-
-/// Less equals than operation.
-/// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::less_equal;
-/// let a = Tensor::<i128>::new(
-///  Some(&[1, 0, 5, 4, 5, 1]),
-/// &[2, 3],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-/// Some(&[1, 2, 3, 4, 5, 6]),
-/// &[2, 3],
-/// ).unwrap();
-/// let result = less_equal(&a, &b).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 0, 1, 1, 1]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-///
-pub fn less_equal<
-    T: TensorType
-        + Sub<Output = T>
-        + Mul<Output = T>
-        + std::marker::Send
-        + std::marker::Sync
-        + std::cmp::PartialOrd
-        + std::convert::TryFrom<u64>,
->(
-    a: &Tensor<T>,
-    b: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    // a < b <=> b > a
-    greater_equal(b, a)
-}
-
 /// Resize using nearest neighbour interpolation.
 /// # Arguments
 /// * `a` - Tensor
@@ -575,40 +152,41 @@ pub fn less_equal<
 /// ```
 ///
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap();
 /// let result = resize(&a, &[1, 2]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]), &[2, 6]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]), &[2, 6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap();
 /// let result = resize(&a, &[2, 2]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 4, 4, 5, 5, 6, 6]), &[4, 6]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 4, 4, 5, 5, 6, 6]), &[4, 6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::resize;
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4]),
 /// &[2, 2],
 /// ).unwrap();
 /// let result = resize(&a, &[2, 2]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 4, 4, 3, 3, 4, 4]), &[4, 4]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 4, 4, 3, 3, 4, 4]), &[4, 4]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
-/// let a = Tensor::<i128>::new(
+/// let a = Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
 /// &[3, 2],
 /// ).unwrap();
 /// let result = resize(&a, &[2, 3]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 5, 5, 5, 6, 6, 6]), &[6, 6]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 5, 5, 5, 6, 6, 6]), &[6, 6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
@@ -646,328 +224,6 @@ pub fn resize<T: TensorType + Send + Sync>(
     Ok(output)
 }
 
-/// Computes the einstein sum of a set of tensors.
-/// # Arguments
-/// * `equation` - Einstein summation equation
-/// * `inputs` - Vector of tensors
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::einsum;
-///
-/// // matmul case
-/// let x = Tensor::<i128>::new(
-///    Some(&[2, 1, 2, 1, 1, 1]),
-///  &[2, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///   Some(&[2, 3, 2, 1, 1, 1]),
-/// &[3, 2],
-/// ).unwrap();
-/// let result = einsum("ij,jk->ik", &[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[8, 9, 5, 5]), &[2, 2]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// // element wise multiplication
-/// let x = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
-///  &[3, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
-///  &[3, 3],
-/// ).unwrap();
-/// let result = einsum("ij,ij->ij", &[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 4, 9, 2, 6, 12, 3, 8, 15]), &[3, 3]).unwrap();
-/// assert_eq!(result, expected);
-///
-///
-/// // dot product of A with the transpose of B.
-/// let x = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
-///  &[3, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
-///  &[3, 3],
-/// ).unwrap();
-/// let result = einsum("ik,jk->ij", &[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[14, 14, 14, 20, 20, 20, 26, 26, 26]), &[3, 3]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// // dot product
-/// let x = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
-///  &[3, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
-///  &[3, 3],
-/// ).unwrap();
-/// let result = einsum("ik,ik->i", &[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[14, 20, 26]), &[3]).unwrap();
-/// assert_eq!(result, expected);
-///
-///
-/// // dot product
-/// let x = Tensor::<i128>::new(
-///    Some(&[1, 2, 3]),
-///  &[3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[1, 2, 3]),
-///  &[3],
-/// ).unwrap();
-/// let result = einsum("i,i->", &[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[14]), &[1]).unwrap();
-/// assert_eq!(result, expected);
-///
-///
-/// // wut ?
-/// let x = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
-///  &[3, 3, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[4, 5, 7, 8]),
-///  &[2, 2],
-/// ).unwrap();
-/// let result = einsum("anm,bm->ba", &[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[68, 80, 95, 113, 134, 158]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// // wutttttt ?
-/// let x = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
-///  &[3, 3, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[4, 5, 7, 8]),
-///  &[2, 2],
-/// ).unwrap();
-/// let z = Tensor::<i128>::new(
-///    Some(&[4, 5, 7, 8, 9, 9]),
-///  &[2, 3],
-/// ).unwrap();
-///
-/// let result = einsum("bn,anm,bm->ba", &[z, x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[390, 414, 534, 994, 1153, 1384]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-///
-///
-/// // contraction with a single common axis
-/// let x = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
-///  &[3, 3, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[4, 5, 7, 8]),
-///  &[2, 2],
-/// ).unwrap();
-/// let result = einsum("abc,cd->", &[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[648]), &[1]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// // contraction with no common axes (outer product)
-/// let x = Tensor::<i128>::new(
-///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5, 1, 2, 3, 2, 3, 4, 3, 4, 5]),
-///  &[3, 3, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[4, 5, 7, 8]),
-///  &[2, 2],
-/// ).unwrap();
-/// let result = einsum("abc,ed->", &[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1296]), &[1]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// // trivial axes mapping
-/// let x = Tensor::<i128>::new(
-///    Some(&[4, 5, 7, 8]),
-///  &[2, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[4, 5]),
-///  &[2],
-/// ).unwrap();
-///
-/// let result = einsum("mk,k->m", &[x.clone(), k.clone()]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[41, 68]), &[2]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// let result = einsum("mk,k->mn", &[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[41, 68]), &[2, 1]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// let x = Tensor::<i128>::new(
-///    Some(&[0, 0, 0, 3]),
-///  &[1, 4],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///    Some(&[213, 227, 74, 77]),
-///  &[4],
-/// ).unwrap();
-///
-/// let result = einsum("mk,k->ma", &[x.clone(), k.clone()]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[231]), &[1, 1]).unwrap();
-/// assert_eq!(result, expected);
-/// // subtle difference
-/// let result = einsum("mk,n->ma", &[x.clone(), k.clone()]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1773]), &[1, 1]).unwrap();
-/// assert_eq!(result, expected);
-///
-////// ```
-pub fn einsum<
-    T: TensorType + Mul<Output = T> + Add<Output = T> + std::marker::Send + std::marker::Sync,
->(
-    equation: &str,
-    inputs: &[Tensor<T>],
-) -> Result<Tensor<T>, TensorError> {
-    // Parse equation into an operation
-
-    let mut equation = equation.split("->");
-    let inputs_eq = equation.next().unwrap();
-    let output_eq = equation.next().unwrap();
-    let inputs_eq = inputs_eq.split(',').collect::<Vec<_>>();
-
-    // Check that the number of inputs matches the number of inputs in the equation
-    if inputs.len() != inputs_eq.len() {
-        return Err(TensorError::DimMismatch("einsum".to_string()));
-    }
-
-    let mut indices_to_size = HashMap::new();
-    for (i, input) in inputs.iter().enumerate() {
-        for j in 0..inputs_eq[i].len() {
-            let c = inputs_eq[i].chars().nth(j).unwrap();
-            if let std::collections::hash_map::Entry::Vacant(e) = indices_to_size.entry(c) {
-                e.insert(input.dims()[j]);
-            } else if indices_to_size[&c] != input.dims()[j] {
-                return Err(TensorError::DimMismatch("einsum".to_string()));
-            }
-        }
-    }
-
-    // maps unrepresented indices in the output to a trivial 1
-    for c in output_eq.chars() {
-        indices_to_size.entry(c).or_insert(1);
-    }
-
-    // Compute the output tensor shape
-    let mut output_shape: Vec<usize> = output_eq
-        .chars()
-        .map(|c| *indices_to_size.get(&c).unwrap())
-        .collect();
-
-    if output_shape.is_empty() {
-        output_shape.push(1);
-    }
-
-    let mut seen = HashSet::new();
-    let mut common_indices_to_inputs = vec![];
-    for input in &inputs_eq {
-        for c in input.chars() {
-            if !seen.contains(&c) {
-                seen.insert(c);
-            } else {
-                common_indices_to_inputs.push(c);
-            }
-        }
-    }
-
-    let cartesian_coord = output_shape
-        .iter()
-        .map(|d| 0..*d)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    // Compute the cartesian product of all indices
-    let output: Vec<T> = cartesian_coord
-        .par_iter()
-        .map(|coord| {
-            // Compute the slice of each input tensor given the current coordinate of the output tensor
-            let inputs = (0..inputs.len())
-                .map(|idx| {
-                    let mut slice = vec![];
-                    for (i, c) in inputs_eq[idx].chars().enumerate() {
-                        // If the current index is in the output equation, then the slice should be the current coordinate
-                        if let Some(idx) = output_eq.find(c) {
-                            slice.push(coord[idx]..coord[idx] + 1);
-                        // Otherwise, the slice should be the entire dimension of the input tensor
-                        } else {
-                            slice.push(0..inputs[idx].dims()[i]);
-                        }
-                    }
-
-                    // Get the slice of the input tensor
-                    inputs[idx].get_slice(&slice).unwrap()
-                })
-                .collect::<Vec<_>>();
-
-            // Get the indices common across input tensors
-            let mut common_coord = common_indices_to_inputs
-                .iter()
-                .map(|d| {
-                    // If the current index is in the output equation, then the slice should be the current coordinate
-                    if output_eq.contains(*d) {
-                        0..1
-                    // Otherwise, the slice should be the entire dimension of the input tensor
-                    } else {
-                        0..*indices_to_size.get(d).unwrap()
-                    }
-                })
-                .multi_cartesian_product()
-                .collect::<Vec<_>>();
-
-            // If there are no common indices, then we need to add an empty slice to force one iteration of the loop
-            if common_coord.is_empty() {
-                common_coord.push(vec![]);
-            }
-
-            let mut prod = T::zero().unwrap();
-
-            // Compute the cartesian product of all common indices
-            for common_dim in common_coord {
-                let inputs = (0..inputs.len())
-                    .map(|idx| {
-                        let mut slice = vec![];
-                        // Iterate over all indices in the input equation
-                        for (i, c) in inputs_eq[idx].chars().enumerate() {
-                            // If the current index is common to multiple inputs, then the slice should be the current coordinate
-                            if let Some(j) = common_indices_to_inputs.iter().position(|&r| r == c) {
-                                slice.push(common_dim[j]..common_dim[j] + 1);
-                            } else {
-                                slice.push(0..inputs[idx].dims()[i]);
-                            }
-                        }
-                        // Get the slice of the input tensor
-                        inputs[idx].get_slice(&slice).unwrap()
-                    })
-                    .collect::<Vec<_>>();
-
-                let input_pairs = inputs
-                    .iter()
-                    .map(|d| d.iter())
-                    .multi_cartesian_product()
-                    .collect::<Vec<_>>();
-
-                // Compute the product of all input tensors
-                for pair in input_pairs {
-                    prod = prod
-                        + pair
-                            .into_iter()
-                            .fold(T::one().unwrap(), |acc, x| acc * x.clone());
-                }
-            }
-            prod
-        })
-        .collect();
-
-    let mut output: Tensor<T> = output.into_iter().into();
-    output.reshape(&output_shape)?;
-
-    Ok(output)
-}
-
 /// Adds multiple tensors.
 /// # Arguments
 ///
@@ -975,29 +231,30 @@ pub fn einsum<
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::add;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
 /// let result = add(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 4, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // Now test 1D casting
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<IntegerRep>::new(
 ///     Some(&[2]),
 ///     &[1]).unwrap();
 /// let result = add(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 3, 4, 3, 3, 3]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync>(
@@ -1021,30 +278,31 @@ pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sy
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::sub;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
 /// let result = sub(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, -2, 0, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // Now test 1D sub
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<IntegerRep>::new(
 ///     Some(&[2]),
 ///     &[1],
 /// ).unwrap();
 /// let result = sub(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, -1, 0, -1, -1, -1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync>(
@@ -1060,29 +318,6 @@ pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sy
     Ok(output)
 }
 
-/// Negates a tensor.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::neg;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 1, 2, 1, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = neg(&x).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[-2, -1, -2, -1, -1, -1]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn neg<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sync>(
-    t: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-    Ok(-t.clone())
-}
-
 /// Elementwise multiplies multiple tensors.
 /// # Arguments
 ///
@@ -1090,29 +325,30 @@ pub fn neg<T: TensorType + Neg<Output = T> + std::marker::Send + std::marker::Sy
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::mult;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 3, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
 /// let result = mult(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 3, 4, 1, 1, 1]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // Now test 1D mult
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
 ///     &[2, 3],
 /// ).unwrap();
-/// let k = Tensor::<i128>::new(
+/// let k = Tensor::<IntegerRep>::new(
 ///     Some(&[2]),
 ///     &[1]).unwrap();
 /// let result = mult(&[x, k]).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync>(
@@ -1128,88 +364,6 @@ pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::S
     Ok(output)
 }
 
-/// Rescale a tensor with a const integer (similar to const_mult).
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::rescale;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 1, 2, 1, 1, 1]),
-///     &[2, 3],
-/// ).unwrap();
-/// let k = 2;
-/// let result = rescale(&x, k).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 2, 4, 2, 2, 2]), &[2, 3]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn rescale<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync>(
-    a: &Tensor<T>,
-    mult: u128,
-) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-    let mut output: Tensor<T> = a.clone();
-    output.par_iter_mut().enumerate().for_each(|(i, a_i)| {
-        for _ in 1..mult {
-            *a_i = a_i.clone() + a[i].clone();
-        }
-    });
-    Ok(output)
-}
-
-/// Sums a tensor.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::sum;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 2, 1, 1, 0]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = sum(&x).unwrap();
-/// let expected = 21;
-/// assert_eq!(result[0], expected);
-/// ```
-pub fn sum<T: TensorType + Add<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-    let mut res = T::zero().unwrap();
-
-    let _ = a.map(|a_i| res = res.clone() + a_i);
-    Tensor::new(Some(&[res]), &[1])
-}
-
-/// Takes prod of tensor's elements.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::prod;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 2, 1, 1, 0]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = prod(&x).unwrap();
-/// let expected = 0;
-/// assert_eq!(result[0], expected);
-/// ```
-pub fn prod<T: TensorType + Mul<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-    let mut res = T::one().unwrap();
-
-    let _ = a.map(|a_i| res = res.clone() * a_i);
-    Tensor::new(Some(&[res]), &[1])
-}
-
 /// Downsamples a tensor along a dimension.
 /// # Arguments
 /// * `input` - Tensor
@@ -1219,25 +373,26 @@ pub fn prod<T: TensorType + Mul<Output = T>>(a: &Tensor<T>) -> Result<Tensor<T>,
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::downsample;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 4, 5, 6]),
 ///  &[2, 3],
 /// ).unwrap();
 /// let result = downsample(&x, 0, 1, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[4, 5, 6]), &[1, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 5, 6]), &[1, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = downsample(&x, 1, 2, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 3, 4, 6]), &[2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 4, 6]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = downsample(&x, 1, 2, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 5]), &[2, 1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 5]), &[2, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = downsample(&x, 1, 2, 2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[3, 6]), &[2, 1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[3, 6]), &[2, 1]).unwrap();
 /// assert_eq!(result, expected);
 pub fn downsample<T: TensorType + Send + Sync>(
     input: &Tensor<T>,
@@ -1288,8 +443,9 @@ pub fn downsample<T: TensorType + Send + Sync>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::gather;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 4, 5, 6]),
 ///   &[2, 3],
 /// ).unwrap();
@@ -1298,7 +454,7 @@ pub fn downsample<T: TensorType + Send + Sync>(
 ///  &[2],
 /// ).unwrap();
 /// let result = gather(&x, &index, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 4, 5]), &[2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn gather<T: TensorType + Send + Sync>(
@@ -1354,6 +510,7 @@ pub fn gather<T: TensorType + Send + Sync>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::scatter;
 /// let x = Tensor::<f64>::new(
 ///   Some(&[1.0, 2.0, 3.0, 4.0]),
@@ -1415,8 +572,9 @@ pub fn scatter<T: TensorType + Send + Sync>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::gather_elements;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 4]),
 ///   &[2, 2],
 /// ).unwrap();
@@ -1425,7 +583,7 @@ pub fn scatter<T: TensorType + Send + Sync>(
 ///  &[2, 2],
 /// ).unwrap();
 /// let result = gather_elements(&x, &index, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 1, 4, 3]), &[2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 4, 3]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn gather_elements<T: TensorType + Send + Sync>(
@@ -1472,8 +630,9 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::gather_nd;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///   Some(&[0, 1, 2, 3]),
 /// &[2, 2],
 /// ).unwrap();
@@ -1482,7 +641,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 2],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 3]), &[2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 3]), &[2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -1490,10 +649,10 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 1],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 0, 1]), &[2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 3, 0, 1]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///  Some(&[0, 1, 2, 3, 4, 5, 6, 7]),
 /// &[2, 2, 2],
 /// ).unwrap();
@@ -1502,7 +661,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 2],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -1510,7 +669,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 1, 2],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 1, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 3, 4, 5]), &[2, 1, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -1518,7 +677,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 1],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -1526,7 +685,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 2, 3],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 3, 4, 5]), &[2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -1534,7 +693,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 2, 2],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 3, 0, 1, 6, 7, 4, 5]), &[2, 2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 3, 0, 1, 6, 7, 4, 5]), &[2, 2, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let index = Tensor::<usize>::new(
@@ -1542,7 +701,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// &[2, 3],
 /// ).unwrap();
 /// let result = gather_nd(&x, &index, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 7]), &[2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 7]), &[2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 pub fn gather_nd<T: TensorType + Send + Sync>(
@@ -1652,8 +811,9 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::scatter_nd;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
 /// &[8],
 /// ).unwrap();
@@ -1662,15 +822,15 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// Some(&[4, 3, 1, 7]),
 /// &[4, 1],
 /// ).unwrap();
-/// let src = Tensor::<i128>::new(
+/// let src = Tensor::<IntegerRep>::new(
 /// Some(&[9, 10, 11, 12]),
 /// &[4],
 /// ).unwrap();
 /// let result = scatter_nd(&x, &index, &src).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 11, 3, 10, 9, 6, 7, 12]), &[8]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 11, 3, 10, 9, 6, 7, 12]), &[8]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
 ///         1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
 ///         8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8,
@@ -1683,7 +843,7 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// &[2, 1],
 /// ).unwrap();
 ///
-/// let src = Tensor::<i128>::new(
+/// let src = Tensor::<IntegerRep>::new(
 ///  Some(&[5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8,
 ///         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
 ///   ]),
@@ -1692,7 +852,7 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 ///
 /// let result = scatter_nd(&x, &index, &src).unwrap();
 ///
-/// let expected = Tensor::<i128>::new(
+/// let expected = Tensor::<IntegerRep>::new(
 ///  Some(&[5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8,
 ///         1, 2, 3, 4, 5, 6, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1,
 ///         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
@@ -1701,7 +861,7 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// ).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
 /// &[2, 4],
 /// ).unwrap();
@@ -1710,15 +870,15 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// Some(&[0, 1]),
 /// &[2, 1],
 /// ).unwrap();
-/// let src = Tensor::<i128>::new(
+/// let src = Tensor::<IntegerRep>::new(
 /// Some(&[9, 10]),
 /// &[2],
 /// ).unwrap();
 /// let result = scatter_nd(&x, &index, &src).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[9, 9, 9, 9, 10, 10, 10, 10]), &[2, 4]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[9, 9, 9, 9, 10, 10, 10, 10]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///  Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
 /// &[2, 4],
 /// ).unwrap();
@@ -1727,12 +887,12 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// Some(&[0, 1]),
 /// &[1, 1, 2],
 /// ).unwrap();
-/// let src = Tensor::<i128>::new(
+/// let src = Tensor::<IntegerRep>::new(
 /// Some(&[9]),
 /// &[1, 1],
 /// ).unwrap();
 /// let result = scatter_nd(&x, &index, &src).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 9, 3, 4, 5, 6, 7, 8]), &[2, 4]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 9, 3, 4, 5, 6, 7, 8]), &[2, 4]).unwrap();
 /// assert_eq!(result, expected);
 /// ````
 ///
@@ -1774,261 +934,20 @@ pub fn scatter_nd<T: TensorType + Send + Sync>(
     Ok(output)
 }
 
-fn axes_op<T: TensorType + Send + Sync>(
-    a: &Tensor<T>,
-    axes: &[usize],
-    op: impl Fn(&Tensor<T>) -> Result<Tensor<T>, TensorError> + Send + Sync,
-) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-
-    if axes.is_empty() {
-        return Ok(a.clone());
-    }
-
-    let mut new_dims = vec![];
-    for i in 0..a.dims().len() {
-        if !axes.contains(&i) {
-            new_dims.push(a.dims()[i]);
-        } else {
-            new_dims.push(1);
-        }
-    }
-
-    let res = Tensor::new(None, &new_dims)?;
-
-    let cartesian_coord = new_dims
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    let res = res.par_enum_map(|i, _: T| {
-        let coord = cartesian_coord[i].clone();
-        let mut prod_dims = vec![];
-        for (i, c) in coord.iter().enumerate() {
-            if axes.contains(&i) {
-                prod_dims.push(0..a.dims()[i]);
-            } else {
-                prod_dims.push(*c..*c + 1);
-            }
-        }
-
-        Ok(op(&a.get_slice(&prod_dims)?)?[0].clone())
-    })?;
-
-    Ok(res)
-}
-
-/// Takes product of a tensor along specific axes.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::prod_axes;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 2, 1, 1, 0]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = prod_axes(&x, &[1]).unwrap();
-/// let expected = Tensor::<i128>::new(
-///     Some(&[60, 0]),
-///     &[2, 1],
-/// ).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn prod_axes<T: TensorType + Mul<Output = T> + Send + Sync>(
-    a: &Tensor<T>,
-    axes: &[usize],
-) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-    axes_op(a, axes, prod)
-}
-
-/// Returns top K values.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::topk;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 2, 1, 1, 0]),
-///     &[6],
-/// ).unwrap();
-/// let result = topk(&x, 3, true).unwrap();
-/// let expected = Tensor::<i128>::new(
-///     Some(&[15, 2, 2]),
-///     &[3],
-/// ).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn topk<T: TensorType + PartialOrd>(
-    a: &Tensor<T>,
-    k: usize,
-    largest: bool,
-) -> Result<Tensor<T>, TensorError> {
-    let mut indexed_a = a.clone();
-    indexed_a.flatten();
-
-    let mut indexed_a = a.iter().enumerate().collect::<Vec<_>>();
-
-    if largest {
-        indexed_a.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
-    } else {
-        indexed_a.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
-    }
-
-    let indexed_a = indexed_a
-        .into_iter()
-        .take(k)
-        .map(|(i, _)| i)
-        .collect::<Vec<_>>();
-
-    let mut output = Tensor::new(None, &[k])?;
-
-    for (i, x) in indexed_a.iter().enumerate() {
-        output.set(&[i], a[*x].clone());
-    }
-
-    Ok(output)
-}
-
-/// Returns top K values.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// * `dim` - Dimension to topk along
-/// * `largest` - Whether to return the largest or largest values
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::topk_axes;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 2, 1, 1, 0]),
-///     &[2,3],
-/// ).unwrap();
-/// let result = topk_axes(&x, 2, 1, true).unwrap();
-/// let expected = Tensor::<i128>::new(
-///     Some(&[15, 2, 1, 1]),
-///     &[2,2],
-/// ).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn topk_axes<T: TensorType + PartialOrd + Send + Sync>(
-    a: &Tensor<T>,
-    k: usize,
-    dim: usize,
-    largest: bool,
-) -> Result<Tensor<T>, TensorError> {
-    let mut new_dims = a.dims().to_vec();
-    new_dims[dim] = k;
-
-    let res = Tensor::new(None, &new_dims)?;
-
-    let cartesian_coord = new_dims
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    let res = res.par_enum_map(|i, _: T| {
-        let coord = cartesian_coord[i].clone();
-        let mut slice = vec![];
-        for (i, c) in coord.iter().enumerate() {
-            if i == dim {
-                slice.push(0..a.dims()[i]);
-            } else {
-                slice.push(*c..*c + 1);
-            }
-        }
-        let sliced_value = a.get_slice(&slice)?;
-        let topk = topk(&sliced_value, k, largest)?;
-        Ok(topk[coord[dim]].clone())
-    })?;
-
-    Ok(res)
-}
-
-/// Sums a tensor along specific axes.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::sum_axes;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 2, 1, 1, 0]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = sum_axes(&x, &[1]).unwrap();
-/// let expected = Tensor::<i128>::new(
-///     Some(&[19, 2]),
-///     &[2, 1],
-/// ).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn sum_axes<T: TensorType + Add<Output = T> + Send + Sync>(
-    a: &Tensor<T>,
-    axes: &[usize],
-) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-    axes_op(a, axes, sum)
-}
-
-/// Mins a tensor along specific axes.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::min_axes;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 2, 1, 1, 0]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = min_axes(&x, &[1]).unwrap();
-/// let expected = Tensor::<i128>::new(
-///     Some(&[2, 0]),
-///     &[2, 1],
-/// ).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn min_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + Send + Sync>(
-    a: &Tensor<T>,
-    axes: &[usize],
-) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-
-    let min_fn = |a: &Tensor<T>| -> Result<Tensor<T>, TensorError> {
-        Ok(vec![a.par_iter().min().unwrap().clone()].into_iter().into())
-    };
-
-    axes_op(a, axes, min_fn)
-}
-
 /// Abs a tensor.
 /// # Arguments
 /// * `a` - Tensor
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::abs;
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///    Some(&[-2, 15, 2, -1, 1, 0]),
 /// &[2, 3],
 /// ).unwrap();
 /// let result = abs(&x).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, 0]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 15, 2, 1, 1, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
@@ -2044,359 +963,20 @@ pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
     Ok(output)
 }
 
-/// Max of a tensor along specific axes.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::max_axes;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 2, 1, 1, 0]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = max_axes(&x, &[1]).unwrap();
-/// let expected = Tensor::<i128>::new(
-///     Some(&[15, 1]),
-///     &[2, 1],
-/// ).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn max_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + Send + Sync>(
-    a: &Tensor<T>,
-    axes: &[usize],
-) -> Result<Tensor<T>, TensorError> {
-    // calculate value of output
-
-    let max_fn = |a: &Tensor<T>| -> Result<Tensor<T>, TensorError> {
-        Ok(vec![a.par_iter().max().unwrap().clone()].into_iter().into())
-    };
-
-    axes_op(a, axes, max_fn)
-}
-
-/// Argmax of a tensor along specific axes.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::argmax_axes;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 2, 1, 1, 0]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = argmax_axes(&x, 1).unwrap();
-/// let expected = Tensor::<i128>::new(
-///     Some(&[1, 0]),
-///     &[2, 1],
-/// ).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn argmax_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + From<u64> + Send + Sync>(
-    a: &Tensor<T>,
-    dim: usize,
-) -> Result<Tensor<T>, TensorError> {
-    let argmax_fn = |a: &Tensor<T>| -> Result<Tensor<T>, TensorError> {
-        Ok(vec![a
-            .clone()
-            .into_iter()
-            .enumerate()
-            // we value the first index in the case of a tie
-            .max_by_key(|(idx, value)| (value.clone(), -(*idx as i64)))
-            .map(|(idx, _)| T::from(idx as u64))
-            .unwrap()]
-        .into_iter()
-        .into())
-    };
-
-    // calculate value of output
-    axes_op(a, &[dim], argmax_fn)
-}
-
-/// Argmin of a tensor along specific axes.
-/// # Arguments
-///
-/// * `a` - Tensor
-/// * `b` - Single value
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::argmin_axes;
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 15, 0, 1, 1, 0]),
-///     &[2, 3],
-/// ).unwrap();
-/// let result = argmin_axes(&x, 0).unwrap();
-/// let expected = Tensor::<i128>::new(
-///     Some(&[1, 1, 0]),
-///     &[1, 3],
-/// ).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn argmin_axes<T: TensorType + Add<Output = T> + std::cmp::Ord + From<u64> + Send + Sync>(
-    a: &Tensor<T>,
-    dim: usize,
-) -> Result<Tensor<T>, TensorError> {
-    let argmax_fn = |a: &Tensor<T>| -> Result<Tensor<T>, TensorError> {
-        Ok(vec![a
-            .clone()
-            .into_iter()
-            .enumerate()
-            // we value the first index in the case of a tie
-            .min_by_key(|(idx, value)| (value.clone(), (*idx as i64)))
-            .map(|(idx, _)| T::from(idx as u64))
-            .unwrap()]
-        .into_iter()
-        .into())
-    };
-
-    // calculate value of output
-    axes_op(a, &[dim], argmax_fn)
-}
-
-/// Applies convolution over a 3D tensor of shape C x H x W (and adds a bias).
-/// # Arguments
-///
-/// * `inputs` - A vector of tensors holding in order: input image, convolution kernel, convolution bias.
-/// * `padding` - Tuple of padding values in x and y directions.
-/// * `stride` - Tuple of stride values in x and y directions.
-/// # Examples
-/// ```
-/// // expected ouputs are taken from pytorch torch.nn.functional.conv2d
-///
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::conv;
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[1, 1, 3, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[5, 1, 1, 1]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///     Some(&[0]),
-///     &[1],
-/// ).unwrap();
-/// let result = conv::<i128>(&[x, k, b], [(0, 0); 2], (1, 1)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// // Now test single channel
-/// let x = Tensor::<i128>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[1, 2, 3, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[5, 1, 1, 1, 5, 2, 1, 1]),
-///     &[2, 1, 2, 2],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///     Some(&[1, 1]),
-///     &[2],
-/// ).unwrap();
-///
-/// let result = conv::<i128>(&[x, k, b], [(0, 0); 2], (1, 1)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[32, 17, 9, 27, 34, 20, 13, 26]), &[1, 2, 2, 2]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// // Now test multi channel
-/// let x = Tensor::<i128>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[1, 2, 3, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[5, 1, 1, 1, 5, 2, 1, 1, 5, 3, 1, 1, 5, 4, 1, 1, 5, 1, 1, 1, 5, 2, 1, 1, 5, 3, 1, 1, 5, 4, 1, 1]),
-///     &[4, 2, 2, 2],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///     Some(&[1, 1, 1, 1]),
-///     &[4],
-/// ).unwrap();
-///
-/// let result = conv::<i128>(&[x, k, b], [(0, 0); 2], (1, 1)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[65, 36, 21, 52, 73, 48, 37, 48, 65, 36, 21, 52, 73, 48, 37, 48]), &[1, 4, 2, 2]).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn conv<
-    T: TensorType
-        + Mul<Output = T>
-        + Add<Output = T>
-        + std::marker::Sync
-        + std::marker::Send
-        + std::iter::Sum,
->(
-    inputs: &[Tensor<T>],
-    padding: [(usize, usize); 2],
-    stride: (usize, usize),
-) -> Result<Tensor<T>, TensorError> {
-    let has_bias = inputs.len() == 3;
-    let (image, kernel) = (&mut inputs[0].clone(), &mut inputs[1].clone());
-
-    let og_image_dims = image.dims().to_vec();
-    let og_kernel_dims = kernel.dims().to_vec();
-    // ensure inputs are 4D tensors
-    if og_image_dims.len() == 3 {
-        // adds a dummy image_channels dimension
-        let mut new_dims = image.dims().to_vec();
-        // insert 1 at the input_channels pos
-        if og_kernel_dims.len() == 3 {
-            new_dims.insert(1, 1);
-        } else {
-            new_dims.insert(0, 1);
-        }
-        image.reshape(&new_dims)?;
-    }
-
-    // ensure kernel is 4D tensor
-    if og_kernel_dims.len() == 3 && og_image_dims.len() == 3 {
-        // adds a dummy image_channels dimension
-        let mut new_dims = kernel.dims().to_vec();
-        // insert 1 at the input_channels pos
-        new_dims.insert(1, 1);
-        kernel.reshape(&new_dims)?;
-    }
-
-    if (image.dims().len() != 4)
-        || (kernel.dims().len() != 4)
-        // ensure number of groups makes sense
-        || (image.dims()[1] % kernel.dims()[1] != 0)
-    {
-        return Err(TensorError::DimMismatch("conv".to_string()));
-    }
-
-    let image_dims = image.dims();
-    let kernel_dims = kernel.dims();
-
-    if has_bias {
-        let bias = &mut inputs[2].clone();
-
-        if bias.dims().is_empty() {
-            bias.reshape(&[1])?;
-        }
-
-        if (bias.dims().len() != 1) && (bias.dims()[0] != kernel.dims()[0]) {
-            return Err(TensorError::DimMismatch("conv bias".to_string()));
-        }
-    }
-
-    let (batch_size, output_channels, input_channels, kernel_height, kernel_width) = (
-        image_dims[0],
-        kernel_dims[0],
-        image_dims[1],
-        kernel_dims[2],
-        kernel_dims[3],
-    );
-
-    let (image_height, image_width) = (image_dims[2], image_dims[3]);
-
-    let padded_image = pad::<T>(image, padding)?;
-
-    let vert_slides = (image_height + padding[0].0 + padding[1].0 - kernel_height) / stride.0 + 1;
-    let horz_slides = (image_width + padding[0].1 + padding[1].1 - kernel_width) / stride.1 + 1;
-
-    let num_groups = input_channels / kernel_dims[1];
-    let input_channels_per_group = input_channels / num_groups;
-    let output_channels_per_group = output_channels / num_groups;
-
-    if output_channels_per_group == 0 {
-        return Err(TensorError::DimMismatch(format!(
-            "Given groups={}, expected kernel to be at least {} at dimension 0 but got {} instead",
-            num_groups, num_groups, output_channels_per_group
-        )));
-    }
-
-    let num_outputs =
-        batch_size * num_groups * output_channels_per_group * vert_slides * horz_slides;
-
-    let mut output = Tensor::new(None, &[num_outputs])?;
-
-    let cartesian_coord = [
-        (0..batch_size),
-        (0..num_groups),
-        (0..output_channels_per_group),
-        (0..vert_slides),
-        (0..horz_slides),
-    ]
-    .iter()
-    .cloned()
-    .multi_cartesian_product()
-    .collect::<Vec<_>>();
-
-    output.par_iter_mut().enumerate().for_each(|(i, o)| {
-        let cartesian_coord_per_group = &cartesian_coord[i];
-        let (batch, group, i, j, k) = (
-            cartesian_coord_per_group[0],
-            cartesian_coord_per_group[1],
-            cartesian_coord_per_group[2],
-            cartesian_coord_per_group[3],
-            cartesian_coord_per_group[4],
-        );
-        let rs = j * stride.0;
-        let cs = k * stride.1;
-
-        let start_channel = group * input_channels_per_group;
-        let end_channel = start_channel + input_channels_per_group;
-
-        let local_image = padded_image
-            .get_slice(&[
-                batch..batch + 1,
-                start_channel..end_channel,
-                rs..(rs + kernel_height),
-                cs..(cs + kernel_width),
-            ])
-            .unwrap();
-
-        let start_kernel_index = group * output_channels_per_group + i;
-        let end_kernel_index = start_kernel_index + 1;
-        let local_kernel = kernel
-            .get_slice(&[start_kernel_index..end_kernel_index])
-            .unwrap();
-
-        let res = dot(&[local_image, local_kernel]).unwrap()[0].clone();
-        if has_bias {
-            let bias_index = if inputs[2].len() > 1 {
-                start_kernel_index
-            } else {
-                0
-            };
-            *o = res + inputs[2][bias_index].clone();
-        } else {
-            *o = res;
-        }
-    });
-
-    // remove dummy batch dimension if we added one
-    if og_image_dims.len() == 3 && vert_slides == 1 {
-        output.reshape(&[batch_size, output_channels, horz_slides])?;
-    } else if og_image_dims.len() == 3 {
-        output.reshape(&[output_channels, vert_slides, horz_slides])?;
-    } else {
-        output.reshape(&[batch_size, output_channels, vert_slides, horz_slides])?;
-    }
-
-    Ok(output)
-}
-
 /// Intercalates values into a tensor along a given axis.
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::intercalate_values;
 ///
-/// let tensor = Tensor::<i128>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+/// let tensor = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
 /// let result = intercalate_values(&tensor, 0, 2, 1).unwrap();
 ///
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 2, 3, 0, 4]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 2, 3, 0, 4]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// let result = intercalate_values(&expected, 0, 2, 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 0, 2, 0, 0, 0, 3, 0, 4]), &[3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 2, 0, 0, 0, 3, 0, 4]), &[3, 3]).unwrap();
 ///
 /// assert_eq!(result, expected);
 ///
@@ -2441,24 +1021,25 @@ pub fn intercalate_values<T: TensorType>(
 /// One hot encodes a tensor along a given axis.
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::one_hot;
-/// let tensor = Tensor::<i128>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
+/// let tensor = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
 /// let result = one_hot(&tensor, 5, 2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 0,
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 0, 0, 0,
 ///                                           0, 0, 1, 0, 0,
 ///                                           0, 0, 0, 1, 0,
 ///                                           0, 0, 0, 0, 1]), &[2, 2, 5]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 pub fn one_hot(
-    tensor: &Tensor<i128>,
+    tensor: &Tensor<IntegerRep>,
     num_classes: usize,
     axis: usize,
-) -> Result<Tensor<i128>, TensorError> {
+) -> Result<Tensor<IntegerRep>, TensorError> {
     let mut output_dims = tensor.dims().to_vec();
     output_dims.insert(axis, num_classes);
 
-    let mut output: Tensor<i128> = Tensor::new(None, &output_dims)?;
+    let mut output: Tensor<IntegerRep> = Tensor::new(None, &output_dims)?;
 
     let cartesian_coord = output
         .dims()
@@ -2497,438 +1078,7 @@ pub fn one_hot(
     Ok(output)
 }
 
-/// Performs a 2D deconvolution on the given input tensor.
-/// # Examples
-/// ```
-// // expected ouputs are taken from pytorch torch.nn.functional.conv_transpose2d
-///
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::deconv;
-///
-/// let c = Tensor::<i128>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap();
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 4, 0, 1]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-///
-/// let result = deconv::<i128>(&[x, c], [(1, 1); 2], (1, 1), (2, 2)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 32, 0, 32, 0, 6, 0, 12, 0, 4, 0, 8, 0, 4, 0, 8, 0, 0, 0, 3, 0, 0, 0, 2]), &[1, 2, 3, 4]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 4, 0, 1]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[3, 1, 1, 5]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], [(0, 0); 2], (0, 0), (1, 1)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[6, 14, 4, 2, 17, 21, 0, 1, 5]), &[1, 1, 3, 3]).unwrap();
-/// assert_eq!(result, expected);
-///
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 4, 0, 1]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[3, 1, 1, 5]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], [(1, 1); 2], (0, 0), (1, 1)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[17]), &[1, 1, 1, 1]).unwrap();
-/// assert_eq!(result, expected);
-///
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 4, 0, 1]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[3, 1, 1, 5]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], [(1, 1); 2], (0, 0), (2, 2)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[10, 4, 0, 3]), &[1, 1, 2, 2]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 4, 0, 1]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[3, 1, 1, 5]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], [(0, 0); 2], (0, 0), (2, 2)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 4, 0, 1]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[3, 2]),
-///     &[1, 1, 2, 1],
-/// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], [(1, 1); 2], (0, 0), (2, 2)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 0]), &[1, 1, 2, 1]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 4, 0, 1]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[3, 2]),
-///     &[1, 1, 2, 1],
-/// ).unwrap();
-/// let result = deconv::<i128>(&[x, k], [(0, 0); 2], (0, 0), (2, 2)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 1, 4, 3]).unwrap();
-/// assert_eq!(result, expected);
-///
-///
-/// let c = Tensor::<i128>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap();
-/// let x = Tensor::<i128>::new(
-///     Some(&[2, 4, 0, 1]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-///
-/// let result = deconv::<i128>(&[x, c], [(1, 1); 2], (0, 0), (2, 2)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
-/// assert_eq!(result, expected);
-///
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[3, 8, 0, 8, 4, 9, 8, 1, 8]),
-///     &[1, 1, 3, 3],
-/// ).unwrap();
-/// let k = Tensor::<i128>::new(
-///     Some(&[1, 0, 4, 6]),
-///     &[1, 1, 2, 2],
-/// ).unwrap();
-/// let b = Tensor::<i128>::new(
-///     Some(&[1]),
-///     &[1],
-/// ).unwrap();
-/// let result = deconv::<i128>(&[x, k, b], [(1, 1); 2], (0, 0), (1, 1)).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
-/// assert_eq!(result, expected);
-///
-/// ```
-pub fn deconv<
-    T: TensorType
-        + Mul<Output = T>
-        + Add<Output = T>
-        + std::marker::Sync
-        + std::marker::Send
-        + std::iter::Sum,
->(
-    inputs: &[Tensor<T>],
-    padding: [(usize, usize); 2],
-    output_padding: (usize, usize),
-    stride: (usize, usize),
-) -> Result<Tensor<T>, TensorError> {
-    let has_bias = inputs.len() == 3;
-    let (image, kernel) = (&inputs[0], &inputs[1]);
-
-    if (image.dims().len() != 4) || (kernel.dims().len() != 4) {
-        return Err(TensorError::DimMismatch("deconv".to_string()));
-    }
-
-    if stride.0 == 0 || stride.1 == 0 {
-        return Err(TensorError::DimMismatch(
-            "nil stride is not supported for deconv".to_string(),
-        ));
-    }
-
-    if has_bias {
-        let bias = &mut inputs[2].clone();
-
-        if bias.dims().is_empty() {
-            bias.reshape(&[1])?;
-        }
-
-        if (bias.dims().len() != 1) && (bias.dims()[0] != kernel.dims()[0]) {
-            return Err(TensorError::DimMismatch("deconv bias".to_string()));
-        }
-    }
-
-    let (kernel_height, kernel_width) = (kernel.dims()[2], kernel.dims()[3]);
-
-    let mut expanded_image = intercalate_values(image, T::zero().unwrap(), stride.0, 2)?;
-    expanded_image = intercalate_values(&expanded_image, T::zero().unwrap(), stride.1, 3)?;
-    expanded_image = pad(&expanded_image, [(kernel_height - 1, kernel_width - 1); 2])?;
-
-    // flip order
-    let channel_coord = (0..kernel.dims()[0])
-        .cartesian_product(0..kernel.dims()[1])
-        .collect::<Vec<_>>();
-
-    let slice_coord = expanded_image
-        .dims()
-        .iter()
-        .enumerate()
-        .map(|(i, d)| {
-            if i == 2 {
-                padding[0].0..d - padding[1].0 + output_padding.0
-            } else if i == 3 {
-                padding[0].1..d - padding[1].1 + output_padding.1
-            } else {
-                0..*d
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let sliced_expanded_image = expanded_image.get_slice(&slice_coord)?;
-
-    let mut inverted_kernels = vec![];
-
-    for (i, j) in channel_coord {
-        let mut channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
-        channel = Tensor::from(channel.clone().into_iter().rev());
-        channel.reshape(&[kernel.dims()[2], kernel.dims()[3]])?;
-        inverted_kernels.push(channel);
-    }
-
-    let mut deconv_kernel =
-        Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
-    deconv_kernel.reshape(kernel.dims())?;
-
-    // tensorflow formatting patch
-    if kernel.dims()[0] == sliced_expanded_image.dims()[1] {
-        deconv_kernel.reshape(&[
-            kernel.dims()[1],
-            kernel.dims()[0],
-            kernel.dims()[2],
-            kernel.dims()[3],
-        ])?;
-    }
-
-    let input = if has_bias {
-        vec![
-            sliced_expanded_image,
-            deconv_kernel.clone(),
-            inputs[2].clone(),
-        ]
-    } else {
-        vec![sliced_expanded_image, deconv_kernel.clone()]
-    };
-
-    let output = conv(&input, [(0, 0); 2], (1, 1))?;
-
-    Ok(output)
-}
-
-/// Applies 2D sum pooling over a 4D tensor of shape B x C x H x W.
-/// # Arguments
-///
-/// * `image` - Tensor.
-/// * `padding` - Tuple of padding values in x and y directions.
-/// * `stride` - Tuple of stride values in x and y directions.
-/// * `pool_dims` - Tuple of pooling window size in x and y directions.
-/// * `normalize` - Flag to normalize the output by the number of elements in the pooling window.
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::sumpool;
-/// use halo2_proofs::circuit::Value;
-/// use halo2_proofs::plonk::Assigned;
-/// use halo2curves::pasta::Fp as F;
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[1, 1, 3, 3],
-/// ).unwrap();
-/// let pooled = sumpool(&x, [(0, 0); 2], (1, 1), (2, 2), false).unwrap();
-/// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[11, 8, 8, 10]), &[1, 1, 2, 2]).unwrap();
-/// assert_eq!(pooled, expected);
-///
-/// // This time with normalization
-/// let pooled = sumpool(&x, [(0, 0); 2], (1, 1), (2, 2), true).unwrap();
-/// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[3, 2, 2, 3]), &[1, 1, 2, 2]).unwrap();
-/// assert_eq!(pooled, expected);
-/// ```
-pub fn sumpool(
-    image: &Tensor<i128>,
-    padding: [(usize, usize); 2],
-    stride: (usize, usize),
-    kernel_shape: (usize, usize),
-    normalize: bool,
-) -> Result<Tensor<i128>, TensorError> {
-    let image_dims = image.dims();
-    let batch_size = image_dims[0];
-    let image_channels = image_dims[1];
-
-    let unit = 1_i128;
-
-    let mut kernel = Tensor::from(0..kernel_shape.0 * kernel_shape.1).map(|_| unit);
-    kernel.reshape(&[1, 1, kernel_shape.0, kernel_shape.1])?;
-
-    let cartesian_coord = [(0..batch_size), (0..image_channels)]
-        .iter()
-        .cloned()
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
-
-    let res = cartesian_coord
-        .iter()
-        .map(|coord| {
-            let (b, i) = (coord[0], coord[1]);
-            let input = image.get_slice(&[b..b + 1, i..i + 1])?;
-            let output = conv(&[input, kernel.clone()], padding, stride)?;
-            Ok(output)
-        })
-        .collect::<Result<Tensor<_>, TensorError>>()?;
-
-    let shape = &res[0].dims()[2..];
-    let mut combined = res.combine()?;
-    combined.reshape(&[&[batch_size, image_channels], shape].concat())?;
-
-    if normalize {
-        let norm = kernel.len();
-        combined = nonlinearities::const_div(&combined, norm as f64);
-    }
-
-    Ok(combined)
-}
-
-/// Applies 2D max pooling over a 4D tensor of shape B x C x H x W.
-/// # Arguments
-///
-/// * `image` - Tensor.
-/// * `padding` - Tuple of padding values in x and y directions.
-/// * `stride` - Tuple of stride values in x and y directions.
-/// * `pool_dims` - Tuple of pooling window size in x and y directions.
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::max_pool2d;
-/// use ezkl::circuit::utils::F32;
-/// use halo2_proofs::circuit::Value;
-/// use halo2_proofs::plonk::Assigned;
-/// use halo2curves::pasta::Fp as F;
-///
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[1, 1, 3, 3],
-/// ).unwrap();
-/// let pooled = max_pool2d::<i128>(&x, &[(0, 0); 2], &(1, 1), &(2, 2)).unwrap();
-/// let expected: Tensor<i128> = Tensor::<i128>::new(Some(&[5, 4, 4, 6]), &[1, 1, 2, 2]).unwrap();
-/// assert_eq!(pooled, expected);
-///
-/// let x = Tensor::<f32>::new(Some(&[-0.9180, -0.4702, -0.0882, -0.0885, 0.3940,
-///                                  -0.4884, 0.1395,  1.7860, -0.9729,  1.5160, -0.3346,
-///                                 -0.0601, -0.1140,  0.2522, -0.2938, -0.0355]), &[1,1,4,4]).unwrap();
-/// let x = x.map(|x| F32(x));
-/// let pooled = max_pool2d::<F32>(&x, &[(0, 0); 2], &(2, 2), &(2, 2)).unwrap();
-/// let expected = Tensor::<f32>::new(Some(&[0.3940,  1.7860, 1.5160, -0.0355]), &[1, 1, 2, 2]).unwrap();
-/// let expected = expected.map(|x| F32(x));
-/// assert_eq!(pooled, expected);
-/// ```
-pub fn max_pool2d<T: TensorType + std::marker::Sync + std::marker::Send + std::cmp::Ord>(
-    image: &Tensor<T>,
-    padding: &[(usize, usize); 2],
-    stride: &(usize, usize),
-    pool_dims: &(usize, usize),
-) -> Result<Tensor<T>, TensorError> {
-    if image.dims().len() != 4 {
-        return Err(TensorError::DimMismatch("max_pool2d".to_string()));
-    }
-    let image_dims = image.dims();
-
-    let (batch, input_channels, image_height, image_width) =
-        (image_dims[0], image_dims[1], image_dims[2], image_dims[3]);
-
-    let padded_image = pad::<T>(image, *padding)?;
-
-    let vert_slides = (image_height + padding[0].0 + padding[1].0 - pool_dims.0) / stride.0 + 1;
-    let horz_slides = (image_width + padding[0].1 + padding[1].1 - pool_dims.1) / stride.1 + 1;
-
-    let mut output: Tensor<T> =
-        Tensor::new(None, &[batch, input_channels, horz_slides, vert_slides]).unwrap();
-
-    let cartesian_coord = [
-        (0..batch),
-        (0..input_channels),
-        (0..vert_slides),
-        (0..horz_slides),
-    ]
-    .iter()
-    .cloned()
-    .multi_cartesian_product()
-    .collect::<Vec<_>>();
-
-    output
-        .par_iter_mut()
-        .enumerate()
-        .for_each(|(flat_index, o)| {
-            let coord = &cartesian_coord[flat_index];
-            let (b, i, j, k) = (coord[0], coord[1], coord[2], coord[3]);
-            let rs = j * stride.0;
-            let cs = k * stride.1;
-            let themax = padded_image
-                .get_slice(&[
-                    b..(b + 1),
-                    i..(i + 1),
-                    rs..(rs + pool_dims.0),
-                    cs..(cs + pool_dims.1),
-                ])
-                .unwrap()
-                .into_iter()
-                .max()
-                .unwrap();
-            *o = themax;
-        });
-
-    Ok(output)
-}
-
-/// Dot product of two tensors.
-/// # Arguments
-///
-/// * `inputs` - Vector of tensors of length 2.
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::dot;
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[1, 3, 3],
-/// ).unwrap();
-/// let y = Tensor::<i128>::new(
-///     Some(&[5, 5, 10, -4, 2, -1, 2, 0, 1]),
-///     &[1, 3, 3],
-/// ).unwrap();
-/// assert_eq!(dot(&[x, y]).unwrap()[0], 86);
-/// ```
-pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync + std::iter::Sum>(
-    inputs: &[Tensor<T>],
-) -> Result<Tensor<T>, TensorError> {
-    if (inputs.len() != 2) || (inputs[0].clone().len() != inputs[1].clone().len()) {
-        return Err(TensorError::DimMismatch("dot".to_string()));
-    }
-
-    let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
-    let res: Vec<T> = a
-        .par_iter()
-        .zip(b.par_iter())
-        .fold(
-            || T::zero().unwrap(),
-            |acc, (k, i)| acc + k.clone() * i.clone(),
-        )
-        .collect();
-
-    let res = res.into_iter().sum();
-
-    Tensor::new(Some(&[res]), &[1])
-}
-
-/// Pads a 4D tensor of shape `B x C x H x W` to a tensor of shape `B x C x (H + 2xPADDING) x (W + 2xPADDING)` using 0 values.
+/// Pads a ND tensor of shape `B x C x H x D1 x D2 x ...` along all dimensions.
 /// # Arguments
 ///
 /// * `image` - Tensor.
@@ -2936,100 +1086,56 @@ pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T> + Send + Sync + std
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::pad;
 ///
-/// let x = Tensor::<i128>::new(
+/// let x = Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap();
-/// let result = pad::<i128>(&x, [(1, 1); 2]).unwrap();
-/// let expected = Tensor::<i128>::new(
+/// let result = pad::<IntegerRep>(&x, vec![(0, 0), (0, 0), (1, 1), (1, 1)], 0).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(
 ///     Some(&[0, 0, 0, 0, 0, 0, 5, 2, 3, 0, 0, 0, 4, -1, 0, 0, 3, 1, 6, 0, 0, 0, 0, 0, 0]),
 ///     &[1, 1, 5, 5],
 /// ).unwrap();
 /// assert_eq!(result, expected);
 ///
-///
-///
+/// let result = pad::<IntegerRep>(&x, vec![(1, 1), (1, 1)], 2).unwrap();
+/// assert_eq!(result, expected);
 /// ```
 pub fn pad<T: TensorType>(
     image: &Tensor<T>,
-    padding: [(usize, usize); 2],
+    padding: Vec<(usize, usize)>,
+    offset: usize,
 ) -> Result<Tensor<T>, TensorError> {
-    if image.dims().len() != 4 {
-        return Err(TensorError::DimMismatch("pad".to_string()));
-    }
-    let (batch_size, channels, height, width) = (
-        image.dims()[0],
-        image.dims()[1],
-        image.dims()[2],
-        image.dims()[3],
-    );
+    let padded_dims = image.dims()[offset..]
+        .iter()
+        .enumerate()
+        .map(|(i, d)| d + padding[i].0 + padding[i].1)
+        .collect::<Vec<_>>();
 
-    let (padding_before, padding_after) = padding.into();
+    let mut output_dims = image.dims()[..offset].to_vec();
+    output_dims.extend(padded_dims);
 
-    let padded_height = height + padding_before.0 + padding_after.0;
-    let padded_width = width + padding_before.1 + padding_after.1;
+    let mut output = Tensor::<T>::new(None, &output_dims).unwrap();
 
-    let mut output =
-        Tensor::<T>::new(None, &[batch_size, channels, padded_height, padded_width]).unwrap();
+    let cartesian_coord = image
+        .dims()
+        .iter()
+        .map(|d| (0..*d))
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
 
-    for b in 0..batch_size {
-        for channel in 0..channels {
-            for row in 0..height {
-                for col in 0..width {
-                    output.set(
-                        &[b, channel, row + padding_before.0, col + padding_before.1],
-                        image.get(&[b, channel, row, col]).clone(),
-                    );
-                }
-            }
-        }
+    for coord in cartesian_coord {
+        let rest = &coord[offset..];
+        let mut padded_res = coord[..offset].to_vec();
+        padded_res.extend(rest.iter().zip(padding.iter()).map(|(c, p)| c + p.0));
+        let image_val = image.get(&coord);
+        output.set(&padded_res, image_val);
     }
 
-    output.reshape(&[batch_size, channels, padded_height, padded_width])?;
+    output.reshape(&output_dims)?;
     Ok(output)
-}
-
-/// Packs a multi-dim tensor into a single elem tensor
-/// # Arguments
-///
-/// * `a` - Tensor.
-/// * `base` - Base to use when packing
-/// * `scale` - fixed point representation scale
-/// # Examples
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::tensor::ops::pack;
-///
-/// let x = Tensor::<i128>::new(
-///     Some(&[5, 2, 1]),
-///     &[1, 3],
-/// ).unwrap();
-/// let result = pack::<i128>(&x, 2, 2).unwrap();
-/// let expected = Tensor::<i128>::new(
-///     Some(&[90]),
-///     &[1],
-/// ).unwrap();
-/// assert_eq!(result, expected);
-/// ```
-pub fn pack<T: TensorType + std::marker::Send + std::marker::Sync>(
-    a: &Tensor<T>,
-    base: T,
-    scale: u32,
-) -> Result<Tensor<T>, TensorError>
-where
-    T: Add<Output = T>,
-    T: Mul<Output = T>,
-{
-    // base ^ (scale + tensor)
-    let mut output = T::zero().unwrap();
-    let base_tensor = Tensor::new(Some(&[base]), &[1])?;
-    for (i, a_i) in a.iter().enumerate() {
-        let pow_value = &base_tensor.pow((i as u32) * (scale + 1))?[0];
-        output = output + pow_value.clone() * a_i.clone();
-    }
-    Tensor::new(Some(&[output]), &[1])
 }
 
 /// Concatenates a list of tensors along a specified axis.
@@ -3040,37 +1146,38 @@ where
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::concat;
 /// // tested against pytorch outputs for reference :)
 ///
 /// // 1D example
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3]), &[3]).unwrap();
-/// let y = Tensor::<i128>::new(Some(&[4, 5, 6]), &[3]).unwrap();
+/// let x = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+/// let y = Tensor::<IntegerRep>::new(Some(&[4, 5, 6]), &[3]).unwrap();
 /// let result = concat(&[&x, &y], 0).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// // 2D example
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
-/// let y = Tensor::<i128>::new(Some(&[7, 8, 9]), &[3, 1]).unwrap();
+/// let x = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+/// let y = Tensor::<IntegerRep>::new(Some(&[7, 8, 9]), &[3, 1]).unwrap();
 /// let result = concat(&[&x, &y], 1).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 7, 3, 4, 8, 5, 6, 9]), &[3, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 7, 3, 4, 8, 5, 6, 9]), &[3, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// /// 4D example
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[2, 2, 2, 2]).unwrap();
-/// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[2, 2, 1, 2]).unwrap();
+/// let x = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[2, 2, 2, 2]).unwrap();
+/// let y = Tensor::<IntegerRep>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[2, 2, 1, 2]).unwrap();
 /// let result = concat(&[&x, &y], 2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 17, 18, 5, 6, 7, 8, 19, 20, 9, 10, 11, 12, 21, 22, 13, 14, 15, 16, 23, 14]), &[2, 2, 3, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 17, 18, 5, 6, 7, 8, 19, 20, 9, 10, 11, 12, 21, 22, 13, 14, 15, 16, 23, 14]), &[2, 2, 3, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 ///
 /// // 5D example
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[8, 1, 1, 1, 2]).unwrap();
-/// let y = Tensor::<i128>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[4, 1, 1, 1, 2]).unwrap();
+/// let x = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]), &[8, 1, 1, 1, 2]).unwrap();
+/// let y = Tensor::<IntegerRep>::new(Some(&[17, 18, 19, 20, 21, 22, 23, 14]), &[4, 1, 1, 1, 2]).unwrap();
 /// let result = concat(&[&x, &y], 0).unwrap();
 ///
-/// let expected = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 14]), &[12, 1, 1, 1, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 14]), &[12, 1, 1, 1, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
 /// ```
@@ -3142,20 +1249,21 @@ pub fn concat<T: TensorType + Send + Sync>(
 /// ```
 /// // tested against pytorch output
 /// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::tensor::ops::slice;
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+/// let x = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
 /// let result = slice(&x, &0, &1, &2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[3, 4]), &[1, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[3, 4]), &[1, 2]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
+/// let x = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[3, 2]).unwrap();
 /// let result = slice(&x, &1, &1, &2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 4, 6]), &[3, 1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 4, 6]), &[3, 1]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let x = Tensor::<i128>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 2, 3]).unwrap();
+/// let x = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), &[2, 2, 3]).unwrap();
 /// let result = slice(&x, &2, &1, &2).unwrap();
-/// let expected = Tensor::<i128>::new(Some(&[2, 5, 8, 11]), &[2, 2, 1]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 5, 8, 11]), &[2, 2, 1]).unwrap();
 /// assert_eq!(result, expected);
 /// ```
 ///
@@ -3195,21 +1303,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     ///
     /// use ezkl::tensor::ops::nonlinearities::ceil;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[1, 2, 3, 4, 5, 6]),
     ///  &[3, 2],
     /// ).unwrap();
     /// let result = ceil(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn ceil(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn ceil(a: &Tensor<IntegerRep>, scale: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
             let rounded = kix.ceil() * scale;
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3221,20 +1330,21 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::floor;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///   Some(&[1, 2, 3, 4, 5, 6]),
     ///  &[3, 2],
     /// ).unwrap();
     /// let result = floor(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 2, 2, 4, 4, 6]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 2, 2, 4, 4, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn floor(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn floor(a: &Tensor<IntegerRep>, scale: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
             let rounded = kix.floor() * scale;
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3246,20 +1356,21 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::round;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///   Some(&[1, 2, 3, 4, 5, 6]),
     /// &[3, 2],
     /// ).unwrap();
     /// let result = round(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn round(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn round(a: &Tensor<IntegerRep>, scale: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
             let rounded = kix.round() * scale;
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3271,20 +1382,21 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::round_half_to_even;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///   Some(&[1, 2, 3, 4, 5, 6]),
     /// &[3, 2],
     /// ).unwrap();
     /// let result = round_half_to_even(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 2, 4, 4, 4, 6]), &[3, 2]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 2, 4, 4, 4, 6]), &[3, 2]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn round_half_to_even(a: &Tensor<i128>, scale: f64) -> Tensor<i128> {
+    pub fn round_half_to_even(a: &Tensor<IntegerRep>, scale: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale;
             let rounded = kix.round_ties_even() * scale;
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3296,21 +1408,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::pow;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[2, 15, 2, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = pow(&x, 1.0, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 225, 4, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 225, 4, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn pow(a: &Tensor<i128>, scale_input: f64, power: f64) -> Tensor<i128> {
+    pub fn pow(a: &Tensor<IntegerRep>, scale_input: f64, power: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let kix = scale_input * (kix).powf(power);
             let rounded = kix.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3321,13 +1434,14 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::kronecker_delta;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[2, 15, 2, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = kronecker_delta(&x);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn kronecker_delta<T: TensorType + std::cmp::PartialEq + Send + Sync>(
@@ -3352,38 +1466,39 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::sigmoid;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = sigmoid(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 1, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 1, 1]), &[2, 3]).unwrap();
     ///
     /// assert_eq!(result, expected);
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[65536]),
     ///   &[1],
     /// ).unwrap();
     /// let result = sigmoid(&x, 65536.0);
-    /// let expected = Tensor::<i128>::new(Some(&[47911]), &[1]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[47911]), &[1]).unwrap();
     /// assert_eq!(result, expected);
     ///
     /// /// assert_eq!(result, expected);
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[256]),
     ///   &[1],
     /// ).unwrap();
     /// let result = sigmoid(&x, 256.0);
-    /// let expected = Tensor::<i128>::new(Some(&[187]), &[1]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[187]), &[1]).unwrap();
     ///
     /// ```
-    pub fn sigmoid(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn sigmoid(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input / (1.0 + (-kix).exp());
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3402,18 +1517,19 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::hardswish;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[-12, -3, 2, 1, 1, 15]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = hardswish(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 2, 1, 1, 15]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 2, 1, 1, 15]), &[2, 3]).unwrap();
     ///
     /// assert_eq!(result, expected);
     ///
     /// ```
-    pub fn hardswish(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn hardswish(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let res = if kix <= -3.0 {
@@ -3424,7 +1540,7 @@ pub mod nonlinearities {
                 kix * (kix + 3.0) / 6.0
             };
             let rounded = (res * scale_input).round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3438,32 +1554,33 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::exp;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = exp(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[7, 3269017, 7, 3, 3, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[7, 3269017, 7, 3, 3, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[37, 12, 41]),
     ///   &[3],
     /// ).unwrap();
     /// let result = exp(&x, 512.0);
     ///
-    /// let expected = Tensor::<i128>::new(Some(&[550, 524, 555]), &[3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[550, 524, 555]), &[3]).unwrap();
     ///
     /// assert_eq!(result, expected);
     /// ```
-    pub fn exp(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn exp(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.exp();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3477,32 +1594,33 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::ln;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 15, 2, 1, 1, 3000]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = ln(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 3, 1, 0, 0, 8]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 1, 0, 0, 8]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[37, 12, 41]),
     ///   &[3],
     /// ).unwrap();
     /// let result = ln(&x, 512.0);
     ///
-    /// let expected = Tensor::<i128>::new(Some(&[-1345, -1922, -1293]), &[3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[-1345, -1922, -1293]), &[3]).unwrap();
     ///
     /// assert_eq!(result, expected);
     /// ```
-    pub fn ln(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn ln(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.ln();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3513,143 +1631,19 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::sign;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[-2, 15, 2, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = sign(&x);
-    /// let expected = Tensor::<i128>::new(Some(&[-1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[-1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sign(a: &Tensor<i128>) -> Tensor<i128> {
+    pub fn sign(a: &Tensor<IntegerRep>) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| Ok::<_, TensorError>(a_i.signum()))
             .unwrap()
-    }
-
-    /// softmax layout
-    pub fn softmax_axes(
-        a: &Tensor<i128>,
-        input_scale: f64,
-        output_scale: f64,
-        axes: &[usize],
-    ) -> Tensor<i128> {
-        // we want this to be as small as possible so we set the output scale to 1
-        let dims = a.dims();
-
-        if dims.len() == 1 {
-            return softmax(a, input_scale, output_scale);
-        }
-
-        let cartesian_coord = dims[..dims.len() - 1]
-            .iter()
-            .map(|x| 0..*x)
-            .multi_cartesian_product()
-            .collect::<Vec<_>>();
-
-        let mut outputs = vec![];
-
-        for coord in cartesian_coord {
-            let mut sum_dims = vec![];
-            for (i, c) in coord.iter().enumerate() {
-                if axes.contains(&i) {
-                    sum_dims.push(0..a.dims()[i]);
-                } else {
-                    sum_dims.push(*c..*c + 1);
-                }
-            }
-
-            let softmax_input = a.get_slice(&sum_dims).unwrap();
-
-            let res = softmax(&softmax_input, input_scale, output_scale);
-
-            outputs.push(res);
-        }
-
-        let mut res = Tensor::new(Some(&outputs), &[outputs.len()])
-            .unwrap()
-            .combine()
-            .unwrap();
-        res.reshape(dims).unwrap();
-        res
-    }
-
-    /// Applies softmax
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `scale_input` - Single value
-    /// * `scale_output` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::softmax;
-    /// let x = Tensor::<i128>::new(
-    ///     Some(&[2, 2, 3, 2, 2, 0]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let result = softmax(&x, 128.0, 128.0 * 128.0);
-    /// // doubles the scale of the input
-    /// let expected = Tensor::<i128>::new(Some(&[2734, 2734, 2755, 2734, 2734, 2692]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn softmax(a: &Tensor<i128>, input_scale: f64, output_scale: f64) -> Tensor<i128> {
-        // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
-
-        let exp = exp(a, input_scale);
-
-        let sum = sum(&exp).unwrap();
-        let inv_denom = recip(&sum, input_scale, output_scale);
-        let mut res = (exp * inv_denom).unwrap();
-        res = res
-            .iter()
-            .map(|x| ((*x as f64) / input_scale).round() as i128)
-            .collect();
-        res.reshape(a.dims()).unwrap();
-        res
-    }
-
-    /// Applies range_check_percent
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `b` - Tensor
-    /// * `scale_input` - Single value
-    /// * `scale_output` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::range_check_percent;
-    /// let x = Tensor::<i128>::new(
-    ///     Some(&[100, 200, 300, 400, 500, 600]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let y = Tensor::<i128>::new(
-    ///    Some(&[103, 204, 303, 404, 505, 607]),
-    ///   &[2, 3],
-    /// ).unwrap();
-    /// let result = range_check_percent(&[x, y], 1024, 1024, 1.0); // 1% tolerance
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 0, 0, 0, 1]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn range_check_percent(
-        t: &[Tensor<i128>],
-        input_scale: usize,
-        output_scale: usize,
-        tol: f32,
-    ) -> Tensor<i128> {
-        // the more accurate calculation is commented out and we implement as below so it matches the steps in layout
-        let scale = input_scale * output_scale;
-        let diff: Tensor<i128> = sub(t).unwrap();
-        let recip = recip(&t[0], input_scale as f64, output_scale as f64);
-        let product = mult(&[diff, recip]).unwrap();
-        let _tol = ((tol / 100.0) * scale as f32).round() as f64;
-        let upper_bound = greater_than(&product, _tol);
-        let neg_product =
-            mult(&[product, Tensor::<i128>::new(Some(&[-1]), &[1]).unwrap()]).unwrap();
-        let lower_bound = greater_than(&neg_product, _tol);
-
-        add(&[upper_bound, lower_bound]).unwrap()
     }
 
     /// Elementwise applies square root to a tensor of integers.
@@ -3661,21 +1655,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::sqrt;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[4, 25, 8, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = sqrt(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 5, 3, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 5, 3, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sqrt(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn sqrt(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sqrt();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3689,21 +1684,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::rsqrt;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[4, 25, 8, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = rsqrt(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 0, 0, 1, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 0, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn rsqrt(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn rsqrt(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input / (kix.sqrt() + f64::EPSILON);
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3716,21 +1712,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::cos;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = cos(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(& [-1, 2, -1, 2, 2, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(& [-1, 2, -1, 2, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn cos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn cos(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.cos();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3743,21 +1740,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::acos;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = acos(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 0, 0, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 0, 0, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn acos(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn acos(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.acos();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3770,21 +1768,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::cosh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = cosh(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[27, 36002449669, 1490, 2, 2, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[27, 36002449669, 1490, 2, 2, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn cosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn cosh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.cosh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3797,21 +1796,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::acosh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = acosh(&x, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(& [2, 4, 3, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(& [2, 4, 3, 0, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn acosh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn acosh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.acosh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3824,21 +1824,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::sin;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = sin(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sin(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn sin(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sin();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3851,21 +1852,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::asin;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = asin(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(& [4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(& [4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn asin(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn asin(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.asin();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3878,21 +1880,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::sinh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = sinh(&x, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[7, 268337, 55, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[7, 268337, 55, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn sinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn sinh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sinh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3905,21 +1908,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::asinh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = asinh(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn asinh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn asinh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.asinh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3932,21 +1936,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::tan;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = tan(&x, 64.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 26, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 26, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn tan(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn tan(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.tan();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3959,21 +1964,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::atan;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[4, 25, 8, 1, 1, 0]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let result = atan(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn atan(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn atan(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.atan();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -3987,22 +1993,23 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::tanh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[4, 25, 8, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = tanh(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
 
-    pub fn tanh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn tanh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.tanh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -4016,22 +2023,23 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::atanh;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[4, 25, 8, 2, 2, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = atanh(&x, 32.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4, 34, 8, 2, 2, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 34, 8, 2, 2, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
 
-    pub fn atanh(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn atanh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.atanh();
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -4045,16 +2053,17 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::erffunc;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[5, 28, 9, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = erffunc(&x, 128.0);
-    /// let expected = Tensor::<i128>::new(Some(&[6, 31, 10, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[6, 31, 10, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn erffunc(a: &Tensor<i128>, scale_input: f64) -> Tensor<i128> {
+    pub fn erffunc(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         const NCOEF: usize = 28;
         const COF: [f64; 28] = [
             -1.3026537197817094,
@@ -4115,7 +2124,7 @@ pub mod nonlinearities {
             let kix = (a_i as f64) / scale_input;
             let fout = scale_input * erf(kix);
             let rounded = fout.round();
-            Ok::<_, TensorError>(rounded as i128)
+            Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
     }
@@ -4129,23 +2138,24 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::leakyrelu;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 15, 2, 1, 1, -5]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = leakyrelu(&x, 0.1);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, -1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 15, 2, 1, 1, -1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn leakyrelu(a: &Tensor<i128>, slope: f64) -> Tensor<i128> {
+    pub fn leakyrelu(a: &Tensor<IntegerRep>, slope: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let rounded = if a_i < 0 {
                 let d_inv_x = (slope) * (a_i as f64);
-                d_inv_x.round() as i128
+                d_inv_x.round() as IntegerRep
             } else {
                 let d_inv_x = a_i as f64;
-                d_inv_x.round() as i128
+                d_inv_x.round() as IntegerRep
             };
             Ok::<_, TensorError>(rounded)
         })
@@ -4159,23 +2169,24 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::max;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[2, 15, 2, 1, 1, -5]),
     ///   &[2, 3],
     /// ).unwrap();
     /// let result = max(&x, 1.0, 1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 15, 2, 1, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 15, 2, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn max(a: &Tensor<i128>, scale_input: f64, threshold: f64) -> Tensor<i128> {
+    pub fn max(a: &Tensor<IntegerRep>, scale_input: f64, threshold: f64) -> Tensor<IntegerRep> {
         // calculate value of output
         a.par_enum_map(|_, a_i| {
             let d_inv_x = (a_i as f64) / scale_input;
             let rounded = if d_inv_x <= threshold {
-                (threshold * scale_input).round() as i128
+                (threshold * scale_input).round() as IntegerRep
             } else {
-                (d_inv_x * scale_input).round() as i128
+                (d_inv_x * scale_input).round() as IntegerRep
             };
             Ok::<_, TensorError>(rounded)
         })
@@ -4189,23 +2200,24 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::min;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[2, 15, 2, 1, 1, -5]),
     ///   &[2, 3],
     /// ).unwrap();
     /// let result = min(&x, 1.0, 2.0);
-    /// let expected = Tensor::<i128>::new(Some(&[2, 2, 2, 1, 1, -5]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 2, 2, 1, 1, -5]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn min(a: &Tensor<i128>, scale_input: f64, threshold: f64) -> Tensor<i128> {
+    pub fn min(a: &Tensor<IntegerRep>, scale_input: f64, threshold: f64) -> Tensor<IntegerRep> {
         // calculate value of output
         a.par_enum_map(|_, a_i| {
             let d_inv_x = (a_i as f64) / scale_input;
             let rounded = if d_inv_x >= threshold {
-                (threshold * scale_input).round() as i128
+                (threshold * scale_input).round() as IntegerRep
             } else {
-                (d_inv_x * scale_input).round() as i128
+                (d_inv_x * scale_input).round() as IntegerRep
             };
             Ok::<_, TensorError>(rounded)
         })
@@ -4220,20 +2232,21 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::const_div;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     /// let result = const_div(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 4, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn const_div(a: &Tensor<i128>, denom: f64) -> Tensor<i128> {
+    pub fn const_div(a: &Tensor<IntegerRep>, denom: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let d_inv_x = (a_i as f64) / (denom);
-            Ok::<_, TensorError>(d_inv_x.round() as i128)
+            Ok::<_, TensorError>(d_inv_x.round() as IntegerRep)
         })
         .unwrap()
     }
@@ -4246,22 +2259,23 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::recip;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2_f64;
     /// let result = recip(&x, 1.0, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 1, 0, 2, 2]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn recip(a: &Tensor<i128>, input_scale: f64, out_scale: f64) -> Tensor<i128> {
+    pub fn recip(a: &Tensor<IntegerRep>, input_scale: f64, out_scale: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let rescaled = (a_i as f64) / input_scale;
             let denom = (1_f64) / (rescaled + f64::EPSILON);
             let d_inv_x = out_scale * denom;
-            Ok::<_, TensorError>(d_inv_x.round() as i128)
+            Ok::<_, TensorError>(d_inv_x.round() as IntegerRep)
         })
         .unwrap()
     }
@@ -4272,20 +2286,21 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::zero_recip;
     /// let k = 2_f64;
     /// let result = zero_recip(1.0);
-    /// let expected = Tensor::<i128>::new(Some(&[4503599627370496]), &[1]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4503599627370496]), &[1]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn zero_recip(out_scale: f64) -> Tensor<i128> {
-        let a = Tensor::<i128>::new(Some(&[0]), &[1]).unwrap();
+    pub fn zero_recip(out_scale: f64) -> Tensor<IntegerRep> {
+        let a = Tensor::<IntegerRep>::new(Some(&[0]), &[1]).unwrap();
 
         a.par_enum_map(|_, a_i| {
             let rescaled = a_i as f64;
             let denom = (1_f64) / (rescaled + f64::EPSILON);
             let d_inv_x = out_scale * denom;
-            Ok::<_, TensorError>(d_inv_x.round() as i128)
+            Ok::<_, TensorError>(d_inv_x.round() as IntegerRep)
         })
         .unwrap()
     }
@@ -4298,18 +2313,19 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::greater_than;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     /// let result = greater_than(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 0, 0, 1, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 1, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn greater_than(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) > 0_f64)))
+    pub fn greater_than(a: &Tensor<IntegerRep>, b: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(IntegerRep::from((a_i as f64 - b) > 0_f64)))
             .unwrap()
     }
 
@@ -4321,18 +2337,19 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::greater_than_equal;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 1, 2, 7, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     /// let result = greater_than_equal(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 0, 1, 1, 0, 0]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 1, 1, 0, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn greater_than_equal(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) >= 0_f64)))
+    pub fn greater_than_equal(a: &Tensor<IntegerRep>, b: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(IntegerRep::from((a_i as f64 - b) >= 0_f64)))
             .unwrap()
     }
 
@@ -4343,20 +2360,21 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::less_than;
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[2, 1, 2, 7, 1, 1]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     ///
     /// let result = less_than(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[0, 1, 0, 0, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 0, 0, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn less_than(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) < 0_f64)))
+    pub fn less_than(a: &Tensor<IntegerRep>, b: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(IntegerRep::from((a_i as f64 - b) < 0_f64)))
             .unwrap()
     }
 
@@ -4367,42 +2385,22 @@ pub mod nonlinearities {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::nonlinearities::less_than_equal;
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///    Some(&[2, 1, 2, 7, 1, 1]),
     ///  &[2, 3],
     /// ).unwrap();
     /// let k = 2.0;
     ///
     /// let result = less_than_equal(&x, k);
-    /// let expected = Tensor::<i128>::new(Some(&[1, 1, 1, 0, 1, 1]), &[2, 3]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 0, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-    pub fn less_than_equal(a: &Tensor<i128>, b: f64) -> Tensor<i128> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(i128::from((a_i as f64 - b) <= 0_f64)))
+    pub fn less_than_equal(a: &Tensor<IntegerRep>, b: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(IntegerRep::from((a_i as f64 - b) <= 0_f64)))
             .unwrap()
-    }
-
-    /// Takes the mean of a tensor
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::tensor::ops::nonlinearities::mean;
-    /// let x = Tensor::<i128>::new(
-    ///     Some(&[2, 1, 2, 7, 1, 1]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let result = mean(&x, 1);
-    /// let expected = Tensor::<i128>::new(Some(&[2]), &[1]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn mean(a: &Tensor<i128>, scale: usize) -> Tensor<i128> {
-        let sum = sum(a).unwrap();
-        const_div(&sum, (scale * a.len()) as f64)
     }
 }
 
@@ -4417,17 +2415,18 @@ pub mod accumulated {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::accumulated::dot;
     ///
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[5, 2]),
     ///     &[2],
     /// ).unwrap();
-    /// let y = Tensor::<i128>::new(
+    /// let y = Tensor::<IntegerRep>::new(
     ///     Some(&[5, 5]),
     ///     &[2],
     /// ).unwrap();
-    /// let expected = Tensor::<i128>::new(
+    /// let expected = Tensor::<IntegerRep>::new(
     ///     Some(&[25, 35]),
     ///     &[2],
     /// ).unwrap();
@@ -4466,13 +2465,14 @@ pub mod accumulated {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::accumulated::sum;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = sum(&x, 1).unwrap();
-    /// let expected = Tensor::<i128>::new(
+    /// let expected = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 17, 19, 20, 21, 21]),
     ///     &[6],
     /// ).unwrap();
@@ -4503,13 +2503,14 @@ pub mod accumulated {
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
     /// use ezkl::tensor::ops::accumulated::prod;
-    /// let x = Tensor::<i128>::new(
+    /// let x = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
     /// let result = prod(&x, 1).unwrap();
-    /// let expected = Tensor::<i128>::new(
+    /// let expected = Tensor::<IntegerRep>::new(
     ///     Some(&[2, 30, 60, 60, 60, 0]),
     ///     &[6],
     /// ).unwrap();

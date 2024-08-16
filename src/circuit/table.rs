@@ -1,4 +1,4 @@
-use std::{error::Error, marker::PhantomData};
+use std::marker::PhantomData;
 
 use halo2curves::ff::PrimeField;
 
@@ -11,19 +11,17 @@ use maybe_rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
     circuit::CircuitError,
-    fieldutils::i128_to_felt,
+    fieldutils::{integer_rep_to_felt, IntegerRep},
     tensor::{Tensor, TensorType},
 };
 
 use crate::circuit::lookup::LookupOp;
 
-use super::Op;
-
 /// The range of the lookup table.
-pub type Range = (i128, i128);
+pub type Range = (IntegerRep, IntegerRep);
 
 /// The safety factor for the range of the lookup table.
-pub const RANGE_MULTIPLIER: i128 = 2;
+pub const RANGE_MULTIPLIER: IntegerRep = 2;
 /// The safety factor offset for the number of rows in the lookup table.
 pub const RESERVED_BLINDING_ROWS_PAD: usize = 3;
 
@@ -109,22 +107,22 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
     /// get column index given input
     pub fn get_col_index(&self, input: F) -> F {
         //    range is split up into chunks of size col_size, find the chunk that input is in
-        let chunk =
-            (crate::fieldutils::felt_to_i128(input) - self.range.0).abs() / (self.col_size as i128);
+        let chunk = (crate::fieldutils::felt_to_integer_rep(input) - self.range.0).abs()
+            / (self.col_size as IntegerRep);
 
-        i128_to_felt(chunk)
+        integer_rep_to_felt(chunk)
     }
 
     /// get first_element of column
     pub fn get_first_element(&self, chunk: usize) -> (F, F) {
-        let chunk = chunk as i128;
+        let chunk = chunk as IntegerRep;
         // we index from 1 to prevent soundness issues
-        let first_element = i128_to_felt(chunk * (self.col_size as i128) + self.range.0);
-        let op_f = Op::<F>::f(
-            &self.nonlinearity,
-            &[Tensor::from(vec![first_element].into_iter())],
-        )
-        .unwrap();
+        let first_element =
+            integer_rep_to_felt(chunk * (self.col_size as IntegerRep) + self.range.0);
+        let op_f = self
+            .nonlinearity
+            .f(&[Tensor::from(vec![first_element].into_iter())])
+            .unwrap();
         (first_element, op_f.output[0])
     }
 
@@ -140,9 +138,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
 }
 
 ///
-pub fn num_cols_required(range_len: i128, col_size: usize) -> usize {
+pub fn num_cols_required(range_len: IntegerRep, col_size: usize) -> usize {
     // number of cols needed to store the range
-    (range_len / (col_size as i128)) as usize + 1
+    (range_len / (col_size as IntegerRep)) as usize + 1
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
@@ -204,9 +202,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         &mut self,
         layouter: &mut impl Layouter<F>,
         preassigned_input: bool,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<(), CircuitError> {
         if self.is_assigned {
-            return Err(Box::new(CircuitError::TableAlreadyAssigned));
+            return Err(CircuitError::TableAlreadyAssigned);
         }
 
         let smallest = self.range.0;
@@ -328,9 +326,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
 
     /// get first_element of column
     pub fn get_first_element(&self, chunk: usize) -> F {
-        let chunk = chunk as i128;
+        let chunk = chunk as IntegerRep;
         // we index from 1 to prevent soundness issues
-        i128_to_felt(chunk * (self.col_size as i128) + self.range.0)
+        integer_rep_to_felt(chunk * (self.col_size as IntegerRep) + self.range.0)
     }
 
     ///
@@ -346,10 +344,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
     /// get column index given input
     pub fn get_col_index(&self, input: F) -> F {
         //    range is split up into chunks of size col_size, find the chunk that input is in
-        let chunk =
-            (crate::fieldutils::felt_to_i128(input) - self.range.0).abs() / (self.col_size as i128);
+        let chunk = (crate::fieldutils::felt_to_integer_rep(input) - self.range.0).abs()
+            / (self.col_size as IntegerRep);
 
-        i128_to_felt(chunk)
+        integer_rep_to_felt(chunk)
     }
 }
 
@@ -395,9 +393,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
     }
 
     /// Assigns values to the constraints generated when calling `configure`.
-    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), Box<dyn Error>> {
+    pub fn layout(&mut self, layouter: &mut impl Layouter<F>) -> Result<(), CircuitError> {
         if self.is_assigned {
-            return Err(Box::new(CircuitError::TableAlreadyAssigned));
+            return Err(CircuitError::TableAlreadyAssigned);
         }
 
         let smallest = self.range.0;

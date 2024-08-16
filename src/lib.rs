@@ -24,13 +24,69 @@
 // we allow this for our dynamic range based indexing scheme
 #![allow(clippy::single_range_in_vec_init)]
 #![feature(buf_read_has_data_left)]
+#![feature(stmt_expr_attributes)]
+
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
+
+/// Error type
+#[derive(thiserror::Error, Debug)]
+#[allow(missing_docs)]
+pub enum EZKLError {
+    #[error("[aggregation] {0}")]
+    AggregationError(#[from] pfsys::evm::aggregation_kzg::AggregationError),
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[eth] {0}")]
+    EthError(#[from] eth::EthError),
+    #[error("[graph] {0}")]
+    GraphError(#[from] graph::errors::GraphError),
+    #[error("[pfsys] {0}")]
+    PfsysError(#[from] pfsys::errors::PfsysError),
+    #[error("[circuit] {0}")]
+    CircuitError(#[from] circuit::errors::CircuitError),
+    #[error("[tensor] {0}")]
+    TensorError(#[from] tensor::errors::TensorError),
+    #[error("[module] {0}")]
+    ModuleError(#[from] circuit::modules::errors::ModuleError),
+    #[error("[io] {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("[json] {0}")]
+    JsonError(#[from] serde_json::Error),
+    #[error("[utf8] {0}")]
+    Utf8Error(#[from] std::str::Utf8Error),
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[reqwest] {0}")]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("[fmt] {0}")]
+    FmtError(#[from] std::fmt::Error),
+    #[error("[halo2] {0}")]
+    Halo2Error(#[from] halo2_proofs::plonk::Error),
+    #[error("[Uncategorized] {0}")]
+    UncategorizedError(String),
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[error("[execute] {0}")]
+    ExecutionError(#[from] execute::ExecutionError),
+    #[error("[srs] {0}")]
+    SrsError(#[from] pfsys::srs::SrsError),
+}
+
+impl From<&str> for EZKLError {
+    fn from(s: &str) -> Self {
+        EZKLError::UncategorizedError(s.to_string())
+    }
+}
+
+impl From<String> for EZKLError {
+    fn from(s: String) -> Self {
+        EZKLError::UncategorizedError(s)
+    }
+}
 
 use std::str::FromStr;
 
 use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
+use fieldutils::IntegerRep;
 use graph::Visibility;
 use halo2_proofs::poly::{
     ipa::commitment::IPACommitmentScheme, kzg::commitment::KZGCommitmentScheme,
@@ -177,37 +233,37 @@ impl From<String> for Commitments {
 #[derive(Debug, Args, Deserialize, Serialize, Clone, PartialEq, PartialOrd, ToFlags)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
-    #[arg(short = 'T', long, default_value = "0")]
+    #[arg(short = 'T', long, default_value = "0", value_hint = clap::ValueHint::Other)]
     pub tolerance: Tolerance,
     /// The denominator in the fixed point representation used when quantizing inputs
-    #[arg(short = 'S', long, default_value = "7", allow_hyphen_values = true)]
+    #[arg(short = 'S', long, default_value = "7", value_hint = clap::ValueHint::Other)]
     pub input_scale: Scale,
     /// The denominator in the fixed point representation used when quantizing parameters
-    #[arg(long, default_value = "7", allow_hyphen_values = true)]
+    #[arg(long, default_value = "7", value_hint = clap::ValueHint::Other)]
     pub param_scale: Scale,
     /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
-    #[arg(long, default_value = "1")]
+    #[arg(long, default_value = "1",  value_hint = clap::ValueHint::Other)]
     pub scale_rebase_multiplier: u32,
     /// The min and max elements in the lookup table input column
-    #[arg(short = 'B', long, value_parser = parse_key_val::<i128, i128>, default_value = "-32768->32768")]
+    #[arg(short = 'B', long, value_parser = parse_key_val::<IntegerRep, IntegerRep>, default_value = "-32768->32768")]
     pub lookup_range: Range,
     /// The log_2 number of rows
-    #[arg(short = 'K', long, default_value = "17")]
+    #[arg(short = 'K', long, default_value = "17", value_hint = clap::ValueHint::Other)]
     pub logrows: u32,
     /// The log_2 number of rows
-    #[arg(short = 'N', long, default_value = "2")]
+    #[arg(short = 'N', long, default_value = "2", value_hint = clap::ValueHint::Other)]
     pub num_inner_cols: usize,
     /// Hand-written parser for graph variables, eg. batch_size=1
-    #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size->1", value_delimiter = ',')]
+    #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size->1", value_delimiter = ',', value_hint = clap::ValueHint::Other)]
     pub variables: Vec<(String, usize)>,
-    /// Flags whether inputs are public, private, hashed
-    #[arg(long, default_value = "private")]
+    /// Flags whether inputs are public, private, fixed, hashed, polycommit
+    #[arg(long, default_value = "private", value_hint = clap::ValueHint::Other)]
     pub input_visibility: Visibility,
-    /// Flags whether outputs are public, private, hashed
-    #[arg(long, default_value = "public")]
+    /// Flags whether outputs are public, private, fixed, hashed, polycommit
+    #[arg(long, default_value = "public", value_hint = clap::ValueHint::Other)]
     pub output_visibility: Visibility,
-    /// Flags whether params are public, private, hashed
-    #[arg(long, default_value = "private")]
+    /// Flags whether params are fixed, private, hashed, polycommit
+    #[arg(long, default_value = "private", value_hint = clap::ValueHint::Other)]
     pub param_visibility: Visibility,
     #[arg(long, default_value = "false")]
     /// Rebase the scale using lookup table for division instead of using a range check
@@ -216,10 +272,10 @@ pub struct RunArgs {
     #[arg(long, default_value = "false")]
     pub rebase_frac_zero_constants: bool,
     /// check mode (safe, unsafe, etc)
-    #[arg(long, default_value = "unsafe")]
+    #[arg(long, default_value = "unsafe", value_hint = clap::ValueHint::Other)]
     pub check_mode: CheckMode,
     /// commitment scheme
-    #[arg(long, default_value = "kzg")]
+    #[arg(long, default_value = "kzg", value_hint = clap::ValueHint::Other)]
     pub commitment: Option<Commitments>,
 }
 
@@ -247,7 +303,13 @@ impl Default for RunArgs {
 
 impl RunArgs {
     ///
-    pub fn validate(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.param_visibility == Visibility::Public {
+            return Err(
+                "params cannot be public instances, you are probably trying to use `fixed` or `kzgcommit`"
+                    .into(),
+            );
+        }
         if self.scale_rebase_multiplier < 1 {
             return Err("scale_rebase_multiplier must be >= 1".into());
         }

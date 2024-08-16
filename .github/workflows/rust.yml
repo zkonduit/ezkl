@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - name: Build
@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - name: Docs
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -73,7 +73,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -106,7 +106,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -139,7 +139,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -172,7 +172,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -189,7 +189,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -199,7 +199,7 @@ jobs:
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
       - name: Run wasm verifier tests
         # on mac:
         #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
@@ -212,7 +212,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -229,13 +229,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-nextest
           locked: true
+      # - name: The Worm Mock
+      #   run: cargo nextest run --release --verbose tests::large_mock_::large_tests_5_expects -- --include-ignored
       - name: public outputs and tolerance > 0
         run: cargo nextest run --release --verbose tests::mock_tolerance_public_outputs_ --test-threads 32
       - name: public outputs + batch size == 10
@@ -258,6 +260,8 @@ jobs:
         run: cargo nextest run --release --verbose tests::mock_hashed_input_::t  --test-threads 32
       - name: hashed params
         run: cargo nextest run --release --verbose tests::mock_hashed_params_::t  --test-threads 32
+      - name: hashed params public inputs
+        run: cargo nextest run --release --verbose tests::mock_hashed_params_public_inputs_::t  --test-threads 32
       - name: hashed outputs
         run: cargo nextest run --release --verbose tests::mock_hashed_output_::t  --test-threads 32
       - name: hashed inputs + params + outputs
@@ -286,7 +290,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -304,11 +308,11 @@ jobs:
           node-version: "18.12.1"
           cache: "pnpm"
       - name: "Add rust-src"
-        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
       - name: Install dependencies for js tests and in-browser-evm-verifier package
         run: |
-          pnpm install --no-frozen-lockfile
-          pnpm install --dir ./in-browser-evm-verifier --no-frozen-lockfile
+          pnpm install --frozen-lockfile
+          pnpm install --dir ./in-browser-evm-verifier --frozen-lockfile
         env:
           CI: false
           NODE_ENV: development
@@ -326,7 +330,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: KZG prove and verify tests (EVM + VK rendered seperately)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify_render_seperately_ --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg all)
@@ -341,6 +345,12 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_output_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs & outputs)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + on chain inputs & kzg outputs + params)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_kzg_output_kzg_params_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + on chain outputs & kzg inputs + params)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_output_kzg_input_kzg_params_prove_and_verify --test-threads 1
+      - name: KZG prove and verify tests (EVM + on chain all kzg)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_all_kzg_params_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs & outputs hashes)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_hashed_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM)
@@ -354,12 +364,12 @@ jobs:
 
   prove-and-verify-tests:
     runs-on: non-gpu
-    needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -367,7 +377,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
       - uses: actions/checkout@v3
       - name: Use pnpm 8
         uses: pnpm/action-setup@v2
@@ -380,7 +390,7 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies for js tests
         run: |
-          pnpm install --no-frozen-lockfile
+          pnpm install --frozen-lockfile
         env:
           CI: false
           NODE_ENV: development
@@ -394,14 +404,18 @@ jobs:
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+      - name: KZG prove and verify tests (public outputs + column overflow)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w
+      - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
+      - name: KZG prove and verify tests (hashed inputs + column overflow)
+        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_hashed_inputs_
       - name: KZG prove and verify tests (public outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_tight_lookup_::t
       - name: IPA prove and verify tests
         run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_::t --test-threads 1
       - name: IPA prove and verify tests (ipa outputs)
         run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_ipa_output
-      - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests single inner col
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_single_col
       - name: KZG prove and verify tests triple inner col
@@ -412,8 +426,6 @@ jobs:
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_octuple_col --test-threads 8
       - name: KZG prove and verify tests (kzg outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output
-      - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (public outputs)
         run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t
       - name: KZG prove and verify tests (public inputs)
@@ -431,11 +443,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-02-06-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
       - uses: actions/checkout@v3
       - uses: baptiste0928/cargo-install@v1
         with:
@@ -465,7 +477,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -483,7 +495,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -500,7 +512,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -517,7 +529,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -527,7 +539,7 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: KZG prove and verify aggr tests
         run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 4 -- --include-ignored
 
@@ -538,15 +550,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-nextest
           locked: true
-      - name: Download MNIST
-        run: sh data.sh
       - name: Examples
         run: cargo nextest run --release tests_examples
 
@@ -560,7 +570,7 @@ jobs:
           python-version: "3.12"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - name: Install cmake
@@ -570,11 +580,11 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       - name: Run pytest
-        run: source .env/bin/activate; pytest -vv
+        run: source .env/bin/activate; pip install pytest-asyncio; pytest -vv
 
   accuracy-measurement-tests:
     runs-on: ubuntu-latest-32-cores
@@ -586,7 +596,7 @@ jobs:
           python-version: "3.12"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -610,6 +620,24 @@ jobs:
 
   python-integration-tests:
     runs-on: large-self-hosted
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        env:
+          POSTGRES_USER: ubuntu
+          POSTGRES_HOST_AUTH_METHOD: trust
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          -v /var/run/postgresql:/var/run/postgresql
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
@@ -617,7 +645,7 @@ jobs:
           python-version: "3.11"
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-06
+          toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -627,13 +655,15 @@ jobs:
       - name: Install solc
         run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
-        run: cargo install --git https://github.com/foundry-rs/foundry --rev c2233ec9fe61e0920c61c6d779bc707252852037 --profile local --locked anvil --force
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: Install pip
         run: python -m ensurepip --upgrade
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt; python -m ensurepip --upgrade
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
+      - name: Postgres tutorials
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --no-capture
       - name: Tictactoe tutorials
         run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
       # - name: authenticate-kaggle-cli
@@ -651,5 +681,3 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
-      # - name: Postgres tutorials
-      #   run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --test-threads 1
