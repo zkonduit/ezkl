@@ -9,6 +9,7 @@ EZKL
 	<br>
 </h1>
 
+
 > Easy Zero-Knowledge Inference
 
 [![Test](https://github.com/zkonduit/ezkl/workflows/Rust/badge.svg)](https://github.com/zkonduit/ezkl/actions?query=workflow%3ARust)
