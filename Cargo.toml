@@ -215,4 +215,7 @@ halo2_proofs = { git = "https://github.com/zkonduit/halo2#098ac0ef3b29255e0e2524
 
 
 [profile.release]
-rustflags = ["-C", "relocation-model=pic"]
+rustflags = ["-C", "relocation-model=pic", "-C", "target-cpu=native"]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
