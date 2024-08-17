@@ -10,6 +10,12 @@ This Contributor License Agreement (this "**Agreement**" or "**CLA**") sets fort
 
 3. "**Work**" means any products owned or managed by Zkonduit.
 
+
+
+
+
+
+
 ## 2. Licenses.
 
 1. Copyright License. Subject to the terms and conditions of this Agreement, You hereby grant to Zkonduit, and to recipients and users of any software distributed by Zkonduit, a perpetual, worldwide, non-exclusive, transferable, no-charge, royalty-free, irrevocable copyright license, with the right to sublicense these rights to multiple tiers of sublicensees, to reproduce, prepare derivative works of, display, perform, sublicense, and distribute Your Contributions and such derivative works. 
