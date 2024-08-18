@@ -327,8 +327,8 @@ jobs:
           cd in-browser-evm-verifier
           pnpm build:commonjs
           cd ..
-      - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+      # - name: Install solc
+      #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: KZG prove and verify tests (EVM + VK rendered seperately)
@@ -536,8 +536,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+      # - name: Install solc
+      #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: KZG prove and verify aggr tests
@@ -575,8 +575,8 @@ jobs:
           components: rustfmt, clippy
       - name: Install cmake
         run: sudo apt-get install -y cmake
-      - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+      # - name: Install solc
+      #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Install Anvil
@@ -652,8 +652,8 @@ jobs:
         with:
           crate: cargo-nextest
           locked: true
-      - name: Install solc
-        run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+      # - name: Install solc
+      #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: Install pip
