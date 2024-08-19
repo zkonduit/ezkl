@@ -195,7 +195,7 @@ mv-lookup = [
     "snark-verifier/mv-lookup",
     "halo2_solidity_verifier/mv-lookup",
 ]
-asm = ["halo2_curves/asm"]
+asm = ["halo2curves/asm", "halo2_proofs/asm"]
 precompute-coset = ["halo2_proofs/precompute-coset"]
 det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
