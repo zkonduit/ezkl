@@ -18,6 +18,9 @@ use maybe_rayon::{
     slice::ParallelSliceMut,
 };
 use serde::{Deserialize, Serialize};
+use std::io::BufRead;
+use std::io::Write;
+use std::path::PathBuf;
 pub use val::*;
 pub use var::*;
 
@@ -41,6 +44,7 @@ use itertools::Itertools;
 use metal::{Device, MTLResourceOptions, MTLSize};
 use std::error::Error;
 use std::fmt::Debug;
+use std::io::Read;
 use std::iter::Iterator;
 use std::ops::{Add, Deref, DerefMut, Div, Mul, Neg, Range, Sub};
 use std::{cmp::max, ops::Rem};
@@ -406,6 +410,45 @@ impl<'data, T: Clone + TensorType + std::marker::Send + std::marker::Sync>
     type Item = &'data mut T;
     fn par_iter_mut(&'data mut self) -> Self::Iter {
         self.inner.par_iter_mut()
+    }
+}
+
+impl<T: Clone + TensorType + PrimeField> Tensor<T> {
+    /// save to a file
+    pub fn save(&self, path: &PathBuf) -> Result<(), TensorError> {
+        let writer =
+            std::fs::File::create(path).map_err(|e| TensorError::FileSaveError(e.to_string()))?;
+        let mut buf_writer = std::io::BufWriter::new(writer);
+
+        self.inner.iter().map(|x| x.clone()).for_each(|x| {
+            let x = x.to_repr();
+            buf_writer.write_all(x.as_ref()).unwrap();
+        });
+
+        Ok(())
+    }
+
+    /// load from a file
+    pub fn load(path: &PathBuf) -> Result<Self, TensorError> {
+        let reader =
+            std::fs::File::open(path).map_err(|e| TensorError::FileLoadError(e.to_string()))?;
+        let mut buf_reader = std::io::BufReader::new(reader);
+
+        let mut inner = Vec::new();
+        while let Ok(true) = buf_reader.has_data_left() {
+            let mut repr = T::Repr::default();
+            match buf_reader.read_exact(repr.as_mut()) {
+                Ok(_) => {
+                    inner.push(T::from_repr(repr).unwrap());
+                }
+                Err(_) => {
+                    return Err(TensorError::FileLoadError(
+                        "Failed to read tensor".to_string(),
+                    ))
+                }
+            }
+        }
+        Ok(Tensor::new(Some(&inner), &[inner.len()]).unwrap())
     }
 }
 

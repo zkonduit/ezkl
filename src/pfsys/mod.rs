@@ -558,7 +558,8 @@ where
         + PrimeField
         + FromUniformBytes<64>
         + WithSmallOrderMulGroup<3>,
-    Scheme::Curve: Serialize + DeserializeOwned,
+    Scheme::Curve: Serialize + DeserializeOwned + SerdeObject,
+    Scheme::ParamsProver: Send + Sync,
 {
     let strategy = Strategy::new(params.verifier_params());
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);

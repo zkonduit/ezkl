@@ -135,6 +135,53 @@ impl LookupOp {
         (-range, range)
     }
 
+    /// as path
+    pub fn as_path(&self) -> String {
+        match self {
+            LookupOp::Abs => "abs".into(),
+            LookupOp::Ceil { scale } => format!("ceil_{}", scale),
+            LookupOp::Floor { scale } => format!("floor_{}", scale),
+            LookupOp::Round { scale } => format!("round_{}", scale),
+            LookupOp::RoundHalfToEven { scale } => format!("round_half_to_even_{}", scale),
+            LookupOp::Pow { scale, a } => format!("pow_{}_{}", scale, a),
+            LookupOp::KroneckerDelta => "kronecker_delta".into(),
+            LookupOp::Max { scale, a } => format!("max_{}_{}", scale, a),
+            LookupOp::Min { scale, a } => format!("min_{}_{}", scale, a),
+            LookupOp::Sign => "sign".into(),
+            LookupOp::LessThan { a } => format!("less_than_{}", a),
+            LookupOp::LessThanEqual { a } => format!("less_than_equal_{}", a),
+            LookupOp::GreaterThan { a } => format!("greater_than_{}", a),
+            LookupOp::GreaterThanEqual { a } => format!("greater_than_equal_{}", a),
+            LookupOp::Div { denom } => format!("div_{}", denom),
+            LookupOp::Cast { scale } => format!("cast_{}", scale),
+            LookupOp::Recip {
+                input_scale,
+                output_scale,
+            } => format!("recip_{}_{}", input_scale, output_scale),
+            LookupOp::ReLU => "relu".to_string(),
+            LookupOp::LeakyReLU { slope: a } => format!("leaky_relu_{}", a),
+            LookupOp::Sigmoid { scale } => format!("sigmoid_{}", scale),
+            LookupOp::Sqrt { scale } => format!("sqrt_{}", scale),
+            LookupOp::Rsqrt { scale } => format!("rsqrt_{}", scale),
+            LookupOp::Erf { scale } => format!("erf_{}", scale),
+            LookupOp::Exp { scale } => format!("exp_{}", scale),
+            LookupOp::Ln { scale } => format!("ln_{}", scale),
+            LookupOp::Cos { scale } => format!("cos_{}", scale),
+            LookupOp::ACos { scale } => format!("acos_{}", scale),
+            LookupOp::Cosh { scale } => format!("cosh_{}", scale),
+            LookupOp::ACosh { scale } => format!("acosh_{}", scale),
+            LookupOp::Sin { scale } => format!("sin_{}", scale),
+            LookupOp::ASin { scale } => format!("asin_{}", scale),
+            LookupOp::Sinh { scale } => format!("sinh_{}", scale),
+            LookupOp::ASinh { scale } => format!("asinh_{}", scale),
+            LookupOp::Tan { scale } => format!("tan_{}", scale),
+            LookupOp::ATan { scale } => format!("atan_{}", scale),
+            LookupOp::ATanh { scale } => format!("atanh_{}", scale),
+            LookupOp::Tanh { scale } => format!("tanh_{}", scale),
+            LookupOp::HardSwish { scale } => format!("hardswish_{}", scale),
+        }
+    }
+
     /// Matches a [Op] to an operation in the `tensor::ops` module.
     pub(crate) fn f<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
