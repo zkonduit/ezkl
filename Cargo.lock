@@ -2316,7 +2316,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#db0fbbe6ebb5cc9526e90eabc82a6dc81e1672e0?branch=ac/cache-lookup-commitments#db0fbbe6ebb5cc9526e90eabc82a6dc81e1672e0"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0"
 dependencies = [
  "bincode",
  "blake2b_simd",
@@ -2325,6 +2325,7 @@ dependencies = [
  "group",
  "halo2curves 0.7.0",
  "icicle",
+ "instant",
  "lazy_static",
  "log",
  "maybe-rayon",

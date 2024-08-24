@@ -19,7 +19,7 @@ halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/option
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "b753a832e92d5c86c5c997327a9cf9de86a18851", features = [
     "derive_serde"
 ] }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#db0fbbe6ebb5cc9526e90eabc82a6dc81e1672e0", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
 clap = { version = "4.5.3", features = ["derive"] }
@@ -213,7 +213,7 @@ no-update = []
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#db0fbbe6ebb5cc9526e90eabc82a6dc81e1672e0", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 
 [profile.release]
 rustflags = ["-C", "relocation-model=pic"]
