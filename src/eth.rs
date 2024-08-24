@@ -731,7 +731,7 @@ pub async fn verify_proof_with_data_attestation(
 
     for val in flattened_instances.clone() {
         let bytes = val.to_repr();
-        let u = U256::from_le_slice(bytes.as_slice());
+        let u = U256::from_le_slice(bytes.inner().as_slice());
         public_inputs.push(u);
     }
 
