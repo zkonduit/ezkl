@@ -1860,7 +1860,6 @@ name = "ezkl"
 version = "0.0.0"
 dependencies = [
  "alloy",
- "ark-std 0.3.0",
  "bincode",
  "chrono",
  "clap",

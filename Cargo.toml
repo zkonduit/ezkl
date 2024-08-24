@@ -40,7 +40,6 @@ snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = 
 halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", branch = "ac/update-h2-curves" }
 maybe-rayon = { version = "0.1.1", default_features = false }
 bincode = { version = "1.3.3", default_features = false }
-ark-std = { version = "^0.3.0", default-features = false }
 unzip-n = "0.1.2"
 num = "0.4.1"
 portable-atomic = "1.6.0"
