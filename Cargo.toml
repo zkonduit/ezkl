@@ -204,6 +204,7 @@ det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
 empty-cmd = []
 no-banner = []
+no-update = []
 
 
 # icicle patch to 0.1.0 if feature icicle is enabled
@@ -215,7 +216,7 @@ halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup
 
 [profile.release]
 rustflags = ["-C", "relocation-model=pic"]
-lto = "fat"
-codegen-units = 1
-panic = "abort"
+# lto = "fat"
+# codegen-units = 1
+# panic = "abort"
 
