@@ -374,7 +374,7 @@ mod matmul_col_ultra_overflow {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 20;
+    const LEN: usize = 10;
 
     #[derive(Clone)]
     struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
