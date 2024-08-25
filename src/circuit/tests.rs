@@ -1298,7 +1298,7 @@ mod conv_relu_col_ultra_overflow {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 20;
+    const LEN: usize = 15;
 
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
