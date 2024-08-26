@@ -15,8 +15,8 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
-halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/optional-selector-poly" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#098ac0ef3b29255e0e2524ecbb4e7e325ae6e7fd", package = "halo2_proofs" }
+halo2_gadgets = { git = "https://github.com/emirsoyturk/halo2", branch = "icicle-integration" }
+halo2_proofs = { git = "https://github.com/emirsoyturk/halo2", branch = "icicle-integration", package = "halo2_proofs" }
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "9fff22c", features = [
     "derive_serde",
 ] }
@@ -211,8 +211,7 @@ metal = ["dep:metal", "dep:objc"]
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#098ac0ef3b29255e0e2524ecbb4e7e325ae6e7fd", package = "halo2_proofs" }
-
+halo2_proofs = { git = "https://github.com/emirsoyturk/halo2", branch = "icicle-integration", package = "halo2_proofs" }
 
 [profile.release]
 rustflags = ["-C", "relocation-model=pic"]
