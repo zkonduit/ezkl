@@ -181,8 +181,13 @@ jobs:
           echo "target flag is: ${{ env.TARGET_FLAGS }}"
           echo "target dir is: ${{ env.TARGET_DIR }}"
 
-      - name: Build release binary
+      - name: Build release binary (no asm)
+        if: matrix.build != 'linux-gnu'
         run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
+
+      - name: Build release binary (asm)
+        if: matrix.build == 'linux-gnu'
+        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features asm
 
       - name: Strip release binary
         if: matrix.build != 'windows-msvc' && matrix.build != 'linux-aarch64'

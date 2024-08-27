@@ -16,34 +16,33 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/optional-selector-poly" }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#098ac0ef3b29255e0e2524ecbb4e7e325ae6e7fd", package = "halo2_proofs" }
-halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "9fff22c", features = [
-    "derive_serde",
+halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "b753a832e92d5c86c5c997327a9cf9de86a18851", features = [
+    "derive_serde"
 ] }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 rand = { version = "0.8", default_features = false }
 itertools = { version = "0.10.3", default_features = false }
 clap = { version = "4.5.3", features = ["derive"] }
-clap_complete = "4.5.2"
 serde = { version = "1.0.126", features = ["derive"], optional = true }
 serde_json = { version = "1.0.97", default_features = false, features = [
     "float_roundtrip",
     "raw_value",
 ], optional = true }
+clap_complete = "4.5.2"
 log = { version = "0.4.17", default_features = false, optional = true }
 thiserror = { version = "1.0.38", default_features = false }
 hex = { version = "0.4.3", default_features = false }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/chunked-mv-lookup", package = "ecc" }
-snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup", features = [
+snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup",  features = [
     "derive_serde",
 ] }
-halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", branch = "main" }
+halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", branch = "ac/update-h2-curves" }
 maybe-rayon = { version = "0.1.1", default_features = false }
 bincode = { version = "1.3.3", default_features = false }
 unzip-n = "0.1.2"
 num = "0.4.1"
 portable-atomic = "1.6.0"
 tosubcommand = { git = "https://github.com/zkonduit/enum_to_subcommand", package = "tosubcommand" }
-metal = { git = "https://github.com/gfx-rs/metal-rs", optional = true }
 semver = "1.0.22"
 
 # evm related deps
@@ -65,9 +64,9 @@ pg_bigdecimal = "0.1.5"
 lazy_static = "1.4.0"
 colored_json = { version = "3.0.1", default_features = false, optional = true }
 regex = { version = "1", default_features = false }
-tokio = { version = "1.35", default_features = false, features = [
+tokio = { version = "1.35.0", default_features = false, features = [
     "macros",
-    "rt-multi-thread"
+    "rt-multi-thread",
 ] }
 pyo3 = { version = "0.21.2", features = [
     "extension-module",
@@ -75,21 +74,23 @@ pyo3 = { version = "0.21.2", features = [
     "macros",
 ], default_features = false, optional = true }
 pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio/", branch="migration-pyo3-0.21", features = [
-    "attributes",
+  "attributes",
     "tokio-runtime",
 ], default_features = false, optional = true }
+
 pyo3-log = { version = "0.10.0", default_features = false, optional = true }
 tract-onnx = { git = "https://github.com/sonos/tract/", rev = "40c64319291184814d9fea5fdf4fa16f5a4f7116", default_features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
+metal = { git = "https://github.com/gfx-rs/metal-rs", optional = true }
 objc = { version = "0.2.4", optional = true }
-
+mimalloc = "0.1"
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
 colored = { version = "2.0.0", default_features = false, optional = true }
 env_logger = { version = "0.10.0", default_features = false, optional = true }
 chrono = "0.4.31"
 sha256 = "1.4.0"
-mimalloc = "0.1"
+
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["js"] }
@@ -178,7 +179,7 @@ required-features = ["ezkl"]
 
 [features]
 web = ["wasm-bindgen-rayon"]
-default = ["ezkl", "mv-lookup", "no-banner", "parallel-poly-read"]
+default = ["ezkl", "mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read"]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
 ezkl = [
@@ -198,21 +199,25 @@ mv-lookup = [
     "snark-verifier/mv-lookup",
     "halo2_solidity_verifier/mv-lookup",
 ]
-# precompute-coset = ["halo2_proofs/precompute-coset"]
+asm = ["halo2curves/asm", "halo2_proofs/asm"]
+precompute-coset = ["halo2_proofs/precompute-coset"]
 det-prove = []
 icicle = ["halo2_proofs/icicle_gpu"]
 empty-cmd = []
 no-banner = []
 no-update = []
-metal = ["dep:metal", "dep:objc"]
+
 
 # icicle patch to 0.1.0 if feature icicle is enabled
 [patch.'https://github.com/ingonyama-zk/icicle']
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#098ac0ef3b29255e0e2524ecbb4e7e325ae6e7fd", package = "halo2_proofs" }
-
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 
 [profile.release]
 rustflags = ["-C", "relocation-model=pic"]
+# lto = "fat"
+# codegen-units = 1
+# panic = "abort"
+
