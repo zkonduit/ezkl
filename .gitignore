@@ -1,6 +1,5 @@
 target
 pkg
-data
 *.csv
 !examples/notebooks/eth_price.csv
 *.ipynb_checkpoints

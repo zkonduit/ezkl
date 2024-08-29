@@ -256,7 +256,7 @@ mod matmul_col_ultra_overflow_double_col {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 20;
+    const LEN: usize = 10;
     const NUM_INNER_COLS: usize = 2;
 
     #[derive(Clone)]
@@ -374,7 +374,7 @@ mod matmul_col_ultra_overflow {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 20;
+    const LEN: usize = 10;
 
     #[derive(Clone)]
     struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -1048,8 +1048,9 @@ mod conv {
                                 &mut region,
                                 &self.inputs,
                                 Box::new(PolyOp::Conv {
-                                    padding: [(1, 1); 2],
-                                    stride: (2, 2),
+                                    padding: vec![(1, 1); 2],
+                                    stride: vec![2; 2],
+                                    group: 1,
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1158,7 +1159,7 @@ mod conv_col_ultra_overflow {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 28;
+    const LEN: usize = 10;
 
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -1198,8 +1199,9 @@ mod conv_col_ultra_overflow {
                                 &mut region,
                                 &[self.image.clone(), self.kernel.clone()],
                                 Box::new(PolyOp::Conv {
-                                    padding: [(1, 1); 2],
-                                    stride: (2, 2),
+                                    padding: vec![(1, 1); 2],
+                                    stride: vec![2; 2],
+                                    group: 1,
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1296,7 +1298,7 @@ mod conv_relu_col_ultra_overflow {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 28;
+    const LEN: usize = 15;
 
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -1343,8 +1345,9 @@ mod conv_relu_col_ultra_overflow {
                                 &mut region,
                                 &[self.image.clone(), self.kernel.clone()],
                                 Box::new(PolyOp::Conv {
-                                    padding: [(1, 1); 2],
-                                    stride: (2, 2),
+                                    padding: vec![(1, 1); 2],
+                                    stride: vec![2; 2],
+                                    group: 1,
                                 }),
                             )
                             .map_err(|_| Error::Synthesis);

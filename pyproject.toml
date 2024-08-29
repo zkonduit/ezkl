@@ -8,6 +8,7 @@ addopts = "-rfEX -p pytester --strict-markers"
 testpaths = [
     "tests/python/*_tests.py",
 ]
+asyncio_mode = "auto"
 
 [project]
 name = "ezkl"

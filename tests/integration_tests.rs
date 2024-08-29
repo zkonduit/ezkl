@@ -3,7 +3,7 @@
 mod native_tests {
 
     use ezkl::circuit::Tolerance;
-    use ezkl::fieldutils::{felt_to_i128, i128_to_felt};
+    use ezkl::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
@@ -183,12 +183,13 @@ mod native_tests {
 
     const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr_proof.json";
 
-    const LARGE_TESTS: [&str; 5] = [
+    const LARGE_TESTS: [&str; 6] = [
         "self_attention",
         "nanoGPT",
         "multihead_attention",
         "mobilenet",
         "mnist_gan",
+        "smallworm",
     ];
 
     const ACCURACY_CAL_TESTS: [&str; 6] = [
@@ -200,7 +201,7 @@ mod native_tests {
         "1l_tiny_div",
     ];
 
-    const TESTS: [&str; 92] = [
+    const TESTS: [&str; 94] = [
         "1l_mlp", //0
         "1l_slice",
         "1l_concat",
@@ -296,7 +297,9 @@ mod native_tests {
         "reducel1",
         "reducel2", // 89
         "1l_lppool",
-        "lstm_large", // 91
+        "lstm_large",  // 91
+        "lstm_medium", // 92
+        "lenet_5",     // 93
     ];
 
     const WASM_TESTS: [&str; 46] = [
@@ -535,7 +538,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=91 {
+            seq!(N in 0..=93 {
 
             #(#[test_case(TESTS[N])])*
             #[ignore]
@@ -623,7 +626,7 @@ mod native_tests {
             #(#[test_case(TESTS[N])])*
             fn mock_large_batch_public_outputs_(test: &str) {
                 // currently variable output rank is not supported in ONNX
-                if test != "gather_nd" && test != "lstm_large" {
+                if test != "gather_nd" && test != "lstm_large"  && test != "lstm_medium" {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
@@ -640,6 +643,15 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                 mock(path, test.to_string(), "public", "private", "private", 1, "resources", None, 0.0);
+                test_dir.close().unwrap();
+            }
+
+            #(#[test_case(TESTS[N])])*
+            fn mock_hashed_params_public_inputs_(test: &str) {
+                crate::native_tests::init_binary();
+                let test_dir = TempDir::new(test).unwrap();
+                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                mock(path, test.to_string(), "public", "hashed", "private", 1, "resources", None, 0.0);
                 test_dir.close().unwrap();
             }
 
@@ -899,7 +911,7 @@ mod native_tests {
             seq!(N in 0..=45 {
 
                 #(#[test_case(WASM_TESTS[N])])*
-                fn prove_and_verify_with_overflow_(test: &str) {
+                fn kzg_prove_and_verify_with_overflow_(test: &str) {
                     crate::native_tests::init_binary();
                     // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
@@ -908,11 +920,24 @@ mod native_tests {
                     prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testWasm", false);
-                    // test_dir.close().unwrap();
+                    test_dir.close().unwrap();
                 }
 
                 #(#[test_case(WASM_TESTS[N])])*
-                fn prove_and_verify_with_overflow_fixed_params_(test: &str) {
+                fn kzg_prove_and_verify_with_overflow_hashed_inputs_(test: &str) {
+                    crate::native_tests::init_binary();
+                    // crate::native_tests::init_wasm();
+                    let test_dir = TempDir::new(test).unwrap();
+                    env_logger::init();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    prove_and_verify(path, test.to_string(), "safe", "hashed", "private", "public", 1, None, true, "single", Commitments::KZG, 2);
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testWasm", false);
+                    test_dir.close().unwrap();
+                }
+
+                #(#[test_case(WASM_TESTS[N])])*
+                fn kzg_prove_and_verify_with_overflow_fixed_params_(test: &str) {
                     crate::native_tests::init_binary();
                     // crate::native_tests::init_wasm();
                     let test_dir = TempDir::new(test).unwrap();
@@ -926,7 +951,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=4 {
+            seq!(N in 0..=5 {
 
             #(#[test_case(LARGE_TESTS[N])])*
             #[ignore]
@@ -1001,7 +1026,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, hardfork);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private", "private");
                     // test_dir.close().unwrap();
                 }
 
@@ -1011,7 +1036,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public", "private");
                     // test_dir.close().unwrap();
                 }
 
@@ -1021,7 +1046,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "public", "public");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "public", "public", "private");
                     test_dir.close().unwrap();
                 }
 
@@ -1031,7 +1056,34 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed", "private");
+                    test_dir.close().unwrap();
+                }
+                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
+                fn kzg_evm_on_chain_input_kzg_output_kzg_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "polycommit", "polycommit");
+                    test_dir.close().unwrap();
+                }
+                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
+                fn kzg_evm_on_chain_output_kzg_input_kzg_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "polycommit", "public", "polycommit");
+                    test_dir.close().unwrap();
+                }
+                #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
+                fn kzg_evm_on_chain_all_kzg_params_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "file", "polycommit", "polycommit", "polycommit");
                     test_dir.close().unwrap();
                 }
             });
@@ -1360,7 +1412,7 @@ mod native_tests {
             let witness = witness.clone();
             let outputs = witness.outputs.clone();
 
-            // get values as i128
+            // get values as i64
             let output_perturbed_safe: Vec<Vec<halo2curves::bn256::Fr>> = outputs
                 .iter()
                 .map(|sv| {
@@ -1370,10 +1422,10 @@ mod native_tests {
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
                                 halo2curves::bn256::Fr::zero()
                             } else {
-                                i128_to_felt(
-                                    (felt_to_i128(*v) as f32
+                                integer_rep_to_felt(
+                                    (felt_to_integer_rep(*v) as f32
                                         * (rand::thread_rng().gen_range(-0.01..0.01) * tolerance))
-                                        as i128,
+                                        as IntegerRep,
                                 )
                             };
 
@@ -1383,7 +1435,7 @@ mod native_tests {
                 })
                 .collect::<Vec<_>>();
 
-            // get values as i128
+            // get values as i64
             let output_perturbed_bad: Vec<Vec<halo2curves::bn256::Fr>> = outputs
                 .iter()
                 .map(|sv| {
@@ -1393,10 +1445,10 @@ mod native_tests {
                             let perturbation = if v == &halo2curves::bn256::Fr::zero() {
                                 halo2curves::bn256::Fr::from(2)
                             } else {
-                                i128_to_felt(
-                                    (felt_to_i128(*v) as f32
+                                integer_rep_to_felt(
+                                    (felt_to_integer_rep(*v) as f32
                                         * (rand::thread_rng().gen_range(0.02..0.1) * tolerance))
-                                        as i128,
+                                        as IntegerRep,
                                 )
                             };
                             *v + perturbation
@@ -1800,6 +1852,18 @@ mod native_tests {
         let settings_arg = format!("{}/{}/settings.json", test_dir, example_name);
         let private_key = format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
 
+        // create encoded calldata
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "encode-evm-calldata",
+                "--proof-path",
+                &format!("{}/{}/aggr.pf", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+
+        assert!(status.success());
+
         let base_args = vec![
             "create-evm-verifier-aggr",
             "--vk-path",
@@ -2022,6 +2086,18 @@ mod native_tests {
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
         let settings_arg = format!("--settings-path={}", settings_path);
 
+        // create encoded calldata
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "encode-evm-calldata",
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+
+        assert!(status.success());
+
         // create the verifier
         let mut args = vec!["create-evm-verifier", "--vk-path", &vk_arg, &settings_arg];
 
@@ -2191,6 +2267,19 @@ mod native_tests {
 
         let deployed_addr_arg_vk = format!("--addr-vk={}", addr_vk);
 
+        // create encoded calldata
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "encode-evm-calldata",
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+                &deployed_addr_arg_vk,
+            ])
+            .status()
+            .expect("failed to execute process");
+
+        assert!(status.success());
+
         // now verify the proof
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
         let mut args = vec![
@@ -2240,12 +2329,13 @@ mod native_tests {
         output_source: &str,
         input_visibility: &str,
         output_visibility: &str,
+        param_visibility: &str,
     ) {
         gen_circuit_settings_and_witness(
             test_dir,
             example_name.clone(),
             input_visibility,
-            "private",
+            param_visibility,
             output_visibility,
             1,
             "resources",
@@ -2260,7 +2350,6 @@ mod native_tests {
 
         let model_path = format!("{}/{}/network.compiled", test_dir, example_name);
         let settings_path = format!("{}/{}/settings.json", test_dir, example_name);
-
         init_params(settings_path.clone().into());
 
         let data_path = format!("{}/{}/input.json", test_dir, example_name);
@@ -2271,62 +2360,6 @@ mod native_tests {
 
         let test_input_source = format!("--input-source={}", input_source);
         let test_output_source = format!("--output-source={}", output_source);
-
-        // load witness
-        let witness: GraphWitness = GraphWitness::from_path(witness_path.clone().into()).unwrap();
-        let mut input: GraphData = GraphData::from_path(data_path.clone().into()).unwrap();
-
-        if input_visibility == "hashed" {
-            let hashes = witness.processed_inputs.unwrap().poseidon_hash.unwrap();
-            input.input_data = DataSource::File(
-                hashes
-                    .iter()
-                    .map(|h| vec![FileSourceInner::Field(*h)])
-                    .collect(),
-            );
-        }
-        if output_visibility == "hashed" {
-            let hashes = witness.processed_outputs.unwrap().poseidon_hash.unwrap();
-            input.output_data = Some(DataSource::File(
-                hashes
-                    .iter()
-                    .map(|h| vec![FileSourceInner::Field(*h)])
-                    .collect(),
-            ));
-        } else {
-            input.output_data = Some(DataSource::File(
-                witness
-                    .pretty_elements
-                    .unwrap()
-                    .rescaled_outputs
-                    .iter()
-                    .map(|o| {
-                        o.iter()
-                            .map(|f| FileSourceInner::Float(f.parse().unwrap()))
-                            .collect()
-                    })
-                    .collect(),
-            ));
-        }
-
-        input.save(data_path.clone().into()).unwrap();
-
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "setup-test-evm-data",
-                "-D",
-                data_path.as_str(),
-                "-M",
-                &model_path,
-                "--test-data",
-                test_on_chain_data_path.as_str(),
-                rpc_arg.as_str(),
-                test_input_source.as_str(),
-                test_output_source.as_str(),
-            ])
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -2341,6 +2374,82 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        // generate the witness, passing the vk path to generate the necessary kzg commits
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "gen-witness",
+                "-D",
+                &data_path,
+                "-M",
+                &model_path,
+                "-O",
+                &witness_path,
+                "--vk-path",
+                &format!("{}/{}/key.vk", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
+
+        // load witness
+        let witness: GraphWitness = GraphWitness::from_path(witness_path.clone().into()).unwrap();
+        // print out the witness
+        println!("WITNESS: {:?}", witness);
+        let mut input: GraphData = GraphData::from_path(data_path.clone().into()).unwrap();
+        if input_source != "file" || output_source != "file" {
+            println!("on chain input");
+            if input_visibility == "hashed" {
+                let hashes = witness.processed_inputs.unwrap().poseidon_hash.unwrap();
+                input.input_data = DataSource::File(
+                    hashes
+                        .iter()
+                        .map(|h| vec![FileSourceInner::Field(*h)])
+                        .collect(),
+                );
+            }
+            if output_visibility == "hashed" {
+                let hashes = witness.processed_outputs.unwrap().poseidon_hash.unwrap();
+                input.output_data = Some(DataSource::File(
+                    hashes
+                        .iter()
+                        .map(|h| vec![FileSourceInner::Field(*h)])
+                        .collect(),
+                ));
+            } else {
+                input.output_data = Some(DataSource::File(
+                    witness
+                        .pretty_elements
+                        .unwrap()
+                        .rescaled_outputs
+                        .iter()
+                        .map(|o| {
+                            o.iter()
+                                .map(|f| FileSourceInner::Float(f.parse().unwrap()))
+                                .collect()
+                        })
+                        .collect(),
+                ));
+            }
+            input.save(data_path.clone().into()).unwrap();
+
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "setup-test-evm-data",
+                    "-D",
+                    data_path.as_str(),
+                    "-M",
+                    &model_path,
+                    "--test-data",
+                    test_on_chain_data_path.as_str(),
+                    rpc_arg.as_str(),
+                    test_input_source.as_str(),
+                    test_output_source.as_str(),
+                ])
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+        }
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args([
@@ -2361,6 +2470,18 @@ mod native_tests {
         let vk_arg = format!("{}/{}/key.vk", test_dir, example_name);
 
         let settings_arg = format!("--settings-path={}", settings_path);
+
+        // create encoded calldata
+        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            .args([
+                "encode-evm-calldata",
+                "--proof-path",
+                &format!("{}/{}/proof.pf", test_dir, example_name),
+            ])
+            .status()
+            .expect("failed to execute process");
+
+        assert!(status.success());
 
         // create the verifier
         let mut args = vec!["create-evm-verifier", "--vk-path", &vk_arg, &settings_arg];
@@ -2399,18 +2520,32 @@ mod native_tests {
 
         let sol_arg = format!("{}/{}/kzg.sol", test_dir, example_name);
 
+        let mut create_da_args = vec![
+            "create-evm-da",
+            &settings_arg,
+            "--sol-code-path",
+            sol_arg.as_str(),
+            "-W",
+            &witness_path,
+        ];
+
+        // if there is a on-chain source we add the data
+        if input_source != "file" || output_source != "file" {
+            create_da_args.push("-D");
+            create_da_args.push(test_on_chain_data_path.as_str());
+        }
+
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "create-evm-da",
-                &settings_arg,
-                "--sol-code-path",
-                sol_arg.as_str(),
-                "-D",
-                test_on_chain_data_path.as_str(),
-            ])
+            .args(&create_da_args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
+
+        let deploy_evm_data_path = if input_source != "file" || output_source != "file" {
+            test_on_chain_data_path.clone()
+        } else {
+            data_path.clone()
+        };
 
         let addr_path_da_arg = format!("--addr-path={}/{}/addr_da.txt", test_dir, example_name);
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2418,7 +2553,7 @@ mod native_tests {
                 "deploy-evm-da",
                 format!("--settings-path={}", settings_path).as_str(),
                 "-D",
-                test_on_chain_data_path.as_str(),
+                deploy_evm_data_path.as_str(),
                 "--sol-code-path",
                 sol_arg.as_str(),
                 rpc_arg.as_str(),
@@ -2456,40 +2591,42 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-        // Create a new set of test on chain data
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args([
-                "setup-test-evm-data",
+        // Create a new set of test on chain data only for the on-chain input source
+        if input_source != "file" || output_source != "file" {
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args([
+                    "setup-test-evm-data",
+                    "-D",
+                    data_path.as_str(),
+                    "-M",
+                    &model_path,
+                    "--test-data",
+                    test_on_chain_data_path.as_str(),
+                    rpc_arg.as_str(),
+                    test_input_source.as_str(),
+                    test_output_source.as_str(),
+                ])
+                .status()
+                .expect("failed to execute process");
+
+            assert!(status.success());
+
+            let deployed_addr_arg = format!("--addr={}", addr_da);
+
+            let args: Vec<&str> = vec![
+                "test-update-account-calls",
+                deployed_addr_arg.as_str(),
                 "-D",
-                data_path.as_str(),
-                "-M",
-                &model_path,
-                "--test-data",
                 test_on_chain_data_path.as_str(),
                 rpc_arg.as_str(),
-                test_input_source.as_str(),
-                test_output_source.as_str(),
-            ])
-            .status()
-            .expect("failed to execute process");
+            ];
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args(&args)
+                .status()
+                .expect("failed to execute process");
 
-        assert!(status.success());
-
-        let deployed_addr_arg = format!("--addr={}", addr_da);
-
-        let args = vec![
-            "test-update-account-calls",
-            deployed_addr_arg.as_str(),
-            "-D",
-            test_on_chain_data_path.as_str(),
-            rpc_arg.as_str(),
-        ];
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(&args)
-            .status()
-            .expect("failed to execute process");
-
-        assert!(status.success());
+            assert!(status.success());
+        }
         // As sanity check, add example that should fail.
         let args = vec![
             "verify-evm",

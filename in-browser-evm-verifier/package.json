@@ -1,6 +1,6 @@
 {
   "name": "@ezkljs/verify",
-  "version": "0.0.0",
+  "version": "v10.4.2",
   "publishConfig": {
     "access": "public"
   },
@@ -20,16 +20,16 @@
     "build": "npm run clean && npm run build:commonjs && npm run build:esm"
   },
   "dependencies": {
-    "@ethereumjs/common": "^4.0.0",
-    "@ethereumjs/evm": "^2.0.0",
-    "@ethereumjs/statemanager": "^2.0.0",
-    "@ethereumjs/tx": "^5.0.0",
-    "@ethereumjs/util": "^9.0.0",
-    "@ethereumjs/vm": "^7.0.0",
-    "@ethersproject/abi": "^5.7.0",
-    "@ezkljs/engine": "^9.4.4",
-    "ethers": "^6.7.1",
-    "json-bigint": "^1.0.0"
+    "@ethereumjs/common": "4.0.0",
+    "@ethereumjs/evm": "2.0.0",
+    "@ethereumjs/statemanager": "2.0.0",
+    "@ethereumjs/tx": "5.0.0",
+    "@ethereumjs/util": "9.0.0",
+    "@ethereumjs/vm": "7.0.0",
+    "@ethersproject/abi": "5.7.0",
+    "@ezkljs/engine": "10.4.2",
+    "ethers": "6.7.1",
+    "json-bigint": "1.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.8.3",

@@ -1,40 +1,52 @@
-use crate::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
-use crate::circuit::modules::poseidon::PoseidonChip;
-use crate::circuit::modules::Module;
-use crate::fieldutils::felt_to_i128;
-use crate::fieldutils::i128_to_felt;
-use crate::graph::modules::POSEIDON_LEN_GRAPH;
-use crate::graph::quantize_float;
-use crate::graph::scale_to_multiplier;
-use crate::graph::{GraphCircuit, GraphSettings};
-use crate::pfsys::create_proof_circuit;
-use crate::pfsys::evm::aggregation_kzg::AggregationCircuit;
-use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
-use crate::pfsys::verify_proof_circuit;
-use crate::pfsys::TranscriptType;
-use crate::tensor::TensorType;
-use crate::CheckMode;
-use crate::Commitments;
+use crate::{
+    circuit::{
+        modules::{
+            polycommit::PolyCommitChip,
+            poseidon::{
+                spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
+                PoseidonChip,
+            },
+            Module,
+        },
+        region::RegionSettings,
+    },
+    fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
+    graph::{
+        modules::POSEIDON_LEN_GRAPH, quantize_float, scale_to_multiplier, GraphCircuit,
+        GraphSettings,
+    },
+    pfsys::{
+        create_proof_circuit,
+        evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript},
+        verify_proof_circuit, TranscriptType,
+    },
+    tensor::TensorType,
+    CheckMode, Commitments,
+};
 use console_error_panic_hook;
-use halo2_proofs::plonk::*;
-use halo2_proofs::poly::commitment::{CommitmentScheme, ParamsProver};
-use halo2_proofs::poly::ipa::multiopen::{ProverIPA, VerifierIPA};
-use halo2_proofs::poly::ipa::{
-    commitment::{IPACommitmentScheme, ParamsIPA},
-    strategy::SingleStrategy as IPASingleStrategy,
+use halo2_proofs::{
+    plonk::*,
+    poly::{
+        commitment::{CommitmentScheme, ParamsProver},
+        ipa::{
+            commitment::{IPACommitmentScheme, ParamsIPA},
+            multiopen::{ProverIPA, VerifierIPA},
+            strategy::SingleStrategy as IPASingleStrategy,
+        },
+        kzg::{
+            commitment::{KZGCommitmentScheme, ParamsKZG},
+            multiopen::{ProverSHPLONK, VerifierSHPLONK},
+            strategy::SingleStrategy as KZGSingleStrategy,
+        },
+        VerificationStrategy,
+    },
 };
-use halo2_proofs::poly::kzg::multiopen::ProverSHPLONK;
-use halo2_proofs::poly::kzg::multiopen::VerifierSHPLONK;
-use halo2_proofs::poly::kzg::{
-    commitment::{KZGCommitmentScheme, ParamsKZG},
-    strategy::SingleStrategy as KZGSingleStrategy,
-};
-use halo2_proofs::poly::VerificationStrategy;
 use halo2_solidity_verifier::encode_calldata;
-use halo2curves::bn256::{Bn256, Fr, G1Affine};
-use halo2curves::ff::{FromUniformBytes, PrimeField};
-use snark_verifier::loader::native::NativeLoader;
-use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
+use halo2curves::{
+    bn256::{Bn256, Fr, G1Affine},
+    ff::{FromUniformBytes, PrimeField},
+};
+use snark_verifier::{loader::native::NativeLoader, system::halo2::transcript::evm::EvmTranscript};
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_console_logger::DEFAULT_LOGGER;
@@ -112,7 +124,7 @@ pub fn feltToInt(
     let felt: Fr = serde_json::from_slice(&array[..])
         .map_err(|e| JsError::new(&format!("Failed to deserialize field element: {}", e)))?;
     Ok(wasm_bindgen::Clamped(
-        serde_json::to_vec(&felt_to_i128(felt))
+        serde_json::to_vec(&felt_to_integer_rep(felt))
             .map_err(|e| JsError::new(&format!("Failed to serialize integer: {}", e)))?,
     ))
 }
@@ -126,7 +138,7 @@ pub fn feltToFloat(
 ) -> Result<f64, JsError> {
     let felt: Fr = serde_json::from_slice(&array[..])
         .map_err(|e| JsError::new(&format!("Failed to deserialize field element: {}", e)))?;
-    let int_rep = felt_to_i128(felt);
+    let int_rep = felt_to_integer_rep(felt);
     let multiplier = scale_to_multiplier(scale);
     Ok(int_rep as f64 / multiplier)
 }
@@ -140,11 +152,49 @@ pub fn floatToFelt(
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
     let int_rep =
         quantize_float(&input, 0.0, scale).map_err(|e| JsError::new(&format!("{}", e)))?;
-    let felt = i128_to_felt(int_rep);
+    let felt = integer_rep_to_felt(int_rep);
     let vec = crate::pfsys::field_to_string::<halo2curves::bn256::Fr>(&felt);
     Ok(wasm_bindgen::Clamped(serde_json::to_vec(&vec).map_err(
         |e| JsError::new(&format!("Failed to serialize a float to felt{}", e)),
     )?))
+}
+
+/// Generate a kzg commitment.
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn kzgCommit(
+    message: wasm_bindgen::Clamped<Vec<u8>>,
+    vk: wasm_bindgen::Clamped<Vec<u8>>,
+    settings: wasm_bindgen::Clamped<Vec<u8>>,
+    params_ser: wasm_bindgen::Clamped<Vec<u8>>,
+) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
+    let message: Vec<Fr> = serde_json::from_slice(&message[..])
+        .map_err(|e| JsError::new(&format!("Failed to deserialize message: {}", e)))?;
+
+    let mut reader = std::io::BufReader::new(&params_ser[..]);
+    let params: ParamsKZG<Bn256> =
+        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
+            .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
+
+    let mut reader = std::io::BufReader::new(&vk[..]);
+    let circuit_settings: GraphSettings = serde_json::from_slice(&settings[..])
+        .map_err(|e| JsError::new(&format!("Failed to deserialize settings: {}", e)))?;
+    let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
+        &mut reader,
+        halo2_proofs::SerdeFormat::RawBytes,
+        circuit_settings,
+    )
+    .map_err(|e| JsError::new(&format!("Failed to deserialize vk: {}", e)))?;
+
+    let output = PolyCommitChip::commit::<KZGCommitmentScheme<Bn256>>(
+        message,
+        (vk.cs().blinding_factors() + 1) as u32,
+        &params,
+    );
+
+    Ok(wasm_bindgen::Clamped(
+        serde_json::to_vec(&output).map_err(|e| JsError::new(&format!("{}", e)))?,
+    ))
 }
 
 /// Converts a buffer to vector of 4 u64s representing a fixed point field element
@@ -236,7 +286,7 @@ pub fn genWitness(
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let witness = circuit
-        .forward::<KZGCommitmentScheme<Bn256>>(&mut input, None, None, false)
+        .forward::<KZGCommitmentScheme<Bn256>>(&mut input, None, None, RegionSettings::all_false())
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     serde_json::to_vec(&witness)

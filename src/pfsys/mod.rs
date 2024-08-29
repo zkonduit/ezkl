@@ -4,6 +4,11 @@ pub mod evm;
 /// SRS generation, processing, verification and downloading
 pub mod srs;
 
+/// errors related to pfsys
+pub mod errors;
+
+pub use errors::PfsysError;
+
 use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
 use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
@@ -32,7 +37,6 @@ use serde::{Deserialize, Serialize};
 use snark_verifier::loader::native::NativeLoader;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use snark_verifier::verifier::plonk::PlonkProtocol;
-use std::error::Error;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Cursor, Write};
 use std::ops::Deref;
@@ -364,24 +368,28 @@ where
     }
 
     /// Saves the Proof to a specified `proof_path`.
-    pub fn save(&self, proof_path: &PathBuf) -> Result<(), Box<dyn Error>> {
-        let file = std::fs::File::create(proof_path)?;
+    pub fn save(&self, proof_path: &PathBuf) -> Result<(), PfsysError> {
+        let file = std::fs::File::create(proof_path)
+            .map_err(|e| PfsysError::SaveProof(format!("{}", e)))?;
         let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, file);
-        serde_json::to_writer(&mut writer, &self)?;
+        serde_json::to_writer(&mut writer, &self)
+            .map_err(|e| PfsysError::SaveProof(format!("{}", e)))?;
         Ok(())
     }
 
     /// Load a json serialized proof from the provided path.
     pub fn load<Scheme: CommitmentScheme<Curve = C, Scalar = F>>(
         proof_path: &PathBuf,
-    ) -> Result<Self, Box<dyn Error>>
+    ) -> Result<Self, PfsysError>
     where
         <C as CurveAffine>::ScalarExt: FromUniformBytes<64>,
     {
         trace!("reading proof");
-        let file = std::fs::File::open(proof_path)?;
+        let file =
+            std::fs::File::open(proof_path).map_err(|e| PfsysError::LoadProof(format!("{}", e)))?;
         let reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
-        let proof: Self = serde_json::from_reader(reader)?;
+        let proof: Self =
+            serde_json::from_reader(reader).map_err(|e| PfsysError::LoadProof(format!("{}", e)))?;
         Ok(proof)
     }
 }
@@ -541,7 +549,7 @@ pub fn create_proof_circuit<
     transcript_type: TranscriptType,
     split: Option<ProofSplitCommit>,
     protocol: Option<PlonkProtocol<Scheme::Curve>>,
-) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
+) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, PfsysError>
 where
     Scheme::ParamsVerifier: 'params,
     Scheme::Scalar: Serialize
@@ -550,7 +558,8 @@ where
         + PrimeField
         + FromUniformBytes<64>
         + WithSmallOrderMulGroup<3>,
-    Scheme::Curve: Serialize + DeserializeOwned,
+    Scheme::Curve: Serialize + DeserializeOwned + SerdeObject,
+    Scheme::ParamsProver: Send + Sync,
 {
     let strategy = Strategy::new(params.verifier_params());
     let mut transcript = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
@@ -626,7 +635,35 @@ pub fn swap_proof_commitments<
 >(
     snark: &Snark<Scheme::Scalar, Scheme::Curve>,
     commitments: &[Scheme::Curve],
-) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, Box<dyn Error>>
+) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, PfsysError>
+where
+    Scheme::Scalar: SerdeObject
+        + PrimeField
+        + FromUniformBytes<64>
+        + WithSmallOrderMulGroup<3>
+        + Ord
+        + Serialize
+        + DeserializeOwned,
+    Scheme::Curve: Serialize + DeserializeOwned,
+{
+    let proof_first_bytes = get_proof_commitments::<Scheme, E, TW>(commitments)?;
+
+    let mut snark_new = snark.clone();
+    // swap the proof bytes for the new ones
+    snark_new.proof[..proof_first_bytes.len()].copy_from_slice(&proof_first_bytes);
+    snark_new.create_hex_proof();
+
+    Ok(snark_new)
+}
+
+/// Returns the bytes encoded proof commitments
+pub fn get_proof_commitments<
+    Scheme: CommitmentScheme,
+    E: EncodedChallenge<Scheme::Curve>,
+    TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
+>(
+    commitments: &[Scheme::Curve],
+) -> Result<Vec<u8>, PfsysError>
 where
     Scheme::Scalar: SerdeObject
         + PrimeField
@@ -639,28 +676,27 @@ where
 {
     let mut transcript_new: TW = TranscriptWriterBuffer::<_, Scheme::Curve, _>::init(vec![]);
 
-    // polycommit commitments are the first set of points in the proof, this we'll always be the first set of advice
+    // polycommit commitments are the first set of points in the proof, this will always be the first set of advice
     for commit in commitments {
         transcript_new
             .write_point(*commit)
-            .map_err(|_| "failed to write point")?;
+            .map_err(|e| PfsysError::WritePoint(format!("{}", e)))?;
     }
 
     let proof_first_bytes = transcript_new.finalize();
 
-    let mut snark_new = snark.clone();
-    // swap the proof bytes for the new ones
-    snark_new.proof[..proof_first_bytes.len()].copy_from_slice(&proof_first_bytes);
-    snark_new.create_hex_proof();
+    if commitments.is_empty() {
+        log::warn!("no commitments found in witness");
+    }
 
-    Ok(snark_new)
+    Ok(proof_first_bytes)
 }
 
 /// Swap the proof commitments to a new set in the proof for KZG
 pub fn swap_proof_commitments_polycommit(
     snark: &Snark<Fr, G1Affine>,
     commitments: &[G1Affine],
-) -> Result<Snark<Fr, G1Affine>, Box<dyn Error>> {
+) -> Result<Snark<Fr, G1Affine>, PfsysError> {
     let proof = match snark.commitment {
         Some(Commitments::KZG) => match snark.transcript_type {
             TranscriptType::EVM => swap_proof_commitments::<
@@ -687,7 +723,7 @@ pub fn swap_proof_commitments_polycommit(
             >(snark, commitments)?,
         },
         None => {
-            return Err("commitment scheme not found".into());
+            return Err(PfsysError::InvalidCommitmentScheme);
         }
     };
 
@@ -734,22 +770,22 @@ where
 pub fn load_vk<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     path: PathBuf,
     params: <C as Circuit<Scheme::Scalar>>::Params,
-) -> Result<VerifyingKey<Scheme::Curve>, Box<dyn Error>>
+) -> Result<VerifyingKey<Scheme::Curve>, PfsysError>
 where
     C: Circuit<Scheme::Scalar>,
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
-    info!("loading verification key from {:?}", path);
-    let f =
-        File::open(path.clone()).map_err(|_| format!("failed to load vk at {}", path.display()))?;
+    debug!("loading verification key from {:?}", path);
+    let f = File::open(path.clone()).map_err(|e| PfsysError::LoadVk(format!("{}", e)))?;
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     let vk = VerifyingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
         serde_format_from_str(&EZKL_KEY_FORMAT),
         params,
-    )?;
-    info!("done loading verification key ✅");
+    )
+    .map_err(|e| PfsysError::LoadVk(format!("{}", e)))?;
+    info!("loaded verification key ✅");
     Ok(vk)
 }
 
@@ -757,22 +793,22 @@ where
 pub fn load_pk<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     path: PathBuf,
     params: <C as Circuit<Scheme::Scalar>>::Params,
-) -> Result<ProvingKey<Scheme::Curve>, Box<dyn Error>>
+) -> Result<ProvingKey<Scheme::Curve>, PfsysError>
 where
     C: Circuit<Scheme::Scalar>,
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
-    info!("loading proving key from {:?}", path);
-    let f =
-        File::open(path.clone()).map_err(|_| format!("failed to load pk at {}", path.display()))?;
+    debug!("loading proving key from {:?}", path);
+    let f = File::open(path.clone()).map_err(|e| PfsysError::LoadPk(format!("{}", e)))?;
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     let pk = ProvingKey::<Scheme::Curve>::read::<_, C>(
         &mut reader,
         serde_format_from_str(&EZKL_KEY_FORMAT),
         params,
-    )?;
-    info!("done loading proving key ✅");
+    )
+    .map_err(|e| PfsysError::LoadPk(format!("{}", e)))?;
+    info!("loaded proving key ✅");
     Ok(pk)
 }
 
@@ -784,7 +820,7 @@ pub fn save_pk<C: SerdeObject + CurveAffine>(
 where
     C::ScalarExt: FromUniformBytes<64> + SerdeObject,
 {
-    info!("saving proving key 💾");
+    debug!("saving proving key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     pk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
@@ -801,7 +837,7 @@ pub fn save_vk<C: CurveAffine + SerdeObject>(
 where
     C::ScalarExt: FromUniformBytes<64> + SerdeObject,
 {
-    info!("saving verification key 💾");
+    debug!("saving verification key 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     vk.write(&mut writer, serde_format_from_str(&EZKL_KEY_FORMAT))?;
@@ -815,7 +851,7 @@ pub fn save_params<Scheme: CommitmentScheme>(
     path: &PathBuf,
     params: &'_ Scheme::ParamsVerifier,
 ) -> Result<(), io::Error> {
-    info!("saving parameters 💾");
+    debug!("saving parameters 💾");
     let f = File::create(path)?;
     let mut writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
     params.write(&mut writer)?;

@@ -1,6 +1,5 @@
 use crate::{
     circuit::layouts,
-    fieldutils::{felt_to_i128, i128_to_felt},
     tensor::{self, Tensor, TensorError},
 };
 
@@ -32,8 +31,9 @@ pub enum PolyOp {
         equation: String,
     },
     Conv {
-        padding: [(usize, usize); 2],
-        stride: (usize, usize),
+        padding: Vec<(usize, usize)>,
+        stride: Vec<usize>,
+        group: usize,
     },
     Downsample {
         axis: usize,
@@ -41,9 +41,10 @@ pub enum PolyOp {
         modulo: usize,
     },
     DeConv {
-        padding: [(usize, usize); 2],
-        output_padding: (usize, usize),
-        stride: (usize, usize),
+        padding: Vec<(usize, usize)>,
+        output_padding: Vec<usize>,
+        stride: Vec<usize>,
+        group: usize,
     },
     Add,
     Sub,
@@ -58,7 +59,7 @@ pub enum PolyOp {
         destination: usize,
     },
     Flatten(Vec<usize>),
-    Pad([(usize, usize); 2]),
+    Pad(Vec<(usize, usize)>),
     Sum {
         axes: Vec<usize>,
     },
@@ -98,7 +99,8 @@ impl<
             + PartialOrd
             + std::hash::Hash
             + Serialize
-            + for<'de> Deserialize<'de>,
+            + for<'de> Deserialize<'de>
+            ,
     > Op<F> for PolyOp
 {
     /// Returns a reference to the Any trait.
@@ -141,15 +143,34 @@ impl<
             }
             PolyOp::Reshape(shape) => format!("RESHAPE (shape={:?})", shape),
             PolyOp::Flatten(_) => "FLATTEN".into(),
-            PolyOp::Pad(_) => "PAD".into(),
+            PolyOp::Pad(pads) => format!("PAD (pads={:?})", pads),
             PolyOp::Add => "ADD".into(),
             PolyOp::Mult => "MULT".into(),
             PolyOp::Sub => "SUB".into(),
             PolyOp::Sum { axes } => format!("SUM (axes={:?})", axes),
             PolyOp::Prod { .. } => "PROD".into(),
             PolyOp::Pow(_) => "POW".into(),
-            PolyOp::Conv { .. } => "CONV".into(),
-            PolyOp::DeConv { .. } => "DECONV".into(),
+            PolyOp::Conv {
+                stride,
+                padding,
+                group,
+            } => {
+                format!(
+                    "CONV (stride={:?}, padding={:?}, group={})",
+                    stride, padding, group
+                )
+            }
+            PolyOp::DeConv {
+                stride,
+                padding,
+                output_padding,
+                group,
+            } => {
+                format!(
+                    "DECONV (stride={:?}, padding={:?}, output_padding={:?}, group={})",
+                    stride, padding, output_padding, group
+                )
+            }
             PolyOp::Concat { axis } => format!("CONCAT (axis={})", axis),
             PolyOp::Slice { axis, start, end } => {
                 format!("SLICE (axis={}, start={}, end={})", axis, start, end)
@@ -163,156 +184,12 @@ impl<
         }
     }
 
-    /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, inputs: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        let mut inputs = inputs.to_vec();
-        let res = match &self {
-            PolyOp::MeanOfSquares { axes } => {
-                let x = inputs[0].map(|x| felt_to_i128(x));
-                Ok(tensor::ops::nonlinearities::mean_of_squares_axes(&x, axes).map(i128_to_felt))
-            }
-            PolyOp::MultiBroadcastTo { shape } => {
-                if 1 != inputs.len() {
-                    return Err(TensorError::DimMismatch(
-                        "multibroadcastto inputs".to_string(),
-                    ));
-                }
-                inputs[0].expand(shape)
-            }
-            PolyOp::And => tensor::ops::and(&inputs[0], &inputs[1]),
-            PolyOp::Or => tensor::ops::or(&inputs[0], &inputs[1]),
-            PolyOp::Xor => tensor::ops::xor(&inputs[0], &inputs[1]),
-            PolyOp::Not => tensor::ops::not(&inputs[0]),
-            PolyOp::Downsample {
-                axis,
-                stride,
-                modulo,
-            } => tensor::ops::downsample(&inputs[0], *axis, *stride, *modulo),
-            PolyOp::Resize { scale_factor } => tensor::ops::resize(&inputs[0], scale_factor),
-            PolyOp::Iff => tensor::ops::iff(&inputs[0], &inputs[1], &inputs[2]),
-            PolyOp::Einsum { equation } => tensor::ops::einsum(equation, &inputs),
-            PolyOp::Identity { .. } => Ok(inputs[0].clone()),
-            PolyOp::Reshape(new_dims) => {
-                let mut t = inputs[0].clone();
-                t.reshape(new_dims)?;
-                Ok(t)
-            }
-            PolyOp::MoveAxis {
-                source,
-                destination,
-            } => inputs[0].move_axis(*source, *destination),
-            PolyOp::Flatten(new_dims) => {
-                let mut t = inputs[0].clone();
-                t.reshape(new_dims)?;
-                Ok(t)
-            }
-            PolyOp::Pad(p) => {
-                if 1 != inputs.len() {
-                    return Err(TensorError::DimMismatch("pad inputs".to_string()));
-                }
-                tensor::ops::pad(&inputs[0], *p)
-            }
-            PolyOp::Add => tensor::ops::add(&inputs),
-            PolyOp::Neg => tensor::ops::neg(&inputs[0]),
-            PolyOp::Sub => tensor::ops::sub(&inputs),
-            PolyOp::Mult => tensor::ops::mult(&inputs),
-            PolyOp::Conv { padding, stride } => tensor::ops::conv(&inputs, *padding, *stride),
-            PolyOp::DeConv {
-                padding,
-                output_padding,
-                stride,
-            } => tensor::ops::deconv(&inputs, *padding, *output_padding, *stride),
-            PolyOp::Pow(u) => {
-                if 1 != inputs.len() {
-                    return Err(TensorError::DimMismatch("pow inputs".to_string()));
-                }
-                inputs[0].pow(*u)
-            }
-            PolyOp::Sum { axes } => {
-                if 1 != inputs.len() {
-                    return Err(TensorError::DimMismatch("sum inputs".to_string()));
-                }
-                tensor::ops::sum_axes(&inputs[0], axes)
-            }
-            PolyOp::Prod { axes, .. } => {
-                if 1 != inputs.len() {
-                    return Err(TensorError::DimMismatch("prod inputs".to_string()));
-                }
-                tensor::ops::prod_axes(&inputs[0], axes)
-            }
-            PolyOp::Concat { axis } => {
-                tensor::ops::concat(&inputs.iter().collect::<Vec<_>>(), *axis)
-            }
-            PolyOp::Slice { axis, start, end } => {
-                if 1 != inputs.len() {
-                    return Err(TensorError::DimMismatch("slice inputs".to_string()));
-                }
-                tensor::ops::slice(&inputs[0], axis, start, end)
-            }
-            PolyOp::GatherElements { dim, constant_idx } => {
-                let x = inputs[0].clone();
-                let y = if let Some(idx) = constant_idx {
-                    idx.clone()
-                } else {
-                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
-                };
-                tensor::ops::gather_elements(&x, &y, *dim)
-            }
-            PolyOp::GatherND {
-                indices,
-                batch_dims,
-            } => {
-                let x = inputs[0].clone();
-                let y = if let Some(idx) = indices {
-                    idx.clone()
-                } else {
-                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
-                };
-                tensor::ops::gather_nd(&x, &y, *batch_dims)
-            }
-            PolyOp::ScatterElements { dim, constant_idx } => {
-                let x = inputs[0].clone();
-
-                let idx = if let Some(idx) = constant_idx {
-                    idx.clone()
-                } else {
-                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
-                };
-
-                let src = if constant_idx.is_some() {
-                    inputs[1].clone()
-                } else {
-                    inputs[2].clone()
-                };
-                tensor::ops::scatter(&x, &idx, &src, *dim)
-            }
-
-            PolyOp::ScatterND { constant_idx } => {
-                let x = inputs[0].clone();
-                let idx = if let Some(idx) = constant_idx {
-                    idx.clone()
-                } else {
-                    inputs[1].clone().map(|x| felt_to_i128(x) as usize)
-                };
-                let src = if constant_idx.is_some() {
-                    inputs[1].clone()
-                } else {
-                    inputs[2].clone()
-                };
-                tensor::ops::scatter_nd(&x, &idx, &src)
-            }
-            PolyOp::Trilu { upper, k } => tensor::ops::trilu(&inputs[0], *k, *upper),
-        }?;
-
-        Ok(ForwardResult { output: res })
-    }
-
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
             PolyOp::MultiBroadcastTo { shape } => {
                 layouts::expand(config, region, values[..].try_into()?, shape)?
@@ -345,9 +222,18 @@ impl<
             PolyOp::Prod { axes, .. } => {
                 layouts::prod_axes(config, region, values[..].try_into()?, axes)?
             }
-            PolyOp::Conv { padding, stride } => {
-                layouts::conv(config, region, values[..].try_into()?, *padding, *stride)?
-            }
+            PolyOp::Conv {
+                padding,
+                stride,
+                group,
+            } => layouts::conv(
+                config,
+                region,
+                values[..].try_into()?,
+                padding,
+                stride,
+                *group,
+            )?,
             PolyOp::GatherElements { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
                     tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
@@ -394,13 +280,15 @@ impl<
                 padding,
                 output_padding,
                 stride,
+                group,
             } => layouts::deconv(
                 config,
                 region,
                 values[..].try_into()?,
-                *padding,
-                *output_padding,
-                *stride,
+                padding,
+                output_padding,
+                stride,
+                *group,
             )?,
             PolyOp::Add => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Add)?,
             PolyOp::Sub => layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Sub)?,
@@ -411,12 +299,13 @@ impl<
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
             PolyOp::Pad(p) => {
                 if values.len() != 1 {
-                    return Err(Box::new(TensorError::DimError(
+                    return Err(TensorError::DimError(
                         "Pad operation requires a single input".to_string(),
-                    )));
+                    )
+                    .into());
                 }
                 let mut input = values[0].clone();
-                input.pad(*p)?;
+                input.pad(p.clone(), 0)?;
                 input
             }
             PolyOp::Pow(exp) => layouts::pow(config, region, values[..].try_into()?, *exp)?,
@@ -430,7 +319,7 @@ impl<
         }))
     }
 
-    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         let scale = match self {
             PolyOp::MeanOfSquares { .. } => 2 * in_scales[0],
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,

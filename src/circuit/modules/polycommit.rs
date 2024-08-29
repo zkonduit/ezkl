@@ -18,6 +18,7 @@ use halo2curves::CurveAffine;
 use crate::circuit::region::ConstantsMap;
 use crate::tensor::{Tensor, ValTensor, ValType, VarTensor};
 
+use super::errors::ModuleError;
 use super::Module;
 
 /// The number of instance columns used by the PolyCommit hash function
@@ -44,12 +45,11 @@ impl PolyCommitChip {
     /// Commit to the message using the KZG commitment scheme
     pub fn commit<Scheme: CommitmentScheme<Scalar = Fp, Curve = G1Affine>>(
         message: Vec<Scheme::Scalar>,
-        degree: u32,
         num_unusable_rows: u32,
         params: &Scheme::ParamsProver,
     ) -> Vec<G1Affine> {
         let k = params.k();
-        let domain = halo2_proofs::poly::EvaluationDomain::new(degree, k);
+        let domain = halo2_proofs::poly::EvaluationDomain::new(2, k);
         let n = 2_u64.pow(k) - num_unusable_rows as u64;
         let num_poly = (message.len() / n as usize) + 1;
         let mut poly = vec![domain.empty_lagrange(); num_poly];
@@ -111,7 +111,7 @@ impl Module<Fp> for PolyCommitChip {
         _: &mut impl Layouter<Fp>,
         _: &[ValTensor<Fp>],
         _: &mut ConstantsMap<Fp>,
-    ) -> Result<Self::InputAssignments, Error> {
+    ) -> Result<Self::InputAssignments, ModuleError> {
         Ok(())
     }
 
@@ -124,28 +124,30 @@ impl Module<Fp> for PolyCommitChip {
         input: &[ValTensor<Fp>],
         _: usize,
         constants: &mut ConstantsMap<Fp>,
-    ) -> Result<ValTensor<Fp>, Error> {
+    ) -> Result<ValTensor<Fp>, ModuleError> {
         assert_eq!(input.len(), 1);
 
         let local_constants = constants.clone();
-        layouter.assign_region(
-            || "PolyCommit",
-            |mut region| {
-                let mut local_inner_constants = local_constants.clone();
-                let res = self.config.inputs.assign(
-                    &mut region,
-                    0,
-                    &input[0],
-                    &mut local_inner_constants,
-                )?;
-                *constants = local_inner_constants;
-                Ok(res)
-            },
-        )
+        layouter
+            .assign_region(
+                || "PolyCommit",
+                |mut region| {
+                    let mut local_inner_constants = local_constants.clone();
+                    let res = self.config.inputs.assign(
+                        &mut region,
+                        0,
+                        &input[0],
+                        &mut local_inner_constants,
+                    )?;
+                    *constants = local_inner_constants;
+                    Ok(res)
+                },
+            )
+            .map_err(|e| e.into())
     }
 
     ///
-    fn run(message: Vec<Fp>) -> Result<Vec<Vec<Fp>>, Box<dyn std::error::Error>> {
+    fn run(message: Vec<Fp>) -> Result<Vec<Vec<Fp>>, ModuleError> {
         Ok(vec![message])
     }
 

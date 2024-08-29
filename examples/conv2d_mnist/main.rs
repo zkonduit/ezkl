@@ -2,8 +2,7 @@ use ezkl::circuit::region::RegionCtx;
 use ezkl::circuit::{
     ops::lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode,
 };
-use ezkl::fieldutils;
-use ezkl::fieldutils::i32_to_felt;
+use ezkl::fieldutils::{self, integer_rep_to_felt, IntegerRep};
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::poly::commitment::Params;
@@ -42,8 +41,8 @@ const NUM_INNER_COLS: usize = 1;
 struct Config<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened //not supported yet in rust stable
     const CLASSES: usize,
-    const LOOKUP_MIN: i128,
-    const LOOKUP_MAX: i128,
+    const LOOKUP_MIN: IntegerRep,
+    const LOOKUP_MAX: IntegerRep,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -66,8 +65,8 @@ struct Config<
 struct MyCircuit<
     const LEN: usize, //LEN = CHOUT x OH x OW flattened
     const CLASSES: usize,
-    const LOOKUP_MIN: i128,
-    const LOOKUP_MAX: i128,
+    const LOOKUP_MIN: IntegerRep,
+    const LOOKUP_MAX: IntegerRep,
     // Convolution
     const KERNEL_HEIGHT: usize,
     const KERNEL_WIDTH: usize,
@@ -90,8 +89,8 @@ struct MyCircuit<
 impl<
         const LEN: usize,
         const CLASSES: usize,
-        const LOOKUP_MIN: i128,
-        const LOOKUP_MAX: i128,
+        const LOOKUP_MIN: IntegerRep,
+        const LOOKUP_MAX: IntegerRep,
         // Convolution
         const KERNEL_HEIGHT: usize,
         const KERNEL_WIDTH: usize,
@@ -203,8 +202,9 @@ where
                     let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
 
                     let op = PolyOp::Conv {
-                        padding: [(PADDING, PADDING); 2],
-                        stride: (STRIDE, STRIDE),
+                        padding: vec![(PADDING, PADDING); 2],
+                        stride: vec![STRIDE; 2],
+                        group: 1,
                     };
                     let x = config
                         .layer_config
@@ -308,13 +308,18 @@ pub fn runconv() {
         tst_lbl: _,
         ..
     } = MnistBuilder::new()
+        .base_path("examples/data")
         .label_format_digit()
         .training_set_length(50_000)
         .validation_set_length(10_000)
         .test_set_length(10_000)
         .finalize();
 
-    let mut train_data = Tensor::from(trn_img.iter().map(|x| i32_to_felt::<F>(*x as i32 / 16)));
+    let mut train_data = Tensor::from(
+        trn_img
+            .iter()
+            .map(|x| integer_rep_to_felt::<F>(*x as IntegerRep / 16)),
+    );
     train_data.reshape(&[50_000, 28, 28]).unwrap();
 
     let mut train_labels = Tensor::from(trn_lbl.iter().map(|x| *x as f32));
@@ -342,8 +347,8 @@ pub fn runconv() {
             .map(|fl| {
                 let dx = fl * 32_f32;
                 let rounded = dx.round();
-                let integral: i32 = unsafe { rounded.to_int_unchecked() };
-                fieldutils::i32_to_felt(integral)
+                let integral: IntegerRep = unsafe { rounded.to_int_unchecked() };
+                fieldutils::integer_rep_to_felt(integral)
             }),
     );
 
@@ -354,7 +359,8 @@ pub fn runconv() {
 
     let l0_kernels = l0_kernels.try_into().unwrap();
 
-    let mut l0_bias = Tensor::<F>::from((0..OUT_CHANNELS).map(|_| fieldutils::i32_to_felt(0)));
+    let mut l0_bias =
+        Tensor::<F>::from((0..OUT_CHANNELS).map(|_| fieldutils::integer_rep_to_felt(0)));
     l0_bias.set_visibility(&ezkl::graph::Visibility::Private);
 
     let l0_bias = l0_bias.try_into().unwrap();
@@ -362,8 +368,8 @@ pub fn runconv() {
     let mut l2_biases = Tensor::<F>::from(myparams.biases.into_iter().map(|fl| {
         let dx = fl * 32_f32;
         let rounded = dx.round();
-        let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        fieldutils::i32_to_felt(integral)
+        let integral: IntegerRep = unsafe { rounded.to_int_unchecked() };
+        fieldutils::integer_rep_to_felt(integral)
     }));
     l2_biases.set_visibility(&ezkl::graph::Visibility::Private);
     l2_biases.reshape(&[l2_biases.len(), 1]).unwrap();
@@ -373,8 +379,8 @@ pub fn runconv() {
     let mut l2_weights = Tensor::<F>::from(myparams.weights.into_iter().flatten().map(|fl| {
         let dx = fl * 32_f32;
         let rounded = dx.round();
-        let integral: i32 = unsafe { rounded.to_int_unchecked() };
-        fieldutils::i32_to_felt(integral)
+        let integral: IntegerRep = unsafe { rounded.to_int_unchecked() };
+        fieldutils::integer_rep_to_felt(integral)
     }));
     l2_weights.set_visibility(&ezkl::graph::Visibility::Private);
     l2_weights.reshape(&[CLASSES, LEN]).unwrap();
@@ -400,13 +406,13 @@ pub fn runconv() {
         l2_params: [l2_weights, l2_biases],
     };
 
-    let public_input: Tensor<i32> = vec![
-        -25124i32, -19304, -16668, -4399, -6209, -4548, -2317, -8349, -6117, -23461,
+    let public_input: Tensor<IntegerRep> = vec![
+        -25124, -19304, -16668, -4399, -6209, -4548, -2317, -8349, -6117, -23461,
     ]
     .into_iter()
     .into();
 
-    let pi_inner: Tensor<F> = public_input.map(i32_to_felt::<F>);
+    let pi_inner: Tensor<F> = public_input.map(integer_rep_to_felt::<F>);
 
     println!("MOCK PROVING");
     let now = Instant::now();

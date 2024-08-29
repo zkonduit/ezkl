@@ -1,12 +1,12 @@
-use core::{iter::FilterMap, slice::Iter};
-
-use crate::circuit::region::ConstantsMap;
+use crate::{circuit::region::ConstantsMap, fieldutils::felt_to_integer_rep};
+use maybe_rayon::slice::Iter;
 
 use super::{
     ops::{intercalate_values, pad, resize},
     *,
 };
 use halo2_proofs::{arithmetic::Field, circuit::Cell, plonk::Instance};
+use maybe_rayon::iter::{FilterMap, IntoParallelIterator, ParallelIterator};
 
 pub(crate) fn create_constant_tensor<
     F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd,
@@ -52,6 +52,44 @@ pub enum ValType<F: PrimeField + TensorType + std::marker::Send + std::marker::S
     Constant(F),
     /// assigned constant
     AssignedConstant(AssignedCell<F, F>, F),
+}
+
+impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for IntegerRep {
+    fn from(val: ValType<F>) -> Self {
+        match val {
+            ValType::Value(v) => {
+                let mut output = 0;
+                let mut i = 0;
+                v.map(|y| {
+                    let e = felt_to_integer_rep(y);
+                    output = e;
+                    i += 1;
+                });
+                output
+            }
+            ValType::AssignedValue(v) => {
+                let mut output = 0;
+                let mut i = 0;
+                v.evaluate().map(|y| {
+                    let e = felt_to_integer_rep(y);
+                    output = e;
+                    i += 1;
+                });
+                output
+            }
+            ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                let mut output = 0;
+                let mut i = 0;
+                v.value().map(|y| {
+                    let e = felt_to_integer_rep(*y);
+                    output = e;
+                    i += 1;
+                });
+                output
+            }
+            ValType::Constant(v) => felt_to_integer_rep(v),
+        }
+    }
 }
 
 impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd> ValType<F> {
@@ -117,44 +155,6 @@ impl<F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + Partia
             ValType::PrevAssigned(v) => Some(v.clone()),
             ValType::AssignedConstant(v, _) => Some(v.clone()),
             _ => None,
-        }
-    }
-}
-
-impl<F: PrimeField + TensorType + PartialOrd> From<ValType<F>> for i32 {
-    fn from(val: ValType<F>) -> Self {
-        match val {
-            ValType::Value(v) => {
-                let mut output = 0_i32;
-                let mut i = 0;
-                v.map(|y| {
-                    let e = felt_to_i32(y);
-                    output = e;
-                    i += 1;
-                });
-                output
-            }
-            ValType::AssignedValue(v) => {
-                let mut output = 0_i32;
-                let mut i = 0;
-                v.evaluate().map(|y| {
-                    let e = felt_to_i32(y);
-                    output = e;
-                    i += 1;
-                });
-                output
-            }
-            ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
-                let mut output = 0_i32;
-                let mut i = 0;
-                v.value().map(|y| {
-                    let e = felt_to_i32(*y);
-                    output = e;
-                    i += 1;
-                });
-                output
-            }
-            ValType::Constant(v) => felt_to_i32(v),
         }
     }
 }
@@ -256,23 +256,23 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Vec<ValType<F>>> for ValTenso
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> TryFrom<Tensor<F>> for ValTensor<F> {
-    type Error = Box<dyn Error>;
-    fn try_from(t: Tensor<F>) -> Result<ValTensor<F>, Box<dyn Error>> {
+    type Error = TensorError;
+    fn try_from(t: Tensor<F>) -> Result<ValTensor<F>, TensorError> {
         let visibility = t.visibility.clone();
         let dims = t.dims().to_vec();
-        let inner = t.into_iter().map(|x| {
-            if let Some(vis) = &visibility {
-                match vis {
-                    Visibility::Fixed => Ok(ValType::Constant(x)),
-                    _ => {
-                        Ok(Value::known(x).into())
+        let inner = t
+            .into_iter()
+            .map(|x| {
+                if let Some(vis) = &visibility {
+                    match vis {
+                        Visibility::Fixed => Ok(ValType::Constant(x)),
+                        _ => Ok(Value::known(x).into()),
                     }
+                } else {
+                    Err(TensorError::UnsetVisibility)
                 }
-            }
-            else {
-                Err("visibility should be set to convert a tensor of field elements to a ValTensor.".into())
-            }
-        }).collect::<Result<Vec<_>, Box<dyn Error>>>()?;
+            })
+            .collect::<Result<Vec<_>, TensorError>>()?;
 
         let mut inner: Tensor<ValType<F>> = inner.into_iter().into();
         inner.reshape(&dims)?;
@@ -316,6 +316,12 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Tensor<AssignedCell<F, F>>> f
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
+    /// Allocate a new [ValTensor::Value] from the given [Tensor] of [i64].
+    pub fn from_integer_rep_tensor(t: Tensor<IntegerRep>) -> ValTensor<F> {
+        let inner = t.map(|x| ValType::Value(Value::known(integer_rep_to_felt(x))));
+        inner.into()
+    }
+
     /// Allocate a new [ValTensor::Instance] from the ConstraintSystem with the given tensor `dims`, optionally enabling `equality`.
     pub fn new_instance(
         cs: &mut ConstraintSystem<F>,
@@ -372,13 +378,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// reverse order of elements whilst preserving the shape
-    pub fn reverse(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn reverse(&mut self) -> Result<(), TensorError> {
         match self {
             ValTensor::Value { inner: v, .. } => {
                 v.reverse();
             }
             ValTensor::Instance { .. } => {
-                return Err(Box::new(TensorError::WrongMethod));
+                return Err(TensorError::WrongMethod);
             }
         };
         Ok(())
@@ -414,7 +420,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     ///
-    pub fn any_unknowns(&self) -> Result<bool, Box<dyn Error>> {
+    pub fn any_unknowns(&self) -> Result<bool, TensorError> {
         match self {
             ValTensor::Instance { .. } => Ok(true),
             _ => Ok(self.get_inner()?.iter().any(|&x| {
@@ -454,7 +460,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         &self,
     ) -> FilterMap<Iter<'_, ValType<F>>, fn(&ValType<F>) -> Option<(F, ValType<F>)>> {
         match self {
-            ValTensor::Value { inner, .. } => inner.iter().filter_map(|x| {
+            ValTensor::Value { inner, .. } => inner.par_iter().filter_map(|x| {
                 if let ValType::Constant(v) = x {
                     Some((*v, x.clone()))
                 } else {
@@ -485,7 +491,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// Fetch the underlying [Tensor] of field elements.
-    pub fn get_felt_evals(&self) -> Result<Tensor<F>, Box<dyn Error>> {
+    pub fn get_felt_evals(&self) -> Result<Tensor<F>, TensorError> {
         let mut felt_evals: Vec<F> = vec![];
         match self {
             ValTensor::Value {
@@ -498,7 +504,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                     }
                 });
             }
-            _ => return Err(Box::new(TensorError::WrongMethod)),
+            _ => return Err(TensorError::WrongMethod),
         };
 
         let mut res: Tensor<F> = felt_evals.into_iter().into();
@@ -515,9 +521,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// Calls `int_evals` on the inner tensor.
-    pub fn get_int_evals(&self) -> Result<Tensor<i128>, Box<dyn Error>> {
+    pub fn int_evals(&self) -> Result<Tensor<IntegerRep>, TensorError> {
         // finally convert to vector of integers
-        let mut integer_evals: Vec<i128> = vec![];
+        let mut integer_evals: Vec<IntegerRep> = vec![];
         match self {
             ValTensor::Value {
                 inner: v, dims: _, ..
@@ -525,25 +531,26 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 // we have to push to an externally created vector or else vaf.map() returns an evaluation wrapped in Value<> (which we don't want)
                 let _ = v.map(|vaf| match vaf {
                     ValType::Value(v) => v.map(|f| {
-                        integer_evals.push(crate::fieldutils::felt_to_i128(f));
+                        integer_evals.push(crate::fieldutils::felt_to_integer_rep(f));
                     }),
                     ValType::AssignedValue(v) => v.map(|f| {
-                        integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
+                        integer_evals.push(crate::fieldutils::felt_to_integer_rep(f.evaluate()));
                     }),
                     ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
                         v.value_field().map(|f| {
-                            integer_evals.push(crate::fieldutils::felt_to_i128(f.evaluate()));
+                            integer_evals
+                                .push(crate::fieldutils::felt_to_integer_rep(f.evaluate()));
                         })
                     }
                     ValType::Constant(v) => {
-                        integer_evals.push(crate::fieldutils::felt_to_i128(v));
+                        integer_evals.push(crate::fieldutils::felt_to_integer_rep(v));
                         Value::unknown()
                     }
                 });
             }
-            _ => return Err(Box::new(TensorError::WrongMethod)),
+            _ => return Err(TensorError::WrongMethod),
         };
-        let mut tensor: Tensor<i128> = integer_evals.into_iter().into();
+        let mut tensor: Tensor<IntegerRep> = integer_evals.into_iter().into();
         match tensor.reshape(self.dims()) {
             _ => {}
         };
@@ -552,7 +559,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// Calls `pad_to_zero_rem` on the inner tensor.
-    pub fn pad_to_zero_rem(&mut self, n: usize, pad: ValType<F>) -> Result<(), Box<dyn Error>> {
+    pub fn pad_to_zero_rem(&mut self, n: usize, pad: ValType<F>) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
@@ -561,14 +568,35 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
-                return Err(Box::new(TensorError::WrongMethod));
+                return Err(TensorError::WrongMethod);
             }
         };
         Ok(())
     }
 
     /// Calls `get_slice` on the inner tensor.
-    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<ValTensor<F>, Box<dyn Error>> {
+    pub fn last(&self) -> Result<ValTensor<F>, TensorError> {
+        let slice = match self {
+            ValTensor::Value {
+                inner: v,
+                dims: _,
+                scale,
+            } => {
+                let inner = v.last()?;
+                let dims = inner.dims().to_vec();
+                ValTensor::Value {
+                    inner,
+                    dims,
+                    scale: *scale,
+                }
+            }
+            _ => return Err(TensorError::WrongMethod),
+        };
+        Ok(slice)
+    }
+
+    /// Calls `get_slice` on the inner tensor.
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<ValTensor<F>, TensorError> {
         if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims() {
             return Ok(self.clone());
         }
@@ -586,13 +614,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                     scale: *scale,
                 }
             }
-            _ => return Err(Box::new(TensorError::WrongMethod)),
+            _ => return Err(TensorError::WrongMethod),
         };
         Ok(slice)
     }
 
     /// Calls `get_single_elem` on the inner tensor.
-    pub fn get_single_elem(&self, index: usize) -> Result<ValTensor<F>, Box<dyn Error>> {
+    pub fn get_single_elem(&self, index: usize) -> Result<ValTensor<F>, TensorError> {
         let slice = match self {
             ValTensor::Value {
                 inner: v,
@@ -606,7 +634,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                     scale: *scale,
                 }
             }
-            _ => return Err(Box::new(TensorError::WrongMethod)),
+            _ => return Err(TensorError::WrongMethod),
         };
         Ok(slice)
     }
@@ -642,7 +670,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         })
     }
     /// Calls `expand` on the inner tensor.
-    pub fn expand(&mut self, dims: &[usize]) -> Result<(), Box<dyn Error>> {
+    pub fn expand(&mut self, dims: &[usize]) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
@@ -651,14 +679,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
-                return Err(Box::new(TensorError::WrongMethod));
+                return Err(TensorError::WrongMethod);
             }
         };
         Ok(())
     }
 
     /// Calls `move_axis` on the inner tensor.
-    pub fn move_axis(&mut self, source: usize, destination: usize) -> Result<(), Box<dyn Error>> {
+    pub fn move_axis(&mut self, source: usize, destination: usize) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
@@ -667,14 +695,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
-                return Err(Box::new(TensorError::WrongMethod));
+                return Err(TensorError::WrongMethod);
             }
         };
         Ok(())
     }
 
     /// Sets the [ValTensor]'s shape.
-    pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), Box<dyn Error>> {
+    pub fn reshape(&mut self, new_dims: &[usize]) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
@@ -684,10 +712,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             }
             ValTensor::Instance { dims: d, idx, .. } => {
                 if d[*idx].iter().product::<usize>() != new_dims.iter().product::<usize>() {
-                    return Err(Box::new(TensorError::DimError(format!(
+                    return Err(TensorError::DimError(format!(
                         "Cannot reshape {:?} to {:?} as they have number of elements",
                         d[*idx], new_dims
-                    ))));
+                    )));
                 }
                 d[*idx] = new_dims.to_vec();
             }
@@ -696,12 +724,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// Sets the [ValTensor]'s shape.
-    pub fn slice(
-        &mut self,
-        axis: &usize,
-        start: &usize,
-        end: &usize,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn slice(&mut self, axis: &usize, start: &usize, end: &usize) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
@@ -710,7 +733,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
-                return Err(Box::new(TensorError::WrongMethod));
+                return Err(TensorError::WrongMethod);
             }
         };
         Ok(())
@@ -752,43 +775,72 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         Ok(())
     }
 
-    /// gets constants
-    pub fn get_const_zero_indices(&self) -> Result<Vec<usize>, TensorError> {
+    /// remove constant zero values constants
+    pub fn remove_const_zero_values(&mut self) {
         match self {
-            ValTensor::Value { inner: v, .. } => {
-                let mut indices = vec![];
-                for (i, e) in v.iter().enumerate() {
-                    if let ValType::Constant(r) = e {
-                        if *r == F::ZERO {
-                            indices.push(i);
+            ValTensor::Value { inner: v, dims, .. } => {
+                *v = v
+                    .clone()
+                    .into_par_iter()
+                    .filter_map(|e| {
+                        if let ValType::Constant(r) = e {
+                            if r == F::ZERO {
+                                return None;
+                            }
+                        } else if let ValType::AssignedConstant(_, r) = e {
+                            if r == F::ZERO {
+                                return None;
+                            }
                         }
-                    } else if let ValType::AssignedConstant(_, r) = e {
-                        if *r == F::ZERO {
-                            indices.push(i);
-                        }
-                    }
-                }
-                Ok(indices)
+                        Some(e)
+                    })
+                    .collect();
+                *dims = v.dims().to_vec();
             }
-            ValTensor::Instance { .. } => Ok(vec![]),
+            ValTensor::Instance { .. } => {}
         }
     }
 
     /// gets constants
-    pub fn get_const_indices(&self) -> Result<Vec<usize>, TensorError> {
+    pub fn get_const_zero_indices(&self) -> Vec<usize> {
         match self {
-            ValTensor::Value { inner: v, .. } => {
-                let mut indices = vec![];
-                for (i, e) in v.iter().enumerate() {
-                    if let ValType::Constant(_) = e {
-                        indices.push(i);
-                    } else if let ValType::AssignedConstant(_, _) = e {
-                        indices.push(i);
+            ValTensor::Value { inner: v, .. } => v
+                .par_iter()
+                .enumerate()
+                .filter_map(|(i, e)| {
+                    if let ValType::Constant(r) = e {
+                        if *r == F::ZERO {
+                            return Some(i);
+                        }
+                    } else if let ValType::AssignedConstant(_, r) = e {
+                        if *r == F::ZERO {
+                            return Some(i);
+                        }
                     }
-                }
-                Ok(indices)
-            }
-            ValTensor::Instance { .. } => Ok(vec![]),
+                    None
+                })
+                .collect(),
+            ValTensor::Instance { .. } => vec![],
+        }
+    }
+
+    /// gets constants
+    pub fn get_const_indices(&self) -> Vec<usize> {
+        match self {
+            ValTensor::Value { inner: v, .. } => v
+                .par_iter()
+                .enumerate()
+                .filter_map(|(i, e)| {
+                    if let ValType::Constant(_) = e {
+                        Some(i)
+                    } else if let ValType::AssignedConstant(_, _) = e {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            ValTensor::Instance { .. } => vec![],
         }
     }
 
@@ -873,13 +925,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         };
         Ok(())
     }
-    /// Calls `pad` on the inner [Tensor].
-    pub fn pad(&mut self, padding: [(usize, usize); 2]) -> Result<(), TensorError> {
+    /// Calls `pad_spatial_dims` on the inner [Tensor].
+    pub fn pad(&mut self, padding: Vec<(usize, usize)>, offset: usize) -> Result<(), TensorError> {
         match self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = pad(v, padding)?;
+                *v = pad(v, padding, offset)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
@@ -951,32 +1003,29 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
     /// A [String] representation of the [ValTensor] for display, for example in showing intermediate values in a computational graph.
     pub fn show(&self) -> String {
-        match self.clone() {
-            ValTensor::Value {
-                inner: v, dims: _, ..
-            } => {
-                let r: Tensor<i32> = v.map(|x| x.into());
-                if r.len() > 10 {
-                    let start = r[..5].to_vec();
-                    let end = r[r.len() - 5..].to_vec();
-                    // print the two split by ... in the middle
-                    format!(
-                        "[{} ... {}]",
-                        start.iter().map(|x| format!("{}", x)).join(", "),
-                        end.iter().map(|x| format!("{}", x)).join(", ")
-                    )
-                } else {
-                    format!("{:?}", r)
-                }
-            }
-            _ => "ValTensor not PrevAssigned".into(),
+        let r = match self.int_evals() {
+            Ok(v) => v,
+            Err(_) => return "ValTensor not PrevAssigned".into(),
+        };
+
+        if r.len() > 10 {
+            let start = r[..5].to_vec();
+            let end = r[r.len() - 5..].to_vec();
+            // print the two split by ... in the middle
+            format!(
+                "[{} ... {}]",
+                start.iter().map(|x| format!("{}", x)).join(", "),
+                end.iter().map(|x| format!("{}", x)).join(", ")
+            )
+        } else {
+            format!("{:?}", r)
         }
     }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// inverts the inner values
-    pub fn inverse(&self) -> Result<ValTensor<F>, Box<dyn Error>> {
+    pub fn inverse(&self) -> Result<ValTensor<F>, TensorError> {
         let mut cloned_self = self.clone();
 
         match &mut cloned_self {
@@ -994,7 +1043,7 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
-                return Err(Box::new(TensorError::WrongMethod));
+                return Err(TensorError::WrongMethod);
             }
         };
         Ok(cloned_self)

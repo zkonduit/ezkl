@@ -1,10 +1,10 @@
-use std::{any::Any, error::Error};
+use std::any::Any;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     graph::quantize_tensor,
-    tensor::{self, Tensor, TensorError, TensorType, ValTensor},
+    tensor::{self, Tensor, TensorType, ValTensor},
 };
 use halo2curves::ff::PrimeField;
 
@@ -14,6 +14,8 @@ use self::{lookup::LookupOp, region::RegionCtx};
 pub mod base;
 ///
 pub mod chip;
+///
+pub mod errors;
 ///
 pub mod hybrid;
 /// Layouts for specific functions (composed of base ops)
@@ -25,6 +27,8 @@ pub mod poly;
 ///
 pub mod region;
 
+pub use errors::CircuitError;
+
 /// A struct representing the result of a forward pass.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
@@ -35,8 +39,6 @@ pub struct ForwardResult<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
     std::fmt::Debug + Send + Sync + Any
 {
-    /// Matches a [Op] to an operation in the `tensor::ops` module.
-    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError>;
     /// Returns a string representation of the operation.
     fn as_string(&self) -> String;
 
@@ -46,10 +48,10 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>>;
+    ) -> Result<Option<ValTensor<F>>, CircuitError>;
 
     /// Returns the scale of the output of the operation.
-    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>>;
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError>;
 
     /// Do any of the inputs to this op require homogenous input scales?
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
@@ -71,33 +73,6 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
 
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any;
-
-    /// Safe mode output checl
-    fn safe_mode_check(
-        &self,
-        claimed_output: &ValTensor<F>,
-        original_values: &[ValTensor<F>],
-    ) -> Result<(), TensorError> {
-        let felt_evals = original_values
-            .iter()
-            .map(|v| {
-                let mut evals = v.get_felt_evals().map_err(|_| TensorError::FeltError)?;
-                evals.reshape(v.dims())?;
-                Ok(evals)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let ref_op: Tensor<F> = self.f(&felt_evals)?.output;
-
-        let mut output = claimed_output
-            .get_felt_evals()
-            .map_err(|_| TensorError::FeltError)?;
-        output.reshape(claimed_output.dims())?;
-
-        assert_eq!(output, ref_op);
-
-        Ok(())
-    }
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Clone for Box<dyn Op<F>> {
@@ -151,8 +126,8 @@ impl InputType {
                 *input = T::from_f64(f64_input).unwrap();
             }
             InputType::Int | InputType::TDim => {
-                let int_input = input.clone().to_i128().unwrap();
-                *input = T::from_i128(int_input).unwrap();
+                let int_input = input.clone().to_i64().unwrap();
+                *input = T::from_i64(int_input).unwrap();
             }
         }
     }
@@ -168,18 +143,12 @@ pub struct Input {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input {
-    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         Ok(self.scale)
     }
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-
-    fn f(&self, x: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        Ok(ForwardResult {
-            output: x[0].clone(),
-        })
     }
 
     fn as_string(&self) -> String {
@@ -191,7 +160,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         values: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
         let value = values[0].clone();
         if !value.all_prev_assigned() {
             match self.datum_type {
@@ -229,14 +198,11 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
 pub struct Unknown;
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Unknown {
-    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         Ok(0)
     }
     fn as_any(&self) -> &dyn Any {
         self
-    }
-    fn f(&self, _: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        Err(TensorError::WrongMethod)
     }
 
     fn as_string(&self) -> String {
@@ -247,8 +213,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Unknow
         _: &mut crate::circuit::BaseConfig<F>,
         _: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
-        Err(Box::new(super::CircuitError::UnsupportedOp))
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
+        Err(super::CircuitError::UnsupportedOp)
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
@@ -278,7 +244,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
         }
     }
     /// Rebase the scale of the constant
-    pub fn rebase_scale(&mut self, new_scale: crate::Scale) -> Result<(), Box<dyn Error>> {
+    pub fn rebase_scale(&mut self, new_scale: crate::Scale) -> Result<(), CircuitError> {
         let visibility = self.quantized_values.visibility().unwrap();
         self.quantized_values = quantize_tensor(self.raw_values.clone(), new_scale, &visibility)?;
         Ok(())
@@ -307,11 +273,6 @@ impl<
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn f(&self, _: &[Tensor<F>]) -> Result<ForwardResult<F>, TensorError> {
-        let output = self.quantized_values.clone();
-
-        Ok(ForwardResult { output })
-    }
 
     fn as_string(&self) -> String {
         format!("CONST (scale={})", self.quantized_values.scale().unwrap())
@@ -321,7 +282,7 @@ impl<
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
         _: &[ValTensor<F>],
-    ) -> Result<Option<ValTensor<F>>, Box<dyn Error>> {
+    ) -> Result<Option<ValTensor<F>>, CircuitError> {
         let value = if let Some(value) = &self.pre_assigned_val {
             value.clone()
         } else {
@@ -335,7 +296,7 @@ impl<
         Box::new(self.clone()) // Forward to the derive(Clone) impl
     }
 
-    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, Box<dyn Error>> {
+    fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         Ok(self.quantized_values.scale().unwrap())
     }
 

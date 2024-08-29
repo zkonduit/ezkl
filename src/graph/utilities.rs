@@ -1,5 +1,4 @@
-#[cfg(not(target_arch = "wasm32"))]
-use super::GraphError;
+use super::errors::GraphError;
 #[cfg(not(target_arch = "wasm32"))]
 use super::VarScales;
 use super::{Rescaled, SupportedOp, Visibility};
@@ -10,13 +9,13 @@ use crate::circuit::lookup::LookupOp;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::circuit::poly::PolyOp;
 use crate::circuit::Op;
+use crate::fieldutils::IntegerRep;
 use crate::tensor::{Tensor, TensorError, TensorType};
 use halo2curves::bn256::Fr as Fp;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
 #[cfg(not(target_arch = "wasm32"))]
 use log::{debug, warn};
-use std::error::Error;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
@@ -52,16 +51,20 @@ use tract_onnx::tract_hir::{
 /// * `dims` - the dimensionality of the resulting [Tensor].
 /// * `shift` - offset used in the fixed point representation.
 /// * `scale` - `2^scale` used in the fixed point representation.
-pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i128, TensorError> {
+pub fn quantize_float(
+    elem: &f64,
+    shift: f64,
+    scale: crate::Scale,
+) -> Result<IntegerRep, TensorError> {
     let mult = scale_to_multiplier(scale);
-    let max_value = ((i128::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
+    let max_value = ((IntegerRep::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
     if *elem > max_value {
         return Err(TensorError::SigBitTruncationError);
     }
 
     // we parallelize the quantization process as it seems to be quite slow at times
-    let scaled = (mult * *elem + shift).round() as i128;
+    let scaled = (mult * *elem + shift).round() as IntegerRep;
 
     Ok(scaled)
 }
@@ -72,7 +75,7 @@ pub fn quantize_float(elem: &f64, shift: f64, scale: crate::Scale) -> Result<i12
 /// * `scale` - `2^scale` used in the fixed point representation.
 /// * `shift` - offset used in the fixed point representation.
 pub fn dequantize(felt: Fp, scale: crate::Scale, shift: f64) -> f64 {
-    let int_rep = crate::fieldutils::felt_to_i128(felt);
+    let int_rep = crate::fieldutils::felt_to_integer_rep(felt);
     let multiplier = scale_to_multiplier(scale);
     int_rep as f64 / multiplier - shift
 }
@@ -87,12 +90,40 @@ pub fn multiplier_to_scale(mult: f64) -> crate::Scale {
     mult.log2().round() as crate::Scale
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+/// extract padding from a onnx node.
+pub fn extract_padding(
+    pool_spec: &PoolSpec,
+    num_dims: usize,
+) -> Result<Vec<(usize, usize)>, GraphError> {
+    let padding = match &pool_spec.padding {
+        PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
+            b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
+        }
+        PaddingSpec::Valid => vec![(0, 0); num_dims],
+        _ => {
+            return Err(GraphError::MissingParams("padding".to_string()));
+        }
+    };
+    Ok(padding)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+/// Extracts the strides from a onnx node.
+pub fn extract_strides(pool_spec: &PoolSpec) -> Result<Vec<usize>, GraphError> {
+    Ok(pool_spec
+        .strides
+        .clone()
+        .ok_or(GraphError::MissingParams("stride".to_string()))?
+        .to_vec())
+}
+
 /// Gets the shape of a onnx node's outlets.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn node_output_shapes(
     node: &OnnxNode<TypedFact, Box<dyn TypedOp>>,
     symbol_values: &SymbolValues,
-) -> Result<Vec<Vec<usize>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<Vec<usize>>, GraphError> {
     let mut shapes = Vec::new();
     let outputs = node.outputs.to_vec();
     for output in outputs {
@@ -109,7 +140,7 @@ use tract_onnx::prelude::SymbolValues;
 /// Extracts the raw values from a tensor.
 pub fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
-) -> Result<Tensor<f32>, Box<dyn std::error::Error>> {
+) -> Result<Tensor<f32>, GraphError> {
     use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
     let dt = input.datum_type();
@@ -194,20 +225,20 @@ pub fn extract_tensor_value(
             // Generally a shape or hyperparam
             let vec = input.as_slice::<tract_onnx::prelude::TDim>()?.to_vec();
 
-            let cast: Result<Vec<f32>, &str> = vec
+            let cast: Result<Vec<f32>, GraphError> = vec
                 .par_iter()
                 .map(|x| match x.to_i64() {
                     Ok(v) => Ok(v as f32),
                     Err(_) => match x.to_i64() {
                         Ok(v) => Ok(v as f32),
-                        Err(_) => Err("could not evaluate tdim"),
+                        Err(_) => Err(GraphError::UnsupportedDataType(0, "TDim".to_string())),
                     },
                 })
                 .collect();
 
             const_value = Tensor::<f32>::new(Some(&cast?), &dims)?;
         }
-        _ => return Err("unsupported data type".into()),
+        _ => return Err(GraphError::UnsupportedDataType(0, format!("{:?}", dt))),
     }
     const_value.reshape(&dims)?;
 
@@ -219,12 +250,12 @@ fn load_op<C: tract_onnx::prelude::Op + Clone>(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
     name: String,
-) -> Result<C, Box<dyn std::error::Error>> {
+) -> Result<C, GraphError> {
     // Extract the slope layer hyperparams
     let op: &C = match op.downcast_ref::<C>() {
         Some(b) => b,
         None => {
-            return Err(Box::new(GraphError::OpMismatch(idx, name)));
+            return Err(GraphError::OpMismatch(idx, name));
         }
     };
 
@@ -247,7 +278,7 @@ pub fn new_op_from_onnx(
     inputs: &mut [super::NodeType],
     symbol_values: &SymbolValues,
     rebase_frac_zero_constants: bool,
-) -> Result<(SupportedOp, Vec<usize>), Box<dyn std::error::Error>> {
+) -> Result<(SupportedOp, Vec<usize>), GraphError> {
     use tract_onnx::tract_core::ops::array::Trilu;
 
     use crate::circuit::InputType;
@@ -257,10 +288,12 @@ pub fn new_op_from_onnx(
         .flat_map(|x| x.out_scales())
         .collect::<Vec<_>>();
 
+    let input_dims = inputs.iter().flat_map(|x| x.out_dims()).collect::<Vec<_>>();
+
     let mut replace_const = |scale: crate::Scale,
                              index: usize,
                              default_op: SupportedOp|
-     -> Result<SupportedOp, Box<dyn std::error::Error>> {
+     -> Result<SupportedOp, GraphError> {
         let mut constant = inputs[index].opkind();
         let constant = constant.get_mutable_constant();
         if let Some(c) = constant {
@@ -285,19 +318,13 @@ pub fn new_op_from_onnx(
                 deleted_indices.push(1);
                 let raw_values = &c.raw_values;
                 if raw_values.len() != 1 {
-                    return Err(Box::new(GraphError::InvalidDims(
-                        idx,
-                        "shift left".to_string(),
-                    )));
+                    return Err(GraphError::InvalidDims(idx, "shift left".to_string()));
                 }
                 SupportedOp::Linear(PolyOp::Identity {
                     out_scale: Some(input_scales[0] - raw_values[0] as i32),
                 })
             } else {
-                return Err(Box::new(GraphError::OpMismatch(
-                    idx,
-                    "ShiftLeft".to_string(),
-                )));
+                return Err(GraphError::OpMismatch(idx, "ShiftLeft".to_string()));
             }
         }
         "ShiftRight" => {
@@ -307,28 +334,19 @@ pub fn new_op_from_onnx(
                 deleted_indices.push(1);
                 let raw_values = &c.raw_values;
                 if raw_values.len() != 1 {
-                    return Err(Box::new(GraphError::InvalidDims(
-                        idx,
-                        "shift right".to_string(),
-                    )));
+                    return Err(GraphError::InvalidDims(idx, "shift right".to_string()));
                 }
                 SupportedOp::Linear(PolyOp::Identity {
                     out_scale: Some(input_scales[0] + raw_values[0] as i32),
                 })
             } else {
-                return Err(Box::new(GraphError::OpMismatch(
-                    idx,
-                    "ShiftRight".to_string(),
-                )));
+                return Err(GraphError::OpMismatch(idx, "ShiftRight".to_string()));
             }
         }
         "MultiBroadcastTo" => {
-            let op = load_op::<MultiBroadcastTo>(node.op(), idx, node.op().name().to_string())?;
-            let shape = op.shape.clone();
-            let shape = shape
-                .iter()
-                .map(|x| x.to_usize())
-                .collect::<Result<Vec<_>, _>>()?;
+            let _op = load_op::<MultiBroadcastTo>(node.op(), idx, node.op().name().to_string())?;
+            let shapes = node_output_shapes(&node, symbol_values)?;
+            let shape = shapes[0].clone();
             SupportedOp::Linear(PolyOp::MultiBroadcastTo { shape })
         }
 
@@ -337,7 +355,7 @@ pub fn new_op_from_onnx(
 
             for (i, input) in inputs.iter_mut().enumerate() {
                 if !input.opkind().is_constant() {
-                    return Err("Range only supports constant inputs in a zk circuit".into());
+                    return Err(GraphError::NonConstantRange);
                 } else {
                     input.decrement_use();
                     deleted_indices.push(i);
@@ -348,7 +366,7 @@ pub fn new_op_from_onnx(
             assert_eq!(input_ops.len(), 3, "Range requires 3 inputs");
             let input_ops = input_ops
                 .iter()
-                .map(|x| x.get_constant().ok_or("Range requires constant inputs"))
+                .map(|x| x.get_constant().ok_or(GraphError::NonConstantRange))
                 .collect::<Result<Vec<_>, _>>()?;
 
             let start = input_ops[0].raw_values.map(|x| x as usize)[0];
@@ -375,11 +393,11 @@ pub fn new_op_from_onnx(
                 deleted_indices.push(1);
                 let raw_values = &c.raw_values;
                 if raw_values.len() != 1 {
-                    return Err(Box::new(GraphError::InvalidDims(idx, "trilu".to_string())));
+                    return Err(GraphError::InvalidDims(idx, "trilu".to_string()));
                 }
                 raw_values[0] as i32
             } else {
-                return Err("we only support constant inputs for trilu diagonal".into());
+                return Err(GraphError::NonConstantTrilu);
             };
 
             SupportedOp::Linear(PolyOp::Trilu { upper, k: diagonal })
@@ -387,7 +405,7 @@ pub fn new_op_from_onnx(
 
         "Gather" => {
             if inputs.len() != 2 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "gather".to_string())));
+                return Err(GraphError::InvalidDims(idx, "gather".to_string()));
             };
             let op = load_op::<Gather>(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
@@ -456,10 +474,7 @@ pub fn new_op_from_onnx(
         }
         "ScatterElements" => {
             if inputs.len() != 3 {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "scatter elements".to_string(),
-                )));
+                return Err(GraphError::InvalidDims(idx, "scatter elements".to_string()));
             };
             let op = load_op::<ScatterElements>(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
@@ -494,10 +509,7 @@ pub fn new_op_from_onnx(
         }
         "ScatterNd" => {
             if inputs.len() != 3 {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "scatter nd".to_string(),
-                )));
+                return Err(GraphError::InvalidDims(idx, "scatter nd".to_string()));
             };
             // just verify it deserializes correctly
             let _op = load_op::<ScatterNd>(node.op(), idx, node.op().name().to_string())?;
@@ -529,10 +541,7 @@ pub fn new_op_from_onnx(
 
         "GatherNd" => {
             if inputs.len() != 2 {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "gather nd".to_string(),
-                )));
+                return Err(GraphError::InvalidDims(idx, "gather nd".to_string()));
             };
             let op = load_op::<GatherNd>(node.op(), idx, node.op().name().to_string())?;
             let batch_dims = op.batch_dims;
@@ -566,10 +575,7 @@ pub fn new_op_from_onnx(
 
         "GatherElements" => {
             if inputs.len() != 2 {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "gather elements".to_string(),
-                )));
+                return Err(GraphError::InvalidDims(idx, "gather elements".to_string()));
             };
             let op = load_op::<GatherElements>(node.op(), idx, node.op().name().to_string())?;
             let axis = op.axis;
@@ -615,10 +621,7 @@ pub fn new_op_from_onnx(
                 }
 
                 _ => {
-                    return Err(Box::new(GraphError::OpMismatch(
-                        idx,
-                        "MoveAxis".to_string(),
-                    )))
+                    return Err(GraphError::OpMismatch(idx, "MoveAxis".to_string()));
                 }
             }
         }
@@ -654,7 +657,9 @@ pub fn new_op_from_onnx(
                 | DatumType::U32
                 | DatumType::U64 => 0,
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => scales.params,
-                _ => return Err(Box::new(GraphError::UnsupportedDataType)),
+                _ => {
+                    return Err(GraphError::UnsupportedDataType(idx, format!("{:?}", dt)));
+                }
             };
 
             // if all raw_values are round then set scale to 0
@@ -672,7 +677,7 @@ pub fn new_op_from_onnx(
         }
         "Reduce<ArgMax(false)>" => {
             if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "argmax".to_string())));
+                return Err(GraphError::InvalidDims(idx, "argmax".to_string()));
             };
             let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes: Vec<usize> = op.axes.into_iter().collect();
@@ -682,7 +687,7 @@ pub fn new_op_from_onnx(
         }
         "Reduce<ArgMin(false)>" => {
             if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "argmin".to_string())));
+                return Err(GraphError::InvalidDims(idx, "argmin".to_string()));
             };
             let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes: Vec<usize> = op.axes.into_iter().collect();
@@ -692,7 +697,7 @@ pub fn new_op_from_onnx(
         }
         "Reduce<Min>" => {
             if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "min".to_string())));
+                return Err(GraphError::InvalidDims(idx, "min".to_string()));
             };
             let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
@@ -701,7 +706,7 @@ pub fn new_op_from_onnx(
         }
         "Reduce<Max>" => {
             if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "max".to_string())));
+                return Err(GraphError::InvalidDims(idx, "max".to_string()));
             };
             let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
@@ -710,7 +715,7 @@ pub fn new_op_from_onnx(
         }
         "Reduce<Prod>" => {
             if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "prod".to_string())));
+                return Err(GraphError::InvalidDims(idx, "prod".to_string()));
             };
             let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes: Vec<usize> = op.axes.into_iter().collect();
@@ -727,7 +732,7 @@ pub fn new_op_from_onnx(
         }
         "Reduce<Sum>" => {
             if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "sum".to_string())));
+                return Err(GraphError::InvalidDims(idx, "sum".to_string()));
             };
             let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
@@ -736,10 +741,7 @@ pub fn new_op_from_onnx(
         }
         "Reduce<MeanOfSquares>" => {
             if inputs.len() != 1 {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "mean of squares".to_string(),
-                )));
+                return Err(GraphError::InvalidDims(idx, "mean of squares".to_string()));
             };
             let op = load_op::<Reduce>(node.op(), idx, node.op().name().to_string())?;
             let axes = op.axes.into_iter().collect();
@@ -759,7 +761,7 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>();
 
             if const_inputs.len() != 1 {
-                return Err(Box::new(GraphError::OpMismatch(idx, "Max".to_string())));
+                return Err(GraphError::OpMismatch(idx, "Max".to_string()));
             }
 
             let const_idx = const_inputs[0];
@@ -768,10 +770,10 @@ pub fn new_op_from_onnx(
                 if c.len() == 1 {
                     c[0]
                 } else {
-                    return Err(Box::new(GraphError::InvalidDims(idx, "max".to_string())));
+                    return Err(GraphError::InvalidDims(idx, "max".to_string()));
                 }
             } else {
-                return Err(Box::new(GraphError::OpMismatch(idx, "Max".to_string())));
+                return Err(GraphError::OpMismatch(idx, "Max".to_string()));
             };
 
             if inputs.len() == 2 {
@@ -790,7 +792,7 @@ pub fn new_op_from_onnx(
                     })
                 }
             } else {
-                return Err(Box::new(GraphError::InvalidDims(idx, "max".to_string())));
+                return Err(GraphError::InvalidDims(idx, "max".to_string()));
             }
         }
         "Min" => {
@@ -805,7 +807,7 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>();
 
             if const_inputs.len() != 1 {
-                return Err(Box::new(GraphError::OpMismatch(idx, "Min".to_string())));
+                return Err(GraphError::OpMismatch(idx, "Min".to_string()));
             }
 
             let const_idx = const_inputs[0];
@@ -814,10 +816,10 @@ pub fn new_op_from_onnx(
                 if c.len() == 1 {
                     c[0]
                 } else {
-                    return Err(Box::new(GraphError::InvalidDims(idx, "min".to_string())));
+                    return Err(GraphError::InvalidDims(idx, "min".to_string()));
                 }
             } else {
-                return Err(Box::new(GraphError::OpMismatch(idx, "Min".to_string())));
+                return Err(GraphError::OpMismatch(idx, "Min".to_string()));
             };
 
             if inputs.len() == 2 {
@@ -834,7 +836,7 @@ pub fn new_op_from_onnx(
                     a: crate::circuit::utils::F32(unit),
                 })
             } else {
-                return Err(Box::new(GraphError::InvalidDims(idx, "min".to_string())));
+                return Err(GraphError::InvalidDims(idx, "min".to_string()));
             }
         }
         "Recip" => {
@@ -855,10 +857,7 @@ pub fn new_op_from_onnx(
             let leaky_op: &LeakyRelu = match leaky_op.0.downcast_ref::<LeakyRelu>() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(
-                        idx,
-                        "leaky relu".to_string(),
-                    )));
+                    return Err(GraphError::OpMismatch(idx, "leaky relu".to_string()));
                 }
             };
 
@@ -867,7 +866,7 @@ pub fn new_op_from_onnx(
             })
         }
         "Scan" => {
-            return Err("scan should never be analyzed explicitly".into());
+            unreachable!();
         }
         "QuantizeLinearU8" | "DequantizeLinearF32" => {
             SupportedOp::Linear(PolyOp::Identity { out_scale: None })
@@ -932,7 +931,9 @@ pub fn new_op_from_onnx(
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
         }),
         "Source" => {
-            let (scale, datum_type) = match node.outputs[0].fact.datum_type {
+            let dt = node.outputs[0].fact.datum_type;
+
+            let (scale, datum_type) = match dt {
                 DatumType::Bool => (0, InputType::Bool),
                 DatumType::TDim => (0, InputType::TDim),
                 DatumType::I64
@@ -946,7 +947,7 @@ pub fn new_op_from_onnx(
                 DatumType::F16 => (scales.input, InputType::F16),
                 DatumType::F32 => (scales.input, InputType::F32),
                 DatumType::F64 => (scales.input, InputType::F64),
-                _ => return Err(Box::new(GraphError::UnsupportedDataType)),
+                _ => return Err(GraphError::UnsupportedDataType(idx, format!("{:?}", dt))),
             };
             SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
         }
@@ -985,7 +986,7 @@ pub fn new_op_from_onnx(
                 DatumType::F16 | DatumType::F32 | DatumType::F64 => {
                     SupportedOp::Linear(PolyOp::Identity { out_scale: None })
                 }
-                _ => return Err(Box::new(GraphError::UnsupportedDataType)),
+                _ => return Err(GraphError::UnsupportedDataType(idx, format!("{:?}", dt))),
             }
         }
         "Add" => SupportedOp::Linear(PolyOp::Add),
@@ -1001,7 +1002,7 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>();
 
             if const_idx.len() > 1 {
-                return Err(Box::new(GraphError::InvalidDims(idx, "mul".to_string())));
+                return Err(GraphError::InvalidDims(idx, "mul".to_string()));
             }
 
             if const_idx.len() == 1 {
@@ -1027,17 +1028,14 @@ pub fn new_op_from_onnx(
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::Less)
             } else {
-                return Err(Box::new(GraphError::InvalidDims(idx, "less".to_string())));
+                return Err(GraphError::InvalidDims(idx, "less".to_string()));
             }
         }
         "LessEqual" => {
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::LessEqual)
             } else {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "less equal".to_string(),
-                )));
+                return Err(GraphError::InvalidDims(idx, "less equal".to_string()));
             }
         }
         "Greater" => {
@@ -1045,10 +1043,7 @@ pub fn new_op_from_onnx(
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::Greater)
             } else {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "greater".to_string(),
-                )));
+                return Err(GraphError::InvalidDims(idx, "greater".to_string()));
             }
         }
         "GreaterEqual" => {
@@ -1056,10 +1051,7 @@ pub fn new_op_from_onnx(
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::GreaterEqual)
             } else {
-                return Err(Box::new(GraphError::InvalidDims(
-                    idx,
-                    "greater equal".to_string(),
-                )));
+                return Err(GraphError::InvalidDims(idx, "greater equal".to_string()));
             }
         }
         "EinSum" => {
@@ -1067,7 +1059,7 @@ pub fn new_op_from_onnx(
             let op: &EinSum = match node.op().downcast_ref::<EinSum>() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "einsum".to_string())));
+                    return Err(GraphError::OpMismatch(idx, "einsum".to_string()));
                 }
             };
 
@@ -1081,7 +1073,7 @@ pub fn new_op_from_onnx(
             let softmax_op: &Softmax = match node.op().downcast_ref::<Softmax>() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "softmax".to_string())));
+                    return Err(GraphError::OpMismatch(idx, "softmax".to_string()));
                 }
             };
 
@@ -1100,7 +1092,7 @@ pub fn new_op_from_onnx(
             let sumpool_node: &MaxPool = match op.downcast_ref() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "Maxpool".to_string())));
+                    return Err(GraphError::OpMismatch(idx, "Maxpool".to_string()));
                 }
             };
 
@@ -1108,55 +1100,19 @@ pub fn new_op_from_onnx(
 
             // only support pytorch type formatting for now
             if pool_spec.data_format != DataFormat::NCHW {
-                return Err(Box::new(GraphError::MissingParams(
+                return Err(GraphError::MissingParams(
                     "data in wrong format".to_string(),
-                )));
+                ));
             }
 
-            let stride = pool_spec
-                .strides
-                .clone()
-                .ok_or(GraphError::MissingParams("stride".to_string()))?;
-            let padding = match &pool_spec.padding {
-                PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    if b.len() == 2 && a.len() == 2 {
-                        [(b[0], b[1]), (a[0], a[1])]
-                    } else if b.len() == 1 && a.len() == 1 {
-                        [(b[0], b[0]), (a[0], a[0])]
-                    } else if b.len() == 1 && a.len() == 2 {
-                        [(b[0], b[0]), (a[0], a[1])]
-                    } else if b.len() == 2 && a.len() == 1 {
-                        [(b[0], b[1]), (a[0], a[0])]
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                    }
-                }
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                }
-            };
+            let stride = extract_strides(pool_spec)?;
+            let padding = extract_padding(pool_spec, input_dims[0].len())?;
             let kernel_shape = &pool_spec.kernel_shape;
 
-            let (stride_h, stride_w) = if stride.len() == 1 {
-                (1, stride[0])
-            } else if stride.len() == 2 {
-                (stride[0], stride[1])
-            } else {
-                return Err(Box::new(GraphError::MissingParams("stride".to_string())));
-            };
-
-            let (kernel_height, kernel_width) = if kernel_shape.len() == 1 {
-                (1, kernel_shape[0])
-            } else if kernel_shape.len() == 2 {
-                (kernel_shape[0], kernel_shape[1])
-            } else {
-                return Err(Box::new(GraphError::MissingParams("kernel".to_string())));
-            };
-
-            SupportedOp::Hybrid(HybridOp::MaxPool2d {
+            SupportedOp::Hybrid(HybridOp::MaxPool {
                 padding,
-                stride: (stride_h, stride_w),
-                pool_dims: (kernel_height, kernel_width),
+                stride: stride.to_vec(),
+                pool_dims: kernel_shape.to_vec(),
             })
         }
         "Ceil" => SupportedOp::Nonlinear(LookupOp::Ceil {
@@ -1196,15 +1152,15 @@ pub fn new_op_from_onnx(
             let conv_node: &Conv = match node.op().downcast_ref::<Conv>() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "conv".to_string())));
+                    return Err(GraphError::OpMismatch(idx, "conv".to_string()));
                 }
             };
 
             if let Some(dilations) = &conv_node.pool_spec.dilations {
                 if dilations.iter().any(|x| *x != 1) {
-                    return Err(Box::new(GraphError::MisformedParams(
+                    return Err(GraphError::MisformedParams(
                         "non unit dilations not supported".to_string(),
-                    )));
+                    ));
                 }
             }
 
@@ -1212,44 +1168,15 @@ pub fn new_op_from_onnx(
                 && (conv_node.pool_spec.data_format != DataFormat::CHW))
                 || (conv_node.kernel_fmt != KernelFormat::OIHW)
             {
-                return Err(Box::new(GraphError::MisformedParams(
+                return Err(GraphError::MisformedParams(
                     "data or kernel in wrong format".to_string(),
-                )));
+                ));
             }
 
-            let stride = match conv_node.pool_spec.strides.clone() {
-                Some(s) => {
-                    if s.len() == 1 {
-                        (s[0], s[0])
-                    } else if s.len() == 2 {
-                        (s[0], s[1])
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("strides".to_string())));
-                    }
-                }
-                None => {
-                    return Err(Box::new(GraphError::MissingParams("strides".to_string())));
-                }
-            };
+            let pool_spec = &conv_node.pool_spec;
 
-            let padding = match &conv_node.pool_spec.padding {
-                PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    if b.len() == 2 && a.len() == 2 {
-                        [(b[0], b[1]), (a[0], a[1])]
-                    } else if b.len() == 1 && a.len() == 1 {
-                        [(b[0], b[0]), (a[0], a[0])]
-                    } else if b.len() == 1 && a.len() == 2 {
-                        [(b[0], b[0]), (a[0], a[1])]
-                    } else if b.len() == 2 && a.len() == 1 {
-                        [(b[0], b[1]), (a[0], a[0])]
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                    }
-                }
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                }
-            };
+            let stride = extract_strides(pool_spec)?;
+            let padding = extract_padding(pool_spec, input_dims[0].len())?;
 
             // if bias exists then rescale it to the input + kernel scale
             if input_scales.len() == 3 {
@@ -1267,7 +1194,13 @@ pub fn new_op_from_onnx(
                 }
             }
 
-            SupportedOp::Linear(PolyOp::Conv { padding, stride })
+            let group = conv_node.group;
+
+            SupportedOp::Linear(PolyOp::Conv {
+                padding,
+                stride,
+                group,
+            })
         }
         "Not" => SupportedOp::Linear(PolyOp::Not),
         "And" => SupportedOp::Linear(PolyOp::And),
@@ -1278,54 +1211,30 @@ pub fn new_op_from_onnx(
             let deconv_node: &Deconv = match node.op().downcast_ref::<Deconv>() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "deconv".to_string())));
+                    return Err(GraphError::OpMismatch(idx, "deconv".to_string()));
                 }
             };
 
             if let Some(dilations) = &deconv_node.pool_spec.dilations {
                 if dilations.iter().any(|x| *x != 1) {
-                    return Err(Box::new(GraphError::MisformedParams(
+                    return Err(GraphError::MisformedParams(
                         "non unit dilations not supported".to_string(),
-                    )));
+                    ));
                 }
             }
 
             if (deconv_node.pool_spec.data_format != DataFormat::NCHW)
                 || (deconv_node.kernel_format != KernelFormat::OIHW)
             {
-                return Err(Box::new(GraphError::MisformedParams(
+                return Err(GraphError::MisformedParams(
                     "data or kernel in wrong format".to_string(),
-                )));
+                ));
             }
 
-            let stride = match deconv_node.pool_spec.strides.clone() {
-                Some(s) => (s[0], s[1]),
-                None => {
-                    return Err(Box::new(GraphError::MissingParams("strides".to_string())));
-                }
-            };
-            let padding = match &deconv_node.pool_spec.padding {
-                PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    if b.len() == 2 && a.len() == 2 {
-                        [(b[0], b[1]), (a[0], a[1])]
-                    } else if b.len() == 1 && a.len() == 1 {
-                        [(b[0], b[0]), (a[0], a[0])]
-                    } else if b.len() == 1 && a.len() == 2 {
-                        [(b[0], b[0]), (a[0], a[1])]
-                    } else if b.len() == 2 && a.len() == 1 {
-                        [(b[0], b[1]), (a[0], a[0])]
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                    }
-                }
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                }
-            };
+            let pool_spec = &deconv_node.pool_spec;
 
-            let output_padding: (usize, usize) =
-                (deconv_node.adjustments[0], deconv_node.adjustments[1]);
-
+            let stride = extract_strides(pool_spec)?;
+            let padding = extract_padding(pool_spec, input_dims[0].len())?;
             // if bias exists then rescale it to the input + kernel scale
             if input_scales.len() == 3 {
                 let bias_scale = input_scales[2];
@@ -1344,18 +1253,16 @@ pub fn new_op_from_onnx(
 
             SupportedOp::Linear(PolyOp::DeConv {
                 padding,
-                output_padding,
+                output_padding: deconv_node.adjustments.to_vec(),
                 stride,
+                group: deconv_node.group,
             })
         }
         "Downsample" => {
             let downsample_node: Downsample = match node.op().downcast_ref::<Downsample>() {
                 Some(b) => b.clone(),
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(
-                        idx,
-                        "downsample".to_string(),
-                    )));
+                    return Err(GraphError::OpMismatch(idx, "downsample".to_string()));
                 }
             };
 
@@ -1380,7 +1287,7 @@ pub fn new_op_from_onnx(
             }
             // check if optional scale factor is present
             if inputs.len() != 2 && inputs.len() != 3 {
-                return Err(Box::new(GraphError::OpMismatch(idx, "Resize".to_string())));
+                return Err(GraphError::OpMismatch(idx, "Resize".to_string()));
             }
 
             let scale_factor_node =  // find optional_scales_input in the string and extract the value inside the Some
@@ -1394,7 +1301,7 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>()[1]
                 .split(')')
                 .collect::<Vec<_>>()[0]
-                .parse::<usize>()?)
+                .parse::<usize>().map_err(|_| GraphError::OpMismatch(idx, "Resize".to_string()))?)
             };
 
             let scale_factor = if let Some(scale_factor_node) = scale_factor_node {
@@ -1402,7 +1309,7 @@ pub fn new_op_from_onnx(
                 if let Some(c) = extract_const_raw_values(boxed_op) {
                     c.map(|x| x as usize).into_iter().collect::<Vec<usize>>()
                 } else {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "Resize".to_string())));
+                    return Err(GraphError::OpMismatch(idx, "Resize".to_string()));
                 }
             } else {
                 // default
@@ -1426,7 +1333,7 @@ pub fn new_op_from_onnx(
             let sumpool_node: &SumPool = match op.downcast_ref() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "sumpool".to_string())));
+                    return Err(GraphError::OpMismatch(idx, "sumpool".to_string()));
                 }
             };
 
@@ -1434,57 +1341,18 @@ pub fn new_op_from_onnx(
 
             // only support pytorch type formatting for now
             if pool_spec.data_format != DataFormat::NCHW {
-                return Err(Box::new(GraphError::MissingParams(
+                return Err(GraphError::MissingParams(
                     "data in wrong format".to_string(),
-                )));
+                ));
             }
 
-            let stride = pool_spec
-                .strides
-                .clone()
-                .ok_or(GraphError::MissingParams("stride".to_string()))?;
-            let padding = match &pool_spec.padding {
-                PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-                    if b.len() == 2 && a.len() == 2 {
-                        [(b[0], b[1]), (a[0], a[1])]
-                    } else if b.len() == 1 && a.len() == 1 {
-                        [(b[0], b[0]), (a[0], a[0])]
-                    } else if b.len() == 1 && a.len() == 2 {
-                        [(b[0], b[0]), (a[0], a[1])]
-                    } else if b.len() == 2 && a.len() == 1 {
-                        [(b[0], b[1]), (a[0], a[0])]
-                    } else {
-                        return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                    }
-                }
-                _ => {
-                    return Err(Box::new(GraphError::MissingParams("padding".to_string())));
-                }
-            };
-            let kernel_shape = &pool_spec.kernel_shape;
-
-            let (stride_h, stride_w) = if stride.len() == 1 {
-                (1, stride[0])
-            } else if stride.len() == 2 {
-                (stride[0], stride[1])
-            } else {
-                return Err(Box::new(GraphError::MissingParams("stride".to_string())));
-            };
-
-            let (kernel_height, kernel_width) = if kernel_shape.len() == 1 {
-                (1, kernel_shape[0])
-            } else if kernel_shape.len() == 2 {
-                (kernel_shape[0], kernel_shape[1])
-            } else {
-                return Err(Box::new(GraphError::MissingParams(
-                    "kernel shape".to_string(),
-                )));
-            };
+            let stride = extract_strides(pool_spec)?;
+            let padding = extract_padding(pool_spec, input_dims[0].len())?;
 
             SupportedOp::Hybrid(HybridOp::SumPool {
                 padding,
-                stride: (stride_h, stride_w),
-                kernel_shape: (kernel_height, kernel_width),
+                stride: stride.to_vec(),
+                kernel_shape: pool_spec.kernel_shape.to_vec(),
                 normalized: sumpool_node.normalize,
             })
         }
@@ -1497,7 +1365,7 @@ pub fn new_op_from_onnx(
             let pad_node: &Pad = match node.op().downcast_ref::<Pad>() {
                 Some(b) => b,
                 None => {
-                    return Err(Box::new(GraphError::OpMismatch(idx, "pad".to_string())));
+                    return Err(GraphError::OpMismatch(idx, "pad".to_string()));
                 }
             };
             // we only support constant 0 padding
@@ -1506,34 +1374,12 @@ pub fn new_op_from_onnx(
                     tract_onnx::prelude::Tensor::zero::<f32>(&[])?,
                 ))
             {
-                return Err(Box::new(GraphError::MisformedParams(
+                return Err(GraphError::MisformedParams(
                     "pad mode or pad type".to_string(),
-                )));
+                ));
             }
 
-            let padding_len = pad_node.pads.len();
-
-            // we only support symmetrical padding that affects the last 2 dims (height and width params)
-            for (i, pad_params) in pad_node.pads.iter().enumerate() {
-                if (i < padding_len - 2) && ((pad_params.0 != 0) || (pad_params.1 != 0)) {
-                    return Err(Box::new(GraphError::MisformedParams(
-                        "ezkl currently only supports padding height and width dimensions"
-                            .to_string(),
-                    )));
-                }
-            }
-
-            let padding = [
-                (
-                    pad_node.pads[padding_len - 2].0,
-                    pad_node.pads[padding_len - 1].0,
-                ),
-                (
-                    pad_node.pads[padding_len - 2].1,
-                    pad_node.pads[padding_len - 1].1,
-                ),
-            ];
-            SupportedOp::Linear(PolyOp::Pad(padding))
+            SupportedOp::Linear(PolyOp::Pad(pad_node.pads.to_vec()))
         }
         "RmAxis" | "Reshape" | "AddAxis" => {
             // Extract the slope layer hyperparams
@@ -1581,9 +1427,9 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     const_value: Tensor<f32>,
     scale: crate::Scale,
     visibility: &Visibility,
-) -> Result<Tensor<F>, Box<dyn std::error::Error>> {
+) -> Result<Tensor<F>, TensorError> {
     let mut value: Tensor<F> = const_value.par_enum_map(|_, x| {
-        Ok::<_, TensorError>(crate::fieldutils::i128_to_felt::<F>(quantize_float(
+        Ok::<_, TensorError>(crate::fieldutils::integer_rep_to_felt::<F>(quantize_float(
             &(x).into(),
             0.0,
             scale,
@@ -1600,7 +1446,7 @@ use crate::tensor::ValTensor;
 pub(crate) fn split_valtensor(
     values: &ValTensor<Fp>,
     shapes: Vec<Vec<usize>>,
-) -> Result<Vec<ValTensor<Fp>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<ValTensor<Fp>>, GraphError> {
     let mut tensors: Vec<ValTensor<Fp>> = Vec::new();
     let mut start = 0;
     for shape in shapes {
@@ -1618,7 +1464,7 @@ pub fn homogenize_input_scales(
     op: Box<dyn Op<Fp>>,
     input_scales: Vec<crate::Scale>,
     inputs_to_scale: Vec<usize>,
-) -> Result<Box<dyn Op<Fp>>, Box<dyn Error>> {
+) -> Result<Box<dyn Op<Fp>>, GraphError> {
     let relevant_input_scales = input_scales
         .clone()
         .into_iter()
@@ -1637,7 +1483,7 @@ pub fn homogenize_input_scales(
 
     let mut multipliers: Vec<u128> = vec![1; input_scales.len()];
 
-    let max_scale = input_scales.iter().max().ok_or("no max scale")?;
+    let max_scale = input_scales.iter().max().ok_or(GraphError::MissingScale)?;
     let _ = input_scales
         .iter()
         .enumerate()
