@@ -195,7 +195,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
         with:
           # Pin to version 0.12.1
-          version: '0.12.1'
+          version: 'v0.12.1'
       - uses: nanasess/setup-chromedriver@v2
         # with:
         #   chromedriver-version: "115.0.5790.102"
@@ -378,7 +378,7 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
         with:
           # Pin to version 0.12.1
-          version: '0.12.1'
+          version: 'v0.12.1'
       - name: Add wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
 
