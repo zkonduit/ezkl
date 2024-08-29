@@ -27,4 +27,10 @@ pub enum TensorError {
     /// Unset visibility
     #[error("unset visibility")]
     UnsetVisibility,
+    /// File save error
+    #[error("save error: {0}")]
+    FileSaveError(String),
+    /// File load error
+    #[error("load error: {0}")]
+    FileLoadError(String),
 }

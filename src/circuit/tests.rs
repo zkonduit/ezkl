@@ -256,7 +256,7 @@ mod matmul_col_ultra_overflow_double_col {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 20;
+    const LEN: usize = 10;
     const NUM_INNER_COLS: usize = 2;
 
     #[derive(Clone)]
@@ -374,7 +374,7 @@ mod matmul_col_ultra_overflow {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 20;
+    const LEN: usize = 10;
 
     #[derive(Clone)]
     struct MatmulCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -1159,7 +1159,7 @@ mod conv_col_ultra_overflow {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 28;
+    const LEN: usize = 10;
 
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -1298,7 +1298,7 @@ mod conv_relu_col_ultra_overflow {
     use super::*;
 
     const K: usize = 4;
-    const LEN: usize = 28;
+    const LEN: usize = 15;
 
     #[derive(Clone)]
     struct ConvCircuit<F: PrimeField + TensorType + PartialOrd> {

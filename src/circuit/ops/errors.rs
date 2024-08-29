@@ -91,4 +91,7 @@ pub enum CircuitError {
     /// Missing layout
     #[error("missing layout for op: {0}")]
     MissingLayout(String),
+    #[error("[io] {0}")]
+    /// IO error
+    IoError(#[from] std::io::Error),
 }

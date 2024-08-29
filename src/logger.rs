@@ -76,7 +76,7 @@ pub fn init_logger() {
             prefix_token(&record.level()),
             //    pretty print UTC time
             chrono::Utc::now()
-                .format("%Y-%m-%d %H:%M:%S")
+                .format("%Y-%m-%d %H:%M:%S:%3f")
                 .to_string()
                 .bright_magenta(),
             record.metadata().target(),

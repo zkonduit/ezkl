@@ -1043,6 +1043,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "blake2"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
+dependencies = [
+ "digest 0.10.7",
+]
+
+[[package]]
 name = "blake2b_simd"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1086,9 +1095,9 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "blst"
-version = "0.3.12"
+version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62dc83a094a71d43eeadd254b1ec2d24cb6a0bb6cadce00df51f0db594711a32"
+checksum = "4378725facc195f1a538864863f6de233b500a8862747e7f165078a419d5e874"
 dependencies = [
  "cc",
  "glob",
@@ -1868,7 +1877,7 @@ dependencies = [
  "halo2_gadgets",
  "halo2_proofs",
  "halo2_solidity_verifier",
- "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=9fff22c)",
+ "halo2curves 0.7.0",
  "hex",
  "indicatif",
  "instant",
@@ -1877,6 +1886,7 @@ dependencies = [
  "log",
  "maybe-rayon",
  "metal",
+ "mimalloc",
  "mnist",
  "num",
  "objc",
@@ -2306,20 +2316,24 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2#098ac0ef3b29255e0e2524ecbb4e7e325ae6e7fd#098ac0ef3b29255e0e2524ecbb4e7e325ae6e7fd"
+source = "git+https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0"
 dependencies = [
+ "bincode",
  "blake2b_simd",
  "env_logger",
  "ff",
  "group",
- "halo2curves 0.6.1 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=9fff22c)",
+ "halo2curves 0.7.0",
  "icicle",
+ "instant",
+ "lazy_static",
  "log",
  "maybe-rayon",
  "rand_chacha",
  "rand_core 0.6.4",
  "rustacuda",
  "rustc-hash 2.0.0",
+ "serde",
  "sha3 0.9.1",
  "tracing",
 ]
@@ -2404,15 +2418,18 @@ dependencies = [
 
 [[package]]
 name = "halo2curves"
-version = "0.6.1"
-source = "git+https://github.com/privacy-scaling-explorations/halo2curves?rev=9fff22c#9fff22c5f72cc54fac1ef3a844e1072b08cfecdf"
+version = "0.7.0"
+source = "git+https://github.com/privacy-scaling-explorations/halo2curves?rev=b753a832e92d5c86c5c997327a9cf9de86a18851#b753a832e92d5c86c5c997327a9cf9de86a18851"
 dependencies = [
- "blake2b_simd",
+ "blake2",
+ "digest 0.10.7",
  "ff",
  "group",
+ "halo2derive",
  "hex",
  "lazy_static",
  "num-bigint",
+ "num-integer",
  "num-traits",
  "pairing",
  "pasta_curves",
@@ -2422,9 +2439,23 @@ dependencies = [
  "rayon",
  "serde",
  "serde_arrays",
+ "sha2",
  "static_assertions",
  "subtle",
  "unroll",
+]
+
+[[package]]
+name = "halo2derive"
+version = "0.1.0"
+source = "git+https://github.com/privacy-scaling-explorations/halo2curves?rev=b753a832e92d5c86c5c997327a9cf9de86a18851#b753a832e92d5c86c5c997327a9cf9de86a18851"
+dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2940,6 +2971,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.39"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23aa6811d3bd4deb8a84dde645f943476d13b248d818edcf8ce0b2f37f036b44"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "libredox"
 version = "0.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3138,6 +3179,15 @@ dependencies = [
  "log",
  "objc",
  "paste",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68914350ae34959d83f732418d51e2427a794055d0b9529f48259ac07af65633"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]
@@ -4897,7 +4947,7 @@ source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lo
 dependencies = [
  "ecc",
  "halo2_proofs",
- "halo2curves 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "halo2curves 0.6.1",
  "hex",
  "itertools 0.10.5",
  "lazy_static",
