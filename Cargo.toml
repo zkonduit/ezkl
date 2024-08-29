@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/optional-selector-poly" }
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "b753a832e92d5c86c5c997327a9cf9de86a18851", features = [
-    "derive_serde"
+    "derive_serde",
 ] }
 halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 rand = { version = "0.8", default_features = false }
@@ -33,7 +33,7 @@ log = { version = "0.4.17", default_features = false, optional = true }
 thiserror = { version = "1.0.38", default_features = false }
 hex = { version = "0.4.3", default_features = false }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/chunked-mv-lookup", package = "ecc" }
-snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup",  features = [
+snark-verifier = { git = "https://github.com/zkonduit/snark-verifier", branch = "ac/chunked-mv-lookup", features = [
     "derive_serde",
 ] }
 halo2_solidity_verifier = { git = "https://github.com/alexander-camuto/halo2-solidity-verifier", branch = "ac/update-h2-curves" }
@@ -45,10 +45,20 @@ portable-atomic = "1.6.0"
 tosubcommand = { git = "https://github.com/zkonduit/enum_to_subcommand", package = "tosubcommand" }
 semver = "1.0.22"
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev="5fbf57bac99edef9d8475190109a7ea9fb7e5e83", features = ["provider-http", "signers", "contract", "rpc-types-eth", "signer-wallet", "node-bindings"] }
-foundry-compilers = {version = "0.4.1", features = ["svm-solc"]}
+alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev = "5fbf57bac99edef9d8475190109a7ea9fb7e5e83", features = [
+    "provider-http",
+    "signers",
+    "contract",
+    "rpc-types-eth",
+    "signer-wallet",
+    "node-bindings",
+] }
+foundry-compilers = { version = "0.4.1", features = ["svm-solc"] }
 ethabi = "18"
 indicatif = { version = "0.17.5", features = ["rayon"] }
 gag = { version = "1.0.0", default_features = false }
@@ -73,8 +83,8 @@ pyo3 = { version = "0.21.2", features = [
     "abi3-py37",
     "macros",
 ], default_features = false, optional = true }
-pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio/", branch="migration-pyo3-0.21", features = [
-  "attributes",
+pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio/", branch = "migration-pyo3-0.21", features = [
+    "attributes",
     "tokio-runtime",
 ], default_features = false, optional = true }
 
@@ -179,7 +189,13 @@ required-features = ["ezkl"]
 
 [features]
 web = ["wasm-bindgen-rayon"]
-default = ["ezkl", "mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read"]
+default = [
+    "ezkl",
+    "mv-lookup",
+    "precompute-coset",
+    "no-banner",
+    "parallel-poly-read",
+]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
 ezkl = [
@@ -220,4 +236,3 @@ rustflags = ["-C", "relocation-model=pic"]
 # lto = "fat"
 # codegen-units = 1
 # panic = "abort"
-
