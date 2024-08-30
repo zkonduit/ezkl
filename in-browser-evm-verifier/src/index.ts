@@ -9,7 +9,6 @@ import { EVM } from '@ethereumjs/evm'
 import { buildTransaction, encodeDeployment } from './utils/tx-builder'
 import { getAccountNonce, insertAccount } from './utils/account-utils'
 import { encodeVerifierCalldata } from '../nodejs/ezkl';
-import { error } from 'console'
 
 async function deployContract(
   vm: VM,
@@ -66,7 +65,7 @@ async function verify(
     vkAddress = new Uint8Array(uint8Array.buffer);
 
     // convert uitn8array of length
-    error('vkAddress', vkAddress)
+    console.error('vkAddress', vkAddress)
   }
   const data = encodeVerifierCalldata(proof, vkAddress)
 
