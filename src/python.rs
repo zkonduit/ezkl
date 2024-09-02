@@ -1490,8 +1490,8 @@ fn encode_evm_calldata<'a>(
 /// srs_path: str
 ///     The path to the SRS file
 ///
-/// render_vk_separately: bool
-///     Whether the verifier key should be rendered as a separate contract. We recommend disabling selector compression if this is enabled. To save the verifier key as a separate contract, set this to true and then call the create_evm_vk command
+/// reusable: bool
+///     Whether the verifier should be rendered as a reusable contract. If so, then you will need to deploy the VK artifact separately which you can generate using the create_evm_vka command
 ///
 /// Returns
 /// -------
@@ -1503,7 +1503,7 @@ fn encode_evm_calldata<'a>(
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
     abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
     srs_path=None,
-    render_vk_seperately = DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap(),
+    reusable = DEFAULT_RENDER_REUSABLE.parse().unwrap(),
 ))]
 fn create_evm_verifier(
     py: Python,
@@ -1512,7 +1512,7 @@ fn create_evm_verifier(
     sol_code_path: PathBuf,
     abi_path: PathBuf,
     srs_path: Option<PathBuf>,
-    render_vk_seperately: bool,
+    reusable: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
         crate::execute::create_evm_verifier(
@@ -1521,7 +1521,7 @@ fn create_evm_verifier(
             settings_path,
             sol_code_path,
             abi_path,
-            render_vk_seperately,
+            reusable,
         )
         .await
         .map_err(|e| {
@@ -1533,7 +1533,8 @@ fn create_evm_verifier(
     })
 }
 
-/// Creates an Evm verifer key. This command should be called after create_evm_verifier with the render_vk_separately arg set to true. By rendering a verification key separately you can reuse the same verifier for similar circuit setups with different verifying keys, helping to reduce the amount of state our verifiers store on the blockchain.
+/// Creates an Evm VK artifact. This command generated a VK with circuit specific meta data encoding in memory for use by the reusable H2 verifier.
+/// This is useful for deploying verifier that were otherwise too big to fit on chain and required aggregation.
 ///
 /// Arguments
 /// ---------
@@ -1563,7 +1564,7 @@ fn create_evm_verifier(
     abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
     srs_path=None
 ))]
-fn create_evm_vk(
+fn create_evm_vka(
     py: Python,
     vk_path: PathBuf,
     settings_path: PathBuf,
@@ -1572,7 +1573,7 @@ fn create_evm_vk(
     srs_path: Option<PathBuf>,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
-        crate::execute::create_evm_vk(vk_path, srs_path, settings_path, sol_code_path, abi_path)
+        crate::execute::create_evm_vka(vk_path, srs_path, settings_path, sol_code_path, abi_path)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to run create_evm_verifier: {}", e);
@@ -1703,6 +1704,7 @@ fn setup_test_evm_witness(
     addr_path,
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
     rpc_url=None,
+    contract_type=ContractType::default(),
     optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
     private_key=None,
 ))]
@@ -1711,6 +1713,7 @@ fn deploy_evm(
     addr_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
+    contract_type: ContractType,
     optimizer_runs: usize,
     private_key: Option<String>,
 ) -> PyResult<Bound<'_, PyAny>> {
@@ -1721,42 +1724,7 @@ fn deploy_evm(
             addr_path,
             optimizer_runs,
             private_key,
-            "Halo2Verifier",
-        )
-        .await
-        .map_err(|e| {
-            let err_str = format!("Failed to run deploy_evm: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
-
-        Ok(true)
-    })
-}
-
-/// deploys the solidity vk verifier
-#[pyfunction(signature = (
-    addr_path,
-    sol_code_path=PathBuf::from(DEFAULT_VK_SOL),
-    rpc_url=None,
-    optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
-    private_key=None,
-))]
-fn deploy_vk_evm(
-    py: Python,
-    addr_path: PathBuf,
-    sol_code_path: PathBuf,
-    rpc_url: Option<String>,
-    optimizer_runs: usize,
-    private_key: Option<String>,
-) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
-        crate::execute::deploy_evm(
-            sol_code_path,
-            rpc_url,
-            addr_path,
-            optimizer_runs,
-            private_key,
-            "Halo2VerifyingArtifact",
+            contract_type,
         )
         .await
         .map_err(|e| {
@@ -1892,8 +1860,8 @@ fn verify_evm<'a>(
 /// srs_path: str
 ///     The path to the SRS file
 ///
-/// render_vk_separately: bool
-///     Whether the verifier key should be rendered as a separate contract. We recommend disabling selector compression if this is enabled. To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command
+/// reusable: bool
+///     Whether the verifier should be rendered as a reusable contract. If so, then you will need to deploy the VK artifact separately which you can generate using the create_evm_vka command
 ///
 /// Returns
 /// -------
@@ -1906,7 +1874,7 @@ fn verify_evm<'a>(
     abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     srs_path=None,
-    render_vk_seperately = DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap(),
+    reusable = DEFAULT_RENDER_REUSABLE.parse().unwrap(),
 ))]
 fn create_evm_verifier_aggr(
     py: Python,
@@ -1916,7 +1884,7 @@ fn create_evm_verifier_aggr(
     abi_path: PathBuf,
     logrows: u32,
     srs_path: Option<PathBuf>,
-    render_vk_seperately: bool,
+    reusable: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
         crate::execute::create_evm_aggregate_verifier(
@@ -1926,7 +1894,7 @@ fn create_evm_verifier_aggr(
             abi_path,
             aggregation_settings,
             logrows,
-            render_vk_seperately,
+            reusable,
         )
         .await
         .map_err(|e| {
@@ -1975,9 +1943,8 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_circuit, m)?)?;
     m.add_function(wrap_pyfunction!(verify_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
-    m.add_function(wrap_pyfunction!(create_evm_vk, m)?)?;
+    m.add_function(wrap_pyfunction!(create_evm_vka, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
-    m.add_function(wrap_pyfunction!(deploy_vk_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
     m.add_function(wrap_pyfunction!(setup_test_evm_witness, m)?)?;

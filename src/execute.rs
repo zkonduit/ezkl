@@ -195,7 +195,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             settings_path,
             sol_code_path,
             abi_path,
-            render_vk_seperately,
+            reusable,
         } => {
             create_evm_verifier(
                 vk_path.unwrap_or(DEFAULT_VK.into()),
@@ -203,7 +203,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
                 settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
                 sol_code_path.unwrap_or(DEFAULT_SOL_CODE.into()),
                 abi_path.unwrap_or(DEFAULT_VERIFIER_ABI.into()),
-                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap()),
+                reusable.unwrap_or(DEFAULT_RENDER_REUSABLE.parse().unwrap()),
             )
             .await
         }
@@ -219,14 +219,14 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
 
-        Commands::CreateEvmVK {
+        Commands::CreateEvmVKArtifact {
             vk_path,
             srs_path,
             settings_path,
             sol_code_path,
             abi_path,
         } => {
-            create_evm_vk(
+            create_evm_vka(
                 vk_path.unwrap_or(DEFAULT_VK.into()),
                 srs_path,
                 settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
@@ -260,7 +260,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             abi_path,
             aggregation_settings,
             logrows,
-            render_vk_seperately,
+            reusable,
         } => {
             create_evm_aggregate_verifier(
                 vk_path.unwrap_or(DEFAULT_VK.into()),
@@ -269,7 +269,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
                 abi_path.unwrap_or(DEFAULT_VERIFIER_AGGREGATED_ABI.into()),
                 aggregation_settings,
                 logrows.unwrap_or(DEFAULT_AGGREGATED_LOGROWS.parse().unwrap()),
-                render_vk_seperately.unwrap_or(DEFAULT_RENDER_VK_SEPERATELY.parse().unwrap()),
+                reusable.unwrap_or(DEFAULT_RENDER_REUSABLE.parse().unwrap()),
             )
             .await
         }
@@ -434,12 +434,13 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
         #[cfg(not(target_arch = "wasm32"))]
-        Commands::DeployEvmVerifier {
+        Commands::DeployEvm {
             sol_code_path,
             rpc_url,
             addr_path,
             optimizer_runs,
             private_key,
+            contract,
         } => {
             deploy_evm(
                 sol_code_path.unwrap_or(DEFAULT_SOL_CODE.into()),
@@ -447,25 +448,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
                 addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS.into()),
                 optimizer_runs,
                 private_key,
-                "Halo2Verifier",
-            )
-            .await
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        Commands::DeployEvmVK {
-            sol_code_path,
-            rpc_url,
-            addr_path,
-            optimizer_runs,
-            private_key,
-        } => {
-            deploy_evm(
-                sol_code_path.unwrap_or(DEFAULT_VK_SOL.into()),
-                rpc_url,
-                addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS_VK.into()),
-                optimizer_runs,
-                private_key,
-                "Halo2VerifyingArtifact",
+                contract,
             )
             .await
         }
@@ -1426,7 +1409,7 @@ pub(crate) async fn create_evm_verifier(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    render_vk_seperately: bool,
+    reusable: bool,
 ) -> Result<String, EZKLError> {
     let settings = GraphSettings::load(&settings_path)?;
     let commitment: Commitments = settings.run_args.commitment.into();
@@ -1448,16 +1431,16 @@ pub(crate) async fn create_evm_verifier(
         halo2_solidity_verifier::BatchOpenScheme::Bdfg21,
         num_instance,
     );
-    let verifier_solidity = if render_vk_seperately {
-        generator.render_separately()?.0 // ignore the rendered vk for now and generate it in create_evm_vk
+    let (verifier_solidity, name) = if reusable {
+        (generator.render_separately()?.0, "Halo2VerifierReusable") // ignore the rendered vk artifact for now and generate it in create_evm_vka
     } else {
-        generator.render()?
+        (generator.render()?, "Halo2Verifier")
     };
 
     File::create(sol_code_path.clone())?.write_all(verifier_solidity.as_bytes())?;
 
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2Verifier", 0).await?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, name, 0).await?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 
@@ -1465,7 +1448,7 @@ pub(crate) async fn create_evm_verifier(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) async fn create_evm_vk(
+pub(crate) async fn create_evm_vka(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
     settings_path: PathBuf,
@@ -1616,8 +1599,13 @@ pub(crate) async fn deploy_evm(
     addr_path: PathBuf,
     runs: usize,
     private_key: Option<String>,
-    contract_name: &str,
+    contract: ContractType,
 ) -> Result<String, EZKLError> {
+    let contract_name = match contract {
+        ContractType::Verifier { reusable: false } => "Halo2Verifier",
+        ContractType::Verifier { reusable: true } => "Halo2VerifierReusable",
+        ContractType::VerifyingKeyArtifact => "Halo2VerifyingArtifact",
+    };
     let contract_address = deploy_contract_via_solidity(
         sol_code_path,
         rpc_url.as_deref(),
@@ -1708,7 +1696,7 @@ pub(crate) async fn create_evm_aggregate_verifier(
     abi_path: PathBuf,
     circuit_settings: Vec<PathBuf>,
     logrows: u32,
-    render_vk_seperately: bool,
+    reusable: bool,
 ) -> Result<String, EZKLError> {
     let srs_path = get_srs_path(logrows, srs_path, Commitments::KZG);
     let params: ParamsKZG<Bn256> = load_srs_verifier::<KZGCommitmentScheme<Bn256>>(srs_path)?;
@@ -1746,8 +1734,8 @@ pub(crate) async fn create_evm_aggregate_verifier(
 
     generator = generator.set_acc_encoding(Some(acc_encoding));
 
-    let verifier_solidity = if render_vk_seperately {
-        generator.render_separately()?.0 // ignore the rendered vk for now and generate it in create_evm_vk
+    let verifier_solidity = if reusable {
+        generator.render_separately()?.0 // ignore the rendered vk artifact for now and generate it in create_evm_vka
     } else {
         generator.render()?
     };
