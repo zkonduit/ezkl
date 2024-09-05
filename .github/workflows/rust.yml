@@ -92,13 +92,13 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
-        run: cargo nextest run  --release lookup_ultra_overflow --no-capture --features icicle -- --include-ignored
+        run: cargo nextest run lookup_ultra_overflow --no-capture --features icicle -- --include-ignored
       - name: Matmul overflow
         run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture --features icicle -- --include-ignored
       - name: Conv overflow
         run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --features icicle -- --include-ignored
       - name: Conv + relu overflow
-        run: cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture --features icicle -- --include-ignored
+        run: cargo nextest run conv_relu_col_ultra_overflow --no-capture --features icicle -- --include-ignored
 
   ultra-overflow-tests_og-lookup:
     runs-on: non-gpu
