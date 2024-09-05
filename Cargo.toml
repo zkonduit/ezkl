@@ -219,5 +219,5 @@ halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup
 rustflags = ["-C", "relocation-model=pic"]
 lto = "fat"
 codegen-units = 1
-panic = "abort"
+# panic = "abort"
 
