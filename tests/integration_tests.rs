@@ -1137,7 +1137,31 @@ mod native_tests {
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     init_logger();
                     log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_ for test: {}", test);
-                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap());
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), false);
+
+                    match REUSABLE_VERIFIER_ADDR.try_lock() {
+                        Ok(mut addr) => {
+                            *addr = Some(reusable_verifier_address.clone());
+                            log::error!("Reusing the same verifeir deployed at address: {}", reusable_verifier_address);
+                        }
+                        Err(_) => {
+                            log::error!("Failed to acquire lock on REUSABLE_VERIFIER_ADDR");
+                        }
+                    }
+
+                    test_dir.close().unwrap();
+
+                }
+
+                #(#[test_case(TESTS_EVM[N])])*
+                fn kzg_evm_prove_and_verify_reusable_verifier_with_overflow_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
+                    init_logger();
+                    log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_with_overflow_ for test: {}", test);
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), true);
 
                     match REUSABLE_VERIFIER_ADDR.try_lock() {
                         Ok(mut addr) => {
@@ -2184,6 +2208,7 @@ mod native_tests {
         param_visibility: &str,
         output_visibility: &str,
         reusable_verifier_address: &mut Option<String>,
+        overflow: bool,
     ) -> String {
         let anvil_url = ANVIL_URL.as_str();
 
@@ -2196,7 +2221,7 @@ mod native_tests {
             output_visibility,
             num_inner_columns,
             None,
-            false,
+            overflow,
             "single",
             Commitments::KZG,
             2,

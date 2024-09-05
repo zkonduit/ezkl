@@ -335,7 +335,9 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: KZG prove and verify tests (EVM + reusable verifier)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify_reusable_verifier_ --test-threads 1
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify_reusable_verifier --test-threads 1
+      - name: KZG prove and verify tests (EVM + reusable verifier + col-overflow)
+        run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify_reusable_verifier_with_overflow --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg all)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_kzg_all_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg inputs)
