@@ -509,7 +509,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: KZG )tests
-        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features icicle --test-threads 1 -- --include-ignored
+        run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --features icicle --test-threads 1 -- --include-ignored
 
   prove-and-verify-aggr-tests:
     runs-on: large-self-hosted
