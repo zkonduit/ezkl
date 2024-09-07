@@ -241,8 +241,8 @@ mod native_tests {
         "1l_conv_transpose",
         "1l_upsample",
         "1l_identity", //35
-        "idolmodel",
-        "trig",
+        "idolmodel",   // too big evm
+        "trig",        // too big evm
         "prelu_gmm",
         "lstm",
         "rnn", //40
@@ -983,6 +983,7 @@ mod native_tests {
         mod tests_evm {
             use seq_macro::seq;
             use crate::native_tests::TESTS_EVM;
+            use crate::native_tests::TESTS;
             use crate::native_tests::TESTS_EVM_AGGR;
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
@@ -1113,23 +1114,8 @@ mod native_tests {
 
             });
 
-
-            seq!(N in 0..=22 {
-
-                #(#[test_case(TESTS_EVM[N])])*
-                fn kzg_evm_prove_and_verify_(test: &str) {
-                    crate::native_tests::init_binary();
-                    let test_dir = TempDir::new(test).unwrap();
-                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
-                    kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "public");
-                    #[cfg(not(feature = "icicle"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
-                    test_dir.close().unwrap();
-
-                }
-
-                #(#[test_case(TESTS_EVM[N])])*
+            seq!(N in 0..=93 {
+                #(#[test_case(TESTS[N])])*
                 fn kzg_evm_prove_and_verify_reusable_verifier_(test: &str) {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
@@ -1153,7 +1139,7 @@ mod native_tests {
 
                 }
 
-                #(#[test_case(TESTS_EVM[N])])*
+                #(#[test_case(TESTS[N])])*
                 fn kzg_evm_prove_and_verify_reusable_verifier_with_overflow_(test: &str) {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
@@ -1173,6 +1159,23 @@ mod native_tests {
                         }
                     }
 
+                    test_dir.close().unwrap();
+
+                }
+            });
+
+
+            seq!(N in 0..=22 {
+
+                #(#[test_case(TESTS[N])])*
+                fn kzg_evm_prove_and_verify_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
+                    kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "public");
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
                 }
