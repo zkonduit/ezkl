@@ -1120,10 +1120,15 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
+                    let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
                     init_logger();
                     log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_ for test: {}", test);
+                    // default vis
                     let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), false);
+                    // public/public vis
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), false);
+                    // hashed input
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", &mut Some(reusable_verifier_address), false);
 
                     match REUSABLE_VERIFIER_ADDR.try_lock() {
                         Ok(mut addr) => {
@@ -1141,13 +1146,22 @@ mod native_tests {
 
                 #(#[test_case(TESTS[N])])*
                 fn kzg_evm_prove_and_verify_reusable_verifier_with_overflow_(test: &str) {
+                    // verifier too big to fit on chain
+                    if test == "1l_eltwise_div" || test == "lenet_5" || test == "ltsf" {
+                        return;
+                    }
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     init_logger();
                     log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_with_overflow_ for test: {}", test);
+                    // default vis
                     let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), true);
+                    // public/public vis
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), true);
+                    // hashed input
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", &mut Some(reusable_verifier_address), true);
 
                     match REUSABLE_VERIFIER_ADDR.try_lock() {
                         Ok(mut addr) => {
@@ -1167,7 +1181,7 @@ mod native_tests {
 
             seq!(N in 0..=22 {
 
-                #(#[test_case(TESTS[N])])*
+                #(#[test_case(TESTS_EVM[N])])*
                 fn kzg_evm_prove_and_verify_(test: &str) {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
