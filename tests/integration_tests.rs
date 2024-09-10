@@ -1146,8 +1146,8 @@ mod native_tests {
 
                 #(#[test_case(TESTS[N])])*
                 fn kzg_evm_prove_and_verify_reusable_verifier_with_overflow_(test: &str) {
-                    // verifier too big to fit on chain
-                    if test == "1l_eltwise_div" || test == "lenet_5" || test == "ltsf" {
+                    // verifier too big to fit on chain with overflow calibration target
+                    if test == "1l_eltwise_div" || test == "lenet_5" || test == "ltsf" || test == "lstm_large" {
                         return;
                     }
                     crate::native_tests::init_binary();
