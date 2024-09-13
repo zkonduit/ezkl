@@ -69,7 +69,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                 &params,
                 (LOOKUP_MIN, LOOKUP_MAX),
                 K,
-                &&LookupOp::LeakyReLU { slope: 0.0.into() },
+                &LookupOp::LeakyReLU { slope: 0.0.into() },
             )
             .unwrap();
 

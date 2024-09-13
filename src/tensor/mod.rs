@@ -420,7 +420,7 @@ impl<T: Clone + TensorType + PrimeField> Tensor<T> {
             std::fs::File::create(path).map_err(|e| TensorError::FileSaveError(e.to_string()))?;
         let mut buf_writer = std::io::BufWriter::new(writer);
 
-        self.inner.iter().map(|x| x.clone()).for_each(|x| {
+        self.inner.iter().copied().for_each(|x| {
             let x = x.to_repr();
             buf_writer.write_all(x.as_ref()).unwrap();
         });
@@ -805,7 +805,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     pub fn exclude_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
         for (i, elem) in self.inner.clone().into_iter().enumerate() {
-            if !(i % n == 0) {
+            if i % n != 0 {
                 inner.push(elem.clone());
             }
         }

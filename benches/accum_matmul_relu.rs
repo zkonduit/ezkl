@@ -64,7 +64,7 @@ impl Circuit<Fr> for MyCircuit {
                 &a,
                 BITS,
                 K,
-                &&LookupOp::LeakyReLU { slope: 0.0.into() },
+                &LookupOp::LeakyReLU { slope: 0.0.into() },
             )
             .unwrap();
 

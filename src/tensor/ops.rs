@@ -106,8 +106,7 @@ pub fn decompose(
 
     let resp = x
         .iter()
-        .map(|val| get_rep(val, base, n))
-        .flatten()
+        .flat_map(|val| get_rep(val, base, n))
         .collect::<Vec<IntegerRep>>();
 
     println!("{} {} {:?} ", base, n, resp);
