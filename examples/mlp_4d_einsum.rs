@@ -69,7 +69,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                 &params,
                 (LOOKUP_MIN, LOOKUP_MAX),
                 K,
-                &LookupOp::ReLU,
+                &&LookupOp::LeakyReLU { slope: 0.0.into() },
             )
             .unwrap();
 
@@ -141,7 +141,11 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                     println!("x shape: {:?}", x.dims());
                     let mut x = config
                         .layer_config
-                        .layout(&mut region, &[x], Box::new(LookupOp::ReLU))
+                        .layout(
+                            &mut region,
+                            &[x],
+                            Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                        )
                         .unwrap()
                         .unwrap();
                     println!("3");
@@ -177,7 +181,11 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                     println!("x shape: {:?}", x.dims());
                     let x = config
                         .layer_config
-                        .layout(&mut region, &[x], Box::new(LookupOp::ReLU))
+                        .layout(
+                            &mut region,
+                            &[x],
+                            Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                        )
                         .unwrap();
                     println!("6");
                     println!("offset: {}", region.row());

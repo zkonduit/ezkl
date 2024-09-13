@@ -163,7 +163,7 @@ where
                 &params,
                 (LOOKUP_MIN, LOOKUP_MAX),
                 K,
-                &LookupOp::ReLU,
+                &&LookupOp::LeakyReLU { slope: 0.0.into() },
             )
             .unwrap();
 
@@ -221,7 +221,11 @@ where
 
                     let x = config
                         .layer_config
-                        .layout(&mut region, &[x.unwrap()], Box::new(LookupOp::ReLU))
+                        .layout(
+                            &mut region,
+                            &[x.unwrap()],
+                            Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                        )
                         .unwrap();
 
                     let mut x = config

@@ -764,6 +764,54 @@ impl<T: Clone + TensorType> Tensor<T> {
         index
     }
 
+    /// Fetches every nth element
+    ///
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 5]), &[3]).unwrap();
+    /// assert_eq!(a.get_every_n(2).unwrap(), expected);
+    /// assert_eq!(a.get_every_n(1).unwrap(), a);
+    ///
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 6]), &[2]).unwrap();
+    /// assert_eq!(a.duplicate_every_n(5).unwrap(), expected);
+    ///
+    /// ```
+    pub fn get_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+        let mut inner: Vec<T> = vec![];
+        for (i, elem) in self.inner.clone().into_iter().enumerate() {
+            if i % n == 0 {
+                inner.push(elem.clone());
+            }
+        }
+        Tensor::new(Some(&inner), &[inner.len()])
+    }
+
+    /// Excludes every nth element
+    ///
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 4, 6]), &[3]).unwrap();
+    /// assert_eq!(a.exclude_every_n(2).unwrap(), expected);
+    /// assert_eq!(a.exclude_every_n(7).unwrap(), a);
+    ///
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 3, 4, 5]), &[9]).unwrap();
+    /// assert_eq!(a.duplicate_every_n(5).unwrap(), expected);
+    ///
+    /// ```
+    pub fn exclude_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
+        let mut inner: Vec<T> = vec![];
+        for (i, elem) in self.inner.clone().into_iter().enumerate() {
+            if !(i % n == 0) {
+                inner.push(elem.clone());
+            }
+        }
+        Tensor::new(Some(&inner), &[inner.len()])
+    }
+
     /// Duplicates every nth element
     ///
     /// ```
@@ -1210,6 +1258,31 @@ impl<T: Clone + TensorType> Tensor<T> {
             None => {
                 return Err(TensorError::DimError(
                     "Cannot get last element of empty tensor".to_string(),
+                ))
+            }
+        };
+
+        Tensor::new(Some(&[res]), &[1])
+    }
+
+    /// Get first elem from Tensor
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+    /// let mut b = Tensor::<IntegerRep>::new(Some(&[1]), &[1]).unwrap();
+    ///
+    /// assert_eq!(a.first().unwrap(), b);
+    /// ```
+    pub fn first(&self) -> Result<Tensor<T>, TensorError>
+    where
+        T: Send + Sync,
+    {
+        let res = match self.inner.first() {
+            Some(e) => e.clone(),
+            None => {
+                return Err(TensorError::DimError(
+                    "Cannot get first element of empty tensor".to_string(),
                 ))
             }
         };

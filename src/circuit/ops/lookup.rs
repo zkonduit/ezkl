@@ -15,14 +15,12 @@ use halo2curves::ff::PrimeField;
 /// An enum representing the operations that can be used to express more complex operations via accumulation
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum LookupOp {
-    Abs,
     Div {
         denom: utils::F32,
     },
     Cast {
         scale: utils::F32,
     },
-    ReLU,
     Max {
         scale: utils::F32,
         a: utils::F32,
@@ -116,7 +114,6 @@ pub enum LookupOp {
     LessThanEqual {
         a: utils::F32,
     },
-    Sign,
     KroneckerDelta,
     Pow {
         scale: utils::F32,
@@ -138,7 +135,6 @@ impl LookupOp {
     /// as path
     pub fn as_path(&self) -> String {
         match self {
-            LookupOp::Abs => "abs".into(),
             LookupOp::Ceil { scale } => format!("ceil_{}", scale),
             LookupOp::Floor { scale } => format!("floor_{}", scale),
             LookupOp::Round { scale } => format!("round_{}", scale),
@@ -147,7 +143,6 @@ impl LookupOp {
             LookupOp::KroneckerDelta => "kronecker_delta".into(),
             LookupOp::Max { scale, a } => format!("max_{}_{}", scale, a),
             LookupOp::Min { scale, a } => format!("min_{}_{}", scale, a),
-            LookupOp::Sign => "sign".into(),
             LookupOp::LessThan { a } => format!("less_than_{}", a),
             LookupOp::LessThanEqual { a } => format!("less_than_equal_{}", a),
             LookupOp::GreaterThan { a } => format!("greater_than_{}", a),
@@ -158,7 +153,6 @@ impl LookupOp {
                 input_scale,
                 output_scale,
             } => format!("recip_{}_{}", input_scale, output_scale),
-            LookupOp::ReLU => "relu".to_string(),
             LookupOp::LeakyReLU { slope: a } => format!("leaky_relu_{}", a),
             LookupOp::Sigmoid { scale } => format!("sigmoid_{}", scale),
             LookupOp::Sqrt { scale } => format!("sqrt_{}", scale),
@@ -189,7 +183,6 @@ impl LookupOp {
     ) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_integer_rep(x));
         let res = match &self {
-            LookupOp::Abs => Ok(tensor::ops::abs(&x)?),
             LookupOp::Ceil { scale } => Ok(tensor::ops::nonlinearities::ceil(&x, scale.into())),
             LookupOp::Floor { scale } => Ok(tensor::ops::nonlinearities::floor(&x, scale.into())),
             LookupOp::Round { scale } => Ok(tensor::ops::nonlinearities::round(&x, scale.into())),
@@ -212,7 +205,6 @@ impl LookupOp {
                 scale.0.into(),
                 a.0.into(),
             )),
-            LookupOp::Sign => Ok(tensor::ops::nonlinearities::sign(&x)),
             LookupOp::LessThan { a } => Ok(tensor::ops::nonlinearities::less_than(
                 &x,
                 f32::from(*a).into(),
@@ -244,8 +236,6 @@ impl LookupOp {
                 input_scale.into(),
                 output_scale.into(),
             )),
-            LookupOp::ReLU => Ok(tensor::ops::nonlinearities::leakyrelu(&x, 0_f64)),
-
             LookupOp::LeakyReLU { slope: a } => {
                 Ok(tensor::ops::nonlinearities::leakyrelu(&x, a.0.into()))
             }
@@ -289,7 +279,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         match self {
-            LookupOp::Abs => "ABS".into(),
             LookupOp::Ceil { scale } => format!("CEIL(scale={})", scale),
             LookupOp::Floor { scale } => format!("FLOOR(scale={})", scale),
             LookupOp::Round { scale } => format!("ROUND(scale={})", scale),
@@ -298,7 +287,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::KroneckerDelta => "K_DELTA".into(),
             LookupOp::Max { scale, a } => format!("MAX(scale={}, a={})", scale, a),
             LookupOp::Min { scale, a } => format!("MIN(scale={}, a={})", scale, a),
-            LookupOp::Sign => "SIGN".into(),
             LookupOp::GreaterThan { a } => format!("GREATER_THAN(a={})", a),
             LookupOp::GreaterThanEqual { a } => format!("GREATER_THAN_EQUAL(a={})", a),
             LookupOp::LessThan { a } => format!("LESS_THAN(a={})", a),
@@ -313,7 +301,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
             LookupOp::Cast { scale } => format!("CAST(scale={})", scale),
             LookupOp::Ln { scale } => format!("LN(scale={})", scale),
-            LookupOp::ReLU => "RELU".to_string(),
             LookupOp::LeakyReLU { slope: a } => format!("L_RELU(slope={})", a),
             LookupOp::Sigmoid { scale } => format!("SIGMOID(scale={})", scale),
             LookupOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
@@ -358,8 +345,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
                 in_scale + multiplier_to_scale(1. / scale.0 as f64)
             }
             LookupOp::Recip { output_scale, .. } => multiplier_to_scale(output_scale.into()),
-            LookupOp::Sign
-            | LookupOp::GreaterThan { .. }
+            LookupOp::GreaterThan { .. }
             | LookupOp::LessThan { .. }
             | LookupOp::GreaterThanEqual { .. }
             | LookupOp::LessThanEqual { .. }

@@ -281,7 +281,7 @@ pub fn new_op_from_onnx(
 ) -> Result<(SupportedOp, Vec<usize>), GraphError> {
     use tract_onnx::tract_core::ops::array::Trilu;
 
-    use crate::circuit::InputType;
+    use crate::{circuit::InputType, EZKL_DECOMP_BASE, EZKL_DECOMP_LEN};
 
     let input_scales = inputs
         .iter()
@@ -782,7 +782,10 @@ pub fn new_op_from_onnx(
                     deleted_indices.push(const_idx);
                 }
                 if unit == 0. {
-                    SupportedOp::Nonlinear(LookupOp::ReLU)
+                    SupportedOp::Linear(PolyOp::ReLU {
+                        base: *EZKL_DECOMP_BASE,
+                        n: *EZKL_DECOMP_LEN,
+                    })
                 } else {
                     // get the non-constant index
                     let non_const_idx = if const_idx == 0 { 1 } else { 0 };
@@ -871,7 +874,10 @@ pub fn new_op_from_onnx(
         "QuantizeLinearU8" | "DequantizeLinearF32" => {
             SupportedOp::Linear(PolyOp::Identity { out_scale: None })
         }
-        "Abs" => SupportedOp::Nonlinear(LookupOp::Abs),
+        "Abs" => SupportedOp::Linear(PolyOp::Abs {
+            base: *EZKL_DECOMP_BASE,
+            n: *EZKL_DECOMP_LEN,
+        }),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
         "HardSwish" => SupportedOp::Nonlinear(LookupOp::HardSwish {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
@@ -1127,7 +1133,10 @@ pub fn new_op_from_onnx(
         "RoundHalfToEven" => SupportedOp::Nonlinear(LookupOp::RoundHalfToEven {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
         }),
-        "Sign" => SupportedOp::Nonlinear(LookupOp::Sign),
+        "Sign" => SupportedOp::Linear(PolyOp::Sign {
+            base: *EZKL_DECOMP_BASE,
+            n: *EZKL_DECOMP_LEN,
+        }),
         "Pow" => {
             // Extract the slope layer hyperparams from a const
 

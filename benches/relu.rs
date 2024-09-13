@@ -42,7 +42,7 @@ impl Circuit<Fr> for NLCircuit {
                 .map(|_| VarTensor::new_advice(cs, K, 1, LEN))
                 .collect::<Vec<_>>();
 
-            let nl = LookupOp::ReLU;
+            let nl = LookupOp::LeakyReLU { slope: 0.0.into() };
 
             let mut config = Config::default();
 
@@ -65,7 +65,11 @@ impl Circuit<Fr> for NLCircuit {
             |region| {
                 let mut region = RegionCtx::new(region, 0, 1);
                 config
-                    .layout(&mut region, &[self.input.clone()], Box::new(LookupOp::ReLU))
+                    .layout(
+                        &mut region,
+                        &[self.input.clone()],
+                        Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                    )
                     .unwrap();
                 Ok(())
             },

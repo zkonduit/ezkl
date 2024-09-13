@@ -7,6 +7,118 @@ use itertools::Itertools;
 use maybe_rayon::{iter::ParallelIterator, prelude::IntoParallelRefIterator};
 pub use std::ops::{Add, Mul, Neg, Sub};
 
+/// Helper function to get the base decomp of an integer
+/// # Arguments
+/// * `x` - IntegerRep
+/// * `n` - usize
+/// * `base` - usize
+///
+fn get_rep(x: &IntegerRep, base: usize, n: usize) -> Vec<IntegerRep> {
+    let mut rep = vec![0; n + 1];
+    // sign bit
+    rep[0] = if *x < 0 {
+        -1
+    } else if *x > 0 {
+        1
+    } else {
+        0
+    };
+
+    let mut x = x.abs();
+    //
+    for i in (1..rep.len()).rev() {
+        rep[i] = x % base as i128;
+        x /= base as i128;
+    }
+
+    rep
+}
+
+/// Decompose a tensor of integers into a larger tensor with added dimension of size `n + 1` with the binary (or OTHER base) representation of the integer.
+/// # Arguments
+/// * `x` - Tensor
+/// * `n` - usize
+/// * `base` - usize
+/// # Examples
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::tensor::ops::decompose;
+/// let x = Tensor::<IntegerRep>::new(
+///  Some(&[0, 1, 2, -1]),
+/// &[2, 2]).unwrap();
+///
+/// let result = decompose(&x, 2, 2).unwrap();
+/// // result will have dims [2, 2, 3]
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0,
+///                                                 1, 0, 1,
+///                                                 1, 1, 0,
+///                                                 -1, 0, 1]), &[2, 2, 3]).unwrap();
+///  assert_eq!(result, expected);
+///
+/// let result = decompose(&x, 3, 1).unwrap();
+///
+///
+/// // result will have dims [2, 2, 2]
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0,
+///                                                 1, 1,
+///                                                 1, 2,
+///                                                 -1, 1]), &[2, 2, 2]).unwrap();
+///
+/// assert_eq!(result, expected);
+///
+/// let x = Tensor::<IntegerRep>::new(
+///         Some(&[0, 11, 23, -1]),
+///        &[2, 2]).unwrap();
+///
+/// let result = decompose(&x, 2, 5).unwrap();
+/// // result will have dims [2, 2, 6]
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 0, 0, 0,
+///                                                1, 0, 1, 0, 1, 1,
+///                                               1, 1, 0, 1, 1, 1,
+///                                              -1, 0, 0, 0, 0, 1]), &[2, 2, 6]).unwrap();
+/// assert_eq!(result, expected);
+///
+/// let result = decompose(&x, 16, 2).unwrap();
+/// // result will have dims [2, 2, 3]
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0,
+///                                               1, 0, 11,
+///                                              1, 1, 7,
+///                                             -1, 0, 1]), &[2, 2, 3]).unwrap();
+/// assert_eq!(result, expected);
+/// ```
+///
+pub fn decompose(
+    x: &Tensor<IntegerRep>,
+    base: usize,
+    n: usize,
+) -> Result<Tensor<IntegerRep>, TensorError> {
+    let mut dims = x.dims().to_vec();
+    dims.push(n + 1);
+
+    if n == 0 {
+        let mut x = x.clone();
+        x.reshape(&dims)?;
+        return Ok(x);
+    }
+
+    println!("{} {}", base, n);
+
+    let resp = x
+        .iter()
+        .map(|val| get_rep(val, base, n))
+        .flatten()
+        .collect::<Vec<IntegerRep>>();
+
+    println!("{} {} {:?} ", base, n, resp);
+
+    let output = Tensor::<i128>::new(Some(&resp), &dims)?;
+
+    println!("{} {} {:?} {:?}", base, n, resp, output);
+
+    Ok(output)
+}
+
 /// Trilu operation.
 /// # Arguments
 /// * `a` - Tensor

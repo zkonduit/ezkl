@@ -58,7 +58,15 @@ impl Circuit<Fr> for MyCircuit {
 
         // sets up a new relu table
         base_config
-            .configure_lookup(cs, &b, &output, &a, BITS, k, &LookupOp::ReLU)
+            .configure_lookup(
+                cs,
+                &b,
+                &output,
+                &a,
+                BITS,
+                k,
+                &LookupOp::LeakyReLU { slope: 0.0.into() },
+            )
             .unwrap();
 
         MyConfig { base_config }
@@ -83,7 +91,11 @@ impl Circuit<Fr> for MyCircuit {
                     .unwrap();
                 let _output = config
                     .base_config
-                    .layout(&mut region, &[output.unwrap()], Box::new(LookupOp::ReLU))
+                    .layout(
+                        &mut region,
+                        &[output.unwrap()],
+                        Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                    )
                     .unwrap();
                 Ok(())
             },

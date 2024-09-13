@@ -150,6 +150,19 @@ lazy_static! {
     /// The serialization format for the keys
     pub static ref EZKL_KEY_FORMAT: String = std::env::var("EZKL_KEY_FORMAT")
         .unwrap_or("raw-bytes".to_string());
+
+    /// The base used to decompose operations like abs, sign, relu
+    pub static ref EZKL_DECOMP_BASE: usize = std::env::var("EZKL_DECOMP_BASE")
+        // this is 2**14
+        .unwrap_or("16384".to_string())
+        .parse()
+        .unwrap();
+
+    /// The length of the decomposition for operations like abs, sign, relu
+    pub static ref EZKL_DECOMP_LEN: usize = std::env::var("EZKL_DECOMP_LEN")
+    .unwrap_or("2".to_string())
+    .parse()
+    .unwrap();
 }
 
 #[cfg(target_arch = "wasm32")]

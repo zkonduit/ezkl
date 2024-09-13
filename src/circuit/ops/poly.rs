@@ -9,6 +9,18 @@ use super::{base::BaseOp, *};
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PolyOp {
+    ReLU {
+        base: usize,
+        n: usize,
+    },
+    Abs {
+        base: usize,
+        n: usize,
+    },
+    Sign {
+        base: usize,
+        n: usize,
+    },
     GatherElements {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
@@ -99,8 +111,7 @@ impl<
             + PartialOrd
             + std::hash::Hash
             + Serialize
-            + for<'de> Deserialize<'de>
-            ,
+            + for<'de> Deserialize<'de>,
     > Op<F> for PolyOp
 {
     /// Returns a reference to the Any trait.
@@ -110,6 +121,9 @@ impl<
 
     fn as_string(&self) -> String {
         match &self {
+            PolyOp::Abs { base, n } => format!("ABS (base={}, n={})", base, n),
+            PolyOp::Sign { base, n } => format!("SIGN (base={}, n={})", base, n),
+            PolyOp::ReLU { base, n } => format!("RELU (base={}, n={})", base, n),
             PolyOp::GatherElements { dim, constant_idx } => format!(
                 "GATHERELEMENTS (dim={}, constant_idx{})",
                 dim,
@@ -191,6 +205,15 @@ impl<
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
+            PolyOp::Abs { base, n } => {
+                layouts::abs(config, region, values[..].try_into()?, base, n)?
+            }
+            PolyOp::Sign { base, n } => {
+                layouts::sign(config, region, values[..].try_into()?, base, n)?
+            }
+            PolyOp::ReLU { base, n } => {
+                layouts::relu(config, region, values[..].try_into()?, base, n)?
+            }
             PolyOp::MultiBroadcastTo { shape } => {
                 layouts::expand(config, region, values[..].try_into()?, shape)?
             }
