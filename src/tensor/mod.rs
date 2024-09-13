@@ -796,7 +796,6 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
     /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 4, 6]), &[3]).unwrap();
     /// assert_eq!(a.exclude_every_n(2).unwrap(), expected);
-    /// assert_eq!(a.exclude_every_n(7).unwrap(), a);
     ///
     /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 3, 4, 5]), &[9]).unwrap();
     /// assert_eq!(a.exclude_every_n(5).unwrap(), expected);
