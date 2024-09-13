@@ -775,7 +775,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.get_every_n(1).unwrap(), a);
     ///
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 6]), &[2]).unwrap();
-    /// assert_eq!(a.duplicate_every_n(5).unwrap(), expected);
+    /// assert_eq!(a.get_every_n(5).unwrap(), expected);
     ///
     /// ```
     pub fn get_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
@@ -799,7 +799,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a.exclude_every_n(7).unwrap(), a);
     ///
     /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 3, 4, 5]), &[9]).unwrap();
-    /// assert_eq!(a.duplicate_every_n(5).unwrap(), expected);
+    /// assert_eq!(a.exclude_every_n(5).unwrap(), expected);
     ///
     /// ```
     pub fn exclude_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
