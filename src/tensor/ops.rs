@@ -7,13 +7,25 @@ use itertools::Itertools;
 use maybe_rayon::{iter::ParallelIterator, prelude::IntoParallelRefIterator};
 pub use std::ops::{Add, Mul, Neg, Sub};
 
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+/// Decomposition error
+pub enum DecompositionError {
+    /// Integer is too large to be represented by base and n
+    #[error("integer {} is too large to be represented by base {} and n {}", .0, .1, .2)]
+    TooLarge(IntegerRep, usize, usize),
+}
+
 /// Helper function to get the base decomp of an integer
 /// # Arguments
 /// * `x` - IntegerRep
 /// * `n` - usize
 /// * `base` - usize
 ///
-fn get_rep(x: &IntegerRep, base: usize, n: usize) -> Vec<IntegerRep> {
+fn get_rep(x: &IntegerRep, base: usize, n: usize) -> Result<Vec<IntegerRep>, DecompositionError> {
+    // check if x is too large
+    if *x > (base.pow(n as u32) as IntegerRep) {
+        return Err(DecompositionError::TooLarge(*x, base, n));
+    }
     let mut rep = vec![0; n + 1];
     // sign bit
     rep[0] = if *x < 0 {
@@ -31,7 +43,7 @@ fn get_rep(x: &IntegerRep, base: usize, n: usize) -> Vec<IntegerRep> {
         x /= base as i128;
     }
 
-    rep
+    Ok(rep)
 }
 
 /// Decompose a tensor of integers into a larger tensor with added dimension of size `n + 1` with the binary (or OTHER base) representation of the integer.
@@ -102,18 +114,16 @@ pub fn decompose(
         return Ok(x);
     }
 
-    println!("{} {}", base, n);
-
     let resp = x
-        .iter()
-        .flat_map(|val| get_rep(val, base, n))
+        .par_iter()
+        .map(|val| get_rep(val, base, n))
+        // now collect the results into a Result<Vec<Vec<IntegerRep>>, DecompositionError>
+        .collect::<Result<Vec<Vec<IntegerRep>>, DecompositionError>>()?
+        .into_iter()
+        .flatten()
         .collect::<Vec<IntegerRep>>();
 
-    println!("{} {} {:?} ", base, n, resp);
-
     let output = Tensor::<i128>::new(Some(&resp), &dims)?;
-
-    println!("{} {} {:?} {:?}", base, n, resp, output);
 
     Ok(output)
 }
@@ -540,7 +550,7 @@ pub fn downsample<T: TensorType + Send + Sync>(
 
     output = output.par_enum_map(|i, _: T| {
         let coord = indices[i].clone();
-        Ok(input.get(&coord))
+        Ok::<_, TensorError>(input.get(&coord))
     })?;
 
     Ok(output)
@@ -600,7 +610,7 @@ pub fn gather<T: TensorType + Send + Sync>(
             .map(|(i, x)| if i == dim { index_val } else { *x })
             .collect::<Vec<_>>();
 
-        Ok(input.get(&new_coord))
+        Ok::<_, TensorError>(input.get(&new_coord))
     })?;
 
     // Reshape the output tensor
@@ -724,7 +734,7 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 
         let val = input.get(&new_coord);
 
-        Ok(val)
+        Ok::<_, TensorError>(val)
     })?;
 
     // Reshape the output tensor
@@ -1038,7 +1048,7 @@ pub fn scatter_nd<T: TensorType + Send + Sync>(
             let index_slice = index_val.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
             let src_val = src.get_slice(&slice)?;
             output.set_slice(&index_slice, &src_val)?;
-            Ok(())
+            Ok::<_, TensorError>(())
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -1345,7 +1355,7 @@ pub fn concat<T: TensorType + Send + Sync>(
             index += x;
         }
 
-        Ok(inputs[input_index].get(&input_coord))
+        Ok::<_, TensorError>(inputs[input_index].get(&input_coord))
     })?;
 
     // Reshape the output tensor

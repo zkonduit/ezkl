@@ -182,87 +182,119 @@ impl LookupOp {
         x: &[Tensor<F>],
     ) -> Result<ForwardResult<F>, TensorError> {
         let x = x[0].clone().map(|x| felt_to_integer_rep(x));
-        let res = match &self {
-            LookupOp::Ceil { scale } => Ok(tensor::ops::nonlinearities::ceil(&x, scale.into())),
-            LookupOp::Floor { scale } => Ok(tensor::ops::nonlinearities::floor(&x, scale.into())),
-            LookupOp::Round { scale } => Ok(tensor::ops::nonlinearities::round(&x, scale.into())),
-            LookupOp::RoundHalfToEven { scale } => Ok(
-                tensor::ops::nonlinearities::round_half_to_even(&x, scale.into()),
-            ),
-            LookupOp::Pow { scale, a } => Ok(tensor::ops::nonlinearities::pow(
-                &x,
-                scale.0.into(),
-                a.0.into(),
-            )),
-            LookupOp::KroneckerDelta => Ok(tensor::ops::nonlinearities::kronecker_delta(&x)),
-            LookupOp::Max { scale, a } => Ok(tensor::ops::nonlinearities::max(
-                &x,
-                scale.0.into(),
-                a.0.into(),
-            )),
-            LookupOp::Min { scale, a } => Ok(tensor::ops::nonlinearities::min(
-                &x,
-                scale.0.into(),
-                a.0.into(),
-            )),
-            LookupOp::LessThan { a } => Ok(tensor::ops::nonlinearities::less_than(
-                &x,
-                f32::from(*a).into(),
-            )),
-            LookupOp::LessThanEqual { a } => Ok(tensor::ops::nonlinearities::less_than_equal(
-                &x,
-                f32::from(*a).into(),
-            )),
-            LookupOp::GreaterThan { a } => Ok(tensor::ops::nonlinearities::greater_than(
-                &x,
-                f32::from(*a).into(),
-            )),
-            LookupOp::GreaterThanEqual { a } => Ok(
-                tensor::ops::nonlinearities::greater_than_equal(&x, f32::from(*a).into()),
-            ),
-            LookupOp::Div { denom } => Ok(tensor::ops::nonlinearities::const_div(
-                &x,
-                f32::from(*denom).into(),
-            )),
-            LookupOp::Cast { scale } => Ok(tensor::ops::nonlinearities::const_div(
-                &x,
-                f32::from(*scale).into(),
-            )),
-            LookupOp::Recip {
-                input_scale,
-                output_scale,
-            } => Ok(tensor::ops::nonlinearities::recip(
-                &x,
-                input_scale.into(),
-                output_scale.into(),
-            )),
-            LookupOp::LeakyReLU { slope: a } => {
-                Ok(tensor::ops::nonlinearities::leakyrelu(&x, a.0.into()))
-            }
-            LookupOp::Sigmoid { scale } => {
-                Ok(tensor::ops::nonlinearities::sigmoid(&x, scale.into()))
-            }
-            LookupOp::Sqrt { scale } => Ok(tensor::ops::nonlinearities::sqrt(&x, scale.into())),
-            LookupOp::Rsqrt { scale } => Ok(tensor::ops::nonlinearities::rsqrt(&x, scale.into())),
-            LookupOp::Erf { scale } => Ok(tensor::ops::nonlinearities::erffunc(&x, scale.into())),
-            LookupOp::Exp { scale } => Ok(tensor::ops::nonlinearities::exp(&x, scale.into())),
-            LookupOp::Ln { scale } => Ok(tensor::ops::nonlinearities::ln(&x, scale.into())),
-            LookupOp::Cos { scale } => Ok(tensor::ops::nonlinearities::cos(&x, scale.into())),
-            LookupOp::ACos { scale } => Ok(tensor::ops::nonlinearities::acos(&x, scale.into())),
-            LookupOp::Cosh { scale } => Ok(tensor::ops::nonlinearities::cosh(&x, scale.into())),
-            LookupOp::ACosh { scale } => Ok(tensor::ops::nonlinearities::acosh(&x, scale.into())),
-            LookupOp::Sin { scale } => Ok(tensor::ops::nonlinearities::sin(&x, scale.into())),
-            LookupOp::ASin { scale } => Ok(tensor::ops::nonlinearities::asin(&x, scale.into())),
-            LookupOp::Sinh { scale } => Ok(tensor::ops::nonlinearities::sinh(&x, scale.into())),
-            LookupOp::ASinh { scale } => Ok(tensor::ops::nonlinearities::asinh(&x, scale.into())),
-            LookupOp::Tan { scale } => Ok(tensor::ops::nonlinearities::tan(&x, scale.into())),
-            LookupOp::ATan { scale } => Ok(tensor::ops::nonlinearities::atan(&x, scale.into())),
-            LookupOp::ATanh { scale } => Ok(tensor::ops::nonlinearities::atanh(&x, scale.into())),
-            LookupOp::Tanh { scale } => Ok(tensor::ops::nonlinearities::tanh(&x, scale.into())),
-            LookupOp::HardSwish { scale } => {
-                Ok(tensor::ops::nonlinearities::hardswish(&x, scale.into()))
-            }
-        }?;
+        let res =
+            match &self {
+                LookupOp::Ceil { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::ceil(&x, scale.into()))
+                }
+                LookupOp::Floor { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::floor(&x, scale.into()))
+                }
+                LookupOp::Round { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::round(&x, scale.into()))
+                }
+                LookupOp::RoundHalfToEven { scale } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::round_half_to_even(&x, scale.into()),
+                ),
+                LookupOp::Pow { scale, a } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::pow(&x, scale.0.into(), a.0.into()),
+                ),
+                LookupOp::KroneckerDelta => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::kronecker_delta(&x))
+                }
+                LookupOp::Max { scale, a } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::max(&x, scale.0.into(), a.0.into()),
+                ),
+                LookupOp::Min { scale, a } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::min(&x, scale.0.into(), a.0.into()),
+                ),
+                LookupOp::LessThan { a } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::less_than(&x, f32::from(*a).into()),
+                ),
+                LookupOp::LessThanEqual { a } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::less_than_equal(&x, f32::from(*a).into()),
+                ),
+                LookupOp::GreaterThan { a } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::greater_than(&x, f32::from(*a).into()),
+                ),
+                LookupOp::GreaterThanEqual { a } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::greater_than_equal(&x, f32::from(*a).into()),
+                ),
+                LookupOp::Div { denom } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::const_div(&x, f32::from(*denom).into()),
+                ),
+                LookupOp::Cast { scale } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::const_div(&x, f32::from(*scale).into()),
+                ),
+                LookupOp::Recip {
+                    input_scale,
+                    output_scale,
+                } => Ok::<_, TensorError>(tensor::ops::nonlinearities::recip(
+                    &x,
+                    input_scale.into(),
+                    output_scale.into(),
+                )),
+                LookupOp::LeakyReLU { slope: a } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::leakyrelu(&x, a.0.into()))
+                }
+                LookupOp::Sigmoid { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::sigmoid(&x, scale.into()))
+                }
+                LookupOp::Sqrt { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::sqrt(&x, scale.into()))
+                }
+                LookupOp::Rsqrt { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::rsqrt(&x, scale.into()))
+                }
+                LookupOp::Erf { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::erffunc(&x, scale.into()))
+                }
+                LookupOp::Exp { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::exp(&x, scale.into()))
+                }
+                LookupOp::Ln { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::ln(&x, scale.into()))
+                }
+                LookupOp::Cos { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::cos(&x, scale.into()))
+                }
+                LookupOp::ACos { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::acos(&x, scale.into()))
+                }
+                LookupOp::Cosh { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::cosh(&x, scale.into()))
+                }
+                LookupOp::ACosh { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::acosh(&x, scale.into()))
+                }
+                LookupOp::Sin { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::sin(&x, scale.into()))
+                }
+                LookupOp::ASin { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::asin(&x, scale.into()))
+                }
+                LookupOp::Sinh { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::sinh(&x, scale.into()))
+                }
+                LookupOp::ASinh { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::asinh(&x, scale.into()))
+                }
+                LookupOp::Tan { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::tan(&x, scale.into()))
+                }
+                LookupOp::ATan { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::atan(&x, scale.into()))
+                }
+                LookupOp::ATanh { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::atanh(&x, scale.into()))
+                }
+                LookupOp::Tanh { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::tanh(&x, scale.into()))
+                }
+                LookupOp::HardSwish { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::hardswish(&x, scale.into()))
+                }
+            }?;
 
         let output = res.map(|x| integer_rep_to_felt(x));
 

@@ -525,7 +525,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         let evals = self.int_evals()?;
         Ok(evals
             .par_enum_map(|_, val| {
-                Ok(ValType::Value(Value::known(integer_rep_to_felt(
+                Ok::<_, TensorError>(ValType::Value(Value::known(integer_rep_to_felt(
                     val.signum(),
                 ))))
             })?

@@ -4192,8 +4192,6 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     claimed_output = region.assign(&config.custom_gates.inputs[0], &claimed_output)?;
     region.increment(claimed_output.len());
 
-    println!("claimed output dims {:?}", claimed_output.dims());
-
     let cartesian_coord = input
         .dims()
         .iter()
@@ -4210,33 +4208,19 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
         let mut claimed_output_slice = claimed_output.get_slice(&slice)?;
         claimed_output_slice.flatten();
 
-        println!("claimed_output_slice {:?}", claimed_output_slice.dims());
-
-        println!("claimed_output_slice len {}", claimed_output_slice.len());
-
         let sliced_input = input.get_slice(&slice)?;
         // get the sign bit and make sure it is valid
-        let sign = claimed_output.first()?;
+        let sign = claimed_output_slice.first()?;
         let sign = range_check(config, region, &[sign], &(-1, 1))?;
 
         // get the rest of the thing and make sure it is in the correct range
         let rest = claimed_output_slice.get_slice(&[1..claimed_output_slice.len()])?;
 
-        println!("rest len {}, bases len {}", rest.len(), bases.len());
-
         let rest = range_check(config, region, &[rest], &(0, (base - 1) as i128))?;
 
         let prod_decomp = dot(config, region, &[rest, bases.clone()])?;
 
-        println!("prod_decomp {:?}", prod_decomp.dims());
-
-        println!("sign {:?}", sign.dims());
-
         let signed_decomp = pairwise(config, region, &[prod_decomp, sign], BaseOp::Mult)?;
-
-        println!("signed decomp {:?}", signed_decomp.dims());
-
-        println!("sliced_input {:?}", sliced_input.dims());
 
         enforce_equality(config, region, &[sliced_input, signed_decomp])?;
 
@@ -4257,7 +4241,6 @@ pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut decomp = decompose(config, region, values, base, n)?;
     // get every n elements now, which correspond to the sign bit
-    println!("decomp dims {:?}", decomp.dims());
 
     decomp.get_every_n(*n + 1)?;
     decomp.reshape(values[0].dims())?;
