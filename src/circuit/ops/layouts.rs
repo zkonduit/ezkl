@@ -4164,7 +4164,7 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 ) -> Result<ValTensor<F>, CircuitError> {
     let input = values[0].clone();
 
-    let is_assigned = !input.any_unknowns()?;
+    let is_assigned = !input.all_prev_assigned();
 
     let bases: ValTensor<F> = Tensor::from(
         (0..*n)
@@ -4173,25 +4173,6 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     )
     .into();
 
-    let mut claimed_output: ValTensor<F> = if is_assigned {
-        let input_evals = input.int_evals()?;
-        tensor::ops::decompose(&input_evals, *base, *n)?
-            .par_enum_map(|_, x| Ok::<_, TensorError>(Value::known(integer_rep_to_felt::<F>(x))))?
-            .into()
-    } else {
-        let mut dims = input.dims().to_vec();
-        dims.push(n + 1);
-
-        Tensor::new(
-            Some(&vec![Value::<F>::unknown(); input.len() * (n + 1)]),
-            &dims,
-        )?
-        .into()
-    };
-
-    claimed_output = region.assign(&config.custom_gates.inputs[0], &claimed_output)?;
-    region.increment(claimed_output.len());
-
     let cartesian_coord = input
         .dims()
         .iter()
@@ -4199,37 +4180,53 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    let mut dummy_iterator = Tensor::from(0..cartesian_coord.len());
+    let mut output: Tensor<Tensor<ValType<F>>> = Tensor::new(None, input.dims())?;
 
-    let inner_loop_function = |i: usize, region: &mut RegionCtx<F>| {
-        let coord = cartesian_coord[i].clone();
-        let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+    let inner_loop_function =
+        |i: usize, region: &mut RegionCtx<F>| -> Result<Tensor<ValType<F>>, CircuitError> {
+            let coord = cartesian_coord[i].clone();
+            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let mut sliced_input = input.get_slice(&slice)?;
+            sliced_input.flatten();
 
-        let mut claimed_output_slice = claimed_output.get_slice(&slice)?;
-        claimed_output_slice.flatten();
+            if !is_assigned {
+                sliced_input = region.assign(&config.custom_gates.inputs[0], &sliced_input)?;
+            }
 
-        let sliced_input = input.get_slice(&slice)?;
-        // get the sign bit and make sure it is valid
-        let sign = claimed_output_slice.first()?;
-        let sign = range_check(config, region, &[sign], &(-1, 1))?;
+            let mut claimed_output_slice = sliced_input.decompose(*base, *n)?;
 
-        // get the rest of the thing and make sure it is in the correct range
-        let rest = claimed_output_slice.get_slice(&[1..claimed_output_slice.len()])?;
+            claimed_output_slice =
+                region.assign(&config.custom_gates.inputs[1], &claimed_output_slice)?;
+            claimed_output_slice.flatten();
 
-        let rest = range_check(config, region, &[rest], &(0, (base - 1) as i128))?;
+            region.increment(claimed_output_slice.len());
 
-        let prod_decomp = dot(config, region, &[rest, bases.clone()])?;
+            // get the sign bit and make sure it is valid
+            let sign = claimed_output_slice.first()?;
+            let sign = range_check(config, region, &[sign], &(-1, 1))?;
 
-        let signed_decomp = pairwise(config, region, &[prod_decomp, sign], BaseOp::Mult)?;
+            // get the rest of the thing and make sure it is in the correct range
+            let rest = claimed_output_slice.get_slice(&[1..claimed_output_slice.len()])?;
 
-        enforce_equality(config, region, &[sliced_input, signed_decomp])?;
+            let rest = range_check(config, region, &[rest], &(0, (base - 1) as i128))?;
 
-        Ok(usize::default())
-    };
+            let prod_decomp = dot(config, region, &[rest, bases.clone()])?;
 
-    region.apply_in_loop(&mut dummy_iterator, inner_loop_function)?;
+            let signed_decomp = pairwise(config, region, &[prod_decomp, sign], BaseOp::Mult)?;
 
-    Ok(claimed_output)
+            enforce_equality(config, region, &[sliced_input, signed_decomp])?;
+
+            Ok(claimed_output_slice.get_inner_tensor()?.clone())
+        };
+
+    region.apply_in_loop(&mut output, inner_loop_function)?;
+
+    let mut combined_output = output.combine()?;
+    let mut output_dims = input.dims().to_vec();
+    output_dims.push(*n + 1);
+    combined_output.reshape(&output_dims)?;
+
+    Ok(combined_output.into())
 }
 
 pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(

@@ -21,9 +21,13 @@ pub enum DecompositionError {
 /// * `n` - usize
 /// * `base` - usize
 ///
-fn get_rep(x: &IntegerRep, base: usize, n: usize) -> Result<Vec<IntegerRep>, DecompositionError> {
+pub fn get_rep(
+    x: &IntegerRep,
+    base: usize,
+    n: usize,
+) -> Result<Vec<IntegerRep>, DecompositionError> {
     // check if x is too large
-    if *x > (base.pow(n as u32) as IntegerRep) {
+    if x.abs() > (base.pow(n as u32) as IntegerRep) {
         return Err(DecompositionError::TooLarge(*x, base, n));
     }
     let mut rep = vec![0; n + 1];

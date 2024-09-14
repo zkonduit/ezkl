@@ -532,6 +532,42 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             .into())
     }
 
+    /// Decompose the inner values into base `base` and `n` legs.
+    pub fn decompose(&self, base: usize, n: usize) -> Result<Self, TensorError> {
+        let res = self
+            .get_inner()?
+            .par_iter()
+            .map(|x| {
+                let mut is_empty = true;
+                x.map(|_| is_empty = false);
+                if is_empty {
+                    return Ok::<_, TensorError>(vec![Value::<F>::unknown(); n + 1]);
+                } else {
+                    let mut res = vec![Value::unknown(); n + 1];
+                    let mut int_rep = 0;
+
+                    x.map(|f| {
+                        int_rep = crate::fieldutils::felt_to_integer_rep(f);
+                    });
+                    let decompe = crate::tensor::ops::get_rep(&int_rep, base, n)?;
+
+                    for (i, x) in decompe.iter().enumerate() {
+                        res[i] = Value::known(crate::fieldutils::integer_rep_to_felt(*x));
+                    }
+                    Ok(res)
+                }
+            })
+            .collect::<Result<Vec<_>, _>>();
+
+        let mut tensor = Tensor::from(res?.into_iter().flatten().collect::<Vec<_>>().into_iter());
+        let mut dims = self.dims().to_vec();
+        dims.push(n + 1);
+
+        tensor.reshape(&dims)?;
+
+        Ok(tensor.into())
+    }
+
     /// Calls `int_evals` on the inner tensor.
     pub fn int_evals(&self) -> Result<Tensor<IntegerRep>, TensorError> {
         // finally convert to vector of integers
