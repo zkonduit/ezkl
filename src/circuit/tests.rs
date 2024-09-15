@@ -1348,7 +1348,7 @@ mod conv_relu_col_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
+                        let mut region = RegionCtx::new(region, 0, 1, 2, 2);
                         let output = config
                             .layout(
                                 &mut region,
@@ -2422,7 +2422,7 @@ mod relu {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
+                        let mut region = RegionCtx::new(region, 0, 1, 2, 2);
                         Ok(config
                             .layout(&mut region, &[self.input.clone()], Box::new(PolyOp::ReLU))
                             .unwrap())
