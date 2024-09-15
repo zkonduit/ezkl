@@ -391,6 +391,7 @@ impl<
             PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow as crate::Scale),
             PolyOp::Identity { out_scale } => out_scale.unwrap_or(in_scales[0]),
+            PolyOp::Sign { .. } => 0,
             _ => in_scales[0],
         };
         Ok(scale)

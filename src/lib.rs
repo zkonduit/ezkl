@@ -166,6 +166,12 @@ lazy_static! {
 }
 
 #[cfg(target_arch = "wasm32")]
+const EZKL_DECOMP_BASE: &usize = &16384;
+
+#[cfg(target_arch = "wasm32")]
+const EZKL_DECOMP_LEN: &usize = &2;
+
+#[cfg(target_arch = "wasm32")]
 const EZKL_KEY_FORMAT: &str = "raw-bytes";
 
 #[cfg(target_arch = "wasm32")]

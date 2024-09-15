@@ -24,6 +24,7 @@ use crate::{
         ops::{accumulated, add, mult, sub},
         Tensor, TensorError, ValType,
     },
+    EZKL_DECOMP_BASE, EZKL_DECOMP_LEN,
 };
 
 use super::*;
@@ -2500,12 +2501,9 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
 
-    nonlinearity(
-        config,
-        region,
-        &[diff],
-        &LookupOp::GreaterThan { a: utils::F32(0.) },
-    )
+    let sign = sign(config, region, &[diff], &EZKL_DECOMP_BASE, &EZKL_DECOMP_LEN)?;
+
+    equals(config, region, &[sign, create_unit_tensor(1)])
 }
 
 /// Greater equals than operation.
@@ -2544,21 +2542,17 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
+    let (lhs, rhs) = (values[0].clone(), values[1].clone());
 
-    let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
-
-    lhs.expand(&broadcasted_shape)?;
-    rhs.expand(&broadcasted_shape)?;
-
-    let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
-
-    nonlinearity(
+    // add 1 to lhs
+    let lhs_plus_one = pairwise(
         config,
         region,
-        &[diff],
-        &LookupOp::GreaterThanEqual { a: utils::F32(0.) },
-    )
+        &[lhs.clone(), create_unit_tensor(1)],
+        BaseOp::Add,
+    )?;
+
+    greater(config, region, &[lhs_plus_one, rhs])
 }
 
 /// Less than to operation.

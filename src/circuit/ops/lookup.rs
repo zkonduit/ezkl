@@ -102,18 +102,6 @@ pub enum LookupOp {
     Erf {
         scale: utils::F32,
     },
-    GreaterThan {
-        a: utils::F32,
-    },
-    LessThan {
-        a: utils::F32,
-    },
-    GreaterThanEqual {
-        a: utils::F32,
-    },
-    LessThanEqual {
-        a: utils::F32,
-    },
     KroneckerDelta,
     Pow {
         scale: utils::F32,
@@ -143,10 +131,6 @@ impl LookupOp {
             LookupOp::KroneckerDelta => "kronecker_delta".into(),
             LookupOp::Max { scale, a } => format!("max_{}_{}", scale, a),
             LookupOp::Min { scale, a } => format!("min_{}_{}", scale, a),
-            LookupOp::LessThan { a } => format!("less_than_{}", a),
-            LookupOp::LessThanEqual { a } => format!("less_than_equal_{}", a),
-            LookupOp::GreaterThan { a } => format!("greater_than_{}", a),
-            LookupOp::GreaterThanEqual { a } => format!("greater_than_equal_{}", a),
             LookupOp::Div { denom } => format!("div_{}", denom),
             LookupOp::Cast { scale } => format!("cast_{}", scale),
             LookupOp::Recip {
@@ -207,18 +191,6 @@ impl LookupOp {
                 ),
                 LookupOp::Min { scale, a } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::min(&x, scale.0.into(), a.0.into()),
-                ),
-                LookupOp::LessThan { a } => Ok::<_, TensorError>(
-                    tensor::ops::nonlinearities::less_than(&x, f32::from(*a).into()),
-                ),
-                LookupOp::LessThanEqual { a } => Ok::<_, TensorError>(
-                    tensor::ops::nonlinearities::less_than_equal(&x, f32::from(*a).into()),
-                ),
-                LookupOp::GreaterThan { a } => Ok::<_, TensorError>(
-                    tensor::ops::nonlinearities::greater_than(&x, f32::from(*a).into()),
-                ),
-                LookupOp::GreaterThanEqual { a } => Ok::<_, TensorError>(
-                    tensor::ops::nonlinearities::greater_than_equal(&x, f32::from(*a).into()),
                 ),
                 LookupOp::Div { denom } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::const_div(&x, f32::from(*denom).into()),
@@ -319,10 +291,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::KroneckerDelta => "K_DELTA".into(),
             LookupOp::Max { scale, a } => format!("MAX(scale={}, a={})", scale, a),
             LookupOp::Min { scale, a } => format!("MIN(scale={}, a={})", scale, a),
-            LookupOp::GreaterThan { a } => format!("GREATER_THAN(a={})", a),
-            LookupOp::GreaterThanEqual { a } => format!("GREATER_THAN_EQUAL(a={})", a),
-            LookupOp::LessThan { a } => format!("LESS_THAN(a={})", a),
-            LookupOp::LessThanEqual { a } => format!("LESS_THAN_EQUAL(a={})", a),
             LookupOp::Recip {
                 input_scale,
                 output_scale,
@@ -377,11 +345,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
                 in_scale + multiplier_to_scale(1. / scale.0 as f64)
             }
             LookupOp::Recip { output_scale, .. } => multiplier_to_scale(output_scale.into()),
-            LookupOp::GreaterThan { .. }
-            | LookupOp::LessThan { .. }
-            | LookupOp::GreaterThanEqual { .. }
-            | LookupOp::LessThanEqual { .. }
-            | LookupOp::KroneckerDelta => 0,
+            LookupOp::KroneckerDelta => 0,
             _ => inputs_scale[0],
         };
         Ok(scale)
