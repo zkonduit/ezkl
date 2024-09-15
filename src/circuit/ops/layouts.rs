@@ -4186,7 +4186,11 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
                 sliced_input = region.assign(&config.custom_gates.inputs[0], &sliced_input)?;
             }
 
-            let mut claimed_output_slice = sliced_input.decompose(*base, *n)?;
+            let mut claimed_output_slice = if region.witness_gen() {
+                sliced_input.decompose(*base, *n)?
+            } else {
+                Tensor::from(vec![ValType::Value(Value::unknown()); *n + 1].into_iter()).into()
+            };
 
             claimed_output_slice =
                 region.assign(&config.custom_gates.inputs[1], &claimed_output_slice)?;
