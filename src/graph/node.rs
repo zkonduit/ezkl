@@ -473,11 +473,9 @@ impl Node {
         node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
         other_nodes: &mut BTreeMap<usize, super::NodeType>,
         scales: &VarScales,
-        param_visibility: &Visibility,
         idx: usize,
         symbol_values: &SymbolValues,
-        div_rebasing: bool,
-        rebase_frac_zero_constants: bool,
+        run_args: &crate::RunArgs,
     ) -> Result<Self, GraphError> {
         trace!("Create {:?}", node);
         trace!("Create op {:?}", node.op);
@@ -517,11 +515,10 @@ impl Node {
         let (mut opkind, deleted_indices) = new_op_from_onnx(
             idx,
             scales,
-            param_visibility,
             node.clone(),
             &mut inputs,
             symbol_values,
-            rebase_frac_zero_constants,
+            run_args,
         )?; // parses the op name
 
         // we can only take the inputs as mutable once -- so we need to collect them first
@@ -569,7 +566,7 @@ impl Node {
                     rescale_const_with_single_use(
                         constant,
                         in_scales.clone(),
-                        param_visibility,
+                        &run_args.param_visibility,
                         input_node.num_uses(),
                     )?;
                     input_node.replace_opkind(constant.clone_dyn().into());
@@ -589,7 +586,7 @@ impl Node {
             global_scale,
             out_scale,
             scales.rebase_multiplier,
-            div_rebasing,
+            run_args.div_rebasing,
         );
 
         out_scale = opkind.out_scale(in_scales)?;

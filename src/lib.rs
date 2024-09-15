@@ -151,18 +151,6 @@ lazy_static! {
     pub static ref EZKL_KEY_FORMAT: String = std::env::var("EZKL_KEY_FORMAT")
         .unwrap_or("raw-bytes".to_string());
 
-    /// The base used to decompose operations like abs, sign, relu
-    pub static ref EZKL_DECOMP_BASE: usize = std::env::var("EZKL_DECOMP_BASE")
-        // this is 2**14
-        .unwrap_or("16384".to_string())
-        .parse()
-        .unwrap();
-
-    /// The length of the decomposition for operations like abs, sign, relu
-    pub static ref EZKL_DECOMP_LEN: usize = std::env::var("EZKL_DECOMP_LEN")
-    .unwrap_or("2".to_string())
-    .parse()
-    .unwrap();
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -296,6 +284,12 @@ pub struct RunArgs {
     /// commitment scheme
     #[arg(long, default_value = "kzg", value_hint = clap::ValueHint::Other)]
     pub commitment: Option<Commitments>,
+    /// the base used for decompositions
+    #[arg(long, default_value = "16384", value_hint = clap::ValueHint::Other)]
+    pub decomp_base: usize,
+    #[arg(long, default_value = "2", value_hint = clap::ValueHint::Other)]
+    /// the number of legs used for decompositions
+    pub decomp_legs: usize,
 }
 
 impl Default for RunArgs {
@@ -316,6 +310,8 @@ impl Default for RunArgs {
             rebase_frac_zero_constants: false,
             check_mode: CheckMode::UNSAFE,
             commitment: None,
+            decomp_base: 16384,
+            decomp_legs: 2,
         }
     }
 }

@@ -9,18 +9,9 @@ use super::{base::BaseOp, *};
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PolyOp {
-    ReLU {
-        base: usize,
-        n: usize,
-    },
-    Abs {
-        base: usize,
-        n: usize,
-    },
-    Sign {
-        base: usize,
-        n: usize,
-    },
+    ReLU,
+    Abs,
+    Sign,
     GatherElements {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
@@ -121,9 +112,9 @@ impl<
 
     fn as_string(&self) -> String {
         match &self {
-            PolyOp::Abs { base, n } => format!("ABS (base={}, n={})", base, n),
-            PolyOp::Sign { base, n } => format!("SIGN (base={}, n={})", base, n),
-            PolyOp::ReLU { base, n } => format!("RELU (base={}, n={})", base, n),
+            PolyOp::Abs => "ABS".to_string(),
+            PolyOp::Sign => "SIGN".to_string(),
+            PolyOp::ReLU => "RELU".to_string(),
             PolyOp::GatherElements { dim, constant_idx } => format!(
                 "GATHERELEMENTS (dim={}, constant_idx{})",
                 dim,
@@ -205,15 +196,9 @@ impl<
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
-            PolyOp::Abs { base, n } => {
-                layouts::abs(config, region, values[..].try_into()?, base, n)?
-            }
-            PolyOp::Sign { base, n } => {
-                layouts::sign(config, region, values[..].try_into()?, base, n)?
-            }
-            PolyOp::ReLU { base, n } => {
-                layouts::relu(config, region, values[..].try_into()?, base, n)?
-            }
+            PolyOp::Abs => layouts::abs(config, region, values[..].try_into()?)?,
+            PolyOp::Sign => layouts::sign(config, region, values[..].try_into()?)?,
+            PolyOp::ReLU => layouts::relu(config, region, values[..].try_into()?)?,
             PolyOp::MultiBroadcastTo { shape } => {
                 layouts::expand(config, region, values[..].try_into()?, shape)?
             }

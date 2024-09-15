@@ -786,7 +786,8 @@ pub(crate) async fn gen_witness(
 
     let commitment: Commitments = settings.run_args.commitment.into();
 
-    let region_settings = RegionSettings::all_true();
+    let region_settings =
+        RegionSettings::all_true(settings.run_args.decomp_base, settings.run_args.decomp_legs);
 
     let start_time = Instant::now();
     let witness = if settings.module_requires_polycommit() {
@@ -1178,7 +1179,10 @@ pub(crate) async fn calibrate(
                         &mut data.clone(),
                         None,
                         None,
-                        RegionSettings::all_true(),
+                        RegionSettings::all_true(
+                            settings.run_args.decomp_base,
+                            settings.run_args.decomp_legs,
+                        ),
                     )
                     .map_err(|e| format!("failed to forward: {}", e))?;
 

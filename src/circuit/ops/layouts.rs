@@ -24,7 +24,6 @@ use crate::{
         ops::{accumulated, add, mult, sub},
         Tensor, TensorError, ValType,
     },
-    EZKL_DECOMP_BASE, EZKL_DECOMP_LEN,
 };
 
 use super::*;
@@ -2483,7 +2482,7 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  Some(&[1, 2, 3, 4, 5, 6]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = greater::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = greater::<Fp>(&dummy_config, &mut dummy_region, &[a,b], 128, 2).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 1, 0, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -2501,7 +2500,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
 
-    let sign = sign(config, region, &[diff], &EZKL_DECOMP_BASE, &EZKL_DECOMP_LEN)?;
+    let sign = sign(config, region, &[diff])?;
 
     equals(config, region, &[sign, create_unit_tensor(1)])
 }
@@ -2533,7 +2532,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  Some(&[1, 2, 3, 4, 5, 4]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = greater_equal::<Fp>(&dummy_config, &mut dummy_region, &[a,b]).unwrap();
+/// let result = greater_equal::<Fp>(&dummy_config, &mut dummy_region, &[a,b], 128, 2).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 0, 0]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -4227,13 +4226,11 @@ pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-    base: &usize,
-    n: &usize,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let mut decomp = decompose(config, region, values, base, n)?;
+    let mut decomp = decompose(config, region, values, &region.base(), &region.legs())?;
     // get every n elements now, which correspond to the sign bit
 
-    decomp.get_every_n(*n + 1)?;
+    decomp.get_every_n(region.legs() + 1)?;
     decomp.reshape(values[0].dims())?;
 
     Ok(decomp)
@@ -4243,10 +4240,8 @@ pub(crate) fn abs<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-    base: &usize,
-    n: &usize,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let sign = sign(config, region, values, base, n)?;
+    let sign = sign(config, region, values)?;
 
     pairwise(config, region, &[values[0].clone(), sign], BaseOp::Mult)
 }
@@ -4255,10 +4250,8 @@ pub(crate) fn relu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-    base: &usize,
-    n: &usize,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let sign = sign(config, region, values, base, n)?;
+    let sign = sign(config, region, values)?;
 
     let mut unit = create_unit_tensor(sign.len());
     unit.reshape(sign.dims())?;

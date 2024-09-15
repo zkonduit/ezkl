@@ -71,12 +71,17 @@ pub enum HybridOp {
     },
 }
 
-impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash > Op<F> for HybridOp {
+impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for HybridOp {
     ///
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         match self {
-            HybridOp::Greater | HybridOp::Less | HybridOp::Equals => vec![0, 1],
-            HybridOp::GreaterEqual | HybridOp::LessEqual => vec![0, 1],
+            HybridOp::Greater { .. }
+            | HybridOp::Less { .. }
+            | HybridOp::Equals { .. }
+            | HybridOp::GreaterEqual { .. }
+            | HybridOp::LessEqual { .. } => {
+                vec![0, 1]
+            }
             _ => vec![],
         }
     }
@@ -135,10 +140,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash > Op<F> for Hybri
                 )
             }
             HybridOp::RangeCheck(p) => format!("RANGECHECK (tol={:?})", p),
-            HybridOp::Greater => "GREATER".into(),
-            HybridOp::GreaterEqual => "GREATEREQUAL".into(),
-            HybridOp::Less => "LESS".into(),
-            HybridOp::LessEqual => "LESSEQUAL".into(),
+            HybridOp::Greater => "GREATER".to_string(),
+            HybridOp::GreaterEqual => "GREATEREQUAL".to_string(),
+            HybridOp::Less => "LESS".to_string(),
+            HybridOp::LessEqual => "LESSEQUAL".to_string(),
             HybridOp::Equals => "EQUALS".into(),
             HybridOp::Gather { dim, .. } => format!("GATHER (dim={})", dim),
             HybridOp::TopK { k, dim, largest } => {

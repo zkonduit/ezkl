@@ -541,7 +541,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 let mut is_empty = true;
                 x.map(|_| is_empty = false);
                 if is_empty {
-                    return Ok::<_, TensorError>(vec![Value::<F>::unknown(); n + 1]);
+                    Ok::<_, TensorError>(vec![Value::<F>::unknown(); n + 1])
                 } else {
                     let mut res = vec![Value::unknown(); n + 1];
                     let mut int_rep = 0;

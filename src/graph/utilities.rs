@@ -273,15 +273,14 @@ fn load_op<C: tract_onnx::prelude::Op + Clone>(
 pub fn new_op_from_onnx(
     idx: usize,
     scales: &VarScales,
-    param_visibility: &Visibility,
     node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
     inputs: &mut [super::NodeType],
     symbol_values: &SymbolValues,
-    rebase_frac_zero_constants: bool,
+    run_args: &crate::RunArgs,
 ) -> Result<(SupportedOp, Vec<usize>), GraphError> {
     use tract_onnx::tract_core::ops::array::Trilu;
 
-    use crate::{circuit::InputType, EZKL_DECOMP_BASE, EZKL_DECOMP_LEN};
+    use crate::circuit::InputType;
 
     let input_scales = inputs
         .iter()
@@ -664,13 +663,16 @@ pub fn new_op_from_onnx(
 
             // if all raw_values are round then set scale to 0
             let all_round = raw_value.iter().all(|x| (x).fract() == 0.0);
-            if all_round && rebase_frac_zero_constants {
+            if all_round && run_args.rebase_frac_zero_constants {
                 constant_scale = 0;
             }
 
             // Quantize the raw value
-            let quantized_value =
-                quantize_tensor(raw_value.clone(), constant_scale, param_visibility)?;
+            let quantized_value = quantize_tensor(
+                raw_value.clone(),
+                constant_scale,
+                &run_args.param_visibility,
+            )?;
             let c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
             // Create a constant op
             SupportedOp::Constant(c)
@@ -782,10 +784,7 @@ pub fn new_op_from_onnx(
                     deleted_indices.push(const_idx);
                 }
                 if unit == 0. {
-                    SupportedOp::Linear(PolyOp::ReLU {
-                        base: *EZKL_DECOMP_BASE,
-                        n: *EZKL_DECOMP_LEN,
-                    })
+                    SupportedOp::Linear(PolyOp::ReLU)
                 } else {
                     // get the non-constant index
                     let non_const_idx = if const_idx == 0 { 1 } else { 0 };
@@ -874,10 +873,7 @@ pub fn new_op_from_onnx(
         "QuantizeLinearU8" | "DequantizeLinearF32" => {
             SupportedOp::Linear(PolyOp::Identity { out_scale: None })
         }
-        "Abs" => SupportedOp::Linear(PolyOp::Abs {
-            base: *EZKL_DECOMP_BASE,
-            n: *EZKL_DECOMP_LEN,
-        }),
+        "Abs" => SupportedOp::Linear(PolyOp::Abs),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
         "HardSwish" => SupportedOp::Nonlinear(LookupOp::HardSwish {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
@@ -1133,10 +1129,7 @@ pub fn new_op_from_onnx(
         "RoundHalfToEven" => SupportedOp::Nonlinear(LookupOp::RoundHalfToEven {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
         }),
-        "Sign" => SupportedOp::Linear(PolyOp::Sign {
-            base: *EZKL_DECOMP_BASE,
-            n: *EZKL_DECOMP_LEN,
-        }),
+        "Sign" => SupportedOp::Linear(PolyOp::Sign),
         "Pow" => {
             // Extract the slope layer hyperparams from a const
 

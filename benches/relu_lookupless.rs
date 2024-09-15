@@ -66,13 +66,9 @@ impl Circuit<Fr> for NLCircuit {
         layouter.assign_region(
             || "",
             |region| {
-                let mut region = RegionCtx::new(region, 0, 1);
+                let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
                 config
-                    .layout(
-                        &mut region,
-                        &[self.input.clone()],
-                        Box::new(PolyOp::ReLU { base: 1024, n: 2 }),
-                    )
+                    .layout(&mut region, &[self.input.clone()], Box::new(PolyOp::ReLU))
                     .unwrap();
                 Ok(())
             },

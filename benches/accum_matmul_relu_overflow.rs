@@ -84,7 +84,7 @@ impl Circuit<Fr> for MyCircuit {
                 let op = PolyOp::Einsum {
                     equation: "ij,jk->ik".to_string(),
                 };
-                let mut region = region::RegionCtx::new(region, 0, 1);
+                let mut region = region::RegionCtx::new(region, 0, 1, 1024, 2);
                 let output = config
                     .base_config
                     .layout(&mut region, &self.inputs, Box::new(op))

@@ -93,6 +93,10 @@ pub struct RegionSettings {
     pub witness_gen: bool,
     /// whether we should check range checks for validity
     pub check_range: bool,
+    /// base for decompositions
+    pub base: usize,
+    /// number of legs for decompositions
+    pub legs: usize,
 }
 
 #[allow(unsafe_code)]
@@ -102,26 +106,32 @@ unsafe impl Send for RegionSettings {}
 
 impl RegionSettings {
     /// Create a new region settings
-    pub fn new(witness_gen: bool, check_range: bool) -> RegionSettings {
+    pub fn new(witness_gen: bool, check_range: bool, base: usize, legs: usize) -> RegionSettings {
         RegionSettings {
             witness_gen,
             check_range,
+            base,
+            legs,
         }
     }
 
     /// Create a new region settings with all true
-    pub fn all_true() -> RegionSettings {
+    pub fn all_true(base: usize, legs: usize) -> RegionSettings {
         RegionSettings {
             witness_gen: true,
             check_range: true,
+            base,
+            legs,
         }
     }
 
     /// Create a new region settings with all false
-    pub fn all_false() -> RegionSettings {
+    pub fn all_false(base: usize, legs: usize) -> RegionSettings {
         RegionSettings {
             witness_gen: false,
             check_range: false,
+            base,
+            legs,
         }
     }
 }
@@ -173,6 +183,16 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a, F> {
+    /// get the region's decomposition base
+    pub fn base(&self) -> usize {
+        self.settings.base
+    }
+
+    /// get the region's decomposition legs
+    pub fn legs(&self) -> usize {
+        self.settings.legs
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     ///
     pub fn debug_report(&self) {
@@ -234,7 +254,13 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// Create a new region context
-    pub fn new(region: Region<'a, F>, row: usize, num_inner_cols: usize) -> RegionCtx<'a, F> {
+    pub fn new(
+        region: Region<'a, F>,
+        row: usize,
+        num_inner_cols: usize,
+        decomp_base: usize,
+        decomp_legs: usize,
+    ) -> RegionCtx<'a, F> {
         let region = Some(RefCell::new(region));
         let linear_coord = row * num_inner_cols;
 
@@ -246,7 +272,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             dynamic_lookup_index: DynamicLookupIndex::default(),
             shuffle_index: ShuffleIndex::default(),
             statistics: RegionStatistics::default(),
-            settings: RegionSettings::all_true(),
+            settings: RegionSettings::all_true(decomp_base, decomp_legs),
             assigned_constants: HashMap::new(),
         }
     }
@@ -256,9 +282,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         region: Region<'a, F>,
         row: usize,
         num_inner_cols: usize,
+        decomp_base: usize,
+        decomp_legs: usize,
         constants: ConstantsMap<F>,
     ) -> RegionCtx<'a, F> {
-        let mut new_self = Self::new(region, row, num_inner_cols);
+        let mut new_self = Self::new(region, row, num_inner_cols, decomp_base, decomp_legs);
         new_self.assigned_constants = constants;
         new_self
     }

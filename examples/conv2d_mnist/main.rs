@@ -199,7 +199,7 @@ where
             .assign_region(
                 || "mlp_4d",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                    let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 1024, 2);
 
                     let op = PolyOp::Conv {
                         padding: vec![(PADDING, PADDING); 2],

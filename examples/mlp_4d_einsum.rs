@@ -108,7 +108,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
             .assign_region(
                 || "mlp_4d",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0, 1);
+                    let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
                     let x = config
                         .layer_config
                         .layout(

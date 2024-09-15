@@ -56,7 +56,7 @@ mod matmul {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -133,7 +133,7 @@ mod matmul_col_overflow_double_col {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -207,7 +207,7 @@ mod matmul_col_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -291,7 +291,7 @@ mod matmul_col_ultra_overflow_double_col {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -408,7 +408,7 @@ mod matmul_col_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -519,7 +519,7 @@ mod dot {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -596,7 +596,7 @@ mod dot_col_overflow_triple_col {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 3);
+                        let mut region = RegionCtx::new(region, 0, 3, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -669,7 +669,7 @@ mod dot_col_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -742,7 +742,7 @@ mod sum {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -812,7 +812,7 @@ mod sum_col_overflow_double_col {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -881,7 +881,7 @@ mod sum_col_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -952,7 +952,7 @@ mod composition {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         let _ = config
                             .layout(
                                 &mut region,
@@ -1043,7 +1043,7 @@ mod conv {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -1194,7 +1194,7 @@ mod conv_col_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -1348,7 +1348,7 @@ mod conv_relu_col_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         let output = config
                             .layout(
                                 &mut region,
@@ -1364,7 +1364,7 @@ mod conv_relu_col_ultra_overflow {
                             .layout(
                                 &mut region,
                                 &[output.unwrap().unwrap()],
-                                Box::new(PolyOp::ReLU { base: 2, n: 2 }),
+                                Box::new(PolyOp::ReLU),
                             )
                             .unwrap();
                         Ok(())
@@ -1485,7 +1485,7 @@ mod add_w_shape_casting {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
@@ -1552,7 +1552,7 @@ mod add {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
@@ -1636,7 +1636,7 @@ mod dynamic_lookup {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         for i in 0..NUM_LOOP {
                             layouts::dynamic_lookup(
                                 &config,
@@ -1778,7 +1778,7 @@ mod shuffle {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         for i in 0..NUM_LOOP {
                             layouts::shuffles(
                                 &config,
@@ -1893,7 +1893,7 @@ mod add_with_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
@@ -1995,7 +1995,7 @@ mod add_with_overflow_and_poseidon {
             layouter.assign_region(
                 || "model",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0, 1);
+                    let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                     config
                         .base
                         .layout(&mut region, &inputs, Box::new(PolyOp::Add))
@@ -2101,7 +2101,7 @@ mod sub {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Sub))
                             .map_err(|_| Error::Synthesis)
@@ -2168,7 +2168,7 @@ mod mult {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Mult))
                             .map_err(|_| Error::Synthesis)
@@ -2235,7 +2235,7 @@ mod pow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Pow(5)))
                             .map_err(|_| Error::Synthesis)
@@ -2322,7 +2322,7 @@ mod matmul_relu {
             layouter.assign_region(
                 || "",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0, 1);
+                    let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
                     let op = PolyOp::Einsum {
                         equation: "ij,jk->ik".to_string(),
                     };
@@ -2332,11 +2332,7 @@ mod matmul_relu {
                         .unwrap();
                     let _output = config
                         .base_config
-                        .layout(
-                            &mut region,
-                            &[output.unwrap()],
-                            Box::new(PolyOp::ReLU { base: 1024, n: 2 }),
-                        )
+                        .layout(&mut region, &[output.unwrap()], Box::new(PolyOp::ReLU))
                         .unwrap();
                     Ok(())
                 },
@@ -2426,13 +2422,9 @@ mod relu {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         Ok(config
-                            .layout(
-                                &mut region,
-                                &[self.input.clone()],
-                                Box::new(PolyOp::ReLU { base: 2, n: 2 }),
-                            )
+                            .layout(&mut region, &[self.input.clone()], Box::new(PolyOp::ReLU))
                             .unwrap())
                     },
                 )
@@ -2518,7 +2510,7 @@ mod lookup_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
