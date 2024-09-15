@@ -1372,8 +1372,10 @@ pub(crate) async fn calibrate(
         let module_log_row = best_params.module_constraint_logrows_with_blinding();
         let instance_logrows = best_params.log2_total_instances_with_blinding();
         let dynamic_lookup_logrows = best_params.dynamic_lookup_and_shuffle_logrows_with_blinding();
+        let range_check_logrows = best_params.range_check_log_rows_with_blinding();
 
         let mut reduction = std::cmp::max(lookup_log_rows, module_log_row);
+        reduction = std::cmp::max(reduction, range_check_logrows);
         reduction = std::cmp::max(reduction, instance_logrows);
         reduction = std::cmp::max(reduction, dynamic_lookup_logrows);
         reduction = std::cmp::max(reduction, crate::graph::MIN_LOGROWS);
