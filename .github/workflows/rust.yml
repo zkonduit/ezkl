@@ -184,7 +184,6 @@ jobs:
 
   wasm32-tests:
     runs-on: ubuntu-latest
-    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1

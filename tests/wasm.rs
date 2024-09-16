@@ -16,14 +16,12 @@ mod wasm32 {
         srsValidation, u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
     };
     use halo2_proofs::plonk::VerifyingKey;
-    use halo2_proofs::poly::commitment::CommitmentScheme;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2_proofs::poly::kzg::commitment::ParamsKZG;
     use halo2_solidity_verifier::encode_calldata;
     use halo2curves::bn256::Bn256;
     use halo2curves::bn256::{Fr, G1Affine};
     use snark_verifier::util::arithmetic::PrimeField;
-    use wasm_bindgen::JsError;
     #[cfg(feature = "web")]
     pub use wasm_bindgen_rayon::init_thread_pool;
     use wasm_bindgen_test::*;
