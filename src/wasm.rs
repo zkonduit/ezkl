@@ -290,7 +290,7 @@ pub fn genWitness(
             &mut input,
             None,
             None,
-            RegionSettings::all_false(
+            RegionSettings::all_true(
                 circuit.settings().run_args.decomp_base,
                 circuit.settings().run_args.decomp_legs,
             ),
