@@ -1,7 +1,7 @@
 use crate::graph::input::{CallsToAccount, FileSourceInner, GraphData};
 use crate::graph::modules::POSEIDON_INSTANCES;
 use crate::graph::DataSource;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use crate::graph::GraphSettings;
 use crate::pfsys::evm::EvmVerificationError;
 use crate::pfsys::Snark;
@@ -11,7 +11,7 @@ use alloy::core::primitives::Bytes;
 use alloy::core::primitives::U256;
 use alloy::dyn_abi::abi::token::{DynSeqToken, PackedSeqToken, WordToken};
 use alloy::dyn_abi::abi::TokenSeq;
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_os = "ios", target_arch = "wasm32"))]
 use alloy::prelude::Wallet;
 // use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
@@ -285,7 +285,7 @@ pub type EthersClient = Arc<
 pub type ContractFactory<M> = CallBuilder<Http<Client>, Arc<M>, ()>;
 
 /// Return an instance of Anvil and a client for the given RPC URL. If none is provided, a local client is used.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 pub async fn setup_eth_backend(
     rpc_url: Option<&str>,
     private_key: Option<&str>,
@@ -614,7 +614,7 @@ pub async fn update_account_calls(
 }
 
 /// Verify a proof using a Solidity verifier contract
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     addr: H160,
@@ -716,7 +716,7 @@ pub async fn setup_test_contract<M: 'static + Provider<Http<Client>, Ethereum>>(
 
 /// Verify a proof using a Solidity DataAttestation contract.
 /// Used for testing purposes.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 pub async fn verify_proof_with_data_attestation(
     proof: Snark<Fr, G1Affine>,
     addr_verifier: H160,
@@ -829,7 +829,7 @@ pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
 }
 
 /// Reads on-chain inputs, returning the raw encoded data returned from making all the calls in on_chain_input_data
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>(
     client: Arc<M>,
     address: H160,
@@ -863,7 +863,7 @@ pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>
 }
 
 ///
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
     client: Arc<M>,
     scales: Vec<crate::Scale>,
@@ -964,7 +964,7 @@ fn get_sol_contract_factory<'a, M: 'static + Provider<Http<Client>, Ethereum>, T
 }
 
 /// Compiles a solidity verifier contract and returns the abi, bytecode, and runtime bytecode
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 pub async fn get_contract_artifacts(
     sol_code_path: PathBuf,
     contract_name: &str,

@@ -729,7 +729,7 @@ pub fn srsValidation(srs: wasm_bindgen::Clamped<Vec<u8>>) -> Result<bool, JsErro
 // HELPER FUNCTIONS
 
 /// Creates a [ProvingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_os = "ios", target_arch = "wasm32"))]
 pub fn create_vk_wasm<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     circuit: &C,
     params: &'_ Scheme::ParamsProver,
@@ -747,7 +747,7 @@ where
     Ok(vk)
 }
 /// Creates a [ProvingKey] from a [VerifyingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_os = "ios", target_arch = "wasm32"))]
 pub fn create_pk_wasm<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
     vk: VerifyingKey<Scheme::Curve>,
     circuit: &C,
