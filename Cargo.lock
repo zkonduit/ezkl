@@ -2316,7 +2316,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0"
+source = "git+https://github.com/zkonduit//halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0"
 dependencies = [
  "bincode",
  "blake2b_simd",
