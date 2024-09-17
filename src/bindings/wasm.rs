@@ -1,28 +1,23 @@
-use crate::{
-    circuit::{
-        modules::{
-            polycommit::PolyCommitChip,
-            poseidon::{
-                spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
-                PoseidonChip,
-            },
-            Module,
+#![allow(unused_imports)] // TODO - remove this line after implementing the functions
+
+use crate::{circuit::{
+    modules::{
+        polycommit::PolyCommitChip,
+        poseidon::{
+            spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
+            PoseidonChip,
         },
-        region::RegionSettings,
+        Module,
     },
-    fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
-    graph::{
-        modules::POSEIDON_LEN_GRAPH, quantize_float, scale_to_multiplier, GraphCircuit,
-        GraphSettings,
-    },
-    pfsys::{
-        create_proof_circuit,
-        evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript},
-        verify_proof_circuit, TranscriptType,
-    },
-    tensor::TensorType,
-    CheckMode, Commitments,
-};
+    region::RegionSettings,
+}, fieldutils::{felt_to_integer_rep, integer_rep_to_felt}, graph::{
+    modules::POSEIDON_LEN_GRAPH, quantize_float, scale_to_multiplier, GraphCircuit,
+    GraphSettings,
+}, pfsys::{
+    create_proof_circuit,
+    evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript},
+    verify_proof_circuit, TranscriptType,
+}, tensor::TensorType, CheckMode, Commitments, EZKLError};
 use console_error_panic_hook;
 use halo2_proofs::{
     plonk::*,
@@ -53,6 +48,13 @@ use wasm_bindgen_console_logger::DEFAULT_LOGGER;
 
 #[cfg(feature = "web")]
 pub use wasm_bindgen_rayon::init_thread_pool;
+use crate::bindings::universal::{EZKLError as ExternalEZKLError, encode_verifier_calldata};
+
+impl From<ExternalEZKLError> for JsError {
+    fn from(e: ExternalEZKLError) -> Self {
+        JsError::new(&format!("{}", e))
+    }
+}
 
 #[wasm_bindgen]
 /// Initialize logger for wasm
@@ -73,7 +75,7 @@ pub fn encodeVerifierCalldata(
     proof: wasm_bindgen::Clamped<Vec<u8>>,
     vk_address: Option<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
-    encode_verifier_calldata(proof.0, vk_address).map_err(|e| JsError::new(&format!("{}", e)))
+    encode_verifier_calldata(proof.0, vk_address).map_err(JsError::from)
 }
 
 /// Converts a hex string to a byte array
