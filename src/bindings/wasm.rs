@@ -1,54 +1,50 @@
-#![allow(unused_imports)] // TODO - remove this line after implementing the functions
-
-use crate::{circuit::{
-    modules::{
-        polycommit::PolyCommitChip,
-        poseidon::{
-            spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
-            PoseidonChip,
+use crate::{
+    circuit::{
+        modules::{
+            polycommit::PolyCommitChip,
+            poseidon::{
+                spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
+                PoseidonChip,
+            },
+            Module,
         },
-        Module,
     },
-    region::RegionSettings,
-}, fieldutils::{felt_to_integer_rep, integer_rep_to_felt}, graph::{
-    modules::POSEIDON_LEN_GRAPH, quantize_float, scale_to_multiplier, GraphCircuit,
-    GraphSettings,
-}, pfsys::{
-    create_proof_circuit,
-    evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript},
-    verify_proof_circuit, TranscriptType,
-}, tensor::TensorType, CheckMode, Commitments, EZKLError};
+    fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
+    graph::{
+        modules::POSEIDON_LEN_GRAPH, quantize_float, scale_to_multiplier, GraphCircuit,
+        GraphSettings,
+    },
+};
 use console_error_panic_hook;
 use halo2_proofs::{
     plonk::*,
-    poly::{
-        commitment::{CommitmentScheme, ParamsProver},
-        ipa::{
-            commitment::{IPACommitmentScheme, ParamsIPA},
-            multiopen::{ProverIPA, VerifierIPA},
-            strategy::SingleStrategy as IPASingleStrategy,
-        },
-        kzg::{
-            commitment::{KZGCommitmentScheme, ParamsKZG},
-            multiopen::{ProverSHPLONK, VerifierSHPLONK},
-            strategy::SingleStrategy as KZGSingleStrategy,
-        },
-        VerificationStrategy,
-    },
+    poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG}
 };
-use halo2_solidity_verifier::encode_calldata;
 use halo2curves::{
     bn256::{Bn256, Fr, G1Affine},
-    ff::{FromUniformBytes, PrimeField},
+    ff::PrimeField,
 };
-use snark_verifier::{loader::native::NativeLoader, system::halo2::transcript::evm::EvmTranscript};
-use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_console_logger::DEFAULT_LOGGER;
 
+use crate::bindings::universal::{
+    EZKLError as ExternalEZKLError,
+    encode_verifier_calldata,
+    gen_witness,
+    gen_vk,
+    gen_pk,
+    verify_aggr,
+    witness_validation,
+    compiled_circuit_validation,
+    input_validation,
+    proof_validation,
+    vk_validation,
+    pk_validation,
+    settings_validation,
+    srs_validation,
+};
 #[cfg(feature = "web")]
 pub use wasm_bindgen_rayon::init_thread_pool;
-use crate::bindings::universal::{EZKLError as ExternalEZKLError, encode_verifier_calldata};
 
 impl From<ExternalEZKLError> for JsError {
     fn from(e: ExternalEZKLError) -> Self {
@@ -259,29 +255,7 @@ pub fn genWitness(
     compiled_circuit: wasm_bindgen::Clamped<Vec<u8>>,
     input: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
-    let mut circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize compiled model: {}", e)))?;
-    let input: crate::graph::input::GraphData = serde_json::from_slice(&input[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize input: {}", e)))?;
-
-    let mut input = circuit
-        .load_graph_input(&input)
-        .map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    let witness = circuit
-        .forward::<KZGCommitmentScheme<Bn256>>(
-            &mut input,
-            None,
-            None,
-            RegionSettings::all_true(
-                circuit.settings().run_args.decomp_base,
-                circuit.settings().run_args.decomp_legs,
-            ),
-        )
-        .map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    serde_json::to_vec(&witness)
-        .map_err(|e| JsError::new(&format!("Failed to serialize witness: {}", e)))
+    gen_witness(compiled_circuit.0, input.0).map_err(JsError::from)
 }
 
 /// Generate verifying key in browser
@@ -292,29 +266,7 @@ pub fn genVk(
     params_ser: wasm_bindgen::Clamped<Vec<u8>>,
     compress_selectors: bool,
 ) -> Result<Vec<u8>, JsError> {
-    // Read in kzg params
-    let mut reader = std::io::BufReader::new(&params_ser[..]);
-    let params: ParamsKZG<Bn256> =
-        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
-            .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
-    // Read in compiled circuit
-    let circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize compiled model: {}", e)))?;
-
-    // Create verifying key
-    let vk = create_vk_wasm::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(
-        &circuit,
-        &params,
-        compress_selectors,
-    )
-    .map_err(Box::<dyn std::error::Error>::from)
-    .map_err(|e| JsError::new(&format!("Failed to create verifying key: {}", e)))?;
-
-    let mut serialized_vk = Vec::new();
-    vk.write(&mut serialized_vk, halo2_proofs::SerdeFormat::RawBytes)
-        .map_err(|e| JsError::new(&format!("Failed to serialize vk: {}", e)))?;
-
-    Ok(serialized_vk)
+    gen_vk(compiled_circuit.0, params_ser.0, compress_selectors).map_err(JsError::from)
 }
 
 /// Generate proving key in browser
@@ -325,33 +277,7 @@ pub fn genPk(
     compiled_circuit: wasm_bindgen::Clamped<Vec<u8>>,
     params_ser: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
-    // Read in kzg params
-    let mut reader = std::io::BufReader::new(&params_ser[..]);
-    let params: ParamsKZG<Bn256> =
-        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
-            .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
-    // Read in compiled circuit
-    let circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize compiled model: {}", e)))?;
-
-    // Read in verifying key
-    let mut reader = std::io::BufReader::new(&vk[..]);
-    let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
-        circuit.settings().clone(),
-    )
-    .map_err(|e| JsError::new(&format!("Failed to deserialize verifying key: {}", e)))?;
-    // Create proving key
-    let pk = create_pk_wasm::<KZGCommitmentScheme<Bn256>, Fr, GraphCircuit>(vk, &circuit, &params)
-        .map_err(Box::<dyn std::error::Error>::from)
-        .map_err(|e| JsError::new(&format!("Failed to create proving key: {}", e)))?;
-
-    let mut serialized_pk = Vec::new();
-    pk.write(&mut serialized_pk, halo2_proofs::SerdeFormat::RawBytes)
-        .map_err(|e| JsError::new(&format!("Failed to serialize pk: {}", e)))?;
-
-    Ok(serialized_pk)
+    gen_pk(vk.0, compiled_circuit.0, params_ser.0).map_err(JsError::from)
 }
 
 /// Verify proof in browser using wasm
@@ -362,86 +288,12 @@ pub fn verify(
     settings: wasm_bindgen::Clamped<Vec<u8>>,
     srs: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<bool, JsError> {
-    let circuit_settings: GraphSettings = serde_json::from_slice(&settings[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize settings: {}", e)))?;
-
-    let proof: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof_js[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize proof: {}", e)))?;
-
-    let mut reader = std::io::BufReader::new(&vk[..]);
-    let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
-        circuit_settings.clone(),
-    )
-    .map_err(|e| JsError::new(&format!("Failed to deserialize vk: {}", e)))?;
-
-    let orig_n = 1 << circuit_settings.run_args.logrows;
-
-    let commitment = circuit_settings.run_args.commitment.into();
-
-    let mut reader = std::io::BufReader::new(&srs[..]);
-    let result = match commitment {
-        Commitments::KZG => {
-            let params: ParamsKZG<Bn256> =
-                halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
-                    .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
-            let strategy = KZGSingleStrategy::new(params.verifier_params());
-            match proof.transcript_type {
-                TranscriptType::EVM => verify_proof_circuit::<
-                    VerifierSHPLONK<'_, Bn256>,
-                    KZGCommitmentScheme<Bn256>,
-                    KZGSingleStrategy<_>,
-                    _,
-                    EvmTranscript<G1Affine, _, _, _>,
-                >(&proof, &params, &vk, strategy, orig_n),
-
-                TranscriptType::Poseidon => {
-                    verify_proof_circuit::<
-                        VerifierSHPLONK<'_, Bn256>,
-                        KZGCommitmentScheme<Bn256>,
-                        KZGSingleStrategy<_>,
-                        _,
-                        PoseidonTranscript<NativeLoader, _>,
-                    >(&proof, &params, &vk, strategy, orig_n)
-                }
-            }
-        }
-        Commitments::IPA => {
-            let params: ParamsIPA<_> =
-                halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
-                    .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
-            let strategy = IPASingleStrategy::new(params.verifier_params());
-            match proof.transcript_type {
-                TranscriptType::EVM => verify_proof_circuit::<
-                    VerifierIPA<_>,
-                    IPACommitmentScheme<G1Affine>,
-                    IPASingleStrategy<_>,
-                    _,
-                    EvmTranscript<G1Affine, _, _, _>,
-                >(&proof, &params, &vk, strategy, orig_n),
-                TranscriptType::Poseidon => {
-                    verify_proof_circuit::<
-                        VerifierIPA<_>,
-                        IPACommitmentScheme<G1Affine>,
-                        IPASingleStrategy<_>,
-                        _,
-                        PoseidonTranscript<NativeLoader, _>,
-                    >(&proof, &params, &vk, strategy, orig_n)
-                }
-            }
-        }
-    };
-
-    match result {
-        Ok(_) => Ok(true),
-        Err(e) => Err(JsError::new(&format!("{}", e))),
-    }
+    super::universal::verify(proof_js.0, vk.0, settings.0, srs.0).map_err(JsError::from)
 }
 
+/// Verify aggregate proof in browser using wasm
 #[wasm_bindgen]
 #[allow(non_snake_case)]
-/// Verify aggregate proof in browser using wasm
 pub fn verifyAggr(
     proof_js: wasm_bindgen::Clamped<Vec<u8>>,
     vk: wasm_bindgen::Clamped<Vec<u8>>,
@@ -449,78 +301,7 @@ pub fn verifyAggr(
     srs: wasm_bindgen::Clamped<Vec<u8>>,
     commitment: &str,
 ) -> Result<bool, JsError> {
-    let proof: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof_js[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize proof: {}", e)))?;
-
-    let mut reader = std::io::BufReader::new(&vk[..]);
-    let vk = VerifyingKey::<G1Affine>::read::<_, AggregationCircuit>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
-        (),
-    )
-    .map_err(|e| JsError::new(&format!("Failed to deserialize vk: {}", e)))?;
-
-    let commit = Commitments::from_str(commitment).map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    let orig_n = 1 << logrows;
-
-    let mut reader = std::io::BufReader::new(&srs[..]);
-    let result = match commit {
-        Commitments::KZG => {
-            let params: ParamsKZG<Bn256> =
-                halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
-                    .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
-            let strategy = KZGSingleStrategy::new(params.verifier_params());
-            match proof.transcript_type {
-                TranscriptType::EVM => verify_proof_circuit::<
-                    VerifierSHPLONK<'_, Bn256>,
-                    KZGCommitmentScheme<Bn256>,
-                    KZGSingleStrategy<_>,
-                    _,
-                    EvmTranscript<G1Affine, _, _, _>,
-                >(&proof, &params, &vk, strategy, orig_n),
-
-                TranscriptType::Poseidon => {
-                    verify_proof_circuit::<
-                        VerifierSHPLONK<'_, Bn256>,
-                        KZGCommitmentScheme<Bn256>,
-                        KZGSingleStrategy<_>,
-                        _,
-                        PoseidonTranscript<NativeLoader, _>,
-                    >(&proof, &params, &vk, strategy, orig_n)
-                }
-            }
-        }
-        Commitments::IPA => {
-            let params: ParamsIPA<_> =
-                halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
-                    .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
-            let strategy = IPASingleStrategy::new(params.verifier_params());
-            match proof.transcript_type {
-                TranscriptType::EVM => verify_proof_circuit::<
-                    VerifierIPA<_>,
-                    IPACommitmentScheme<G1Affine>,
-                    IPASingleStrategy<_>,
-                    _,
-                    EvmTranscript<G1Affine, _, _, _>,
-                >(&proof, &params, &vk, strategy, orig_n),
-                TranscriptType::Poseidon => {
-                    verify_proof_circuit::<
-                        VerifierIPA<_>,
-                        IPACommitmentScheme<G1Affine>,
-                        IPASingleStrategy<_>,
-                        _,
-                        PoseidonTranscript<NativeLoader, _>,
-                    >(&proof, &params, &vk, strategy, orig_n)
-                }
-            }
-        }
-    };
-
-    match result {
-        Ok(_) => Ok(true),
-        Err(e) => Err(JsError::new(&format!("{}", e))),
-    }
+    verify_aggr(proof_js.0, vk.0, logrows, srs.0, commitment).map_err(JsError::from)
 }
 
 /// Prove in browser using wasm
@@ -531,100 +312,7 @@ pub fn prove(
     compiled_circuit: wasm_bindgen::Clamped<Vec<u8>>,
     srs: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
-    #[cfg(feature = "det-prove")]
-    log::set_max_level(log::LevelFilter::Debug);
-    #[cfg(not(feature = "det-prove"))]
-    log::set_max_level(log::LevelFilter::Info);
-
-    // read in circuit
-    let mut circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize circuit: {}", e)))?;
-
-    // read in model input
-    let data: crate::graph::GraphWitness = serde_json::from_slice(&witness[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize witness: {}", e)))?;
-
-    // read in proving key
-    let mut reader = std::io::BufReader::new(&pk[..]);
-    let pk = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
-        circuit.settings().clone(),
-    )
-    .map_err(|e| JsError::new(&format!("Failed to deserialize proving key: {}", e)))?;
-
-    // prep public inputs
-    circuit
-        .load_graph_witness(&data)
-        .map_err(|e| JsError::new(&format!("{}", e)))?;
-    let public_inputs = circuit
-        .prepare_public_inputs(&data)
-        .map_err(|e| JsError::new(&format!("{}", e)))?;
-    let proof_split_commits: Option<crate::pfsys::ProofSplitCommit> = data.into();
-
-    // read in kzg params
-    let mut reader = std::io::BufReader::new(&srs[..]);
-    let commitment = circuit.settings().run_args.commitment.into();
-    // creates and verifies the proof
-    let proof = match commitment {
-        Commitments::KZG => {
-            let params: ParamsKZG<Bn256> =
-                halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
-                    .map_err(|e| JsError::new(&format!("Failed to deserialize srs: {}", e)))?;
-
-            create_proof_circuit::<
-                KZGCommitmentScheme<Bn256>,
-                _,
-                ProverSHPLONK<_>,
-                VerifierSHPLONK<_>,
-                KZGSingleStrategy<_>,
-                _,
-                EvmTranscript<_, _, _, _>,
-                EvmTranscript<_, _, _, _>,
-            >(
-                circuit,
-                vec![public_inputs],
-                &params,
-                &pk,
-                CheckMode::UNSAFE,
-                crate::Commitments::KZG,
-                TranscriptType::EVM,
-                proof_split_commits,
-                None,
-            )
-        }
-        Commitments::IPA => {
-            let params: ParamsIPA<_> =
-                halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
-                    .map_err(|e| JsError::new(&format!("Failed to deserialize srs: {}", e)))?;
-
-            create_proof_circuit::<
-                IPACommitmentScheme<G1Affine>,
-                _,
-                ProverIPA<_>,
-                VerifierIPA<_>,
-                IPASingleStrategy<_>,
-                _,
-                EvmTranscript<_, _, _, _>,
-                EvmTranscript<_, _, _, _>,
-            >(
-                circuit,
-                vec![public_inputs],
-                &params,
-                &pk,
-                CheckMode::UNSAFE,
-                crate::Commitments::IPA,
-                TranscriptType::EVM,
-                proof_split_commits,
-                None,
-            )
-        }
-    }
-    .map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    Ok(serde_json::to_string(&proof)
-        .map_err(|e| JsError::new(&format!("{}", e)))?
-        .into_bytes())
+    super::universal::prove(witness.0, pk.0, compiled_circuit.0, srs.0).map_err(JsError::from)
 }
 
 // VALIDATION FUNCTIONS
@@ -633,10 +321,7 @@ pub fn prove(
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn witnessValidation(witness: wasm_bindgen::Clamped<Vec<u8>>) -> Result<bool, JsError> {
-    let _: crate::graph::GraphWitness = serde_json::from_slice(&witness[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize witness: {}", e)))?;
-
-    Ok(true)
+    witness_validation(witness.0).map_err(JsError::from)
 }
 /// Compiled circuit validation
 #[wasm_bindgen]
@@ -644,28 +329,19 @@ pub fn witnessValidation(witness: wasm_bindgen::Clamped<Vec<u8>>) -> Result<bool
 pub fn compiledCircuitValidation(
     compiled_circuit: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<bool, JsError> {
-    let _: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize compiled circuit: {}", e)))?;
-
-    Ok(true)
+    compiled_circuit_validation(compiled_circuit.0).map_err(JsError::from)
 }
 /// Input file validation
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn inputValidation(input: wasm_bindgen::Clamped<Vec<u8>>) -> Result<bool, JsError> {
-    let _: crate::graph::input::GraphData = serde_json::from_slice(&input[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize input: {}", e)))?;
-
-    Ok(true)
+    input_validation(input.0).map_err(JsError::from)
 }
 /// Proof file validation
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn proofValidation(proof: wasm_bindgen::Clamped<Vec<u8>>) -> Result<bool, JsError> {
-    let _: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize proof: {}", e)))?;
-
-    Ok(true)
+    proof_validation(proof.0).map_err(JsError::from)
 }
 /// Vk file validation
 #[wasm_bindgen]
@@ -674,17 +350,7 @@ pub fn vkValidation(
     vk: wasm_bindgen::Clamped<Vec<u8>>,
     settings: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<bool, JsError> {
-    let circuit_settings: GraphSettings = serde_json::from_slice(&settings[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize settings: {}", e)))?;
-    let mut reader = std::io::BufReader::new(&vk[..]);
-    let _ = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
-        circuit_settings,
-    )
-    .map_err(|e| JsError::new(&format!("Failed to deserialize vk: {}", e)))?;
-
-    Ok(true)
+    vk_validation(vk.0, settings.0).map_err(JsError::from)
 }
 /// Pk file validation
 #[wasm_bindgen]
@@ -693,79 +359,22 @@ pub fn pkValidation(
     pk: wasm_bindgen::Clamped<Vec<u8>>,
     settings: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<bool, JsError> {
-    let circuit_settings: GraphSettings = serde_json::from_slice(&settings[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize settings: {}", e)))?;
-    let mut reader = std::io::BufReader::new(&pk[..]);
-    let _ = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
-        &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
-        circuit_settings,
-    )
-    .map_err(|e| JsError::new(&format!("Failed to deserialize proving key: {}", e)))?;
-
-    Ok(true)
+    pk_validation(pk.0, settings.0).map_err(JsError::from)
 }
 /// Settings file validation
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn settingsValidation(settings: wasm_bindgen::Clamped<Vec<u8>>) -> Result<bool, JsError> {
-    let _: GraphSettings = serde_json::from_slice(&settings[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize settings: {}", e)))?;
-
-    Ok(true)
+    settings_validation(settings.0).map_err(JsError::from)
 }
 /// Srs file validation
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn srsValidation(srs: wasm_bindgen::Clamped<Vec<u8>>) -> Result<bool, JsError> {
-    let mut reader = std::io::BufReader::new(&srs[..]);
-    let _: ParamsKZG<Bn256> =
-        halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader)
-            .map_err(|e| JsError::new(&format!("Failed to deserialize params: {}", e)))?;
-
-    Ok(true)
+    srs_validation(srs.0).map_err(JsError::from)
 }
 
-// HELPER FUNCTIONS
-
-/// Creates a [ProvingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
-#[cfg(any(target_os = "ios", target_arch = "wasm32"))]
-pub fn create_vk_wasm<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
-    circuit: &C,
-    params: &'_ Scheme::ParamsProver,
-    compress_selectors: bool,
-) -> Result<VerifyingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
-where
-    C: Circuit<Scheme::Scalar>,
-    <Scheme as CommitmentScheme>::Scalar: FromUniformBytes<64>,
-{
-    //	Real proof
-    let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
-
-    // Initialize the verifying key
-    let vk = keygen_vk_custom(params, &empty_circuit, compress_selectors)?;
-    Ok(vk)
-}
-/// Creates a [ProvingKey] from a [VerifyingKey] for a [GraphCircuit] (`circuit`) with specific [CommitmentScheme] parameters (`params`) for the WASM target
-#[cfg(any(target_os = "ios", target_arch = "wasm32"))]
-pub fn create_pk_wasm<Scheme: CommitmentScheme, F: PrimeField + TensorType, C: Circuit<F>>(
-    vk: VerifyingKey<Scheme::Curve>,
-    circuit: &C,
-    params: &'_ Scheme::ParamsProver,
-) -> Result<ProvingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
-where
-    C: Circuit<Scheme::Scalar>,
-    <Scheme as CommitmentScheme>::Scalar: FromUniformBytes<64>,
-{
-    //	Real proof
-    let empty_circuit = <C as Circuit<F>>::without_witnesses(circuit);
-
-    // Initialize the proving key
-    let pk = keygen_pk(params, vk, &empty_circuit)?;
-    Ok(pk)
-}
-
-///
+/// HELPER FUNCTIONS
 pub fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
     let mut n: u128 = 0;
     for &b in arr.iter().rev() {

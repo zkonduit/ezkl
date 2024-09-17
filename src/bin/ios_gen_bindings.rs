@@ -45,10 +45,14 @@ fn build_bindings(library_name: &str, mode: &str) {
     let framework_out = bindings_out.join("EzklCore.xcframework");
 
     // Define target architectures for building
+    // We currently only support iOS devices and simulators running on ARM Macs
+    // This is due to limiting the library size to under 100MB for GitHub Commit Size Limit
+    // To support older Macs (Intel), follow the instructions in the comments below
     #[allow(clippy::useless_vec)]
     let target_archs = vec![
-        vec!["aarch64-apple-ios"],                         // iOS device
-        vec!["aarch64-apple-ios-sim", "x86_64-apple-ios"], // iOS simulator
+        vec!["aarch64-apple-ios"], // iOS device
+        vec!["aarch64-apple-ios-sim"], // iOS simulator ARM Mac
+                                   // vec!["aarch64-apple-ios-sim", "x86_64-apple-ios"], // TODO - replace the above line with this line to allow running on older Macs (Intel)
     ];
 
     // Build the library for each architecture and combine them
