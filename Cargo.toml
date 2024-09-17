@@ -78,8 +78,8 @@ pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio/", branch="m
     "tokio-runtime",
 ], default-features = false, optional = true }
 
-pyo3-log = { version = "0.10.0", default_features = false, optional = true }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev = "40c64319291184814d9fea5fdf4fa16f5a4f7116", default_features = false, optional = true }
+pyo3-log = { version = "0.10.0", default-features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev = "40c64319291184814d9fea5fdf4fa16f5a4f7116", default-features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
 metal = { git = "https://github.com/gfx-rs/metal-rs", optional = true }
 objc = { version = "0.2.4", optional = true }
