@@ -57,7 +57,7 @@ impl Circuit<Fr> for MyCircuit {
         layouter.assign_region(
             || "",
             |region| {
-                let mut region = region::RegionCtx::new(region, 0, 1);
+                let mut region = region::RegionCtx::new(region, 0, 1, 1024, 2);
                 config
                     .layout(
                         &mut region,

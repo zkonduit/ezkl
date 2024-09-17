@@ -547,7 +547,11 @@ impl Model {
             })
             .collect::<Result<Vec<_>, GraphError>>()?;
 
-        let res = self.dummy_layout(run_args, &inputs, RegionSettings::all_false())?;
+        let res = self.dummy_layout(
+            run_args,
+            &inputs,
+            RegionSettings::all_false(run_args.decomp_base, run_args.decomp_legs),
+        )?;
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
 
@@ -883,16 +887,8 @@ impl Model {
                     );
                 }
                 None => {
-                    let mut n = Node::new(
-                        n.clone(),
-                        &mut nodes,
-                        scales,
-                        &run_args.param_visibility,
-                        i,
-                        symbol_values,
-                        run_args.div_rebasing,
-                        run_args.rebase_frac_zero_constants,
-                    )?;
+                    let mut n =
+                        Node::new(n.clone(), &mut nodes, scales, i, symbol_values, run_args)?;
                     if let Some(ref scales) = override_input_scales {
                         if let Some(inp) = n.opkind.get_input() {
                             let scale = scales[input_idx];
@@ -1112,6 +1108,8 @@ impl Model {
                     region,
                     0,
                     run_args.num_inner_cols,
+                    run_args.decomp_base,
+                    run_args.decomp_legs,
                     original_constants.clone(),
                 );
                 // we need to do this as this loop is called multiple times

@@ -240,7 +240,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::layouts::dot;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -374,7 +374,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// // matmul case
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -827,7 +827,7 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -1760,7 +1760,7 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -1864,7 +1864,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2027,7 +2027,7 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2063,7 +2063,7 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2099,7 +2099,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2141,7 +2141,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
@@ -2177,7 +2177,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2223,7 +2223,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2415,7 +2415,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[2, 15, 2, 1, 1, 0]),
@@ -2472,7 +2472,7 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128, 2));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[1, 12, 6, 4, 5, 6]),
@@ -2500,12 +2500,9 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
 
-    nonlinearity(
-        config,
-        region,
-        &[diff],
-        &LookupOp::GreaterThan { a: utils::F32(0.) },
-    )
+    let sign = sign(config, region, &[diff])?;
+
+    equals(config, region, &[sign, create_unit_tensor(1)])
 }
 
 /// Greater equals than operation.
@@ -2524,7 +2521,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128, 2));
 ///
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -2544,21 +2541,17 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let (mut lhs, mut rhs) = (values[0].clone(), values[1].clone());
+    let (lhs, rhs) = (values[0].clone(), values[1].clone());
 
-    let broadcasted_shape = get_broadcasted_shape(lhs.dims(), rhs.dims())?;
-
-    lhs.expand(&broadcasted_shape)?;
-    rhs.expand(&broadcasted_shape)?;
-
-    let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
-
-    nonlinearity(
+    // add 1 to lhs
+    let lhs_plus_one = pairwise(
         config,
         region,
-        &[diff],
-        &LookupOp::GreaterThanEqual { a: utils::F32(0.) },
-    )
+        &[lhs.clone(), create_unit_tensor(1)],
+        BaseOp::Add,
+    )?;
+
+    greater(config, region, &[lhs_plus_one, rhs])
 }
 
 /// Less than to operation.
@@ -2578,7 +2571,7 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128, 2));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 0, 5, 4, 5, 1]),
@@ -2619,7 +2612,7 @@ pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 0, 5, 4, 5, 1]),
@@ -2660,7 +2653,7 @@ pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 1, 1, 1, 1, 0]),
@@ -2704,7 +2697,7 @@ pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[1, 1, 1, 1, 1, 0]),
@@ -2752,7 +2745,7 @@ pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[1, 1, 1, 1, 1, 0]),
@@ -2826,7 +2819,7 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 1, 1, 1, 1, 0]),
@@ -2882,7 +2875,7 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 1, 1, 1, 1, 0]),
@@ -2925,7 +2918,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let mask = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 0, 1, 0, 1, 0]),
@@ -2983,7 +2976,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
@@ -3015,7 +3008,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -3097,7 +3090,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -3198,7 +3191,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let c = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap());
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -3426,7 +3419,7 @@ pub fn deconv<
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -4155,6 +4148,128 @@ pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .map_err(|e| e.into())
 }
 
+pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    base: &usize,
+    n: &usize,
+) -> Result<ValTensor<F>, CircuitError> {
+    let input = values[0].clone();
+
+    let is_assigned = !input.all_prev_assigned();
+
+    let bases: ValTensor<F> = Tensor::from(
+        (0..*n)
+            .rev()
+            .map(|x| ValType::Constant(integer_rep_to_felt(base.pow(x as u32) as IntegerRep))),
+    )
+    .into();
+
+    let cartesian_coord = input
+        .dims()
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let mut output: Tensor<Tensor<ValType<F>>> = Tensor::new(None, input.dims())?;
+
+    let inner_loop_function =
+        |i: usize, region: &mut RegionCtx<F>| -> Result<Tensor<ValType<F>>, CircuitError> {
+            let coord = cartesian_coord[i].clone();
+            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let mut sliced_input = input.get_slice(&slice)?;
+            sliced_input.flatten();
+
+            if !is_assigned {
+                sliced_input = region.assign(&config.custom_gates.inputs[0], &sliced_input)?;
+            }
+
+            let mut claimed_output_slice = if region.witness_gen() {
+                sliced_input.decompose(*base, *n)?
+            } else {
+                Tensor::from(vec![ValType::Value(Value::unknown()); *n + 1].into_iter()).into()
+            };
+
+            claimed_output_slice =
+                region.assign(&config.custom_gates.inputs[1], &claimed_output_slice)?;
+            claimed_output_slice.flatten();
+
+            region.increment(claimed_output_slice.len());
+
+            // get the sign bit and make sure it is valid
+            let sign = claimed_output_slice.first()?;
+            let sign = range_check(config, region, &[sign], &(-1, 1))?;
+
+            // get the rest of the thing and make sure it is in the correct range
+            let rest = claimed_output_slice.get_slice(&[1..claimed_output_slice.len()])?;
+
+            let rest = range_check(config, region, &[rest], &(0, (base - 1) as i128))?;
+
+            let prod_decomp = dot(config, region, &[rest, bases.clone()])?;
+
+            let signed_decomp = pairwise(config, region, &[prod_decomp, sign], BaseOp::Mult)?;
+
+            enforce_equality(config, region, &[sliced_input, signed_decomp])?;
+
+            Ok(claimed_output_slice.get_inner_tensor()?.clone())
+        };
+
+    region.apply_in_loop(&mut output, inner_loop_function)?;
+
+    let mut combined_output = output.combine()?;
+    let mut output_dims = input.dims().to_vec();
+    output_dims.push(*n + 1);
+    combined_output.reshape(&output_dims)?;
+
+    Ok(combined_output.into())
+}
+
+pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, CircuitError> {
+    let mut decomp = decompose(config, region, values, &region.base(), &region.legs())?;
+    // get every n elements now, which correspond to the sign bit
+
+    decomp.get_every_n(region.legs() + 1)?;
+    decomp.reshape(values[0].dims())?;
+
+    Ok(decomp)
+}
+
+pub(crate) fn abs<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, CircuitError> {
+    let sign = sign(config, region, values)?;
+
+    pairwise(config, region, &[values[0].clone(), sign], BaseOp::Mult)
+}
+
+pub(crate) fn relu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, CircuitError> {
+    let sign = sign(config, region, values)?;
+
+    let mut unit = create_unit_tensor(sign.len());
+    unit.reshape(sign.dims())?;
+
+    let relu_mask = equals(config, region, &[sign, unit])?;
+
+    pairwise(
+        config,
+        region,
+        &[values[0].clone(), relu_mask],
+        BaseOp::Mult,
+    )
+}
+
 fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -4324,7 +4439,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 2, 3, 2, 2, 0]),
@@ -4372,7 +4487,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true());
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[100, 200, 300, 400, 500, 600]),

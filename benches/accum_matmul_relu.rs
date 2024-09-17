@@ -57,7 +57,15 @@ impl Circuit<Fr> for MyCircuit {
 
         // sets up a new relu table
         base_config
-            .configure_lookup(cs, &b, &output, &a, BITS, K, &LookupOp::ReLU)
+            .configure_lookup(
+                cs,
+                &b,
+                &output,
+                &a,
+                BITS,
+                K,
+                &LookupOp::LeakyReLU { slope: 0.0.into() },
+            )
             .unwrap();
 
         MyConfig { base_config }
@@ -75,14 +83,18 @@ impl Circuit<Fr> for MyCircuit {
                 let op = PolyOp::Einsum {
                     equation: "ij,jk->ik".to_string(),
                 };
-                let mut region = region::RegionCtx::new(region, 0, 1);
+                let mut region = region::RegionCtx::new(region, 0, 1, 1024, 2);
                 let output = config
                     .base_config
                     .layout(&mut region, &self.inputs, Box::new(op))
                     .unwrap();
                 let _output = config
                     .base_config
-                    .layout(&mut region, &[output.unwrap()], Box::new(LookupOp::ReLU))
+                    .layout(
+                        &mut region,
+                        &[output.unwrap()],
+                        Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                    )
                     .unwrap();
                 Ok(())
             },

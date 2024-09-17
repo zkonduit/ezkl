@@ -23,7 +23,7 @@ examples_path = os.path.abspath(
 
 srs_path = os.path.join(folder_path, 'kzg_test.params')
 params_k17_path = os.path.join(folder_path, 'kzg_test_k17.params')
-params_k20_path = os.path.join(folder_path, 'kzg_test_k20.params')
+params_k21_path = os.path.join(folder_path, 'kzg_test_k21.params')
 anvil_url = "http://localhost:3030"
 
 
@@ -104,8 +104,8 @@ def test_gen_srs():
     ezkl.gen_srs(params_k17_path, 17)
     assert os.path.isfile(params_k17_path)
 
-    ezkl.gen_srs(params_k20_path, 20)
-    assert os.path.isfile(params_k20_path)
+    ezkl.gen_srs(params_k21_path, 21)
+    assert os.path.isfile(params_k21_path)
 
 
 
@@ -677,7 +677,7 @@ async def test_aggregate_and_verify_aggr():
     )
 
     # mock aggregate
-    res = ezkl.mock_aggregate([proof_path], 20)
+    res = ezkl.mock_aggregate([proof_path], 21)
     assert res == True
 
     aggregate_proof_path = os.path.join(folder_path, 'aggr_1l_relu.pf')
@@ -688,8 +688,8 @@ async def test_aggregate_and_verify_aggr():
         [proof_path],
         aggregate_vk_path,
         aggregate_pk_path,
-        20,
-        srs_path=params_k20_path,
+        21,
+        srs_path=params_k21_path,
     )
 
     res = ezkl.gen_vk_from_pk_aggr(aggregate_pk_path, aggregate_vk_path)
@@ -701,9 +701,9 @@ async def test_aggregate_and_verify_aggr():
         aggregate_proof_path,
         aggregate_pk_path,
         "poseidon",
-        20,
+        21,
         "unsafe",
-        srs_path=params_k20_path,
+        srs_path=params_k21_path,
     )
 
     assert res == True
@@ -713,8 +713,8 @@ async def test_aggregate_and_verify_aggr():
     res = ezkl.verify_aggr(
         aggregate_proof_path,
         aggregate_vk_path,
-        20,
-        srs_path=params_k20_path,
+        21,
+        srs_path=params_k21_path,
     )
     assert res == True
 
@@ -793,8 +793,8 @@ async def test_evm_aggregate_and_verify_aggr():
         [proof_path],
         aggregate_vk_path,
         aggregate_pk_path,
-        20,
-        srs_path=params_k20_path,
+        21,
+        srs_path=params_k21_path,
     )
 
     res = ezkl.aggregate(
@@ -802,9 +802,9 @@ async def test_evm_aggregate_and_verify_aggr():
         aggregate_proof_path,
         aggregate_pk_path,
         "evm",
-        20,
+        21,
         "unsafe",
-        srs_path=params_k20_path,
+        srs_path=params_k21_path,
     )
 
     assert res == True
@@ -819,8 +819,8 @@ async def test_evm_aggregate_and_verify_aggr():
         aggregate_vk_path,
         sol_code_path,
         abi_path,
-        logrows=20,
-        srs_path=params_k20_path,
+        logrows=21,
+        srs_path=params_k21_path,
     )
 
     assert res == True
@@ -838,8 +838,8 @@ async def test_evm_aggregate_and_verify_aggr():
     res = ezkl.verify_aggr(
         aggregate_proof_path,
         aggregate_vk_path,
-        20,
-        srs_path=params_k20_path,
+        21,
+        srs_path=params_k21_path,
     )
     assert res == True
 

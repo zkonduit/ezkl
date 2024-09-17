@@ -786,7 +786,8 @@ pub(crate) async fn gen_witness(
 
     let commitment: Commitments = settings.run_args.commitment.into();
 
-    let region_settings = RegionSettings::all_true();
+    let region_settings =
+        RegionSettings::all_true(settings.run_args.decomp_base, settings.run_args.decomp_legs);
 
     let start_time = Instant::now();
     let witness = if settings.module_requires_polycommit() {
@@ -1178,7 +1179,10 @@ pub(crate) async fn calibrate(
                         &mut data.clone(),
                         None,
                         None,
-                        RegionSettings::all_true(),
+                        RegionSettings::all_true(
+                            settings.run_args.decomp_base,
+                            settings.run_args.decomp_legs,
+                        ),
                     )
                     .map_err(|e| format!("failed to forward: {}", e))?;
 
@@ -1372,8 +1376,10 @@ pub(crate) async fn calibrate(
         let module_log_row = best_params.module_constraint_logrows_with_blinding();
         let instance_logrows = best_params.log2_total_instances_with_blinding();
         let dynamic_lookup_logrows = best_params.dynamic_lookup_and_shuffle_logrows_with_blinding();
+        let range_check_logrows = best_params.range_check_log_rows_with_blinding();
 
         let mut reduction = std::cmp::max(lookup_log_rows, module_log_row);
+        reduction = std::cmp::max(reduction, range_check_logrows);
         reduction = std::cmp::max(reduction, instance_logrows);
         reduction = std::cmp::max(reduction, dynamic_lookup_logrows);
         reduction = std::cmp::max(reduction, crate::graph::MIN_LOGROWS);

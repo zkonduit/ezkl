@@ -451,6 +451,18 @@ impl GraphSettings {
             .ceil() as u32
     }
 
+    /// Calc the number of rows required for the range checks
+    pub fn range_check_log_rows_with_blinding(&self) -> u32 {
+        let max_range = self
+            .required_range_checks
+            .iter()
+            .map(|x| x.1 - x.0)
+            .max()
+            .unwrap_or(0);
+
+        (max_range as f32).log2().ceil() as u32
+    }
+
     fn model_constraint_logrows_with_blinding(&self) -> u32 {
         (self.num_rows as f64 + RESERVED_BLINDING_ROWS as f64)
             .log2()

@@ -141,23 +141,23 @@ mod tests {
 
     #[test]
     fn f32_eq() {
-        assert!(F32(std::f32::NAN) == F32(std::f32::NAN));
-        assert!(F32(std::f32::NAN) != F32(5.0));
-        assert!(F32(5.0) != F32(std::f32::NAN));
+        assert!(F32(f32::NAN) == F32(f32::NAN));
+        assert!(F32(f32::NAN) != F32(5.0));
+        assert!(F32(5.0) != F32(f32::NAN));
         assert!(F32(0.0) == F32(-0.0));
     }
 
     #[test]
     fn f32_cmp() {
-        assert!(F32(std::f32::NAN) == F32(std::f32::NAN));
-        assert!(F32(std::f32::NAN) < F32(5.0));
-        assert!(F32(5.0) > F32(std::f32::NAN));
+        assert!(F32(f32::NAN) == F32(f32::NAN));
+        assert!(F32(f32::NAN) < F32(5.0));
+        assert!(F32(5.0) > F32(f32::NAN));
         assert!(F32(0.0) == F32(-0.0));
     }
 
     #[test]
     fn f32_hash() {
         assert!(calculate_hash(&F32(0.0)) == calculate_hash(&F32(-0.0)));
-        assert!(calculate_hash(&F32(std::f32::NAN)) == calculate_hash(&F32(-std::f32::NAN)));
+        assert!(calculate_hash(&F32(f32::NAN)) == calculate_hash(&F32(-f32::NAN)));
     }
 }

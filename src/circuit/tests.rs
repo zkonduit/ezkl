@@ -8,6 +8,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::Fr as F;
 use halo2curves::ff::{Field, PrimeField};
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 use ops::lookup::LookupOp;
 use ops::region::RegionCtx;
 use rand::rngs::OsRng;
@@ -55,7 +56,7 @@ mod matmul {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -132,7 +133,7 @@ mod matmul_col_overflow_double_col {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -206,7 +207,7 @@ mod matmul_col_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -290,7 +291,7 @@ mod matmul_col_ultra_overflow_double_col {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -407,7 +408,7 @@ mod matmul_col_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -518,7 +519,7 @@ mod dot {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -595,7 +596,7 @@ mod dot_col_overflow_triple_col {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 3);
+                        let mut region = RegionCtx::new(region, 0, 3, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -668,7 +669,7 @@ mod dot_col_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -741,7 +742,7 @@ mod sum {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -811,7 +812,7 @@ mod sum_col_overflow_double_col {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                        let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -880,7 +881,7 @@ mod sum_col_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -951,7 +952,7 @@ mod composition {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         let _ = config
                             .layout(
                                 &mut region,
@@ -1042,7 +1043,7 @@ mod conv {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -1193,7 +1194,7 @@ mod conv_col_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(
                                 &mut region,
@@ -1297,7 +1298,7 @@ mod conv_relu_col_ultra_overflow {
 
     use super::*;
 
-    const K: usize = 4;
+    const K: usize = 8;
     const LEN: usize = 15;
 
     #[derive(Clone)]
@@ -1317,15 +1318,23 @@ mod conv_relu_col_ultra_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN * 4);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN * 4);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN * 4);
             let mut base_config =
                 Self::Config::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
             // sets up a new relu table
+
             base_config
-                .configure_lookup(cs, &b, &output, &a, (-3, 3), K, &LookupOp::ReLU)
+                .configure_range_check(cs, &a, &b, (-1, 1), K)
                 .unwrap();
+
+            base_config
+                .configure_range_check(cs, &a, &b, (0, 1), K)
+                .unwrap();
+
+            let _constant = VarTensor::constant_cols(cs, K, 8, false);
+
             base_config.clone()
         }
 
@@ -1334,12 +1343,12 @@ mod conv_relu_col_ultra_overflow {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            config.layout_tables(&mut layouter).unwrap();
+            config.layout_range_checks(&mut layouter).unwrap();
             layouter
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 2, 2);
                         let output = config
                             .layout(
                                 &mut region,
@@ -1355,7 +1364,7 @@ mod conv_relu_col_ultra_overflow {
                             .layout(
                                 &mut region,
                                 &[output.unwrap().unwrap()],
-                                Box::new(LookupOp::ReLU),
+                                Box::new(PolyOp::ReLU),
                             )
                             .unwrap();
                         Ok(())
@@ -1476,7 +1485,7 @@ mod add_w_shape_casting {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
@@ -1543,7 +1552,7 @@ mod add {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
@@ -1627,7 +1636,7 @@ mod dynamic_lookup {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         for i in 0..NUM_LOOP {
                             layouts::dynamic_lookup(
                                 &config,
@@ -1769,7 +1778,7 @@ mod shuffle {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         for i in 0..NUM_LOOP {
                             layouts::shuffles(
                                 &config,
@@ -1884,7 +1893,7 @@ mod add_with_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
                             .map_err(|_| Error::Synthesis)
@@ -1986,7 +1995,7 @@ mod add_with_overflow_and_poseidon {
             layouter.assign_region(
                 || "model",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0, 1);
+                    let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                     config
                         .base
                         .layout(&mut region, &inputs, Box::new(PolyOp::Add))
@@ -2092,7 +2101,7 @@ mod sub {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Sub))
                             .map_err(|_| Error::Synthesis)
@@ -2159,7 +2168,7 @@ mod mult {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Mult))
                             .map_err(|_| Error::Synthesis)
@@ -2226,7 +2235,7 @@ mod pow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
                             .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Pow(5)))
                             .map_err(|_| Error::Synthesis)
@@ -2258,7 +2267,6 @@ mod matmul_relu {
 
     const K: usize = 18;
     const LEN: usize = 32;
-    use crate::circuit::lookup::LookupOp;
 
     #[derive(Clone)]
     struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
@@ -2288,10 +2296,16 @@ mod matmul_relu {
 
             let mut base_config =
                 BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::SAFE);
-            // sets up a new relu table
+
             base_config
-                .configure_lookup(cs, &b, &output, &a, (-32768, 32768), K, &LookupOp::ReLU)
+                .configure_range_check(cs, &a, &b, (-1, 1), K)
                 .unwrap();
+
+            base_config
+                .configure_range_check(cs, &a, &b, (0, 1023), K)
+                .unwrap();
+
+            let _constant = VarTensor::constant_cols(cs, K, 8, false);
 
             MyConfig { base_config }
         }
@@ -2301,11 +2315,14 @@ mod matmul_relu {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>,
         ) -> Result<(), Error> {
-            config.base_config.layout_tables(&mut layouter).unwrap();
+            config
+                .base_config
+                .layout_range_checks(&mut layouter)
+                .unwrap();
             layouter.assign_region(
                 || "",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0, 1);
+                    let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
                     let op = PolyOp::Einsum {
                         equation: "ij,jk->ik".to_string(),
                     };
@@ -2315,7 +2332,7 @@ mod matmul_relu {
                         .unwrap();
                     let _output = config
                         .base_config
-                        .layout(&mut region, &[output.unwrap()], Box::new(LookupOp::ReLU))
+                        .layout(&mut region, &[output.unwrap()], Box::new(PolyOp::ReLU))
                         .unwrap();
                     Ok(())
                 },
@@ -2354,6 +2371,8 @@ mod relu {
         plonk::{Circuit, ConstraintSystem, Error},
     };
 
+    const K: u32 = 8;
+
     #[derive(Clone)]
     struct ReLUCircuit<F: PrimeField + TensorType + PartialOrd> {
         pub input: ValTensor<F>,
@@ -2370,16 +2389,26 @@ mod relu {
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
             let advices = (0..3)
-                .map(|_| VarTensor::new_advice(cs, 4, 1, 3))
+                .map(|_| VarTensor::new_advice(cs, 8, 1, 3))
                 .collect::<Vec<_>>();
 
-            let nl = LookupOp::ReLU;
-
-            let mut config = BaseConfig::default();
+            let mut config = BaseConfig::configure(
+                cs,
+                &[advices[0].clone(), advices[1].clone()],
+                &advices[2],
+                CheckMode::SAFE,
+            );
 
             config
-                .configure_lookup(cs, &advices[0], &advices[1], &advices[2], (-6, 6), 4, &nl)
+                .configure_range_check(cs, &advices[0], &advices[1], (-1, 1), K as usize)
                 .unwrap();
+
+            config
+                .configure_range_check(cs, &advices[0], &advices[1], (0, 1), K as usize)
+                .unwrap();
+
+            let _constant = VarTensor::constant_cols(cs, K as usize, 8, false);
+
             config
         }
 
@@ -2388,15 +2417,15 @@ mod relu {
             mut config: Self::Config,
             mut layouter: impl Layouter<F>, // layouter is our 'write buffer' for the circuit
         ) -> Result<(), Error> {
-            config.layout_tables(&mut layouter).unwrap();
+            config.layout_range_checks(&mut layouter).unwrap();
             layouter
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
-                        config
-                            .layout(&mut region, &[self.input.clone()], Box::new(LookupOp::ReLU))
-                            .map_err(|_| Error::Synthesis)
+                        let mut region = RegionCtx::new(region, 0, 1, 2, 2);
+                        Ok(config
+                            .layout(&mut region, &[self.input.clone()], Box::new(PolyOp::ReLU))
+                            .unwrap())
                     },
                 )
                 .unwrap();
@@ -2414,7 +2443,7 @@ mod relu {
             input: ValTensor::from(input),
         };
 
-        let prover = MockProver::run(4_u32, &circuit, vec![]).unwrap();
+        let prover = MockProver::run(K, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
     }
 }
@@ -2453,7 +2482,7 @@ mod lookup_ultra_overflow {
                 .map(|_| VarTensor::new_advice(cs, 4, 1, 3))
                 .collect::<Vec<_>>();
 
-            let nl = LookupOp::ReLU;
+            let nl = LookupOp::LeakyReLU { slope: 0.0.into() };
 
             let mut config = BaseConfig::default();
 
@@ -2481,9 +2510,13 @@ mod lookup_ultra_overflow {
                 .assign_region(
                     || "",
                     |region| {
-                        let mut region = RegionCtx::new(region, 0, 1);
+                        let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
-                            .layout(&mut region, &[self.input.clone()], Box::new(LookupOp::ReLU))
+                            .layout(
+                                &mut region,
+                                &[self.input.clone()],
+                                Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
