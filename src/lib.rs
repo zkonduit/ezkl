@@ -128,9 +128,11 @@ pub mod python;
 pub mod srs_sha;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
-/// wasm prover and verifier
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-pub mod wasm;
+/// Bindings managment
+#[cfg(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown")))]
+pub mod bindings;
+#[cfg(target_os = "ios")]
+uniffi::setup_scaffolding!();
 
 #[cfg(not(target_arch = "wasm32"))]
 use lazy_static::lazy_static;
