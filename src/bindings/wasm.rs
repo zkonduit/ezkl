@@ -73,26 +73,7 @@ pub fn encodeVerifierCalldata(
     proof: wasm_bindgen::Clamped<Vec<u8>>,
     vk_address: Option<Vec<u8>>,
 ) -> Result<Vec<u8>, JsError> {
-    let snark: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize proof: {}", e)))?;
-
-    let vk_address: Option<[u8; 20]> = if let Some(vk_address) = vk_address {
-        let array: [u8; 20] = serde_json::from_slice(&vk_address[..])
-            .map_err(|e| JsError::new(&format!("Failed to deserialize vk address: {}", e)))?;
-        Some(array)
-    } else {
-        None
-    };
-
-    let flattened_instances = snark.instances.into_iter().flatten();
-
-    let encoded = encode_calldata(
-        vk_address,
-        &snark.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
-
-    Ok(encoded)
+    encode_verifier_calldata(proof.0, vk_address).map_err(|e| JsError::new(&format!("{}", e)))
 }
 
 /// Converts a hex string to a byte array
