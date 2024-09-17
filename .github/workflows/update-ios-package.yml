@@ -1,0 +1,117 @@
+name: Create New Release of iOS EZKL Package
+# TODO - test the code
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag to release"
+        required: true
+  push:
+    tags:
+      - "*"
+
+jobs:
+  build-and-update:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout EZKL
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
+      - name: Build EzklCoreBindings
+        run: CONFIGURATION=release cargo run --bin ios_gen_bindings --features ios-bindings
+
+      - name: Install Git LFS
+        run: |
+          brew install git-lfs
+          git lfs install
+
+      - name: Clone ezkl-ios-port repository
+        run: |
+          git clone https://github.com/${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port.git
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
+
+      - name: Fetch LFS objects
+        run: |
+          cd ezkl-ios-port
+          git lfs pull
+
+      - name: Copy EzklCoreBindings
+        run: |
+          rm -rf ezkl-ios-port/Sources/EzklCoreBindings
+          cp -r EzklCoreBindings ezkl-ios-port/Sources/
+
+      - name: Set up Xcode environment
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          sudo xcodebuild -license accept
+
+      - name: Run Package Tests
+        run: |
+          cd ezkl-ios-port
+          xcodebuild test \
+            -scheme EzklPackage \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+            -resultBundlePath ../testResults
+
+      - name: Run Example App Tests
+        run: |
+          cd ezkl-ios-port/Example
+          xcodebuild test \
+            -project Example.xcodeproj \
+            -scheme EzklApp \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+            -parallel-testing-enabled NO \
+            -resultBundlePath ../../exampleTestResults \
+            -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder
+
+      - name: Upload Test Results (Package)
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: package-test-results
+          path: ./testResults
+
+      - name: Upload Test Results (Example)
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: example-app-test-results
+          path: ./exampleTestResults
+
+      - name: Zip Package
+        run: |
+          cd ezkl-ios-port
+          zip -r EzklCoreBindings.zip LICENSE-MIT.txt Package.swift README.md Sources Tests/UnitTest.swift
+        env:
+          SWIFT_PACKAGE_OWNER_USERNAME: ${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}
+
+      - name: Create Release in ezkl-ios-port
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          release_name: Release ${{ github.event.inputs.tag }}
+          body: "Release for ${{ github.event.inputs.tag }}"
+          draft: false
+          prerelease: false
+          repository: ${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port
+        env:
+          GITHUB_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
+
+      - name: Upload Zip to Release in ezkl-ios-port
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}  # Use the upload URL from the previous step
+          asset_path: ezkl-ios-port/EzklCoreBindings.zip
+          asset_name: EzklCoreBindings.zip
+          asset_content_type: application/zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
