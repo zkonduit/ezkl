@@ -96,6 +96,9 @@ use halo2curves::bn256::{Bn256, G1Affine};
 use serde::{Deserialize, Serialize};
 use tosubcommand::ToFlags;
 
+/// Bindings managment
+#[cfg(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown")))]
+pub mod bindings;
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
 /// CLI commands.
@@ -129,9 +132,6 @@ pub mod python;
 pub mod srs_sha;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
-/// Bindings managment
-#[cfg(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown")))]
-pub mod bindings;
 #[cfg(target_os = "ios")]
 uniffi::setup_scaffolding!();
 
