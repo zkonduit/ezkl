@@ -1,9 +1,9 @@
 use super::scale_to_multiplier;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use super::utilities::node_output_shapes;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use super::VarScales;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use super::Visibility;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
@@ -13,29 +13,29 @@ use crate::circuit::Constant;
 use crate::circuit::Input;
 use crate::circuit::Op;
 use crate::circuit::Unknown;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use crate::graph::errors::GraphError;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use crate::graph::new_op_from_onnx;
 use crate::tensor::TensorError;
 use halo2curves::bn256::Fr as Fp;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use log::trace;
 use serde::Deserialize;
 use serde::Serialize;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use std::collections::BTreeMap;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use std::fmt;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use tabled::Tabled;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use tract_onnx::{
     self,
     prelude::{Node as OnnxNode, SymbolValues, TypedFact, TypedOp},
 };
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     if !v.is_empty() {
         format!("{:?}", v)
@@ -44,7 +44,7 @@ fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 fn display_opkind(v: &SupportedOp) -> String {
     v.as_string()
 }
@@ -303,7 +303,7 @@ impl SupportedOp {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
     fn homogenous_rescale(
         &self,
         in_scales: Vec<crate::Scale>,
@@ -441,7 +441,7 @@ pub struct Node {
     pub num_uses: usize,
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 impl Tabled for Node {
     const LENGTH: usize = 6;
 
@@ -481,7 +481,7 @@ impl Node {
     /// * `other_nodes` - [BTreeMap] of other previously initialized [Node]s in the computational graph.
     /// * `public_params` - flag if parameters of model are public
     /// * `idx` - The node's unique identifier.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         node: OnnxNode<TypedFact, Box<dyn TypedOp>>,
@@ -625,7 +625,7 @@ impl Node {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 fn rescale_const_with_single_use(
     constant: &mut Constant<Fp>,
     in_scales: Vec<crate::Scale>,
