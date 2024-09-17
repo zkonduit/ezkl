@@ -1,12 +1,12 @@
 use super::errors::GraphError;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use super::VarScales;
 use super::{Rescaled, SupportedOp, Visibility};
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use crate::circuit::hybrid::HybridOp;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use crate::circuit::lookup::LookupOp;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use crate::circuit::poly::PolyOp;
 use crate::circuit::Op;
 use crate::fieldutils::IntegerRep;
@@ -14,13 +14,13 @@ use crate::tensor::{Tensor, TensorError, TensorType};
 use halo2curves::bn256::Fr as Fp;
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use log::{debug, warn};
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use std::sync::Arc;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use tract_onnx::tract_core::ops::{
     array::{
         Gather, GatherElements, GatherNd, MultiBroadcastTo, OneHot, ScatterElements, ScatterNd,
@@ -33,7 +33,7 @@ use tract_onnx::tract_core::ops::{
     nn::{LeakyRelu, Reduce, Softmax},
     Downsample,
 };
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use tract_onnx::tract_hir::{
     internal::DimLike,
     ops::array::{Pad, PadMode, TypedConcat},
@@ -90,7 +90,7 @@ pub fn multiplier_to_scale(mult: f64) -> crate::Scale {
     mult.log2().round() as crate::Scale
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 /// extract padding from a onnx node.
 pub fn extract_padding(
     pool_spec: &PoolSpec,
@@ -108,7 +108,7 @@ pub fn extract_padding(
     Ok(padding)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 /// Extracts the strides from a onnx node.
 pub fn extract_strides(pool_spec: &PoolSpec) -> Result<Vec<usize>, GraphError> {
     Ok(pool_spec
@@ -119,7 +119,7 @@ pub fn extract_strides(pool_spec: &PoolSpec) -> Result<Vec<usize>, GraphError> {
 }
 
 /// Gets the shape of a onnx node's outlets.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 pub fn node_output_shapes(
     node: &OnnxNode<TypedFact, Box<dyn TypedOp>>,
     symbol_values: &SymbolValues,
@@ -134,9 +134,9 @@ pub fn node_output_shapes(
     }
     Ok(shapes)
 }
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 use tract_onnx::prelude::SymbolValues;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 /// Extracts the raw values from a tensor.
 pub fn extract_tensor_value(
     input: Arc<tract_onnx::prelude::Tensor>,
@@ -245,7 +245,7 @@ pub fn extract_tensor_value(
     Ok(const_value)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 fn load_op<C: tract_onnx::prelude::Op + Clone>(
     op: &dyn tract_onnx::prelude::Op,
     idx: usize,
@@ -269,7 +269,7 @@ fn load_op<C: tract_onnx::prelude::Op + Clone>(
 /// * `param_visibility` - [Visibility] of the node.
 /// * `node` - the [OnnxNode] to be matched.
 /// * `inputs` - the node's inputs.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
 pub fn new_op_from_onnx(
     idx: usize,
     scales: &VarScales,
