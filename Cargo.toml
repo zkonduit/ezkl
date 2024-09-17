@@ -217,7 +217,7 @@ no-update = []
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
+halo2_proofs = { git = "https://github.com/zkonduit//halo2", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 
 [profile.release]
 rustflags = ["-C", "relocation-model=pic"]
