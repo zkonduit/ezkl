@@ -170,6 +170,10 @@ name = "relu"
 harness = false
 
 [[bench]]
+name = "relu_lookupless"
+harness = false
+
+[[bench]]
 name = "accum_matmul_relu"
 harness = false
 

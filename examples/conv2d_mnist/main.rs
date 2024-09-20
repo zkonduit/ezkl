@@ -163,7 +163,7 @@ where
                 &params,
                 (LOOKUP_MIN, LOOKUP_MAX),
                 K,
-                &LookupOp::ReLU,
+                &LookupOp::LeakyReLU { slope: 0.0.into() },
             )
             .unwrap();
 
@@ -199,7 +199,7 @@ where
             .assign_region(
                 || "mlp_4d",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS);
+                    let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 1024, 2);
 
                     let op = PolyOp::Conv {
                         padding: vec![(PADDING, PADDING); 2],
@@ -221,7 +221,11 @@ where
 
                     let x = config
                         .layer_config
-                        .layout(&mut region, &[x.unwrap()], Box::new(LookupOp::ReLU))
+                        .layout(
+                            &mut region,
+                            &[x.unwrap()],
+                            Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                        )
                         .unwrap();
 
                     let mut x = config

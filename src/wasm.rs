@@ -286,7 +286,15 @@ pub fn genWitness(
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     let witness = circuit
-        .forward::<KZGCommitmentScheme<Bn256>>(&mut input, None, None, RegionSettings::all_false())
+        .forward::<KZGCommitmentScheme<Bn256>>(
+            &mut input,
+            None,
+            None,
+            RegionSettings::all_true(
+                circuit.settings().run_args.decomp_base,
+                circuit.settings().run_args.decomp_legs,
+            ),
+        )
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     serde_json::to_vec(&witness)

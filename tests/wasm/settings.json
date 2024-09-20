@@ -8,7 +8,7 @@
         "param_scale": 0,
         "scale_rebase_multiplier": 10,
         "lookup_range": [
-            -2,
+            0,
             0
         ],
         "logrows": 6,
@@ -24,15 +24,18 @@
         "param_visibility": "Private",
         "div_rebasing": false,
         "rebase_frac_zero_constants": false,
-        "check_mode": "UNSAFE"
+        "check_mode": "UNSAFE",
+        "commitment": "KZG",
+        "decomp_base": 128,
+        "decomp_legs": 2
     },
-    "num_rows": 16,
+    "num_rows": 46,
+    "total_assignments": 92,
+    "total_const_size": 3,
     "total_dynamic_col_size": 0,
     "num_dynamic_lookups": 0,
     "num_shuffles": 0,
     "total_shuffle_col_size": 0,
-    "total_assignments": 32,
-    "total_const_size": 8,
     "model_instance_shapes": [
         [
             1,
@@ -54,12 +57,19 @@
             ]
         ]
     },
-    "required_lookups": [
-        "ReLU"
+    "required_lookups": [],
+    "required_range_checks": [
+        [
+            -1,
+            1
+        ],
+        [
+            0,
+            127
+        ]
     ],
-    "required_range_checks": [],
     "check_mode": "UNSAFE",
     "version": "0.0.0",
     "num_blinding_factors": null,
-    "timestamp": 1702474230544
+    "timestamp": 1726429587279
 }

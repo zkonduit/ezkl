@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::region::RegionCtx;
-use ezkl::circuit::table::Range;
-use ezkl::circuit::{ops::lookup::LookupOp, BaseConfig as Config, CheckMode};
+use ezkl::circuit::{BaseConfig as Config, CheckMode};
 use ezkl::fieldutils::IntegerRep;
 use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::TranscriptType;
@@ -18,7 +18,6 @@ use halo2curves::bn256::{Bn256, Fr};
 use rand::Rng;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
-const BITS: Range = (-32768, 32768);
 static mut LEN: usize = 4;
 const K: usize = 16;
 
@@ -42,13 +41,17 @@ impl Circuit<Fr> for NLCircuit {
                 .map(|_| VarTensor::new_advice(cs, K, 1, LEN))
                 .collect::<Vec<_>>();
 
-            let nl = LookupOp::LeakyReLU { slope: 0.0.into() };
-
             let mut config = Config::default();
 
             config
-                .configure_lookup(cs, &advices[0], &advices[1], &advices[2], BITS, K, &nl)
+                .configure_range_check(cs, &advices[0], &advices[1], (-1, 1), K)
                 .unwrap();
+
+            config
+                .configure_range_check(cs, &advices[0], &advices[1], (0, 1023), K)
+                .unwrap();
+
+            let _constant = VarTensor::constant_cols(cs, K, LEN, false);
 
             config
         }
@@ -59,17 +62,13 @@ impl Circuit<Fr> for NLCircuit {
         mut config: Self::Config,
         mut layouter: impl Layouter<Fr>, // layouter is our 'write buffer' for the circuit
     ) -> Result<(), Error> {
-        config.layout_tables(&mut layouter).unwrap();
+        config.layout_range_checks(&mut layouter).unwrap();
         layouter.assign_region(
             || "",
             |region| {
                 let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
                 config
-                    .layout(
-                        &mut region,
-                        &[self.input.clone()],
-                        Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
-                    )
+                    .layout(&mut region, &[self.input.clone()], Box::new(PolyOp::ReLU))
                     .unwrap();
                 Ok(())
             },

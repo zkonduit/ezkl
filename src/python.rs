@@ -191,6 +191,12 @@ struct PyRunArgs {
     #[pyo3(get, set)]
     /// str: commitment type, accepts `kzg`, `ipa`
     pub commitment: PyCommitments,
+    /// int: The base used for decomposition
+    #[pyo3(get, set)]
+    pub decomp_base: usize,
+    /// int: The number of legs used for decomposition
+    #[pyo3(get, set)]
+    pub decomp_legs: usize,
 }
 
 /// default instantiation of PyRunArgs
@@ -221,6 +227,8 @@ impl From<PyRunArgs> for RunArgs {
             rebase_frac_zero_constants: py_run_args.rebase_frac_zero_constants,
             check_mode: py_run_args.check_mode,
             commitment: Some(py_run_args.commitment.into()),
+            decomp_base: py_run_args.decomp_base,
+            decomp_legs: py_run_args.decomp_legs,
         }
     }
 }
@@ -243,6 +251,8 @@ impl Into<PyRunArgs> for RunArgs {
             rebase_frac_zero_constants: self.rebase_frac_zero_constants,
             check_mode: self.check_mode,
             commitment: self.commitment.into(),
+            decomp_base: self.decomp_base,
+            decomp_legs: self.decomp_legs,
         }
     }
 }

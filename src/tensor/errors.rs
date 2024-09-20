@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use super::ops::DecompositionError;
+
 /// A wrapper for tensor related errors.
 #[derive(Debug, Error)]
 pub enum TensorError {
@@ -33,4 +35,7 @@ pub enum TensorError {
     /// File load error
     #[error("load error: {0}")]
     FileLoadError(String),
+    /// Decomposition error
+    #[error("decomposition error: {0}")]
+    DecompositionError(#[from] DecompositionError),
 }

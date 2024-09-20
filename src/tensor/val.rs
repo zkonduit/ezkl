@@ -520,6 +520,54 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         }
     }
 
+    /// Get the sign of the inner values
+    pub fn sign(&self) -> Result<Self, TensorError> {
+        let evals = self.int_evals()?;
+        Ok(evals
+            .par_enum_map(|_, val| {
+                Ok::<_, TensorError>(ValType::Value(Value::known(integer_rep_to_felt(
+                    val.signum(),
+                ))))
+            })?
+            .into())
+    }
+
+    /// Decompose the inner values into base `base` and `n` legs.
+    pub fn decompose(&self, base: usize, n: usize) -> Result<Self, TensorError> {
+        let res = self
+            .get_inner()?
+            .par_iter()
+            .map(|x| {
+                let mut is_empty = true;
+                x.map(|_| is_empty = false);
+                if is_empty {
+                    return Ok::<_, TensorError>(vec![Value::<F>::unknown(); n + 1]);
+                } else {
+                    let mut res = vec![Value::unknown(); n + 1];
+                    let mut int_rep = 0;
+
+                    x.map(|f| {
+                        int_rep = crate::fieldutils::felt_to_integer_rep(f);
+                    });
+                    let decompe = crate::tensor::ops::get_rep(&int_rep, base, n)?;
+
+                    for (i, x) in decompe.iter().enumerate() {
+                        res[i] = Value::known(crate::fieldutils::integer_rep_to_felt(*x));
+                    }
+                    Ok(res)
+                }
+            })
+            .collect::<Result<Vec<_>, _>>();
+
+        let mut tensor = Tensor::from(res?.into_iter().flatten().collect::<Vec<_>>().into_iter());
+        let mut dims = self.dims().to_vec();
+        dims.push(n + 1);
+
+        tensor.reshape(&dims)?;
+
+        Ok(tensor.into())
+    }
+
     /// Calls `int_evals` on the inner tensor.
     pub fn int_evals(&self) -> Result<Tensor<IntegerRep>, TensorError> {
         // finally convert to vector of integers
@@ -574,7 +622,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         Ok(())
     }
 
-    /// Calls `get_slice` on the inner tensor.
+    /// Calls `last` on the inner tensor.
     pub fn last(&self) -> Result<ValTensor<F>, TensorError> {
         let slice = match self {
             ValTensor::Value {
@@ -583,6 +631,27 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 scale,
             } => {
                 let inner = v.last()?;
+                let dims = inner.dims().to_vec();
+                ValTensor::Value {
+                    inner,
+                    dims,
+                    scale: *scale,
+                }
+            }
+            _ => return Err(TensorError::WrongMethod),
+        };
+        Ok(slice)
+    }
+
+    /// Calls `first`
+    pub fn first(&self) -> Result<ValTensor<F>, TensorError> {
+        let slice = match self {
+            ValTensor::Value {
+                inner: v,
+                dims: _,
+                scale,
+            } => {
+                let inner = v.first()?;
                 let dims = inner.dims().to_vec();
                 ValTensor::Value {
                     inner,
@@ -766,6 +835,38 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 inner: v, dims: d, ..
             } => {
                 *v = v.duplicate_every_n(n, num_repeats, initial_offset)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `get_every_n` on the inner [Tensor].
+    pub fn get_every_n(&mut self, n: usize) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = v.get_every_n(n)?;
+                *d = v.dims().to_vec();
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        }
+        Ok(())
+    }
+
+    /// Calls `exclude_every_n` on the inner [Tensor].
+    pub fn exclude_every_n(&mut self, n: usize) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: d, ..
+            } => {
+                *v = v.exclude_every_n(n)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {

@@ -9,6 +9,9 @@ use super::{base::BaseOp, *};
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PolyOp {
+    ReLU,
+    Abs,
+    Sign,
     GatherElements {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
@@ -99,8 +102,7 @@ impl<
             + PartialOrd
             + std::hash::Hash
             + Serialize
-            + for<'de> Deserialize<'de>
-            ,
+            + for<'de> Deserialize<'de>,
     > Op<F> for PolyOp
 {
     /// Returns a reference to the Any trait.
@@ -110,6 +112,9 @@ impl<
 
     fn as_string(&self) -> String {
         match &self {
+            PolyOp::Abs => "ABS".to_string(),
+            PolyOp::Sign => "SIGN".to_string(),
+            PolyOp::ReLU => "RELU".to_string(),
             PolyOp::GatherElements { dim, constant_idx } => format!(
                 "GATHERELEMENTS (dim={}, constant_idx{})",
                 dim,
@@ -191,6 +196,9 @@ impl<
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
+            PolyOp::Abs => layouts::abs(config, region, values[..].try_into()?)?,
+            PolyOp::Sign => layouts::sign(config, region, values[..].try_into()?)?,
+            PolyOp::ReLU => layouts::relu(config, region, values[..].try_into()?)?,
             PolyOp::MultiBroadcastTo { shape } => {
                 layouts::expand(config, region, values[..].try_into()?, shape)?
             }
@@ -368,6 +376,7 @@ impl<
             PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow as crate::Scale),
             PolyOp::Identity { out_scale } => out_scale.unwrap_or(in_scales[0]),
+            PolyOp::Sign { .. } => 0,
             _ => in_scales[0],
         };
         Ok(scale)
