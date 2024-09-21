@@ -27,21 +27,9 @@ jobs:
       - name: Build EzklCoreBindings
         run: CONFIGURATION=release cargo run --bin ios_gen_bindings --features ios-bindings
 
-      - name: Install Git LFS
-        run: |
-          brew install git-lfs
-          git lfs install
-
       - name: Clone ezkl-ios-port repository
         run: |
           git clone -b feat/ezkl-direct-integration https://github.com/${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port.git
-        env:
-          GIT_LFS_SKIP_SMUDGE: "1"
-
-      - name: Fetch LFS objects
-        run: |
-          cd ezkl-ios-port
-          git lfs pull
 
       - name: Copy EzklCoreBindings
         run: |
