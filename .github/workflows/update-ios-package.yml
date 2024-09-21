@@ -1,4 +1,4 @@
-name: Create New Release of iOS EZKL Package
+name: Build and Publish EZKL iOS SPM package
 
 on:
   workflow_dispatch:
