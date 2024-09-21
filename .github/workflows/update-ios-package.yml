@@ -34,7 +34,7 @@ jobs:
       - name: Copy EzklCoreBindings
         run: |
           rm -rf ezkl-ios-port/Sources/EzklCoreBindings
-          cp -r EzklCoreBindings ezkl-ios-port/Sources/
+          cp -r build/EzklCoreBindings ezkl-ios-port/Sources/
 
       - name: Set up Xcode environment
         run: |
