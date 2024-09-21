@@ -1,5 +1,4 @@
 name: Create New Release of iOS EZKL Package
-# TODO - test the code
 
 on:
   workflow_dispatch:
@@ -35,7 +34,7 @@ jobs:
 
       - name: Clone ezkl-ios-port repository
         run: |
-          git clone https://github.com/${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port.git
+          git clone -b feat/ezkl-direct-integration https://github.com/${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port.git
         env:
           GIT_LFS_SKIP_SMUDGE: "1"
 
@@ -87,31 +86,17 @@ jobs:
           name: example-app-test-results
           path: ./exampleTestResults
 
-      - name: Zip Package
+      - name: Commit and Push Changes to feat/ezkl-direct-integration
         run: |
           cd ezkl-ios-port
-          zip -r EzklCoreBindings.zip LICENSE-MIT.txt Package.swift README.md Sources Tests/UnitTest.swift
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add Sources/EzklCoreBindings
+          git commit -m "Update EzklCoreBindings from ezkl-ios-rust-porter"
+          git tag ${{ github.event.inputs.tag }}
+          git remote set-url origin https://${SWIFT_PACKAGE_OWNER_USERNAME}:${EZKL_PORTER_TOKEN}@github.com/${SWIFT_PACKAGE_OWNER_USERNAME}/ezkl-ios-port.git
+          git push origin feat/ezkl-direct-integration
+          git push origin --tags
         env:
+          EZKL_PORTER_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
           SWIFT_PACKAGE_OWNER_USERNAME: ${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}
-
-      - name: Create Release in ezkl-ios-port
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ github.event.inputs.tag }}
-          release_name: Release ${{ github.event.inputs.tag }}
-          body: "Release for ${{ github.event.inputs.tag }}"
-          draft: false
-          prerelease: false
-          repository: ${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port
-        env:
-          GITHUB_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
-
-      - name: Upload Zip to Release in ezkl-ios-port
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}  # Use the upload URL from the previous step
-          asset_path: ezkl-ios-port/EzklCoreBindings.zip
-          asset_name: EzklCoreBindings.zip
-          asset_content_type: application/zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
