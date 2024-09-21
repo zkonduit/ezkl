@@ -97,7 +97,7 @@ use serde::{Deserialize, Serialize};
 use tosubcommand::ToFlags;
 
 /// Bindings managment
-#[cfg(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown"), feature = "python-bindings"))]
 pub mod bindings;
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
@@ -124,9 +124,6 @@ pub mod graph;
 pub mod logger;
 /// Tools for proofs and verification used by cli
 pub mod pfsys;
-/// Python bindings
-#[cfg(feature = "python-bindings")]
-pub mod python;
 /// srs sha hashes
 #[cfg(not(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown"))))]
 pub mod srs_sha;
