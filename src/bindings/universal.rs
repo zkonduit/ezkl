@@ -175,7 +175,7 @@ pub(crate) fn gen_pk(
 /// Verify proof with vk, proof json, circuit settings json and srs
 #[cfg_attr(target_os = "ios", uniffi::export)]
 pub(crate) fn verify(
-    proof_json: Vec<u8>,
+    proof: Vec<u8>,
     vk: Vec<u8>,
     settings: Vec<u8>,
     srs: Vec<u8>,
@@ -183,7 +183,7 @@ pub(crate) fn verify(
     let circuit_settings: GraphSettings = serde_json::from_slice(&settings[..])
         .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize settings: {}", e)))?;
 
-    let proof: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof_json[..])
+    let proof: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof[..])
         .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize proof: {}", e)))?;
 
     let mut reader = BufReader::new(&vk[..]);
