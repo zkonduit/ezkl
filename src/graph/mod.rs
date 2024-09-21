@@ -384,7 +384,7 @@ fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) -> Resu
 
 #[cfg(feature = "python-bindings")]
 fn insert_polycommit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Result<(), PyErr> {
-    use crate::python::PyG1Affine;
+    use crate::bindings::python::PyG1Affine;
     let poseidon_hash: Vec<Vec<PyG1Affine>> = commits
         .iter()
         .map(|c| c.iter().map(|x| PyG1Affine::from(*x)).collect())
