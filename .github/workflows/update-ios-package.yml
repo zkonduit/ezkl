@@ -29,7 +29,7 @@ jobs:
 
       - name: Clone ezkl-ios-port repository
         run: |
-          git clone -b feat/ezkl-direct-integration https://github.com/${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port.git
+          git clone https://github.com/${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port.git
 
       - name: Copy EzklCoreBindings
         run: |
@@ -80,10 +80,10 @@ jobs:
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git add Sources/EzklCoreBindings
-          git commit -m "Update EzklCoreBindings from ezkl-ios-rust-porter"
+          git commit -m "Update EzklCoreBindings from ezkl-for-ios"
           git tag ${{ github.event.inputs.tag }}
           git remote set-url origin https://${SWIFT_PACKAGE_OWNER_USERNAME}:${EZKL_PORTER_TOKEN}@github.com/${SWIFT_PACKAGE_OWNER_USERNAME}/ezkl-ios-port.git
-          git push origin feat/ezkl-direct-integration
+          git push origin
           git push origin --tags
         env:
           EZKL_PORTER_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
