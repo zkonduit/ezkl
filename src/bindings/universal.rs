@@ -93,23 +93,29 @@ pub(crate) fn encode_verifier_calldata(
 /// Generate witness from compiled circuit and input json
 #[cfg_attr(target_os = "ios", uniffi::export)]
 pub(crate) fn gen_witness(compiled_circuit: Vec<u8>, input: Vec<u8>) -> Result<Vec<u8>, EZKLError> {
-    let mut circuit: GraphCircuit = bincode::deserialize(&compiled_circuit[..])
-        .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize circuit: {}", e)))?;
-
+    let mut circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
+        .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize compiled model: {}", e)))?;
     let input: crate::graph::input::GraphData = serde_json::from_slice(&input[..])
         .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize input: {}", e)))?;
 
     let mut input = circuit
         .load_graph_input(&input)
-        .map_err(InnerEZKLError::from)?;
+        .map_err(|e| EZKLError::InternalError(format!("{}", e)))?;
 
     let witness = circuit
-        .forward::<KZGCommitmentScheme<Bn256>>(&mut input, None, None, RegionSettings::all_false())
-        .map_err(InnerEZKLError::from)?;
+        .forward::<KZGCommitmentScheme<Bn256>>(
+            &mut input,
+            None,
+            None,
+            RegionSettings::all_true(
+                circuit.settings().run_args.decomp_base,
+                circuit.settings().run_args.decomp_legs,
+            ),
+        )
+        .map_err(|e| EZKLError::InternalError(format!("{}", e)))?;
 
     serde_json::to_vec(&witness)
-        .map_err(InnerEZKLError::from)
-        .map_err(EZKLError::from)
+        .map_err(|e| EZKLError::InternalError(format!("Failed to serialize witness: {}", e)))
 }
 
 /// Generate verifying key from compiled circuit, and parameters srs
