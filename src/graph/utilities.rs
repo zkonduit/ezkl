@@ -96,6 +96,11 @@ pub fn extract_padding(
     pool_spec: &PoolSpec,
     image_size: &[usize],
 ) -> Result<Vec<(usize, usize)>, GraphError> {
+    let num_relevant_dims = pool_spec.kernel_shape.len();
+
+    // get the last num_relevant_dims of the image size
+    let image_size = &image_size[image_size.len() - num_relevant_dims..];
+
     let dims = pool_spec.computed_padding(image_size);
     let mut padding = Vec::new();
     for dim in dims {
