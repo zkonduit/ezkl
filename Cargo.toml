@@ -61,7 +61,7 @@ reqwest = { version = "0.12.4", default-features = false, features = [
 openssl = { version = "0.10.55", features = ["vendored"] }
 tokio-postgres = "0.7.10"
 pg_bigdecimal = "0.1.5"
-lazy_static = "1.4.0"
+lazy_static = "1.5.0"
 colored_json = { version = "3.0.1", default_features = false, optional = true }
 regex = { version = "1", default_features = false }
 tokio = { version = "1.35.0", default_features = false, features = [
@@ -79,7 +79,7 @@ pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio/", branch="m
 ], default_features = false, optional = true }
 
 pyo3-log = { version = "0.10.0", default_features = false, optional = true }
-tract-onnx = { git = "https://github.com/sonos/tract/", rev = "40c64319291184814d9fea5fdf4fa16f5a4f7116", default_features = false, optional = true }
+tract-onnx = { git = "https://github.com/sonos/tract/", rev = "c5417ce88caac69d8756bbef3d654c503d9db9c9", default_features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
 metal = { git = "https://github.com/gfx-rs/metal-rs", optional = true }
 objc = { version = "0.2.4", optional = true }
@@ -110,7 +110,7 @@ criterion = { version = "0.5.1", features = ["html_reports"] }
 
 [dev-dependencies]
 tempfile = "3.3.0"
-lazy_static = "1.4.0"
+lazy_static = "1.5.0"
 mnist = "0.5"
 seq-macro = "0.3.1"
 test-case = "2.2.2"
@@ -221,7 +221,7 @@ halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup
 
 [profile.release]
 rustflags = ["-C", "relocation-model=pic"]
-lto = "fat"
-codegen-units = 1
+# lto = "fat"
+# codegen-units = 1
 # panic = "abort"
 

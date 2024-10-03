@@ -2950,11 +2950,11 @@ dependencies = [
 
 [[package]]
 name = "lazy_static"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 dependencies = [
- "spin 0.5.2",
+ "spin",
 ]
 
 [[package]]
@@ -3260,14 +3260,16 @@ dependencies = [
 
 [[package]]
 name = "ndarray"
-version = "0.15.6"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adb12d4e967ec485a5f71c6311fe28158e9d6f4bc4a447b474184d0f91a8fa32"
+checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
 dependencies = [
  "matrixmultiply",
  "num-complex",
  "num-integer",
  "num-traits",
+ "portable-atomic",
+ "portable-atomic-util",
  "rawpointer",
 ]
 
@@ -3532,9 +3534,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.12.1"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
+checksum = "f1bf18183cf54e8d6059647fc3063646a1801cf30896933ec2311622cc4b9a27"
 dependencies = [
  "lock_api",
  "parking_lot_core",
@@ -3788,6 +3790,15 @@ name = "portable-atomic"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcdd8420072e66d54a407b3316991fe946ce3ab1083a7f575b2463866624704d"
+dependencies = [
+ "portable-atomic",
+]
 
 [[package]]
 name = "poseidon"
@@ -4426,7 +4437,7 @@ dependencies = [
  "cfg-if",
  "getrandom",
  "libc",
- "spin 0.9.8",
+ "spin",
  "untrusted",
  "windows-sys 0.52.0",
 ]
@@ -4979,12 +4990,6 @@ dependencies = [
  "thiserror",
  "unicode-xid",
 ]
-
-[[package]]
-name = "spin"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "spin"
@@ -5566,8 +5571,8 @@ dependencies = [
 
 [[package]]
 name = "tract-core"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=c5417ce88caac69d8756bbef3d654c503d9db9c9#c5417ce88caac69d8756bbef3d654c503d9db9c9"
 dependencies = [
  "anyhow",
  "bit-set",
@@ -5590,8 +5595,8 @@ dependencies = [
 
 [[package]]
 name = "tract-data"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=c5417ce88caac69d8756bbef3d654c503d9db9c9#c5417ce88caac69d8756bbef3d654c503d9db9c9"
 dependencies = [
  "anyhow",
  "downcast-rs",
@@ -5605,6 +5610,7 @@ dependencies = [
  "nom",
  "num-integer",
  "num-traits",
+ "parking_lot",
  "scan_fmt",
  "smallvec",
  "string-interner",
@@ -5612,8 +5618,8 @@ dependencies = [
 
 [[package]]
 name = "tract-hir"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=c5417ce88caac69d8756bbef3d654c503d9db9c9#c5417ce88caac69d8756bbef3d654c503d9db9c9"
 dependencies = [
  "derive-new",
  "log",
@@ -5622,8 +5628,8 @@ dependencies = [
 
 [[package]]
 name = "tract-linalg"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=c5417ce88caac69d8756bbef3d654c503d9db9c9#c5417ce88caac69d8756bbef3d654c503d9db9c9"
 dependencies = [
  "byteorder",
  "cc",
@@ -5649,8 +5655,8 @@ dependencies = [
 
 [[package]]
 name = "tract-nnef"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=c5417ce88caac69d8756bbef3d654c503d9db9c9#c5417ce88caac69d8756bbef3d654c503d9db9c9"
 dependencies = [
  "byteorder",
  "flate2",
@@ -5663,8 +5669,8 @@ dependencies = [
 
 [[package]]
 name = "tract-onnx"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=c5417ce88caac69d8756bbef3d654c503d9db9c9#c5417ce88caac69d8756bbef3d654c503d9db9c9"
 dependencies = [
  "bytes",
  "derive-new",
@@ -5680,8 +5686,8 @@ dependencies = [
 
 [[package]]
 name = "tract-onnx-opl"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=c5417ce88caac69d8756bbef3d654c503d9db9c9#c5417ce88caac69d8756bbef3d654c503d9db9c9"
 dependencies = [
  "getrandom",
  "log",
