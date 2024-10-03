@@ -1017,8 +1017,13 @@ pub fn new_op_from_onnx(
                         if raw_values.log2().fract() == 0.0 {
                             inputs[const_idx].decrement_use();
                             deleted_indices.push(const_idx);
+                            // get the non constant index
+                            let non_const_idx = if const_idx == 0 { 1 } else { 0 };
+
                             op = SupportedOp::Linear(PolyOp::Identity {
-                                out_scale: Some(input_scales[0] + raw_values.log2() as i32),
+                                out_scale: Some(
+                                    input_scales[non_const_idx] + raw_values.log2() as i32,
+                                ),
                             });
                         }
                     }
@@ -1027,21 +1032,21 @@ pub fn new_op_from_onnx(
             op
         }
         "Iff" => SupportedOp::Linear(PolyOp::Iff),
-        "Less" => {
+        "<" => {
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::Less)
             } else {
                 return Err(GraphError::InvalidDims(idx, "less".to_string()));
             }
         }
-        "LessEqual" => {
+        "<=" => {
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::LessEqual)
             } else {
                 return Err(GraphError::InvalidDims(idx, "less equal".to_string()));
             }
         }
-        "Greater" => {
+        ">" => {
             // Extract the slope layer hyperparams
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::Greater)
@@ -1049,7 +1054,7 @@ pub fn new_op_from_onnx(
                 return Err(GraphError::InvalidDims(idx, "greater".to_string()));
             }
         }
-        "GreaterEqual" => {
+        ">=" => {
             // Extract the slope layer hyperparams
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::GreaterEqual)
