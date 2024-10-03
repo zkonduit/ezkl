@@ -645,7 +645,7 @@ impl Model {
 
         let mut symbol_values = SymbolValues::default();
         for (symbol, value) in run_args.variables.iter() {
-            let symbol = model.sym(symbol);
+            let symbol = model.symbol_table.sym(symbol);
             symbol_values = symbol_values.with(&symbol, *value as i64);
             debug!("set {} to {}", symbol, value);
         }
