@@ -1214,7 +1214,7 @@ pub fn new_op_from_onnx(
         "And" => SupportedOp::Linear(PolyOp::And),
         "Or" => SupportedOp::Linear(PolyOp::Or),
         "Xor" => SupportedOp::Linear(PolyOp::Xor),
-        "Equals" => SupportedOp::Hybrid(HybridOp::Equals),
+        "==" => SupportedOp::Hybrid(HybridOp::Equals),
         "Deconv" => {
             let deconv_node: &Deconv = match node.op().downcast_ref::<Deconv>() {
                 Some(b) => b,
