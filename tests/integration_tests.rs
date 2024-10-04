@@ -7,11 +7,15 @@ mod native_tests {
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
+    use ezkl::pfsys::Snark;
     use ezkl::Commitments;
+    use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+    use halo2curves::bn256::Bn256;
     use lazy_static::lazy_static;
     use rand::Rng;
     use std::env::var;
     use std::io::{Read, Write};
+    use std::path::PathBuf;
     use std::process::{Child, Command};
     use std::sync::Once;
     static COMPILE: Once = Once::new();
@@ -1120,7 +1124,7 @@ mod native_tests {
                     crate::native_tests::init_binary();
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
+                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     init_logger();
                     log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_ for test: {}", test);
                     // default vis
@@ -2353,7 +2357,7 @@ mod native_tests {
 
         // now verify the proof
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
-        let mut args = vec![
+        let args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
@@ -2367,13 +2371,50 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-        // As sanity check, add example that should fail.
-        args[2] = PF_FAILURE;
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(args)
-            .status()
-            .expect("failed to execute process");
-        assert!(!status.success());
+        // Read the original proof file
+        let original_proof_data: ezkl::pfsys::Snark<
+            halo2curves::bn256::Fr,
+            halo2curves::bn256::G1Affine,
+        > = Snark::load::<KZGCommitmentScheme<Bn256>>(&PathBuf::from(format!(
+            "{}/{}/proof.pf",
+            test_dir, example_name
+        )))
+        .expect("Failed to read proof file");
+
+        for i in 0..1 {
+            // Create a copy of the original proof data
+            let mut modified_proof_data = original_proof_data.clone();
+
+            // Flip a random bit
+            let random_byte = rand::thread_rng().gen_range(0..modified_proof_data.proof.len());
+            let random_bit = rand::thread_rng().gen_range(0..8);
+            modified_proof_data.proof[random_byte] ^= 1 << random_bit;
+
+            // Write the modified proof to a new file
+            let modified_pf_arg = format!("{}/{}/modified_proof_{}.pf", test_dir, example_name, i);
+            modified_proof_data
+                .save(&PathBuf::from(modified_pf_arg.clone()))
+                .expect("Failed to save modified proof file");
+
+            // Verify the modified proof (should fail)
+            let mut args_mod = args.clone();
+            args_mod[2] = &modified_pf_arg;
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args(&args_mod)
+                .status()
+                .expect("failed to execute process");
+
+            if status.success() {
+                log::error!("Verification unexpectedly succeeded for modified proof {}. Flipped bit {} in byte {}", i, random_bit, random_byte);
+            }
+
+            assert!(
+                !status.success(),
+                "Modified proof {} should have failed verification",
+                i
+            );
+        }
+
         // Returned deploy_addr_arg for reusable verifier
         deployed_addr_arg
     }
