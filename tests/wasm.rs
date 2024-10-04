@@ -9,7 +9,7 @@ mod wasm32 {
     use ezkl::graph::GraphCircuit;
     use ezkl::graph::{GraphSettings, GraphWitness};
     use ezkl::pfsys;
-    use ezkl::wasm::{
+    use ezkl::bindings::wasm::{
         bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
         feltToFloat, feltToInt, feltToLittleEndian, genPk, genVk, genWitness, inputValidation,
         kzgCommit, pkValidation, poseidonHash, proofValidation, prove, settingsValidation,
