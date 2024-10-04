@@ -1891,7 +1891,7 @@ pub(crate) fn prove(
     let commitment = circuit_settings.run_args.commitment.into();
     let logrows = circuit_settings.run_args.logrows;
     // creates and verifies the proof
-    let mut snark = match commitment {
+    let mut snark: Snark<Fr, G1Affine> = match commitment {
         Commitments::KZG => {
             let pk =
                 load_pk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(pk_path, circuit.params())?;
