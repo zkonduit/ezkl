@@ -41,7 +41,7 @@ use tract_onnx::tract_hir::{
     ops::konst::Const,
     ops::nn::DataFormat,
     tract_core::ops::cast::Cast,
-    tract_core::ops::cnn::{conv::KernelFormat, MaxPool, PaddingSpec, SumPool},
+    tract_core::ops::cnn::{conv::KernelFormat, MaxPool, SumPool},
 };
 
 /// Quantizes an iterable of f32s to a [Tensor] of i32s using a fixed point representation.
@@ -94,17 +94,18 @@ pub fn multiplier_to_scale(mult: f64) -> crate::Scale {
 /// extract padding from a onnx node.
 pub fn extract_padding(
     pool_spec: &PoolSpec,
-    num_dims: usize,
+    image_size: &[usize],
 ) -> Result<Vec<(usize, usize)>, GraphError> {
-    let padding = match &pool_spec.padding {
-        PaddingSpec::Explicit(b, a) | PaddingSpec::ExplicitOnnxPool(b, a, _) => {
-            b.iter().zip(a.iter()).map(|(b, a)| (*b, *a)).collect()
-        }
-        PaddingSpec::Valid => vec![(0, 0); num_dims],
-        _ => {
-            return Err(GraphError::MissingParams("padding".to_string()));
-        }
-    };
+    let num_relevant_dims = pool_spec.kernel_shape.len();
+
+    // get the last num_relevant_dims of the image size
+    let image_size = &image_size[image_size.len() - num_relevant_dims..];
+
+    let dims = pool_spec.computed_padding(image_size);
+    let mut padding = Vec::new();
+    for dim in dims {
+        padding.push((dim.pad_before, dim.pad_after));
+    }
     Ok(padding)
 }
 
@@ -1016,8 +1017,13 @@ pub fn new_op_from_onnx(
                         if raw_values.log2().fract() == 0.0 {
                             inputs[const_idx].decrement_use();
                             deleted_indices.push(const_idx);
+                            // get the non constant index
+                            let non_const_idx = if const_idx == 0 { 1 } else { 0 };
+
                             op = SupportedOp::Linear(PolyOp::Identity {
-                                out_scale: Some(input_scales[0] + raw_values.log2() as i32),
+                                out_scale: Some(
+                                    input_scales[non_const_idx] + raw_values.log2() as i32,
+                                ),
                             });
                         }
                     }
@@ -1108,7 +1114,7 @@ pub fn new_op_from_onnx(
             }
 
             let stride = extract_strides(pool_spec)?;
-            let padding = extract_padding(pool_spec, input_dims[0].len())?;
+            let padding = extract_padding(pool_spec, &input_dims[0])?;
             let kernel_shape = &pool_spec.kernel_shape;
 
             SupportedOp::Hybrid(HybridOp::MaxPool {
@@ -1178,7 +1184,7 @@ pub fn new_op_from_onnx(
             let pool_spec = &conv_node.pool_spec;
 
             let stride = extract_strides(pool_spec)?;
-            let padding = extract_padding(pool_spec, input_dims[0].len())?;
+            let padding = extract_padding(pool_spec, &input_dims[0])?;
 
             // if bias exists then rescale it to the input + kernel scale
             if input_scales.len() == 3 {
@@ -1236,7 +1242,7 @@ pub fn new_op_from_onnx(
             let pool_spec = &deconv_node.pool_spec;
 
             let stride = extract_strides(pool_spec)?;
-            let padding = extract_padding(pool_spec, input_dims[0].len())?;
+            let padding = extract_padding(pool_spec, &input_dims[0])?;
             // if bias exists then rescale it to the input + kernel scale
             if input_scales.len() == 3 {
                 let bias_scale = input_scales[2];
@@ -1349,7 +1355,7 @@ pub fn new_op_from_onnx(
             }
 
             let stride = extract_strides(pool_spec)?;
-            let padding = extract_padding(pool_spec, input_dims[0].len())?;
+            let padding = extract_padding(pool_spec, &input_dims[0])?;
 
             SupportedOp::Hybrid(HybridOp::SumPool {
                 padding,
@@ -1358,11 +1364,6 @@ pub fn new_op_from_onnx(
                 normalized: sumpool_node.normalize,
             })
         }
-        // "GlobalAvgPool" => SupportedOp::Linear(PolyOp::SumPool {
-        //     padding: [(0, 0); 2],
-        //     stride: (1, 1),
-        //     kernel_shape: (inputs[0].out_dims()[0][1], inputs[0].out_dims()[0][2]),
-        // }),
         "Pad" => {
             let pad_node: &Pad = match node.op().downcast_ref::<Pad>() {
                 Some(b) => b,

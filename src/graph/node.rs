@@ -125,6 +125,7 @@ impl RebaseScale {
         if (op_out_scale > (global_scale * scale_rebase_multiplier as i32))
             && !inner.is_constant()
             && !inner.is_input()
+            && !inner.is_identity()
         {
             let multiplier =
                 scale_to_multiplier(op_out_scale - global_scale * scale_rebase_multiplier as i32);
@@ -324,6 +325,19 @@ impl SupportedOp {
             SupportedOp::Unknown(op) => op,
             SupportedOp::Rescaled(op) => op,
             SupportedOp::RebaseScale(op) => op,
+        }
+    }
+
+    /// check if is the identity operation
+    /// # Returns
+    /// * `true` if the operation is the identity operation
+    /// * `false` otherwise
+    pub fn is_identity(&self) -> bool {
+        match self {
+            SupportedOp::Linear(op) => matches!(op, PolyOp::Identity { .. }),
+            SupportedOp::Rescaled(op) => op.inner.is_identity(),
+            SupportedOp::RebaseScale(op) => op.inner.is_identity(),
+            _ => false,
         }
     }
 }
