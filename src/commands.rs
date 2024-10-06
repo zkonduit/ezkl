@@ -81,8 +81,10 @@ pub const DEFAULT_CALIBRATION_FILE: &str = "calibration.json";
 pub const DEFAULT_LOOKUP_SAFETY_MARGIN: &str = "2";
 /// Default Compress selectors
 pub const DEFAULT_DISABLE_SELECTOR_COMPRESSION: &str = "false";
-/// Default render vk separately
-pub const DEFAULT_RENDER_VK_SEPERATELY: &str = "false";
+/// Default render reusable verifier
+pub const DEFAULT_RENDER_REUSABLE: &str = "false";
+/// Default contract deployment type
+pub const DEFAULT_CONTRACT_DEPLOYMENT_TYPE: &str = "verifier";
 /// Default VK sol path
 pub const DEFAULT_VK_SOL: &str = "vk.sol";
 /// Default VK abi path
@@ -181,6 +183,67 @@ impl From<&str> for CalibrationTarget {
     }
 }
 
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
+/// Determines what type of contract (verifier, verifier/reusable, vka) should be deployed
+pub enum ContractType {
+    /// Deploys a verifier contrat tailored to the circuit and not reusable
+    Verifier {
+        /// Whether to deploy a reusable verifier. This can reduce state bloat on-chain since you need only deploy a verifying key artifact (vka) for a given circuit which is significantly smaller than the verifier contract (up to 4 times smaller for large circuits)
+        /// Can also be used as an alternative to aggregation for verifiers that are otherwise too large to fit on-chain. 
+        reusable: bool,
+    },
+    /// Deploys a verifying key artifact that the reusable verifier loads into memory during runtime. Encodes the circuit specific data that was otherwise hardcoded onto the stack.
+    VerifyingKeyArtifact,
+}
+
+impl Default for ContractType {
+    fn default() -> Self {
+        ContractType::Verifier {
+            reusable: false,
+        }
+    }
+}
+
+impl std::fmt::Display for ContractType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ContractType::Verifier { reusable: true } => {
+                    "verifier/reusable".to_string()
+                },
+                ContractType::Verifier {
+                    reusable: false,
+                } => "verifier".to_string(),
+                ContractType::VerifyingKeyArtifact => "vka".to_string(),
+            }
+        )
+    }
+}
+
+impl ToFlags for ContractType {
+    fn to_flags(&self) -> Vec<String> {
+        vec![format!("{}", self)]
+    }
+}
+
+impl From<&str> for ContractType {
+    fn from(s: &str) -> Self {
+        match s {
+            "verifier" => ContractType::Verifier { reusable: false },
+            "verifier/reusable" => ContractType::Verifier { reusable: true },
+            "vka" => ContractType::VerifyingKeyArtifact,
+            _ => {
+                log::error!("Invalid value for ContractType");
+                log::warn!("Defaulting to verifier");
+                ContractType::default()
+            }
+        }
+    }
+}
+
+
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
 /// wrapper for H160 to make it easy to parse into flag vals
@@ -240,6 +303,39 @@ impl<'source> FromPyObject<'source> for CalibrationTarget {
             "resources/col-overflow" => Ok(CalibrationTarget::Resources { col_overflow: true }),
             "accuracy" => Ok(CalibrationTarget::Accuracy),
             _ => Err(PyValueError::new_err("Invalid value for CalibrationTarget")),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Converts ContractType into a PyObject (Required for ContractType to be compatible with Python)
+impl IntoPy<PyObject> for ContractType {
+    fn into_py(self, py: Python) -> PyObject {
+        match self {
+            ContractType::Verifier { reusable: true } => {
+                "verifier/reusable".to_object(py)
+            }
+            ContractType::Verifier {
+                reusable: false,
+            } => "verifier".to_object(py),
+            ContractType::VerifyingKeyArtifact => "vka".to_object(py),
+        }
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+/// Obtains ContractType from PyObject (Required for ContractType to be compatible with Python)
+impl<'source> FromPyObject<'source> for ContractType {
+    fn extract(ob: &'source PyAny) -> PyResult<Self> {
+        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
+        let strval = trystr.to_string();
+        match strval.to_lowercase().as_str() {
+            "verifier" => Ok(ContractType::Verifier {
+                reusable: false,
+            }),
+            "verifier/reusable" => Ok(ContractType::Verifier { reusable: true }),
+            "vka" => Ok(ContractType::VerifyingKeyArtifact),
+            _ => Err(PyValueError::new_err("Invalid value for ContractType")),
         }
     }
 }
@@ -666,16 +762,14 @@ pub enum Commands {
         /// The path to output the Solidity verifier ABI
         #[arg(long, default_value = DEFAULT_VERIFIER_ABI, value_hint = clap::ValueHint::FilePath)]
         abi_path: Option<PathBuf>,
-        /// Whether the verifier key should be rendered as a separate contract.
-        /// We recommend disabling selector compression if this is enabled.
-        /// To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command.        
-        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY, action = clap::ArgAction::SetTrue)]
-        render_vk_seperately: Option<bool>,
+        /// Whether the to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.       
+        #[arg(long, default_value = DEFAULT_RENDER_REUSABLE, action = clap::ArgAction::SetTrue)]
+        reusable: Option<bool>,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    /// Creates an Evm verifier for a single proof
-    #[command(name = "create-evm-vk")]
-    CreateEvmVK {
+    /// Creates an Evm verifier artifact for a single proof to be used by the reusable verifier
+    #[command(name = "create-evm-vka")]
+    CreateEvmVKArtifact {
         /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
@@ -739,11 +833,9 @@ pub enum Commands {
         // logrows used for aggregation circuit
         #[arg(long, default_value = DEFAULT_AGGREGATED_LOGROWS, value_hint = clap::ValueHint::Other)]
         logrows: Option<u32>,
-        /// Whether the verifier key should be rendered as a separate contract.
-        /// We recommend disabling selector compression if this is enabled.
-        /// To save the verifier key as a separate contract, set this to true and then call the create-evm-vk command.        
-        #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY, action = clap::ArgAction::SetTrue)]
-        render_vk_seperately: Option<bool>,
+        /// Whether the to render the verifier as reusable or not. If true, you will need to deploy a VK artifact, passing it as part of the calldata to the verifier.              
+        #[arg(long, default_value = DEFAULT_RENDER_REUSABLE, action = clap::ArgAction::SetTrue)]
+        reusable: Option<bool>,
     },
     /// Verifies a proof, returning accept or reject
     Verify {
@@ -785,8 +877,8 @@ pub enum Commands {
         commitment: Option<Commitments>,
     },
     #[cfg(not(target_arch = "wasm32"))]
-    /// Deploys an evm verifier that is generated by ezkl
-    DeployEvmVerifier {
+    /// Deploys an evm contract (verifier, reusable verifier, or vk artifact) that is generated by ezkl
+    DeployEvm {
         /// The path to the Solidity code (generated using the create-evm-verifier command)
         #[arg(long, default_value = DEFAULT_SOL_CODE, value_hint = clap::ValueHint::FilePath)]
         sol_code_path: Option<PathBuf>,
@@ -802,25 +894,9 @@ pub enum Commands {
         /// Private secp256K1 key in hex format, 64 chars, no 0x prefix, of the account signing transactions. If None the private key will be generated by Anvil
         #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
         private_key: Option<String>,
-    },
-    #[cfg(not(target_arch = "wasm32"))]
-    /// Deploys an evm verifier that is generated by ezkl
-    DeployEvmVK {
-        /// The path to the Solidity code (generated using the create-evm-verifier command)
-        #[arg(long, default_value = DEFAULT_VK_SOL, value_hint = clap::ValueHint::FilePath)]
-        sol_code_path: Option<PathBuf>,
-        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
-        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: Option<String>,
-        #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS_VK, value_hint = clap::ValueHint::Other)]
-        /// The path to output the contract address
-        addr_path: Option<PathBuf>,
-        /// The optimizer runs to set on the verifier. Lower values optimize for deployment cost, while higher values optimize for gas cost.
-        #[arg(long, default_value = DEFAULT_OPTIMIZER_RUNS, value_hint = clap::ValueHint::Other)]
-        optimizer_runs: usize,
-        /// Private secp256K1 key in hex format, 64 chars, no 0x prefix, of the account signing transactions. If None the private key will be generated by Anvil
-        #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
-        private_key: Option<String>,
+        /// Contract type to be deployed
+        #[arg(long = "contract-type", short = 'C', default_value = DEFAULT_CONTRACT_DEPLOYMENT_TYPE, value_hint = clap::ValueHint::Other)]
+        contract: ContractType,
     },
     #[cfg(not(target_arch = "wasm32"))]
     /// Deploys an evm verifier that allows for data attestation
