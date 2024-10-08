@@ -264,12 +264,13 @@ pub(crate) fn verify(
 #[cfg_attr(target_os = "ios", uniffi::export)]
 pub(crate) fn verify_aggr(
     proof_js: Vec<u8>,
+    proof: Vec<u8>,
     vk: Vec<u8>,
     logrows: u64,
     srs: Vec<u8>,
     commitment: &str,
 ) -> Result<bool, EZKLError> {
-    let proof: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof_js[..])
+    let proof: crate::pfsys::Snark<Fr, G1Affine> = serde_json::from_slice(&proof[..])
         .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize proof: {}", e)))?;
 
     let mut reader = BufReader::new(&vk[..]);
