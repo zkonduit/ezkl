@@ -3,7 +3,9 @@ use crate::circuit::CheckMode;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::commands::CalibrationTarget;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity};
+use crate::eth::{
+    deploy_contract_via_solidity, deploy_da_verifier_via_solidity, deploy_via_verifier_manager,
+};
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(unused_imports)]
 use crate::eth::{fix_da_sol, get_contract_artifacts, verify_proof_via_solidity};
@@ -440,6 +442,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             addr_path,
             optimizer_runs,
             private_key,
+            verifier_manager,
             contract,
         } => {
             deploy_evm(
@@ -448,6 +451,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
                 addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS.into()),
                 optimizer_runs,
                 private_key,
+                verifier_manager.unwrap_or(DEFAULT_VERIFIER_MANAGER_ADDRESS.into()),
                 contract,
             )
             .await
@@ -1482,9 +1486,13 @@ pub(crate) async fn create_evm_vka(
         num_instance,
     );
 
-    let vk_solidity = generator.render_separately()?.1;
+    let (reusable_verifier, vk_solidity) = generator.render_separately()?;
 
-    File::create(sol_code_path.clone())?.write_all(vk_solidity.as_bytes())?;
+    // We store each contracts to the same file...
+    // We need to do this so that during the deployment transaction we make sure
+    // verifier manager links the VKA to the correct reusable_verifier.
+    let combined_solidity = format!("{}\n\n{}", reusable_verifier, vk_solidity);
+    File::create(sol_code_path.clone())?.write_all(combined_solidity.as_bytes())?;
 
     // fetch abi of the contract
     let (abi, _, _) = get_contract_artifacts(sol_code_path, "Halo2VerifyingArtifact", 0).await?;
@@ -1605,6 +1613,7 @@ pub(crate) async fn deploy_evm(
     addr_path: PathBuf,
     runs: usize,
     private_key: Option<String>,
+    verifier_manager: H160Flag,
     contract: ContractType,
 ) -> Result<String, EZKLError> {
     let contract_name = match contract {
@@ -1612,14 +1621,29 @@ pub(crate) async fn deploy_evm(
         ContractType::Verifier { reusable: true } => "Halo2VerifierReusable",
         ContractType::VerifyingKeyArtifact => "Halo2VerifyingArtifact",
     };
-    let contract_address = deploy_contract_via_solidity(
-        sol_code_path,
-        rpc_url.as_deref(),
-        runs,
-        private_key.as_deref(),
-        contract_name,
-    )
-    .await?;
+
+    let contract_address =
+        if contract_name == "Halo2VerifierReusable" || contract_name == "Halo2VerifyingArtifact" {
+            // Use VerifierManager to deploy the contract
+            deploy_via_verifier_manager(
+                sol_code_path,
+                rpc_url.as_deref(),
+                runs,
+                private_key.as_deref(),
+                contract_name,
+                verifier_manager.into(),
+            )
+            .await?
+        } else {
+            deploy_contract_via_solidity(
+                sol_code_path,
+                rpc_url.as_deref(),
+                runs,
+                private_key.as_deref(),
+                contract_name,
+            )
+            .await?
+        };
 
     info!("Contract deployed at: {:#?}", contract_address);
 
