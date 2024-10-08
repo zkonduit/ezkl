@@ -204,6 +204,7 @@ required-features = ["ios-bindings"]
 web = ["wasm-bindgen-rayon"]
 default = ["ezkl", "mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read"]
 onnx = ["dep:tract-onnx"]
+ios-bindings = ["camino", "uniffi_bindgen", "uuid"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
 ezkl = [
     "onnx",
@@ -229,8 +230,6 @@ icicle = ["halo2_proofs/icicle_gpu"]
 empty-cmd = []
 no-banner = []
 no-update = []
-ios-bindings = ["camino", "uniffi_bindgen", "uuid"]
-
 
 # icicle patch to 0.1.0 if feature icicle is enabled
 [patch.'https://github.com/ingonyama-zk/icicle']
