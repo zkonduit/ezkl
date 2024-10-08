@@ -2,7 +2,7 @@
 import ezkl
 import Foundation
 
-let pathToFile = "../../../../tests/wasm/"
+let pathToFile = "../../../../tests/assets/"
 
 
 func loadFileAsBytes(from path: String) -> Data? {
