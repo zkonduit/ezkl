@@ -8,7 +8,7 @@ func loadFileAsBytes(from path: String) -> Data? {
 }
 
 do {
-    let pathToFile = "../../../../tests/wasm/"
+    let pathToFile = "../../../../tests/assets/"
     let proofPath = pathToFile + "proof.json"
 
     guard let proof = loadFileAsBytes(from: proofPath) else {

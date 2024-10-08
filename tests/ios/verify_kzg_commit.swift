@@ -8,7 +8,7 @@ func loadFileAsBytes(from path: String) -> Data? {
 }
 
 do {
-    let pathToFile = "../../../../tests/wasm/"
+    let pathToFile = "../../../../tests/assets/"
     let vkPath = pathToFile + "vk.key"
     let srsPath = pathToFile + "kzg"
     let settingsPath = pathToFile + "settings.json"

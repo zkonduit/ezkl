@@ -28,18 +28,18 @@ mod wasm32 {
 
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-    pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/witness.json");
-    pub const NETWORK_COMPILED: &[u8] = include_bytes!("../tests/wasm/model.compiled");
-    pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/network.onnx");
-    pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
-    pub const PROOF: &[u8] = include_bytes!("../tests/wasm/proof.json");
-    pub const PROOF_AGGR: &[u8] = include_bytes!("../tests/wasm/proof_aggr.json");
-    pub const SETTINGS: &[u8] = include_bytes!("../tests/wasm/settings.json");
-    pub const PK: &[u8] = include_bytes!("../tests/wasm/pk.key");
-    pub const VK: &[u8] = include_bytes!("../tests/wasm/vk.key");
-    pub const VK_AGGR: &[u8] = include_bytes!("../tests/wasm/vk_aggr.key");
-    pub const SRS: &[u8] = include_bytes!("../tests/wasm/kzg");
-    pub const SRS1: &[u8] = include_bytes!("../tests/wasm/kzg1.srs");
+    pub const WITNESS: &[u8] = include_bytes!("assets/witness.json");
+    pub const NETWORK_COMPILED: &[u8] = include_bytes!("assets/model.compiled");
+    pub const NETWORK: &[u8] = include_bytes!("assets/network.onnx");
+    pub const INPUT: &[u8] = include_bytes!("assets/input.json");
+    pub const PROOF: &[u8] = include_bytes!("assets/proof.json");
+    pub const PROOF_AGGR: &[u8] = include_bytes!("assets/proof_aggr.json");
+    pub const SETTINGS: &[u8] = include_bytes!("assets/settings.json");
+    pub const PK: &[u8] = include_bytes!("assets/pk.key");
+    pub const VK: &[u8] = include_bytes!("assets/vk.key");
+    pub const VK_AGGR: &[u8] = include_bytes!("assets/vk_aggr.key");
+    pub const SRS: &[u8] = include_bytes!("assets/kzg");
+    pub const SRS1: &[u8] = include_bytes!("assets/kzg1.srs");
 
     #[wasm_bindgen_test]
     async fn can_verify_aggr() {
