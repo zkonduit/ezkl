@@ -263,7 +263,6 @@ pub(crate) fn verify(
 /// Verify aggregate proof with vk, proof, circuit settings and srs
 #[cfg_attr(target_os = "ios", uniffi::export)]
 pub(crate) fn verify_aggr(
-    proof_js: Vec<u8>,
     proof: Vec<u8>,
     vk: Vec<u8>,
     logrows: u64,
