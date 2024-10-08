@@ -8,7 +8,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::Fr as F;
 use halo2curves::ff::{Field, PrimeField};
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(not(any(all(target_arch = "wasm32", target_os = "unknown"), target_os = "ios")))]
 use ops::lookup::LookupOp;
 use ops::region::RegionCtx;
 use rand::rngs::OsRng;
