@@ -46,7 +46,7 @@ var/
 node_modules
 /dist
 timingData.json
-!tests/wasm/pk.key
-!tests/wasm/vk.key
+!tests/assets/pk.key
+!tests/assets/vk.key
 docs/python/build
-!tests/wasm/vk_aggr.key
+!tests/assets/vk_aggr.key

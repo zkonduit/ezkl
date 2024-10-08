@@ -8,7 +8,7 @@ func loadFileAsBytes(from path: String) -> Data? {
 }
 
 do {
-    let pathToFile = "../../../../tests/wasm/"
+    let pathToFile = "../../../../tests/assets/"
     let compiledCircuitPath = pathToFile + "model.compiled"
     let networkPath = pathToFile + "network.onnx"
     let witnessPath = pathToFile + "witness.json"
