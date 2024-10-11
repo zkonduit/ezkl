@@ -1,21 +1,17 @@
-pytorch1.12.1:«
-+
+pytorch2.2.2:„
+*
 input1
-input2onnx::Equal_4And_0"And
-'
+input2/And_output_0/And"And
+)
 input3
-input
-onnx::Or_5Xor_1"Xor
-+
+input/Xor_output_0/Xor"Xor
+5
 input2
-
-onnx::Or_5onnx::And_6Or_2"Or
-0
-input1
-onnx::And_6onnx::Equal_7And_3"And
-6
-onnx::Equal_4
-onnx::Equal_7outputEqual_4"Equal	torch_jitZ!
+/Xor_output_0/And_1_output_0/And_1"And
+5
+/And_output_0
+/And_1_output_0output/And_2"And
+main_graphZ!
 input
 	
 
