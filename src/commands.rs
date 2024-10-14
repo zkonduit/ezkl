@@ -1,4 +1,4 @@
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use alloy::primitives::Address as H160;
 use clap::{Command, Parser, Subcommand};
 use clap_complete::{generate, Generator, Shell};
@@ -17,7 +17,7 @@ use tosubcommand::{ToFlags, ToSubcommand};
 use crate::{pfsys::ProofType, Commitments, RunArgs};
 
 use crate::circuit::CheckMode;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use crate::graph::TestDataSource;
 use crate::pfsys::TranscriptType;
 
@@ -181,28 +181,28 @@ impl From<&str> for CalibrationTarget {
     }
 }
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
 /// wrapper for H160 to make it easy to parse into flag vals
 pub struct H160Flag {
     inner: H160,
 }
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 impl From<H160Flag> for H160 {
     fn from(val: H160Flag) -> H160 {
         val.inner
     }
 }
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 impl ToFlags for H160Flag {
     fn to_flags(&self) -> Vec<String> {
         vec![format!("{:#x}", self.inner)]
     }
 }
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 impl From<&str> for H160Flag {
     fn from(s: &str) -> Self {
         Self {
@@ -365,7 +365,7 @@ pub enum Commands {
     },
 
     /// Calibrates the proving scale, lookup bits and logrows from a circuit settings file.
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     CalibrateSettings {
         /// The path to the .json calibration data file.
         #[arg(short = 'D', long, default_value = DEFAULT_CALIBRATION_FILE, value_hint = clap::ValueHint::FilePath)]
@@ -416,7 +416,7 @@ pub enum Commands {
         commitment: Option<Commitments>,
     },
 
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Gets an SRS from a circuit settings file.
     #[command(name = "get-srs")]
     GetSrs {
@@ -552,7 +552,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue)]
         disable_selector_compression: Option<bool>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Deploys a test contact that the data attester reads from and creates a data attestation formatted input.json file that contains call data information
     #[command(arg_required_else_help = true)]
     SetupTestEvmData {
@@ -577,7 +577,7 @@ pub enum Commands {
         #[arg(long, default_value = "on-chain", value_hint = clap::ValueHint::Other)]
         output_source: TestDataSource,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// The Data Attestation Verifier contract stores the account calls to fetch data to feed into ezkl. This call data can be updated by an admin account. This tests that admin account is able to update this call data.
     #[command(arg_required_else_help = true)]
     TestUpdateAccountCalls {
@@ -591,7 +591,7 @@ pub enum Commands {
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
         rpc_url: Option<String>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Swaps the positions in the transcript that correspond to commitments
     SwapProofCommitments {
         /// The path to the proof file
@@ -602,7 +602,7 @@ pub enum Commands {
         witness_path: Option<PathBuf>,
     },
 
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Loads model, data, and creates proof
     Prove {
         /// The path to the .json witness file (generated using the gen-witness command)
@@ -633,7 +633,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_CHECKMODE, value_hint = clap::ValueHint::Other)]
         check_mode: Option<CheckMode>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Encodes a proof into evm calldata
     #[command(name = "encode-evm-calldata")]
     EncodeEvmCalldata {
@@ -647,7 +647,7 @@ pub enum Commands {
         #[arg(long, value_hint = clap::ValueHint::Other)]
         addr_vk: Option<H160Flag>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Creates an Evm verifier for a single proof
     #[command(name = "create-evm-verifier")]
     CreateEvmVerifier {
@@ -672,7 +672,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_RENDER_VK_SEPERATELY, action = clap::ArgAction::SetTrue)]
         render_vk_seperately: Option<bool>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Creates an Evm verifier for a single proof
     #[command(name = "create-evm-vk")]
     CreateEvmVK {
@@ -692,7 +692,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_VK_ABI, value_hint = clap::ValueHint::FilePath)]
         abi_path: Option<PathBuf>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Creates an Evm verifier that attests to on-chain inputs for a single proof
     #[command(name = "create-evm-da")]
     CreateEvmDataAttestation {
@@ -717,7 +717,7 @@ pub enum Commands {
         witness: Option<PathBuf>,
     },
 
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Creates an Evm verifier for an aggregate proof
     #[command(name = "create-evm-verifier-aggr")]
     CreateEvmVerifierAggr {
@@ -784,7 +784,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_COMMITMENT, value_hint = clap::ValueHint::Other)]
         commitment: Option<Commitments>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Deploys an evm verifier that is generated by ezkl
     DeployEvmVerifier {
         /// The path to the Solidity code (generated using the create-evm-verifier command)
@@ -803,7 +803,7 @@ pub enum Commands {
         #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
         private_key: Option<String>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Deploys an evm verifier that is generated by ezkl
     DeployEvmVK {
         /// The path to the Solidity code (generated using the create-evm-verifier command)
@@ -822,7 +822,7 @@ pub enum Commands {
         #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
         private_key: Option<String>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Deploys an evm verifier that allows for data attestation
     #[command(name = "deploy-evm-da")]
     DeployEvmDataAttestation {
@@ -848,7 +848,7 @@ pub enum Commands {
         #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
         private_key: Option<String>,
     },
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Verifies a proof using a local Evm executor, returning accept or reject
     #[command(name = "verify-evm")]
     VerifyEvm {

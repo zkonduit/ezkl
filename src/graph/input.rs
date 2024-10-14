@@ -2,9 +2,9 @@ use super::errors::GraphError;
 use super::quantize_float;
 use crate::circuit::InputType;
 use crate::fieldutils::integer_rep_to_felt;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use crate::graph::postgres::Client;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use crate::tensor::Tensor;
 use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
@@ -20,12 +20,12 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::Read;
 use std::panic::UnwindSafe;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use tract_onnx::tract_core::{
     tract_data::{prelude::Tensor as TractTensor, TVec},
     value::TValue,
 };
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use tract_onnx::tract_hir::tract_num_traits::ToPrimitive;
 
 type Decimals = u8;
@@ -171,7 +171,7 @@ impl OnChainSource {
     }
 }
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 /// Inner elements of inputs/outputs coming from postgres DB
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
 pub struct PostgresSource {
@@ -189,7 +189,7 @@ pub struct PostgresSource {
     pub port: String,
 }
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 impl PostgresSource {
     /// Create a new PostgresSource
     pub fn new(
@@ -268,7 +268,7 @@ impl PostgresSource {
 }
 
 impl OnChainSource {
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Create dummy local on-chain data to test the OnChain data source
     pub async fn test_from_file_data(
         data: &FileSource,
@@ -359,7 +359,7 @@ pub enum DataSource {
     /// On-chain data source. The first element is the calls to the account, and the second is the RPC url.
     OnChain(OnChainSource),
     /// Postgres DB
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     DB(PostgresSource),
 }
 
@@ -419,7 +419,7 @@ impl<'de> Deserialize<'de> for DataSource {
         if let Ok(t) = second_try {
             return Ok(DataSource::OnChain(t));
         }
-        #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
         {
             let third_try: Result<PostgresSource, _> = serde_json::from_str(this_json.get());
             if let Ok(t) = third_try {
@@ -445,7 +445,7 @@ impl UnwindSafe for GraphData {}
 
 impl GraphData {
     // not wasm
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Convert the input data to tract data
     pub fn to_tract_data(
         &self,
@@ -530,7 +530,7 @@ impl GraphData {
                     "on-chain data cannot be split into batches".to_string(),
                 ))
             }
-            #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+            #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
             GraphData {
                 input_data: DataSource::DB(data),
                 output_data: _,

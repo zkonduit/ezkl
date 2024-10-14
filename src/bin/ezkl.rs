@@ -1,28 +1,28 @@
 // ignore file if compiling for wasm
 #[global_allocator]
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use clap::{CommandFactory, Parser};
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use colored_json::ToColoredJson;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use ezkl::commands::Cli;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use ezkl::execute::run;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use ezkl::logger::init_logger;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use log::{error, info};
 #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
 use rand::prelude::SliceRandom;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 #[cfg(feature = "icicle")]
 use std::env;
 
 #[tokio::main(flavor = "current_thread")]
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 pub async fn main() {
     let args = Cli::parse();
 
@@ -59,7 +59,7 @@ pub async fn main() {
     }
 }
 
-#[cfg(any(target_os = "ios", target_arch = "wasm32"))]
+#[cfg(any(feature = "ios-bindings", target_arch = "wasm32"))]
 pub fn main() {}
 
 #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]

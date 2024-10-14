@@ -1,4 +1,4 @@
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 #[cfg(test)]
 mod native_tests {
 

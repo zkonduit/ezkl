@@ -5898,6 +5898,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31bff6daf87277a9014bcdefbc2842b0553392919d1096843c5aad899ca4588"
 dependencies = [
  "anyhow",
+ "uniffi_bindgen",
  "uniffi_build",
  "uniffi_core",
  "uniffi_macros",
@@ -5996,8 +5997,6 @@ dependencies = [
 [[package]]
 name = "uniffi_testing"
 version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f922465f7566f25f8fe766920205fdfa9a3fcdc209c6bfb7557f0b5bf45b04dd"
 dependencies = [
  "anyhow",
  "camino",

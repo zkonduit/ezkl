@@ -30,13 +30,13 @@
 //!
 
 /// Error type
-// #[cfg_attr(target_os = "ios", derive(uniffi::Error))]
+// #[cfg_attr(feature = "ios-bindings", derive(uniffi::Error))]
 #[derive(thiserror::Error, Debug)]
 #[allow(missing_docs)]
 pub enum EZKLError {
     #[error("[aggregation] {0}")]
     AggregationError(#[from] pfsys::evm::aggregation_kzg::AggregationError),
-    #[cfg(not(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown"))))]
+    #[cfg(not(any(feature = "ios-bindings", all(target_arch = "wasm32", target_os = "unknown"))))]
     #[error("[eth] {0}")]
     EthError(#[from] eth::EthError),
     #[error("[graph] {0}")]
@@ -55,7 +55,7 @@ pub enum EZKLError {
     JsonError(#[from] serde_json::Error),
     #[error("[utf8] {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
-    #[cfg(not(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown"))))]
+    #[cfg(not(any(feature = "ios-bindings", all(target_arch = "wasm32", target_os = "unknown"))))]
     #[error("[reqwest] {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("[fmt] {0}")]
@@ -64,7 +64,7 @@ pub enum EZKLError {
     Halo2Error(#[from] halo2_proofs::plonk::Error),
     #[error("[Uncategorized] {0}")]
     UncategorizedError(String),
-    #[cfg(not(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown"))))]
+    #[cfg(not(any(feature = "ios-bindings", all(target_arch = "wasm32", target_os = "unknown"))))]
     #[error("[execute] {0}")]
     ExecutionError(#[from] execute::ExecutionError),
     #[error("[srs] {0}")]
@@ -97,21 +97,21 @@ use serde::{Deserialize, Serialize};
 use tosubcommand::ToFlags;
 
 /// Bindings managment
-#[cfg(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown"), feature = "python-bindings"))]
+#[cfg(any(feature = "ios-bindings", all(target_arch = "wasm32", target_os = "unknown"), feature = "python-bindings"))]
 pub mod bindings;
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
 /// CLI commands.
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 pub mod commands;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 // abigen doesn't generate docs for this module
 #[allow(missing_docs)]
 /// Utility functions for contracts
 pub mod eth;
 /// Command execution
 ///
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 pub mod execute;
 /// Utilities for converting from Halo2 Field types to integers (and vice-versa).
 pub mod fieldutils;
@@ -120,25 +120,25 @@ pub mod fieldutils;
 #[cfg(feature = "onnx")]
 pub mod graph;
 /// beautiful logging
-#[cfg(not(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown"))))]
+#[cfg(not(any(feature = "ios-bindings", all(target_arch = "wasm32", target_os = "unknown"))))]
 pub mod logger;
 /// Tools for proofs and verification used by cli
 pub mod pfsys;
 /// srs sha hashes
-#[cfg(not(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown"))))]
+#[cfg(not(any(feature = "ios-bindings", all(target_arch = "wasm32", target_os = "unknown"))))]
 pub mod srs_sha;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
-#[cfg(target_os = "ios")]
+#[cfg(feature = "ios-bindings")]
 uniffi::setup_scaffolding!();
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use lazy_static::lazy_static;
 
 /// The denominator in the fixed point representation used when quantizing inputs
 pub type Scale = i32;
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 // Buf writer capacity
 lazy_static! {
     /// The capacity of the buffer used for writing to disk
@@ -153,10 +153,10 @@ lazy_static! {
 
 }
 
-#[cfg(any(target_os = "ios", target_arch = "wasm32"))]
+#[cfg(any(feature = "ios-bindings", target_arch = "wasm32"))]
 const EZKL_KEY_FORMAT: &str = "raw-bytes";
 
-#[cfg(any(target_os = "ios", target_arch = "wasm32"))]
+#[cfg(any(feature = "ios-bindings", target_arch = "wasm32"))]
 const EZKL_BUF_CAPACITY: &usize = &8000;
 
 #[derive(

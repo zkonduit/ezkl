@@ -3,7 +3,7 @@ use crate::{
     fieldutils::IntegerRep,
     tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor},
 };
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use colored::Colorize;
 use halo2_proofs::{
     circuit::Region,
@@ -193,7 +193,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.settings.legs
     }
 
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     ///
     pub fn debug_report(&self) {
         log::debug!(
