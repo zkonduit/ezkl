@@ -1,7 +1,7 @@
 use log::{debug, error, info};
 use std::fmt::Debug;
 use std::net::IpAddr;
-#[cfg(unix)]
+#[cfg(all(not(feature = "ios-bindings"), unix))]
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -150,7 +150,7 @@ impl Config {
     /// Adds a Unix socket host to the configuration.
     ///
     /// Unlike `host`, this method allows non-UTF8 paths.
-    #[cfg(unix)]
+    #[cfg(all(not(feature = "ios-bindings"), unix))]
     pub fn host_path<T>(&mut self, host: T) -> &mut Config
     where
         T: AsRef<Path>,

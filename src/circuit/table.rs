@@ -15,7 +15,7 @@ use crate::{
     tensor::{Tensor, TensorType},
 };
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use crate::execute::EZKL_REPO_PATH;
 
 use crate::circuit::lookup::LookupOp;
@@ -28,14 +28,14 @@ pub const RANGE_MULTIPLIER: IntegerRep = 2;
 /// The safety factor offset for the number of rows in the lookup table.
 pub const RESERVED_BLINDING_ROWS_PAD: usize = 3;
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 lazy_static::lazy_static! {
     /// an optional directory to read and write the lookup table cache
     pub static ref LOOKUP_CACHE: String = format!("{}/cache", *EZKL_REPO_PATH);
 }
 
 /// The lookup table cache is disabled on wasm32 target.
-#[cfg(any(target_os = "ios", target_arch = "wasm32"))]
+#[cfg(any(feature = "ios-bindings", target_arch = "wasm32"))]
 pub const LOOKUP_CACHE: &str = "";
 
 #[derive(Debug, Clone)]

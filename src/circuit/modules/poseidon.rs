@@ -560,7 +560,7 @@ mod tests {
     fn hash_for_a_range_of_input_sizes() {
         let rng = rand::rngs::OsRng;
 
-        #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
         env_logger::init();
 
         {
