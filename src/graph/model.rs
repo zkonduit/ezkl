@@ -21,9 +21,9 @@ use crate::{
 };
 use halo2curves::bn256::Fr as Fp;
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use super::input::GraphData;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use colored::Colorize;
 use halo2_proofs::{
     circuit::{Layouter, Value},
@@ -36,29 +36,29 @@ use log::{debug, info, trace};
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use tabled::Table;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use tract_onnx;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use tract_onnx::prelude::{
     Framework, Graph, InferenceFact, InferenceModelExt, SymbolValues, TypedFact, TypedOp,
 };
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use tract_onnx::tract_core::internal::DatumType;
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 use tract_onnx::tract_hir::ops::scan::Scan;
 use unzip_n::unzip_n;
 
 unzip_n!(pub 3);
 
-#[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
 type TractResult = (Graph<TypedFact, Box<dyn TypedOp>>, SymbolValues);
 /// The result of a forward pass.
 #[derive(Clone, Debug)]
@@ -470,7 +470,7 @@ impl Model {
     /// # Arguments
     /// * `reader` - A reader for an Onnx file.
     /// * `run_args` - [RunArgs]
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     pub fn new(reader: &mut dyn std::io::Read, run_args: &RunArgs) -> Result<Self, GraphError> {
         let visibility = VarVisibility::from_args(run_args)?;
 
@@ -517,7 +517,7 @@ impl Model {
         check_mode: CheckMode,
     ) -> Result<GraphSettings, GraphError> {
         let instance_shapes = self.instance_shapes()?;
-        #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
         debug!(
             "{} {} {}",
             "model has".blue(),
@@ -574,13 +574,13 @@ impl Model {
             version: env!("CARGO_PKG_VERSION").to_string(),
             num_blinding_factors: None,
             // unix time timestamp
-            #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+            #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
             timestamp: Some(
                 instant::SystemTime::now()
                     .duration_since(instant::SystemTime::UNIX_EPOCH)?
                     .as_millis(),
             ),
-            #[cfg(any(target_os = "ios", target_arch = "wasm32"))]
+            #[cfg(any(feature = "ios-bindings", target_arch = "wasm32"))]
             timestamp: None,
         })
     }
@@ -609,7 +609,7 @@ impl Model {
     /// * `reader` - A reader for an Onnx file.
     /// * `scale` - The scale to use for quantization.
     /// * `public_params` - Whether to make the params public.
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     fn load_onnx_using_tract(
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
@@ -664,7 +664,7 @@ impl Model {
     /// * `reader` - A reader for an Onnx file.
     /// * `scale` - The scale to use for quantization.
     /// * `public_params` - Whether to make the params public.
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     fn load_onnx_model(
         reader: &mut dyn std::io::Read,
         run_args: &RunArgs,
@@ -700,7 +700,7 @@ impl Model {
     }
 
     /// Formats nodes (including subgraphs) into tables !
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     pub fn table_nodes(&self) -> String {
         let mut node_accumulator = vec![];
         let mut string = String::new();
@@ -742,7 +742,7 @@ impl Model {
     /// * `visibility` - Which inputs to the model are public and private (params, inputs, outputs) using [VarVisibility].
     /// * `input_scales` - The scales of the model's inputs.
 
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     pub fn nodes_from_graph(
         graph: &Graph<TypedFact, Box<dyn TypedOp>>,
         run_args: &RunArgs,
@@ -931,7 +931,7 @@ impl Model {
         Ok(nodes)
     }
 
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Removes all nodes that are consts with 0 uses
     fn remove_unused_nodes(nodes: &mut BTreeMap<usize, NodeType>) {
         // remove all nodes that are consts with 0 uses now
@@ -950,7 +950,7 @@ impl Model {
         });
     }
 
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     /// Run tract onnx model on sample data !
     pub fn run_onnx_predictions(
         run_args: &RunArgs,
@@ -991,7 +991,7 @@ impl Model {
     /// Creates a `Model` from parsed run_args
     /// # Arguments
     /// * `params` - A [GraphSettings] struct holding parsed CLI arguments.
-    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+    #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
     pub fn from_run_args(run_args: &RunArgs, model: &std::path::Path) -> Result<Self, GraphError> {
         let mut file = std::fs::File::open(model).map_err(|e| {
             GraphError::ReadWriteFileError(model.display().to_string(), e.to_string())
@@ -1166,7 +1166,7 @@ impl Model {
                     })?;
                 }
                 // Then number of columns in the circuits
-                #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+                #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
                 thread_safe_region.debug_report();
 
                 *constants = thread_safe_region.assigned_constants().clone();
@@ -1197,7 +1197,7 @@ impl Model {
         for (idx, node) in self.graph.nodes.iter() {
             debug!("laying out {}: {}", idx, node.as_str(),);
             // Then number of columns in the circuits
-            #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+            #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
             region.debug_report();
             debug!("input indices: {:?}", node.inputs());
             debug!("output scales: {:?}", node.out_scales());
@@ -1451,7 +1451,7 @@ impl Model {
         trace!("dummy model layout took: {:?}", duration);
 
         // Then number of columns in the circuits
-        #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
+        #[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
         region.debug_report();
 
         let outputs = outputs
