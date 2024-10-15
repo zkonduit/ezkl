@@ -117,7 +117,7 @@ pub mod execute;
 pub mod fieldutils;
 /// Methods for loading onnx format models and automatically laying them out in
 /// a Halo2 circuit.
-#[cfg(feature = "onnx")]
+#[cfg(any(feature = "onnx", feature = "ios-bindings"))]
 pub mod graph;
 /// beautiful logging
 #[cfg(not(any(feature = "ios-bindings", all(target_arch = "wasm32", target_os = "unknown"))))]
