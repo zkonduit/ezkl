@@ -187,7 +187,7 @@ web = ["wasm-bindgen-rayon"]
 default = ["ezkl", "mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read", "enable-all"]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
-ios-bindings = ["ezkl", "mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read", "dep:uniffi", "dep:instant"]
+ios-bindings = ["mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read", "dep:uniffi", "dep:instant", "serde", "serde_json/std", "log", "halo2_proofs/circuit-params"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
     "onnx",
@@ -240,7 +240,7 @@ icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package =
 halo2_proofs = { git = "https://github.com/zkonduit//halo2", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 
 [patch.crates-io]
-uniffi_testing = { path = "../uniffi-rs/uniffi_testing" }
+uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
 
 [profile.release]
 rustflags = ["-C", "relocation-model=pic"]
