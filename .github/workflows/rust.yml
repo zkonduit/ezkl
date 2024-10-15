@@ -691,7 +691,6 @@ jobs:
 
   ios-integration-tests:
       runs-on: macos-latest
-      needs: [build, library-tests, docs]
       steps:
         - uses: actions/checkout@v4
         - uses: actions-rs/toolchain@v1
@@ -708,7 +707,7 @@ jobs:
 
   swift-package-tests:
       runs-on: macos-latest
-      needs: [build, library-tests, docs]
+      needs: [ios-integration-tests]
 
       steps:
         - uses: actions/checkout@v4
