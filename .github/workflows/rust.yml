@@ -45,7 +45,7 @@ jobs:
         run: cargo doc --verbose
 
   library-tests:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -365,7 +365,7 @@ jobs:
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify --test-threads 1
 
   prove-and-verify-tests:
-    runs-on: non-gpu
+    runs-on: ubuntu-latest
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -566,7 +566,7 @@ jobs:
         run: cargo nextest run --release tests_examples
 
   python-tests:
-    runs-on: non-gpu
+    runs-on: ubuntu-latest # TODO - remove this
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
