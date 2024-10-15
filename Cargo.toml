@@ -29,7 +29,7 @@ serde_json = { version = "1.0.97", default-features = false, features = [
     "float_roundtrip",
     "raw_value",
 ], optional = true }
-clap_complete = "4.5.2"
+clap_complete = { version = "4.5.2", optional = true }
 log = { version = "0.4.17", default-features = false, optional = true }
 thiserror = { version = "1.0.38", default-features = false }
 hex = { version = "0.4.3", default-features = false }
@@ -42,7 +42,7 @@ maybe-rayon = { version = "0.1.1", default-features = false }
 bincode = { version = "1.3.3", default-features = false }
 unzip-n = "0.1.2"
 num = "0.4.1"
-portable-atomic = "1.6.0"
+portable-atomic = { version = "1.6.0", optional = true }
 tosubcommand = { git = "https://github.com/zkonduit/enum_to_subcommand", package = "tosubcommand" }
 semver = "1.0.22"
 
@@ -217,6 +217,8 @@ enable-all = [
     "dep:mimalloc",
     "dep:chrono",
     "dep:sha256",
+    "dep:portable-atomic",
+    "dep:clap_complete",
 ]
 parallel-poly-read = ["halo2_proofs/parallel-poly-read"]
 mv-lookup = [
