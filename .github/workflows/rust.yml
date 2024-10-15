@@ -704,7 +704,7 @@ jobs:
         - name: Run ios tests
           run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2024-07-18-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
 
-  test-ios-bindings:
+  swift-package-tests:
       runs-on: macos-latest
       needs: [build, library-tests, docs]
 
