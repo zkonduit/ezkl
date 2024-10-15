@@ -716,7 +716,7 @@ jobs:
             override: true
             components: rustfmt, clippy
         - name: Build EzklCoreBindings
-          run: CONFIGURATION=debug cargo build --features ios-bindings-test --no-default-features
+          run: CONFIGURATION=debug cargo run --bin ios_gen_bindings --features "ios-bindings uuid camino uniffi_bindgen" --no-default-features
 
         - name: Clone ezkl-ios-port repository
           run: |

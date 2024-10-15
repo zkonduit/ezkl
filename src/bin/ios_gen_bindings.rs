@@ -7,13 +7,10 @@ use uniffi_bindgen::bindings::SwiftBindingGenerator;
 use uniffi_bindgen::library_mode::generate_bindings;
 use uuid::Uuid;
 
-// Name of the Rust library to generate bindings for
-const LIBRARY_NAME: &str = "ezkl";
-
 fn main() {
+    let library_name = std::env::var("CARGO_PKG_NAME").expect("CARGO_PKG_NAME is not set");
     let mode = determine_build_mode();
-
-    build_bindings(LIBRARY_NAME, mode);
+    build_bindings(&library_name, mode);
 }
 
 /// Determines the build mode based on the CONFIGURATION environment variable.
@@ -157,7 +154,12 @@ fn build_for_arch(arch: &str, build_dir: &Path, mode: &str) {
 
     // Run cargo build for the specified architecture and mode
     let mut build_cmd = Command::new("cargo");
-    build_cmd.arg("build");
+    build_cmd
+        .arg("build")
+        .arg("--no-default-features")
+        .arg("--features")
+        .arg("ios-bindings");
+
     if mode == "release" {
         build_cmd.arg("--release");
     }

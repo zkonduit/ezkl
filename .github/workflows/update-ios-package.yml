@@ -25,7 +25,7 @@ jobs:
           override: true
 
       - name: Build EzklCoreBindings
-        run: CONFIGURATION=release cargo run --bin ios_gen_bindings --features ios-bindings
+        run: CONFIGURATION=release cargo run --bin ios_gen_bindings --features "ios-bindings uuid camino uniffi_bindgen" --no-default-features
 
       - name: Clone ezkl-ios-port repository
         run: |
