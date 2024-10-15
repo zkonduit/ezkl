@@ -60,20 +60,6 @@ jobs:
             -resultBundlePath ../../exampleTestResults \
             -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder
 
-      - name: Upload Test Results (Package)
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: package-test-results
-          path: ./testResults
-
-      - name: Upload Test Results (Example)
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: example-app-test-results
-          path: ./exampleTestResults
-
       - name: Commit and Push Changes to feat/ezkl-direct-integration
         run: |
           cd ezkl-ios-port

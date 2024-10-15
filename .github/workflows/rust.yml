@@ -686,3 +686,67 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
+
+  ios-integration-tests:
+      runs-on: macos-latest
+      needs: [build, library-tests, docs]
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions-rs/toolchain@v1
+          with:
+            toolchain: nightly-2024-07-18
+            override: true
+            components: rustfmt, clippy
+        - uses: baptiste0928/cargo-install@v1
+          with:
+            crate: cargo-nextest
+            locked: true
+        - name: Run ios tests
+          run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2024-07-18-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
+
+  test-ios-bindings:
+      runs-on: macos-latest
+      needs: [build, library-tests, docs]
+
+      steps:
+        - uses: actions/checkout@v4
+        - uses: actions-rs/toolchain@v1
+          with:
+            toolchain: nightly-2024-07-18
+            override: true
+            components: rustfmt, clippy
+        - name: Build EzklCoreBindings
+          run: CONFIGURATION=debug cargo build --features ios-bindings-test --no-default-features
+
+        - name: Clone ezkl-ios-port repository
+          run: |
+            git clone https://github.com/${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port.git
+
+        - name: Copy EzklCoreBindings
+          run: |
+            rm -rf ezkl-ios-port/Sources/EzklCoreBindings
+            cp -r build/EzklCoreBindings ezkl-ios-port/Sources/
+
+        - name: Set up Xcode environment
+          run: |
+            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+            sudo xcodebuild -license accept
+
+        - name: Run Package Tests
+          run: |
+            cd ezkl-ios-port
+            xcodebuild test \
+              -scheme EzklPackage \
+              -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+              -resultBundlePath ../testResults
+
+        - name: Run Example App Tests
+          run: |
+            cd ezkl-ios-port/Example
+            xcodebuild test \
+              -project Example.xcodeproj \
+              -scheme EzklApp \
+              -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+              -parallel-testing-enabled NO \
+              -resultBundlePath ../../exampleTestResults \
+              -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder
