@@ -197,6 +197,7 @@ python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
 ios-bindings = ["mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read", "dep:uniffi", "dep:instant", "serde", "serde_json/std", "log", "halo2_proofs/circuit-params"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
+    "enable-all",
     "onnx",
     "serde",
     "serde_json",
