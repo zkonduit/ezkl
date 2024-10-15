@@ -71,11 +71,12 @@ metal = { git = "https://github.com/gfx-rs/metal-rs", optional = true }
 objc = { version = "0.2.4", optional = true }
 mimalloc = { version = "0.1", optional = true }
 
+# universal bindings
 uniffi = { version = "=0.28.0", optional = true }
-uniffi_bindgen = { version = "=0.28.0", optional = true } # TODO - move to build-dependencies
-camino = { version = "^1.1", optional = true } # TODO - move to build-dependencies
-uuid = { version = "1.10.0", features = ["v4"], optional = true } # TODO - move to build-dependencies
 getrandom = { version = "0.2.8", optional = true }
+uniffi_bindgen = { version = "=0.28.0", optional = true }
+camino = { version = "^1.1", optional = true }
+uuid = { version = "1.10.0", features = ["v4"], optional = true }
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
 colored = { version = "2.0.0", default-features = false, optional = true }
@@ -99,7 +100,6 @@ wasm-bindgen-console-logger = "0.1.1"
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
-
 
 
 [build-dependencies]
