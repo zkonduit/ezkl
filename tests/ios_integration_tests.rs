@@ -1,4 +1,4 @@
-#[cfg(feature = "ios-bindings")]
+#[cfg(feature = "ios-bindings-test")]
 uniffi::build_foreign_language_testcases!(
     "tests/ios/can_verify_aggr.swift",
     "tests/ios/verify_gen_witness.swift",
