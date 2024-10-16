@@ -13,6 +13,7 @@ use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
 use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
 use crate::{Commitments, EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
+#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
@@ -42,6 +43,7 @@ use std::io::{self, BufReader, BufWriter, Cursor, Write};
 use std::ops::Deref;
 use std::path::PathBuf;
 use thiserror::Error as thisError;
+#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
@@ -57,8 +59,9 @@ fn serde_format_from_str(s: &str) -> halo2_proofs::SerdeFormat {
 
 #[allow(missing_docs)]
 #[derive(
-    ValueEnum, Copy, Clone, Default, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd,
+    Copy, Clone, Default, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd,
 )]
+#[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), derive(ValueEnum))]
 pub enum ProofType {
     #[default]
     Single,
@@ -77,7 +80,7 @@ impl std::fmt::Display for ProofType {
         )
     }
 }
-
+#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
 impl ToFlags for ProofType {
     fn to_flags(&self) -> Vec<String> {
         vec![format!("{}", self)]
@@ -129,17 +132,35 @@ impl<'source> pyo3::FromPyObject<'source> for ProofType {
 }
 
 #[allow(missing_docs)]
-#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), derive(ValueEnum))]
 pub enum StrategyType {
     Single,
     Accum,
 }
 impl std::fmt::Display for StrategyType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_possible_value()
-            .expect("no values are skipped")
-            .get_name()
-            .fmt(f)
+        // When the `ezkl` feature is disabled or we're targeting `wasm32`, use basic string representation.
+        #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
+        {
+            write!(
+                f,
+                "{}",
+                match self {
+                    StrategyType::Single => "single",
+                    StrategyType::Accum => "accum",
+                }
+            )
+        }
+
+        // When the `ezkl` feature is enabled and we're not targeting `wasm32`, use `to_possible_value`.
+        #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+        {
+            self.to_possible_value()
+                .expect("no values are skipped")
+                .get_name()
+                .fmt(f)
+        }
     }
 }
 #[cfg(feature = "python-bindings")]
@@ -178,8 +199,9 @@ pub enum PfSysError {
 
 #[allow(missing_docs)]
 #[derive(
-    ValueEnum, Default, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd,
+    Default, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd,
 )]
+#[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), derive(ValueEnum))]
 pub enum TranscriptType {
     Poseidon,
     #[default]
@@ -198,7 +220,7 @@ impl std::fmt::Display for TranscriptType {
         )
     }
 }
-
+#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
 impl ToFlags for TranscriptType {
     fn to_flags(&self) -> Vec<String> {
         vec![format!("{}", self)]

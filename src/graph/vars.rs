@@ -14,6 +14,7 @@ use pyo3::{
 };
 
 use serde::{Deserialize, Serialize};
+#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
 use self::errors::GraphError;
@@ -64,6 +65,7 @@ impl Display for Visibility {
     }
 }
 
+#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
 impl ToFlags for Visibility {
     fn to_flags(&self) -> Vec<String> {
         vec![format!("{}", self)]
