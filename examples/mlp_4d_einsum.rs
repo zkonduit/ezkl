@@ -220,7 +220,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
 }
 
 pub fn runmlp() {
-    #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     env_logger::init();
     // parameters
     let mut l0_kernel: Tensor<F> = Tensor::<IntegerRep>::new(

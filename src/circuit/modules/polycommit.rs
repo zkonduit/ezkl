@@ -219,7 +219,7 @@ mod tests {
     fn polycommit_chip_for_a_range_of_input_sizes() {
         let rng = rand::rngs::OsRng;
 
-        #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+        #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
         env_logger::init();
 
         {
@@ -247,7 +247,7 @@ mod tests {
     #[test]
     #[ignore]
     fn polycommit_chip_much_longer_input() {
-        #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+        #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
         env_logger::init();
 
         let rng = rand::rngs::OsRng;

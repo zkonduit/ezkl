@@ -20,7 +20,7 @@ use crate::EZKL_BUF_CAPACITY;
 use crate::{commands::*, EZKLError};
 use crate::{Commitments, RunArgs};
 use colored::Colorize;
-#[cfg(all(not(not(feature = "ezkl")), unix))]
+#[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{self, Circuit};
