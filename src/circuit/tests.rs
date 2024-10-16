@@ -247,10 +247,10 @@ mod matmul_col_overflow {
 }
 
 #[cfg(test)]
-#[cfg(not(any(
-    not(feature = "ezkl"),
-    all(target_arch = "wasm32", target_os = "unknown")
-)))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod matmul_col_ultra_overflow_double_col {
 
     use halo2_proofs::poly::kzg::{
@@ -368,10 +368,10 @@ mod matmul_col_ultra_overflow_double_col {
 }
 
 #[cfg(test)]
-#[cfg(not(any(
-    not(feature = "ezkl"),
-    all(target_arch = "wasm32", target_os = "unknown")
-)))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod matmul_col_ultra_overflow {
 
     use halo2_proofs::poly::kzg::{
@@ -1154,10 +1154,10 @@ mod conv {
 }
 
 #[cfg(test)]
-#[cfg(not(any(
-    not(feature = "ezkl"),
-    all(target_arch = "wasm32", target_os = "unknown")
-)))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod conv_col_ultra_overflow {
 
     use halo2_proofs::poly::{
@@ -1298,10 +1298,10 @@ mod conv_col_ultra_overflow {
 
 #[cfg(test)]
 // not wasm 32 unknown
-#[cfg(not(any(
-    not(feature = "ezkl"),
-    all(target_arch = "wasm32", target_os = "unknown")
-)))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod conv_relu_col_ultra_overflow {
 
     use halo2_proofs::poly::kzg::{
@@ -2464,10 +2464,10 @@ mod relu {
 }
 
 #[cfg(test)]
-#[cfg(not(any(
-    not(feature = "ezkl"),
-    all(target_arch = "wasm32", target_os = "unknown")
-)))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod lookup_ultra_overflow {
     use super::*;
     use halo2_proofs::{

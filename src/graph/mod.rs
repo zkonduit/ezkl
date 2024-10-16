@@ -7,7 +7,7 @@ pub mod modules;
 /// Inner elements of a computational graph that represent a single operation / constraints.
 pub mod node;
 /// postgres helper functions
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 pub mod postgres;
 /// Helper functions
 pub mod utilities;
@@ -17,7 +17,7 @@ pub mod vars;
 /// errors for the graph
 pub mod errors;
 
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use colored_json::ToColoredJson;
 #[cfg(all(not(not(feature = "ezkl")), unix))]
 use gag::Gag;
@@ -25,11 +25,11 @@ use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::poly::commitment::CommitmentScheme;
 pub use input::DataSource;
 use itertools::Itertools;
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
 use self::errors::GraphError;
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use self::input::OnChainSource;
 use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
@@ -49,7 +49,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::{self, Fr as Fp, G1Affine};
 use halo2curves::ff::{Field, PrimeField};
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -79,7 +79,7 @@ pub const MAX_NUM_LOOKUP_COLS: usize = 12;
 pub const MAX_LOOKUP_ABS: IntegerRep =
     (MAX_NUM_LOOKUP_COLS as IntegerRep) * 2_i128.pow(MAX_PUBLIC_SRS);
 
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 lazy_static! {
     /// Max circuit area
     pub static ref EZKL_MAX_CIRCUIT_AREA: Option<usize> =
@@ -698,7 +698,7 @@ impl std::fmt::Display for TestDataSource {
     }
 }
 
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 impl ToFlags for TestDataSource {}
 
 impl From<String> for TestDataSource {
@@ -887,7 +887,7 @@ impl GraphCircuit {
             public_inputs.processed_outputs = elements.processed_outputs.clone();
         }
 
-        #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+        #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
         debug!(
             "rescaled and processed public inputs: {}",
             serde_json::to_string(&public_inputs)?.to_colored_json_auto()?
@@ -924,7 +924,7 @@ impl GraphCircuit {
     }
 
     ///
-    #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     pub async fn load_graph_input(
         &mut self,
         data: &GraphData,
@@ -955,7 +955,7 @@ impl GraphCircuit {
         }
     }
 
-    #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     /// Process the data source for the model
     async fn process_data_source(
         &mut self,
@@ -985,7 +985,7 @@ impl GraphCircuit {
     }
 
     /// Prepare on chain test data
-    #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     pub async fn load_on_chain_data(
         &mut self,
         source: OnChainSource,
@@ -1349,7 +1349,7 @@ impl GraphCircuit {
             visibility,
         );
 
-        #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+        #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
         log::trace!(
             "witness: \n {}",
             &witness.as_json()?.to_colored_json_auto()?
@@ -1359,7 +1359,7 @@ impl GraphCircuit {
     }
 
     /// Create a new circuit from a set of input data and [RunArgs].
-    #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     pub fn from_run_args(
         run_args: &RunArgs,
         model_path: &std::path::Path,
@@ -1369,7 +1369,7 @@ impl GraphCircuit {
     }
 
     /// Create a new circuit from a set of input data and [GraphSettings].
-    #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     pub fn from_settings(
         params: &GraphSettings,
         model_path: &std::path::Path,
@@ -1384,7 +1384,7 @@ impl GraphCircuit {
     }
 
     ///
-    #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     pub async fn populate_on_chain_test_data(
         &mut self,
         data: &mut GraphData,
@@ -1477,7 +1477,7 @@ impl CircuitSize {
         }
     }
 
-    #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     /// Export the ezkl configuration as json
     pub fn as_json(&self) -> Result<String, GraphError> {
         let serialized = match serde_json::to_string(&self) {
@@ -1565,7 +1565,7 @@ impl Circuit<Fp> for GraphCircuit {
 
         let circuit_size = CircuitSize::from_cs(cs, params.run_args.logrows);
 
-        #[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+        #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
         debug!(
             "circuit size: \n {}",
             circuit_size

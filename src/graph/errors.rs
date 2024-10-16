@@ -48,10 +48,10 @@ pub enum GraphError {
     #[error("failed to ser/deser model: {0}")]
     ModelSerialize(#[from] bincode::Error),
     /// Tract error
-    #[cfg(not(any(
-        not(feature = "ezkl"),
-        all(target_arch = "wasm32", target_os = "unknown")
-    )))]
+    #[cfg(all(
+        feature = "ezkl",
+        not(all(target_arch = "wasm32", target_os = "unknown"))
+    ))]
     #[error("[tract] {0}")]
     TractError(#[from] tract_onnx::prelude::TractError),
     /// Packing exponent is too large
@@ -88,17 +88,17 @@ pub enum GraphError {
     #[error("unknown dimension batch_size in model inputs, set batch_size in variables")]
     MissingBatchSize,
     /// Tokio postgres error
-    #[cfg(not(any(
-        not(feature = "ezkl"),
-        all(target_arch = "wasm32", target_os = "unknown")
-    )))]
+    #[cfg(all(
+        feature = "ezkl",
+        not(all(target_arch = "wasm32", target_os = "unknown"))
+    ))]
     #[error("[tokio postgres] {0}")]
     TokioPostgresError(#[from] tokio_postgres::Error),
     /// Eth error
-    #[cfg(not(any(
-        not(feature = "ezkl"),
-        all(target_arch = "wasm32", target_os = "unknown")
-    )))]
+    #[cfg(all(
+        feature = "ezkl",
+        not(all(target_arch = "wasm32", target_os = "unknown"))
+    ))]
     #[error("[eth] {0}")]
     EthError(#[from] crate::eth::EthError),
     /// Json error

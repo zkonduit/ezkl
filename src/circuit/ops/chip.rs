@@ -14,7 +14,7 @@ use pyo3::{
     types::PyString,
 };
 use serde::{Deserialize, Serialize};
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
 use crate::{
@@ -50,7 +50,7 @@ impl std::fmt::Display for CheckMode {
     }
 }
 
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 impl ToFlags for CheckMode {
     /// Convert the struct to a subcommand string
     fn to_flags(&self) -> Vec<String> {
@@ -90,7 +90,7 @@ impl std::fmt::Display for Tolerance {
     }
 }
 
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 impl ToFlags for Tolerance {
     /// Convert the struct to a subcommand string
     fn to_flags(&self) -> Vec<String> {

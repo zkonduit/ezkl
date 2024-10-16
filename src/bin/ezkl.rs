@@ -1,28 +1,28 @@
 // ignore file if compiling for wasm
 #[global_allocator]
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::{CommandFactory, Parser};
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use colored_json::ToColoredJson;
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use ezkl::commands::Cli;
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use ezkl::execute::run;
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use ezkl::logger::init_logger;
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use log::{error, info};
 #[cfg(not(any(target_arch = "wasm32", feature = "no-banner")))]
 use rand::prelude::SliceRandom;
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 #[cfg(feature = "icicle")]
 use std::env;
 
 #[tokio::main(flavor = "current_thread")]
-#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 pub async fn main() {
     let args = Cli::parse();
 
