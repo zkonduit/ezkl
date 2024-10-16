@@ -1,13 +1,11 @@
 use crate::{
-    circuit::{
-        modules::{
-            polycommit::PolyCommitChip,
-            poseidon::{
-                spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
-                PoseidonChip,
-            },
-            Module,
+    circuit::modules::{
+        polycommit::PolyCommitChip,
+        poseidon::{
+            spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
+            PoseidonChip,
         },
+        Module,
     },
     fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
     graph::{
@@ -18,7 +16,7 @@ use crate::{
 use console_error_panic_hook;
 use halo2_proofs::{
     plonk::*,
-    poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG}
+    poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
 };
 use halo2curves::{
     bn256::{Bn256, Fr, G1Affine},
@@ -28,20 +26,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_console_logger::DEFAULT_LOGGER;
 
 use crate::bindings::universal::{
-    EZKLError as ExternalEZKLError,
-    encode_verifier_calldata,
-    gen_witness,
-    gen_vk,
-    gen_pk,
-    verify_aggr,
-    witness_validation,
-    compiled_circuit_validation,
-    input_validation,
-    proof_validation,
-    vk_validation,
-    pk_validation,
-    settings_validation,
-    srs_validation,
+    compiled_circuit_validation, encode_verifier_calldata, gen_pk, gen_vk, gen_witness,
+    input_validation, pk_validation, proof_validation, settings_validation, srs_validation,
+    verify_aggr, vk_validation, witness_validation, EZKLError as ExternalEZKLError,
 };
 #[cfg(feature = "web")]
 pub use wasm_bindgen_rayon::init_thread_pool;

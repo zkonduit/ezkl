@@ -36,7 +36,10 @@
 pub enum EZKLError {
     #[error("[aggregation] {0}")]
     AggregationError(#[from] pfsys::evm::aggregation_kzg::AggregationError),
-    #[cfg(not(any(not(feature = "ezkl"), all(target_arch = "wasm32", target_os = "unknown"))))]
+    #[cfg(not(any(
+        not(feature = "ezkl"),
+        all(target_arch = "wasm32", target_os = "unknown")
+    )))]
     #[error("[eth] {0}")]
     EthError(#[from] eth::EthError),
     #[error("[graph] {0}")]
@@ -55,7 +58,10 @@ pub enum EZKLError {
     JsonError(#[from] serde_json::Error),
     #[error("[utf8] {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
-    #[cfg(not(any(not(feature = "ezkl"), all(target_arch = "wasm32", target_os = "unknown"))))]
+    #[cfg(not(any(
+        not(feature = "ezkl"),
+        all(target_arch = "wasm32", target_os = "unknown")
+    )))]
     #[error("[reqwest] {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("[fmt] {0}")]
@@ -64,7 +70,10 @@ pub enum EZKLError {
     Halo2Error(#[from] halo2_proofs::plonk::Error),
     #[error("[Uncategorized] {0}")]
     UncategorizedError(String),
-    #[cfg(not(any(not(feature = "ezkl"), all(target_arch = "wasm32", target_os = "unknown"))))]
+    #[cfg(not(any(
+        not(feature = "ezkl"),
+        all(target_arch = "wasm32", target_os = "unknown")
+    )))]
     #[error("[execute] {0}")]
     ExecutionError(#[from] execute::ExecutionError),
     #[error("[srs] {0}")]
@@ -100,7 +109,11 @@ use serde::{Deserialize, Serialize};
 use tosubcommand::ToFlags;
 
 /// Bindings managment
-#[cfg(any(feature = "ios-bindings", all(target_arch = "wasm32", target_os = "unknown"), feature = "python-bindings"))]
+#[cfg(any(
+    feature = "ios-bindings",
+    all(target_arch = "wasm32", target_os = "unknown"),
+    feature = "python-bindings"
+))]
 pub mod bindings;
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
@@ -123,12 +136,18 @@ pub mod fieldutils;
 #[cfg(any(feature = "onnx", not(feature = "ezkl")))]
 pub mod graph;
 /// beautiful logging
-#[cfg(not(any(not(feature = "ezkl"), all(target_arch = "wasm32", target_os = "unknown"))))]
+#[cfg(not(any(
+    not(feature = "ezkl"),
+    all(target_arch = "wasm32", target_os = "unknown")
+)))]
 pub mod logger;
 /// Tools for proofs and verification used by cli
 pub mod pfsys;
 /// srs sha hashes
-#[cfg(not(any(not(feature = "ezkl"), all(target_arch = "wasm32", target_os = "unknown"))))]
+#[cfg(not(any(
+    not(feature = "ezkl"),
+    all(target_arch = "wasm32", target_os = "unknown")
+)))]
 pub mod srs_sha;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
@@ -236,7 +255,10 @@ impl From<String> for Commitments {
 
 /// Parameters specific to a proving run
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, PartialOrd)]
-#[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), derive(Args, ToFlags))]
+#[cfg_attr(
+    not(any(not(feature = "ezkl"), target_arch = "wasm32")),
+    derive(Args, ToFlags)
+)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
     #[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), arg(short = 'T', long, default_value = "0", value_hint = clap::ValueHint::Other))]
@@ -271,11 +293,17 @@ pub struct RunArgs {
     /// Flags whether params are fixed, private, hashed, polycommit
     #[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), arg(long, default_value = "private", value_hint = clap::ValueHint::Other))]
     pub param_visibility: Visibility,
-    #[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), arg(long, default_value = "false"))]
+    #[cfg_attr(
+        not(any(not(feature = "ezkl"), target_arch = "wasm32")),
+        arg(long, default_value = "false")
+    )]
     /// Rebase the scale using lookup table for division instead of using a range check
     pub div_rebasing: bool,
     /// Should constants with 0.0 fraction be rebased to scale 0
-    #[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), arg(long, default_value = "false"))]
+    #[cfg_attr(
+        not(any(not(feature = "ezkl"), target_arch = "wasm32")),
+        arg(long, default_value = "false")
+    )]
     pub rebase_frac_zero_constants: bool,
     /// check mode (safe, unsafe, etc)
     #[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), arg(long, default_value = "unsafe", value_hint = clap::ValueHint::Other))]

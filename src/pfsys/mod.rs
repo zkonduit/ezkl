@@ -58,10 +58,11 @@ fn serde_format_from_str(s: &str) -> halo2_proofs::SerdeFormat {
 }
 
 #[allow(missing_docs)]
-#[derive(
-    Copy, Clone, Default, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd,
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
+#[cfg_attr(
+    not(any(not(feature = "ezkl"), target_arch = "wasm32")),
+    derive(ValueEnum)
 )]
-#[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), derive(ValueEnum))]
 pub enum ProofType {
     #[default]
     Single,
@@ -133,7 +134,10 @@ impl<'source> pyo3::FromPyObject<'source> for ProofType {
 
 #[allow(missing_docs)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), derive(ValueEnum))]
+#[cfg_attr(
+    not(any(not(feature = "ezkl"), target_arch = "wasm32")),
+    derive(ValueEnum)
+)]
 pub enum StrategyType {
     Single,
     Accum,
@@ -198,10 +202,11 @@ pub enum PfSysError {
 }
 
 #[allow(missing_docs)]
-#[derive(
-    Default, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd,
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
+#[cfg_attr(
+    not(any(not(feature = "ezkl"), target_arch = "wasm32")),
+    derive(ValueEnum)
 )]
-#[cfg_attr(not(any(not(feature = "ezkl"), target_arch = "wasm32")), derive(ValueEnum))]
 pub enum TranscriptType {
     Poseidon,
     #[default]
