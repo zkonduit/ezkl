@@ -1,6 +1,12 @@
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 #[cfg(test)]
 mod wasm32 {
+    use ezkl::bindings::wasm::{
+        bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
+        feltToFloat, feltToInt, feltToLittleEndian, genPk, genVk, genWitness, inputValidation,
+        kzgCommit, pkValidation, poseidonHash, proofValidation, prove, settingsValidation,
+        srsValidation, u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
+    };
     use ezkl::circuit::modules::polycommit::PolyCommitChip;
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
@@ -9,12 +15,6 @@ mod wasm32 {
     use ezkl::graph::GraphCircuit;
     use ezkl::graph::{GraphSettings, GraphWitness};
     use ezkl::pfsys;
-    use ezkl::bindings::wasm::{
-        bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
-        feltToFloat, feltToInt, feltToLittleEndian, genPk, genVk, genWitness, inputValidation,
-        kzgCommit, pkValidation, poseidonHash, proofValidation, prove, settingsValidation,
-        srsValidation, u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
-    };
     use halo2_proofs::plonk::VerifyingKey;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2_proofs::poly::kzg::commitment::ParamsKZG;

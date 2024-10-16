@@ -94,7 +94,9 @@ pub(crate) fn encode_verifier_calldata(
 #[cfg_attr(feature = "ios-bindings", uniffi::export)]
 pub(crate) fn gen_witness(compiled_circuit: Vec<u8>, input: Vec<u8>) -> Result<Vec<u8>, EZKLError> {
     let mut circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
-        .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize compiled model: {}", e)))?;
+        .map_err(|e| {
+            EZKLError::InternalError(format!("Failed to deserialize compiled model: {}", e))
+        })?;
     let input: crate::graph::input::GraphData = serde_json::from_slice(&input[..])
         .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize input: {}", e)))?;
 
@@ -532,7 +534,12 @@ pub(crate) fn srs_validation(srs: Vec<u8>) -> Result<bool, EZKLError> {
 
 // HELPER FUNCTIONS
 
-fn get_params<Scheme: for<'a> halo2_proofs::poly::commitment::Params<'a, halo2curves::bn256::G1Affine>>(mut reader: &mut BufReader<&[u8]>) -> Result<Scheme, EZKLError> {    halo2_proofs::poly::commitment::Params::<G1Affine>::read(&mut reader)
+fn get_params<
+    Scheme: for<'a> halo2_proofs::poly::commitment::Params<'a, halo2curves::bn256::G1Affine>,
+>(
+    mut reader: &mut BufReader<&[u8]>,
+) -> Result<Scheme, EZKLError> {
+    halo2_proofs::poly::commitment::Params::<G1Affine>::read(&mut reader)
         .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize params: {}", e)))
 }
 
