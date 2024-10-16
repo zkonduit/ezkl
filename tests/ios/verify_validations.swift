@@ -100,6 +100,4 @@ do {
     let srsValidationResult = try? srsValidation(srs:srs)
     assert(srsValidationResult != nil, "SRS validation should pass for srs")
 
-} catch {
-    fatalError("Test failed with error: \(error)")
 }
