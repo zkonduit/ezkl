@@ -862,7 +862,7 @@ pub fn save_params<Scheme: CommitmentScheme>(
 ////////////////////////
 
 #[cfg(test)]
-#[cfg(not(any(feature = "ios-bindings", target_arch = "wasm32")))]
+#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
 mod tests {
 
     use super::*;
