@@ -20,17 +20,13 @@ halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/option
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "b753a832e92d5c86c5c997327a9cf9de86a18851", features = [
     "derive_serde",
 ] }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", branch = "ac/cache-lookup-commitments", features = ["circuit-params"] }
 rand = { version = "0.8", default-features = false }
 itertools = { version = "0.10.3", default-features = false }
 clap = { version = "4.5.3", features = ["derive"] }
-serde = { version = "1.0.126", features = ["derive"], optional = true }
-serde_json = { version = "1.0.97", default-features = false, features = [
-    "float_roundtrip",
-    "raw_value",
-], optional = true }
+serde = { version = "1.0.126", features = ["derive"] }
 clap_complete = { version = "4.5.2", optional = true }
-log = { version = "0.4.17", default-features = false, optional = true }
+log = { version = "0.4.17", default-features = false }
 thiserror = { version = "1.0.38", default-features = false }
 hex = { version = "0.4.3", default-features = false }
 halo2_wrong_ecc = { git = "https://github.com/zkonduit/halo2wrong", branch = "ac/chunked-mv-lookup", package = "ecc" }
@@ -46,8 +42,13 @@ portable-atomic = { version = "1.6.0", optional = true }
 tosubcommand = { git = "https://github.com/zkonduit/enum_to_subcommand", package = "tosubcommand" }
 semver = "1.0.22"
 
-# evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+serde_json = { version = "1.0.97", features = [
+    "float_roundtrip",
+    "raw_value",
+] }
+
+# evm related deps
 alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev = "5fbf57bac99edef9d8475190109a7ea9fb7e5e83", features = [
     "provider-http",
     "signers",
@@ -60,7 +61,7 @@ foundry-compilers = { version = "0.4.1", features = ["svm-solc"], optional = tru
 ethabi = { version = "18", optional = true }
 indicatif = { version = "0.17.5", features = ["rayon"], optional = true }
 gag = { version = "1.0.0", default-features = false, optional = true }
-instant = { version = "0.1", optional = true }
+instant = { version = "0.1" }
 reqwest = { version = "0.12.4", default-features = false, features = ["default-tls", "multipart", "stream"], optional = true }
 openssl = { version = "0.10.55", features = ["vendored"], optional = true }
 tokio-postgres = { version = "0.7.10", optional = true }
@@ -93,6 +94,10 @@ sha256 = { version = "1.4.0", optional = true }
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+serde_json = { version = "1.0.97", default-features = false, features = [
+    "float_roundtrip",
+    "raw_value",
+] }
 getrandom = { version = "0.2.8", features = ["js"] }
 instant = { version = "0.1", features = ["wasm-bindgen", "inaccurate"] }
 
@@ -191,30 +196,23 @@ required-features = ["ios-bindings", "uuid", "camino", "uniffi_bindgen"]
 
 [features]
 web = ["wasm-bindgen-rayon"]
-default = ["ezkl", "mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read", "enable-all"]
+default = ["ezkl", "mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read"]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
-ios-bindings = ["mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read", "dep:uniffi", "dep:instant", "serde", "serde_json/std", "log", "halo2_proofs/circuit-params"]
+ios-bindings = ["mv-lookup", "precompute-coset", "parallel-poly-read", "uniffi/build"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
-    "enable-all",
     "onnx",
-    "serde",
-    "serde_json",
-    "log",
-    "colored",
-    "env_logger",
+    "dep:colored",
+    "dep:env_logger",
     "tabled/color",
+    "serde_json/std",
     "colored_json",
-    "halo2_proofs/circuit-params",
-]
-enable-all = [
     "dep:alloy",
     "dep:foundry-compilers",
     "dep:ethabi",
     "dep:indicatif",
     "dep:gag",
-    "dep:instant",
     "dep:reqwest",
     "dep:openssl",
     "dep:tokio-postgres",
@@ -228,7 +226,7 @@ enable-all = [
     "dep:portable-atomic",
     "dep:clap_complete",
 ]
-parallel-poly-read = ["halo2_proofs/parallel-poly-read"]
+parallel-poly-read = ["halo2_proofs/circuit-params", "halo2_proofs/parallel-poly-read"]
 mv-lookup = [
     "halo2_proofs/mv-lookup",
     "snark-verifier/mv-lookup",
