@@ -10,7 +10,6 @@ use alloy::core::primitives::Bytes;
 use alloy::core::primitives::U256;
 use alloy::dyn_abi::abi::token::{DynSeqToken, PackedSeqToken, WordToken};
 use alloy::dyn_abi::abi::TokenSeq;
-use alloy::prelude::Wallet;
 // use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
 use alloy::node_bindings::Anvil;
