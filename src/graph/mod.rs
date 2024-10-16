@@ -25,6 +25,7 @@ use halo2_proofs::plonk::VerifyingKey;
 use halo2_proofs::poly::commitment::CommitmentScheme;
 pub use input::DataSource;
 use itertools::Itertools;
+#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
 use self::errors::GraphError;
@@ -697,6 +698,7 @@ impl std::fmt::Display for TestDataSource {
     }
 }
 
+#[cfg(not(any(not(feature = "ezkl"), target_arch = "wasm32")))]
 impl ToFlags for TestDataSource {}
 
 impl From<String> for TestDataSource {
