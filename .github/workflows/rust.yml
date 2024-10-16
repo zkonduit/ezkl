@@ -721,7 +721,7 @@ jobs:
 
         - name: Clone ezkl-ios-port repository
           run: |
-            git clone https://github.com/${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port.git
+            git clone https://github.com/ElusAegis/ezkl-ios-port.git # TODO - replace with the correct repository for the iOS EZKL Swift Package
 
         - name: Copy EzklCoreBindings
           run: |
