@@ -192,7 +192,7 @@ web = ["wasm-bindgen-rayon"]
 default = ["ezkl", "mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read"]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
-ios-bindings = ["mv-lookup", "precompute-coset", "parallel-poly-read", "uniffi/build"]
+ios-bindings = ["mv-lookup", "precompute-coset", "parallel-poly-read", "uniffi"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
     "onnx",
