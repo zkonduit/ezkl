@@ -719,14 +719,14 @@ jobs:
         - name: Build EzklCoreBindings
           run: CONFIGURATION=debug cargo run --bin ios_gen_bindings --features "ios-bindings uuid camino uniffi_bindgen" --no-default-features
 
-        - name: Clone ezkl-ios-port repository
+        - name: Clone ezkl-swift- repository
           run: |
-            git clone https://github.com/ElusAegis/ezkl-ios-port.git # TODO - replace with the correct repository for the iOS EZKL Swift Package
+            git clone https://github.com/zkonduit/ezkl-swift-package.git
 
         - name: Copy EzklCoreBindings
           run: |
-            rm -rf ezkl-ios-port/Sources/EzklCoreBindings
-            cp -r build/EzklCoreBindings ezkl-ios-port/Sources/
+            rm -rf ezkl-swift-package/Sources/EzklCoreBindings
+            cp -r build/EzklCoreBindings ezkl-swift-package/Sources/
 
         - name: Set up Xcode environment
           run: |
@@ -735,7 +735,7 @@ jobs:
 
         - name: Run Package Tests
           run: |
-            cd ezkl-ios-port
+            cd ezkl-swift-package
             xcodebuild test \
               -scheme EzklPackage \
               -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
@@ -743,7 +743,7 @@ jobs:
 
         - name: Run Example App Tests
           run: |
-            cd ezkl-ios-port/Example
+            cd ezkl-swift-package/Example
             xcodebuild test \
               -project Example.xcodeproj \
               -scheme EzklApp \
