@@ -9,7 +9,9 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
     def forward(self, w, x, y, z):
-        return [((x & y)) == (x & (y | (z ^ w)))]
+        a = (x & y)
+        b = (y & (z ^ w))
+        return [a & b]
 
 
 circuit = MyModel()
