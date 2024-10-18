@@ -27,14 +27,14 @@ jobs:
       - name: Build EzklCoreBindings
         run: CONFIGURATION=release cargo run --bin ios_gen_bindings --features "ios-bindings uuid camino uniffi_bindgen" --no-default-features
 
-      - name: Clone ezkl-ios-port repository
+      - name: Clone ezkl-swift-package repository
         run: |
-          git clone https://github.com/${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}/ezkl-ios-port.git
+          git clone https://github.com/zkonduit/ezkl-swift-package.git
 
       - name: Copy EzklCoreBindings
         run: |
-          rm -rf ezkl-ios-port/Sources/EzklCoreBindings
-          cp -r build/EzklCoreBindings ezkl-ios-port/Sources/
+          rm -rf ezkl-swift-package/Sources/EzklCoreBindings
+          cp -r build/EzklCoreBindings ezkl-swift-package/Sources/
 
       - name: Set up Xcode environment
         run: |
@@ -43,7 +43,7 @@ jobs:
 
       - name: Run Package Tests
         run: |
-          cd ezkl-ios-port
+          cd ezkl-swift-package
           xcodebuild test \
             -scheme EzklPackage \
             -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
@@ -51,7 +51,7 @@ jobs:
 
       - name: Run Example App Tests
         run: |
-          cd ezkl-ios-port/Example
+          cd ezkl-swift-package/Example
           xcodebuild test \
             -project Example.xcodeproj \
             -scheme EzklApp \
@@ -62,15 +62,14 @@ jobs:
 
       - name: Commit and Push Changes to feat/ezkl-direct-integration
         run: |
-          cd ezkl-ios-port
+          cd ezkl-swift-package
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git add Sources/EzklCoreBindings
-          git commit -m "Update EzklCoreBindings from ezkl-for-ios"
+          git commit -m "Automatically updated EzklCoreBindings for EZKL"
           git tag ${{ github.event.inputs.tag }}
-          git remote set-url origin https://${SWIFT_PACKAGE_OWNER_USERNAME}:${EZKL_PORTER_TOKEN}@github.com/${SWIFT_PACKAGE_OWNER_USERNAME}/ezkl-ios-port.git
+          git remote set-url origin https://zkonduit:${EZKL_PORTER_TOKEN}@github.com/zkonduit/ezkl-swift-package.git
           git push origin
           git push origin --tags
         env:
           EZKL_PORTER_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
-          SWIFT_PACKAGE_OWNER_USERNAME: ${{ vars.SWIFT_PACKAGE_OWNER_USERNAME }}
