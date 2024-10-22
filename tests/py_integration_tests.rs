@@ -11,7 +11,7 @@ mod py_tests {
     static ENV_SETUP: Once = Once::new();
     static DOWNLOAD_VOICE_DATA: Once = Once::new();
 
-    //Sure to run this once
+    // Sure to run this once
 
     lazy_static! {
         static ref CARGO_TARGET_DIR: String =
@@ -198,6 +198,18 @@ mod py_tests {
                 let path = test_dir.path().to_str().unwrap();
                 crate::py_tests::mv_test_(path, "voice_judge.ipynb");
                 run_notebook(path, "voice_judge.ipynb");
+                test_dir.close().unwrap();
+                anvil_child.kill().unwrap();
+            }
+
+            #[test]
+            fn reusable_verifier_notebook_() {
+                crate::py_tests::init_binary();
+                let mut anvil_child = crate::py_tests::start_anvil(false);
+                let test_dir: TempDir = TempDir::new("reusable_verifier").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "reusable_verifier.ipynb");
+                run_notebook(path, "reusable_verifier.ipynb");
                 test_dir.close().unwrap();
                 anvil_child.kill().unwrap();
             }

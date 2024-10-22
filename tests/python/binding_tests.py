@@ -450,10 +450,10 @@ async def test_create_evm_verifier_separate_vk():
         sol_code_path,
         abi_path,
         srs_path=srs_path,
-        render_vk_seperately=True
+        reusable=True
     )
 
-    res = await ezkl.create_evm_vk(
+    res = await ezkl.create_evm_vka(
         vk_path,
         settings_path,
         vk_code_path,
@@ -465,9 +465,9 @@ async def test_create_evm_verifier_separate_vk():
     assert os.path.isfile(sol_code_path)
 
 
-async def test_deploy_evm_separate_vk():
+async def test_deploy_evm_reusable_and_vka():
     """
-    Test deployment of the separate verifier smart contract + vk
+    Test deployment of the reusable verifier smart contract + vka
     In order to run this you will need to install solc in your environment
     """
     addr_path_verifier = os.path.join(folder_path, 'address_separate.json')
@@ -481,13 +481,15 @@ async def test_deploy_evm_separate_vk():
     res = await ezkl.deploy_evm(
         addr_path_verifier,
         sol_code_path,
-        rpc_url=anvil_url,
+        anvil_url,
+        "verifier/reusable",
     )
 
-    res = await ezkl.deploy_vk_evm(
+    res = await ezkl.deploy_evm(
         addr_path_vk,
         vk_code_path,
-        rpc_url=anvil_url,
+        anvil_url,
+        "vka",
     )
 
     assert res == True
@@ -506,7 +508,7 @@ async def test_deploy_evm():
     res = await ezkl.deploy_evm(
         addr_path,
         sol_code_path,
-        rpc_url=anvil_url,
+        anvil_url,
     )
 
     assert res == True

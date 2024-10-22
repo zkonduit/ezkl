@@ -7,11 +7,15 @@ mod native_tests {
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
+    use ezkl::pfsys::Snark;
     use ezkl::Commitments;
+    use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+    use halo2curves::bn256::Bn256;
     use lazy_static::lazy_static;
     use rand::Rng;
     use std::env::var;
     use std::io::{Read, Write};
+    use std::path::PathBuf;
     use std::process::{Child, Command};
     use std::sync::Once;
     static COMPILE: Once = Once::new();
@@ -241,8 +245,8 @@ mod native_tests {
         "1l_conv_transpose",
         "1l_upsample",
         "1l_identity", //35
-        "idolmodel",
-        "trig",
+        "idolmodel",   // too big evm
+        "trig",        // too big evm
         "prelu_gmm",
         "lstm",
         "rnn", //40
@@ -983,16 +987,26 @@ mod native_tests {
         mod tests_evm {
             use seq_macro::seq;
             use crate::native_tests::TESTS_EVM;
+            use crate::native_tests::TESTS;
             use crate::native_tests::TESTS_EVM_AGGR;
             use test_case::test_case;
             use crate::native_tests::kzg_evm_prove_and_verify;
-            use crate::native_tests::kzg_evm_prove_and_verify_render_seperately;
+            use crate::native_tests::kzg_evm_prove_and_verify_reusable_verifier;
 
             use crate::native_tests::kzg_evm_on_chain_input_prove_and_verify;
             use crate::native_tests::kzg_evm_aggr_prove_and_verify;
             use tempdir::TempDir;
             use crate::native_tests::Hardfork;
             use crate::native_tests::run_js_tests;
+            use ezkl::logger::init_logger;
+            use crate::native_tests::lazy_static;
+
+            // Global variables to store verifier hashes and identical verifiers
+            lazy_static! {
+                // create a new variable of type
+                static ref REUSABLE_VERIFIER_ADDR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+            }
+
 
             /// Currently only on chain inputs that return a non-negative value are supported.
             const TESTS_ON_CHAIN_INPUT: [&str; 17] = [
@@ -1104,6 +1118,70 @@ mod native_tests {
 
             });
 
+            seq!(N in 0..=93 {
+                #(#[test_case(TESTS[N])])*
+                fn kzg_evm_prove_and_verify_reusable_verifier_(test: &str) {
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
+                    init_logger();
+                    log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_ for test: {}", test);
+                    // default vis
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), false);
+                    // public/public vis
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), false);
+                    // hashed input
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", &mut Some(reusable_verifier_address), false);
+
+                    match REUSABLE_VERIFIER_ADDR.try_lock() {
+                        Ok(mut addr) => {
+                            *addr = Some(reusable_verifier_address.clone());
+                            log::error!("Reusing the same verifeir deployed at address: {}", reusable_verifier_address);
+                        }
+                        Err(_) => {
+                            log::error!("Failed to acquire lock on REUSABLE_VERIFIER_ADDR");
+                        }
+                    }
+
+                    test_dir.close().unwrap();
+
+                }
+
+                #(#[test_case(TESTS[N])])*
+                fn kzg_evm_prove_and_verify_reusable_verifier_with_overflow_(test: &str) {
+                    // verifier too big to fit on chain with overflow calibration target
+                    if test == "1l_eltwise_div" || test == "lenet_5" || test == "ltsf" || test == "lstm_large" {
+                        return;
+                    }
+                    crate::native_tests::init_binary();
+                    let test_dir = TempDir::new(test).unwrap();
+                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
+                    init_logger();
+                    log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_with_overflow_ for test: {}", test);
+                    // default vis
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), true);
+                    // public/public vis
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), true);
+                    // hashed input
+                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", &mut Some(reusable_verifier_address), true);
+
+                    match REUSABLE_VERIFIER_ADDR.try_lock() {
+                        Ok(mut addr) => {
+                            *addr = Some(reusable_verifier_address.clone());
+                            log::error!("Reusing the same verifeir deployed at address: {}", reusable_verifier_address);
+                        }
+                        Err(_) => {
+                            log::error!("Failed to acquire lock on REUSABLE_VERIFIER_ADDR");
+                        }
+                    }
+
+                    test_dir.close().unwrap();
+
+                }
+            });
+
 
             seq!(N in 0..=22 {
 
@@ -1116,19 +1194,6 @@ mod native_tests {
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "public");
                     #[cfg(not(feature = "icicle"))]
                     run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
-                    test_dir.close().unwrap();
-
-                }
-
-                #(#[test_case(TESTS_EVM[N])])*
-                fn kzg_evm_prove_and_verify_render_seperately_(test: &str) {
-                    crate::native_tests::init_binary();
-                    let test_dir = TempDir::new(test).unwrap();
-                    let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                    let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
-                    kzg_evm_prove_and_verify_render_seperately(2, path, test.to_string(), "private", "private", "public");
-                    #[cfg(not(feature = "icicle"))]
-                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", true);
                     test_dir.close().unwrap();
 
                 }
@@ -1883,7 +1948,7 @@ mod native_tests {
 
         // deploy the verifier
         let args = vec![
-            "deploy-evm-verifier",
+            "deploy-evm",
             rpc_arg.as_str(),
             addr_path_arg.as_str(),
             "--sol-code-path",
@@ -2114,11 +2179,7 @@ mod native_tests {
         assert!(status.success());
 
         // deploy the verifier
-        let mut args = vec![
-            "deploy-evm-verifier",
-            rpc_arg.as_str(),
-            addr_path_arg.as_str(),
-        ];
+        let mut args = vec!["deploy-evm", rpc_arg.as_str(), addr_path_arg.as_str()];
 
         args.push("--sol-code-path");
         args.push(sol_arg.as_str());
@@ -2160,14 +2221,16 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
-    fn kzg_evm_prove_and_verify_render_seperately(
+    fn kzg_evm_prove_and_verify_reusable_verifier(
         num_inner_columns: usize,
         test_dir: &str,
         example_name: String,
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
-    ) {
+        reusable_verifier_address: &mut Option<String>,
+        overflow: bool,
+    ) -> String {
         let anvil_url = ANVIL_URL.as_str();
 
         prove_and_verify(
@@ -2179,7 +2242,7 @@ mod native_tests {
             output_visibility,
             num_inner_columns,
             None,
-            false,
+            overflow,
             "single",
             Commitments::KZG,
             2,
@@ -2194,27 +2257,58 @@ mod native_tests {
         let settings_arg = format!("--settings-path={}", settings_path);
         let sol_arg = format!("--sol-code-path={}/{}/kzg.sol", test_dir, example_name);
 
-        // create the verifier
-        let args = vec![
-            "create-evm-verifier",
-            "--vk-path",
-            &vk_arg,
-            &settings_arg,
-            &sol_arg,
-            "--render-vk-seperately",
-        ];
+        // if the reusable verifier address is not set, create the verifier
+        let deployed_addr_arg = match reusable_verifier_address {
+            Some(addr) => addr.clone(),
+            None => {
+                // create the reusable verifier
+                let args = vec![
+                    "create-evm-verifier",
+                    "--vk-path",
+                    &vk_arg,
+                    &settings_arg,
+                    &sol_arg,
+                    "--reusable",
+                ];
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(&args)
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
+                let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                    .args(&args)
+                    .status()
+                    .expect("failed to execute process");
+                assert!(status.success());
+
+                // deploy the verifier
+                let args = vec![
+                    "deploy-evm",
+                    rpc_arg.as_str(),
+                    addr_path_arg.as_str(),
+                    sol_arg.as_str(),
+                    "-C=verifier/reusable",
+                ];
+
+                let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                    .args(&args)
+                    .status()
+                    .expect("failed to execute process");
+                assert!(status.success());
+
+                // read in the address
+                let addr =
+                    std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
+                        .expect("failed to read address file");
+
+                let deployed_addr_arg = format!("--addr-verifier={}", addr);
+                // set the reusable verifier address
+                *reusable_verifier_address = Some(addr);
+                deployed_addr_arg
+            }
+        };
 
         let addr_path_arg_vk = format!("--addr-path={}/{}/addr_vk.txt", test_dir, example_name);
-        let sol_arg_vk = format!("--sol-code-path={}/{}/vk.sol", test_dir, example_name);
+        let sol_arg_vk: String = format!("--sol-code-path={}/{}/vk.sol", test_dir, example_name);
         // create the verifier
         let args = vec![
-            "create-evm-vk",
+            "create-evm-vka",
             "--vk-path",
             &vk_arg,
             &settings_arg,
@@ -2227,32 +2321,13 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        // deploy the verifier
+        // deploy the vka
         let args = vec![
-            "deploy-evm-verifier",
-            rpc_arg.as_str(),
-            addr_path_arg.as_str(),
-            sol_arg.as_str(),
-        ];
-
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(&args)
-            .status()
-            .expect("failed to execute process");
-        assert!(status.success());
-
-        // read in the address
-        let addr = std::fs::read_to_string(format!("{}/{}/addr.txt", test_dir, example_name))
-            .expect("failed to read address file");
-
-        let deployed_addr_arg = format!("--addr-verifier={}", addr);
-
-        // deploy the vk
-        let args = vec![
-            "deploy-evm-vk",
+            "deploy-evm",
             rpc_arg.as_str(),
             addr_path_arg_vk.as_str(),
             sol_arg_vk.as_str(),
+            "-C=vka",
         ];
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
@@ -2282,7 +2357,7 @@ mod native_tests {
 
         // now verify the proof
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
-        let mut args = vec![
+        let args = vec![
             "verify-evm",
             "--proof-path",
             pf_arg.as_str(),
@@ -2296,13 +2371,52 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-        // As sanity check, add example that should fail.
-        args[2] = PF_FAILURE;
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
-            .args(args)
-            .status()
-            .expect("failed to execute process");
-        assert!(!status.success());
+        // Read the original proof file
+        let original_proof_data: ezkl::pfsys::Snark<
+            halo2curves::bn256::Fr,
+            halo2curves::bn256::G1Affine,
+        > = Snark::load::<KZGCommitmentScheme<Bn256>>(&PathBuf::from(format!(
+            "{}/{}/proof.pf",
+            test_dir, example_name
+        )))
+        .expect("Failed to read proof file");
+
+        for i in 0..1 {
+            // Create a copy of the original proof data
+            let mut modified_proof_data = original_proof_data.clone();
+
+            // Flip a random bit
+            let random_byte = rand::thread_rng().gen_range(0..modified_proof_data.proof.len());
+            let random_bit = rand::thread_rng().gen_range(0..8);
+            modified_proof_data.proof[random_byte] ^= 1 << random_bit;
+
+            // Write the modified proof to a new file
+            let modified_pf_arg = format!("{}/{}/modified_proof_{}.pf", test_dir, example_name, i);
+            modified_proof_data
+                .save(&PathBuf::from(modified_pf_arg.clone()))
+                .expect("Failed to save modified proof file");
+
+            // Verify the modified proof (should fail)
+            let mut args_mod = args.clone();
+            args_mod[2] = &modified_pf_arg;
+            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                .args(&args_mod)
+                .status()
+                .expect("failed to execute process");
+
+            if status.success() {
+                log::error!("Verification unexpectedly succeeded for modified proof {}. Flipped bit {} in byte {}", i, random_bit, random_byte);
+            }
+
+            assert!(
+                !status.success(),
+                "Modified proof {} should have failed verification",
+                i
+            );
+        }
+
+        // Returned deploy_addr_arg for reusable verifier
+        deployed_addr_arg
     }
 
     // run js browser evm verify tests for a given example
@@ -2504,7 +2618,7 @@ mod native_tests {
 
         // deploy the verifier
         let mut args = vec![
-            "deploy-evm-verifier",
+            "deploy-evm",
             rpc_arg.as_str(),
             addr_path_verifier_arg.as_str(),
         ];

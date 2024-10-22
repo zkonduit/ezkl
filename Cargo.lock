@@ -2341,7 +2341,7 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/update-h2-curves#3082fda94151fc6760a3cb2be4741ddbeef04c03"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/update-h2-curves#eede1db7f3e599112bd1186e9d1913286bdcb539"
 dependencies = [
  "askama",
  "blake2b_simd",
