@@ -174,7 +174,7 @@ impl<'source> FromPyObject<'source> for Tolerance {
 #[derive(Clone, Debug, Default)]
 pub struct DynamicLookups {
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
-    pub lookup_selectors: BTreeMap<(usize, usize), Selector>,
+    pub lookup_selectors: BTreeMap<(usize, (usize, usize)), Selector>,
     /// Selectors for the dynamic lookup tables
     pub table_selectors: Vec<Selector>,
     /// Inputs:
@@ -206,7 +206,7 @@ impl DynamicLookups {
 #[derive(Clone, Debug, Default)]
 pub struct Shuffles {
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
-    pub input_selectors: BTreeMap<(usize, usize), Selector>,
+    pub input_selectors: BTreeMap<(usize, (usize, usize)), Selector>,
     /// Selectors for the dynamic lookup tables
     pub reference_selectors: Vec<Selector>,
     /// Inputs:
@@ -643,57 +643,73 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
         }
 
         for t in tables.iter() {
-            if !t.is_advice() || t.num_blocks() > 1 || t.num_inner_cols() > 1 {
+            if !t.is_advice() || t.num_inner_cols() > 1 {
                 return Err(CircuitError::WrongDynamicColumnType(t.name().to_string()));
             }
         }
 
+        // assert all tables have the same number of inner columns
+        if tables
+            .iter()
+            .map(|t| t.num_blocks())
+            .collect::<Vec<_>>()
+            .windows(2)
+            .any(|w| w[0] != w[1])
+        {
+            return Err(CircuitError::WrongDynamicColumnType(
+                "tables inner cols".to_string(),
+            ));
+        }
+
         let one = Expression::Constant(F::ONE);
 
-        let s_ltable = cs.complex_selector();
+        for q in 0..tables[0].num_blocks() {
+            let s_ltable = cs.complex_selector();
 
-        for x in 0..lookups[0].num_blocks() {
-            for y in 0..lookups[0].num_inner_cols() {
-                let s_lookup = cs.complex_selector();
+            for x in 0..lookups[0].num_blocks() {
+                for y in 0..lookups[0].num_inner_cols() {
+                    let s_lookup = cs.complex_selector();
 
-                cs.lookup_any("lookup", |cs| {
-                    let s_lookupq = cs.query_selector(s_lookup);
-                    let mut expression = vec![];
-                    let s_ltableq = cs.query_selector(s_ltable);
-                    let mut lookup_queries = vec![one.clone()];
+                    cs.lookup_any("lookup", |cs| {
+                        let s_lookupq = cs.query_selector(s_lookup);
+                        let mut expression = vec![];
+                        let s_ltableq = cs.query_selector(s_ltable);
+                        let mut lookup_queries = vec![one.clone()];
 
-                    for lookup in lookups {
-                        lookup_queries.push(match lookup {
-                            VarTensor::Advice { inner: advices, .. } => {
-                                cs.query_advice(advices[x][y], Rotation(0))
-                            }
-                            _ => unreachable!(),
-                        });
-                    }
+                        for lookup in lookups {
+                            lookup_queries.push(match lookup {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    cs.query_advice(advices[x][y], Rotation(0))
+                                }
+                                _ => unreachable!(),
+                            });
+                        }
 
-                    let mut table_queries = vec![one.clone()];
-                    for table in tables {
-                        table_queries.push(match table {
-                            VarTensor::Advice { inner: advices, .. } => {
-                                cs.query_advice(advices[0][0], Rotation(0))
-                            }
-                            _ => unreachable!(),
-                        });
-                    }
+                        let mut table_queries = vec![one.clone()];
+                        for table in tables {
+                            table_queries.push(match table {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    cs.query_advice(advices[q][0], Rotation(0))
+                                }
+                                _ => unreachable!(),
+                            });
+                        }
 
-                    let lhs = lookup_queries.into_iter().map(|c| c * s_lookupq.clone());
-                    let rhs = table_queries.into_iter().map(|c| c * s_ltableq.clone());
-                    expression.extend(lhs.zip(rhs));
+                        let lhs = lookup_queries.into_iter().map(|c| c * s_lookupq.clone());
+                        let rhs = table_queries.into_iter().map(|c| c * s_ltableq.clone());
+                        expression.extend(lhs.zip(rhs));
 
-                    expression
-                });
-                self.dynamic_lookups
-                    .lookup_selectors
-                    .entry((x, y))
-                    .or_insert(s_lookup);
+                        expression
+                    });
+                    self.dynamic_lookups
+                        .lookup_selectors
+                        .entry((q, (x, y)))
+                        .or_insert(s_lookup);
+                }
             }
+
+            self.dynamic_lookups.table_selectors.push(s_ltable);
         }
-        self.dynamic_lookups.table_selectors.push(s_ltable);
 
         // if we haven't previously initialized the input/output, do so now
         if self.dynamic_lookups.tables.is_empty() {
@@ -726,57 +742,72 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
         }
 
         for t in references.iter() {
-            if !t.is_advice() || t.num_blocks() > 1 || t.num_inner_cols() > 1 {
+            if !t.is_advice() || t.num_inner_cols() > 1 {
                 return Err(CircuitError::WrongDynamicColumnType(t.name().to_string()));
             }
         }
 
+        // assert all tables have the same number of blocks
+        if references
+            .iter()
+            .map(|t| t.num_blocks())
+            .collect::<Vec<_>>()
+            .windows(2)
+            .any(|w| w[0] != w[1])
+        {
+            return Err(CircuitError::WrongDynamicColumnType(
+                "references inner cols".to_string(),
+            ));
+        }
+
         let one = Expression::Constant(F::ONE);
 
-        let s_reference = cs.complex_selector();
+        for q in 0..references[0].num_blocks() {
+            let s_reference = cs.complex_selector();
 
-        for x in 0..inputs[0].num_blocks() {
-            for y in 0..inputs[0].num_inner_cols() {
-                let s_input = cs.complex_selector();
+            for x in 0..inputs[0].num_blocks() {
+                for y in 0..inputs[0].num_inner_cols() {
+                    let s_input = cs.complex_selector();
 
-                cs.lookup_any("lookup", |cs| {
-                    let s_inputq = cs.query_selector(s_input);
-                    let mut expression = vec![];
-                    let s_referenceq = cs.query_selector(s_reference);
-                    let mut input_queries = vec![one.clone()];
+                    cs.lookup_any("lookup", |cs| {
+                        let s_inputq = cs.query_selector(s_input);
+                        let mut expression = vec![];
+                        let s_referenceq = cs.query_selector(s_reference);
+                        let mut input_queries = vec![one.clone()];
 
-                    for input in inputs {
-                        input_queries.push(match input {
-                            VarTensor::Advice { inner: advices, .. } => {
-                                cs.query_advice(advices[x][y], Rotation(0))
-                            }
-                            _ => unreachable!(),
-                        });
-                    }
+                        for input in inputs {
+                            input_queries.push(match input {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    cs.query_advice(advices[x][y], Rotation(0))
+                                }
+                                _ => unreachable!(),
+                            });
+                        }
 
-                    let mut ref_queries = vec![one.clone()];
-                    for reference in references {
-                        ref_queries.push(match reference {
-                            VarTensor::Advice { inner: advices, .. } => {
-                                cs.query_advice(advices[0][0], Rotation(0))
-                            }
-                            _ => unreachable!(),
-                        });
-                    }
+                        let mut ref_queries = vec![one.clone()];
+                        for reference in references {
+                            ref_queries.push(match reference {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    cs.query_advice(advices[q][0], Rotation(0))
+                                }
+                                _ => unreachable!(),
+                            });
+                        }
 
-                    let lhs = input_queries.into_iter().map(|c| c * s_inputq.clone());
-                    let rhs = ref_queries.into_iter().map(|c| c * s_referenceq.clone());
-                    expression.extend(lhs.zip(rhs));
+                        let lhs = input_queries.into_iter().map(|c| c * s_inputq.clone());
+                        let rhs = ref_queries.into_iter().map(|c| c * s_referenceq.clone());
+                        expression.extend(lhs.zip(rhs));
 
-                    expression
-                });
-                self.shuffles
-                    .input_selectors
-                    .entry((x, y))
-                    .or_insert(s_input);
+                        expression
+                    });
+                    self.shuffles
+                        .input_selectors
+                        .entry((q, (x, y)))
+                        .or_insert(s_input);
+                }
             }
+            self.shuffles.reference_selectors.push(s_reference);
         }
-        self.shuffles.reference_selectors.push(s_reference);
 
         // if we haven't previously initialized the input/output, do so now
         if self.shuffles.references.is_empty() {

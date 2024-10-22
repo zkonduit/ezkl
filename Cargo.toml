@@ -47,15 +47,16 @@ semver = "1.0.22"
 
 # evm related deps
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev = "5fbf57bac99edef9d8475190109a7ea9fb7e5e83", features = [
+alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.5.0", features = [
     "provider-http",
     "signers",
     "contract",
     "rpc-types-eth",
-    "signer-wallet",
+    "signer-local",
     "node-bindings",
 ] }
-foundry-compilers = { version = "0.4.1", features = ["svm-solc"] }
+foundry-compilers = { version = "0.11.6", features = ["svm-solc"] }
+foundry-compilers-artifacts-solc = { version = "0.11.6" }
 ethabi = "18"
 indicatif = { version = "0.17.5", features = ["rayon"] }
 gag = { version = "1.0.0", default_features = false }
@@ -233,7 +234,7 @@ icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package =
 halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 
 [profile.release]
-rustflags = ["-C", "relocation-model=pic"]
-lto = "fat"
-codegen-units = 1
+# rustflags = ["-C", "relocation-model=pic"]
+# lto = "fat"
+# codegen-units = 1
 # panic = "abort"

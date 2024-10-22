@@ -1501,7 +1501,7 @@ mod add_w_shape_casting {
         // parameters
         let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
 
-        let b = Tensor::from((0..1).map(|i| Value::known(F::from(i as u64 + 1))));
+        let b = Tensor::from((0..1).map(|i| Value::known(F::from(i + 1))));
 
         let circuit = MyCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(b)],

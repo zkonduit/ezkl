@@ -103,6 +103,8 @@ pub struct DummyPassRes {
     pub num_rows: usize,
     /// num dynamic lookups
     pub num_dynamic_lookups: usize,
+    /// max dynamic lookup input len
+    pub max_dynamic_input_len: usize,
     /// dynamic lookup col size
     pub dynamic_lookup_col_coord: usize,
     /// num shuffles
@@ -360,6 +362,14 @@ impl NodeType {
             NodeType::SubGraph { .. } => SupportedOp::Unknown(Unknown),
         }
     }
+
+    /// check if it is a softmax
+    pub fn is_softmax(&self) -> bool {
+        match self {
+            NodeType::Node(n) => n.is_softmax(),
+            NodeType::SubGraph { .. } => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -562,6 +572,7 @@ impl Model {
             num_rows: res.num_rows,
             total_assignments: res.linear_coord,
             required_lookups: res.lookup_ops.into_iter().collect(),
+            max_dynamic_input_len: res.max_dynamic_input_len,
             required_range_checks: res.range_checks.into_iter().collect(),
             model_output_scales: self.graph.get_output_scales()?,
             model_input_scales: self.graph.get_input_scales(),
@@ -1465,6 +1476,7 @@ impl Model {
         let res = DummyPassRes {
             num_rows: region.row(),
             linear_coord: region.linear_coord(),
+            max_dynamic_input_len: region.max_dynamic_input_len(),
             total_const_size: region.total_constants(),
             lookup_ops: region.used_lookups(),
             range_checks: region.used_range_checks(),

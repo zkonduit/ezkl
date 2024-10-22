@@ -623,6 +623,15 @@ impl Node {
             num_uses,
         })
     }
+
+    /// check if it is a softmax node
+    pub fn is_softmax(&self) -> bool {
+        if let SupportedOp::Hybrid(HybridOp::Softmax { .. }) = self.opkind {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

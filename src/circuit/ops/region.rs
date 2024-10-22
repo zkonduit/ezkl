@@ -180,6 +180,7 @@ pub struct RegionCtx<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     statistics: RegionStatistics,
     settings: RegionSettings,
     assigned_constants: ConstantsMap<F>,
+    max_dynamic_input_len: usize,
 }
 
 impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a, F> {
@@ -193,11 +194,16 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.settings.legs
     }
 
+    /// get the max dynamic input len
+    pub fn max_dynamic_input_len(&self) -> usize {
+        self.max_dynamic_input_len
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     ///
     pub fn debug_report(&self) {
         log::debug!(
-            "(rows={}, coord={}, constants={}, max_lookup_inputs={}, min_lookup_inputs={}, max_range_size={}, dynamic_lookup_col_coord={}, shuffle_col_coord={})",
+            "(rows={}, coord={}, constants={}, max_lookup_inputs={}, min_lookup_inputs={}, max_range_size={}, dynamic_lookup_col_coord={}, shuffle_col_coord={}, max_dynamic_input_len={})",
             self.row().to_string().blue(),
             self.linear_coord().to_string().yellow(),
             self.total_constants().to_string().red(),
@@ -205,7 +211,9 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             self.min_lookup_inputs().to_string().green(),
             self.max_range_size().to_string().green(),
             self.dynamic_lookup_col_coord().to_string().green(),
-            self.shuffle_col_coord().to_string().green());
+            self.shuffle_col_coord().to_string().green(), 
+            self.max_dynamic_input_len().to_string().green()
+        );
     }
 
     ///
@@ -221,6 +229,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     ///
     pub fn increment_dynamic_lookup_index(&mut self, n: usize) {
         self.dynamic_lookup_index.index += n;
+    }
+
+    /// increment the max dynamic input len
+    pub fn update_max_dynamic_input_len(&mut self, n: usize) {
+        self.max_dynamic_input_len = self.max_dynamic_input_len.max(n);
     }
 
     ///
@@ -274,6 +287,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings: RegionSettings::all_true(decomp_base, decomp_legs),
             assigned_constants: HashMap::new(),
+            max_dynamic_input_len: 0,
         }
     }
 
@@ -310,6 +324,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
+            max_dynamic_input_len: 0,
         }
     }
 
@@ -331,6 +346,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             statistics: RegionStatistics::default(),
             settings,
             assigned_constants: HashMap::new(),
+            max_dynamic_input_len: 0,
         }
     }
 
@@ -583,9 +599,12 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
-    ) -> Result<ValTensor<F>, CircuitError> {
+    ) -> Result<(ValTensor<F>, usize), CircuitError> {
+
+        self.update_max_dynamic_input_len(values.len());
+
         if let Some(region) = &self.region {
-            Ok(var.assign(
+            Ok(var.assign_exact_column(
                 &mut region.borrow_mut(),
                 self.combined_dynamic_shuffle_coord(),
                 values,
@@ -596,7 +615,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 let values_map = values.create_constants_map_iterator();
                 self.assigned_constants.par_extend(values_map);
             }
-            Ok(values.clone())
+
+            let flush_len = var.get_column_flush(self.combined_dynamic_shuffle_coord(), values)?;
+
+            // get the diff between the current column and the next row
+            Ok((values.clone(), flush_len))
         }
     }
 
@@ -605,7 +628,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
-    ) -> Result<ValTensor<F>, CircuitError> {
+    ) -> Result<(ValTensor<F>, usize), CircuitError> {
         self.assign_dynamic_lookup(var, values)
     }
 

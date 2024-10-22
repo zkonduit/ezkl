@@ -979,8 +979,16 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
     let (lookup_0, lookup_1) = (lookups[0].clone(), lookups[1].clone());
     let (table_0, table_1) = (tables[0].clone(), tables[1].clone());
 
-    let table_0 = region.assign_dynamic_lookup(&config.dynamic_lookups.tables[0], &table_0)?;
-    let _table_1 = region.assign_dynamic_lookup(&config.dynamic_lookups.tables[1], &table_1)?;
+    let (table_0, flush_len_0) =
+        region.assign_dynamic_lookup(&config.dynamic_lookups.tables[0], &table_0)?;
+    let (_table_1, flush_len_1) =
+        region.assign_dynamic_lookup(&config.dynamic_lookups.tables[1], &table_1)?;
+    if flush_len_0 != flush_len_1 {
+        return Err(CircuitError::MismatchedLookupTableLength(
+            flush_len_0,
+            flush_len_1,
+        ));
+    }
     let table_len = table_0.len();
 
     trace!("assigning tables took: {:?}", start.elapsed());
@@ -1005,13 +1013,22 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
 
     trace!("assigning lookup index took: {:?}", start.elapsed());
 
+    let mut lookup_block = 0;
+
     if !region.is_dummy() {
         (0..table_len)
             .map(|i| {
-                let table_selector = config.dynamic_lookups.table_selectors[0];
-                let (_, _, z) = config.dynamic_lookups.tables[0]
-                    .cartesian_coord(region.combined_dynamic_shuffle_coord() + i);
-                region.enable(Some(&table_selector), z)?;
+                let (x, _, z) = config.dynamic_lookups.tables[0]
+                    .cartesian_coord(region.combined_dynamic_shuffle_coord() + i + flush_len_0);
+
+                if lookup_block != x {
+                    lookup_block = x;
+                }
+
+                if lookup_block > 2 && region.linear_coord() < 126200 {
+                    let table_selector = config.dynamic_lookups.table_selectors[lookup_block];
+                    region.enable(Some(&table_selector), z)?;
+                }
                 Ok(())
             })
             .collect::<Result<Vec<_>, CircuitError>>()?;
@@ -1023,20 +1040,24 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
             .map(|i| {
                 let (x, y, z) =
                     config.dynamic_lookups.inputs[0].cartesian_coord(region.linear_coord() + i);
+
                 let lookup_selector = config
                     .dynamic_lookups
                     .lookup_selectors
-                    .get(&(x, y))
+                    .get(&(lookup_block, (x, y)))
                     .ok_or(CircuitError::MissingSelectors(format!("{:?}", (x, y))))?;
 
-                region.enable(Some(lookup_selector), z)?;
+                if lookup_block > 2 && region.linear_coord() < 126200 {
+                    region.enable(Some(lookup_selector), z)?;
+                }
+                // region.enable(Some(lookup_selector), z)?;
 
                 Ok(())
             })
             .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
-    region.increment_dynamic_lookup_col_coord(table_len);
+    region.increment_dynamic_lookup_col_coord(table_len + flush_len_0);
     region.increment_dynamic_lookup_index(1);
     region.increment(lookup_len);
 
@@ -1064,22 +1085,33 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         ));
     }
 
-    let reference = region.assign_shuffle(&config.shuffles.references[0], &reference)?;
+    let (reference, flush_len_ref) =
+        region.assign_shuffle(&config.shuffles.references[0], &reference)?;
     let reference_len = reference.len();
 
     // now create a vartensor of constants for the shuffle index
     let index = create_constant_tensor(F::from(shuffle_index as u64), reference_len);
-    let index = region.assign_shuffle(&config.shuffles.references[1], &index)?;
+    let (index, flush_len_index) = region.assign_shuffle(&config.shuffles.references[1], &index)?;
+
+    if flush_len_index != flush_len_ref {
+        return Err(CircuitError::MismatchedShuffleLength(
+            flush_len_index,
+            flush_len_ref,
+        ));
+    }
 
     let input = region.assign(&config.shuffles.inputs[0], &input)?;
     region.assign(&config.shuffles.inputs[1], &index)?;
 
+    let mut shuffle_block = 0;
+
     if !region.is_dummy() {
         (0..reference_len)
             .map(|i| {
-                let ref_selector = config.shuffles.reference_selectors[0];
-                let (_, _, z) = config.shuffles.references[0]
-                    .cartesian_coord(region.combined_dynamic_shuffle_coord() + i);
+                let (x, _, z) = config.shuffles.references[0]
+                    .cartesian_coord(region.combined_dynamic_shuffle_coord() + i + flush_len_ref);
+                shuffle_block = x;
+                let ref_selector = config.shuffles.reference_selectors[shuffle_block];
                 region.enable(Some(&ref_selector), z)?;
                 Ok(())
             })
@@ -1095,7 +1127,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
                 let input_selector = config
                     .shuffles
                     .input_selectors
-                    .get(&(x, y))
+                    .get(&(shuffle_block, (x, y)))
                     .ok_or(CircuitError::MissingSelectors(format!("{:?}", (x, y))))?;
 
                 region.enable(Some(input_selector), z)?;
@@ -1105,7 +1137,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
             .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
-    region.increment_shuffle_col_coord(reference_len);
+    region.increment_shuffle_col_coord(reference_len + flush_len_ref);
     region.increment_shuffle_index(1);
     region.increment(reference_len);
 
