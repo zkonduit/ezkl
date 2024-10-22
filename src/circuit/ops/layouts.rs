@@ -1025,10 +1025,9 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
                     lookup_block = x;
                 }
 
-                if lookup_block > 2 && region.linear_coord() < 126200 {
-                    let table_selector = config.dynamic_lookups.table_selectors[lookup_block];
-                    region.enable(Some(&table_selector), z)?;
-                }
+                let table_selector = config.dynamic_lookups.table_selectors[lookup_block];
+                region.enable(Some(&table_selector), z)?;
+
                 Ok(())
             })
             .collect::<Result<Vec<_>, CircuitError>>()?;
@@ -1047,9 +1046,8 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
                     .get(&(lookup_block, (x, y)))
                     .ok_or(CircuitError::MissingSelectors(format!("{:?}", (x, y))))?;
 
-                if lookup_block > 2 && region.linear_coord() < 126200 {
-                    region.enable(Some(lookup_selector), z)?;
-                }
+                region.enable(Some(lookup_selector), z)?;
+
                 // region.enable(Some(lookup_selector), z)?;
 
                 Ok(())
