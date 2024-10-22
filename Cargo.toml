@@ -110,7 +110,7 @@ console_error_panic_hook = "0.1.7"
 wasm-bindgen-console-logger = "0.1.1"
 
 
-[target.'cfg(not(any(target_os = "ios", all(target_arch = "wasm32", target_os = "unknown"))))'.dev-dependencies]
+[target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
 
 
@@ -249,7 +249,7 @@ no-update = []
 icicle = { git = "https://github.com/ingonyama-zk/icicle?rev=45b00fb", package = "icicle", branch = "fix/vhnat/ezkl-build-fix" }
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit//halo2", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0", package = "halo2_proofs", branch = "ac/cache-lookup-commitments" }
 
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
