@@ -285,7 +285,7 @@ where
 }
 
 pub fn runconv() {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     env_logger::init();
 
     const KERNEL_HEIGHT: usize = 5;

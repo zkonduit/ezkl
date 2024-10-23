@@ -3,7 +3,7 @@ use crate::{
     fieldutils::IntegerRep,
     tensor::{Tensor, TensorType, ValTensor, ValType, VarTensor},
 };
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use colored::Colorize;
 use halo2_proofs::{
     circuit::Region,
@@ -199,7 +199,12 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         self.max_dynamic_input_len
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    /// get the max dynamic input len
+    pub fn max_dynamic_input_len(&self) -> usize {
+        self.max_dynamic_input_len
+    }
+
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     ///
     pub fn debug_report(&self) {
         log::debug!(
