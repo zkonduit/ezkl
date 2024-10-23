@@ -1,4 +1,4 @@
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 #[cfg(test)]
 mod native_tests {
 

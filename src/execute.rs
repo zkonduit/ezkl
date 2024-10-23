@@ -1,18 +1,13 @@
 use crate::circuit::region::RegionSettings;
 use crate::circuit::CheckMode;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::commands::CalibrationTarget;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity};
-#[cfg(not(target_arch = "wasm32"))]
 #[allow(unused_imports)]
 use crate::eth::{fix_da_sol, get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
-#[cfg(not(target_arch = "wasm32"))]
 use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
-#[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::{
     create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
 };
@@ -21,11 +16,9 @@ use crate::pfsys::{
 };
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::EZKL_BUF_CAPACITY;
 use crate::{commands::*, EZKLError};
 use crate::{Commitments, RunArgs};
-#[cfg(not(target_arch = "wasm32"))]
 use colored::Colorize;
 #[cfg(unix)]
 use gag::Gag;
@@ -45,17 +38,13 @@ use halo2_proofs::poly::kzg::{
 };
 use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer};
-#[cfg(not(target_arch = "wasm32"))]
 use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
 use halo2curves::serde::SerdeObject;
-#[cfg(not(target_arch = "wasm32"))]
 use indicatif::{ProgressBar, ProgressStyle};
 use instant::Instant;
-#[cfg(not(target_arch = "wasm32"))]
 use itertools::Itertools;
-#[cfg(not(target_arch = "wasm32"))]
 use log::debug;
 use log::{info, trace, warn};
 use serde::de::DeserializeOwned;
@@ -65,9 +54,7 @@ use snark_verifier::system::halo2::compile;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use snark_verifier::system::halo2::Config;
 use std::fs::File;
-#[cfg(not(target_arch = "wasm32"))]
 use std::io::BufWriter;
-#[cfg(not(target_arch = "wasm32"))]
 use std::io::{Cursor, Write};
 use std::path::Path;
 use std::path::PathBuf;
@@ -128,7 +115,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             logrows as u32,
             commitment.unwrap_or(Commitments::from_str(DEFAULT_COMMITMENT).unwrap()),
         ),
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::GetSrs {
             srs_path,
             settings_path,
@@ -145,7 +131,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
             args,
         ),
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::CalibrateSettings {
             model,
             settings_path,
@@ -188,7 +173,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             model.unwrap_or(DEFAULT_MODEL.into()),
             witness.unwrap_or(DEFAULT_WITNESS.into()),
         ),
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmVerifier {
             vk_path,
             srs_path,
@@ -207,7 +191,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::EncodeEvmCalldata {
             proof_path,
             calldata_path,
@@ -235,7 +218,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmDataAttestation {
             settings_path,
             sol_code_path,
@@ -252,7 +234,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::CreateEvmVerifierAggr {
             vk_path,
             srs_path,
@@ -298,7 +279,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             disable_selector_compression
                 .unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap()),
         ),
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::SetupTestEvmData {
             data,
             compiled_circuit,
@@ -317,13 +297,11 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::TestUpdateAccountCalls {
             addr,
             data,
             rpc_url,
         } => test_update_account_calls(addr, data.unwrap_or(DEFAULT_DATA.into()), rpc_url).await,
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::SwapProofCommitments {
             proof_path,
             witness_path,
@@ -333,7 +311,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
 
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::Prove {
             witness,
             compiled_circuit,
@@ -433,7 +410,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvm {
             sol_code_path,
             rpc_url,
@@ -452,7 +428,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::DeployEvmDataAttestation {
             data,
             settings_path,
@@ -473,7 +448,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        #[cfg(not(target_arch = "wasm32"))]
         Commands::VerifyEvm {
             proof_path,
             addr_verifier,
@@ -593,7 +567,6 @@ pub(crate) fn gen_srs_cmd(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 async fn fetch_srs(uri: &str) -> Result<Vec<u8>, EZKLError> {
     let pb = {
         let pb = init_spinner();
@@ -613,7 +586,6 @@ async fn fetch_srs(uri: &str) -> Result<Vec<u8>, EZKLError> {
     Ok(std::mem::take(&mut buf))
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn get_file_hash(path: &PathBuf) -> Result<String, EZKLError> {
     use std::io::Read;
     let file = std::fs::File::open(path)?;
@@ -632,7 +604,6 @@ pub(crate) fn get_file_hash(path: &PathBuf) -> Result<String, EZKLError> {
     Ok(hash)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn check_srs_hash(
     logrows: u32,
     srs_path: Option<PathBuf>,
@@ -658,7 +629,6 @@ fn check_srs_hash(
     Ok(hash)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn get_srs_cmd(
     srs_path: Option<PathBuf>,
     settings_path: Option<PathBuf>,
@@ -701,13 +671,10 @@ pub(crate) async fn get_srs_cmd(
             let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
             let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
             // check the SRS
-            #[cfg(not(target_arch = "wasm32"))]
-            let pb = init_spinner();
-            #[cfg(not(target_arch = "wasm32"))]
-            pb.set_message("Validating SRS (this may take a while) ...");
+                let pb = init_spinner();
+                pb.set_message("Validating SRS (this may take a while) ...");
             let params = ParamsKZG::<Bn256>::read(&mut reader)?;
-            #[cfg(not(target_arch = "wasm32"))]
-            pb.finish_with_message("SRS validated.");
+                pb.finish_with_message("SRS validated.");
 
             info!("Saving SRS to disk...");
             let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone(), commitment))?;
@@ -760,9 +727,8 @@ pub(crate) async fn gen_witness(
         None
     };
 
-    #[cfg(not(target_arch = "wasm32"))]
-    let mut input = circuit.load_graph_input(&data).await?;
-    #[cfg(target_arch = "wasm32")]
+        let mut input = circuit.load_graph_input(&data).await?;
+    #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
     let mut input = circuit.load_graph_input(&data)?;
 
     // if any of the settings have kzg visibility then we need to load the srs
@@ -858,7 +824,6 @@ pub(crate) fn gen_circuit_settings(
 }
 
 // not for wasm targets
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn init_spinner() -> ProgressBar {
     let pb = indicatif::ProgressBar::new_spinner();
     pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
@@ -880,7 +845,6 @@ pub(crate) fn init_spinner() -> ProgressBar {
 }
 
 // not for wasm targets
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn init_bar(len: u64) -> ProgressBar {
     let pb = ProgressBar::new(len);
     pb.set_draw_target(indicatif::ProgressDrawTarget::stdout());
@@ -894,7 +858,6 @@ pub(crate) fn init_bar(len: u64) -> ProgressBar {
     pb
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 use colored_json::ToColoredJson;
 
 #[derive(Debug, Clone, Tabled)]
@@ -994,7 +957,6 @@ impl AccuracyResults {
 }
 
 /// Calibrate the circuit parameters to a given a dataset
-#[cfg(not(target_arch = "wasm32"))]
 #[allow(trivial_casts)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn calibrate(
@@ -1127,12 +1089,12 @@ pub(crate) async fn calibrate(
         };
 
         // if unix get a gag
-        #[cfg(unix)]
+        #[cfg(all(not(not(feature = "ezkl")), unix))]
         let _r = match Gag::stdout() {
             Ok(g) => Some(g),
             _ => None,
         };
-        #[cfg(unix)]
+        #[cfg(all(not(not(feature = "ezkl")), unix))]
         let _g = match Gag::stderr() {
             Ok(g) => Some(g),
             _ => None,
@@ -1191,9 +1153,9 @@ pub(crate) async fn calibrate(
         }
 
         // drop the gag
-        #[cfg(unix)]
+        #[cfg(all(not(not(feature = "ezkl")), unix))]
         drop(_r);
-        #[cfg(unix)]
+        #[cfg(all(not(not(feature = "ezkl")), unix))]
         drop(_g);
 
         let result = forward_pass_res.get(&key).ok_or("key not found")?;
@@ -1408,7 +1370,6 @@ pub(crate) fn mock(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn create_evm_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1453,7 +1414,6 @@ pub(crate) async fn create_evm_verifier(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn create_evm_vka(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1494,7 +1454,6 @@ pub(crate) async fn create_evm_vka(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn create_evm_data_attestation(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
@@ -1571,7 +1530,6 @@ pub(crate) async fn create_evm_data_attestation(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn deploy_da_evm(
     data: PathBuf,
     settings_path: PathBuf,
@@ -1598,7 +1556,6 @@ pub(crate) async fn deploy_da_evm(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn deploy_evm(
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
@@ -1654,7 +1611,6 @@ pub(crate) fn encode_evm_calldata(
     Ok(encoded)
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn verify_evm(
     proof_path: PathBuf,
     addr_verifier: H160Flag,
@@ -1694,7 +1650,6 @@ pub(crate) async fn verify_evm(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1818,7 +1773,6 @@ pub(crate) fn setup(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn setup_test_evm_witness(
     data_path: PathBuf,
     compiled_circuit_path: PathBuf,
@@ -1854,9 +1808,7 @@ pub(crate) async fn setup_test_evm_witness(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 use crate::pfsys::ProofType;
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) async fn test_update_account_calls(
     addr: H160Flag,
     data: PathBuf,
@@ -1869,7 +1821,6 @@ pub(crate) async fn test_update_account_calls(
     Ok(String::new())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn prove(
     data_path: PathBuf,
@@ -2067,8 +2018,7 @@ pub(crate) fn mock_aggregate(
         }
     }
     // proof aggregation
-    #[cfg(not(target_arch = "wasm32"))]
-    let pb = {
+        let pb = {
         let pb = init_spinner();
         pb.set_message("Aggregating (may take a while)...");
         pb
@@ -2079,8 +2029,7 @@ pub(crate) fn mock_aggregate(
     let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, vec![circuit.instances()])
         .map_err(|e| ExecutionError::MockProverError(e.to_string()))?;
     prover.verify().map_err(ExecutionError::VerifyError)?;
-    #[cfg(not(target_arch = "wasm32"))]
-    pb.finish_with_message("Done.");
+        pb.finish_with_message("Done.");
     Ok(String::new())
 }
 
@@ -2174,8 +2123,7 @@ pub(crate) fn aggregate(
     }
 
     // proof aggregation
-    #[cfg(not(target_arch = "wasm32"))]
-    let pb = {
+        let pb = {
         let pb = init_spinner();
         pb.set_message("Aggregating (may take a while)...");
         pb
@@ -2324,8 +2272,7 @@ pub(crate) fn aggregate(
     );
     snark.save(&proof_path)?;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    pb.finish_with_message("Done.");
+        pb.finish_with_message("Done.");
 
     Ok(snark)
 }
