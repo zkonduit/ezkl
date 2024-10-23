@@ -57,10 +57,10 @@ alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.5.0", features
     "signer-local",
     "node-bindings",
 ], optional = true }
-foundry-compilers = { version = "0.11.6", features = ["svm-solc"], optional = true }
-ethabi = { version  = "18", optional = true }
-indicatif = { version = "0.17.5", features = ["rayon"] }
-gag = { version = "1.0.0", default_features = false }
+foundry-compilers = { version = "0.12.6", features = ["svm-solc"], optional = true }
+ethabi = { version = "18", optional = true }
+indicatif = { version = "0.17.5", features = ["rayon"], optional = true }
+gag = { version = "1.0.0", default-features = false, optional = true }
 instant = { version = "0.1" }
 reqwest = { version = "0.12.4", default-features = false, features = ["default-tls", "multipart", "stream"], optional = true }
 openssl = { version = "0.10.55", features = ["vendored"], optional = true }
@@ -255,8 +255,8 @@ halo2_proofs = { git = "https://github.com/zkonduit/halo2?branch=ac/cache-lookup
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
 
 [profile.release]
-# rustflags = ["-C", "relocation-model=pic"]
-# lto = "fat"
-# codegen-units = 1
+rustflags = ["-C", "relocation-model=pic"]
+lto = "fat"
+codegen-units = 1
 # panic = "abort"
 
