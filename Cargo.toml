@@ -49,15 +49,16 @@ serde_json = { version = "1.0.97", features = [
 ] }
 
 # evm related deps
-alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.5.0", features = [
+alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev = "5fbf57bac99edef9d8475190109a7ea9fb7e5e83", features = [
     "provider-http",
     "signers",
     "contract",
     "rpc-types-eth",
-    "signer-local",
+    "signer-wallet",
     "node-bindings",
+    
 ], optional = true }
-foundry-compilers = { version = "0.12.6", features = ["svm-solc"], optional = true }
+foundry-compilers = { version = "0.4.1", features = ["svm-solc"], optional = true }
 ethabi = { version = "18", optional = true }
 indicatif = { version = "0.17.5", features = ["rayon"], optional = true }
 gag = { version = "1.0.0", default-features = false, optional = true }

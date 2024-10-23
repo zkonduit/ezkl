@@ -16,21 +16,21 @@ use alloy::node_bindings::Anvil;
 use alloy::primitives::ruint::ParseError;
 use alloy::primitives::{ParseSignedError, B256, I256};
 use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+    ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller,
 };
-use alloy::providers::network::Ethereum;
+use alloy::providers::network::{Ethereum, EthereumSigner};
 use alloy::providers::ProviderBuilder;
 use alloy::providers::{Identity, Provider, RootProvider};
 use alloy::rpc::types::eth::TransactionInput;
 use alloy::rpc::types::eth::TransactionRequest;
 use alloy::signers::k256::ecdsa;
-use alloy::signers::local::{LocalSignerError, PrivateKeySigner as LocalWallet};
+use alloy::signers::wallet::{LocalWallet, WalletError};
 use alloy::sol as abigen;
 use alloy::transports::http::Http;
 use alloy::transports::{RpcError, TransportErrorKind};
 use foundry_compilers::artifacts::Settings as SolcSettings;
 use foundry_compilers::error::{SolcError, SolcIoError};
-use foundry_compilers::solc::Solc;
+use foundry_compilers::Solc;
 use halo2_solidity_verifier::encode_calldata;
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
@@ -220,7 +220,7 @@ pub enum EthError {
     #[error("a contract error occurred: {0}")]
     Contract(#[from] alloy::contract::Error),
     #[error("a wallet error occurred: {0}")]
-    Wallet(#[from] LocalSignerError),
+    Wallet(#[from] WalletError),
     #[error("failed to parse url {0}")]
     UrlParse(String),
     #[error("evm verification error: {0}")]
@@ -270,8 +270,8 @@ const ATTESTDATA_SOL: &str = include_str!("../contracts/AttestData.sol");
 pub type EthersClient = Arc<
     FillProvider<
         JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            JoinFill<JoinFill<JoinFill<Identity, GasFiller>, NonceFiller>, ChainIdFiller>,
+            SignerFiller<EthereumSigner>,
         >,
         RootProvider<Http<Client>>,
         Http<Client>,
@@ -322,6 +322,7 @@ pub async fn setup_eth_backend(
     let client = Arc::new(
         ProviderBuilder::new()
             .with_recommended_fillers()
+            .signer(EthereumSigner::from(wallet))
             .on_http(endpoint.parse().map_err(|_| EthError::UrlParse(endpoint))?),
     );
 
@@ -649,11 +650,11 @@ pub async fn verify_proof_via_solidity(
     info!("estimated verify gas cost: {:#?}", gas);
 
     // if gas is greater than 30 million warn the user that the gas cost is above ethereum's 30 million block gas limit
-    if gas > 30_000_000_u64 {
+    if gas > 30_000_000_u128 {
         warn!(
             "Gas cost of verify transaction is greater than 30 million block gas limit. It will fail on mainnet."
         );
-    } else if gas > 15_000_000_u64 {
+    } else if gas > 15_000_000_u128 {
         warn!(
             "Gas cost of verify transaction is greater than 15 million, the target block size for ethereum"
         );
@@ -962,9 +963,9 @@ pub async fn get_contract_artifacts(
 ) -> Result<(JsonAbi, Bytes, Bytes), EthError> {
     use foundry_compilers::{
         artifacts::{output_selection::OutputSelection, Optimizer},
-        utils::SHANGHAI_SOLC,
+        compilers::CompilerInput,
+        SolcInput, SHANGHAI_SOLC,
     };
-    use foundry_compilers_artifacts_solc::{SolcInput, SolcLanguage};
 
     if !sol_code_path.exists() {
         return Err(EthError::ContractNotFound(
@@ -982,18 +983,16 @@ pub async fn get_contract_artifacts(
         ..Default::default()
     };
 
-    let sources = std::collections::BTreeMap::from([(
-        sol_code_path.clone(),
-        foundry_compilers::artifacts::Source::read(&sol_code_path)?,
-    )]);
-
-    let input = SolcInput::new(
-        SolcLanguage::Solidity,
-        foundry_compilers_artifacts_solc::Sources(sources),
+    let input = SolcInput::build(
+        std::collections::BTreeMap::from([(
+            sol_code_path.clone(),
+            foundry_compilers::artifacts::Source::read(sol_code_path)?,
+        )]),
         settings,
+        &SHANGHAI_SOLC,
     );
 
-    let solc_opt = Solc::find_svm_installed_version(&SHANGHAI_SOLC)?;
+    let solc_opt = Solc::find_svm_installed_version(SHANGHAI_SOLC.to_string())?;
     let solc = match solc_opt {
         Some(solc) => solc,
         None => {
@@ -1004,7 +1003,7 @@ pub async fn get_contract_artifacts(
         }
     };
 
-    let compiled = solc.compile(&input)?;
+    let compiled: foundry_compilers::CompilerOutput = solc.compile(&input[0])?;
 
     let (abi, bytecode, runtime_bytecode) = match compiled.find(contract_name) {
         Some(c) => c.into_parts_or_default(),
