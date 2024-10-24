@@ -443,7 +443,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
                 let dynamic_lookup =
                     VarTensor::new_advice(cs, logrows, 1, dynamic_lookup_and_shuffle_size);
                 if dynamic_lookup.num_blocks() > 1 {
-                    panic!("dynamic lookup or shuffle should only have one block");
+                    warn!("dynamic lookup has {} blocks", dynamic_lookup.num_blocks());
                 };
                 advices.push(dynamic_lookup);
             }

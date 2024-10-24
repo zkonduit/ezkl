@@ -396,6 +396,53 @@ impl VarTensor {
         Ok(res)
     }
 
+    /// Helper function to get the remaining size of the column
+    pub fn get_column_flush<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+        &self,
+        offset: usize,
+        values: &ValTensor<F>,
+    ) -> Result<usize, halo2_proofs::plonk::Error> {
+        if values.len() > self.col_size() {
+            error!("Values are too large for the column");
+            return Err(halo2_proofs::plonk::Error::Synthesis);
+        }
+
+        // this can only be called on columns that have a single inner column
+        if self.num_inner_cols() != 1 {
+            error!("This function can only be called on columns with a single inner column");
+            return Err(halo2_proofs::plonk::Error::Synthesis);
+        }
+
+        // check if the values fit in the remaining space of the column
+        let current_cartesian = self.cartesian_coord(offset);
+        let final_cartesian = self.cartesian_coord(offset + values.len());
+
+        let mut flush_len = 0;
+        if current_cartesian.0 != final_cartesian.0 {
+            debug!("Values overflow the column, flushing to next column");
+            // diff is the number of values that overflow the column
+            flush_len += self.col_size() - current_cartesian.2;
+        }
+
+        Ok(flush_len)
+    }
+
+    /// Assigns [ValTensor] to the columns of the inner tensor. Whereby the values are assigned to a single column, without overflowing.
+    /// So for instance if we are assigning 10 values and we are at index 18 of the column, and the columns are of length 20, we skip the last 2 values of current column and start from the beginning of the next column.
+    pub fn assign_exact_column<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+        &self,
+        region: &mut Region<F>,
+        offset: usize,
+        values: &ValTensor<F>,
+        constants: &mut ConstantsMap<F>,
+    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
+        let flush_len = self.get_column_flush(offset, values)?;
+
+        let assigned_vals = self.assign(region, offset + flush_len, values, constants)?;
+
+        Ok((assigned_vals, flush_len))
+    }
+
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
     /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two.
     pub fn dummy_assign_with_duplication<

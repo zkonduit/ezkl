@@ -408,6 +408,8 @@ pub struct GraphSettings {
     pub total_const_size: usize,
     /// total dynamic column size
     pub total_dynamic_col_size: usize,
+    /// max dynamic column input length
+    pub max_dynamic_input_len: usize,
     /// number of dynamic lookups
     pub num_dynamic_lookups: usize,
     /// number of shuffles
@@ -481,6 +483,13 @@ impl GraphSettings {
         (self.total_dynamic_col_size as f64
             + self.total_shuffle_col_size as f64
             + RESERVED_BLINDING_ROWS as f64)
+            .log2()
+            .ceil() as u32
+    }
+
+    /// calculate the number of rows required for the dynamic lookup and shuffle
+    pub fn min_dynamic_lookup_and_shuffle_logrows_with_blinding(&self) -> u32 {
+        (self.max_dynamic_input_len as f64 + RESERVED_BLINDING_ROWS as f64)
             .log2()
             .ceil() as u32
     }

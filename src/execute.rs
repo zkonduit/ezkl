@@ -1203,6 +1203,7 @@ pub(crate) async fn calibrate(
                 num_rows: new_settings.num_rows,
                 total_assignments: new_settings.total_assignments,
                 total_const_size: new_settings.total_const_size,
+                total_dynamic_col_size: new_settings.total_dynamic_col_size,
                 ..settings.clone()
             };
 
@@ -1320,7 +1321,9 @@ pub(crate) async fn calibrate(
         let lookup_log_rows = best_params.lookup_log_rows_with_blinding();
         let module_log_row = best_params.module_constraint_logrows_with_blinding();
         let instance_logrows = best_params.log2_total_instances_with_blinding();
-        let dynamic_lookup_logrows = best_params.dynamic_lookup_and_shuffle_logrows_with_blinding();
+        let dynamic_lookup_logrows =
+            best_params.min_dynamic_lookup_and_shuffle_logrows_with_blinding();
+
         let range_check_logrows = best_params.range_check_log_rows_with_blinding();
 
         let mut reduction = std::cmp::max(lookup_log_rows, module_log_row);
