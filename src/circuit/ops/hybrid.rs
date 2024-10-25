@@ -81,6 +81,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             | HybridOp::Less { .. }
             | HybridOp::Equals { .. }
             | HybridOp::GreaterEqual { .. }
+            | HybridOp::Max
+            | HybridOp::Min
             | HybridOp::LessEqual { .. } => {
                 vec![0, 1]
             }
