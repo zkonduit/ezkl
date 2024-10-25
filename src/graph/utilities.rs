@@ -763,81 +763,38 @@ pub fn new_op_from_onnx(
                 .map(|(i, _)| i)
                 .collect::<Vec<_>>();
 
-            if const_inputs.len() != 1 {
-                return Err(GraphError::OpMismatch(idx, "Max".to_string()));
-            }
-
-            let const_idx = const_inputs[0];
-            let boxed_op = inputs[const_idx].opkind();
-            let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
-                if c.len() == 1 {
-                    c[0]
-                } else {
-                    return Err(GraphError::InvalidDims(idx, "max".to_string()));
-                }
-            } else {
-                return Err(GraphError::OpMismatch(idx, "Max".to_string()));
-            };
-
             if inputs.len() == 2 {
-                if let Some(node) = inputs.get_mut(const_idx) {
-                    node.decrement_use();
-                    deleted_indices.push(const_idx);
-                }
-                if unit == 0. {
-                    SupportedOp::Linear(PolyOp::ReLU)
+                if const_inputs.len() > 0 {
+                    let const_idx = const_inputs[0];
+                    let boxed_op = inputs[const_idx].opkind();
+                    let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
+                        if c.len() == 1 {
+                            c[0]
+                        } else {
+                            return Err(GraphError::InvalidDims(idx, "max".to_string()));
+                        }
+                    } else {
+                        return Err(GraphError::OpMismatch(idx, "Max".to_string()));
+                    };
+                    if unit == 0. {
+                        if let Some(node) = inputs.get_mut(const_idx) {
+                            node.decrement_use();
+                            deleted_indices.push(const_idx);
+                        }
+                        SupportedOp::Linear(PolyOp::ReLU)
+                    } else {
+                        SupportedOp::Hybrid(HybridOp::Max)
+                    }
                 } else {
-                    // get the non-constant index
-                    let non_const_idx = if const_idx == 0 { 1 } else { 0 };
-                    SupportedOp::Nonlinear(LookupOp::Max {
-                        scale: scale_to_multiplier(inputs[non_const_idx].out_scales()[0]).into(),
-                        a: crate::circuit::utils::F32(unit),
-                    })
+                    SupportedOp::Hybrid(HybridOp::Max)
                 }
             } else {
                 return Err(GraphError::InvalidDims(idx, "max".to_string()));
             }
         }
         "Min" => {
-            // Extract the min value
-            // first find the input that is a constant
-            // and then extract the value
-            let const_inputs = inputs
-                .iter()
-                .enumerate()
-                .filter(|(_, n)| n.is_constant())
-                .map(|(i, _)| i)
-                .collect::<Vec<_>>();
-
-            if const_inputs.len() != 1 {
-                return Err(GraphError::OpMismatch(idx, "Min".to_string()));
-            }
-
-            let const_idx = const_inputs[0];
-            let boxed_op = inputs[const_idx].opkind();
-            let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
-                if c.len() == 1 {
-                    c[0]
-                } else {
-                    return Err(GraphError::InvalidDims(idx, "min".to_string()));
-                }
-            } else {
-                return Err(GraphError::OpMismatch(idx, "Min".to_string()));
-            };
-
             if inputs.len() == 2 {
-                if let Some(node) = inputs.get_mut(const_idx) {
-                    node.decrement_use();
-                    deleted_indices.push(const_idx);
-                }
-
-                // get the non-constant index
-                let non_const_idx = if const_idx == 0 { 1 } else { 0 };
-
-                SupportedOp::Nonlinear(LookupOp::Min {
-                    scale: scale_to_multiplier(inputs[non_const_idx].out_scales()[0]).into(),
-                    a: crate::circuit::utils::F32(unit),
-                })
+                SupportedOp::Hybrid(HybridOp::Min)
             } else {
                 return Err(GraphError::InvalidDims(idx, "min".to_string()));
             }
