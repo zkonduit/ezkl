@@ -99,7 +99,7 @@ pub const DEFAULT_ONLY_RANGE_CHECK_REBASE: &str = "false";
 pub const DEFAULT_COMMITMENT: &str = "kzg";
 // TODO: In prod this will be the same across all chains we deploy to using the EZKL multisig create2 deployment. 
 /// Default address of the verifier manager.
-pub const DEFAULT_VERIFIER_MANAGER_ADDRESS: &str = "contract_verifier_manager.address";
+pub const DEFAULT_VERIFIER_MANAGER_ADDRESS: &str = "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9";
 
 #[cfg(feature = "python-bindings")]
 /// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
@@ -197,6 +197,8 @@ pub enum ContractType {
     },
     /// Deploys a verifying key artifact that the reusable verifier loads into memory during runtime. Encodes the circuit specific data that was otherwise hardcoded onto the stack.
     VerifyingKeyArtifact,
+    /// Manages the deployments of all reusable verifier and verifying artifact keys. Routes all the verification tx to the correct artifacts.
+    VerifierManager
 }
 
 impl Default for ContractType {
@@ -220,6 +222,7 @@ impl std::fmt::Display for ContractType {
                     reusable: false,
                 } => "verifier".to_string(),
                 ContractType::VerifyingKeyArtifact => "vka".to_string(),
+                ContractType::VerifierManager => "manager".to_string()
             }
         )
     }
@@ -237,11 +240,12 @@ impl From<&str> for ContractType {
             "verifier" => ContractType::Verifier { reusable: false },
             "verifier/reusable" => ContractType::Verifier { reusable: true },
             "vka" => ContractType::VerifyingKeyArtifact,
+            "manager" => ContractType::VerifierManager,
             _ => {
                 log::error!("Invalid value for ContractType");
                 log::warn!("Defaulting to verifier");
                 ContractType::default()
-            }
+            },
         }
     }
 }
@@ -899,8 +903,12 @@ pub enum Commands {
         private_key: Option<String>,
         /// Deployed verifier manager contract's address
         /// Use to facilitate reusable verifier and vk artifact deployment
-        #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS, value_hint = clap::ValueHint::Other)]
-        verifier_manager: Option<H160Flag>,
+        #[arg(long, value_hint = clap::ValueHint::Other)]
+        addr_verifier_manager: Option<H160Flag>,
+        /// Deployed reusable verifier  contract's address
+        /// Use to facilitate reusable verifier and vk artifact deployment
+        #[arg(long, value_hint = clap::ValueHint::Other)]
+        addr_reusable_verifier: Option<H160Flag>,
         /// Contract type to be deployed
         #[arg(long = "contract-type", short = 'C', default_value = DEFAULT_CONTRACT_DEPLOYMENT_TYPE, value_hint = clap::ValueHint::Other)]
         contract: ContractType,

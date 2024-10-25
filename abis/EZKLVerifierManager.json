@@ -7,17 +7,6 @@
                 "type": "address"
             }
         ],
-        "stateMutability": "nonpayable",
-        "type": "constructor"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "owner",
-                "type": "address"
-            }
-        ],
         "name": "OwnableInvalidOwner",
         "type": "error"
     },
@@ -38,33 +27,8 @@
             {
                 "indexed": false,
                 "internalType": "address",
-                "name": "verifier",
-                "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "address",
-                "name": "vka",
-                "type": "address"
-            }
-        ],
-        "name": "DeployedVKArtifact",
-        "type": "event"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            {
-                "indexed": false,
-                "internalType": "address",
                 "name": "addr",
                 "type": "address"
-            },
-            {
-                "indexed": false,
-                "internalType": "bytes32",
-                "name": "hash",
-                "type": "bytes32"
             }
         ],
         "name": "DeployedVerifier",
@@ -103,35 +67,6 @@
                 "internalType": "address",
                 "name": "addr",
                 "type": "address"
-            },
-            {
-                "internalType": "bytes32",
-                "name": "runtimeCodeHash",
-                "type": "bytes32"
-            }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "bytes",
-                "name": "bytecode",
-                "type": "bytes"
-            },
-            {
-                "internalType": "address",
-                "name": "verifier",
-                "type": "address"
-            }
-        ],
-        "name": "deployVkArtifact",
-        "outputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
             }
         ],
         "stateMutability": "nonpayable",
@@ -156,11 +91,6 @@
                 "internalType": "bytes",
                 "name": "bytecode",
                 "type": "bytes"
-            },
-            {
-                "internalType": "uint256",
-                "name": "_salt",
-                "type": "uint256"
             }
         ],
         "name": "precomputeAddress",
@@ -197,65 +127,17 @@
     {
         "inputs": [
             {
-                "internalType": "bytes32",
-                "name": "",
-                "type": "bytes32"
-            }
-        ],
-        "name": "verifiers",
-        "outputs": [
-            {
                 "internalType": "address",
                 "name": "",
                 "type": "address"
             }
         ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "vkArtifact",
-                "type": "address"
-            },
-            {
-                "internalType": "bytes",
-                "name": "proof",
-                "type": "bytes"
-            },
-            {
-                "internalType": "uint256[]",
-                "name": "instances",
-                "type": "uint256[]"
-            }
-        ],
-        "name": "verifyProof",
+        "name": "verifierAddresses",
         "outputs": [
             {
                 "internalType": "bool",
                 "name": "",
                 "type": "bool"
-            }
-        ],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
-            }
-        ],
-        "name": "vkArtifactToVerifier",
-        "outputs": [
-            {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
             }
         ],
         "stateMutability": "view",
