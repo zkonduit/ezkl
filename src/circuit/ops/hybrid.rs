@@ -45,6 +45,8 @@ pub enum HybridOp {
     ReduceArgMin {
         dim: usize,
     },
+    Max,
+    Min,
     Softmax {
         input_scale: utils::F32,
         output_scale: utils::F32,
@@ -79,6 +81,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             | HybridOp::Less { .. }
             | HybridOp::Equals { .. }
             | HybridOp::GreaterEqual { .. }
+            | HybridOp::Max
+            | HybridOp::Min
             | HybridOp::LessEqual { .. } => {
                 vec![0, 1]
             }
@@ -93,6 +97,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
 
     fn as_string(&self) -> String {
         match self {
+            HybridOp::Max => format!("MAX"),
+            HybridOp::Min => format!("MIN"),
             HybridOp::Recip {
                 input_scale,
                 output_scale,
@@ -162,6 +168,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
+            HybridOp::Max => layouts::max_comp(config, region, values[..].try_into()?)?,
+            HybridOp::Min => layouts::min_comp(config, region, values[..].try_into()?)?,
             HybridOp::SumPool {
                 padding,
                 stride,

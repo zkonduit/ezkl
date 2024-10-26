@@ -4156,6 +4156,48 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// max layout
+pub(crate) fn max_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+) -> Result<ValTensor<F>, CircuitError> {
+    let is_greater = greater(config, region, values)?;
+    let is_less = not(config, region, &[is_greater.clone()])?;
+
+    let max_val_p1 = pairwise(
+        config,
+        region,
+        &[values[0].clone(), is_greater],
+        BaseOp::Mult,
+    )?;
+
+    let max_val_p2 = pairwise(config, region, &[values[1].clone(), is_less], BaseOp::Mult)?;
+
+    pairwise(config, region, &[max_val_p1, max_val_p2], BaseOp::Add)
+}
+
+/// min comp layout
+pub(crate) fn min_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+) -> Result<ValTensor<F>, CircuitError> {
+    let is_greater = greater(config, region, values)?;
+    let is_less = not(config, region, &[is_greater.clone()])?;
+
+    let min_val_p1 = pairwise(config, region, &[values[0].clone(), is_less], BaseOp::Mult)?;
+
+    let min_val_p2 = pairwise(
+        config,
+        region,
+        &[values[1].clone(), is_greater],
+        BaseOp::Mult,
+    )?;
+
+    pairwise(config, region, &[min_val_p1, min_val_p2], BaseOp::Add)
+}
+
+/// max layout
 pub(crate) fn max<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,

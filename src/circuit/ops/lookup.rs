@@ -21,14 +21,6 @@ pub enum LookupOp {
     Cast {
         scale: utils::F32,
     },
-    Max {
-        scale: utils::F32,
-        a: utils::F32,
-    },
-    Min {
-        scale: utils::F32,
-        a: utils::F32,
-    },
     Ceil {
         scale: utils::F32,
     },
@@ -129,8 +121,6 @@ impl LookupOp {
             LookupOp::RoundHalfToEven { scale } => format!("round_half_to_even_{}", scale),
             LookupOp::Pow { scale, a } => format!("pow_{}_{}", scale, a),
             LookupOp::KroneckerDelta => "kronecker_delta".into(),
-            LookupOp::Max { scale, a } => format!("max_{}_{}", scale, a),
-            LookupOp::Min { scale, a } => format!("min_{}_{}", scale, a),
             LookupOp::Div { denom } => format!("div_{}", denom),
             LookupOp::Cast { scale } => format!("cast_{}", scale),
             LookupOp::Recip {
@@ -186,12 +176,6 @@ impl LookupOp {
                 LookupOp::KroneckerDelta => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::kronecker_delta(&x))
                 }
-                LookupOp::Max { scale, a } => Ok::<_, TensorError>(
-                    tensor::ops::nonlinearities::max(&x, scale.0.into(), a.0.into()),
-                ),
-                LookupOp::Min { scale, a } => Ok::<_, TensorError>(
-                    tensor::ops::nonlinearities::min(&x, scale.0.into(), a.0.into()),
-                ),
                 LookupOp::Div { denom } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::const_div(&x, f32::from(*denom).into()),
                 ),
@@ -289,8 +273,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::RoundHalfToEven { scale } => format!("ROUND_HALF_TO_EVEN(scale={})", scale),
             LookupOp::Pow { a, scale } => format!("POW(scale={}, exponent={})", scale, a),
             LookupOp::KroneckerDelta => "K_DELTA".into(),
-            LookupOp::Max { scale, a } => format!("MAX(scale={}, a={})", scale, a),
-            LookupOp::Min { scale, a } => format!("MIN(scale={}, a={})", scale, a),
             LookupOp::Recip {
                 input_scale,
                 output_scale,

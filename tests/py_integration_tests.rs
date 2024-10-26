@@ -124,41 +124,40 @@ mod py_tests {
     }
 
     const TESTS: [&str; 34] = [
-        "ezkl_demo_batch.ipynb",
-        "proof_splitting.ipynb", // 0
-        "variance.ipynb",
-        "mnist_gan.ipynb",
-        // "mnist_vae.ipynb",
-        "keras_simple_demo.ipynb",
-        "mnist_gan_proof_splitting.ipynb", // 4
-        "hashed_vis.ipynb",                // 5
-        "simple_demo_all_public.ipynb",
-        "data_attest.ipynb",
-        "little_transformer.ipynb",
-        "simple_demo_aggregated_proofs.ipynb",
-        "ezkl_demo.ipynb", // 10
-        "lstm.ipynb",
-        "set_membership.ipynb", // 12
-        "decision_tree.ipynb",
-        "random_forest.ipynb",
-        "gradient_boosted_trees.ipynb", // 15
-        "xgboost.ipynb",
-        "lightgbm.ipynb",
-        "svm.ipynb",
-        "simple_demo_public_input_output.ipynb",
-        "simple_demo_public_network_output.ipynb", // 20
-        "gcn.ipynb",
-        "linear_regression.ipynb",
-        "stacked_regression.ipynb",
-        "data_attest_hashed.ipynb",
-        "kzg_vis.ipynb", // 25
-        "kmeans.ipynb",
-        "solvency.ipynb",
-        "sklearn_mlp.ipynb",
-        "generalized_inverse.ipynb",
-        "mnist_classifier.ipynb", // 30
-        "world_rotation.ipynb",
-        "logistic_regression.ipynb",
+        "ezkl_demo_batch.ipynb",                   // 0
+        "proof_splitting.ipynb",                   // 1
+        "variance.ipynb",                          // 2
+        "mnist_gan.ipynb",                         // 3
+        "keras_simple_demo.ipynb",                 // 4
+        "mnist_gan_proof_splitting.ipynb",         // 5
+        "hashed_vis.ipynb",                        // 6
+        "simple_demo_all_public.ipynb",            // 7
+        "data_attest.ipynb",                       // 8
+        "little_transformer.ipynb",                // 9
+        "simple_demo_aggregated_proofs.ipynb",     // 10
+        "ezkl_demo.ipynb",                         // 11
+        "lstm.ipynb",                              // 12
+        "set_membership.ipynb",                    // 13
+        "decision_tree.ipynb",                     // 14
+        "random_forest.ipynb",                     // 15
+        "gradient_boosted_trees.ipynb",            // 16
+        "xgboost.ipynb",                           // 17
+        "lightgbm.ipynb",                          // 18
+        "svm.ipynb",                               // 19
+        "simple_demo_public_input_output.ipynb",   // 20
+        "simple_demo_public_network_output.ipynb", // 21
+        "gcn.ipynb",                               // 22
+        "linear_regression.ipynb",                 // 23
+        "stacked_regression.ipynb",                // 24
+        "data_attest_hashed.ipynb",                // 25
+        "kzg_vis.ipynb",                           // 26
+        "kmeans.ipynb",                            // 27
+        "solvency.ipynb",                          // 28
+        "sklearn_mlp.ipynb",                       // 29
+        "generalized_inverse.ipynb",               // 30
+        "mnist_classifier.ipynb",                  // 31
+        "world_rotation.ipynb",                    // 32
+        "logistic_regression.ipynb",               // 33
     ];
 
     macro_rules! test_func {
