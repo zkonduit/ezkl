@@ -255,7 +255,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
         self.raw_values = Tensor::new(None, &[0]).unwrap();
     }
 
-    ///
+    /// Pre-assign a value
     pub fn pre_assign(&mut self, val: ValTensor<F>) {
         self.pre_assigned_val = Some(val)
     }

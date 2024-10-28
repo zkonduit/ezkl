@@ -1,4 +1,4 @@
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 #[cfg(test)]
 mod native_tests {
 
@@ -1004,7 +1004,6 @@ mod native_tests {
 
             // Global variables to store verifier hashes and identical verifiers
             lazy_static! {
-                static ref REUSABLE_VERIFIER_ADDR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
                 static ref ANVIL_INSTANCE: std::sync::Mutex<Option<std::process::Child>> = std::sync::Mutex::new(None);
             }
 
@@ -1138,21 +1137,11 @@ mod native_tests {
                     init_logger();
                     log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_ for test: {}", test);
                     // default vis
-                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), false);
+                    kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", false);
                     // public/public vis
-                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), false);
+                    kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", false);
                     // hashed input
-                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", &mut Some(reusable_verifier_address), false);
-
-                    match REUSABLE_VERIFIER_ADDR.try_lock() {
-                        Ok(mut addr) => {
-                            *addr = Some(reusable_verifier_address.clone());
-                            log::error!("Reusing the same verifier deployed at address: {}", reusable_verifier_address);
-                        }
-                        Err(_) => {
-                            log::error!("Failed to acquire lock on REUSABLE_VERIFIER_ADDR");
-                        }
-                    }
+                    kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", false);
 
                     test_dir.close().unwrap();
                 }
@@ -1171,21 +1160,11 @@ mod native_tests {
                     init_logger();
                     log::error!("Running kzg_evm_prove_and_verify_reusable_verifier_with_overflow_ for test: {}", test);
                     // default vis
-                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", &mut REUSABLE_VERIFIER_ADDR.lock().unwrap(), true);
+                    kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "private", "private", "public", true);
                     // public/public vis
-                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", &mut Some(reusable_verifier_address), true);
+                    kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "public", "private", "public", true);
                     // hashed input
-                    let reusable_verifier_address: String = kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", &mut Some(reusable_verifier_address), true);
-
-                    match REUSABLE_VERIFIER_ADDR.try_lock() {
-                        Ok(mut addr) => {
-                            *addr = Some(reusable_verifier_address.clone());
-                            log::error!("Reusing the same verifier deployed at address: {}", reusable_verifier_address);
-                        }
-                        Err(_) => {
-                            log::error!("Failed to acquire lock on REUSABLE_VERIFIER_ADDR");
-                        }
-                    }
+                    kzg_evm_prove_and_verify_reusable_verifier(2, path, test.to_string(), "hashed", "private", "public", true);
 
                     test_dir.close().unwrap();
                 }
@@ -1201,8 +1180,8 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(false, Hardfork::Latest);
                     kzg_evm_prove_and_verify(2, path, test.to_string(), "private", "private", "public");
-                    // #[cfg(not(feature = "icicle"))]
-                    // run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
+                    #[cfg(not(feature = "icicle"))]
+                    run_js_tests(path, test.to_string(), "testBrowserEvmVerify", false);
                     test_dir.close().unwrap();
 
                 }
@@ -2237,9 +2216,8 @@ mod native_tests {
         input_visibility: &str,
         param_visibility: &str,
         output_visibility: &str,
-        _reusable_verifier_address: &mut Option<String>,
         overflow: bool,
-    ) -> String {
+    ) {
         let anvil_url = ANVIL_URL.as_str();
 
         prove_and_verify(
@@ -2335,6 +2313,9 @@ mod native_tests {
             addr
         };
 
+        let addr_path_arg_vk = format!("--addr-path={}/{}/addr_vk.txt", test_dir, example_name);
+        let sol_arg_vk: String = format!("--sol-code-path={}/{}/vk.sol", test_dir, example_name);
+        // create the verifier
         let addr_path_arg_vk = format!("--addr-path={}/{}/addr_vk.txt", test_dir, example_name);
         let sol_arg_vk: String = format!("--sol-code-path={}/{}/vk.sol", test_dir, example_name);
         // create the verifier
@@ -2451,9 +2432,6 @@ mod native_tests {
                 i
             );
         }
-
-        // Returned deploy_addr_arg for reusable verifier
-        deployed_addr_arg
     }
 
     // run js browser evm verify tests for a given example

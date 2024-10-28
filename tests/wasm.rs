@@ -1,6 +1,12 @@
 #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
 #[cfg(test)]
 mod wasm32 {
+    use ezkl::bindings::wasm::{
+        bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
+        feltToFloat, feltToInt, feltToLittleEndian, genPk, genVk, genWitness, inputValidation,
+        kzgCommit, pkValidation, poseidonHash, proofValidation, prove, settingsValidation,
+        srsValidation, u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
+    };
     use ezkl::circuit::modules::polycommit::PolyCommitChip;
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
@@ -9,12 +15,6 @@ mod wasm32 {
     use ezkl::graph::GraphCircuit;
     use ezkl::graph::{GraphSettings, GraphWitness};
     use ezkl::pfsys;
-    use ezkl::wasm::{
-        bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
-        feltToFloat, feltToInt, feltToLittleEndian, genPk, genVk, genWitness, inputValidation,
-        kzgCommit, pkValidation, poseidonHash, proofValidation, prove, settingsValidation,
-        srsValidation, u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
-    };
     use halo2_proofs::plonk::VerifyingKey;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2_proofs::poly::kzg::commitment::ParamsKZG;
@@ -28,18 +28,18 @@ mod wasm32 {
 
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
-    pub const WITNESS: &[u8] = include_bytes!("../tests/wasm/witness.json");
-    pub const NETWORK_COMPILED: &[u8] = include_bytes!("../tests/wasm/model.compiled");
-    pub const NETWORK: &[u8] = include_bytes!("../tests/wasm/network.onnx");
-    pub const INPUT: &[u8] = include_bytes!("../tests/wasm/input.json");
-    pub const PROOF: &[u8] = include_bytes!("../tests/wasm/proof.json");
-    pub const PROOF_AGGR: &[u8] = include_bytes!("../tests/wasm/proof_aggr.json");
-    pub const SETTINGS: &[u8] = include_bytes!("../tests/wasm/settings.json");
-    pub const PK: &[u8] = include_bytes!("../tests/wasm/pk.key");
-    pub const VK: &[u8] = include_bytes!("../tests/wasm/vk.key");
-    pub const VK_AGGR: &[u8] = include_bytes!("../tests/wasm/vk_aggr.key");
-    pub const SRS: &[u8] = include_bytes!("../tests/wasm/kzg");
-    pub const SRS1: &[u8] = include_bytes!("../tests/wasm/kzg1.srs");
+    pub const WITNESS: &[u8] = include_bytes!("assets/witness.json");
+    pub const NETWORK_COMPILED: &[u8] = include_bytes!("assets/model.compiled");
+    pub const NETWORK: &[u8] = include_bytes!("assets/network.onnx");
+    pub const INPUT: &[u8] = include_bytes!("assets/input.json");
+    pub const PROOF: &[u8] = include_bytes!("assets/proof.json");
+    pub const PROOF_AGGR: &[u8] = include_bytes!("assets/proof_aggr.json");
+    pub const SETTINGS: &[u8] = include_bytes!("assets/settings.json");
+    pub const PK: &[u8] = include_bytes!("assets/pk.key");
+    pub const VK: &[u8] = include_bytes!("assets/vk.key");
+    pub const VK_AGGR: &[u8] = include_bytes!("assets/vk_aggr.key");
+    pub const SRS: &[u8] = include_bytes!("assets/kzg");
+    pub const SRS1: &[u8] = include_bytes!("assets/kzg1.srs");
 
     #[wasm_bindgen_test]
     async fn can_verify_aggr() {

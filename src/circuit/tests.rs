@@ -8,7 +8,10 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::Fr as F;
 use halo2curves::ff::{Field, PrimeField};
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(not(any(
+    all(target_arch = "wasm32", target_os = "unknown"),
+    not(feature = "ezkl")
+)))]
 use ops::lookup::LookupOp;
 use ops::region::RegionCtx;
 use rand::rngs::OsRng;
@@ -244,7 +247,10 @@ mod matmul_col_overflow {
 }
 
 #[cfg(test)]
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod matmul_col_ultra_overflow_double_col {
 
     use halo2_proofs::poly::kzg::{
@@ -362,7 +368,10 @@ mod matmul_col_ultra_overflow_double_col {
 }
 
 #[cfg(test)]
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod matmul_col_ultra_overflow {
 
     use halo2_proofs::poly::kzg::{
@@ -1145,7 +1154,10 @@ mod conv {
 }
 
 #[cfg(test)]
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod conv_col_ultra_overflow {
 
     use halo2_proofs::poly::{
@@ -1286,7 +1298,10 @@ mod conv_col_ultra_overflow {
 
 #[cfg(test)]
 // not wasm 32 unknown
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod conv_relu_col_ultra_overflow {
 
     use halo2_proofs::poly::kzg::{
@@ -1501,7 +1516,7 @@ mod add_w_shape_casting {
         // parameters
         let a = Tensor::from((0..LEN).map(|i| Value::known(F::from(i as u64 + 1))));
 
-        let b = Tensor::from((0..1).map(|i| Value::known(F::from(i as u64 + 1))));
+        let b = Tensor::from((0..1).map(|i| Value::known(F::from(i + 1))));
 
         let circuit = MyCircuit::<F> {
             inputs: [ValTensor::from(a), ValTensor::from(b)],
@@ -2449,7 +2464,10 @@ mod relu {
 }
 
 #[cfg(test)]
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 mod lookup_ultra_overflow {
     use super::*;
     use halo2_proofs::{

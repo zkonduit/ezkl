@@ -1,4 +1,4 @@
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 #[cfg(test)]
 mod py_tests {
 
@@ -123,7 +123,8 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 33] = [
+    const TESTS: [&str; 34] = [
+        "ezkl_demo_batch.ipynb",
         "proof_splitting.ipynb", // 0
         "variance.ipynb",
         "mnist_gan.ipynb",

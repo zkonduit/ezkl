@@ -30,12 +30,16 @@
 //!
 
 /// Error type
+// #[cfg_attr(not(feature = "ezkl"), derive(uniffi::Error))]
 #[derive(thiserror::Error, Debug)]
 #[allow(missing_docs)]
 pub enum EZKLError {
     #[error("[aggregation] {0}")]
     AggregationError(#[from] pfsys::evm::aggregation_kzg::AggregationError),
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[cfg(all(
+        feature = "ezkl",
+        not(all(target_arch = "wasm32", target_os = "unknown"))
+    ))]
     #[error("[eth] {0}")]
     EthError(#[from] eth::EthError),
     #[error("[graph] {0}")]
@@ -54,7 +58,10 @@ pub enum EZKLError {
     JsonError(#[from] serde_json::Error),
     #[error("[utf8] {0}")]
     Utf8Error(#[from] std::str::Utf8Error),
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[cfg(all(
+        feature = "ezkl",
+        not(all(target_arch = "wasm32", target_os = "unknown"))
+    ))]
     #[error("[reqwest] {0}")]
     ReqwestError(#[from] reqwest::Error),
     #[error("[fmt] {0}")]
@@ -63,7 +70,10 @@ pub enum EZKLError {
     Halo2Error(#[from] halo2_proofs::plonk::Error),
     #[error("[Uncategorized] {0}")]
     UncategorizedError(String),
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    #[cfg(all(
+        feature = "ezkl",
+        not(all(target_arch = "wasm32", target_os = "unknown"))
+    ))]
     #[error("[execute] {0}")]
     ExecutionError(#[from] execute::ExecutionError),
     #[error("[srs] {0}")]
@@ -85,7 +95,9 @@ impl From<String> for EZKLError {
 use std::str::FromStr;
 
 use circuit::{table::Range, CheckMode, Tolerance};
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::Args;
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use fieldutils::IntegerRep;
 use graph::Visibility;
 use halo2_proofs::poly::{
@@ -93,52 +105,62 @@ use halo2_proofs::poly::{
 };
 use halo2curves::bn256::{Bn256, G1Affine};
 use serde::{Deserialize, Serialize};
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
+/// Bindings managment
+#[cfg(any(
+    feature = "ios-bindings",
+    all(target_arch = "wasm32", target_os = "unknown"),
+    feature = "python-bindings"
+))]
+pub mod bindings;
 /// Methods for configuring tensor operations and assigning values to them in a Halo2 circuit.
 pub mod circuit;
 /// CLI commands.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 pub mod commands;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 // abigen doesn't generate docs for this module
 #[allow(missing_docs)]
 /// Utility functions for contracts
 pub mod eth;
 /// Command execution
 ///
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 pub mod execute;
 /// Utilities for converting from Halo2 Field types to integers (and vice-versa).
 pub mod fieldutils;
 /// Methods for loading onnx format models and automatically laying them out in
 /// a Halo2 circuit.
-#[cfg(feature = "onnx")]
+#[cfg(any(feature = "onnx", not(feature = "ezkl")))]
 pub mod graph;
 /// beautiful logging
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 pub mod logger;
 /// Tools for proofs and verification used by cli
 pub mod pfsys;
-/// Python bindings
-#[cfg(feature = "python-bindings")]
-pub mod python;
 /// srs sha hashes
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+#[cfg(all(
+    feature = "ezkl",
+    not(all(target_arch = "wasm32", target_os = "unknown"))
+))]
 pub mod srs_sha;
 /// An implementation of multi-dimensional tensors.
 pub mod tensor;
-/// wasm prover and verifier
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-pub mod wasm;
+#[cfg(feature = "ios-bindings")]
+uniffi::setup_scaffolding!();
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use lazy_static::lazy_static;
 
 /// The denominator in the fixed point representation used when quantizing inputs
 pub type Scale = i32;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 // Buf writer capacity
 lazy_static! {
     /// The capacity of the buffer used for writing to disk
@@ -153,10 +175,10 @@ lazy_static! {
 
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
 const EZKL_KEY_FORMAT: &str = "raw-bytes";
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
 const EZKL_BUF_CAPACITY: &usize = &8000;
 
 #[derive(
@@ -209,6 +231,7 @@ impl std::fmt::Display for Commitments {
     }
 }
 
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 impl ToFlags for Commitments {
     /// Convert the struct to a subcommand string
     fn to_flags(&self) -> Vec<String> {
@@ -231,57 +254,67 @@ impl From<String> for Commitments {
 }
 
 /// Parameters specific to a proving run
-#[derive(Debug, Args, Deserialize, Serialize, Clone, PartialEq, PartialOrd, ToFlags)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, PartialOrd)]
+#[cfg_attr(
+    all(feature = "ezkl", not(target_arch = "wasm32")),
+    derive(Args, ToFlags)
+)]
 pub struct RunArgs {
     /// The tolerance for error on model outputs
-    #[arg(short = 'T', long, default_value = "0", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'T', long, default_value = "0", value_hint = clap::ValueHint::Other))]
     pub tolerance: Tolerance,
     /// The denominator in the fixed point representation used when quantizing inputs
-    #[arg(short = 'S', long, default_value = "7", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'S', long, default_value = "7", value_hint = clap::ValueHint::Other))]
     pub input_scale: Scale,
     /// The denominator in the fixed point representation used when quantizing parameters
-    #[arg(long, default_value = "7", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "7", value_hint = clap::ValueHint::Other))]
     pub param_scale: Scale,
     /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
-    #[arg(long, default_value = "1",  value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "1",  value_hint = clap::ValueHint::Other))]
     pub scale_rebase_multiplier: u32,
     /// The min and max elements in the lookup table input column
-    #[arg(short = 'B', long, value_parser = parse_key_val::<IntegerRep, IntegerRep>, default_value = "-32768->32768")]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'B', long, value_parser = parse_key_val::<IntegerRep, IntegerRep>, default_value = "-32768->32768"))]
     pub lookup_range: Range,
     /// The log_2 number of rows
-    #[arg(short = 'K', long, default_value = "17", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'K', long, default_value = "17", value_hint = clap::ValueHint::Other))]
     pub logrows: u32,
     /// The log_2 number of rows
-    #[arg(short = 'N', long, default_value = "2", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'N', long, default_value = "2", value_hint = clap::ValueHint::Other))]
     pub num_inner_cols: usize,
     /// Hand-written parser for graph variables, eg. batch_size=1
-    #[arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size->1", value_delimiter = ',', value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size->1", value_delimiter = ',', value_hint = clap::ValueHint::Other))]
     pub variables: Vec<(String, usize)>,
     /// Flags whether inputs are public, private, fixed, hashed, polycommit
-    #[arg(long, default_value = "private", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "private", value_hint = clap::ValueHint::Other))]
     pub input_visibility: Visibility,
     /// Flags whether outputs are public, private, fixed, hashed, polycommit
-    #[arg(long, default_value = "public", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "public", value_hint = clap::ValueHint::Other))]
     pub output_visibility: Visibility,
     /// Flags whether params are fixed, private, hashed, polycommit
-    #[arg(long, default_value = "private", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "private", value_hint = clap::ValueHint::Other))]
     pub param_visibility: Visibility,
-    #[arg(long, default_value = "false")]
+    #[cfg_attr(
+        all(feature = "ezkl", not(target_arch = "wasm32")),
+        arg(long, default_value = "false")
+    )]
     /// Rebase the scale using lookup table for division instead of using a range check
     pub div_rebasing: bool,
     /// Should constants with 0.0 fraction be rebased to scale 0
-    #[arg(long, default_value = "false")]
+    #[cfg_attr(
+        all(feature = "ezkl", not(target_arch = "wasm32")),
+        arg(long, default_value = "false")
+    )]
     pub rebase_frac_zero_constants: bool,
     /// check mode (safe, unsafe, etc)
-    #[arg(long, default_value = "unsafe", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "unsafe", value_hint = clap::ValueHint::Other))]
     pub check_mode: CheckMode,
     /// commitment scheme
-    #[arg(long, default_value = "kzg", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "kzg", value_hint = clap::ValueHint::Other))]
     pub commitment: Option<Commitments>,
     /// the base used for decompositions
-    #[arg(long, default_value = "16384", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "16384", value_hint = clap::ValueHint::Other))]
     pub decomp_base: usize,
-    #[arg(long, default_value = "2", value_hint = clap::ValueHint::Other)]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "2", value_hint = clap::ValueHint::Other))]
     /// the number of legs used for decompositions
     pub decomp_legs: usize,
 }
@@ -354,6 +387,7 @@ impl RunArgs {
 }
 
 /// Parse a single key-value pair
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 fn parse_key_val<T, U>(
     s: &str,
 ) -> Result<(T, U), Box<dyn std::error::Error + Send + Sync + 'static>>

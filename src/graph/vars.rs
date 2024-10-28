@@ -14,6 +14,7 @@ use pyo3::{
 };
 
 use serde::{Deserialize, Serialize};
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
 use self::errors::GraphError;
@@ -64,6 +65,7 @@ impl Display for Visibility {
     }
 }
 
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 impl ToFlags for Visibility {
     fn to_flags(&self) -> Vec<String> {
         vec![format!("{}", self)]
@@ -441,7 +443,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
                 let dynamic_lookup =
                     VarTensor::new_advice(cs, logrows, 1, dynamic_lookup_and_shuffle_size);
                 if dynamic_lookup.num_blocks() > 1 {
-                    panic!("dynamic lookup or shuffle should only have one block");
+                    warn!("dynamic lookup has {} blocks", dynamic_lookup.num_blocks());
                 };
                 advices.push(dynamic_lookup);
             }
