@@ -43,9 +43,6 @@ pub enum LookupOp {
         input_scale: utils::F32,
         output_scale: utils::F32,
     },
-    LeakyReLU {
-        slope: utils::F32,
-    },
     Sigmoid {
         scale: utils::F32,
     },
@@ -127,7 +124,6 @@ impl LookupOp {
                 input_scale,
                 output_scale,
             } => format!("recip_{}_{}", input_scale, output_scale),
-            LookupOp::LeakyReLU { slope: a } => format!("leaky_relu_{}", a),
             LookupOp::Sigmoid { scale } => format!("sigmoid_{}", scale),
             LookupOp::Sqrt { scale } => format!("sqrt_{}", scale),
             LookupOp::Rsqrt { scale } => format!("rsqrt_{}", scale),
@@ -190,9 +186,6 @@ impl LookupOp {
                     input_scale.into(),
                     output_scale.into(),
                 )),
-                LookupOp::LeakyReLU { slope: a } => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::leakyrelu(&x, a.0.into()))
-                }
                 LookupOp::Sigmoid { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::sigmoid(&x, scale.into()))
                 }
@@ -283,7 +276,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
             LookupOp::Cast { scale } => format!("CAST(scale={})", scale),
             LookupOp::Ln { scale } => format!("LN(scale={})", scale),
-            LookupOp::LeakyReLU { slope: a } => format!("L_RELU(slope={})", a),
             LookupOp::Sigmoid { scale } => format!("SIGMOID(scale={})", scale),
             LookupOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
             LookupOp::Erf { scale } => format!("ERF(scale={})", scale),

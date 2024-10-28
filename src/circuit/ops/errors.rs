@@ -94,4 +94,7 @@ pub enum CircuitError {
     #[error("[io] {0}")]
     /// IO error
     IoError(#[from] std::io::Error),
+    /// Invalid scale
+    #[error("negative scale for an op that requires positive inputs {0}")]
+    NegativeScale(String),
 }

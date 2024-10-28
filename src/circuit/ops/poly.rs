@@ -1,5 +1,8 @@
 use crate::{
-    circuit::layouts,
+    circuit::{
+        layouts,
+        utils::{self, F32},
+    },
     tensor::{self, Tensor, TensorError},
 };
 
@@ -9,9 +12,12 @@ use super::{base::BaseOp, *};
 /// An enum representing the operations that can be expressed as arithmetic (non lookup) operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PolyOp {
-    ReLU,
     Abs,
     Sign,
+    LeakyReLU {
+        slope: utils::F32,
+        scale: i32,
+    },
     GatherElements {
         dim: usize,
         constant_idx: Option<Tensor<usize>>,
@@ -112,9 +118,9 @@ impl<
 
     fn as_string(&self) -> String {
         match &self {
+            PolyOp::LeakyReLU { slope: a, .. } => format!("LEAKYRELU (slope={})", a),
             PolyOp::Abs => "ABS".to_string(),
             PolyOp::Sign => "SIGN".to_string(),
-            PolyOp::ReLU => "RELU".to_string(),
             PolyOp::GatherElements { dim, constant_idx } => format!(
                 "GATHERELEMENTS (dim={}, constant_idx{})",
                 dim,
@@ -198,7 +204,9 @@ impl<
         Ok(Some(match self {
             PolyOp::Abs => layouts::abs(config, region, values[..].try_into()?)?,
             PolyOp::Sign => layouts::sign(config, region, values[..].try_into()?)?,
-            PolyOp::ReLU => layouts::relu(config, region, values[..].try_into()?)?,
+            PolyOp::LeakyReLU { slope, scale } => {
+                layouts::leaky_relu(config, region, values[..].try_into()?, slope, scale)?
+            }
             PolyOp::MultiBroadcastTo { shape } => {
                 layouts::expand(config, region, values[..].try_into()?, shape)?
             }
@@ -329,6 +337,12 @@ impl<
 
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         let scale = match self {
+            // this corresponds to the relu operation
+            PolyOp::LeakyReLU {
+                slope: F32(0.0), ..
+            } => in_scales[0],
+            // this corresponds to the leaky relu operation with a slope which induces a change in scale
+            PolyOp::LeakyReLU { scale, .. } => in_scales[0] + *scale,
             PolyOp::MeanOfSquares { .. } => 2 * in_scales[0],
             PolyOp::Xor | PolyOp::Or | PolyOp::And | PolyOp::Not => 0,
             PolyOp::Iff => in_scales[1],

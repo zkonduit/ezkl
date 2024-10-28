@@ -163,18 +163,6 @@ where
                 &params,
                 (LOOKUP_MIN, LOOKUP_MAX),
                 K,
-                &LookupOp::LeakyReLU { slope: 0.0.into() },
-            )
-            .unwrap();
-
-        layer_config
-            .configure_lookup(
-                cs,
-                &input,
-                &output,
-                &params,
-                (LOOKUP_MIN, LOOKUP_MAX),
-                K,
                 &LookupOp::Div { denom: 32.0.into() },
             )
             .unwrap();
@@ -224,7 +212,10 @@ where
                         .layout(
                             &mut region,
                             &[x.unwrap()],
-                            Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                            Box::new(PolyOp::LeakyReLU {
+                                scale: 1,
+                                slope: 0.0.into(),
+                            }),
                         )
                         .unwrap();
 

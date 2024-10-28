@@ -69,19 +69,6 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                 &params,
                 (LOOKUP_MIN, LOOKUP_MAX),
                 K,
-                &LookupOp::LeakyReLU { slope: 0.0.into() },
-            )
-            .unwrap();
-
-        // sets up a new ReLU table and resuses it for l1 and l3 non linearities
-        layer_config
-            .configure_lookup(
-                cs,
-                &input,
-                &output,
-                &params,
-                (LOOKUP_MIN, LOOKUP_MAX),
-                K,
                 &LookupOp::Div {
                     denom: ezkl::circuit::utils::F32::from(128.),
                 },
@@ -144,7 +131,10 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                         .layout(
                             &mut region,
                             &[x],
-                            Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                            Box::new(PolyOp::LeakyReLU {
+                                scale: 1,
+                                slope: 0.0.into(),
+                            }),
                         )
                         .unwrap()
                         .unwrap();
@@ -184,7 +174,10 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                         .layout(
                             &mut region,
                             &[x],
-                            Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                            Box::new(PolyOp::LeakyReLU {
+                                scale: 1,
+                                slope: 0.0.into(),
+                            }),
                         )
                         .unwrap();
                     println!("6");

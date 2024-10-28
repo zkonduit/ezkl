@@ -42,7 +42,7 @@ impl Circuit<Fr> for NLCircuit {
                 .map(|_| VarTensor::new_advice(cs, K, 1, LEN))
                 .collect::<Vec<_>>();
 
-            let nl = LookupOp::LeakyReLU { slope: 0.0.into() };
+            let nl = LookupOp::Sigmoid { scale: 1.0.into() };
 
             let mut config = Config::default();
 
@@ -68,7 +68,7 @@ impl Circuit<Fr> for NLCircuit {
                     .layout(
                         &mut region,
                         &[self.input.clone()],
-                        Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                        Box::new(LookupOp::Sigmoid { scale: 1.0.into() }),
                     )
                     .unwrap();
                 Ok(())
