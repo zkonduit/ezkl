@@ -146,6 +146,8 @@ where
         let params = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN);
         let output = VarTensor::new_advice(cs, K, NUM_INNER_COLS, LEN);
 
+        let _constant = VarTensor::constant_cols(cs, K, LEN, false);
+
         println!("INPUT COL {:#?}", input);
 
         let mut layer_config = PolyConfig::configure(
@@ -154,6 +156,14 @@ where
             &output,
             CheckMode::SAFE,
         );
+
+        layer_config
+            .configure_range_check(cs, &input, &params, (-1, 1), K)
+            .unwrap();
+
+        layer_config
+            .configure_range_check(cs, &input, &params, (0, 1023), K)
+            .unwrap();
 
         layer_config
             .configure_lookup(
@@ -182,6 +192,11 @@ where
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         config.layer_config.layout_tables(&mut layouter).unwrap();
+
+        config
+            .layer_config
+            .layout_range_checks(&mut layouter)
+            .unwrap();
 
         let x = layouter
             .assign_region(
@@ -213,8 +228,8 @@ where
                             &mut region,
                             &[x.unwrap()],
                             Box::new(PolyOp::LeakyReLU {
-                                scale: 1,
                                 slope: 0.0.into(),
+                                scale: 1,
                             }),
                         )
                         .unwrap();

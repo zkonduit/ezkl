@@ -53,12 +53,24 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
         let output = VarTensor::new_advice(cs, K, 1, LEN);
         // tells the config layer to add an affine op to the circuit gate
 
+        let _constant = VarTensor::constant_cols(cs, K, LEN, false);
+
+        println!("INPUT COL {:#?}", input);
+
         let mut layer_config = PolyConfig::<F>::configure(
             cs,
             &[input.clone(), params.clone()],
             &output,
             CheckMode::SAFE,
         );
+
+        layer_config
+            .configure_range_check(cs, &input, &params, (-1, 1), K)
+            .unwrap();
+
+        layer_config
+            .configure_range_check(cs, &input, &params, (0, 1023), K)
+            .unwrap();
 
         // sets up a new ReLU table and resuses it for l1 and l3 non linearities
         layer_config
@@ -90,6 +102,11 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         config.layer_config.layout_tables(&mut layouter).unwrap();
+
+        config
+            .layer_config
+            .layout_range_checks(&mut layouter)
+            .unwrap();
 
         let x = layouter
             .assign_region(
