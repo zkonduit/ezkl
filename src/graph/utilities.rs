@@ -809,7 +809,6 @@ pub fn new_op_from_onnx(
             SupportedOp::Hybrid(HybridOp::Recip {
                 input_scale: (scale_to_multiplier(in_scale) as f32).into(),
                 output_scale: (scale_to_multiplier(max_scale) as f32).into(),
-                use_range_check_for_int: true,
             })
         }
 
@@ -1107,10 +1106,17 @@ pub fn new_op_from_onnx(
                 if c.raw_values.len() > 1 {
                     unimplemented!("only support scalar pow")
                 }
-                SupportedOp::Nonlinear(LookupOp::Pow {
-                    scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
-                    a: crate::circuit::utils::F32(c.raw_values[0]),
-                })
+
+                let exponent = c.raw_values[0];
+
+                if exponent.fract() == 0.0 {
+                    SupportedOp::Linear(PolyOp::Pow(exponent as u32))
+                } else {
+                    SupportedOp::Nonlinear(LookupOp::Pow {
+                        scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                        a: crate::circuit::utils::F32(exponent),
+                    })
+                }
             } else {
                 unimplemented!("only support constant pow for now")
             }

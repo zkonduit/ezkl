@@ -16,7 +16,6 @@ pub enum HybridOp {
     Recip {
         input_scale: utils::F32,
         output_scale: utils::F32,
-        use_range_check_for_int: bool,
     },
     Div {
         denom: utils::F32,
@@ -102,10 +101,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             HybridOp::Recip {
                 input_scale,
                 output_scale,
-                use_range_check_for_int,
             } => format!(
-                "RECIP (input_scale={}, output_scale={}, use_range_check_for_int={})",
-                input_scale, output_scale, use_range_check_for_int
+                "RECIP (input_scale={}, output_scale={})",
+                input_scale, output_scale
             ),
             HybridOp::Div {
                 denom,
@@ -187,31 +185,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             HybridOp::Recip {
                 input_scale,
                 output_scale,
-                use_range_check_for_int,
-            } => {
-                if input_scale.0.fract() == 0.0
-                    && output_scale.0.fract() == 0.0
-                    && *use_range_check_for_int
-                {
-                    layouts::recip(
-                        config,
-                        region,
-                        values[..].try_into()?,
-                        integer_rep_to_felt(input_scale.0 as i128),
-                        integer_rep_to_felt(output_scale.0 as i128),
-                    )?
-                } else {
-                    layouts::nonlinearity(
-                        config,
-                        region,
-                        values.try_into()?,
-                        &LookupOp::Recip {
-                            input_scale: *input_scale,
-                            output_scale: *output_scale,
-                        },
-                    )?
-                }
-            }
+            } => layouts::recip(
+                config,
+                region,
+                values[..].try_into()?,
+                integer_rep_to_felt(input_scale.0 as i128),
+                integer_rep_to_felt(output_scale.0 as i128),
+            )?,
             HybridOp::Div {
                 denom,
                 use_range_check_for_int,
