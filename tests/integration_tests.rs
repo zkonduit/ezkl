@@ -304,7 +304,7 @@ mod native_tests {
         "lstm_large",  // 91
         "lstm_medium", // 92
         "lenet_5",     // 93
-        "rqsrt",       // 94
+        "rsqrt",       // 94
     ];
 
     const WASM_TESTS: [&str; 46] = [
