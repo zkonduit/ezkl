@@ -15,89 +15,32 @@ use halo2curves::ff::PrimeField;
 /// An enum representing the operations that can be used to express more complex operations via accumulation
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum LookupOp {
-    Div {
-        denom: utils::F32,
-    },
-    Cast {
-        scale: utils::F32,
-    },
-    Ceil {
-        scale: utils::F32,
-    },
-    Floor {
-        scale: utils::F32,
-    },
-    Round {
-        scale: utils::F32,
-    },
-    RoundHalfToEven {
-        scale: utils::F32,
-    },
-    Sqrt {
-        scale: utils::F32,
-    },
-    Rsqrt {
-        scale: utils::F32,
-    },
-    Recip {
-        input_scale: utils::F32,
-        output_scale: utils::F32,
-    },
-    Sigmoid {
-        scale: utils::F32,
-    },
-    Ln {
-        scale: utils::F32,
-    },
-    Exp {
-        scale: utils::F32,
-    },
-    Cos {
-        scale: utils::F32,
-    },
-    ACos {
-        scale: utils::F32,
-    },
-    Cosh {
-        scale: utils::F32,
-    },
-    ACosh {
-        scale: utils::F32,
-    },
-    Sin {
-        scale: utils::F32,
-    },
-    ASin {
-        scale: utils::F32,
-    },
-    Sinh {
-        scale: utils::F32,
-    },
-    ASinh {
-        scale: utils::F32,
-    },
-    Tan {
-        scale: utils::F32,
-    },
-    ATan {
-        scale: utils::F32,
-    },
-    Tanh {
-        scale: utils::F32,
-    },
-    ATanh {
-        scale: utils::F32,
-    },
-    Erf {
-        scale: utils::F32,
-    },
-    Pow {
-        scale: utils::F32,
-        a: utils::F32,
-    },
-    HardSwish {
-        scale: utils::F32,
-    },
+    Div { denom: utils::F32 },
+    Cast { scale: utils::F32 },
+    Ceil { scale: utils::F32 },
+    Floor { scale: utils::F32 },
+    Round { scale: utils::F32 },
+    RoundHalfToEven { scale: utils::F32 },
+    Sqrt { scale: utils::F32 },
+    Rsqrt { scale: utils::F32 },
+    Sigmoid { scale: utils::F32 },
+    Ln { scale: utils::F32 },
+    Exp { scale: utils::F32 },
+    Cos { scale: utils::F32 },
+    ACos { scale: utils::F32 },
+    Cosh { scale: utils::F32 },
+    ACosh { scale: utils::F32 },
+    Sin { scale: utils::F32 },
+    ASin { scale: utils::F32 },
+    Sinh { scale: utils::F32 },
+    ASinh { scale: utils::F32 },
+    Tan { scale: utils::F32 },
+    ATan { scale: utils::F32 },
+    Tanh { scale: utils::F32 },
+    ATanh { scale: utils::F32 },
+    Erf { scale: utils::F32 },
+    Pow { scale: utils::F32, a: utils::F32 },
+    HardSwish { scale: utils::F32 },
 }
 
 impl LookupOp {
@@ -118,10 +61,6 @@ impl LookupOp {
             LookupOp::Pow { scale, a } => format!("pow_{}_{}", scale, a),
             LookupOp::Div { denom } => format!("div_{}", denom),
             LookupOp::Cast { scale } => format!("cast_{}", scale),
-            LookupOp::Recip {
-                input_scale,
-                output_scale,
-            } => format!("recip_{}_{}", input_scale, output_scale),
             LookupOp::Sigmoid { scale } => format!("sigmoid_{}", scale),
             LookupOp::Sqrt { scale } => format!("sqrt_{}", scale),
             LookupOp::Rsqrt { scale } => format!("rsqrt_{}", scale),
@@ -173,14 +112,6 @@ impl LookupOp {
                 LookupOp::Cast { scale } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::const_div(&x, f32::from(*scale).into()),
                 ),
-                LookupOp::Recip {
-                    input_scale,
-                    output_scale,
-                } => Ok::<_, TensorError>(tensor::ops::nonlinearities::recip(
-                    &x,
-                    input_scale.into(),
-                    output_scale.into(),
-                )),
                 LookupOp::Sigmoid { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::sigmoid(&x, scale.into()))
                 }
@@ -260,13 +191,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::Round { scale } => format!("ROUND(scale={})", scale),
             LookupOp::RoundHalfToEven { scale } => format!("ROUND_HALF_TO_EVEN(scale={})", scale),
             LookupOp::Pow { a, scale } => format!("POW(scale={}, exponent={})", scale, a),
-            LookupOp::Recip {
-                input_scale,
-                output_scale,
-            } => format!(
-                "RECIP(input_scale={}, output_scale={})",
-                input_scale, output_scale
-            ),
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
             LookupOp::Cast { scale } => format!("CAST(scale={})", scale),
             LookupOp::Ln { scale } => format!("LN(scale={})", scale),
@@ -312,7 +236,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
                 let in_scale = inputs_scale[0];
                 in_scale + multiplier_to_scale(1. / scale.0 as f64)
             }
-            LookupOp::Recip { output_scale, .. } => multiplier_to_scale(output_scale.into()),
             _ => inputs_scale[0],
         };
         Ok(scale)

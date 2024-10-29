@@ -205,7 +205,7 @@ mod native_tests {
         "1l_tiny_div",
     ];
 
-    const TESTS: [&str; 94] = [
+    const TESTS: [&str; 95] = [
         "1l_mlp", //0
         "1l_slice",
         "1l_concat",
@@ -304,6 +304,7 @@ mod native_tests {
         "lstm_large",  // 91
         "lstm_medium", // 92
         "lenet_5",     // 93
+        "rsqrt",       // 94
     ];
 
     const WASM_TESTS: [&str; 46] = [
@@ -542,7 +543,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=93 {
+            seq!(N in 0..=94 {
 
             #(#[test_case(TESTS[N])])*
             #[ignore]
@@ -1118,7 +1119,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=93 {
+            seq!(N in 0..4 {
                 #(#[test_case(TESTS[N])])*
                 fn kzg_evm_prove_and_verify_reusable_verifier_(test: &str) {
                     crate::native_tests::init_binary();
