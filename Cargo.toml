@@ -169,7 +169,7 @@ harness = false
 
 
 [[bench]]
-name = "relu"
+name = "sigmoid"
 harness = false
 
 [[bench]]
@@ -177,12 +177,12 @@ name = "relu_lookupless"
 harness = false
 
 [[bench]]
-name = "accum_matmul_relu"
+name = "accum_matmul_sigmoid"
 harness = false
 
 
 [[bench]]
-name = "accum_matmul_relu_overflow"
+name = "accum_matmul_sigmoid_overflow"
 harness = false
 
 [[bin]]

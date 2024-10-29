@@ -4305,7 +4305,6 @@ pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut decomp = decompose(config, region, values, &region.base(), &region.legs())?;
     // get every n elements now, which correspond to the sign bit
-
     decomp.get_every_n(region.legs() + 1)?;
     decomp.reshape(values[0].dims())?;
 
@@ -4322,10 +4321,12 @@ pub(crate) fn abs<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     pairwise(config, region, &[values[0].clone(), sign], BaseOp::Mult)
 }
 
-pub(crate) fn relu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub(crate) fn leaky_relu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
+    alpha: &utils::F32,
+    input_scale: &i32,
 ) -> Result<ValTensor<F>, CircuitError> {
     let sign = sign(config, region, values)?;
 
@@ -4334,12 +4335,45 @@ pub(crate) fn relu<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let relu_mask = equals(config, region, &[sign, unit])?;
 
-    pairwise(
+    let positive = pairwise(
         config,
         region,
-        &[values[0].clone(), relu_mask],
+        &[values[0].clone(), relu_mask.clone()],
         BaseOp::Mult,
-    )
+    )?;
+
+    if alpha.0 == 0. {
+        return Ok(positive);
+    }
+
+    if input_scale < &0 {
+        return Err(CircuitError::NegativeScale("leaky_relu".to_string()));
+    }
+
+    let scale_constant = create_constant_tensor(F::from(2_i32.pow(*input_scale as u32) as u64), 1);
+
+    let rescaled_positive = pairwise(config, region, &[positive, scale_constant], BaseOp::Mult)?;
+
+    let neg_mask = not(config, region, &[relu_mask])?;
+
+    let quantized_alpha = quantize_tensor(
+        Tensor::from([alpha.0; 1].into_iter()),
+        *input_scale,
+        &crate::graph::Visibility::Fixed,
+    )?;
+
+    let alpha_tensor = create_constant_tensor(quantized_alpha[0], 1);
+
+    let scaled_neg_mask = pairwise(config, region, &[neg_mask, alpha_tensor], BaseOp::Mult)?;
+
+    let neg_part = pairwise(
+        config,
+        region,
+        &[values[0].clone(), scaled_neg_mask],
+        BaseOp::Mult,
+    )?;
+
+    pairwise(config, region, &[rescaled_positive, neg_part], BaseOp::Add)
 }
 
 fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(

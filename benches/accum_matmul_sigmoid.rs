@@ -1,9 +1,9 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use ezkl::circuit::table::Range;
 use ezkl::circuit::*;
 
 use ezkl::circuit::lookup::LookupOp;
 use ezkl::circuit::poly::PolyOp;
-use ezkl::circuit::table::Range;
 use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::TranscriptType;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
@@ -20,9 +20,9 @@ use halo2curves::bn256::{Bn256, Fr};
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::marker::PhantomData;
 
-const BITS: Range = (-8180, 8180);
+const BITS: Range = (-32768, 32768);
 static mut LEN: usize = 4;
-static mut K: usize = 16;
+const K: usize = 16;
 
 #[derive(Clone)]
 struct MyCircuit {
@@ -47,11 +47,10 @@ impl Circuit<Fr> for MyCircuit {
 
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
         let len = unsafe { LEN };
-        let k = unsafe { K };
 
-        let a = VarTensor::new_advice(cs, k, 1, len);
-        let b = VarTensor::new_advice(cs, k, 1, len);
-        let output = VarTensor::new_advice(cs, k, 1, len);
+        let a = VarTensor::new_advice(cs, K, 1, len);
+        let b = VarTensor::new_advice(cs, K, 1, len);
+        let output = VarTensor::new_advice(cs, K, 1, len);
 
         let mut base_config =
             BaseConfig::configure(cs, &[a.clone(), b.clone()], &output, CheckMode::UNSAFE);
@@ -64,8 +63,8 @@ impl Circuit<Fr> for MyCircuit {
                 &output,
                 &a,
                 BITS,
-                k,
-                &LookupOp::LeakyReLU { slope: 0.0.into() },
+                K,
+                &LookupOp::Sigmoid { scale: 1.0.into() },
             )
             .unwrap();
 
@@ -94,7 +93,7 @@ impl Circuit<Fr> for MyCircuit {
                     .layout(
                         &mut region,
                         &[output.unwrap()],
-                        Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                        Box::new(LookupOp::Sigmoid { scale: 1.0.into() }),
                     )
                     .unwrap();
                 Ok(())
@@ -107,13 +106,11 @@ impl Circuit<Fr> for MyCircuit {
 
 fn runmatmul(c: &mut Criterion) {
     let mut group = c.benchmark_group("accum_matmul");
-
-    for &k in [8, 10, 11, 12, 13, 14].iter() {
-        let len = unsafe { LEN };
+    let params = gen_srs::<KZGCommitmentScheme<_>>(17);
+    for &len in [4, 32].iter() {
         unsafe {
-            K = k;
+            LEN = len;
         };
-        let params = gen_srs::<KZGCommitmentScheme<_>>(k as u32);
 
         let mut a = Tensor::from((0..len * len).map(|_| Value::known(Fr::from(1))));
         a.reshape(&[len, len]).unwrap();
@@ -127,8 +124,8 @@ fn runmatmul(c: &mut Criterion) {
             _marker: PhantomData,
         };
 
-        group.throughput(Throughput::Elements(k as u64));
-        group.bench_with_input(BenchmarkId::new("pk", k), &k, |b, &_| {
+        group.throughput(Throughput::Elements(len as u64));
+        group.bench_with_input(BenchmarkId::new("pk", len), &len, |b, &_| {
             b.iter(|| {
                 create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit>(&circuit, &params, true)
                     .unwrap();
@@ -138,8 +135,8 @@ fn runmatmul(c: &mut Criterion) {
         let pk =
             create_keys::<KZGCommitmentScheme<Bn256>, MyCircuit>(&circuit, &params, true).unwrap();
 
-        group.throughput(Throughput::Elements(k as u64));
-        group.bench_with_input(BenchmarkId::new("prove", k), &k, |b, &_| {
+        group.throughput(Throughput::Elements(len as u64));
+        group.bench_with_input(BenchmarkId::new("prove", len), &len, |b, &_| {
             b.iter(|| {
                 let prover = create_proof_circuit::<
                     KZGCommitmentScheme<_>,
@@ -170,7 +167,7 @@ fn runmatmul(c: &mut Criterion) {
 
 criterion_group! {
   name = benches;
-  config = Criterion::default().with_plots().sample_size(10);
+  config = Criterion::default().with_plots();
   targets = runmatmul
 }
 criterion_main!(benches);

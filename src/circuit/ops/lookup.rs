@@ -43,9 +43,6 @@ pub enum LookupOp {
         input_scale: utils::F32,
         output_scale: utils::F32,
     },
-    LeakyReLU {
-        slope: utils::F32,
-    },
     Sigmoid {
         scale: utils::F32,
     },
@@ -94,7 +91,6 @@ pub enum LookupOp {
     Erf {
         scale: utils::F32,
     },
-    KroneckerDelta,
     Pow {
         scale: utils::F32,
         a: utils::F32,
@@ -120,14 +116,12 @@ impl LookupOp {
             LookupOp::Round { scale } => format!("round_{}", scale),
             LookupOp::RoundHalfToEven { scale } => format!("round_half_to_even_{}", scale),
             LookupOp::Pow { scale, a } => format!("pow_{}_{}", scale, a),
-            LookupOp::KroneckerDelta => "kronecker_delta".into(),
             LookupOp::Div { denom } => format!("div_{}", denom),
             LookupOp::Cast { scale } => format!("cast_{}", scale),
             LookupOp::Recip {
                 input_scale,
                 output_scale,
             } => format!("recip_{}_{}", input_scale, output_scale),
-            LookupOp::LeakyReLU { slope: a } => format!("leaky_relu_{}", a),
             LookupOp::Sigmoid { scale } => format!("sigmoid_{}", scale),
             LookupOp::Sqrt { scale } => format!("sqrt_{}", scale),
             LookupOp::Rsqrt { scale } => format!("rsqrt_{}", scale),
@@ -173,9 +167,6 @@ impl LookupOp {
                 LookupOp::Pow { scale, a } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::pow(&x, scale.0.into(), a.0.into()),
                 ),
-                LookupOp::KroneckerDelta => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::kronecker_delta(&x))
-                }
                 LookupOp::Div { denom } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::const_div(&x, f32::from(*denom).into()),
                 ),
@@ -190,9 +181,6 @@ impl LookupOp {
                     input_scale.into(),
                     output_scale.into(),
                 )),
-                LookupOp::LeakyReLU { slope: a } => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::leakyrelu(&x, a.0.into()))
-                }
                 LookupOp::Sigmoid { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::sigmoid(&x, scale.into()))
                 }
@@ -272,7 +260,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::Round { scale } => format!("ROUND(scale={})", scale),
             LookupOp::RoundHalfToEven { scale } => format!("ROUND_HALF_TO_EVEN(scale={})", scale),
             LookupOp::Pow { a, scale } => format!("POW(scale={}, exponent={})", scale, a),
-            LookupOp::KroneckerDelta => "K_DELTA".into(),
             LookupOp::Recip {
                 input_scale,
                 output_scale,
@@ -283,7 +270,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
             LookupOp::Cast { scale } => format!("CAST(scale={})", scale),
             LookupOp::Ln { scale } => format!("LN(scale={})", scale),
-            LookupOp::LeakyReLU { slope: a } => format!("L_RELU(slope={})", a),
             LookupOp::Sigmoid { scale } => format!("SIGMOID(scale={})", scale),
             LookupOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
             LookupOp::Erf { scale } => format!("ERF(scale={})", scale),
@@ -327,7 +313,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
                 in_scale + multiplier_to_scale(1. / scale.0 as f64)
             }
             LookupOp::Recip { output_scale, .. } => multiplier_to_scale(output_scale.into()),
-            LookupOp::KroneckerDelta => 0,
             _ => inputs_scale[0],
         };
         Ok(scale)

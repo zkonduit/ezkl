@@ -68,7 +68,14 @@ impl Circuit<Fr> for NLCircuit {
             |region| {
                 let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
                 config
-                    .layout(&mut region, &[self.input.clone()], Box::new(PolyOp::ReLU))
+                    .layout(
+                        &mut region,
+                        &[self.input.clone()],
+                        Box::new(PolyOp::LeakyReLU {
+                            slope: 0.0.into(),
+                            scale: 1,
+                        }),
+                    )
                     .unwrap();
                 Ok(())
             },

@@ -781,7 +781,10 @@ pub fn new_op_from_onnx(
                             node.decrement_use();
                             deleted_indices.push(const_idx);
                         }
-                        SupportedOp::Linear(PolyOp::ReLU)
+                        SupportedOp::Linear(PolyOp::LeakyReLU {
+                            slope: 0.0.into(),
+                            scale: 1,
+                        })
                     } else {
                         SupportedOp::Hybrid(HybridOp::Max)
                     }
@@ -821,8 +824,9 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            SupportedOp::Nonlinear(LookupOp::LeakyReLU {
+            SupportedOp::Linear(PolyOp::LeakyReLU {
                 slope: crate::circuit::utils::F32(leaky_op.alpha),
+                scale: scales.params,
             })
         }
         "Scan" => {

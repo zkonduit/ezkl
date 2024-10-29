@@ -1553,35 +1553,6 @@ pub mod nonlinearities {
         .unwrap()
     }
 
-    /// Applies Kronecker delta to a tensor of integers.
-    /// # Arguments
-    /// * `a` - Tensor
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::kronecker_delta;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///    Some(&[2, 15, 2, 1, 1, 0]),
-    ///  &[2, 3],
-    /// ).unwrap();
-    /// let result = kronecker_delta(&x);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 0, 0, 1]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn kronecker_delta<T: TensorType + std::cmp::PartialEq + Send + Sync>(
-        a: &Tensor<T>,
-    ) -> Tensor<T> {
-        a.par_enum_map(|_, a_i| {
-            if a_i == T::zero().unwrap() {
-                Ok::<_, TensorError>(T::one().unwrap())
-            } else {
-                Ok::<_, TensorError>(T::zero().unwrap())
-            }
-        })
-        .unwrap()
-    }
-
     /// Elementwise applies sigmoid to a tensor of integers.
     /// # Arguments
     ///

@@ -1379,7 +1379,10 @@ mod conv_relu_col_ultra_overflow {
                             .layout(
                                 &mut region,
                                 &[output.unwrap().unwrap()],
-                                Box::new(PolyOp::ReLU),
+                                Box::new(PolyOp::LeakyReLU {
+                                    slope: 0.0.into(),
+                                    scale: 1,
+                                }),
                             )
                             .unwrap();
                         Ok(())
@@ -2347,7 +2350,14 @@ mod matmul_relu {
                         .unwrap();
                     let _output = config
                         .base_config
-                        .layout(&mut region, &[output.unwrap()], Box::new(PolyOp::ReLU))
+                        .layout(
+                            &mut region,
+                            &[output.unwrap()],
+                            Box::new(PolyOp::LeakyReLU {
+                                slope: 0.0.into(),
+                                scale: 1,
+                            }),
+                        )
                         .unwrap();
                     Ok(())
                 },
@@ -2439,7 +2449,14 @@ mod relu {
                     |region| {
                         let mut region = RegionCtx::new(region, 0, 1, 2, 2);
                         Ok(config
-                            .layout(&mut region, &[self.input.clone()], Box::new(PolyOp::ReLU))
+                            .layout(
+                                &mut region,
+                                &[self.input.clone()],
+                                Box::new(PolyOp::LeakyReLU {
+                                    slope: 0.0.into(),
+                                    scale: 1,
+                                }),
+                            )
                             .unwrap())
                     },
                 )
@@ -2482,11 +2499,11 @@ mod lookup_ultra_overflow {
     use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     #[derive(Clone)]
-    struct ReLUCircuit<F: PrimeField + TensorType + PartialOrd> {
+    struct SigmoidCircuit<F: PrimeField + TensorType + PartialOrd> {
         pub input: ValTensor<F>,
     }
 
-    impl Circuit<F> for ReLUCircuit<F> {
+    impl Circuit<F> for SigmoidCircuit<F> {
         type Config = BaseConfig<F>;
         type FloorPlanner = SimpleFloorPlanner;
         type Params = TestParams;
@@ -2500,7 +2517,7 @@ mod lookup_ultra_overflow {
                 .map(|_| VarTensor::new_advice(cs, 4, 1, 3))
                 .collect::<Vec<_>>();
 
-            let nl = LookupOp::LeakyReLU { slope: 0.0.into() };
+            let nl = LookupOp::Sigmoid { scale: 1.0.into() };
 
             let mut config = BaseConfig::default();
 
@@ -2533,7 +2550,7 @@ mod lookup_ultra_overflow {
                             .layout(
                                 &mut region,
                                 &[self.input.clone()],
-                                Box::new(LookupOp::LeakyReLU { slope: 0.0.into() }),
+                                Box::new(LookupOp::Sigmoid { scale: 1.0.into() }),
                             )
                             .map_err(|_| Error::Synthesis)
                     },
@@ -2546,13 +2563,13 @@ mod lookup_ultra_overflow {
 
     #[test]
     #[ignore]
-    fn relucircuit() {
+    fn sigmoidcircuit() {
         // get some logs fam
         crate::logger::init_logger();
         // parameters
         let a = Tensor::from((0..4).map(|i| Value::known(F::from(i + 1))));
 
-        let circuit = ReLUCircuit::<F> {
+        let circuit = SigmoidCircuit::<F> {
             input: ValTensor::from(a),
         };
 
@@ -2562,7 +2579,7 @@ mod lookup_ultra_overflow {
 
         let pk = crate::pfsys::create_keys::<
             halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme<halo2curves::bn256::Bn256>,
-            ReLUCircuit<F>,
+            SigmoidCircuit<F>,
         >(&circuit, &params, true)
         .unwrap();
 
