@@ -3322,14 +3322,16 @@ dependencies = [
 
 [[package]]
 name = "ndarray"
-version = "0.15.6"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adb12d4e967ec485a5f71c6311fe28158e9d6f4bc4a447b474184d0f91a8fa32"
+checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
 dependencies = [
  "matrixmultiply",
  "num-complex",
  "num-integer",
  "num-traits",
+ "portable-atomic",
+ "portable-atomic-util",
  "rawpointer",
 ]
 
@@ -3856,6 +3858,15 @@ name = "portable-atomic"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90a7d5beecc52a491b54d6dd05c7a45ba1801666a5baad9fdbfc6fef8d2d206c"
+dependencies = [
+ "portable-atomic",
+]
 
 [[package]]
 name = "poseidon"
@@ -5672,8 +5683,8 @@ dependencies = [
 
 [[package]]
 name = "tract-core"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=9b68101a5d13a73cdd1566e40404900a6367cc47#9b68101a5d13a73cdd1566e40404900a6367cc47"
 dependencies = [
  "anyhow",
  "bit-set",
@@ -5696,8 +5707,8 @@ dependencies = [
 
 [[package]]
 name = "tract-data"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=9b68101a5d13a73cdd1566e40404900a6367cc47#9b68101a5d13a73cdd1566e40404900a6367cc47"
 dependencies = [
  "anyhow",
  "downcast-rs",
@@ -5711,6 +5722,7 @@ dependencies = [
  "nom",
  "num-integer",
  "num-traits",
+ "parking_lot",
  "scan_fmt",
  "smallvec",
  "string-interner",
@@ -5718,8 +5730,8 @@ dependencies = [
 
 [[package]]
 name = "tract-hir"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=9b68101a5d13a73cdd1566e40404900a6367cc47#9b68101a5d13a73cdd1566e40404900a6367cc47"
 dependencies = [
  "derive-new",
  "log",
@@ -5728,8 +5740,8 @@ dependencies = [
 
 [[package]]
 name = "tract-linalg"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=9b68101a5d13a73cdd1566e40404900a6367cc47#9b68101a5d13a73cdd1566e40404900a6367cc47"
 dependencies = [
  "byteorder",
  "cc",
@@ -5755,8 +5767,8 @@ dependencies = [
 
 [[package]]
 name = "tract-nnef"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=9b68101a5d13a73cdd1566e40404900a6367cc47#9b68101a5d13a73cdd1566e40404900a6367cc47"
 dependencies = [
  "byteorder",
  "flate2",
@@ -5769,8 +5781,8 @@ dependencies = [
 
 [[package]]
 name = "tract-onnx"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=9b68101a5d13a73cdd1566e40404900a6367cc47#9b68101a5d13a73cdd1566e40404900a6367cc47"
 dependencies = [
  "bytes",
  "derive-new",
@@ -5786,8 +5798,8 @@ dependencies = [
 
 [[package]]
 name = "tract-onnx-opl"
-version = "0.21.6-pre"
-source = "git+https://github.com/sonos/tract/?rev=40c64319291184814d9fea5fdf4fa16f5a4f7116#40c64319291184814d9fea5fdf4fa16f5a4f7116"
+version = "0.21.8-pre"
+source = "git+https://github.com/sonos/tract/?rev=9b68101a5d13a73cdd1566e40404900a6367cc47#9b68101a5d13a73cdd1566e40404900a6367cc47"
 dependencies = [
  "getrandom",
  "log",
