@@ -4155,8 +4155,40 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(assigned_argmin)
 }
 
-/// max layout
-pub(crate) fn max_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+/// Max layout
+/// # Arguments
+/// * `config` - BaseConfig
+/// * `region` - RegionCtx
+/// * `values` - &[ValTensor<F>; 2]
+/// # Returns
+/// * ValTensor<F>
+/// # Example
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::max_comp;
+/// use ezkl::tensor::val::ValTensor;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///    Some(&[5, 2, 3, 0]),
+///   &[1, 1, 2, 2],
+/// ).unwrap());
+/// let y = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///   Some(&[5, 1, 1, 1]),
+///  &[1, 1, 2, 2],
+/// ).unwrap());
+///
+/// let result = max_comp::<Fp>(&dummy_config, &mut dummy_region, &[x, y]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[5, 2, 3, 1]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+///
+pub fn max_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -4176,8 +4208,38 @@ pub(crate) fn max_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     pairwise(config, region, &[max_val_p1, max_val_p2], BaseOp::Add)
 }
 
-/// min comp layout
-pub(crate) fn min_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+/// Min comp layout
+/// # Arguments
+/// * `config` - BaseConfig
+/// * `region` - RegionCtx
+/// * `values` - &[ValTensor<F>; 2]
+/// # Returns
+/// * ValTensor<F>
+/// # Example
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::min_comp;
+/// use ezkl::tensor::val::ValTensor;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///   Some(&[5, 2, 3, 0]),
+///  &[1, 1, 2, 2],
+/// ).unwrap());
+/// let y = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///  Some(&[5, 1, 1, 1]),
+/// &[1, 1, 2, 2],
+/// ).unwrap());
+/// let result = min_comp::<Fp>(&dummy_config, &mut dummy_region, &[x, y]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[5, 1, 1, 0]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+pub fn min_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -4218,6 +4280,435 @@ pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     _sort_ascending(config, region, values)?
         .get_slice(&[0..1])
         .map_err(|e| e.into())
+}
+
+/// floor layout
+/// # Arguments
+/// * `config` - BaseConfig
+/// * `region` - RegionCtx
+/// * `values` - &[ValTensor<F>; 1]
+/// * `scale` - utils::F32
+/// * `legs` - usize
+/// # Returns
+/// * ValTensor<F>
+/// # Example
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::floor;
+/// use ezkl::tensor::val::ValTensor;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+/// Some(&[3, -2, -3, 1]),
+/// &[1, 1, 2, 2],
+/// ).unwrap());
+/// let result = floor::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into(), 2).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[2, -2, -4, 0]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    scale: utils::F32,
+    legs: usize,
+) -> Result<ValTensor<F>, CircuitError> {
+    // decompose with base scale and then set the last element to zero
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
+    // set the last element to zero and then recompose
+    let zero = create_constant_tensor(F::ZERO, 1);
+
+    let assigned_zero = region.assign(&config.custom_gates.inputs[1], &zero)?;
+    let assigned_zero = assigned_zero.get_inner_tensor()?[0].clone();
+    let negative_one = create_constant_tensor(integer_rep_to_felt(-1), 1);
+    let assigned_negative_one = region.assign(&config.custom_gates.inputs[1], &negative_one)?;
+
+    let dims = decomposition.dims().to_vec();
+    let first_dims = decomposition.dims().to_vec()[..decomposition.dims().len() - 1].to_vec();
+
+    let mut incremented_tensor = Tensor::new(None, &first_dims)?;
+
+    let cartesian_coord = first_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let inner_loop_function =
+        |i: usize, region: &mut RegionCtx<F>| -> Result<Tensor<ValType<F>>, CircuitError> {
+            let coord = cartesian_coord[i].clone();
+            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let mut sliced_input = decomposition.get_slice(&slice)?;
+            sliced_input.flatten();
+            let last_elem = sliced_input.last()?;
+
+            let last_elem_is_zero = equals_zero(config, region, &[last_elem.clone()])?;
+            let last_elem_is_not_zero = not(config, region, &[last_elem_is_zero.clone()])?;
+
+            let sign = sliced_input.first()?;
+            let is_negative = equals(config, region, &[sign, assigned_negative_one.clone()])?;
+
+            let is_negative_and_not_zero = and(
+                config,
+                region,
+                &[last_elem_is_not_zero.clone(), is_negative.clone()],
+            )?;
+
+            // increment the penultimate element
+            let incremented_elem = pairwise(
+                config,
+                region,
+                &[
+                    sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
+                    is_negative_and_not_zero.clone(),
+                ],
+                BaseOp::Add,
+            )?;
+
+            let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
+            inner_tensor[sliced_input.len() - 2] =
+                incremented_elem.get_inner_tensor()?.clone()[0].clone();
+
+            // set the last elem to zero
+            inner_tensor[sliced_input.len() - 1] = assigned_zero.clone();
+
+            Ok(inner_tensor.clone())
+        };
+
+    region.apply_in_loop(&mut incremented_tensor, inner_loop_function)?;
+
+    let mut incremented_tensor = incremented_tensor.combine()?;
+    incremented_tensor.reshape(&dims)?;
+
+    recompose(
+        config,
+        region,
+        &[incremented_tensor.into()],
+        &(scale.0 as usize),
+    )
+}
+
+/// ceil layout
+/// # Arguments
+/// * `config` - BaseConfig
+/// * `region` - RegionCtx
+/// * `values` - &[ValTensor<F>; 1]
+/// * `scale` - utils::F32
+/// * `legs` - usize
+/// # Returns
+/// * ValTensor<F>
+/// # Example
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::ceil;
+/// use ezkl::tensor::val::ValTensor;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///  Some(&[3, -2, 3, 1]),
+/// &[1, 1, 2, 2],
+/// ).unwrap());
+/// let result = ceil::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into(), 2).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, -2, 4, 2]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+///
+pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    scale: utils::F32,
+    legs: usize,
+) -> Result<ValTensor<F>, CircuitError> {
+    // decompose with base scale and then set the last element to zero
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
+    // set the last element to zero and then recompose
+    let zero = create_constant_tensor(F::ZERO, 1);
+
+    let assigned_zero = region.assign(&config.custom_gates.inputs[1], &zero)?;
+    let assigned_zero = assigned_zero.get_inner_tensor()?[0].clone();
+    let one = create_constant_tensor(integer_rep_to_felt(1), 1);
+    let assigned_one = region.assign(&config.custom_gates.inputs[1], &one)?;
+
+    let dims = decomposition.dims().to_vec();
+    let first_dims = decomposition.dims().to_vec()[..decomposition.dims().len() - 1].to_vec();
+
+    let mut incremented_tensor = Tensor::new(None, &first_dims)?;
+
+    let cartesian_coord = first_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let inner_loop_function =
+        |i: usize, region: &mut RegionCtx<F>| -> Result<Tensor<ValType<F>>, CircuitError> {
+            let coord = cartesian_coord[i].clone();
+            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let mut sliced_input = decomposition.get_slice(&slice)?;
+            sliced_input.flatten();
+            let last_elem = sliced_input.last()?;
+
+            let last_elem_is_zero = equals_zero(config, region, &[last_elem.clone()])?;
+            let last_elem_is_not_zero = not(config, region, &[last_elem_is_zero.clone()])?;
+
+            let sign = sliced_input.first()?;
+            let is_positive = equals(config, region, &[sign, assigned_one.clone()])?;
+
+            let is_positive_and_not_zero = and(
+                config,
+                region,
+                &[last_elem_is_not_zero.clone(), is_positive.clone()],
+            )?;
+
+            // increment the penultimate element
+            let incremented_elem = pairwise(
+                config,
+                region,
+                &[
+                    sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
+                    is_positive_and_not_zero.clone(),
+                ],
+                BaseOp::Add,
+            )?;
+
+            let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
+            inner_tensor[sliced_input.len() - 2] =
+                incremented_elem.get_inner_tensor()?.clone()[0].clone();
+
+            // set the last elem to zero
+            inner_tensor[sliced_input.len() - 1] = assigned_zero.clone();
+
+            Ok(inner_tensor.clone())
+        };
+
+    region.apply_in_loop(&mut incremented_tensor, inner_loop_function)?;
+
+    let mut incremented_tensor = incremented_tensor.combine()?;
+    incremented_tensor.reshape(&dims)?;
+
+    recompose(
+        config,
+        region,
+        &[incremented_tensor.into()],
+        &(scale.0 as usize),
+    )
+}
+
+/// round layout
+/// # Arguments
+/// * `config` - BaseConfig
+/// * `region` - RegionCtx
+/// * `values` - &[ValTensor<F>; 1]
+/// * `scale` - utils::F32
+/// * `legs` - usize
+/// # Returns
+/// * ValTensor<F>
+/// # Example
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::round;
+/// use ezkl::tensor::val::ValTensor;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+/// Some(&[3, -2, 3, 1]),
+/// &[1, 1, 2, 2],
+/// ).unwrap());
+/// let result = round::<Fp>(&dummy_config, &mut dummy_region, &[x], 4.0.into(), 2).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, -4, 4, 0]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+///
+pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    scale: utils::F32,
+    legs: usize,
+) -> Result<ValTensor<F>, CircuitError> {
+    // decompose with base scale and then set the last element to zero
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
+    // set the last element to zero and then recompose
+    let zero = create_constant_tensor(F::ZERO, 1);
+
+    let assigned_zero = region.assign(&config.custom_gates.inputs[1], &zero)?;
+    let assigned_zero = assigned_zero.get_inner_tensor()?[0].clone();
+    let one = create_constant_tensor(integer_rep_to_felt(1), 1);
+    let assigned_one = region.assign(&config.custom_gates.inputs[1], &one)?;
+    let negative_one = create_constant_tensor(integer_rep_to_felt(-1), 1);
+    let assigned_negative_one = region.assign(&config.custom_gates.inputs[1], &negative_one)?;
+
+    // if scale is not exactly divisible by 2 we warn
+    if scale.0 % 2.0 != 0.0 {
+        log::warn!("Scale is not exactly divisible by 2.0, rounding may not be accurate");
+    }
+
+    let midway_point: ValTensor<F> = create_constant_tensor(
+        integer_rep_to_felt((scale.0 / 2.0).round() as IntegerRep),
+        1,
+    );
+    let assigned_midway_point = region.assign(&config.custom_gates.inputs[1], &midway_point)?;
+
+    let dims = decomposition.dims().to_vec();
+    let first_dims = decomposition.dims().to_vec()[..decomposition.dims().len() - 1].to_vec();
+
+    let mut incremented_tensor = Tensor::new(None, &first_dims)?;
+
+    let cartesian_coord = first_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let inner_loop_function =
+        |i: usize, region: &mut RegionCtx<F>| -> Result<Tensor<ValType<F>>, CircuitError> {
+            let coord = cartesian_coord[i].clone();
+            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let mut sliced_input = decomposition.get_slice(&slice)?;
+            sliced_input.flatten();
+            let last_elem = sliced_input.last()?;
+
+            let sign = sliced_input.first()?;
+            let is_positive = equals(config, region, &[sign.clone(), assigned_one.clone()])?;
+            let is_negative = equals(config, region, &[sign, assigned_negative_one.clone()])?;
+
+            let is_greater_than_midway = greater_equal(
+                config,
+                region,
+                &[last_elem.clone(), assigned_midway_point.clone()],
+            )?;
+
+            // if greater than midway point and positive, increment
+            let is_positive_and_more_than_midway = and(
+                config,
+                region,
+                &[is_positive.clone(), is_greater_than_midway.clone()],
+            )?;
+
+            // is less than midway point and negative, decrement
+            let is_negative_and_more_than_midway = and(
+                config,
+                region,
+                &[is_negative.clone(), is_greater_than_midway],
+            )?;
+
+            let conditions_for_increment = or(
+                config,
+                region,
+                &[
+                    is_positive_and_more_than_midway.clone(),
+                    is_negative_and_more_than_midway.clone(),
+                ],
+            )?;
+
+            // increment the penultimate element
+            let incremented_elem = pairwise(
+                config,
+                region,
+                &[
+                    sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
+                    conditions_for_increment.clone(),
+                ],
+                BaseOp::Add,
+            )?;
+
+            let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
+            inner_tensor[sliced_input.len() - 2] =
+                incremented_elem.get_inner_tensor()?.clone()[0].clone();
+
+            // set the last elem to zero
+            inner_tensor[sliced_input.len() - 1] = assigned_zero.clone();
+
+            Ok(inner_tensor.clone())
+        };
+
+    region.apply_in_loop(&mut incremented_tensor, inner_loop_function)?;
+
+    let mut incremented_tensor = incremented_tensor.combine()?;
+    incremented_tensor.reshape(&dims)?;
+
+    recompose(
+        config,
+        region,
+        &[incremented_tensor.into()],
+        &(scale.0 as usize),
+    )
+}
+
+pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    base: &usize,
+) -> Result<ValTensor<F>, CircuitError> {
+    let input = values[0].clone();
+
+    let first_dims = input.dims().to_vec()[..input.dims().len() - 1].to_vec();
+    let n = input.dims().last().unwrap() - 1;
+
+    let is_assigned = !input.all_prev_assigned();
+
+    let bases: ValTensor<F> = Tensor::from(
+        (0..n)
+            .rev()
+            .map(|x| ValType::Constant(integer_rep_to_felt(base.pow(x as u32) as IntegerRep))),
+    )
+    .into();
+
+    // multiply and sum the values
+    let mut output: Tensor<Tensor<ValType<F>>> = Tensor::new(None, &first_dims)?;
+
+    let cartesian_coord = first_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let inner_loop_function =
+        |i: usize, region: &mut RegionCtx<F>| -> Result<Tensor<ValType<F>>, CircuitError> {
+            let coord = cartesian_coord[i].clone();
+            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let mut sliced_input = input.get_slice(&slice)?;
+            sliced_input.flatten();
+
+            if !is_assigned {
+                sliced_input = region.assign(&config.custom_gates.inputs[0], &sliced_input)?;
+            }
+
+            // get the sign bit and make sure it is valid
+            let sign = sliced_input.first()?;
+            let rest = sliced_input.get_slice(&[1..sliced_input.len()])?;
+
+            let prod_decomp = dot(config, region, &[rest, bases.clone()])?;
+
+            let signed_decomp = pairwise(config, region, &[prod_decomp, sign], BaseOp::Mult)?;
+
+            Ok(signed_decomp.get_inner_tensor()?.clone())
+        };
+
+    region.apply_in_loop(&mut output, inner_loop_function)?;
+
+    let mut combined_output = output.combine()?;
+
+    combined_output.reshape(&first_dims)?;
+
+    Ok(combined_output.into())
 }
 
 pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
