@@ -677,11 +677,12 @@ pub(crate) async fn get_srs_cmd(
                 pb.finish_with_message("SRS validated.");
 
             info!("Saving SRS to disk...");
-            let mut file = std::fs::File::create(get_srs_path(k, srs_path.clone(), commitment))?;
+            let computed_srs_path = get_srs_path(k, srs_path.clone(), commitment);
+            let mut file = std::fs::File::create(&computed_srs_path)?;
             let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
             params.write(&mut buffer)?;
 
-            info!("Saved SRS to disk.");
+            info!("Saved SRS to {}.", computed_srs_path.as_os_str().to_str().unwrap_or("disk"));
 
             info!("SRS downloaded");
         } else {

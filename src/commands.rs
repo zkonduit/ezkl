@@ -508,7 +508,7 @@ pub enum Commands {
         /// Gets an SRS from a circuit settings file.
     #[command(name = "get-srs")]
     GetSrs {
-        /// The path to output the desired srs file, if set to None will save to $EZKL_REPO_PATH/srs
+        /// The path to output the desired srs file, if set to None will save to ~/.ezkl/srs
         #[arg(long, default_value = None, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         /// Path to the circuit settings .json file to read in logrows from. Overriden by logrows if specified.
@@ -555,7 +555,7 @@ pub enum Commands {
         /// The path to save the proving key to
         #[arg(long, default_value = DEFAULT_PK_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
         pk_path: Option<PathBuf>,
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
+        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
@@ -582,7 +582,7 @@ pub enum Commands {
         /// The path to output the proof file to
         #[arg(long, default_value = DEFAULT_PROOF_AGGREGATED, value_hint = clap::ValueHint::FilePath)]
         proof_path: Option<PathBuf>,
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
+        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long)]
         srs_path: Option<PathBuf>,
         #[arg(
@@ -624,7 +624,7 @@ pub enum Commands {
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT, value_hint = clap::ValueHint::FilePath)]
         compiled_circuit: Option<PathBuf>,
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
+        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         /// The path to output the verification key file to
@@ -701,7 +701,7 @@ pub enum Commands {
         /// The path to output the proof file to
         #[arg(long, default_value = DEFAULT_PROOF, value_hint = clap::ValueHint::FilePath)]
         proof_path: Option<PathBuf>,
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
+        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         #[arg(
@@ -733,7 +733,7 @@ pub enum Commands {
         /// Creates an Evm verifier for a single proof
     #[command(name = "create-evm-verifier")]
     CreateEvmVerifier {
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
+        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
@@ -755,7 +755,7 @@ pub enum Commands {
         /// Creates an Evm verifier artifact for a single proof to be used by the reusable verifier
     #[command(name = "create-evm-vka")]
     CreateEvmVKArtifact {
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
+        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
@@ -798,7 +798,7 @@ pub enum Commands {
         /// Creates an Evm verifier for an aggregate proof
     #[command(name = "create-evm-verifier-aggr")]
     CreateEvmVerifierAggr {
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
+        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         /// The path to load the desired verification key file
@@ -831,7 +831,7 @@ pub enum Commands {
         /// The path to the verification key file (generated using the setup command)
         #[arg(long, default_value = DEFAULT_VK, value_hint = clap::ValueHint::FilePath)]
         vk_path: Option<PathBuf>,
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
+        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         /// Reduce SRS logrows to the number of instances rather than the number of logrows used for proofs (only works if the srs were generated in the same ceremony)
@@ -849,7 +849,7 @@ pub enum Commands {
         /// reduced srs
         #[arg(long, default_value = DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION, action = clap::ArgAction::SetTrue)]
         reduced_srs: Option<bool>,
-        /// The path to SRS, if None will use $EZKL_REPO_PATH/srs/kzg{logrows}.srs
+        /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
         /// logrows used for aggregation circuit
