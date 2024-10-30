@@ -4323,10 +4323,12 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // set the last element to zero and then recompose
     let zero = create_constant_tensor(F::ZERO, 1);
 
-    let assigned_zero = region.assign(&config.custom_gates.inputs[1], &zero)?;
+    let assigned_zero = region.assign(&config.custom_gates.inputs[0], &zero)?;
     let assigned_zero = assigned_zero.get_inner_tensor()?[0].clone();
     let negative_one = create_constant_tensor(integer_rep_to_felt(-1), 1);
     let assigned_negative_one = region.assign(&config.custom_gates.inputs[1], &negative_one)?;
+
+    region.increment(1);
 
     let dims = decomposition.dims().to_vec();
     let first_dims = decomposition.dims().to_vec()[..decomposition.dims().len() - 1].to_vec();
@@ -4435,10 +4437,12 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // set the last element to zero and then recompose
     let zero = create_constant_tensor(F::ZERO, 1);
 
-    let assigned_zero = region.assign(&config.custom_gates.inputs[1], &zero)?;
+    let assigned_zero = region.assign(&config.custom_gates.inputs[0], &zero)?;
     let assigned_zero = assigned_zero.get_inner_tensor()?[0].clone();
     let one = create_constant_tensor(integer_rep_to_felt(1), 1);
     let assigned_one = region.assign(&config.custom_gates.inputs[1], &one)?;
+
+    region.increment(1);
 
     let dims = decomposition.dims().to_vec();
     let first_dims = decomposition.dims().to_vec()[..decomposition.dims().len() - 1].to_vec();
@@ -4547,12 +4551,14 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // set the last element to zero and then recompose
     let zero = create_constant_tensor(F::ZERO, 1);
 
-    let assigned_zero = region.assign(&config.custom_gates.inputs[1], &zero)?;
+    let assigned_zero = region.assign(&config.custom_gates.inputs[0], &zero)?;
     let assigned_zero = assigned_zero.get_inner_tensor()?[0].clone();
     let one = create_constant_tensor(integer_rep_to_felt(1), 1);
     let assigned_one = region.assign(&config.custom_gates.inputs[1], &one)?;
     let negative_one = create_constant_tensor(integer_rep_to_felt(-1), 1);
-    let assigned_negative_one = region.assign(&config.custom_gates.inputs[1], &negative_one)?;
+    let assigned_negative_one = region.assign(&config.custom_gates.output, &negative_one)?;
+
+    region.increment(1);
 
     // if scale is not exactly divisible by 2 we warn
     if scale.0 % 2.0 != 0.0 {
