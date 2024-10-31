@@ -852,9 +852,11 @@ mod native_tests {
             fn kzg_prove_and_verify_tight_lookup_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
+                let path = test_dir.into_path();
+                let path = path.to_str().unwrap();
+                crate::native_tests::mv_test_(path, test);
                prove_and_verify(path, test.to_string(), "safe", "private", "private", "public", 1, None, false, "single", Commitments::KZG, 1);
-               test_dir.close().unwrap();
+            //    test_dir.close().unwrap();
             }
 
             #(#[test_case(TESTS[N])])*
@@ -1632,7 +1634,6 @@ mod native_tests {
 
         let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
             .args(args)
-            .stdout(std::process::Stdio::null())
             .status()
             .expect("failed to execute process");
         assert!(status.success());

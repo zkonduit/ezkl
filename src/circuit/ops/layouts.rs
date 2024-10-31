@@ -4320,11 +4320,10 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
     let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
-    // set the last element to zero and then recompose
-    let zero = create_constant_tensor(F::ZERO, 1);
+    // set the last element to zero and then recompose, we don't actually need to assign here
+    // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
+    let zero = ValType::Constant(F::ZERO);
 
-    let assigned_zero = region.assign(&config.custom_gates.inputs[0], &zero)?;
-    let assigned_zero = assigned_zero.get_inner_tensor()?[0].clone();
     let negative_one = create_constant_tensor(integer_rep_to_felt(-1), 1);
     let assigned_negative_one = region.assign(&config.custom_gates.inputs[1], &negative_one)?;
 
@@ -4377,7 +4376,7 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                 incremented_elem.get_inner_tensor()?.clone()[0].clone();
 
             // set the last elem to zero
-            inner_tensor[sliced_input.len() - 1] = assigned_zero.clone();
+            inner_tensor[sliced_input.len() - 1] = zero.clone();
 
             Ok(inner_tensor.clone())
         };
@@ -4434,11 +4433,10 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
     let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
-    // set the last element to zero and then recompose
-    let zero = create_constant_tensor(F::ZERO, 1);
+    // set the last element to zero and then recompose, we don't actually need to assign here
+    // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
+    let zero = ValType::Constant(F::ZERO);
 
-    let assigned_zero = region.assign(&config.custom_gates.inputs[0], &zero)?;
-    let assigned_zero = assigned_zero.get_inner_tensor()?[0].clone();
     let one = create_constant_tensor(integer_rep_to_felt(1), 1);
     let assigned_one = region.assign(&config.custom_gates.inputs[1], &one)?;
 
@@ -4491,7 +4489,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                 incremented_elem.get_inner_tensor()?.clone()[0].clone();
 
             // set the last elem to zero
-            inner_tensor[sliced_input.len() - 1] = assigned_zero.clone();
+            inner_tensor[sliced_input.len() - 1] = zero.clone();
 
             Ok(inner_tensor.clone())
         };
