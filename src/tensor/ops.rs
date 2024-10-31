@@ -27,7 +27,7 @@ pub fn get_rep(
     n: usize,
 ) -> Result<Vec<IntegerRep>, DecompositionError> {
     // check if x is too large
-    if x.abs() > (base.pow(n as u32) as IntegerRep) {
+    if x.abs() > (base.pow(n as u32) as IntegerRep) - 1 {
         return Err(DecompositionError::TooLarge(*x, base, n));
     }
     let mut rep = vec![0; n + 1];
@@ -1421,85 +1421,6 @@ pub fn slice<T: TensorType + Send + Sync>(
 pub mod nonlinearities {
     use super::*;
 
-    /// Ceiling operator.
-    /// # Arguments
-    /// * `a` - Tensor
-    /// * `scale` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    ///
-    /// use ezkl::tensor::ops::nonlinearities::ceil;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///    Some(&[1, 2, 3, 4, 5, 6]),
-    ///  &[3, 2],
-    /// ).unwrap();
-    /// let result = ceil(&x, 2.0);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn ceil(a: &Tensor<IntegerRep>, scale: f64) -> Tensor<IntegerRep> {
-        a.par_enum_map(|_, a_i| {
-            let kix = (a_i as f64) / scale;
-            let rounded = kix.ceil() * scale;
-            Ok::<_, TensorError>(rounded as IntegerRep)
-        })
-        .unwrap()
-    }
-
-    /// Floor operator.
-    /// # Arguments
-    /// * `a` - Tensor
-    /// * `scale` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::floor;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///   Some(&[1, 2, 3, 4, 5, 6]),
-    ///  &[3, 2],
-    /// ).unwrap();
-    /// let result = floor(&x, 2.0);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 2, 2, 4, 4, 6]), &[3, 2]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn floor(a: &Tensor<IntegerRep>, scale: f64) -> Tensor<IntegerRep> {
-        a.par_enum_map(|_, a_i| {
-            let kix = (a_i as f64) / scale;
-            let rounded = kix.floor() * scale;
-            Ok::<_, TensorError>(rounded as IntegerRep)
-        })
-        .unwrap()
-    }
-
-    /// Round operator.
-    /// # Arguments
-    /// * `a` - Tensor
-    /// * `scale` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::round;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///   Some(&[1, 2, 3, 4, 5, 6]),
-    /// &[3, 2],
-    /// ).unwrap();
-    /// let result = round(&x, 2.0);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 2, 4, 4, 6, 6]), &[3, 2]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn round(a: &Tensor<IntegerRep>, scale: f64) -> Tensor<IntegerRep> {
-        a.par_enum_map(|_, a_i| {
-            let kix = (a_i as f64) / scale;
-            let rounded = kix.round() * scale;
-            Ok::<_, TensorError>(rounded as IntegerRep)
-        })
-        .unwrap()
-    }
-
     /// Round half to even operator.
     /// # Arguments
     /// * `a` - Tensor
@@ -1719,27 +1640,6 @@ pub mod nonlinearities {
             Ok::<_, TensorError>(rounded as IntegerRep)
         })
         .unwrap()
-    }
-
-    /// Elementwise applies sign to a tensor of integers.
-    /// # Arguments
-    /// * `a` - Tensor
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::sign;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///    Some(&[-2, 15, 2, 1, 1, 0]),
-    ///  &[2, 3],
-    /// ).unwrap();
-    /// let result = sign(&x);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[-1, 1, 1, 1, 1, 0]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn sign(a: &Tensor<IntegerRep>) -> Tensor<IntegerRep> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(a_i.signum()))
-            .unwrap()
     }
 
     /// Elementwise applies square root to a tensor of integers.
@@ -2225,101 +2125,6 @@ pub mod nonlinearities {
         .unwrap()
     }
 
-    /// Elementwise applies leaky relu to a tensor of integers.
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `scale` - Single value
-    /// * `slope` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::leakyrelu;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///     Some(&[2, 15, 2, 1, 1, -5]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let result = leakyrelu(&x, 0.1);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 15, 2, 1, 1, -1]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn leakyrelu(a: &Tensor<IntegerRep>, slope: f64) -> Tensor<IntegerRep> {
-        a.par_enum_map(|_, a_i| {
-            let rounded = if a_i < 0 {
-                let d_inv_x = (slope) * (a_i as f64);
-                d_inv_x.round() as IntegerRep
-            } else {
-                let d_inv_x = a_i as f64;
-                d_inv_x.round() as IntegerRep
-            };
-            Ok::<_, TensorError>(rounded)
-        })
-        .unwrap()
-    }
-
-    /// Elementwise applies max to a tensor of integers.
-    /// # Arguments
-    /// * `a` - Tensor
-    /// * `b` - scalar
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::max;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///    Some(&[2, 15, 2, 1, 1, -5]),
-    ///   &[2, 3],
-    /// ).unwrap();
-    /// let result = max(&x, 1.0, 1.0);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 15, 2, 1, 1, 1]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn max(a: &Tensor<IntegerRep>, scale_input: f64, threshold: f64) -> Tensor<IntegerRep> {
-        // calculate value of output
-        a.par_enum_map(|_, a_i| {
-            let d_inv_x = (a_i as f64) / scale_input;
-            let rounded = if d_inv_x <= threshold {
-                (threshold * scale_input).round() as IntegerRep
-            } else {
-                (d_inv_x * scale_input).round() as IntegerRep
-            };
-            Ok::<_, TensorError>(rounded)
-        })
-        .unwrap()
-    }
-
-    /// Elementwise applies min to a tensor of integers.
-    /// # Arguments
-    /// * `a` - Tensor
-    /// * `b` - scalar
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::min;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///    Some(&[2, 15, 2, 1, 1, -5]),
-    ///   &[2, 3],
-    /// ).unwrap();
-    /// let result = min(&x, 1.0, 2.0);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 2, 2, 1, 1, -5]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn min(a: &Tensor<IntegerRep>, scale_input: f64, threshold: f64) -> Tensor<IntegerRep> {
-        // calculate value of output
-        a.par_enum_map(|_, a_i| {
-            let d_inv_x = (a_i as f64) / scale_input;
-            let rounded = if d_inv_x >= threshold {
-                (threshold * scale_input).round() as IntegerRep
-            } else {
-                (d_inv_x * scale_input).round() as IntegerRep
-            };
-            Ok::<_, TensorError>(rounded)
-        })
-        .unwrap()
-    }
-
     /// Elementwise divides a tensor with a const integer element.
     /// # Arguments
     ///
@@ -2399,104 +2204,6 @@ pub mod nonlinearities {
             Ok::<_, TensorError>(d_inv_x.round() as IntegerRep)
         })
         .unwrap()
-    }
-
-    /// Elementwise greater than
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `b` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::greater_than;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///     Some(&[2, 1, 2, 7, 1, 1]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let k = 2.0;
-    /// let result = greater_than(&x, k);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 1, 0, 0]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn greater_than(a: &Tensor<IntegerRep>, b: f64) -> Tensor<IntegerRep> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(IntegerRep::from((a_i as f64 - b) > 0_f64)))
-            .unwrap()
-    }
-
-    /// Elementwise greater than
-    /// # Arguments
-    ///
-    /// * `a` - Tensor
-    /// * `b` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::greater_than_equal;
-    /// let x = Tensor::<IntegerRep>::new(
-    ///     Some(&[2, 1, 2, 7, 1, 1]),
-    ///     &[2, 3],
-    /// ).unwrap();
-    /// let k = 2.0;
-    /// let result = greater_than_equal(&x, k);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 1, 1, 0, 0]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn greater_than_equal(a: &Tensor<IntegerRep>, b: f64) -> Tensor<IntegerRep> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(IntegerRep::from((a_i as f64 - b) >= 0_f64)))
-            .unwrap()
-    }
-
-    /// Elementwise less than
-    /// # Arguments
-    /// * `a` - Tensor
-    /// * `b` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::less_than;
-    ///
-    /// let x = Tensor::<IntegerRep>::new(
-    ///    Some(&[2, 1, 2, 7, 1, 1]),
-    ///  &[2, 3],
-    /// ).unwrap();
-    /// let k = 2.0;
-    ///
-    /// let result = less_than(&x, k);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 0, 0, 1, 1]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn less_than(a: &Tensor<IntegerRep>, b: f64) -> Tensor<IntegerRep> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(IntegerRep::from((a_i as f64 - b) < 0_f64)))
-            .unwrap()
-    }
-
-    /// Elementwise less than
-    /// # Arguments
-    /// * `a` - Tensor
-    /// * `b` - Single value
-    /// # Examples
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::less_than_equal;
-    ///
-    /// let x = Tensor::<IntegerRep>::new(
-    ///    Some(&[2, 1, 2, 7, 1, 1]),
-    ///  &[2, 3],
-    /// ).unwrap();
-    /// let k = 2.0;
-    ///
-    /// let result = less_than_equal(&x, k);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 0, 1, 1]), &[2, 3]).unwrap();
-    /// assert_eq!(result, expected);
-    /// ```
-    pub fn less_than_equal(a: &Tensor<IntegerRep>, b: f64) -> Tensor<IntegerRep> {
-        a.par_enum_map(|_, a_i| Ok::<_, TensorError>(IntegerRep::from((a_i as f64 - b) <= 0_f64)))
-            .unwrap()
     }
 }
 

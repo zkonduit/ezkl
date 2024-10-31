@@ -1083,14 +1083,17 @@ pub fn new_op_from_onnx(
                 pool_dims: kernel_shape.to_vec(),
             })
         }
-        "Ceil" => SupportedOp::Nonlinear(LookupOp::Ceil {
+        "Ceil" => SupportedOp::Hybrid(HybridOp::Ceil {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            legs: run_args.decomp_legs,
         }),
-        "Floor" => SupportedOp::Nonlinear(LookupOp::Floor {
+        "Floor" => SupportedOp::Hybrid(HybridOp::Floor {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            legs: run_args.decomp_legs,
         }),
-        "Round" => SupportedOp::Nonlinear(LookupOp::Round {
+        "Round" => SupportedOp::Hybrid(HybridOp::Round {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            legs: run_args.decomp_legs,
         }),
         "RoundHalfToEven" => SupportedOp::Nonlinear(LookupOp::RoundHalfToEven {
             scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),

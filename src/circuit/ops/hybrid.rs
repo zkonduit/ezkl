@@ -13,6 +13,18 @@ use serde::{Deserialize, Serialize};
 /// An enum representing the operations that consist of both lookups and arithmetic operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HybridOp {
+    Ceil {
+        scale: utils::F32,
+        legs: usize,
+    },
+    Floor {
+        scale: utils::F32,
+        legs: usize,
+    },
+    Round {
+        scale: utils::F32,
+        legs: usize,
+    },
     Recip {
         input_scale: utils::F32,
         output_scale: utils::F32,
@@ -96,6 +108,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
 
     fn as_string(&self) -> String {
         match self {
+            HybridOp::Ceil { scale, legs } => format!("CEIL(scale={}, legs={})", scale, legs),
+            HybridOp::Floor { scale, legs } => format!("FLOOR(scale={}, legs={})", scale, legs),
+            HybridOp::Round { scale, legs } => format!("ROUND(scale={}, legs={})", scale, legs),
             HybridOp::Max => format!("MAX"),
             HybridOp::Min => format!("MIN"),
             HybridOp::Recip {
@@ -166,6 +181,15 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
+            HybridOp::Ceil { scale, legs } => {
+                layouts::ceil(config, region, values[..].try_into()?, *scale, *legs)?
+            }
+            HybridOp::Floor { scale, legs } => {
+                layouts::floor(config, region, values[..].try_into()?, *scale, *legs)?
+            }
+            HybridOp::Round { scale, legs } => {
+                layouts::round(config, region, values[..].try_into()?, *scale, *legs)?
+            }
             HybridOp::Max => layouts::max_comp(config, region, values[..].try_into()?)?,
             HybridOp::Min => layouts::min_comp(config, region, values[..].try_into()?)?,
             HybridOp::SumPool {

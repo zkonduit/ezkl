@@ -21,9 +21,9 @@ def main():
     torch_model = Circuit()
     # Input to the model
     shape = [3, 2, 3]
-    w = 0.1*torch.rand(1, *shape, requires_grad=True)
-    x = 0.1*torch.rand(1, *shape, requires_grad=True)
-    y = 0.1*torch.rand(1, *shape, requires_grad=True)
+    w = 2 * torch.rand(1, *shape, requires_grad=True) - 1
+    x = 2 * torch.rand(1, *shape, requires_grad=True) - 1
+    y = 2 * torch.rand(1, *shape, requires_grad=True) - 1
     torch_out = torch_model(w, x, y)
     # Export the model
     torch.onnx.export(torch_model,               # model being run

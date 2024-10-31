@@ -17,9 +17,6 @@ use halo2curves::ff::PrimeField;
 pub enum LookupOp {
     Div { denom: utils::F32 },
     Cast { scale: utils::F32 },
-    Ceil { scale: utils::F32 },
-    Floor { scale: utils::F32 },
-    Round { scale: utils::F32 },
     RoundHalfToEven { scale: utils::F32 },
     Sqrt { scale: utils::F32 },
     Rsqrt { scale: utils::F32 },
@@ -54,9 +51,6 @@ impl LookupOp {
     /// as path
     pub fn as_path(&self) -> String {
         match self {
-            LookupOp::Ceil { scale } => format!("ceil_{}", scale),
-            LookupOp::Floor { scale } => format!("floor_{}", scale),
-            LookupOp::Round { scale } => format!("round_{}", scale),
             LookupOp::RoundHalfToEven { scale } => format!("round_half_to_even_{}", scale),
             LookupOp::Pow { scale, a } => format!("pow_{}_{}", scale, a),
             LookupOp::Div { denom } => format!("div_{}", denom),
@@ -91,15 +85,6 @@ impl LookupOp {
         let x = x[0].clone().map(|x| felt_to_integer_rep(x));
         let res =
             match &self {
-                LookupOp::Ceil { scale } => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::ceil(&x, scale.into()))
-                }
-                LookupOp::Floor { scale } => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::floor(&x, scale.into()))
-                }
-                LookupOp::Round { scale } => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::round(&x, scale.into()))
-                }
                 LookupOp::RoundHalfToEven { scale } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::round_half_to_even(&x, scale.into()),
                 ),
@@ -186,9 +171,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         match self {
-            LookupOp::Ceil { scale } => format!("CEIL(scale={})", scale),
-            LookupOp::Floor { scale } => format!("FLOOR(scale={})", scale),
-            LookupOp::Round { scale } => format!("ROUND(scale={})", scale),
             LookupOp::RoundHalfToEven { scale } => format!("ROUND_HALF_TO_EVEN(scale={})", scale),
             LookupOp::Pow { a, scale } => format!("POW(scale={}, exponent={})", scale, a),
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
