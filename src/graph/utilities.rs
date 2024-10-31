@@ -803,7 +803,7 @@ pub fn new_op_from_onnx(
             }
         }
         "Recip" => {
-            let in_scale = inputs[0].out_scales()[0];
+            let in_scale = input_scales[0];
             let max_scale = std::cmp::max(scales.get_max(), in_scale);
             // If the input scale is larger than the params scale
             SupportedOp::Hybrid(HybridOp::Recip {
@@ -837,61 +837,61 @@ pub fn new_op_from_onnx(
         "Abs" => SupportedOp::Linear(PolyOp::Abs),
         "Neg" => SupportedOp::Linear(PolyOp::Neg),
         "HardSwish" => SupportedOp::Nonlinear(LookupOp::HardSwish {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Sqrt" => SupportedOp::Nonlinear(LookupOp::Sqrt {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Rsqrt" => SupportedOp::Nonlinear(LookupOp::Rsqrt {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Exp" => SupportedOp::Nonlinear(LookupOp::Exp {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Ln" => SupportedOp::Nonlinear(LookupOp::Ln {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Sin" => SupportedOp::Nonlinear(LookupOp::Sin {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Cos" => SupportedOp::Nonlinear(LookupOp::Cos {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Tan" => SupportedOp::Nonlinear(LookupOp::Tan {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Asin" => SupportedOp::Nonlinear(LookupOp::ASin {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Acos" => SupportedOp::Nonlinear(LookupOp::ACos {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Atan" => SupportedOp::Nonlinear(LookupOp::ATan {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Sinh" => SupportedOp::Nonlinear(LookupOp::Sinh {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Cosh" => SupportedOp::Nonlinear(LookupOp::Cosh {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Tanh" => SupportedOp::Nonlinear(LookupOp::Tanh {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Asinh" => SupportedOp::Nonlinear(LookupOp::ASinh {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Acosh" => SupportedOp::Nonlinear(LookupOp::ACosh {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Atanh" => SupportedOp::Nonlinear(LookupOp::ATanh {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Erf" => SupportedOp::Nonlinear(LookupOp::Erf {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
         }),
         "Source" => {
             let dt = node.outputs[0].fact.datum_type;
@@ -935,11 +935,9 @@ pub fn new_op_from_onnx(
                         replace_const(
                             0,
                             0,
-                            SupportedOp::Nonlinear(LookupOp::Cast {
-                                scale: crate::circuit::utils::F32(scale_to_multiplier(
-                                    input_scales[0],
-                                )
-                                    as f32),
+                            SupportedOp::Hybrid(HybridOp::Floor {
+                                scale: scale_to_multiplier(input_scales[0]).into(),
+                                legs: run_args.decomp_legs,
                             }),
                         )?
                     } else {
@@ -1045,7 +1043,7 @@ pub fn new_op_from_onnx(
                 }
             };
 
-            let in_scale = inputs[0].out_scales()[0];
+            let in_scale = input_scales[0];
             let max_scale = std::cmp::max(scales.get_max(), in_scale);
 
             SupportedOp::Hybrid(HybridOp::Softmax {
@@ -1084,19 +1082,20 @@ pub fn new_op_from_onnx(
             })
         }
         "Ceil" => SupportedOp::Hybrid(HybridOp::Ceil {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
             legs: run_args.decomp_legs,
         }),
         "Floor" => SupportedOp::Hybrid(HybridOp::Floor {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
             legs: run_args.decomp_legs,
         }),
         "Round" => SupportedOp::Hybrid(HybridOp::Round {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+            scale: scale_to_multiplier(input_scales[0]).into(),
             legs: run_args.decomp_legs,
         }),
-        "RoundHalfToEven" => SupportedOp::Nonlinear(LookupOp::RoundHalfToEven {
-            scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+        "RoundHalfToEven" => SupportedOp::Hybrid(HybridOp::RoundHalfToEven {
+            scale: scale_to_multiplier(input_scales[0]).into(),
+            legs: run_args.decomp_legs,
         }),
         "Sign" => SupportedOp::Linear(PolyOp::Sign),
         "Pow" => {
@@ -1116,7 +1115,7 @@ pub fn new_op_from_onnx(
                     SupportedOp::Linear(PolyOp::Pow(exponent as u32))
                 } else {
                     SupportedOp::Nonlinear(LookupOp::Pow {
-                        scale: scale_to_multiplier(inputs[0].out_scales()[0]).into(),
+                        scale: scale_to_multiplier(input_scales[0]).into(),
                         a: crate::circuit::utils::F32(exponent),
                     })
                 }

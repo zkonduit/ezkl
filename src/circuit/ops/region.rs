@@ -474,6 +474,17 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         Ok(())
     }
 
+    /// Update the max and min forcefully 
+    pub fn update_max_min_lookup_inputs_force(
+        &mut self,
+        min: IntegerRep,
+        max: IntegerRep,
+    ) -> Result<(), CircuitError> {
+        self.statistics.max_lookup_inputs = self.statistics.max_lookup_inputs.max(max);
+        self.statistics.min_lookup_inputs = self.statistics.min_lookup_inputs.min(min);
+        Ok(())
+    }
+
     /// Update the max and min from inputs
     pub fn update_max_min_lookup_range(&mut self, range: Range) -> Result<(), CircuitError> {
         if range.0 > range.1 {

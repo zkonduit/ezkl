@@ -150,12 +150,16 @@ pub fn num_cols_required(range_len: IntegerRep, col_size: usize) -> usize {
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
+    /// get largest element represented by the range
+    pub fn largest(&self) -> IntegerRep {
+        self.range.0 + (self.col_size * self.table_inputs.len() - 1) as IntegerRep
+    }
     fn name(&self) -> String {
         format!(
             "{}_{}_{}",
             self.nonlinearity.as_path(),
             self.range.0,
-            self.range.1
+            self.largest()
         )
     }
     /// Configures the table.
@@ -222,7 +226,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         }
 
         let smallest = self.range.0;
-        let largest = self.range.1;
+        let largest = self.largest();
 
         let gen_table = || -> Result<(Tensor<F>, Tensor<F>), crate::tensor::TensorError> {
             let inputs = Tensor::from(smallest..=largest)
@@ -291,6 +295,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
 
                                 row_offset += chunk_idx * self.col_size;
                                 let (x, y) = self.cartesian_coord(row_offset);
+
                                 if !preassigned_input {
                                     table.assign_cell(
                                         || format!("nl_i_col row {}", row_offset),
