@@ -4654,6 +4654,155 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     )
 }
 
+/// round half to even layout
+/// # Arguments
+/// * `config` - BaseConfig
+/// * `region` - RegionCtx
+/// * `values` - &[ValTensor<F>; 1]
+/// * `scale` - utils::F32
+/// * `legs` - usize
+/// # Returns
+/// * ValTensor<F>
+/// # Example
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::round;
+/// use ezkl::tensor::val::ValTensor;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+/// Some(&[3, -2, 3, 1]),
+/// &[1, 1, 2, 2],
+/// ).unwrap());
+/// let result = round::<Fp>(&dummy_config, &mut dummy_region, &[x], 4.0.into(), 2).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, -4, 4, 0]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+///
+pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    scale: utils::F32,
+    legs: usize,
+) -> Result<ValTensor<F>, CircuitError> {
+    // decompose with base scale and then set the last element to zero
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
+    // set the last element to zero and then recompose, we don't actually need to assign here
+    // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
+    let zero = ValType::Constant(F::ZERO);
+
+    // if scale is not exactly divisible by 2 we warn
+    if scale.0 % 2.0 != 0.0 {
+        log::warn!("Scale is not exactly divisible by 2.0, rounding may not be accurate");
+    }
+
+    let midway_point: ValTensor<F> = create_constant_tensor(
+        integer_rep_to_felt((scale.0 / 2.0).round() as IntegerRep),
+        1,
+    );
+    let assigned_midway_point = region.assign(&config.custom_gates.inputs[1], &midway_point)?;
+
+    region.increment(1);
+
+    let dims = decomposition.dims().to_vec();
+    let first_dims = decomposition.dims().to_vec()[..decomposition.dims().len() - 1].to_vec();
+
+    let mut incremented_tensor = Tensor::new(None, &first_dims)?;
+
+    let cartesian_coord = first_dims
+        .iter()
+        .map(|x| 0..*x)
+        .multi_cartesian_product()
+        .collect::<Vec<_>>();
+
+    let inner_loop_function =
+        |i: usize, region: &mut RegionCtx<F>| -> Result<Tensor<ValType<F>>, CircuitError> {
+            let coord = cartesian_coord[i].clone();
+            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let mut sliced_input = decomposition.get_slice(&slice)?;
+            sliced_input.flatten();
+            let last_elem = sliced_input.last()?;
+
+            let penultimate_elem =
+                sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?;
+
+            let is_equal_to_midway = equals(
+                config,
+                region,
+                &[last_elem.clone(), assigned_midway_point.clone()],
+            )?;
+            // penultimate_elem is equal to midway point and even, do nothing
+            let is_odd = nonlinearity(
+                config,
+                region,
+                &[penultimate_elem.clone()],
+                &LookupOp::IsOdd,
+            )?;
+
+            let is_odd_and_equal_to_midway = and(
+                config,
+                region,
+                &[is_odd.clone(), is_equal_to_midway.clone()],
+            )?;
+
+            let is_greater_than_midway = greater(
+                config,
+                region,
+                &[last_elem.clone(), assigned_midway_point.clone()],
+            )?;
+
+            // if the number is equal to midway point and odd increment, or if it is is_greater_than_midway
+            let is_odd_and_equal_to_midway_or_greater_than_midway = or(
+                config,
+                region,
+                &[
+                    is_odd_and_equal_to_midway.clone(),
+                    is_greater_than_midway.clone(),
+                ],
+            )?;
+
+            // increment the penultimate element
+            let incremented_elem = pairwise(
+                config,
+                region,
+                &[
+                    sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?,
+                    is_odd_and_equal_to_midway_or_greater_than_midway.clone(),
+                ],
+                BaseOp::Add,
+            )?;
+
+            let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
+            inner_tensor[sliced_input.len() - 2] =
+                incremented_elem.get_inner_tensor()?.clone()[0].clone();
+
+            // set the last elem to zero
+            inner_tensor[sliced_input.len() - 1] = zero.clone();
+
+            Ok(inner_tensor.clone())
+        };
+
+    region.update_max_min_lookup_inputs_force(0, scale.0 as IntegerRep)?;
+
+    region.apply_in_loop(&mut incremented_tensor, inner_loop_function)?;
+
+    let mut incremented_tensor = incremented_tensor.combine()?;
+    incremented_tensor.reshape(&dims)?;
+
+    recompose(
+        config,
+        region,
+        &[incremented_tensor.into()],
+        &(scale.0 as usize),
+    )
+}
+
 pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,

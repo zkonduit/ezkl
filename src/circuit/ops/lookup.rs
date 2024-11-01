@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use crate::{
     circuit::{layouts, table::Range, utils},
     fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep},
-    graph::multiplier_to_scale,
     tensor::{self, Tensor, TensorError, TensorType},
 };
 
@@ -16,8 +15,7 @@ use halo2curves::ff::PrimeField;
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Serialize)]
 pub enum LookupOp {
     Div { denom: utils::F32 },
-    Cast { scale: utils::F32 },
-    RoundHalfToEven { scale: utils::F32 },
+    IsOdd,
     Sqrt { scale: utils::F32 },
     Rsqrt { scale: utils::F32 },
     Sigmoid { scale: utils::F32 },
@@ -51,10 +49,9 @@ impl LookupOp {
     /// as path
     pub fn as_path(&self) -> String {
         match self {
-            LookupOp::RoundHalfToEven { scale } => format!("round_half_to_even_{}", scale),
             LookupOp::Pow { scale, a } => format!("pow_{}_{}", scale, a),
+            LookupOp::IsOdd => "is_odd".to_string(),
             LookupOp::Div { denom } => format!("div_{}", denom),
-            LookupOp::Cast { scale } => format!("cast_{}", scale),
             LookupOp::Sigmoid { scale } => format!("sigmoid_{}", scale),
             LookupOp::Sqrt { scale } => format!("sqrt_{}", scale),
             LookupOp::Rsqrt { scale } => format!("rsqrt_{}", scale),
@@ -85,17 +82,12 @@ impl LookupOp {
         let x = x[0].clone().map(|x| felt_to_integer_rep(x));
         let res =
             match &self {
-                LookupOp::RoundHalfToEven { scale } => Ok::<_, TensorError>(
-                    tensor::ops::nonlinearities::round_half_to_even(&x, scale.into()),
-                ),
+                LookupOp::IsOdd => Ok::<_, TensorError>(tensor::ops::nonlinearities::is_odd(&x)),
                 LookupOp::Pow { scale, a } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::pow(&x, scale.0.into(), a.0.into()),
                 ),
                 LookupOp::Div { denom } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::const_div(&x, f32::from(*denom).into()),
-                ),
-                LookupOp::Cast { scale } => Ok::<_, TensorError>(
-                    tensor::ops::nonlinearities::const_div(&x, f32::from(*scale).into()),
                 ),
                 LookupOp::Sigmoid { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::sigmoid(&x, scale.into()))
@@ -171,10 +163,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         match self {
-            LookupOp::RoundHalfToEven { scale } => format!("ROUND_HALF_TO_EVEN(scale={})", scale),
+            LookupOp::IsOdd => "IS_ODD".to_string(),
             LookupOp::Pow { a, scale } => format!("POW(scale={}, exponent={})", scale, a),
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
-            LookupOp::Cast { scale } => format!("CAST(scale={})", scale),
             LookupOp::Ln { scale } => format!("LN(scale={})", scale),
             LookupOp::Sigmoid { scale } => format!("SIGMOID(scale={})", scale),
             LookupOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
@@ -214,10 +205,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
     /// Returns the scale of the output of the operation.
     fn out_scale(&self, inputs_scale: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         let scale = match self {
-            LookupOp::Cast { scale } => {
-                let in_scale = inputs_scale[0];
-                in_scale + multiplier_to_scale(1. / scale.0 as f64)
-            }
             _ => inputs_scale[0],
         };
         Ok(scale)

@@ -1474,6 +1474,32 @@ pub mod nonlinearities {
         .unwrap()
     }
 
+    /// Checks if a tensor's elements are odd
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// use ezkl::tensor::ops::nonlinearities::is_odd;
+    /// let x = Tensor::<IntegerRep>::new(
+    ///   Some(&[2, 15, 2, 1, 1, 0]),
+    /// &[2, 3],
+    /// ).unwrap();
+    ///
+    /// let result = is_odd(&x);
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 1, 0, 1, 1, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn is_odd(a: &Tensor<IntegerRep>) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| {
+            let rounded = if a_i % 2 == 0 { 0 } else { 1 };
+            Ok::<_, TensorError>(rounded)
+        })
+        .unwrap()
+    }
+
     /// Elementwise applies sigmoid to a tensor of integers.
     /// # Arguments
     ///
