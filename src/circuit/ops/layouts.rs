@@ -4513,7 +4513,6 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// * `region` - RegionCtx
 /// * `values` - &[ValTensor<F>; 1]
 /// * `scale` - utils::F32
-/// * `legs` - usize
 /// # Returns
 /// * ValTensor<F>
 /// # Example
@@ -4534,8 +4533,8 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// &[1, 1, 2, 2],
 /// ).unwrap());
 ///
-/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into(), 2).unwrap();
-/// let expected = Tensor::<IntegerRep>::new(Some(&[2, 1, 2, 0]), &[1, 1, 2, 2]).unwrap();
+/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into()).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, -8]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// ```
@@ -4608,8 +4607,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     region.update_max_min_lookup_inputs_force(-num_bits, num_bits)?;
 
-    println!("claimed_output {}", claimed_output.show());
-
     // now subtract 1 from the claimed output
     let claimed_output_minus_one = pairwise(
         config,
@@ -4617,11 +4614,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[claimed_output.clone(), unit.clone()],
         BaseOp::Sub,
     )?;
-
-    println!(
-        "claimed_output_minus_one {}",
-        claimed_output_minus_one.show()
-    );
 
     // now add 1 to the claimed output
     let claimed_output_plus_one = pairwise(
@@ -4631,11 +4623,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         BaseOp::Add,
     )?;
 
-    println!(
-        "claimed_output_minus_one {}",
-        claimed_output_minus_one.show()
-    );
-
     // prior power of 2 is less than claimed output
     let prior_pow2 = nonlinearity(
         config,
@@ -4644,8 +4631,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &LookupOp::PowersOfTwo { scale },
     )?;
 
-    println!("prior_pow2 {}", prior_pow2.show());
-
     // next power of 2 is greater than claimed output
     let next_pow2 = nonlinearity(
         config,
@@ -4653,8 +4638,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[claimed_output_plus_one],
         &LookupOp::PowersOfTwo { scale },
     )?;
-
-    println!("next_pow2 {}", next_pow2.show());
 
     // assert that the original input is closest to the claimed output than the prior power of 2 and the next power of 2
     let distance_to_prior = pairwise(
@@ -4687,13 +4670,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // now take abs of the distance
     let distance_to_claimed_l1 = abs(config, region, &[distance_to_claimed.clone()])?;
 
-    println!(
-        "distance_to_prior {} distance_to_next {} distance_to_claimed {}",
-        distance_to_prior_l1.show(),
-        distance_to_next_l1.show(),
-        distance_to_claimed_l1.show()
-    );
-
     // can be less than or equal because we round up
     let is_distance_to_prior_less = less_equal(
         config,
@@ -4701,21 +4677,12 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[distance_to_claimed_l1.clone(), distance_to_prior_l1.clone()],
     )?;
 
-    println!(
-        "is_distance_to_prior_less {}",
-        is_distance_to_prior_less.show()
-    );
     // should be striclty less because we round up
     let is_distance_to_next_less = less(
         config,
         region,
         &[distance_to_claimed_l1, distance_to_next_l1.clone()],
     )?;
-
-    println!(
-        "is_distance_to_prior_less {}",
-        is_distance_to_prior_less.show()
-    );
 
     let is_distance_to_prior_less_and_distance_to_next_less = and(
         config,
@@ -4725,11 +4692,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             is_distance_to_next_less.clone(),
         ],
     )?;
-
-    println!(
-        "is_distance_to_prior_less_and_distance_to_next_less {}",
-        is_distance_to_prior_less_and_distance_to_next_less.show()
-    );
 
     let mut comparison_unit = create_constant_tensor(
         integer_rep_to_felt(1),
@@ -4789,11 +4751,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         scale_as_felt * scale_as_felt,
     )?;
 
-    println!(
-        "recip_pow2_prior_to_claimed_distance {}",
-        recip_pow2_prior_to_claimed_distance.show()
-    );
-
     let interpolated_distance = pairwise(
         config,
         region,
@@ -4814,11 +4771,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         BaseOp::Mult,
     )?;
 
-    println!(
-        "signed_gated_prior_interpolated_distance {}",
-        gated_prior_interpolated_distance.show()
-    );
-
     let recip_next_to_claimed_distance = recip(
         config,
         region,
@@ -4826,11 +4778,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         scale_as_felt,
         scale_as_felt * scale_as_felt,
     )?;
-
-    println!(
-        "recip_next_to_claimed_distance {}",
-        recip_next_to_claimed_distance.show()
-    );
 
     let interpolated_distance_next = pairwise(
         config,
@@ -4851,11 +4798,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         ],
         BaseOp::Mult,
     )?;
-
-    println!(
-        "signed_gated_next_interpolated_distance {}",
-        gated_next_interpolated_distance.show()
-    );
 
     let scaled_claimed_output = pairwise(
         config,
@@ -4886,8 +4828,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         ],
         BaseOp::Add,
     )?;
-
-    println!("claimed_output {}", claimed_output.show());
 
     // now multiply the claimed output by ln2
     pairwise(config, region, &[claimed_output, ln2_tensor], BaseOp::Mult)
