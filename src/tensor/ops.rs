@@ -1500,6 +1500,59 @@ pub mod nonlinearities {
         .unwrap()
     }
 
+    /// Powers of 2
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// use ezkl::tensor::ops::nonlinearities::pow2;
+    /// let x = Tensor::<IntegerRep>::new(
+    ///  Some(&[2, 15, 2, 1, 1, 0]),
+    /// &[2, 3],
+    /// ).unwrap();
+    /// let result = pow2(&x, 1.0);
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 225, 4, 1, 1, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn ipow2(a: &Tensor<IntegerRep>, scale_output: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| {
+            let kix = a_i as f64;
+            let kix = scale_output * (2.0_f64).powf(kix);
+            let rounded = kix.round();
+            Ok::<_, TensorError>(rounded as IntegerRep)
+        })
+        .unwrap()
+    }
+
+    /// Elementwise applies ln base 2 to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// use ezkl::tensor::ops::nonlinearities::log2;
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[2, 15, 2, 1, 1, 0]),
+    /// &[2, 3],
+    /// ).unwrap();
+    /// let result = log2(&x, 1.0);
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 1, 0, 0, 0]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn ilog2(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let kix = (kix).log2();
+            let rounded = kix.round();
+            Ok::<_, TensorError>(rounded as IntegerRep)
+        })
+        .unwrap()
+    }
+
     /// Elementwise applies sigmoid to a tensor of integers.
     /// # Arguments
     ///
@@ -1628,12 +1681,11 @@ pub mod nonlinearities {
         .unwrap()
     }
 
-    /// Elementwise applies exponential to a tensor of integers.
+    /// Elementwise applies ln to a tensor of integers.
     /// # Arguments
     ///
     /// * `a` - Tensor
     /// * `scale_input` - Single value
-    /// * `scale_output` - Single value
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;
