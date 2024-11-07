@@ -851,9 +851,18 @@ pub fn new_op_from_onnx(
         "Exp" => SupportedOp::Nonlinear(LookupOp::Exp {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),
-        "Ln" => SupportedOp::Nonlinear(LookupOp::Ln {
-            scale: scale_to_multiplier(input_scales[0]).into(),
-        }),
+        "Ln" => {
+            if run_args.bounded_log_lookup {
+                SupportedOp::Hybrid(HybridOp::Ln {
+                    scale: scale_to_multiplier(input_scales[0]).into(),
+                })
+            } else {
+                SupportedOp::Nonlinear(LookupOp::Ln {
+                    scale: scale_to_multiplier(input_scales[0]).into(),
+                })
+            }
+        }
+
         "Sin" => SupportedOp::Nonlinear(LookupOp::Sin {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),

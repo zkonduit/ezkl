@@ -16,10 +16,11 @@ use halo2curves::ff::PrimeField;
 pub enum LookupOp {
     Div { denom: utils::F32 },
     IsOdd,
+    PowersOfTwo { scale: utils::F32 },
+    Ln { scale: utils::F32 },
     Sqrt { scale: utils::F32 },
     Rsqrt { scale: utils::F32 },
     Sigmoid { scale: utils::F32 },
-    Ln { scale: utils::F32 },
     Exp { scale: utils::F32 },
     Cos { scale: utils::F32 },
     ACos { scale: utils::F32 },
@@ -50,6 +51,8 @@ impl LookupOp {
     pub fn as_path(&self) -> String {
         match self {
             LookupOp::Pow { scale, a } => format!("pow_{}_{}", scale, a),
+            LookupOp::Ln { scale } => format!("ln_{}", scale),
+            LookupOp::PowersOfTwo { scale } => format!("pow2_{}", scale),
             LookupOp::IsOdd => "is_odd".to_string(),
             LookupOp::Div { denom } => format!("div_{}", denom),
             LookupOp::Sigmoid { scale } => format!("sigmoid_{}", scale),
@@ -57,7 +60,6 @@ impl LookupOp {
             LookupOp::Rsqrt { scale } => format!("rsqrt_{}", scale),
             LookupOp::Erf { scale } => format!("erf_{}", scale),
             LookupOp::Exp { scale } => format!("exp_{}", scale),
-            LookupOp::Ln { scale } => format!("ln_{}", scale),
             LookupOp::Cos { scale } => format!("cos_{}", scale),
             LookupOp::ACos { scale } => format!("acos_{}", scale),
             LookupOp::Cosh { scale } => format!("cosh_{}", scale),
@@ -82,6 +84,12 @@ impl LookupOp {
         let x = x[0].clone().map(|x| felt_to_integer_rep(x));
         let res =
             match &self {
+                LookupOp::Ln { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::ln(&x, scale.into()))
+                }
+                LookupOp::PowersOfTwo { scale } => {
+                    Ok::<_, TensorError>(tensor::ops::nonlinearities::ipow2(&x, scale.0.into()))
+                }
                 LookupOp::IsOdd => Ok::<_, TensorError>(tensor::ops::nonlinearities::is_odd(&x)),
                 LookupOp::Pow { scale, a } => Ok::<_, TensorError>(
                     tensor::ops::nonlinearities::pow(&x, scale.0.into(), a.0.into()),
@@ -103,9 +111,6 @@ impl LookupOp {
                 }
                 LookupOp::Exp { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::exp(&x, scale.into()))
-                }
-                LookupOp::Ln { scale } => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::ln(&x, scale.into()))
                 }
                 LookupOp::Cos { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::cos(&x, scale.into()))
@@ -163,10 +168,11 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
     /// Returns the name of the operation
     fn as_string(&self) -> String {
         match self {
+            LookupOp::Ln { scale } => format!("LN(scale={})", scale),
+            LookupOp::PowersOfTwo { scale } => format!("POWERS_OF_TWO(scale={})", scale),
             LookupOp::IsOdd => "IS_ODD".to_string(),
             LookupOp::Pow { a, scale } => format!("POW(scale={}, exponent={})", scale, a),
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
-            LookupOp::Ln { scale } => format!("LN(scale={})", scale),
             LookupOp::Sigmoid { scale } => format!("SIGMOID(scale={})", scale),
             LookupOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
             LookupOp::Erf { scale } => format!("ERF(scale={})", scale),

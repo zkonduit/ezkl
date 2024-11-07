@@ -4507,6 +4507,332 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     )
 }
 
+/// integer ln layout
+/// # Arguments
+/// * `config` - BaseConfig
+/// * `region` - RegionCtx
+/// * `values` - &[ValTensor<F>; 1]
+/// * `scale` - utils::F32
+/// # Returns
+/// * ValTensor<F>
+/// # Example
+///
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::ln;
+/// use ezkl::tensor::val::ValTensor;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+/// Some(&[3, 2, 3, 1]),
+/// &[1, 1, 2, 2],
+/// ).unwrap());
+///
+/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into()).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, -8]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// ```
+pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    scale: utils::F32,
+) -> Result<ValTensor<F>, CircuitError> {
+    // first generate the claimed val
+
+    let mut input = values[0].clone();
+
+    println!("input {}", input.show());
+
+    let scale_as_felt = integer_rep_to_felt(scale.0.round() as IntegerRep);
+
+    let assigned_triple_scaled_as_felt_tensor = region.assign(
+        &config.custom_gates.inputs[1],
+        &create_constant_tensor(scale_as_felt * scale_as_felt * scale_as_felt, 1),
+    )?;
+
+    // natural ln is log2(x) * ln(2)
+    let ln2 = utils::F32::from(2.0_f32.ln());
+    // now create a constant tensor for ln2 with scale
+    let ln2_tensor: ValTensor<F> = create_constant_tensor(
+        integer_rep_to_felt((ln2.0 * scale.0).round() as IntegerRep),
+        1,
+    );
+    region.assign(&config.custom_gates.inputs[0], &ln2_tensor)?;
+    let unit = create_constant_tensor(integer_rep_to_felt(1), 1);
+    region.assign(&config.custom_gates.inputs[1], &unit)?;
+    region.increment(1);
+
+    // 2. assign the image
+    if !input.all_prev_assigned() {
+        input = region.assign(&config.custom_gates.inputs[0], &input)?;
+        // don't need to increment because the claimed output is assigned to output and incremented accordingly
+    }
+
+    let is_assigned = !input.any_unknowns()?;
+
+    let mut claimed_output: ValTensor<F> = if is_assigned {
+        let input_evals = input.int_evals()?;
+        // returns an integer with the base 2 logarithm
+        tensor::ops::nonlinearities::ilog2(&input_evals.clone(), scale.0 as f64)
+            .par_iter()
+            .map(|x| Value::known(integer_rep_to_felt(*x)))
+            .collect::<Tensor<Value<F>>>()
+            .into()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); input.len()]),
+            &[input.len()],
+        )?
+        .into()
+    };
+    claimed_output.reshape(input.dims())?;
+    region.assign(&config.custom_gates.output, &claimed_output)?;
+    region.increment(claimed_output.len());
+
+    let pow2_of_claimed_output = nonlinearity(
+        config,
+        region,
+        &[claimed_output.clone()],
+        &LookupOp::PowersOfTwo { scale },
+    )?;
+
+    let num_bits = (std::mem::size_of::<IntegerRep>() * 8) as IntegerRep;
+
+    region.update_max_min_lookup_inputs_force(-num_bits, num_bits)?;
+
+    // now subtract 1 from the claimed output
+    let claimed_output_minus_one = pairwise(
+        config,
+        region,
+        &[claimed_output.clone(), unit.clone()],
+        BaseOp::Sub,
+    )?;
+
+    // now add 1 to the claimed output
+    let claimed_output_plus_one = pairwise(
+        config,
+        region,
+        &[claimed_output.clone(), unit.clone()],
+        BaseOp::Add,
+    )?;
+
+    // prior power of 2 is less than claimed output
+    let prior_pow2 = nonlinearity(
+        config,
+        region,
+        &[claimed_output_minus_one],
+        &LookupOp::PowersOfTwo { scale },
+    )?;
+
+    // next power of 2 is greater than claimed output
+    let next_pow2 = nonlinearity(
+        config,
+        region,
+        &[claimed_output_plus_one],
+        &LookupOp::PowersOfTwo { scale },
+    )?;
+
+    // assert that the original input is closest to the claimed output than the prior power of 2 and the next power of 2
+    let distance_to_prior = pairwise(
+        config,
+        region,
+        &[input.clone(), prior_pow2.clone()],
+        BaseOp::Sub,
+    )?;
+
+    // now take abs of the distance
+    let distance_to_prior_l1 = abs(config, region, &[distance_to_prior.clone()])?;
+
+    let distance_to_next = pairwise(
+        config,
+        region,
+        &[input.clone(), next_pow2.clone()],
+        BaseOp::Sub,
+    )?;
+
+    // now take abs of the distance
+    let distance_to_next_l1 = abs(config, region, &[distance_to_next.clone()])?;
+
+    let distance_to_claimed = pairwise(
+        config,
+        region,
+        &[input.clone(), pow2_of_claimed_output.clone()],
+        BaseOp::Sub,
+    )?;
+
+    // now take abs of the distance
+    let distance_to_claimed_l1 = abs(config, region, &[distance_to_claimed.clone()])?;
+
+    // can be less than or equal because we round up
+    let is_distance_to_prior_less = less_equal(
+        config,
+        region,
+        &[distance_to_claimed_l1.clone(), distance_to_prior_l1.clone()],
+    )?;
+
+    // should be striclty less because we round up
+    let is_distance_to_next_less = less(
+        config,
+        region,
+        &[distance_to_claimed_l1, distance_to_next_l1.clone()],
+    )?;
+
+    let is_distance_to_prior_less_and_distance_to_next_less = and(
+        config,
+        region,
+        &[
+            is_distance_to_prior_less.clone(),
+            is_distance_to_next_less.clone(),
+        ],
+    )?;
+
+    let mut comparison_unit = create_constant_tensor(
+        integer_rep_to_felt(1),
+        is_distance_to_prior_less_and_distance_to_next_less.len(),
+    );
+
+    comparison_unit.reshape(is_distance_to_prior_less_and_distance_to_next_less.dims())?;
+
+    // assigned unit
+    let assigned_unit = region.assign(&config.custom_gates.inputs[1], &comparison_unit)?;
+    region.increment(assigned_unit.len());
+
+    // assert that the values are truthy
+    enforce_equality(
+        config,
+        region,
+        &[
+            is_distance_to_prior_less_and_distance_to_next_less,
+            assigned_unit.clone(),
+        ],
+    )?;
+
+    // get a linear interpolation now
+
+    let sign_of_distance_to_claimed = sign(config, region, &[distance_to_claimed.clone()])?;
+    let sign_of_distance_to_claimed_is_positive = equals(
+        config,
+        region,
+        &[sign_of_distance_to_claimed.clone(), assigned_unit.clone()],
+    )?;
+
+    let sign_of_distance_to_claimed_is_negative = not(
+        config,
+        region,
+        &[sign_of_distance_to_claimed_is_positive.clone()],
+    )?;
+
+    let pow2_prior_to_claimed_distance = pairwise(
+        config,
+        region,
+        &[pow2_of_claimed_output.clone(), prior_pow2.clone()],
+        BaseOp::Sub,
+    )?;
+
+    let pow2_next_to_claimed_distance = pairwise(
+        config,
+        region,
+        &[next_pow2.clone(), pow2_of_claimed_output.clone()],
+        BaseOp::Sub,
+    )?;
+
+    let recip_pow2_prior_to_claimed_distance = recip(
+        config,
+        region,
+        &[pow2_prior_to_claimed_distance],
+        scale_as_felt,
+        scale_as_felt * scale_as_felt,
+    )?;
+
+    let interpolated_distance = pairwise(
+        config,
+        region,
+        &[
+            recip_pow2_prior_to_claimed_distance.clone(),
+            distance_to_claimed.clone(),
+        ],
+        BaseOp::Mult,
+    )?;
+
+    let gated_prior_interpolated_distance = pairwise(
+        config,
+        region,
+        &[
+            interpolated_distance.clone(),
+            sign_of_distance_to_claimed_is_negative.clone(),
+        ],
+        BaseOp::Mult,
+    )?;
+
+    let recip_next_to_claimed_distance = recip(
+        config,
+        region,
+        &[pow2_next_to_claimed_distance],
+        scale_as_felt,
+        scale_as_felt * scale_as_felt,
+    )?;
+
+    let interpolated_distance_next = pairwise(
+        config,
+        region,
+        &[
+            recip_next_to_claimed_distance.clone(),
+            distance_to_claimed.clone(),
+        ],
+        BaseOp::Mult,
+    )?;
+
+    let gated_next_interpolated_distance = pairwise(
+        config,
+        region,
+        &[
+            interpolated_distance_next.clone(),
+            sign_of_distance_to_claimed_is_positive.clone(),
+        ],
+        BaseOp::Mult,
+    )?;
+
+    let scaled_claimed_output = pairwise(
+        config,
+        region,
+        &[
+            claimed_output.clone(),
+            assigned_triple_scaled_as_felt_tensor,
+        ],
+        BaseOp::Mult,
+    )?;
+
+    let claimed_output = pairwise(
+        config,
+        region,
+        &[
+            scaled_claimed_output.clone(),
+            gated_prior_interpolated_distance.clone(),
+        ],
+        BaseOp::Add,
+    )?;
+
+    let claimed_output = pairwise(
+        config,
+        region,
+        &[
+            claimed_output.clone(),
+            gated_next_interpolated_distance.clone(),
+        ],
+        BaseOp::Add,
+    )?;
+
+    // now multiply the claimed output by ln2
+    pairwise(config, region, &[claimed_output, ln2_tensor], BaseOp::Mult)
+}
+
 /// round layout
 /// # Arguments
 /// * `config` - BaseConfig

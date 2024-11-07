@@ -317,11 +317,18 @@ pub struct RunArgs {
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "2", value_hint = clap::ValueHint::Other))]
     /// the number of legs used for decompositions
     pub decomp_legs: usize,
+    #[cfg_attr(
+        all(feature = "ezkl", not(target_arch = "wasm32")),
+        arg(long, default_value = "false")
+    )]
+    /// use unbounded lookup for the log
+    pub bounded_log_lookup: bool,
 }
 
 impl Default for RunArgs {
     fn default() -> Self {
         Self {
+            bounded_log_lookup: false,
             tolerance: Tolerance::default(),
             input_scale: 7,
             param_scale: 7,
