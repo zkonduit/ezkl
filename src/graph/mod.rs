@@ -1353,7 +1353,7 @@ impl GraphCircuit {
             max_lookup_inputs: model_results.max_lookup_inputs,
             min_lookup_inputs: model_results.min_lookup_inputs,
             max_range_size: model_results.max_range_size,
-            version: Some(crate::commands::VERSION.to_string()),
+            version: Some(crate::version().to_string()),
         };
 
         witness.generate_rescaled_elements(

@@ -108,6 +108,18 @@ use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
+// if CARGO VERSION is 0.0.0 replace with "source - no compatibility guaranteed"
+/// The version of the ezkl library
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Get the version of the library
+pub fn version() -> &'static str {
+    match VERSION {
+        "0.0.0" => "source - no compatibility guaranteed",
+        _ => VERSION,
+    }
+}
+
 /// Bindings managment
 #[cfg(any(
     feature = "ios-bindings",
