@@ -1508,13 +1508,13 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::pow2;
+    /// use ezkl::tensor::ops::nonlinearities::ipow2;
     /// let x = Tensor::<IntegerRep>::new(
     ///  Some(&[2, 15, 2, 1, 1, 0]),
     /// &[2, 3],
     /// ).unwrap();
-    /// let result = pow2(&x, 1.0);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 225, 4, 1, 1, 0]), &[2, 3]).unwrap();
+    /// let result = ipow2(&x, 1.0);
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 32768, 4, 2, 2, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn ipow2(a: &Tensor<IntegerRep>, scale_output: f64) -> Tensor<IntegerRep> {
