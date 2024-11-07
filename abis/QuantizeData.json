@@ -2,6 +2,25 @@
 	{
 		"inputs": [
 			{
+				"internalType": "int256[]",
+				"name": "quantized_data",
+				"type": "int256[]"
+			}
+		],
+		"name": "check_is_valid_field_element",
+		"outputs": [
+			{
+				"internalType": "uint256[]",
+				"name": "output",
+				"type": "uint256[]"
+			}
+		],
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "bytes[]",
 				"name": "data",
 				"type": "bytes[]"
@@ -17,12 +36,41 @@
 				"type": "uint256[]"
 			}
 		],
-		"name": "quantize_data",
+		"name": "quantize_data_multi",
 		"outputs": [
 			{
-				"internalType": "int64[]",
+				"internalType": "int256[]",
 				"name": "quantized_data",
-				"type": "int64[]"
+				"type": "int256[]"
+			}
+		],
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes",
+				"name": "data",
+				"type": "bytes"
+			},
+			{
+				"internalType": "uint256",
+				"name": "decimals",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "scales",
+				"type": "uint256[]"
+			}
+		],
+		"name": "quantize_data_single",
+		"outputs": [
+			{
+				"internalType": "int256[]",
+				"name": "quantized_data",
+				"type": "int256[]"
 			}
 		],
 		"stateMutability": "pure",
