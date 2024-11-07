@@ -133,6 +133,8 @@ pub struct GraphWitness {
     pub min_lookup_inputs: IntegerRep,
     /// max range check size
     pub max_range_size: IntegerRep,
+    /// (optional) version of ezkl used
+    pub version: Option<String>,
 }
 
 impl GraphWitness {
@@ -161,6 +163,7 @@ impl GraphWitness {
             max_lookup_inputs: 0,
             min_lookup_inputs: 0,
             max_range_size: 0,
+            version: None,
         }
     }
 
@@ -1350,6 +1353,7 @@ impl GraphCircuit {
             max_lookup_inputs: model_results.max_lookup_inputs,
             min_lookup_inputs: model_results.min_lookup_inputs,
             max_range_size: model_results.max_range_size,
+            version: Some(crate::commands::VERSION.to_string()),
         };
 
         witness.generate_rescaled_elements(
