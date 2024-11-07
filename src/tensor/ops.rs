@@ -1534,13 +1534,13 @@ pub mod nonlinearities {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::fieldutils::IntegerRep;
-    /// use ezkl::tensor::ops::nonlinearities::log2;
+    /// use ezkl::tensor::ops::nonlinearities::ilog2;
     /// let x = Tensor::<IntegerRep>::new(
-    ///    Some(&[2, 15, 2, 1, 1, 0]),
+    ///    Some(&[2, 15, 2, 1, 1, 2]),
     /// &[2, 3],
     /// ).unwrap();
-    /// let result = log2(&x, 1.0);
-    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 3, 1, 0, 0, 0]), &[2, 3]).unwrap();
+    /// let result = ilog2(&x, 1.0);
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 1, 0, 0, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
     pub fn ilog2(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
