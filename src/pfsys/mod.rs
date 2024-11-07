@@ -10,7 +10,6 @@ pub mod errors;
 pub use errors::PfsysError;
 
 use crate::circuit::CheckMode;
-use crate::commands::VERSION;
 use crate::graph::GraphWitness;
 use crate::pfsys::evm::aggregation_kzg::PoseidonTranscript;
 use crate::{Commitments, EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
