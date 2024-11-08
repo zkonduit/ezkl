@@ -20,9 +20,6 @@ pub enum HybridOp {
         input_scale: utils::F32,
         output_scale: utils::F32,
     },
-    Exp {
-        scale: utils::F32,
-    },
     Sqrt {
         scale: utils::F32,
     },
@@ -124,7 +121,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
 
     fn as_string(&self) -> String {
         match self {
-            HybridOp::Exp { scale } => format!("EXP(scale={})", scale),
             HybridOp::Rsqrt {
                 input_scale,
                 output_scale,
@@ -215,9 +211,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 *input_scale,
                 *output_scale,
             )?,
-            HybridOp::Exp { scale } => {
-                layouts::exp(config, region, values[..].try_into()?, *scale)?
-            }
             HybridOp::Sqrt { scale } => {
                 layouts::sqrt(config, region, values[..].try_into()?, *scale)?
             }

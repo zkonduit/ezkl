@@ -39,8 +39,6 @@ use crate::circuit::ops::lookup::LookupOp;
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// use ezkl::tensor::ValTensor;
-/// use ezkl::circuit::layouts::dot;
-/// use ezkl::circuit::layouts::l1_distance;
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -311,16 +309,14 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// use ezkl::tensor::ValTensor;
-/// use ezkl::circuit::layouts::dot;
-/// use ezkl::circuit::layouts::sqrt;
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
-///     Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+///     Some(&[1, 2, 3, 2, 3, 4, 3, 4, 9]),
 ///    &[3, 3],
 /// ).unwrap());
-/// let result = sqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0).unwrap();
-/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 1, 2, 1, 2, 2]), &[3, 3]).unwrap();
+/// let result = sqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0.into()).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 2, 1, 2, 2, 2, 2, 3]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 
@@ -430,15 +426,13 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// use ezkl::tensor::ValTensor;
-/// use ezkl::circuit::layouts::dot;
-/// use ezkl::circuit::layouts::rsqrt;
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
 /// &[3, 3],
 /// ).unwrap());
-/// let result = rsqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0).unwrap();
+/// let result = rsqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0.into(), 1.0.into()).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 1, 1, 1, 1, 1]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -5004,134 +4998,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     // now multiply the claimed output by ln2
     pairwise(config, region, &[claimed_output, ln2_tensor], BaseOp::Mult)
-}
-
-/// Exponential layout
-/// # Arguments
-/// * `config` - BaseConfig
-/// * `region` - RegionCtx
-/// * `values` - &[ValTensor<F>; 1]
-/// * `scale` - utils::F32
-/// # Returns
-/// * ValTensor<F>
-/// # Example
-/// ```
-/// use ezkl::tensor::Tensor;
-/// use ezkl::fieldutils::IntegerRep;
-/// use ezkl::circuit::ops::layouts::exp;
-/// use ezkl::tensor::val::ValTensor;
-/// use halo2curves::bn256::Fr as Fp;
-/// use ezkl::circuit::region::RegionCtx;
-/// use ezkl::circuit::region::RegionSettings;
-/// use ezkl::circuit::BaseConfig;
-/// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
-/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
-/// Some(&[3, 2, 3, 1]),
-/// &[1, 1, 2, 2],
-/// ).unwrap());
-/// let result = exp::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into()).unwrap();
-/// let expected = Tensor::<IntegerRep>::new(Some(&[9, 4, 9, 1]), &[1, 1, 2, 2]).unwrap();
-/// assert_eq!(result.int_evals().unwrap(), expected);
-/// ```
-pub fn exp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
-    config: &BaseConfig<F>,
-    region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
-    scale: utils::F32,
-) -> Result<ValTensor<F>, CircuitError> {
-    // first generate the claimed val
-
-    let mut input = values[0].clone();
-    let scale_as_felt: F = integer_rep_to_felt(scale.0.round() as IntegerRep);
-
-    let assigned_triple_scaled_as_felt_tensor = region.assign(
-        &config.custom_gates.output,
-        &create_constant_tensor(scale_as_felt * scale_as_felt * scale_as_felt, 1),
-    )?;
-
-    let unit = create_constant_tensor(integer_rep_to_felt(1), 1);
-    let unit = region.assign(&config.custom_gates.inputs[1], &unit)?;
-
-    region.increment(1);
-
-    // 2. assign the image
-    if !input.all_prev_assigned() {
-        input = region.assign(&config.custom_gates.inputs[0], &input)?;
-        // don't need to increment because the claimed output is assigned to output and incremented accordingly
-    }
-
-    let is_assigned = !input.any_unknowns()?;
-
-    let mut claimed_output: ValTensor<F> = if is_assigned {
-        let input_evals = input.int_evals()?;
-        // returns an integer with the base 2 logarithm
-        tensor::ops::nonlinearities::exp(&input_evals.clone(), scale.0 as f64)
-            .par_iter()
-            .map(|x| Value::known(integer_rep_to_felt(*x)))
-            .collect::<Tensor<Value<F>>>()
-            .into()
-    } else {
-        Tensor::new(
-            Some(&vec![Value::<F>::unknown(); input.len()]),
-            &[input.len()],
-        )?
-        .into()
-    };
-    claimed_output.reshape(input.dims())?;
-    region.assign(&config.custom_gates.output, &claimed_output)?;
-    region.increment(claimed_output.len());
-
-    let ln_claimed_output = nonlinearity(
-        config,
-        region,
-        &[claimed_output.clone()],
-        &LookupOp::Ln { scale },
-    )?;
-
-    let claimed_output_minus_one = pairwise(
-        config,
-        region,
-        &[claimed_output.clone(), unit.clone()],
-        BaseOp::Sub,
-    )?;
-
-    let ln_claimed_output_minus_one = nonlinearity(
-        config,
-        region,
-        &[claimed_output_minus_one],
-        &LookupOp::Ln { scale },
-    )?;
-
-    let claimed_output_plus_one =
-        pairwise(config, region, &[claimed_output.clone(), unit], BaseOp::Add)?;
-
-    let ln_claimed_output_plus_one = nonlinearity(
-        config,
-        region,
-        &[claimed_output_plus_one],
-        &LookupOp::Ln { scale },
-    )?;
-
-    let rescaled_input = pairwise(
-        config,
-        region,
-        &[input.clone(), assigned_triple_scaled_as_felt_tensor],
-        BaseOp::Mult,
-    )?;
-
-    is_closest_to(
-        config,
-        region,
-        &[
-            ln_claimed_output.clone(),
-            ln_claimed_output_minus_one.clone(),
-            ln_claimed_output_plus_one.clone(),
-        ],
-        &[rescaled_input.clone()],
-    )?;
-
-    Ok(claimed_output)
 }
 
 /// round layout
