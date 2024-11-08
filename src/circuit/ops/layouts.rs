@@ -368,9 +368,12 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     // assert value is positive
     let sign = sign(config, region, &[input.clone()])?;
+    let ones = create_constant_tensor(F::ONE, sign.len());
+    let ones = region.assign(&config.custom_gates.inputs[1], &ones)?;
+    region.increment(ones.len());
 
     // assert the sign is positive
-    enforce_equality(config, region, &[sign, one.clone()])?;
+    enforce_equality(config, region, &[sign, ones.clone()])?;
 
     // this is now of scale 2 * scale
     let product = pairwise(
