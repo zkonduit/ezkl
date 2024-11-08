@@ -5741,7 +5741,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 /// ).unwrap());
 /// let result = softmax::<Fp>(&dummy_config, &mut dummy_region, &[x], 128.0.into(), (128.0 * 128.0).into()).unwrap();
 /// // doubles the scale of the input
-/// let expected = Tensor::<IntegerRep>::new(Some(&[350012, 350012, 352768, 350012, 350012, 344500), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[350012, 350012, 352768, 350012, 350012, 344500]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
