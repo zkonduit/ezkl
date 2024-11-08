@@ -120,7 +120,6 @@ impl RebaseScale {
         global_scale: crate::Scale,
         op_out_scale: crate::Scale,
         scale_rebase_multiplier: u32,
-        div_rebasing: bool,
     ) -> SupportedOp {
         if (op_out_scale > (global_scale * scale_rebase_multiplier as i32))
             && !inner.is_constant()
@@ -137,7 +136,6 @@ impl RebaseScale {
                     multiplier,
                     rebase_op: HybridOp::Div {
                         denom: crate::circuit::utils::F32((multiplier) as f32),
-                        use_range_check_for_int: !div_rebasing,
                     },
                     original_scale: op.original_scale,
                 })
@@ -148,7 +146,6 @@ impl RebaseScale {
                     multiplier,
                     rebase_op: HybridOp::Div {
                         denom: crate::circuit::utils::F32(multiplier as f32),
-                        use_range_check_for_int: !div_rebasing,
                     },
                     original_scale: op_out_scale,
                 })
@@ -163,7 +160,6 @@ impl RebaseScale {
         inner: SupportedOp,
         target_scale: crate::Scale,
         op_out_scale: crate::Scale,
-        div_rebasing: bool,
     ) -> SupportedOp {
         if (op_out_scale < (target_scale)) && !inner.is_constant() && !inner.is_input() {
             let multiplier = scale_to_multiplier(op_out_scale - target_scale);
@@ -176,7 +172,6 @@ impl RebaseScale {
                     original_scale: op.original_scale,
                     rebase_op: HybridOp::Div {
                         denom: crate::circuit::utils::F32((multiplier) as f32),
-                        use_range_check_for_int: !div_rebasing,
                     },
                 })
             } else {
@@ -187,7 +182,6 @@ impl RebaseScale {
                     original_scale: op_out_scale,
                     rebase_op: HybridOp::Div {
                         denom: crate::circuit::utils::F32(multiplier as f32),
-                        use_range_check_for_int: !div_rebasing,
                     },
                 })
             }
@@ -595,13 +589,7 @@ impl Node {
         let mut out_scale = opkind.out_scale(in_scales.clone())?;
         // rescale the inputs if necessary to get consistent fixed points, we select the largest scale (highest precision)
         let global_scale = scales.get_max();
-        opkind = RebaseScale::rebase(
-            opkind,
-            global_scale,
-            out_scale,
-            scales.rebase_multiplier,
-            run_args.div_rebasing,
-        );
+        opkind = RebaseScale::rebase(opkind, global_scale, out_scale, scales.rebase_multiplier);
 
         out_scale = opkind.out_scale(in_scales)?;
 

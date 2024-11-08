@@ -140,7 +140,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             scales,
             scale_rebase_multiplier,
             max_logrows,
-            only_range_check_rebase,
         } => calibrate(
             model.unwrap_or(DEFAULT_MODEL.into()),
             data.unwrap_or(DEFAULT_DATA.into()),
@@ -149,7 +148,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             lookup_safety_margin,
             scales,
             scale_rebase_multiplier,
-            only_range_check_rebase.unwrap_or(DEFAULT_ONLY_RANGE_CHECK_REBASE.parse().unwrap()),
             max_logrows,
         )
         .await
@@ -671,10 +669,10 @@ pub(crate) async fn get_srs_cmd(
             let srs_uri = format!("{}{}", PUBLIC_SRS_URL, k);
             let mut reader = Cursor::new(fetch_srs(&srs_uri).await?);
             // check the SRS
-                let pb = init_spinner();
-                pb.set_message("Validating SRS (this may take a while) ...");
+            let pb = init_spinner();
+            pb.set_message("Validating SRS (this may take a while) ...");
             let params = ParamsKZG::<Bn256>::read(&mut reader)?;
-                pb.finish_with_message("SRS validated.");
+            pb.finish_with_message("SRS validated.");
 
             info!("Saving SRS to disk...");
             let computed_srs_path = get_srs_path(k, srs_path.clone(), commitment);
@@ -682,7 +680,10 @@ pub(crate) async fn get_srs_cmd(
             let mut buffer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, &mut file);
             params.write(&mut buffer)?;
 
-            info!("Saved SRS to {}.", computed_srs_path.as_os_str().to_str().unwrap_or("disk"));
+            info!(
+                "Saved SRS to {}.",
+                computed_srs_path.as_os_str().to_str().unwrap_or("disk")
+            );
 
             info!("SRS downloaded");
         } else {
@@ -728,7 +729,7 @@ pub(crate) async fn gen_witness(
         None
     };
 
-        let mut input = circuit.load_graph_input(&data).await?;
+    let mut input = circuit.load_graph_input(&data).await?;
     #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
     let mut input = circuit.load_graph_input(&data)?;
 
@@ -968,7 +969,6 @@ pub(crate) async fn calibrate(
     lookup_safety_margin: f64,
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
-    only_range_check_rebase: bool,
     max_logrows: Option<u32>,
 ) -> Result<GraphSettings, EZKLError> {
     use log::error;
@@ -1002,12 +1002,6 @@ pub(crate) async fn calibrate(
         scales
     } else {
         (11..14).collect::<Vec<crate::Scale>>()
-    };
-
-    let div_rebasing = if only_range_check_rebase {
-        vec![false]
-    } else {
-        vec![true, false]
     };
 
     let mut found_params: Vec<GraphSettings> = vec![];
@@ -1047,12 +1041,6 @@ pub(crate) async fn calibrate(
         .map(|(a, b)| (*a, *b))
         .collect::<Vec<((crate::Scale, crate::Scale), u32)>>();
 
-    let range_grid = range_grid
-        .iter()
-        .cartesian_product(div_rebasing.iter())
-        .map(|(a, b)| (*a, *b))
-        .collect::<Vec<(((crate::Scale, crate::Scale), u32), bool)>>();
-
     let mut forward_pass_res = HashMap::new();
 
     let pb = init_bar(range_grid.len() as u64);
@@ -1061,30 +1049,23 @@ pub(crate) async fn calibrate(
     let mut num_failed = 0;
     let mut num_passed = 0;
 
-    for (((input_scale, param_scale), scale_rebase_multiplier), div_rebasing) in range_grid {
+    for ((input_scale, param_scale), scale_rebase_multiplier) in range_grid {
         pb.set_message(format!(
-            "i-scale: {}, p-scale: {}, rebase-(x): {}, div-rebase: {}, fail: {}, pass: {}",
+            "i-scale: {}, p-scale: {}, rebase-(x): {}, fail: {}, pass: {}",
             input_scale.to_string().blue(),
             param_scale.to_string().blue(),
-            scale_rebase_multiplier.to_string().blue(),
-            div_rebasing.to_string().yellow(),
+            scale_rebase_multiplier.to_string().yellow(),
             num_failed.to_string().red(),
             num_passed.to_string().green()
         ));
 
-        let key = (
-            input_scale,
-            param_scale,
-            scale_rebase_multiplier,
-            div_rebasing,
-        );
+        let key = (input_scale, param_scale, scale_rebase_multiplier);
         forward_pass_res.insert(key, vec![]);
 
         let local_run_args = RunArgs {
             input_scale,
             param_scale,
             scale_rebase_multiplier,
-            div_rebasing,
             lookup_range: (IntegerRep::MIN, IntegerRep::MAX),
             ..settings.run_args.clone()
         };
@@ -1188,7 +1169,6 @@ pub(crate) async fn calibrate(
             let found_run_args = RunArgs {
                 input_scale: new_settings.run_args.input_scale,
                 param_scale: new_settings.run_args.param_scale,
-                div_rebasing: new_settings.run_args.div_rebasing,
                 lookup_range: new_settings.run_args.lookup_range,
                 logrows: new_settings.run_args.logrows,
                 scale_rebase_multiplier: new_settings.run_args.scale_rebase_multiplier,
@@ -1296,7 +1276,6 @@ pub(crate) async fn calibrate(
             best_params.run_args.input_scale,
             best_params.run_args.param_scale,
             best_params.run_args.scale_rebase_multiplier,
-            best_params.run_args.div_rebasing,
         ))
         .ok_or("no params found")?
         .iter()
@@ -2022,7 +2001,7 @@ pub(crate) fn mock_aggregate(
         }
     }
     // proof aggregation
-        let pb = {
+    let pb = {
         let pb = init_spinner();
         pb.set_message("Aggregating (may take a while)...");
         pb
@@ -2033,7 +2012,7 @@ pub(crate) fn mock_aggregate(
     let prover = halo2_proofs::dev::MockProver::run(logrows, &circuit, vec![circuit.instances()])
         .map_err(|e| ExecutionError::MockProverError(e.to_string()))?;
     prover.verify().map_err(ExecutionError::VerifyError)?;
-        pb.finish_with_message("Done.");
+    pb.finish_with_message("Done.");
     Ok(String::new())
 }
 
@@ -2127,7 +2106,7 @@ pub(crate) fn aggregate(
     }
 
     // proof aggregation
-        let pb = {
+    let pb = {
         let pb = init_spinner();
         pb.set_message("Aggregating (may take a while)...");
         pb
@@ -2276,7 +2255,7 @@ pub(crate) fn aggregate(
     );
     snark.save(&proof_path)?;
 
-        pb.finish_with_message("Done.");
+    pb.finish_with_message("Done.");
 
     Ok(snark)
 }

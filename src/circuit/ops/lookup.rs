@@ -18,8 +18,6 @@ pub enum LookupOp {
     IsOdd,
     PowersOfTwo { scale: utils::F32 },
     Ln { scale: utils::F32 },
-    Sqrt { scale: utils::F32 },
-    Rsqrt { scale: utils::F32 },
     Sigmoid { scale: utils::F32 },
     Exp { scale: utils::F32 },
     Cos { scale: utils::F32 },
@@ -56,8 +54,6 @@ impl LookupOp {
             LookupOp::IsOdd => "is_odd".to_string(),
             LookupOp::Div { denom } => format!("div_{}", denom),
             LookupOp::Sigmoid { scale } => format!("sigmoid_{}", scale),
-            LookupOp::Sqrt { scale } => format!("sqrt_{}", scale),
-            LookupOp::Rsqrt { scale } => format!("rsqrt_{}", scale),
             LookupOp::Erf { scale } => format!("erf_{}", scale),
             LookupOp::Exp { scale } => format!("exp_{}", scale),
             LookupOp::Cos { scale } => format!("cos_{}", scale),
@@ -99,12 +95,6 @@ impl LookupOp {
                 ),
                 LookupOp::Sigmoid { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::sigmoid(&x, scale.into()))
-                }
-                LookupOp::Sqrt { scale } => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::sqrt(&x, scale.into()))
-                }
-                LookupOp::Rsqrt { scale } => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::rsqrt(&x, scale.into()))
                 }
                 LookupOp::Erf { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::erffunc(&x, scale.into()))
@@ -174,9 +164,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::Pow { a, scale } => format!("POW(scale={}, exponent={})", scale, a),
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
             LookupOp::Sigmoid { scale } => format!("SIGMOID(scale={})", scale),
-            LookupOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
             LookupOp::Erf { scale } => format!("ERF(scale={})", scale),
-            LookupOp::Rsqrt { scale } => format!("RSQRT(scale={})", scale),
             LookupOp::Exp { scale } => format!("EXP(scale={})", scale),
             LookupOp::Tan { scale } => format!("TAN(scale={})", scale),
             LookupOp::ATan { scale } => format!("ATAN(scale={})", scale),
