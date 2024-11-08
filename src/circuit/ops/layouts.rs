@@ -82,6 +82,12 @@ fn is_closest_to<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let is_closest_to_0 = less_equal(config, region, &[l1_distance_0.clone(), l1_distance_1])?;
     let is_closest_to_1 = less_equal(config, region, &[l1_distance_0, l1_distance_2])?;
 
+    // if we wanted to be more explicit about this condition we would:
+    // let is_equal_0 = equals(config, region, &[l1_distance_0.clone(), l1_distance_1])?;
+    // let is_equal_1 = equals(config, region, &[l1_distance_0, l1_distance_2])?;
+    // let both_equal = and(config, region, &[is_equal_0, is_equal_1])?;
+    // enforce_equality(config, region, &[both_equal, F::ZERO])?;
+
     let is_closest = and(config, region, &[is_closest_to_0, is_closest_to_1])?;
 
     let mut comparison_unit = create_constant_tensor(integer_rep_to_felt(1), is_closest.len());
