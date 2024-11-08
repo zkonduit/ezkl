@@ -346,9 +346,15 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             | HybridOp::ReduceArgMax { .. }
             | HybridOp::OneHot { .. }
             | HybridOp::ReduceArgMin { .. } => 0,
-            HybridOp::Softmax { output_scale, .. }
-            | HybridOp::Recip { output_scale, .. }
-            | HybridOp::Rsqrt { output_scale, .. } => multiplier_to_scale(output_scale.0 as f64),
+
+            HybridOp::Recip { output_scale, .. } | HybridOp::Rsqrt { output_scale, .. } => {
+                multiplier_to_scale(output_scale.0 as f64)
+            }
+            HybridOp::Softmax {
+                output_scale,
+                input_scale,
+                ..
+            } => multiplier_to_scale((output_scale.0 * input_scale.0) as f64),
             HybridOp::Ln {
                 scale: output_scale,
             } => 4 * multiplier_to_scale(output_scale.0 as f64),

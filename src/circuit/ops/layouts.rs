@@ -240,6 +240,22 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
     region.increment(claimed_output.len());
 
+    // divide by input_scale
+    let zero_inverse_val =
+        tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64)[0];
+    let zero_inverse = create_constant_tensor(integer_rep_to_felt(zero_inverse_val), 1);
+
+    let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
+
+    let equal_inverse_mask = equals(config, region, &[claimed_output.clone(), zero_inverse])?;
+
+    // assert the two masks are equal
+    enforce_equality(
+        config,
+        region,
+        &[equal_zero_mask.clone(), equal_inverse_mask],
+    )?;
+
     // this is now of scale 2 * scale
     let product = pairwise(
         config,
@@ -276,31 +292,50 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         BaseOp::Mult,
     )?;
 
-    // divide by input_scale
-    let zero_inverse_val =
-        tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64)[0];
-    let zero_inverse = create_constant_tensor(integer_rep_to_felt(zero_inverse_val), 1);
-
-    let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
-
-    let equal_inverse_mask = equals(config, region, &[claimed_output.clone(), zero_inverse])?;
-
-    // assert the two masks are equal
-    enforce_equality(
+    let scaled_equal_zero_mask = pairwise(
         config,
         region,
-        &[equal_zero_mask.clone(), equal_inverse_mask],
+        &[equal_zero_mask.clone(), unit_scale.clone()],
+        BaseOp::Mult,
     )?;
 
-    // now add the unit mask to the rebased_div
+    // add 1 where the mask is 0
+    let product_masked = pairwise(
+        config,
+        region,
+        &[product.clone(), scaled_equal_zero_mask.clone()],
+        BaseOp::Add,
+    )?;
+
+    // add 1 where the mask is 0
+    let claimed_output_minus_one_product_masked = pairwise(
+        config,
+        region,
+        &[
+            claimed_output_minus_one_product.clone(),
+            scaled_equal_zero_mask.clone(),
+        ],
+        BaseOp::Add,
+    )?;
+
+    // add 1 where the mask is 0
+    let claimed_output_plus_one_product_masked = pairwise(
+        config,
+        region,
+        &[
+            claimed_output_plus_one_product.clone(),
+            scaled_equal_zero_mask.clone(),
+        ],
+        BaseOp::Add,
+    )?;
 
     is_closest_to(
         config,
         region,
         &[
-            product,
-            claimed_output_minus_one_product,
-            claimed_output_plus_one_product,
+            product_masked,
+            claimed_output_minus_one_product_masked,
+            claimed_output_plus_one_product_masked,
         ],
         &[unit_scale],
     )?;
@@ -369,7 +404,8 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // assert value is positive
     let sign = sign(config, region, &[input.clone()])?;
     let ones = create_constant_tensor(F::ONE, sign.len());
-    let ones = region.assign(&config.custom_gates.inputs[1], &ones)?;
+    let mut ones = region.assign(&config.custom_gates.inputs[1], &ones)?;
+    ones.reshape(sign.dims())?;
     region.increment(ones.len());
 
     // assert the sign is positive
@@ -5680,11 +5716,8 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
         input_felt_scale,
         output_felt_scale,
     )?;
-    // product of num * (1 / denom) = 2*output_scale
-    let percent = pairwise(config, region, &[input, inv_denom], BaseOp::Mult)?;
-
-    // rebase the percent to 2x the scale
-    div(config, region, &[percent], input_felt_scale)
+    // product of num * (1 / denom) = input_scale * output_scale
+    pairwise(config, region, &[input, inv_denom], BaseOp::Mult)
 }
 
 /// Applies softmax
@@ -5788,17 +5821,8 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::
     let int_scale = scale.0 as IntegerRep;
     // felt scale
     let felt_scale = integer_rep_to_felt(int_scale);
-    // range check len capped at 2^(S-3) and make it divisible 2
-    let range_check_bracket = std::cmp::min(
-        utils::F32(scale.0),
-        utils::F32(2_f32.powf((F::S - 5) as f32)),
-    )
-    .0;
-
-    let range_check_bracket_int = range_check_bracket as IntegerRep;
-
     // input scale ratio we multiply by tol such that in the new scale range_check_len represents tol percent
-    let input_scale_ratio = ((scale.0.powf(2.0) / range_check_bracket) * tol) as IntegerRep / 2 * 2;
+    let input_scale_ratio = (scale.0 * tol) as IntegerRep / 2 * 2;
 
     let recip = recip(
         config,
@@ -5823,10 +5847,5 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::
     log::debug!("rebased_product: {}", rebased_product.show());
 
     // check that it is within the tolerance range
-    range_check(
-        config,
-        region,
-        &[rebased_product],
-        &(-range_check_bracket_int, range_check_bracket_int),
-    )
+    range_check(config, region, &[rebased_product], &(-int_scale, int_scale))
 }
