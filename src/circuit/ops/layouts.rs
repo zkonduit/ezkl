@@ -65,7 +65,9 @@ pub fn l1_distance<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 /// Determines if from a set of 3 tensors the 1st is closest to a reference tensor.
-pub fn is_closest_to<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+/// should only be used in the context of a monotonic function like the product used in the division, recipe, and sqrt arguments;
+/// or the increasing powers of 2 in the ln argument.
+fn is_closest_to<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 3],
@@ -75,6 +77,8 @@ pub fn is_closest_to<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let l1_distance_1 = l1_distance(config, region, &[values[1].clone(), reference[0].clone()])?;
     let l1_distance_2 = l1_distance(config, region, &[values[2].clone(), reference[0].clone()])?;
 
+    // one might expect this to be unsound as if both l1_distance_0 and l1_distance_1 AND l1_distance_2 are the same then one could expect the solution to not be unique.
+    // however if l1_distance_0 and l1_distance_1 are the same then l1_distance_2 must be different for a monotonic function like the product used in the division algorithm.
     let is_closest_to_0 = less_equal(config, region, &[l1_distance_0.clone(), l1_distance_1])?;
     let is_closest_to_1 = less_equal(config, region, &[l1_distance_0, l1_distance_2])?;
 
