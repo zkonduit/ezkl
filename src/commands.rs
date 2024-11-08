@@ -333,18 +333,6 @@ impl<'source> FromPyObject<'source> for ContractType {
         }
     }
 }
-// not wasm
-use lazy_static::lazy_static;
-
-// if CARGO VERSION is 0.0.0 replace with "source - no compatibility guaranteed"
-lazy_static! {
-    /// The version of the ezkl library
-    pub static ref VERSION: &'static str =  if env!("CARGO_PKG_VERSION") == "0.0.0" {
-       "source - no compatibility guaranteed"
-    } else {
-        env!("CARGO_PKG_VERSION")
-    };
-}
 
 /// Get the styles for the CLI
 pub fn get_styles() -> clap::builder::Styles {
@@ -395,7 +383,7 @@ pub fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
 #[allow(missing_docs)]
 #[derive(Parser, Debug, Clone)]
 #[command(author, about, long_about = None)]
-#[clap(version = *VERSION, styles = get_styles(), trailing_var_arg = true)]
+#[clap(version = crate::version(), styles = get_styles(), trailing_var_arg = true)]
 pub struct Cli {
     /// If provided, outputs the completion file for given shell
     #[clap(long = "generate", value_parser)]
