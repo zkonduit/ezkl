@@ -75,27 +75,10 @@ pub fn is_closest_to<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let l1_distance_1 = l1_distance(config, region, &[values[1].clone(), reference[0].clone()])?;
     let l1_distance_2 = l1_distance(config, region, &[values[2].clone(), reference[0].clone()])?;
 
-    // we need to account for rounding up or down so it is a <= and not a < comparison but only one of the distances can be less than or equal to the reference
-    // else we could have two distances that are equal to the reference,
-    // which could result in soundness issues if we're looking for a unique solution in monotically increasing distance functions
-    let is_equal_0 = equals(
-        config,
-        region,
-        &[l1_distance_0.clone(), l1_distance_1.clone()],
-    )?;
     let is_closest_to_0 = less_equal(config, region, &[l1_distance_0.clone(), l1_distance_1])?;
-    let is_equal_1 = equals(
-        config,
-        region,
-        &[l1_distance_0.clone(), l1_distance_2.clone()],
-    )?;
     let is_closest_to_1 = less_equal(config, region, &[l1_distance_0, l1_distance_2])?;
 
     let is_closest = and(config, region, &[is_closest_to_0, is_closest_to_1])?;
-    let both_equal = and(config, region, &[is_equal_0, is_equal_1])?;
-    let not_both_equal = not(config, region, &[both_equal])?;
-
-    let is_closest = and(config, region, &[is_closest, not_both_equal])?;
 
     let mut comparison_unit = create_constant_tensor(integer_rep_to_felt(1), is_closest.len());
 
