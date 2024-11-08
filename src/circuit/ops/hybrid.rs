@@ -137,8 +137,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             HybridOp::Floor { scale, legs } => format!("FLOOR(scale={}, legs={})", scale, legs),
             HybridOp::Round { scale, legs } => format!("ROUND(scale={}, legs={})", scale, legs),
 
-            HybridOp::Max => format!("MAX"),
-            HybridOp::Min => format!("MIN"),
+            HybridOp::Max => "MAX".to_string(),
+            HybridOp::Min => "MIN".to_string(),
             HybridOp::Recip {
                 input_scale,
                 output_scale,

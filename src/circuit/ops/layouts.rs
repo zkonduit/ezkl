@@ -71,6 +71,7 @@ fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     x: &ValTensor<F>,
+    ignore_mask: &Option<ValTensor<F>>,
     f: impl Fn(&BaseConfig<F>, &mut RegionCtx<F>, &ValTensor<F>) -> Result<ValTensor<F>, CircuitError>,
 ) -> Result<(), CircuitError> {
     let two = create_constant_tensor(F::from(2), 1);
@@ -90,7 +91,11 @@ fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::
     let f_x_is_opt_rhs = less(config, region, &[f_x.clone(), f_x_plus_2])?;
     let f_x_is_opt_lhs = less(config, region, &[f_x.clone(), f_x_minus_2])?;
 
-    let is_opt = and(config, region, &[f_x_is_opt_lhs, f_x_is_opt_rhs])?;
+    let mut is_opt = and(config, region, &[f_x_is_opt_lhs, f_x_is_opt_rhs])?;
+
+    if let Some(ignore_mask) = ignore_mask {
+        is_opt = or(config, region, &[is_opt.clone(), ignore_mask.clone()])?;
+    }
 
     let mut comparison_unit = create_constant_tensor(integer_rep_to_felt(1), is_opt.len());
     comparison_unit.reshape(is_opt.dims())?;
@@ -155,7 +160,7 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         Ok(distance)
     };
 
-    optimum_convex_function(config, region, &claimed_output, err_func)?;
+    optimum_convex_function(config, region, &claimed_output, &None, err_func)?;
 
     Ok(claimed_output)
 }
@@ -205,8 +210,15 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let zero_inverse = create_constant_tensor(integer_rep_to_felt(zero_inverse_val), 1);
 
     let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
-
+    let not_equal_zero_mask = not(config, region, &[equal_zero_mask.clone()])?;
     let equal_inverse_mask = equals(config, region, &[claimed_output.clone(), zero_inverse])?;
+
+    let masked_unit_scale = pairwise(
+        config,
+        region,
+        &[unit_scale.clone(), not_equal_zero_mask.clone()],
+        BaseOp::Mult,
+    )?;
 
     // assert the two masks are equal
     enforce_equality(
@@ -220,11 +232,22 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
                     x: &ValTensor<F>|
      -> Result<ValTensor<F>, CircuitError> {
         let product = pairwise(config, region, &[x.clone(), input.clone()], BaseOp::Mult)?;
-        let distance = l1_distance(config, region, &[product.clone(), unit_scale.clone()])?;
+
+        let distance = l1_distance(
+            config,
+            region,
+            &[product.clone(), masked_unit_scale.clone()],
+        )?;
         Ok(distance)
     };
 
-    optimum_convex_function(config, region, &claimed_output, err_func)?;
+    optimum_convex_function(
+        config,
+        region,
+        &claimed_output,
+        &Some(equal_zero_mask),
+        err_func,
+    )?;
 
     Ok(claimed_output)
 }
@@ -306,7 +329,7 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         Ok(distance)
     };
 
-    optimum_convex_function(config, region, &claimed_output, err_func)?;
+    optimum_convex_function(config, region, &claimed_output, &None, err_func)?;
 
     Ok(claimed_output)
 }

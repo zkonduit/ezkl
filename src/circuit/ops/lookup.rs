@@ -198,9 +198,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
 
     /// Returns the scale of the output of the operation.
     fn out_scale(&self, inputs_scale: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
-        let scale = match self {
-            _ => inputs_scale[0],
-        };
+        let scale = inputs_scale[0];
         Ok(scale)
     }
 

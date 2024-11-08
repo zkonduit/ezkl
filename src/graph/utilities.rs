@@ -764,7 +764,7 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>();
 
             if inputs.len() == 2 {
-                if const_inputs.len() > 0 {
+                if !const_inputs.is_empty() {
                     let const_idx = const_inputs[0];
                     let boxed_op = inputs[const_idx].opkind();
                     let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
