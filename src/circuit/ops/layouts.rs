@@ -4828,8 +4828,6 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     comparison_unit.reshape(is_closest.dims())?;
     let assigned_unit = region.assign(&config.custom_gates.inputs[1], &comparison_unit)?;
 
-    println!("is_closest {}", is_closest.show());
-
     enforce_equality(config, region, &[is_closest, assigned_unit])?;
 
     // get a linear interpolation now
