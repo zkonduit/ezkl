@@ -121,6 +121,17 @@ pub fn diff_less_than<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     Ok(())
 }
 
+fn is_positive<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    value: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, CircuitError> {
+    let neg_one = create_constant_tensor(integer_rep_to_felt(-1), 1);
+    let is_negative = equals(config, region, &[value[0].clone(), neg_one])?;
+
+    not(config, region, &[is_negative])
+}
+
 /// Div accumulated layout
 pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
@@ -304,10 +315,10 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region.increment(claimed_output.len());
 
     // assert value is positive
-    let sign = sign(config, region, &[claimed_output.clone()])?;
-    let ones = create_constant_tensor(F::ONE, sign.len());
+    let is_positive = is_positive(config, region, &[claimed_output.clone()])?;
+    let ones = create_constant_tensor(F::ONE, is_positive.len());
     // assert the sign is positive
-    enforce_equality(config, region, &[sign, ones])?;
+    enforce_equality(config, region, &[is_positive, ones])?;
 
     // rescaled input
     let rescaled_input = pairwise(config, region, &[input.clone(), unit_scale], BaseOp::Mult)?;
@@ -4816,6 +4827,8 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let mut comparison_unit = create_constant_tensor(integer_rep_to_felt(1), is_closest.len());
     comparison_unit.reshape(is_closest.dims())?;
     let assigned_unit = region.assign(&config.custom_gates.inputs[1], &comparison_unit)?;
+
+    println!("is_closest {}", is_closest.show());
 
     enforce_equality(config, region, &[is_closest, assigned_unit])?;
 
