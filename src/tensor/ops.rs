@@ -31,14 +31,8 @@ pub fn get_rep(
         return Err(DecompositionError::TooLarge(*x, base, n));
     }
     let mut rep = vec![0; n + 1];
-    // sign bit
-    rep[0] = if *x < 0 {
-        -1
-    } else if *x > 0 {
-        1
-    } else {
-        0
-    };
+    // sign bit, we omit 0 as it is not needed in our representation
+    rep[0] = if *x < 0 { -1 } else { 1 };
 
     let mut x = x.abs();
     //
