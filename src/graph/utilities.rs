@@ -764,7 +764,7 @@ pub fn new_op_from_onnx(
                 .collect::<Vec<_>>();
 
             if inputs.len() == 2 {
-                if const_inputs.len() > 0 {
+                if !const_inputs.is_empty() {
                     let const_idx = const_inputs[0];
                     let boxed_op = inputs[const_idx].opkind();
                     let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
@@ -842,12 +842,17 @@ pub fn new_op_from_onnx(
         "Sigmoid" => SupportedOp::Nonlinear(LookupOp::Sigmoid {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),
-        "Sqrt" => SupportedOp::Nonlinear(LookupOp::Sqrt {
+        "Sqrt" => SupportedOp::Hybrid(HybridOp::Sqrt {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),
-        "Rsqrt" => SupportedOp::Nonlinear(LookupOp::Rsqrt {
-            scale: scale_to_multiplier(input_scales[0]).into(),
-        }),
+        "Rsqrt" => {
+            let in_scale = input_scales[0];
+            let max_scale = std::cmp::max(scales.get_max(), in_scale);
+            SupportedOp::Hybrid(HybridOp::Rsqrt {
+                input_scale: (scale_to_multiplier(in_scale) as f32).into(),
+                output_scale: (scale_to_multiplier(max_scale) as f32).into(),
+            })
+        }
         "Exp" => SupportedOp::Nonlinear(LookupOp::Exp {
             scale: scale_to_multiplier(input_scales[0]).into(),
         }),

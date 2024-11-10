@@ -309,8 +309,6 @@ pub struct RunArgs {
         all(feature = "ezkl", not(target_arch = "wasm32")),
         arg(long, default_value = "false")
     )]
-    /// Rebase the scale using lookup table for division instead of using a range check
-    pub div_rebasing: bool,
     /// Should constants with 0.0 fraction be rebased to scale 0
     #[cfg_attr(
         all(feature = "ezkl", not(target_arch = "wasm32")),
@@ -352,7 +350,6 @@ impl Default for RunArgs {
             input_visibility: Visibility::Private,
             output_visibility: Visibility::Public,
             param_visibility: Visibility::Private,
-            div_rebasing: false,
             rebase_frac_zero_constants: false,
             check_mode: CheckMode::UNSAFE,
             commitment: None,

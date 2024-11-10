@@ -1546,9 +1546,17 @@ pub mod nonlinearities {
     pub fn ilog2(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
-            let kix = (kix).log2();
-            let rounded = kix.round();
-            Ok::<_, TensorError>(rounded as IntegerRep)
+            let log = (kix).log2();
+            let floor = log.floor();
+            let ceil = log.ceil();
+            let floor_dist = ((2.0_f64).powf(floor) - kix).abs();
+            let ceil_dist = (kix - (2.0_f64).powf(ceil)).abs();
+
+            if floor_dist < ceil_dist {
+                Ok::<_, TensorError>(floor as IntegerRep)
+            } else {
+                Ok::<_, TensorError>(ceil as IntegerRep)
+            }
         })
         .unwrap()
     }

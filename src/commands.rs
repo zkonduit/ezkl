@@ -474,9 +474,6 @@ pub enum Commands {
         /// max logrows to use for calibration, 26 is the max public SRS size
         #[arg(long, value_hint = clap::ValueHint::Other)]
         max_logrows: Option<u32>,
-        // whether to only range check rebases (instead of trying both range check and lookup)
-        #[arg(long, default_value = DEFAULT_ONLY_RANGE_CHECK_REBASE, action = clap::ArgAction::SetTrue)]
-        only_range_check_rebase: Option<bool>,
     },
 
     /// Generates a dummy SRS
