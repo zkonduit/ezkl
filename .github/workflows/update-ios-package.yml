@@ -36,6 +36,15 @@ jobs:
           rm -rf ezkl-swift-package/Sources/EzklCoreBindings
           cp -r build/EzklCoreBindings ezkl-swift-package/Sources/
 
+      - name: Copy Test Files
+        run: |
+          rm -rf ezkl-swift-package/Tests/EzklAssets/*
+          
+          cp tests/assets/kzg ezkl-swift-package/Tests/EzklAssets/kzg.srs
+          cp tests/assets/input.json ezkl-swift-package/Tests/EzklAssets/input.json
+          cp tests/assets/model.compiled ezkl-swift-package/Tests/EzklAssets/network.ezkl
+          cp tests/assets/settings.json ezkl-swift-package/Tests/EzklAssets/settings.json
+
       - name: Set up Xcode environment
         run: |
           sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
@@ -66,10 +75,11 @@ jobs:
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git add Sources/EzklCoreBindings
+          git add Tests/EzklAssets
           git commit -m "Automatically updated EzklCoreBindings for EZKL"
           git tag ${{ github.event.inputs.tag }}
           git remote set-url origin https://zkonduit:${EZKL_PORTER_TOKEN}@github.com/zkonduit/ezkl-swift-package.git
           git push origin
-          git push origin --tags
+          git push origin tag ${{ github.event.inputs.tag }}
         env:
           EZKL_PORTER_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
