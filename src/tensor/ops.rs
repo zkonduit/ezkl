@@ -1500,6 +1500,67 @@ pub mod nonlinearities {
         .unwrap()
     }
 
+    /// Powers of 2
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale` - Single value
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// use ezkl::tensor::ops::nonlinearities::ipow2;
+    /// let x = Tensor::<IntegerRep>::new(
+    ///  Some(&[2, 15, 2, 1, 1, 0]),
+    /// &[2, 3],
+    /// ).unwrap();
+    /// let result = ipow2(&x, 1.0);
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 32768, 4, 2, 2, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn ipow2(a: &Tensor<IntegerRep>, scale_output: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| {
+            let kix = a_i as f64;
+            let kix = scale_output * (2.0_f64).powf(kix);
+            let rounded = kix.round();
+            Ok::<_, TensorError>(rounded as IntegerRep)
+        })
+        .unwrap()
+    }
+
+    /// Elementwise applies ln base 2 to a tensor of integers.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// use ezkl::tensor::ops::nonlinearities::ilog2;
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[2, 15, 2, 1, 1, 2]),
+    /// &[2, 3],
+    /// ).unwrap();
+    /// let result = ilog2(&x, 1.0);
+    /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 1, 0, 0, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(result, expected);
+    /// ```
+    pub fn ilog2(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+            let log = (kix).log2();
+            let floor = log.floor();
+            let ceil = log.ceil();
+            let floor_dist = ((2.0_f64).powf(floor) - kix).abs();
+            let ceil_dist = (kix - (2.0_f64).powf(ceil)).abs();
+
+            if floor_dist < ceil_dist {
+                Ok::<_, TensorError>(floor as IntegerRep)
+            } else {
+                Ok::<_, TensorError>(ceil as IntegerRep)
+            }
+        })
+        .unwrap()
+    }
+
     /// Elementwise applies sigmoid to a tensor of integers.
     /// # Arguments
     ///
@@ -1628,12 +1689,11 @@ pub mod nonlinearities {
         .unwrap()
     }
 
-    /// Elementwise applies exponential to a tensor of integers.
+    /// Elementwise applies ln to a tensor of integers.
     /// # Arguments
     ///
     /// * `a` - Tensor
     /// * `scale_input` - Single value
-    /// * `scale_output` - Single value
     /// # Examples
     /// ```
     /// use ezkl::tensor::Tensor;

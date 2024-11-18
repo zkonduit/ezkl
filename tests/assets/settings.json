@@ -27,7 +27,8 @@
         "check_mode": "UNSAFE",
         "commitment": "KZG",
         "decomp_base": 128,
-        "decomp_legs": 2
+        "decomp_legs": 2,
+        "bounded_log_lookup": false
     },
     "num_rows": 46,
     "total_assignments": 92,

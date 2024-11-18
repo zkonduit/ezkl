@@ -13,6 +13,16 @@ use serde::{Deserialize, Serialize};
 /// An enum representing the operations that consist of both lookups and arithmetic operations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum HybridOp {
+    Ln {
+        scale: utils::F32,
+    },
+    Rsqrt {
+        input_scale: utils::F32,
+        output_scale: utils::F32,
+    },
+    Sqrt {
+        scale: utils::F32,
+    },
     RoundHalfToEven {
         scale: utils::F32,
         legs: usize,
@@ -35,7 +45,6 @@ pub enum HybridOp {
     },
     Div {
         denom: utils::F32,
-        use_range_check_for_int: bool,
     },
     ReduceMax {
         axes: Vec<usize>,
@@ -112,6 +121,15 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
 
     fn as_string(&self) -> String {
         match self {
+            HybridOp::Rsqrt {
+                input_scale,
+                output_scale,
+            } => format!(
+                "RSQRT (input_scale={}, output_scale={})",
+                input_scale, output_scale
+            ),
+            HybridOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
+            HybridOp::Ln { scale } => format!("LN(scale={})", scale),
             HybridOp::RoundHalfToEven { scale, legs } => {
                 format!("ROUND_HALF_TO_EVEN(scale={}, legs={})", scale, legs)
             }
@@ -119,8 +137,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             HybridOp::Floor { scale, legs } => format!("FLOOR(scale={}, legs={})", scale, legs),
             HybridOp::Round { scale, legs } => format!("ROUND(scale={}, legs={})", scale, legs),
 
-            HybridOp::Max => format!("MAX"),
-            HybridOp::Min => format!("MIN"),
+            HybridOp::Max => "MAX".to_string(),
+            HybridOp::Min => "MIN".to_string(),
             HybridOp::Recip {
                 input_scale,
                 output_scale,
@@ -128,13 +146,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 "RECIP (input_scale={}, output_scale={})",
                 input_scale, output_scale
             ),
-            HybridOp::Div {
-                denom,
-                use_range_check_for_int,
-            } => format!(
-                "DIV (denom={}, use_range_check_for_int={})",
-                denom, use_range_check_for_int
-            ),
+            HybridOp::Div { denom } => format!("DIV (denom={})", denom),
             HybridOp::SumPool {
                 padding,
                 stride,
@@ -189,6 +201,20 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
         values: &[ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
+            HybridOp::Rsqrt {
+                input_scale,
+                output_scale,
+            } => layouts::rsqrt(
+                config,
+                region,
+                values[..].try_into()?,
+                *input_scale,
+                *output_scale,
+            )?,
+            HybridOp::Sqrt { scale } => {
+                layouts::sqrt(config, region, values[..].try_into()?, *scale)?
+            }
+            HybridOp::Ln { scale } => layouts::ln(config, region, values[..].try_into()?, *scale)?,
             HybridOp::RoundHalfToEven { scale, legs } => {
                 layouts::round_half_to_even(config, region, values[..].try_into()?, *scale, *legs)?
             }
@@ -227,13 +253,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 integer_rep_to_felt(input_scale.0 as i128),
                 integer_rep_to_felt(output_scale.0 as i128),
             )?,
-            HybridOp::Div {
-                denom,
-                use_range_check_for_int,
-                ..
-            } => {
-                if denom.0.fract() == 0.0 && *use_range_check_for_int {
-                    layouts::loop_div(
+            HybridOp::Div { denom, .. } => {
+                if denom.0.fract() == 0.0 {
+                    layouts::div(
                         config,
                         region,
                         values[..].try_into()?,
@@ -324,9 +346,18 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             | HybridOp::ReduceArgMax { .. }
             | HybridOp::OneHot { .. }
             | HybridOp::ReduceArgMin { .. } => 0,
-            HybridOp::Softmax { output_scale, .. } | HybridOp::Recip { output_scale, .. } => {
+
+            HybridOp::Recip { output_scale, .. } | HybridOp::Rsqrt { output_scale, .. } => {
                 multiplier_to_scale(output_scale.0 as f64)
             }
+            HybridOp::Softmax {
+                output_scale,
+                input_scale,
+                ..
+            } => multiplier_to_scale((output_scale.0 * input_scale.0) as f64),
+            HybridOp::Ln {
+                scale: output_scale,
+            } => 4 * multiplier_to_scale(output_scale.0 as f64),
             _ => in_scales[0],
         };
         Ok(scale)

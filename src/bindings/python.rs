@@ -180,9 +180,6 @@ struct PyRunArgs {
     /// list[tuple[str, int]]: Hand-written parser for graph variables, eg. batch_size=1
     pub variables: Vec<(String, usize)>,
     #[pyo3(get, set)]
-    /// bool: Rebase the scale using lookup table for division instead of using a range check
-    pub div_rebasing: bool,
-    #[pyo3(get, set)]
     /// bool: Should constants with 0.0 fraction be rebased to scale 0
     pub rebase_frac_zero_constants: bool,
     #[pyo3(get, set)]
@@ -197,6 +194,9 @@ struct PyRunArgs {
     /// int: The number of legs used for decomposition
     #[pyo3(get, set)]
     pub decomp_legs: usize,
+    /// bool: Should the circuit use unbounded lookups for log
+    #[pyo3(get, set)]
+    pub bounded_log_lookup: bool,
 }
 
 /// default instantiation of PyRunArgs
@@ -212,6 +212,7 @@ impl PyRunArgs {
 impl From<PyRunArgs> for RunArgs {
     fn from(py_run_args: PyRunArgs) -> Self {
         RunArgs {
+            bounded_log_lookup: py_run_args.bounded_log_lookup,
             tolerance: Tolerance::from(py_run_args.tolerance),
             input_scale: py_run_args.input_scale,
             param_scale: py_run_args.param_scale,
@@ -223,7 +224,6 @@ impl From<PyRunArgs> for RunArgs {
             output_visibility: py_run_args.output_visibility,
             param_visibility: py_run_args.param_visibility,
             variables: py_run_args.variables,
-            div_rebasing: py_run_args.div_rebasing,
             rebase_frac_zero_constants: py_run_args.rebase_frac_zero_constants,
             check_mode: py_run_args.check_mode,
             commitment: Some(py_run_args.commitment.into()),
@@ -236,6 +236,7 @@ impl From<PyRunArgs> for RunArgs {
 impl Into<PyRunArgs> for RunArgs {
     fn into(self) -> PyRunArgs {
         PyRunArgs {
+            bounded_log_lookup: self.bounded_log_lookup,
             tolerance: self.tolerance.val,
             input_scale: self.input_scale,
             param_scale: self.param_scale,
@@ -247,7 +248,6 @@ impl Into<PyRunArgs> for RunArgs {
             output_visibility: self.output_visibility,
             param_visibility: self.param_visibility,
             variables: self.variables,
-            div_rebasing: self.div_rebasing,
             rebase_frac_zero_constants: self.rebase_frac_zero_constants,
             check_mode: self.check_mode,
             commitment: self.commitment.into(),
@@ -873,8 +873,6 @@ fn gen_settings(
 /// max_logrows: int
 ///     Optional max logrows to use for calibration
 ///
-/// only_range_check_rebase: bool
-///     Check ranges when rebasing
 ///
 /// Returns
 /// -------
@@ -889,7 +887,6 @@ fn gen_settings(
     scales = None,
     scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.split(",").map(|x| x.parse().unwrap()).collect(),
     max_logrows = None,
-    only_range_check_rebase = DEFAULT_ONLY_RANGE_CHECK_REBASE.parse().unwrap(),
 ))]
 fn calibrate_settings(
     py: Python,
@@ -901,7 +898,6 @@ fn calibrate_settings(
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
-    only_range_check_rebase: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_asyncio::tokio::future_into_py(py, async move {
         crate::execute::calibrate(
@@ -912,7 +908,6 @@ fn calibrate_settings(
             lookup_safety_margin,
             scales,
             scale_rebase_multiplier,
-            only_range_check_rebase,
             max_logrows,
         )
         .await

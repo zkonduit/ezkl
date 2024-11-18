@@ -59,10 +59,7 @@ fn serde_format_from_str(s: &str) -> halo2_proofs::SerdeFormat {
 
 #[allow(missing_docs)]
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
-#[cfg_attr(
-    all(feature = "ezkl", not(target_arch = "wasm32")),
-    derive(ValueEnum)
-)]
+#[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), derive(ValueEnum))]
 pub enum ProofType {
     #[default]
     Single,
@@ -134,10 +131,7 @@ impl<'source> pyo3::FromPyObject<'source> for ProofType {
 
 #[allow(missing_docs)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[cfg_attr(
-    all(feature = "ezkl", not(target_arch = "wasm32")),
-    derive(ValueEnum)
-)]
+#[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), derive(ValueEnum))]
 pub enum StrategyType {
     Single,
     Accum,
@@ -203,10 +197,7 @@ pub enum PfSysError {
 
 #[allow(missing_docs)]
 #[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, PartialOrd)]
-#[cfg_attr(
-    all(feature = "ezkl", not(target_arch = "wasm32")),
-    derive(ValueEnum)
-)]
+#[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), derive(ValueEnum))]
 pub enum TranscriptType {
     Poseidon,
     #[default]
@@ -324,6 +315,8 @@ where
     pub timestamp: Option<u128>,
     /// commitment
     pub commitment: Option<Commitments>,
+    /// (optional) version of ezkl used to generate the proof
+    version: Option<String>,
 }
 
 #[cfg(feature = "python-bindings")]
@@ -385,6 +378,7 @@ where
                     .as_millis(),
             ),
             commitment,
+            version: Some(crate::version().to_string()),
         }
     }
 
@@ -920,6 +914,7 @@ mod tests {
             pretty_public_inputs: None,
             timestamp: None,
             commitment: None,
+            version: None,
         };
 
         snark

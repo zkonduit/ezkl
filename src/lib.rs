@@ -108,6 +108,18 @@ use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
+// if CARGO VERSION is 0.0.0 replace with "source - no compatibility guaranteed"
+/// The version of the ezkl library
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Get the version of the library
+pub fn version() -> &'static str {
+    match VERSION {
+        "0.0.0" => "source - no compatibility guaranteed",
+        _ => VERSION,
+    }
+}
+
 /// Bindings managment
 #[cfg(any(
     feature = "ios-bindings",
@@ -297,8 +309,6 @@ pub struct RunArgs {
         all(feature = "ezkl", not(target_arch = "wasm32")),
         arg(long, default_value = "false")
     )]
-    /// Rebase the scale using lookup table for division instead of using a range check
-    pub div_rebasing: bool,
     /// Should constants with 0.0 fraction be rebased to scale 0
     #[cfg_attr(
         all(feature = "ezkl", not(target_arch = "wasm32")),
@@ -317,11 +327,18 @@ pub struct RunArgs {
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "2", value_hint = clap::ValueHint::Other))]
     /// the number of legs used for decompositions
     pub decomp_legs: usize,
+    #[cfg_attr(
+        all(feature = "ezkl", not(target_arch = "wasm32")),
+        arg(long, default_value = "false")
+    )]
+    /// use unbounded lookup for the log
+    pub bounded_log_lookup: bool,
 }
 
 impl Default for RunArgs {
     fn default() -> Self {
         Self {
+            bounded_log_lookup: false,
             tolerance: Tolerance::default(),
             input_scale: 7,
             param_scale: 7,
@@ -333,7 +350,6 @@ impl Default for RunArgs {
             input_visibility: Visibility::Private,
             output_visibility: Visibility::Public,
             param_visibility: Visibility::Private,
-            div_rebasing: false,
             rebase_frac_zero_constants: false,
             check_mode: CheckMode::UNSAFE,
             commitment: None,

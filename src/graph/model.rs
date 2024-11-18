@@ -915,20 +915,9 @@ impl Model {
                         if scales.contains_key(&i) {
                             let scale_diff = n.out_scale - scales[&i];
                             n.opkind = if scale_diff > 0 {
-                                RebaseScale::rebase(
-                                    n.opkind,
-                                    scales[&i],
-                                    n.out_scale,
-                                    1,
-                                    run_args.div_rebasing,
-                                )
+                                RebaseScale::rebase(n.opkind, scales[&i], n.out_scale, 1)
                             } else {
-                                RebaseScale::rebase_up(
-                                    n.opkind,
-                                    scales[&i],
-                                    n.out_scale,
-                                    run_args.div_rebasing,
-                                )
+                                RebaseScale::rebase_up(n.opkind, scales[&i], n.out_scale)
                             };
                             n.out_scale = scales[&i];
                         }

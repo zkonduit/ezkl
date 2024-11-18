@@ -29,41 +29,96 @@ use crate::{
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
 
-/// Same as div but splits the division into N parts
-pub(crate) fn loop_div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+/// Calculate the L1 distance between two tensors.
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::l1_distance;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// use ezkl::tensor::ValTensor;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+/// &[3, 3],
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///   Some(&[1, 2, 3, 1, 2, 3, 1, 2, 3]),
+/// &[3, 3],
+/// ).unwrap());
+/// let result = l1_distance::<Fp>(&dummy_config, &mut dummy_region, &[x, k]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 1, 1, 1, 2, 2, 2]), &[3, 3]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+pub fn l1_distance<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
-    value: &[ValTensor<F>; 1],
-    divisor: F,
+    values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    if divisor == F::ONE {
-        return Ok(value[0].clone());
-    }
+    let diff = pairwise(config, region, values, BaseOp::Sub)?;
+    let abs_diff = abs(config, region, &[diff])?;
 
-    // if integer val is divisible by 2, we can use a faster method and div > F::S
-    let mut divisor = divisor;
-    let mut num_parts = 1;
+    Ok(abs_diff)
+}
 
-    while felt_to_integer_rep(divisor) % 2 == 0
-        && felt_to_integer_rep(divisor) > (2_i128.pow(F::S - 4))
-    {
-        divisor = integer_rep_to_felt(felt_to_integer_rep(divisor) / 2);
-        num_parts += 1;
-    }
+/// Determines if from a set of 3 tensors the 1st is closest to a reference tensor.
+/// should only be used in the context of a monotonic function like the product used in the division, recipe, and sqrt arguments;
+/// or the increasing powers of 2 in the ln argument. Which is used to construct a convex error function.
+fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    x: &ValTensor<F>,
+    f: impl Fn(&BaseConfig<F>, &mut RegionCtx<F>, &ValTensor<F>) -> Result<ValTensor<F>, CircuitError>,
+) -> Result<(), CircuitError> {
+    let one = create_constant_tensor(F::from(1), 1);
 
-    let output = div(config, region, value, divisor)?;
-    if num_parts == 1 {
-        return Ok(output);
-    }
+    let f_x = f(config, region, x)?;
 
-    let divisor_int = 2_i128.pow(num_parts - 1);
-    let divisor_felt = integer_rep_to_felt(divisor_int);
-    if divisor_int <= 2_i128.pow(F::S - 3) {
-        div(config, region, &[output], divisor_felt)
-    } else {
-        // keep splitting the divisor until it satisfies the condition
-        loop_div(config, region, &[output], divisor_felt)
-    }
+    let x_plus_1 = pairwise(config, region, &[x.clone(), one.clone()], BaseOp::Add)?;
+    let f_x_plus_1 = f(config, region, &x_plus_1)?;
+
+    let x_minus_1 = pairwise(config, region, &[x.clone(), one.clone()], BaseOp::Sub)?;
+    let f_x_minus_1 = f(config, region, &x_minus_1)?;
+
+    // because the function is convex, the result should be the minimum of the three
+    // not that we offset the x by 1 to get the next value
+    // f(x) <= f(x+1) and f(x) <= f(x-1)
+    // the result is 1 if the function is optimal solely because of the convexity of the function
+    // the distances can be equal but this is only possible if f(x) and f(x+1) are both optimal (or f(x) and f(x-1)).
+    let f_x_is_opt_rhs = less_equal(config, region, &[f_x.clone(), f_x_plus_1.clone()])?;
+    let f_x_is_opt_lhs = less_equal(config, region, &[f_x.clone(), f_x_minus_1.clone()])?;
+
+    let is_opt = and(config, region, &[f_x_is_opt_lhs, f_x_is_opt_rhs])?;
+
+    let mut comparison_unit = create_constant_tensor(F::ONE, is_opt.len());
+    comparison_unit.reshape(is_opt.dims())?;
+
+    // assert that the result is 1
+    enforce_equality(config, region, &[is_opt, comparison_unit])?;
+
+    Ok(())
+}
+
+/// Err is less than some constant
+pub fn diff_less_than<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 2],
+    constant: F,
+) -> Result<(), CircuitError> {
+    let distance = l1_distance(config, region, values)?;
+
+    let constant = create_constant_tensor(constant, 1);
+    let is_less = less(config, region, &[distance.clone(), constant.clone()])?;
+
+    // assert the result is 1
+    let comparison_unit = create_constant_tensor(F::ONE, is_less.len());
+    enforce_equality(config, region, &[is_less, comparison_unit])?;
+
+    Ok(())
 }
 
 /// Div accumulated layout
@@ -80,12 +135,7 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let range_check_bracket = felt_to_integer_rep(div) / 2;
-
     let divisor = create_constant_tensor(div, 1);
-
-    let divisor = region.assign(&config.custom_gates.inputs[1], &divisor)?;
-    region.increment(divisor.len());
 
     let is_assigned = !input.any_unknowns()? && !divisor.any_unknowns()?;
 
@@ -117,19 +167,7 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         BaseOp::Mult,
     )?;
 
-    let diff_with_input = pairwise(
-        config,
-        region,
-        &[product.clone(), input.clone()],
-        BaseOp::Sub,
-    )?;
-
-    range_check(
-        config,
-        region,
-        &[diff_with_input],
-        &(-range_check_bracket, range_check_bracket),
-    )?;
+    diff_less_than(config, region, &[input.clone(), product.clone()], div)?;
 
     Ok(claimed_output)
 }
@@ -145,19 +183,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let input = value[0].clone();
     let input_dims = input.dims();
 
-    let integer_input_scale = felt_to_integer_rep(input_scale);
-    let integer_output_scale = felt_to_integer_rep(output_scale);
-
-    // range_check_bracket is min of input_scale * output_scale and 2^F::S - 3
-    let range_check_len = std::cmp::min(integer_output_scale, 2_i128.pow(F::S - 4));
-
-    let input_scale_ratio = if range_check_len > 0 {
-        integer_rep_to_felt(integer_input_scale * integer_output_scale / range_check_len)
-    } else {
-        F::ONE
-    };
-
-    let range_check_bracket = range_check_len / 2;
+    let unit_scale = create_constant_tensor(output_scale * input_scale, 1);
 
     let is_assigned = !input.any_unknowns()?;
 
@@ -183,24 +209,21 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
     region.increment(claimed_output.len());
 
-    // this is now of scale 2 * scale
-    let product = pairwise(
-        config,
-        region,
-        &[claimed_output.clone(), input.clone()],
-        BaseOp::Mult,
-    )?;
-
     // divide by input_scale
-    let rebased_div = loop_div(config, region, &[product], input_scale_ratio)?;
-
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64)[0];
     let zero_inverse = create_constant_tensor(integer_rep_to_felt(zero_inverse_val), 1);
 
     let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
-
+    let not_equal_zero_mask = not(config, region, &[equal_zero_mask.clone()])?;
     let equal_inverse_mask = equals(config, region, &[claimed_output.clone(), zero_inverse])?;
+
+    let masked_unit_scale = pairwise(
+        config,
+        region,
+        &[unit_scale.clone(), not_equal_zero_mask.clone()],
+        BaseOp::Mult,
+    )?;
 
     // assert the two masks are equal
     enforce_equality(
@@ -209,22 +232,133 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[equal_zero_mask.clone(), equal_inverse_mask],
     )?;
 
-    let unit_scale = create_constant_tensor(integer_rep_to_felt(range_check_len), 1);
+    let err_func = |config: &BaseConfig<F>,
+                    region: &mut RegionCtx<F>,
+                    x: &ValTensor<F>|
+     -> Result<ValTensor<F>, CircuitError> {
+        let product = pairwise(config, region, &[x.clone(), input.clone()], BaseOp::Mult)?;
 
-    let unit_mask = pairwise(config, region, &[equal_zero_mask, unit_scale], BaseOp::Mult)?;
+        let distance = l1_distance(
+            config,
+            region,
+            &[product.clone(), masked_unit_scale.clone()],
+        )?;
+        Ok(distance)
+    };
 
-    // now add the unit mask to the rebased_div
-    let rebased_offset_div = pairwise(config, region, &[rebased_div, unit_mask], BaseOp::Add)?;
-
-    // at most the error should be in the original unit scale's range
-    range_check(
-        config,
-        region,
-        &[rebased_offset_div],
-        &(range_check_bracket, 3 * range_check_bracket),
-    )?;
+    optimum_convex_function(config, region, &claimed_output, err_func)?;
 
     Ok(claimed_output)
+}
+
+/// Square root accumulated layout
+/// # Example
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::sqrt;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// use ezkl::tensor::ValTensor;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 3, 2, 3, 4, 3, 4, 9]),
+///    &[3, 3],
+/// ).unwrap());
+/// let result = sqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0.into()).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 2, 1, 2, 2, 2, 2, 3]), &[3, 3]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    value: &[ValTensor<F>; 1],
+    input_scale: utils::F32,
+) -> Result<ValTensor<F>, CircuitError> {
+    let input = value[0].clone();
+    let input_dims = input.dims();
+
+    let unit_scale = create_constant_tensor(integer_rep_to_felt(input_scale.0 as IntegerRep), 1);
+
+    let is_assigned = !input.any_unknowns()?;
+
+    let mut claimed_output: ValTensor<F> = if is_assigned {
+        let input_evals = input.int_evals()?;
+        tensor::ops::nonlinearities::sqrt(&input_evals, input_scale.0 as f64)
+            .par_iter()
+            .map(|x| Value::known(integer_rep_to_felt(*x)))
+            .collect::<Tensor<Value<F>>>()
+            .into()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); input.len()]),
+            &[input.len()],
+        )?
+        .into()
+    };
+    claimed_output.reshape(input_dims)?;
+    let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
+    region.increment(claimed_output.len());
+
+    // force the output to be positive or zero
+    let claimed_output = abs(config, region, &[claimed_output.clone()])?;
+
+    // rescaled input
+    let rescaled_input = pairwise(config, region, &[input.clone(), unit_scale], BaseOp::Mult)?;
+
+    let err_func = |config: &BaseConfig<F>,
+                    region: &mut RegionCtx<F>,
+                    x: &ValTensor<F>|
+     -> Result<ValTensor<F>, CircuitError> {
+        let product = pairwise(config, region, &[x.clone(), x.clone()], BaseOp::Mult)?;
+        let distance = l1_distance(config, region, &[product.clone(), rescaled_input.clone()])?;
+        Ok(distance)
+    };
+
+    optimum_convex_function(config, region, &claimed_output, err_func)?;
+
+    Ok(claimed_output)
+}
+
+/// Reciprocal square root accumulated layout
+/// # Example
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::rsqrt;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// use ezkl::tensor::ValTensor;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
+/// &[3, 3],
+/// ).unwrap());
+/// let result = rsqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0.into(), 1.0.into()).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 1, 1, 1, 1, 1]), &[3, 3]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+pub fn rsqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    value: &[ValTensor<F>; 1],
+    input_scale: utils::F32,
+    output_scale: utils::F32,
+) -> Result<ValTensor<F>, CircuitError> {
+    let sqrt = sqrt(config, region, value, input_scale)?;
+
+    let felt_output_scale = integer_rep_to_felt(output_scale.0 as IntegerRep);
+    let felt_input_scale = integer_rep_to_felt(input_scale.0 as IntegerRep);
+
+    let recip = recip(config, region, &[sqrt], felt_input_scale, felt_output_scale)?;
+
+    Ok(recip)
 }
 
 /// Dot product of two tensors.
@@ -1805,6 +1939,10 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
+    if values[0].len() == 1 {
+        return Ok(values[0].clone());
+    }
+
     region.flush()?;
     // time this entire function run
     let global_start = instant::Instant::now();
@@ -3102,7 +3240,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     last_elem.reshape(&[&[batch_size, image_channels], shape].concat())?;
 
     if normalized {
-        last_elem = loop_div(config, region, &[last_elem], F::from(kernel_len as u64))?;
+        last_elem = div(config, region, &[last_elem], F::from(kernel_len as u64))?;
     }
     Ok(last_elem)
 }
@@ -4507,6 +4645,293 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     )
 }
 
+/// integer ln layout
+/// # Arguments
+/// * `config` - BaseConfig
+/// * `region` - RegionCtx
+/// * `values` - &[ValTensor<F>; 1]
+/// * `scale` - utils::F32
+/// # Returns
+/// * ValTensor<F>
+/// # Example
+///
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::ln;
+/// use ezkl::tensor::val::ValTensor;
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(128,2));
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+/// Some(&[3, 2, 3, 1]),
+/// &[1, 1, 2, 2],
+/// ).unwrap());
+///
+/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into()).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, -8]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// ```
+pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+    scale: utils::F32,
+) -> Result<ValTensor<F>, CircuitError> {
+    // first generate the claimed val
+
+    let mut input = values[0].clone();
+    let scale_as_felt = integer_rep_to_felt(scale.0.round() as IntegerRep);
+
+    let triple_scaled_as_felt_tensor =
+        create_constant_tensor(scale_as_felt * scale_as_felt * scale_as_felt, 1);
+
+    // natural ln is log2(x) * ln(2)
+    let ln2 = utils::F32::from(2.0_f32.ln());
+    // now create a constant tensor for ln2 with scale
+    let ln2_tensor: ValTensor<F> = create_constant_tensor(
+        integer_rep_to_felt((ln2.0 * scale.0).round() as IntegerRep),
+        1,
+    );
+    let unit = create_constant_tensor(integer_rep_to_felt(1), 1);
+    let negative_one = create_constant_tensor(integer_rep_to_felt(-1), 1);
+
+    // 2. assign the image
+    if !input.all_prev_assigned() {
+        input = region.assign(&config.custom_gates.inputs[0], &input)?;
+        // don't need to increment because the claimed output is assigned to output and incremented accordingly
+    }
+
+    let is_assigned = !input.any_unknowns()?;
+
+    let mut claimed_output: ValTensor<F> = if is_assigned {
+        let input_evals = input.int_evals()?;
+        // returns an integer with the base 2 logarithm
+        tensor::ops::nonlinearities::ilog2(&input_evals.clone(), scale.0 as f64)
+            .par_iter()
+            .map(|x| Value::known(integer_rep_to_felt(*x)))
+            .collect::<Tensor<Value<F>>>()
+            .into()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); input.len()]),
+            &[input.len()],
+        )?
+        .into()
+    };
+    claimed_output.reshape(input.dims())?;
+    region.assign(&config.custom_gates.output, &claimed_output)?;
+    region.increment(claimed_output.len());
+
+    let pow2_of_claimed_output = nonlinearity(
+        config,
+        region,
+        &[claimed_output.clone()],
+        &LookupOp::PowersOfTwo { scale },
+    )?;
+
+    let num_bits = (std::mem::size_of::<IntegerRep>() * 8) as IntegerRep;
+
+    region.update_max_min_lookup_inputs_force(-num_bits, num_bits)?;
+
+    // now subtract 1 from the claimed output
+    let claimed_output_minus_one = pairwise(
+        config,
+        region,
+        &[claimed_output.clone(), unit.clone()],
+        BaseOp::Sub,
+    )?;
+
+    // now add 1 to the claimed output
+    let claimed_output_plus_one = pairwise(
+        config,
+        region,
+        &[claimed_output.clone(), unit.clone()],
+        BaseOp::Add,
+    )?;
+
+    // prior power of 2 is less than claimed output
+    let prior_pow2 = nonlinearity(
+        config,
+        region,
+        &[claimed_output_minus_one],
+        &LookupOp::PowersOfTwo { scale },
+    )?;
+
+    // next power of 2 is greater than claimed output
+    let next_pow2 = nonlinearity(
+        config,
+        region,
+        &[claimed_output_plus_one],
+        &LookupOp::PowersOfTwo { scale },
+    )?;
+
+    let distance_to_claimed = pairwise(
+        config,
+        region,
+        &[input.clone(), pow2_of_claimed_output.clone()],
+        BaseOp::Sub,
+    )?;
+
+    let abs_distance_to_claimed = abs(config, region, &[distance_to_claimed.clone()])?;
+
+    let abs_distance_to_next_pow2 =
+        l1_distance(config, region, &[input.clone(), next_pow2.clone()])?;
+
+    let abs_distance_to_prior_pow2 =
+        l1_distance(config, region, &[input.clone(), prior_pow2.clone()])?;
+
+    // because we round up this can be equal
+    let is_closest_to_0: ValTensor<F> = less(
+        config,
+        region,
+        &[
+            abs_distance_to_claimed.clone(),
+            abs_distance_to_next_pow2.clone(),
+        ],
+    )?;
+
+    let is_closest_to_1 = less(
+        config,
+        region,
+        &[
+            abs_distance_to_claimed.clone(),
+            abs_distance_to_prior_pow2.clone(),
+        ],
+    )?;
+
+    let is_closest = and(
+        config,
+        region,
+        &[is_closest_to_0.clone(), is_closest_to_1.clone()],
+    )?;
+
+    let mut comparison_unit = create_constant_tensor(integer_rep_to_felt(1), is_closest.len());
+    comparison_unit.reshape(is_closest.dims())?;
+    let assigned_unit = region.assign(&config.custom_gates.inputs[1], &comparison_unit)?;
+
+    enforce_equality(config, region, &[is_closest, assigned_unit])?;
+
+    // get a linear interpolation now
+
+    let sign_of_distance_to_claimed = sign(config, region, &[distance_to_claimed.clone()])?;
+    let sign_of_distance_to_claimed_is_negative = equals(
+        config,
+        region,
+        &[sign_of_distance_to_claimed.clone(), negative_one.clone()],
+    )?;
+
+    let sign_of_distance_to_claimed_is_positive = not(
+        config,
+        region,
+        &[sign_of_distance_to_claimed_is_negative.clone()],
+    )?;
+
+    let pow2_prior_to_claimed_distance = pairwise(
+        config,
+        region,
+        &[pow2_of_claimed_output.clone(), prior_pow2.clone()],
+        BaseOp::Sub,
+    )?;
+
+    let pow2_next_to_claimed_distance = pairwise(
+        config,
+        region,
+        &[next_pow2.clone(), pow2_of_claimed_output.clone()],
+        BaseOp::Sub,
+    )?;
+
+    let recip_pow2_prior_to_claimed_distance = recip(
+        config,
+        region,
+        &[pow2_prior_to_claimed_distance],
+        scale_as_felt,
+        scale_as_felt * scale_as_felt,
+    )?;
+
+    let interpolated_distance = pairwise(
+        config,
+        region,
+        &[
+            recip_pow2_prior_to_claimed_distance.clone(),
+            distance_to_claimed.clone(),
+        ],
+        BaseOp::Mult,
+    )?;
+
+    let gated_prior_interpolated_distance = pairwise(
+        config,
+        region,
+        &[
+            interpolated_distance.clone(),
+            sign_of_distance_to_claimed_is_negative.clone(),
+        ],
+        BaseOp::Mult,
+    )?;
+
+    let recip_next_to_claimed_distance = recip(
+        config,
+        region,
+        &[pow2_next_to_claimed_distance],
+        scale_as_felt,
+        scale_as_felt * scale_as_felt,
+    )?;
+
+    let interpolated_distance_next = pairwise(
+        config,
+        region,
+        &[
+            recip_next_to_claimed_distance.clone(),
+            distance_to_claimed.clone(),
+        ],
+        BaseOp::Mult,
+    )?;
+
+    let gated_next_interpolated_distance = pairwise(
+        config,
+        region,
+        &[
+            interpolated_distance_next.clone(),
+            sign_of_distance_to_claimed_is_positive.clone(),
+        ],
+        BaseOp::Mult,
+    )?;
+
+    let scaled_claimed_output = pairwise(
+        config,
+        region,
+        &[claimed_output.clone(), triple_scaled_as_felt_tensor],
+        BaseOp::Mult,
+    )?;
+
+    let claimed_output = pairwise(
+        config,
+        region,
+        &[
+            scaled_claimed_output.clone(),
+            gated_prior_interpolated_distance.clone(),
+        ],
+        BaseOp::Add,
+    )?;
+
+    let claimed_output = pairwise(
+        config,
+        region,
+        &[
+            claimed_output.clone(),
+            gated_next_interpolated_distance.clone(),
+        ],
+        BaseOp::Add,
+    )?;
+
+    // now multiply the claimed output by ln2
+    pairwise(config, region, &[claimed_output, ln2_tensor], BaseOp::Mult)
+}
+
 /// round layout
 /// # Arguments
 /// * `config` - BaseConfig
@@ -4551,11 +4976,7 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let zero = ValType::Constant(F::ZERO);
 
     let one = create_constant_tensor(integer_rep_to_felt(1), 1);
-    let assigned_one = region.assign(&config.custom_gates.inputs[1], &one)?;
     let negative_one = create_constant_tensor(integer_rep_to_felt(-1), 1);
-    let assigned_negative_one = region.assign(&config.custom_gates.output, &negative_one)?;
-
-    region.increment(1);
 
     // if scale is not exactly divisible by 2 we warn
     if scale.0 % 2.0 != 0.0 {
@@ -4588,8 +5009,8 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             let last_elem = sliced_input.last()?;
 
             let sign = sliced_input.first()?;
-            let is_positive = equals(config, region, &[sign.clone(), assigned_one.clone()])?;
-            let is_negative = equals(config, region, &[sign, assigned_negative_one.clone()])?;
+            let is_positive = equals(config, region, &[sign.clone(), one.clone()])?;
+            let is_negative = equals(config, region, &[sign, negative_one.clone()])?;
 
             let is_greater_than_midway = greater_equal(
                 config,
@@ -4706,9 +5127,6 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
         integer_rep_to_felt((scale.0 / 2.0).round() as IntegerRep),
         1,
     );
-    let assigned_midway_point = region.assign(&config.custom_gates.inputs[1], &midway_point)?;
-
-    region.increment(1);
 
     let dims = decomposition.dims().to_vec();
     let first_dims = decomposition.dims().to_vec()[..decomposition.dims().len() - 1].to_vec();
@@ -4732,11 +5150,8 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
             let penultimate_elem =
                 sliced_input.get_slice(&[sliced_input.len() - 2..sliced_input.len() - 1])?;
 
-            let is_equal_to_midway = equals(
-                config,
-                region,
-                &[last_elem.clone(), assigned_midway_point.clone()],
-            )?;
+            let is_equal_to_midway =
+                equals(config, region, &[last_elem.clone(), midway_point.clone()])?;
             // penultimate_elem is equal to midway point and even, do nothing
             let is_odd = nonlinearity(
                 config,
@@ -4751,11 +5166,8 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
                 &[is_odd.clone(), is_equal_to_midway.clone()],
             )?;
 
-            let is_greater_than_midway = greater(
-                config,
-                region,
-                &[last_elem.clone(), assigned_midway_point.clone()],
-            )?;
+            let is_greater_than_midway =
+                greater(config, region, &[last_elem.clone(), midway_point.clone()])?;
 
             // if the number is equal to midway point and odd increment, or if it is is_greater_than_midway
             let is_odd_and_equal_to_midway_or_greater_than_midway = or(
@@ -5168,11 +5580,8 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
         input_felt_scale,
         output_felt_scale,
     )?;
-    // product of num * (1 / denom) = 2*output_scale
-    let percent = pairwise(config, region, &[input, inv_denom], BaseOp::Mult)?;
-
-    // rebase the percent to 2x the scale
-    loop_div(config, region, &[percent], input_felt_scale)
+    // product of num * (1 / denom) = input_scale * output_scale
+    pairwise(config, region, &[input, inv_denom], BaseOp::Mult)
 }
 
 /// Applies softmax
@@ -5196,7 +5605,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 /// ).unwrap());
 /// let result = softmax::<Fp>(&dummy_config, &mut dummy_region, &[x], 128.0.into(), (128.0 * 128.0).into()).unwrap();
 /// // doubles the scale of the input
-/// let expected = Tensor::<IntegerRep>::new(Some(&[2734, 2734, 2756, 2734, 2734, 2691]), &[2, 3]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[350012, 350012, 352768, 350012, 350012, 344500]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -5276,17 +5685,8 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::
     let int_scale = scale.0 as IntegerRep;
     // felt scale
     let felt_scale = integer_rep_to_felt(int_scale);
-    // range check len capped at 2^(S-3) and make it divisible 2
-    let range_check_bracket = std::cmp::min(
-        utils::F32(scale.0),
-        utils::F32(2_f32.powf((F::S - 5) as f32)),
-    )
-    .0;
-
-    let range_check_bracket_int = range_check_bracket as IntegerRep;
-
     // input scale ratio we multiply by tol such that in the new scale range_check_len represents tol percent
-    let input_scale_ratio = ((scale.0.powf(2.0) / range_check_bracket) * tol) as IntegerRep / 2 * 2;
+    let input_scale_ratio = (scale.0 * tol) as IntegerRep / 2 * 2;
 
     let recip = recip(
         config,
@@ -5302,7 +5702,7 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::
     let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
 
     log::debug!("product: {}", product.show());
-    let rebased_product = loop_div(
+    let rebased_product = div(
         config,
         region,
         &[product],
@@ -5311,10 +5711,5 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::
     log::debug!("rebased_product: {}", rebased_product.show());
 
     // check that it is within the tolerance range
-    range_check(
-        config,
-        region,
-        &[rebased_product],
-        &(-range_check_bracket_int, range_check_bracket_int),
-    )
+    range_check(config, region, &[rebased_product], &(-int_scale, int_scale))
 }
