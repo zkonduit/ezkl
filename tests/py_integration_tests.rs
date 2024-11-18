@@ -76,8 +76,8 @@ mod py_tests {
                     "nbconvert==7.16.3",
                     "onnx==1.16.0",
                     "kaggle==1.6.8",
-                    "py-solc-x==2.0.2",
-                    "web3==6.16.0",
+                    "py-solc-x==2.0.3",
+                    "web3==7.5.0",
                     "librosa==0.10.1",
                     "keras==3.1.1",
                     "tensorflow==2.16.1",
@@ -123,7 +123,7 @@ mod py_tests {
         }
     }
 
-    const TESTS: [&str; 34] = [
+    const TESTS: [&str; 35] = [
         "ezkl_demo_batch.ipynb",                   // 0
         "proof_splitting.ipynb",                   // 1
         "variance.ipynb",                          // 2
@@ -158,6 +158,7 @@ mod py_tests {
         "mnist_classifier.ipynb",                  // 31
         "world_rotation.ipynb",                    // 32
         "logistic_regression.ipynb",               // 33
+        "univ3-da.ipynb",                          // 34
     ];
 
     macro_rules! test_func {
