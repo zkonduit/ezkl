@@ -331,14 +331,21 @@ pub struct RunArgs {
         all(feature = "ezkl", not(target_arch = "wasm32")),
         arg(long, default_value = "false")
     )]
-    /// use unbounded lookup for the log
+    /// use bounded lookup for the log
     pub bounded_log_lookup: bool,
+    #[cfg_attr(
+        all(feature = "ezkl", not(target_arch = "wasm32")),
+        arg(long, default_value = "false")
+    )]
+    /// use bounded lookup for the exp
+    pub bounded_exp_lookup: bool,
 }
 
 impl Default for RunArgs {
     fn default() -> Self {
         Self {
             bounded_log_lookup: false,
+            bounded_exp_lookup: false,
             tolerance: Tolerance::default(),
             input_scale: 7,
             param_scale: 7,

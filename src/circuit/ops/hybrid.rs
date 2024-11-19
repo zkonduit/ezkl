@@ -16,6 +16,9 @@ pub enum HybridOp {
     Ln {
         scale: utils::F32,
     },
+    Exp {
+        scale: utils::F32,
+    },
     Rsqrt {
         input_scale: utils::F32,
         output_scale: utils::F32,
@@ -130,6 +133,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             ),
             HybridOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
             HybridOp::Ln { scale } => format!("LN(scale={})", scale),
+            HybridOp::Exp { scale } => format!("EXP(scale={})", scale),
             HybridOp::RoundHalfToEven { scale, legs } => {
                 format!("ROUND_HALF_TO_EVEN(scale={}, legs={})", scale, legs)
             }
@@ -215,6 +219,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 layouts::sqrt(config, region, values[..].try_into()?, *scale)?
             }
             HybridOp::Ln { scale } => layouts::ln(config, region, values[..].try_into()?, *scale)?,
+            HybridOp::Exp { scale } => {
+                layouts::exp(config, region, values[..].try_into()?, *scale)?
+            }
             HybridOp::RoundHalfToEven { scale, legs } => {
                 layouts::round_half_to_even(config, region, values[..].try_into()?, *scale, *legs)?
             }
@@ -357,7 +364,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             } => multiplier_to_scale((output_scale.0 * input_scale.0) as f64),
             HybridOp::Ln {
                 scale: output_scale,
-            } => 4 * multiplier_to_scale(output_scale.0 as f64),
+            } => 3 * multiplier_to_scale(output_scale.0 as f64),
             _ => in_scales[0],
         };
         Ok(scale)

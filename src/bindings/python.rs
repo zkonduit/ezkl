@@ -197,6 +197,9 @@ struct PyRunArgs {
     /// bool: Should the circuit use unbounded lookups for log
     #[pyo3(get, set)]
     pub bounded_log_lookup: bool,
+    /// bool: Should the circuit use unbounded lookups for exp
+    #[pyo3(get, set)]
+    pub bounded_exp_lookup: bool,
 }
 
 /// default instantiation of PyRunArgs
@@ -213,6 +216,7 @@ impl From<PyRunArgs> for RunArgs {
     fn from(py_run_args: PyRunArgs) -> Self {
         RunArgs {
             bounded_log_lookup: py_run_args.bounded_log_lookup,
+            bounded_exp_lookup: py_run_args.bounded_exp_lookup,
             tolerance: Tolerance::from(py_run_args.tolerance),
             input_scale: py_run_args.input_scale,
             param_scale: py_run_args.param_scale,
@@ -237,6 +241,7 @@ impl Into<PyRunArgs> for RunArgs {
     fn into(self) -> PyRunArgs {
         PyRunArgs {
             bounded_log_lookup: self.bounded_log_lookup,
+            bounded_exp_lookup: self.bounded_exp_lookup,
             tolerance: self.tolerance.val,
             input_scale: self.input_scale,
             param_scale: self.param_scale,

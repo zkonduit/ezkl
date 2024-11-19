@@ -1728,6 +1728,172 @@ pub mod nonlinearities {
         .unwrap()
     }
 
+    /// Piecewise linear estimation of log2(x) for x > 0.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    pub fn log2_piecewise(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
+        a.enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+
+            let kix_log = kix.log2();
+
+            if kix_log.fract() == 0.0 {
+                return Ok::<_, TensorError>(kix_log.round() as IntegerRep);
+            }
+
+            let prev_log = kix_log.floor();
+            let next_log = prev_log + 1.0;
+
+            let prev_pow2 = (2.0_f64).powf(prev_log);
+            let next_pow2 = (2.0_f64).powf(next_log);
+
+            let gradient = (kix - prev_pow2) / (next_pow2 - prev_pow2);
+
+            println!(
+                "kix: {}, prev_log: {}, next_log: {}, prev_pow2: {}, next_pow2: {}, gradient: {}",
+                kix, prev_log, next_log, prev_pow2, next_pow2, gradient
+            );
+
+            let linear_estimation = prev_log + gradient;
+
+            let rounded = (linear_estimation * scale_input).round();
+
+            Ok::<_, TensorError>(rounded as IntegerRep)
+        })
+        .unwrap()
+    }
+
+    /// Piecewise linear estimation of log2(x) for x > 0.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    pub fn ln_piecewise(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
+        let log2 = log2_piecewise(a, scale_input);
+        let ln2 = 2.0_f64.ln();
+
+        log2.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
+
+            let rounded = (kix * ln2 * scale_input).round();
+            Ok::<_, TensorError>(rounded as IntegerRep)
+        })
+        .unwrap()
+    }
+
+    /// Piecewise inverse of linear estimation of log2(x) for x > 0.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    ///
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// use ezkl::tensor::ops::nonlinearities::inverse_log2_piecewise;
+    /// use ezkl::tensor::ops::nonlinearities::log2_piecewise;
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 4, 5, 6]),
+    /// &[2, 3],
+    /// ).unwrap();
+    ///
+    /// let log = log2_piecewise(&x, 1.0);
+    /// let result = inverse_log2_piecewise(&log, 1.0);
+    ///
+    /// let rounded_x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 4, 4, 4, 8]),
+    /// &[2, 3],
+    /// ).unwrap();
+    ///
+    /// assert_eq!(result, rounded_x);
+    /// ```
+    pub fn inverse_log2_piecewise(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| {
+            println!("a_i: {}", a_i);
+
+            let kix = (a_i as f64) / scale_input;
+
+            println!("kix: {}", kix);
+
+            if kix.fract() == 0.0 {
+                return Ok::<_, TensorError>(2.0_f64.powf(kix).round() as IntegerRep);
+            }
+            let prev_log = kix.floor();
+            let next_log = prev_log + 1.0;
+
+            println!("prev_log: {}, next_log: {}", prev_log, next_log);
+
+            let prev_pow2 = (2.0_f64).powf(prev_log);
+            let next_pow2 = (2.0_f64).powf(next_log);
+
+            println!("prev_pow2: {}, next_pow2: {}", prev_pow2, next_pow2);
+
+            let inv = (kix - prev_log) * (next_pow2 - prev_pow2) + prev_pow2;
+
+            let rounded = (inv * scale_input).round();
+
+            Ok::<_, TensorError>(rounded as IntegerRep)
+        })
+        .unwrap()
+    }
+
+    /// Piecewise inverse of linear estimation of ln(x) for x > 0.
+    /// # Arguments
+    /// * `a` - Tensor
+    /// * `scale_input` - Single value
+    ///
+    /// # Examples
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// use ezkl::tensor::ops::nonlinearities::inverse_ln_piecewise;
+    /// use ezkl::tensor::ops::nonlinearities::ln_piecewise;
+    /// let x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 3, 4, 5, 6]),
+    /// &[2, 3],
+    /// ).unwrap();
+    ///
+    /// let log = ln_piecewise(&x, 1.0);
+    /// let result = inverse_ln_piecewise(&log, 1.0);
+    ///
+    /// let rounded_x = Tensor::<IntegerRep>::new(
+    ///    Some(&[1, 2, 2, 2, 2, 4]),
+    /// &[2, 3],
+    /// ).unwrap();
+    ///
+    /// assert_eq!(result, rounded_x);
+    /// ```
+    pub fn inverse_ln_piecewise(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
+        a.par_enum_map(|_, a_i| {
+            println!("a_i: {}", a_i);
+
+            let kix = (a_i as f64) / scale_input;
+
+            println!("kix: {}", kix);
+
+            if kix.fract() == 0.0 {
+                return Ok::<_, TensorError>(kix.exp().round() as IntegerRep);
+            }
+            let prev_log = kix.floor();
+            let next_log = prev_log + 1.0;
+
+            println!("prev_log: {}, next_log: {}", prev_log, next_log);
+
+            let prev_pow2 = (2.0_f64).powf(prev_log);
+            let next_pow2 = (2.0_f64).powf(next_log);
+
+            let ln2 = 2.0_f64.ln();
+
+            println!("prev_pow2: {}, next_pow2: {}", prev_pow2, next_pow2);
+
+            let inv = (kix - prev_log * ln2) * (next_pow2 - prev_pow2) + prev_pow2 * ln2;
+
+            let rounded = (inv * scale_input).round();
+
+            Ok::<_, TensorError>(rounded as IntegerRep)
+        })
+        .unwrap()
+    }
     /// Elementwise applies square root to a tensor of integers.
     /// # Arguments
     ///
