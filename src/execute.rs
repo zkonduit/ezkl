@@ -1,10 +1,13 @@
 use crate::circuit::region::RegionSettings;
 use crate::circuit::CheckMode;
 use crate::commands::CalibrationTarget;
-use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity};
+use crate::eth::{
+    deploy_contract_via_solidity, deploy_da_verifier_via_solidity, fix_da_multi_sol,
+    fix_da_single_sol,
+};
 #[allow(unused_imports)]
-use crate::eth::{fix_da_sol, get_contract_artifacts, verify_proof_via_solidity};
-use crate::graph::input::GraphData;
+use crate::eth::{get_contract_artifacts, verify_proof_via_solidity};
+use crate::graph::input::{Calls, GraphData};
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
@@ -1456,13 +1459,24 @@ pub(crate) async fn create_evm_data_attestation(
     // if input is not provided, we just instantiate dummy input data
     let data = GraphData::from_path(input).unwrap_or(GraphData::new(DataSource::File(vec![])));
 
+    // The number of input and output instances we attest to for the single call data attestation
+    let mut input_len = None;
+    let mut output_len = None;
+
     let output_data = if let Some(DataSource::OnChain(source)) = data.output_data {
         if visibility.output.is_private() {
             return Err("private output data on chain is not supported on chain".into());
         }
         let mut on_chain_output_data = vec![];
-        for call in source.calls {
-            on_chain_output_data.push(call);
+        match source.calls {
+            Calls::Multiple(calls) => {
+                for call in calls {
+                    on_chain_output_data.push(call);
+                }
+            }
+            Calls::Single(call) => {
+                output_len = Some(call.len);
+            }
         }
         Some(on_chain_output_data)
     } else {
@@ -1474,8 +1488,15 @@ pub(crate) async fn create_evm_data_attestation(
             return Err("private input data on chain is not supported on chain".into());
         }
         let mut on_chain_input_data = vec![];
-        for call in source.calls {
-            on_chain_input_data.push(call);
+        match source.calls {
+            Calls::Multiple(calls) => {
+                for call in calls {
+                    on_chain_input_data.push(call);
+                }
+            }
+            Calls::Single(call) => {
+                input_len = Some(call.len);
+            }
         }
         Some(on_chain_input_data)
     } else {
@@ -1502,13 +1523,24 @@ pub(crate) async fn create_evm_data_attestation(
         None
     };
 
-    let output = fix_da_sol(input_data, output_data, commitment_bytes)?;
-    let mut f = File::create(sol_code_path.clone())?;
-    let _ = f.write(output.as_bytes());
-    // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestation", 0).await?;
-    // save abi to file
-    serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
+    // if either input_len or output_len is Some then we are in the single call data attestation mode
+    if input_len.is_some() || output_len.is_some() {
+        let output = fix_da_single_sol(input_len, output_len)?;
+        let mut f = File::create(sol_code_path.clone())?;
+        let _ = f.write(output.as_bytes());
+        // fetch abi of the contract
+        let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestationSingle", 0).await?;
+        // save abi to file
+        serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
+    } else {
+        let output = fix_da_multi_sol(input_data, output_data, commitment_bytes)?;
+        let mut f = File::create(sol_code_path.clone())?;
+        let _ = f.write(output.as_bytes());
+        // fetch abi of the contract
+        let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestationMulti", 0).await?;
+        // save abi to file
+        serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
+    }
 
     Ok(String::new())
 }

@@ -128,7 +128,9 @@ impl FileSourceInner {
     /// Convert to a field element
     pub fn to_field(&self, scale: crate::Scale) -> Fp {
         match self {
-            FileSourceInner::Float(f) => integer_rep_to_felt(quantize_float(f, 0.0, scale).unwrap()),
+            FileSourceInner::Float(f) => {
+                integer_rep_to_felt(quantize_float(f, 0.0, scale).unwrap())
+            }
             FileSourceInner::Bool(f) => {
                 if *f {
                     Fp::one()
@@ -155,19 +157,80 @@ impl FileSourceInner {
     }
 }
 
+/// Call type for attested inputs on-chain
+#[derive(Clone, Debug, PartialOrd, PartialEq)]
+pub enum Calls {
+    /// Vector of calls to accounts, each returning an attested data point
+    Multiple(Vec<CallsToAccount>),
+    /// Single call to account, returning an array of attested data points
+    Single(CallToAccount),
+}
+
+impl Default for Calls {
+    fn default() -> Self {
+        Calls::Multiple(Vec::new())
+    }
+}
 /// Inner elements of inputs/outputs coming from on-chain
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
 pub struct OnChainSource {
-    /// Vector of calls to accounts
-    pub calls: Vec<CallsToAccount>,
+    /// Calls to accounts
+    pub calls: Calls,
     /// RPC url
     pub rpc: RPCUrl,
 }
 
 impl OnChainSource {
-    /// Create a new OnChainSource
-    pub fn new(calls: Vec<CallsToAccount>, rpc: RPCUrl) -> Self {
-        OnChainSource { calls, rpc }
+    /// Create a new OnChainSource with multiple calls
+    pub fn new_multiple(calls: Vec<CallsToAccount>, rpc: RPCUrl) -> Self {
+        OnChainSource {
+            calls: Calls::Multiple(calls),
+            rpc,
+        }
+    }
+
+    /// Create a new OnChainSource with a single call
+    pub fn new_single(call: CallToAccount, rpc: RPCUrl) -> Self {
+        OnChainSource {
+            calls: Calls::Single(call),
+            rpc,
+        }
+    }
+}
+
+impl Serialize for Calls {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Calls::Single(data) => data.serialize(serializer),
+            Calls::Multiple(data) => data.serialize(serializer),
+        }
+    }
+}
+
+// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
+// UNTAGGED ENUMS WONT WORK :( as highlighted here:
+impl<'de> Deserialize<'de> for Calls {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
+
+        let multiple_try: Result<Vec<CallsToAccount>, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = multiple_try {
+            return Ok(Calls::Multiple(t));
+        }
+        let single_try: Result<CallToAccount, _> = serde_json::from_str(this_json.get());
+        if let Ok(t) = single_try {
+            return Ok(Calls::Single(t));
+        }
+
+        Err(serde::de::Error::custom(
+            "failed to deserialize FileSourceInner",
+        ))
     }
 }
 
@@ -277,7 +340,8 @@ impl OnChainSource {
         rpc: Option<&str>,
     ) -> Result<(Vec<Tensor<Fp>>, Self), GraphError> {
         use crate::eth::{
-            evm_quantize, read_on_chain_inputs, test_on_chain_data, DEFAULT_ANVIL_ENDPOINT,
+            evm_quantize_multi, read_on_chain_inputs_multi, test_on_chain_data,
+            DEFAULT_ANVIL_ENDPOINT,
         };
         use log::debug;
 
@@ -296,7 +360,7 @@ impl OnChainSource {
         let calls_to_accounts = test_on_chain_data(client.clone(), data).await?;
         debug!("Calls to accounts: {:?}", calls_to_accounts);
         let inputs =
-            read_on_chain_inputs(client.clone(), client_address, &calls_to_accounts).await?;
+            read_on_chain_inputs_multi(client.clone(), client_address, &calls_to_accounts).await?;
         debug!("Inputs: {:?}", inputs);
 
         let mut quantized_evm_inputs = vec![];
@@ -304,7 +368,7 @@ impl OnChainSource {
         let mut prev = 0;
         for (idx, i) in data.iter().enumerate() {
             quantized_evm_inputs.extend(
-                evm_quantize(
+                evm_quantize_multi(
                     client.clone(),
                     vec![scales[idx]; i.len()],
                     &(
@@ -330,7 +394,7 @@ impl OnChainSource {
         // Fill the input_data field of the GraphData struct
         Ok((
             inputs,
-            OnChainSource::new(calls_to_accounts.clone(), used_rpc),
+            OnChainSource::new_multiple(calls_to_accounts.clone(), used_rpc),
         ))
     }
 }
@@ -349,6 +413,24 @@ pub struct CallsToAccount {
     pub call_data: Vec<(Call, Decimals)>,
     /// Address of the contract to read the data from.
     pub address: String,
+}
+
+/// Defines a view only call to accounts to fetch the on-chain input data.
+/// This data will be included as part of the first elements in the publicInputs
+/// for the sol evm verifier and will be  verifyWithDataAttestation.sol
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
+pub struct CallToAccount {
+    /// The call_data is a byte strings representing the ABI encoded function call to
+    /// read the data from the address. This call must return a single array of integers that can be
+    /// be safely cast to the int128 type in solidity.
+    pub call_data: Call,
+    /// The number of decimals for f32 conversion of all of the elements returned from the
+    /// call.
+    pub decimals: Decimals,
+    /// Address of the contract to read the data from.
+    pub address: String,
+    /// The number of elements returned from the call.
+    pub len: usize,
 }
 /// Enum that defines source of the inputs/outputs to the EZKL model
 #[derive(Clone, Debug, Serialize, PartialOrd, PartialEq)]
@@ -597,6 +679,28 @@ impl ToPyObject for CallsToAccount {
         dict.set_item("account", &self.address).unwrap();
         dict.set_item("call_data", &self.call_data).unwrap();
         dict.to_object(py)
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+impl ToPyObject for CallToAccount {
+    fn to_object(&self, py: Python) -> PyObject {
+        let dict = PyDict::new(py);
+        dict.set_item("account", &self.address).unwrap();
+        dict.set_item("call_data", &self.call_data).unwrap();
+        dict.set_item("decimals", &self.decimals).unwrap();
+        dict.set_item("len", &self.len).unwrap();
+        dict.to_object(py)
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+impl ToPyObject for Calls {
+    fn to_object(&self, py: Python) -> PyObject {
+        match self {
+            Calls::Multiple(calls) => calls.to_object(py),
+            Calls::Single(call) => call.to_object(py),
+        }
     }
 }
 

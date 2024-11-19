@@ -20,7 +20,9 @@ halo2_gadgets = { git = "https://github.com/zkonduit/halo2", branch = "ac/option
 halo2curves = { git = "https://github.com/privacy-scaling-explorations/halo2curves", rev = "b753a832e92d5c86c5c997327a9cf9de86a18851", features = [
     "derive_serde",
 ] }
-halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", branch = "ac/cache-lookup-commitments", features = ["circuit-params"] }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2", package = "halo2_proofs", branch = "ac/cache-lookup-commitments", features = [
+    "circuit-params",
+] }
 rand = { version = "0.8", default-features = false }
 itertools = { version = "0.10.3", default-features = false }
 clap = { version = "4.5.3", features = ["derive"], optional = true }
@@ -43,10 +45,7 @@ tosubcommand = { git = "https://github.com/zkonduit/enum_to_subcommand", package
 semver = { version = "1.0.22", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-serde_json = { version = "1.0.97", features = [
-    "float_roundtrip",
-    "raw_value",
-] }
+serde_json = { version = "1.0.97", features = ["float_roundtrip", "raw_value"] }
 
 # evm related deps
 alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev = "5fbf57bac99edef9d8475190109a7ea9fb7e5e83", features = [
@@ -56,23 +55,39 @@ alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev = "5
     "rpc-types-eth",
     "signer-wallet",
     "node-bindings",
-    
+
 ], optional = true }
-foundry-compilers = { version = "0.4.1", features = ["svm-solc"], optional = true }
+foundry-compilers = { version = "0.4.1", features = [
+    "svm-solc",
+], optional = true }
 ethabi = { version = "18", optional = true }
 indicatif = { version = "0.17.5", features = ["rayon"], optional = true }
 gag = { version = "1.0.0", default-features = false, optional = true }
 instant = { version = "0.1" }
-reqwest = { version = "0.12.4", default-features = false, features = ["default-tls", "multipart", "stream"], optional = true }
+reqwest = { version = "0.12.4", default-features = false, features = [
+    "default-tls",
+    "multipart",
+    "stream",
+], optional = true }
 openssl = { version = "0.10.55", features = ["vendored"], optional = true }
 tokio-postgres = { version = "0.7.10", optional = true }
 pg_bigdecimal = { version = "0.1.5", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
 colored_json = { version = "3.0.1", default-features = false, optional = true }
 regex = { version = "1", default-features = false, optional = true }
-tokio = { version = "1.35.0", default-features = false, features = ["macros", "rt-multi-thread"], optional = true }
-pyo3 = { version = "0.21.2", features = ["extension-module", "abi3-py37", "macros"], default-features = false, optional = true }
-pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio/", branch="migration-pyo3-0.21", features = ["attributes", "tokio-runtime"], default-features = false, optional = true }
+tokio = { version = "1.35.0", default-features = false, features = [
+    "macros",
+    "rt-multi-thread",
+], optional = true }
+pyo3 = { version = "0.21.2", features = [
+    "extension-module",
+    "abi3-py37",
+    "macros",
+], default-features = false, optional = true }
+pyo3-asyncio = { git = "https://github.com/jopemachine/pyo3-asyncio/", branch = "migration-pyo3-0.21", features = [
+    "attributes",
+    "tokio-runtime",
+], default-features = false, optional = true }
 pyo3-log = { version = "0.10.0", default-features = false, optional = true }
 tract-onnx = { git = "https://github.com/sonos/tract/", rev = "40c64319291184814d9fea5fdf4fa16f5a4f7116", default-features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
@@ -197,7 +212,13 @@ required-features = ["ios-bindings", "uuid", "camino", "uniffi_bindgen"]
 
 [features]
 web = ["wasm-bindgen-rayon"]
-default = ["ezkl", "mv-lookup", "precompute-coset", "no-banner", "parallel-poly-read"]
+default = [
+    "ezkl",
+    "mv-lookup",
+    "precompute-coset",
+    "no-banner",
+    "parallel-poly-read",
+]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-asyncio"]
 ios-bindings = ["mv-lookup", "precompute-coset", "parallel-poly-read", "uniffi"]
@@ -231,7 +252,10 @@ ezkl = [
     "dep:clap",
     "dep:tosubcommand",
 ]
-parallel-poly-read = ["halo2_proofs/circuit-params", "halo2_proofs/parallel-poly-read"]
+parallel-poly-read = [
+    "halo2_proofs/circuit-params",
+    "halo2_proofs/parallel-poly-read",
+]
 mv-lookup = [
     "halo2_proofs/mv-lookup",
     "snark-verifier/mv-lookup",
@@ -260,4 +284,3 @@ rustflags = ["-C", "relocation-model=pic"]
 lto = "fat"
 codegen-units = 1
 # panic = "abort"
-

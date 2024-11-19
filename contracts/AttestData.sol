@@ -163,6 +163,253 @@ contract SwapProofCommitments {
     } /// end checkKzgCommits
 }
 
+contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
+    /**
+     * @notice Struct used to make view only call to account to fetch the data that EZKL reads from.
+     * @param the address of the account to make calls to
+     * @param the abi encoded function calls to make to the `contractAddress`
+     */
+    struct AccountCall {
+        address contractAddress;
+        bytes callData;
+        uint256 decimals;
+    }
+    AccountCall public accountCall;
+
+    uint[] scales;
+
+    address public admin;
+
+    /**
+     * @notice EZKL P value
+     * @dev In order to prevent the verifier from accepting two version of the same pubInput, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
+     * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
+     */
+    uint256 constant ORDER =
+        uint256(
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
+        );
+
+    uint256 constant INPUT_LEN = 0;
+
+    uint256 constant OUTPUT_LEN = 0;
+
+    uint8 public instanceOffset;
+
+    /**
+     * @dev Initialize the contract with account calls the EZKL model will read from.
+     * @param _contractAddresses - The calls to all the contracts EZKL reads storage from.
+     * @param _callData - The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.
+     */
+    constructor(
+        address _contractAddresses,
+        bytes memory _callData,
+        uint256 _decimals,
+        uint[] memory _scales,
+        uint8 _instanceOffset,
+        address _admin
+    ) {
+        admin = _admin;
+        for (uint i; i < _scales.length; i++) {
+            scales.push(1 << _scales[i]);
+        }
+        populateAccountCalls(_contractAddresses, _callData, _decimals);
+        instanceOffset = _instanceOffset;
+    }
+
+    function updateAdmin(address _admin) external {
+        require(msg.sender == admin, "Only admin can update admin");
+        if (_admin == address(0)) {
+            revert();
+        }
+        admin = _admin;
+    }
+
+    function updateAccountCalls(
+        address _contractAddresses,
+        bytes memory _callData,
+        uint256 _decimals
+    ) external {
+        require(msg.sender == admin, "Only admin can update account calls");
+        populateAccountCalls(_contractAddresses, _callData, _decimals);
+    }
+
+    function populateAccountCalls(
+        address _contractAddresses,
+        bytes memory _callData,
+        uint256 _decimals
+    ) internal {
+        AccountCall memory _accountCall = accountCall;
+        _accountCall.contractAddress = _contractAddresses;
+        _accountCall.callData = _callData;
+        _accountCall.decimals = 10 ** _decimals;
+        accountCall = _accountCall;
+    }
+
+    function mulDiv(
+        uint256 x,
+        uint256 y,
+        uint256 denominator
+    ) internal pure returns (uint256 result) {
+        unchecked {
+            uint256 prod0;
+            uint256 prod1;
+            assembly {
+                let mm := mulmod(x, y, not(0))
+                prod0 := mul(x, y)
+                prod1 := sub(sub(mm, prod0), lt(mm, prod0))
+            }
+
+            if (prod1 == 0) {
+                return prod0 / denominator;
+            }
+
+            require(denominator > prod1, "Math: mulDiv overflow");
+
+            uint256 remainder;
+            assembly {
+                remainder := mulmod(x, y, denominator)
+                prod1 := sub(prod1, gt(remainder, prod0))
+                prod0 := sub(prod0, remainder)
+            }
+
+            uint256 twos = denominator & (~denominator + 1);
+            assembly {
+                denominator := div(denominator, twos)
+                prod0 := div(prod0, twos)
+                twos := add(div(sub(0, twos), twos), 1)
+            }
+
+            prod0 |= prod1 * twos;
+
+            uint256 inverse = (3 * denominator) ^ 2;
+
+            inverse *= 2 - denominator * inverse;
+            inverse *= 2 - denominator * inverse;
+            inverse *= 2 - denominator * inverse;
+            inverse *= 2 - denominator * inverse;
+            inverse *= 2 - denominator * inverse;
+            inverse *= 2 - denominator * inverse;
+
+            result = prod0 * inverse;
+            return result;
+        }
+    }
+    /**
+     * @dev Quantize the data returned from the account calls to the scale used by the EZKL model.
+     * @param x - One of the elements of the data returned from the account calls
+     * @param _decimals - Number of base 10 decimals to scale the data by.
+     * @param _scale - The base 2 scale used to convert the floating point value into a fixed point value.
+     *
+     */
+    function quantizeData(
+        int x,
+        uint256 _decimals,
+        uint256 _scale
+    ) internal pure returns (int256 quantized_data) {
+        bool neg = x < 0;
+        if (neg) x = -x;
+        uint output = mulDiv(uint256(x), _scale, _decimals);
+        if (mulmod(uint256(x), _scale, _decimals) * 2 >= _decimals) {
+            output += 1;
+        }
+        quantized_data = neg ? -int256(output) : int256(output);
+    }
+    /**
+     * @dev Make a static call to the account to fetch the data that EZKL reads from.
+     * @param target - The address of the account to make calls to.
+     * @param data  - The abi encoded function calls to make to the `contractAddress` that EZKL reads storage from.
+     * @return The data returned from the account calls. (Must come from either a view or pure function. Will throw an error otherwise)
+     */
+    function staticCall(
+        address target,
+        bytes memory data
+    ) internal view returns (bytes memory) {
+        (bool success, bytes memory returndata) = target.staticcall(data);
+        if (success) {
+            if (returndata.length == 0) {
+                require(
+                    target.code.length > 0,
+                    "Address: call to non-contract"
+                );
+            }
+            return returndata;
+        } else {
+            revert("Address: low-level call failed");
+        }
+    }
+    /**
+     * @dev Convert the fixed point quantized data into a field element.
+     * @param x - The quantized data.
+     * @return field_element - The field element.
+     */
+    function toFieldElement(
+        int256 x
+    ) internal pure returns (uint256 field_element) {
+        // The casting down to uint256 is safe because the order is about 2^254, and the value
+        // of x ranges of -2^127 to 2^127, so x + int(ORDER) is always positive.
+        return uint256(x + int(ORDER)) % ORDER;
+    }
+
+    /**
+     * @dev Make the account calls to fetch the data that EZKL reads from and attest to the data.
+     * @param instances - The public instances to the proof (the data in the proof that publicly accessible to the verifier).
+     */
+    function attestData(uint256[] memory instances) internal view {
+        require(
+            instances.length >= INPUT_LEN + OUTPUT_LEN,
+            "Invalid public inputs length"
+        );
+        AccountCall memory _accountCall = accountCall;
+        uint[] memory _scales = scales;
+        bytes memory returnData = staticCall(
+            _accountCall.contractAddress,
+            _accountCall.callData
+        );
+        int256[] memory x = abi.decode(returnData, (int256[]));
+        uint _offset;
+        int output = quantizeData(x[0], _accountCall.decimals, _scales[0]);
+        uint field_element = toFieldElement(output);
+        for (uint i = 0; i < x.length; i++) {
+            if (field_element != instances[i + instanceOffset]) {
+                _offset += 1;
+            } else {
+                break;
+            }
+        }
+        uint length = x.length - _offset;
+        for (uint i = 1; i < length; i++) {
+            output = quantizeData(x[i], _accountCall.decimals, _scales[i]);
+            field_element = toFieldElement(output);
+            require(
+                field_element == instances[i + instanceOffset + _offset],
+                "Public input does not match"
+            );
+        }
+    }
+
+    /**
+     * @dev Verify the proof with the data attestation.
+     * @param verifier - The address of the verifier contract.
+     * @param encoded - The verifier calldata.
+     */
+    function verifyWithDataAttestation(
+        address verifier,
+        bytes calldata encoded
+    ) public view returns (bool) {
+        require(verifier.code.length > 0, "Address: call to non-contract");
+        attestData(getInstancesCalldata(encoded));
+        // static call the verifier contract to verify the proof
+        (bool success, bytes memory returndata) = verifier.staticcall(encoded);
+
+        if (success) {
+            return abi.decode(returndata, (bool));
+        } else {
+            revert("low-level call to verifier failed");
+        }
+    }
+}
+
 // This contract serves as a Data Attestation Verifier for the EZKL model.
 // It is designed to read and attest to instances of proofs generated from a specified circuit.
 // It is particularly constructed to read only int256 data from specified on-chain contracts' view functions.
@@ -173,11 +420,11 @@ contract SwapProofCommitments {
 // 3. Static Calls: Makes static calls to fetch data from other contracts. See the `staticCall` method.
 // 4. Field Element Conversion: The fixed-point representation is then converted into a field element modulo P using the `toFieldElement` method.
 // 5. Data Attestation: The `attestData` method validates that the public instances match the data fetched and processed by the contract.
-// 6. Proof Verification: The `verifyWithDataAttestation` method parses the instances out of the encoded calldata and calls the `attestData` method to validate the public instances,
+// 6. Proof Verification: The `verifyWithDataAttestationMulti` method parses the instances out of the encoded calldata and calls the `attestData` method to validate the public instances,
 // 6b. Optional KZG Commitment Verification: It also checks the KZG commitments in the proof against the expected commitments using the `checkKzgCommits` method.
 //  then calls the `verifyProof` method to verify the proof on the verifier.
 
-contract DataAttestation is LoadInstances, SwapProofCommitments {
+contract DataAttestationMulti is LoadInstances, SwapProofCommitments {
     /**
      * @notice Struct used to make view only calls to accounts to fetch the data that EZKL reads from.
      * @param the address of the account to make calls to

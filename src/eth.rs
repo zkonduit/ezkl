@@ -1,4 +1,4 @@
-use crate::graph::input::{CallsToAccount, FileSourceInner, GraphData};
+use crate::graph::input::{CallToAccount, Calls, CallsToAccount, FileSourceInner, GraphData};
 use crate::graph::modules::POSEIDON_INSTANCES;
 use crate::graph::DataSource;
 use crate::graph::GraphSettings;
@@ -63,12 +63,18 @@ abigen!(
 abigen!(
     #[allow(missing_docs)]
     #[sol(rpc)]
-    DataAttestation,
-    "./abis/DataAttestation.json"
+    DataAttestationMulti,
+    "./abis/DataAttestationMulti.json"
 );
 abigen!(
     #[allow(missing_docs)]
-    #[sol(rpc, bytecode="608060405234801561000f575f80fd5b50610a8b8061001d5f395ff3fe608060405234801561000f575f80fd5b506004361061003f575f3560e01c80630a7e4b9614610043578063b404abab1461006c578063d3dc6d1f1461007f575b5f80fd5b6100566100513660046105b6565b610092565b60405161006391906106f6565b60405180910390f35b61005661007a366004610739565b610203565b61005661008d3660046107c4565b61033c565b606083516001600160401b038111156100ad576100ad6104e8565b6040519080825280602002602001820160405280156100d6578160200160208202803683370190505b5090505f5b84518110156101fb575f8582815181106100f7576100f7610853565b60200260200101518060200190518101906101129190610867565b90505f811280156101295761012682610892565b91505b5f86848151811061013c5761013c610853565b6020026020010151600a610150919061098e565b90505f86858151811061016557610165610853565b60200260200101516001901b90505f61017f8583856103fd565b905082838061019057610190610999565b83870961019e9060026109ad565b106101b1576101ae6001826109c4565b90505b836101bc57806101c5565b6101c581610892565b8787815181106101d7576101d7610853565b602002602001018181525050505050505080806101f3906109d7565b9150506100db565b509392505050565b606081516001600160401b0381111561021e5761021e6104e8565b604051908082528060200260200182016040528015610247578160200160208202803683370190505b5090505f5b8251811015610336575f83828151811061026857610268610853565b6020026020010151121580156102a457505f80516020610a3683398151915283828151811061029957610299610853565b602002602001015111155b6102ed5760405162461bcd60e51b8152602060048201526015602482015274125b9d985b1a5908199a595b1908195b195b595b9d605a1b60448201526064015b60405180910390fd5b8281815181106102ff576102ff610853565b602002602001015182828151811061031957610319610853565b60209081029190910101528061032e816109d7565b91505061024c565b50919050565b606081516001600160401b03811115610357576103576104e8565b604051908082528060200260200182016040528015610380578160200160208202803683370190505b5090505f5b8251811015610336575f80516020610a36833981519152808483815181106103af576103af610853565b602002602001015160070b6103c491906109ef565b6103ce9190610a16565b8282815181106103e0576103e0610853565b6020908102919091010152806103f5816109d7565b915050610385565b5f80805f19858709858702925082811083820303915050805f036104345783828161042a5761042a610999565b04925050506104e1565b80841161047b5760405162461bcd60e51b81526020600482015260156024820152744d6174683a206d756c446976206f766572666c6f7760581b60448201526064016102e4565b5f848688098519600190810187169687900496828603819004959092119093035f82900391909104909201919091029190911760038402600290811880860282030280860282030280860282030280860282030280860282030280860290910302029150505b9392505050565b634e487b7160e01b5f52604160045260245ffd5b604051601f8201601f191681016001600160401b0381118282101715610524576105246104e8565b604052919050565b5f6001600160401b03821115610544576105446104e8565b5060051b60200190565b5f82601f83011261055d575f80fd5b8135602061057261056d8361052c565b6104fc565b82815260059290921b84018101918181019086841115610590575f80fd5b8286015b848110156105ab5780358352918301918301610594565b509695505050505050565b5f805f606084860312156105c8575f80fd5b83356001600160401b03808211156105de575f80fd5b818601915086601f8301126105f1575f80fd5b8135602061060161056d8361052c565b82815260059290921b8401810191818101908a84111561061f575f80fd5b8286015b848110156106a85780358681111561063a575f8081fd5b8701603f81018d1361064b575f8081fd5b84810135604088821115610661576106616104e8565b610673601f8301601f191688016104fc565b8281528f82848601011115610687575f8081fd5b82828501898301375f92810188019290925250845250918301918301610623565b50975050870135925050808211156106be575f80fd5b6106ca8783880161054e565b935060408601359150808211156106df575f80fd5b506106ec8682870161054e565b9150509250925092565b602080825282518282018190525f9190848201906040850190845b8181101561072d57835183529284019291840191600101610711565b50909695505050505050565b5f602080838503121561074a575f80fd5b82356001600160401b0381111561075f575f80fd5b8301601f8101851361076f575f80fd5b803561077d61056d8261052c565b81815260059190911b8201830190838101908783111561079b575f80fd5b928401925b828410156107b9578335825292840192908401906107a0565b979650505050505050565b5f60208083850312156107d5575f80fd5b82356001600160401b038111156107ea575f80fd5b8301601f810185136107fa575f80fd5b803561080861056d8261052c565b81815260059190911b82018301908381019087831115610826575f80fd5b928401925b828410156107b95783358060070b8114610844575f8081fd5b8252928401929084019061082b565b634e487b7160e01b5f52603260045260245ffd5b5f60208284031215610877575f80fd5b5051919050565b634e487b7160e01b5f52601160045260245ffd5b5f600160ff1b82016108a6576108a661087e565b505f0390565b600181815b808511156108e657815f19048211156108cc576108cc61087e565b808516156108d957918102915b93841c93908002906108b1565b509250929050565b5f826108fc57506001610988565b8161090857505f610988565b816001811461091e576002811461092857610944565b6001915050610988565b60ff8411156109395761093961087e565b50506001821b610988565b5060208310610133831016604e8410600b8410161715610967575081810a610988565b61097183836108ac565b805f19048211156109845761098461087e565b0290505b92915050565b5f6104e183836108ee565b634e487b7160e01b5f52601260045260245ffd5b80820281158282048414176109885761098861087e565b808201808211156109885761098861087e565b5f600182016109e8576109e861087e565b5060010190565b8082018281125f831280158216821582161715610a0e57610a0e61087e565b505092915050565b5f82610a3057634e487b7160e01b5f52601260045260245ffd5b50069056fe30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001a26469706673582212200034995b2b5991300d54d46b8b569fdaad34c590716304d33ba67eac46c8a61764736f6c63430008140033")]
+    #[sol(rpc)]
+    DataAttestationSingle,
+    "./abis/DataAttestationSingle.json"
+);
+abigen!(
+    #[allow(missing_docs)]
+    #[sol(rpc, bytecode="608060405234801561000f575f80fd5b506115598061001d5f395ff3fe608060405234801561000f575f80fd5b506004361061004a575f3560e01c80636b6dd58c1461004e5780639e564bbc1461007e578063b404abab146100ae578063d3dc6d1f146100de575b5f80fd5b61006860048036038101906100639190610987565b61010e565b6040516100759190610acf565b60405180910390f35b61009860048036038101906100939190610bcd565b61027f565b6040516100a59190610acf565b60405180910390f35b6100c860048036038101906100c39190610d5b565b610405565b6040516100d59190610e59565b60405180910390f35b6100f860048036038101906100f39190610f6f565b610554565b6040516101059190610e59565b60405180910390f35b60605f84806020019051810190610125919061105f565b9050805167ffffffffffffffff8111156101425761014161076c565b5b6040519080825280602002602001820160405280156101705781602001602082028036833780820191505090505b5091505f5b8151811015610276575f828281518110610192576101916110a6565b5b602002602001015190505f808212905080156101b557816101b290611100565b91505b5f87600a6101c39190611275565b90505f8785815181106101d9576101d86110a6565b5b60200260200101516001901b90505f6101f3858385610639565b90508260028480610207576102066112bf565b5b84880961021491906112ec565b1061022957600181610226919061132d565b90505b83610234578061023f565b8061023e90611100565b5b888781518110610252576102516110a6565b5b6020026020010181815250505050505050808061026e90611360565b915050610175565b50509392505050565b6060835167ffffffffffffffff81111561029c5761029b61076c565b5b6040519080825280602002602001820160405280156102ca5781602001602082028036833780820191505090505b5090505f5b84518110156103fd575f8582815181106102ec576102eb6110a6565b5b602002602001015180602001905181019061030791906113a7565b90505f80821290508015610322578161031f90611100565b91505b5f868481518110610336576103356110a6565b5b6020026020010151600a61034a9190611275565b90505f8685815181106103605761035f6110a6565b5b60200260200101516001901b90505f61037a858385610639565b9050826002848061038e5761038d6112bf565b5b84880961039b91906112ec565b106103b0576001816103ad919061132d565b90505b836103bb57806103c6565b806103c590611100565b5b8787815181106103d9576103d86110a6565b5b602002602001018181525050505050505080806103f590611360565b9150506102cf565b509392505050565b6060815167ffffffffffffffff8111156104225761042161076c565b5b6040519080825280602002602001820160405280156104505781602001602082028036833780820191505090505b5090505f5b825181101561054e575f838281518110610472576104716110a6565b5b6020026020010151121580156104c257507f30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f00000018382815181106104b7576104b66110a6565b5b602002602001015111155b610501576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016104f89061142c565b60405180910390fd5b828181518110610514576105136110a6565b5b602002602001015182828151811061052f5761052e6110a6565b5b602002602001018181525050808061054690611360565b915050610455565b50919050565b6060815167ffffffffffffffff8111156105715761057061076c565b5b60405190808252806020026020018201604052801561059f5781602001602082028036833780820191505090505b5090505f5b8251811015610633577f30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001808483815181106105e2576105e16110a6565b5b602002602001015160070b6105f7919061144a565b610601919061148b565b828281518110610614576106136110a6565b5b602002602001018181525050808061062b90611360565b9150506105a4565b50919050565b5f805f80198587098587029250828110838203039150505f810361067157838281610667576106666112bf565b5b049250505061073c565b8084116106b3576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016106aa90611505565b60405180910390fd5b5f8486880990508281118203915080830392505f60018619018616905080860495508084049350600181825f0304019050808302841793505f600287600302189050808702600203810290508087026002038102905080870260020381029050808702600203810290508087026002038102905080870260020381029050808502955050505050505b9392505050565b5f604051905090565b5f80fd5b5f80fd5b5f80fd5b5f80fd5b5f601f19601f8301169050919050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b6107a28261075c565b810181811067ffffffffffffffff821117156107c1576107c061076c565b5b80604052505050565b5f6107d3610743565b90506107df8282610799565b919050565b5f67ffffffffffffffff8211156107fe576107fd61076c565b5b6108078261075c565b9050602081019050919050565b828183375f83830152505050565b5f61083461082f846107e4565b6107ca565b9050828152602081018484840111156108505761084f610758565b5b61085b848285610814565b509392505050565b5f82601f83011261087757610876610754565b5b8135610887848260208601610822565b91505092915050565b5f819050919050565b6108a281610890565b81146108ac575f80fd5b50565b5f813590506108bd81610899565b92915050565b5f67ffffffffffffffff8211156108dd576108dc61076c565b5b602082029050602081019050919050565b5f80fd5b5f6109046108ff846108c3565b6107ca565b90508083825260208201905060208402830185811115610927576109266108ee565b5b835b81811015610950578061093c88826108af565b845260208401935050602081019050610929565b5050509392505050565b5f82601f83011261096e5761096d610754565b5b813561097e8482602086016108f2565b91505092915050565b5f805f6060848603121561099e5761099d61074c565b5b5f84013567ffffffffffffffff8111156109bb576109ba610750565b5b6109c786828701610863565b93505060206109d8868287016108af565b925050604084013567ffffffffffffffff8111156109f9576109f8610750565b5b610a058682870161095a565b9150509250925092565b5f81519050919050565b5f82825260208201905092915050565b5f819050602082019050919050565b5f819050919050565b610a4a81610a38565b82525050565b5f610a5b8383610a41565b60208301905092915050565b5f602082019050919050565b5f610a7d82610a0f565b610a878185610a19565b9350610a9283610a29565b805f5b83811015610ac2578151610aa98882610a50565b9750610ab483610a67565b925050600181019050610a95565b5085935050505092915050565b5f6020820190508181035f830152610ae78184610a73565b905092915050565b5f67ffffffffffffffff821115610b0957610b0861076c565b5b602082029050602081019050919050565b5f610b2c610b2784610aef565b6107ca565b90508083825260208201905060208402830185811115610b4f57610b4e6108ee565b5b835b81811015610b9657803567ffffffffffffffff811115610b7457610b73610754565b5b808601610b818982610863565b85526020850194505050602081019050610b51565b5050509392505050565b5f82601f830112610bb457610bb3610754565b5b8135610bc4848260208601610b1a565b91505092915050565b5f805f60608486031215610be457610be361074c565b5b5f84013567ffffffffffffffff811115610c0157610c00610750565b5b610c0d86828701610ba0565b935050602084013567ffffffffffffffff811115610c2e57610c2d610750565b5b610c3a8682870161095a565b925050604084013567ffffffffffffffff811115610c5b57610c5a610750565b5b610c678682870161095a565b9150509250925092565b5f67ffffffffffffffff821115610c8b57610c8a61076c565b5b602082029050602081019050919050565b610ca581610a38565b8114610caf575f80fd5b50565b5f81359050610cc081610c9c565b92915050565b5f610cd8610cd384610c71565b6107ca565b90508083825260208201905060208402830185811115610cfb57610cfa6108ee565b5b835b81811015610d245780610d108882610cb2565b845260208401935050602081019050610cfd565b5050509392505050565b5f82601f830112610d4257610d41610754565b5b8135610d52848260208601610cc6565b91505092915050565b5f60208284031215610d7057610d6f61074c565b5b5f82013567ffffffffffffffff811115610d8d57610d8c610750565b5b610d9984828501610d2e565b91505092915050565b5f81519050919050565b5f82825260208201905092915050565b5f819050602082019050919050565b610dd481610890565b82525050565b5f610de58383610dcb565b60208301905092915050565b5f602082019050919050565b5f610e0782610da2565b610e118185610dac565b9350610e1c83610dbc565b805f5b83811015610e4c578151610e338882610dda565b9750610e3e83610df1565b925050600181019050610e1f565b5085935050505092915050565b5f6020820190508181035f830152610e718184610dfd565b905092915050565b5f67ffffffffffffffff821115610e9357610e9261076c565b5b602082029050602081019050919050565b5f8160070b9050919050565b610eb981610ea4565b8114610ec3575f80fd5b50565b5f81359050610ed481610eb0565b92915050565b5f610eec610ee784610e79565b6107ca565b90508083825260208201905060208402830185811115610f0f57610f0e6108ee565b5b835b81811015610f385780610f248882610ec6565b845260208401935050602081019050610f11565b5050509392505050565b5f82601f830112610f5657610f55610754565b5b8135610f66848260208601610eda565b91505092915050565b5f60208284031215610f8457610f8361074c565b5b5f82013567ffffffffffffffff811115610fa157610fa0610750565b5b610fad84828501610f42565b91505092915050565b5f81519050610fc481610c9c565b92915050565b5f610fdc610fd784610c71565b6107ca565b90508083825260208201905060208402830185811115610fff57610ffe6108ee565b5b835b8181101561102857806110148882610fb6565b845260208401935050602081019050611001565b5050509392505050565b5f82601f83011261104657611045610754565b5b8151611056848260208601610fca565b91505092915050565b5f602082840312156110745761107361074c565b5b5f82015167ffffffffffffffff81111561109157611090610750565b5b61109d84828501611032565b91505092915050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f61110a82610a38565b91507f8000000000000000000000000000000000000000000000000000000000000000820361113c5761113b6110d3565b5b815f039050919050565b5f8160011c9050919050565b5f808291508390505b600185111561119b57808604811115611177576111766110d3565b5b60018516156111865780820291505b808102905061119485611146565b945061115b565b94509492505050565b5f826111b3576001905061126e565b816111c0575f905061126e565b81600181146111d657600281146111e05761120f565b600191505061126e565b60ff8411156111f2576111f16110d3565b5b8360020a915084821115611209576112086110d3565b5b5061126e565b5060208310610133831016604e8410600b84101617156112445782820a90508381111561123f5761123e6110d3565b5b61126e565b6112518484846001611152565b92509050818404811115611268576112676110d3565b5b81810290505b9392505050565b5f61127f82610890565b915061128a83610890565b92506112b77fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff84846111a4565b905092915050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601260045260245ffd5b5f6112f682610890565b915061130183610890565b925082820261130f81610890565b91508282048414831517611326576113256110d3565b5b5092915050565b5f61133782610890565b915061134283610890565b925082820190508082111561135a576113596110d3565b5b92915050565b5f61136a82610890565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820361139c5761139b6110d3565b5b600182019050919050565b5f602082840312156113bc576113bb61074c565b5b5f6113c984828501610fb6565b91505092915050565b5f82825260208201905092915050565b7f496e76616c6964206669656c6420656c656d656e7400000000000000000000005f82015250565b5f6114166015836113d2565b9150611421826113e2565b602082019050919050565b5f6020820190508181035f8301526114438161140a565b9050919050565b5f61145482610a38565b915061145f83610a38565b92508282019050828112155f8312168382125f841215161715611485576114846110d3565b5b92915050565b5f61149582610890565b91506114a083610890565b9250826114b0576114af6112bf565b5b828206905092915050565b7f4d6174683a206d756c446976206f766572666c6f7700000000000000000000005f82015250565b5f6114ef6015836113d2565b91506114fa826114bb565b602082019050919050565b5f6020820190508181035f83015261151c816114e3565b905091905056fea264697066735822122074a33a643064f165fcff9d861d52fd29ef856895dd6c118671a9f5406d87310f64736f6c63430008140033")]
     contract QuantizeData {
         /**
          * @notice EZKL P value
@@ -170,7 +176,7 @@ abigen!(
             }
         }
 
-        function quantize_data(
+        function quantize_data_multi(
             bytes[] memory data,
             uint256[] memory decimals,
             uint256[] memory scales
@@ -181,6 +187,28 @@ abigen!(
                 bool neg = x < 0;
                 if (neg) x = -x;
                 uint denom = 10 ** decimals[i];
+                uint scale = 1 << scales[i];
+                uint output = mulDiv(uint256(x), scale, denom);
+                if (mulmod(uint256(x), scale, denom) * 2 >= denom) {
+                    output += 1;
+                }
+
+                quantized_data[i] = neg ? -int256(output) : int256(output);
+            }
+        }
+
+        function quantize_data_single(
+            bytes memory data,
+            uint256 memory decimals,
+            uint256[] memory scales
+        ) external pure returns (int256[] memory quantized_data) {
+            int[] memory _data = abi.decode(data, (int256[]));
+            quantized_data = new int256[](_data.length);
+            for (uint i; i < _data.length; i++) {
+                int x = _data[i];
+                bool neg = x < 0;
+                if (neg) x = -x;
+                uint denom = 10 ** decimals;
                 uint scale = 1 << scales[i];
                 uint output = mulDiv(uint256(x), scale, denom);
                 if (mulmod(uint256(x), scale, denom) * 2 >= denom) {
@@ -370,6 +398,7 @@ pub async fn deploy_da_verifier_via_solidity(
     let mut scales: Vec<u32> = vec![];
     // The data that will be stored in the test contracts that will eventually be read from.
     let mut calls_to_accounts = vec![];
+    let mut call_to_account = None;
 
     let mut instance_shapes = vec![];
     let mut model_instance_offset = 0;
@@ -407,15 +436,23 @@ pub async fn deploy_da_verifier_via_solidity(
             scales.extend(vec![0; instance_shapes[instance_idx]]);
             instance_idx += 1;
         } else {
-            let input_scales = settings.model_input_scales;
+            let input_scales = settings.clone().model_input_scales;
             // give each input a scale
             for scale in input_scales {
                 scales.extend(vec![scale as u32; instance_shapes[instance_idx]]);
                 instance_idx += 1;
             }
         }
-        for call in source.calls {
-            calls_to_accounts.push(call);
+        // match statement for enum type of source.calls
+        match source.calls {
+            Calls::Multiple(calls) => {
+                for call in calls {
+                    calls_to_accounts.push(call);
+                }
+            }
+            Calls::Single(call) => {
+                call_to_account = Some(call);
+            }
         }
     } else if let DataSource::File(source) = input.input_data {
         if settings.run_args.input_visibility.is_public() {
@@ -431,20 +468,68 @@ pub async fn deploy_da_verifier_via_solidity(
             // set scales 1.0
             scales.extend(vec![0; instance_shapes[instance_idx]]);
         } else {
-            let input_scales = settings.model_output_scales;
+            let input_scales = settings.clone().model_output_scales;
             // give each output a scale
             for scale in input_scales {
                 scales.extend(vec![scale as u32; instance_shapes[instance_idx]]);
                 instance_idx += 1;
             }
         }
-        for call in source.calls {
-            calls_to_accounts.push(call);
+        // match statement for enum type of source.calls
+        match source.calls {
+            Calls::Multiple(calls) => {
+                for call in calls {
+                    calls_to_accounts.push(call);
+                }
+            }
+            Calls::Single(call) => {
+                call_to_account = Some(call);
+            }
         }
     }
 
+    let contract = match call_to_account {
+        Some(call) => {
+            deploy_single_da_contract(
+                client,
+                contract_instance_offset,
+                client_address,
+                scales,
+                call,
+                sol_code_path,
+                runs,
+            )
+            .await
+        }
+        None => {
+            deploy_multi_da_contract(
+                client,
+                contract_instance_offset,
+                client_address,
+                scales,
+                calls_to_accounts,
+                sol_code_path,
+                runs,
+                &settings.clone(),
+            )
+            .await
+        }
+    };
+    return contract;
+}
+
+async fn deploy_multi_da_contract(
+    client: EthersClient,
+    contract_instance_offset: usize,
+    client_address: alloy::primitives::Address,
+    scales: Vec<u32>,
+    calls_to_accounts: Vec<CallsToAccount>,
+    sol_code_path: PathBuf,
+    runs: usize,
+    settings: &GraphSettings,
+) -> Result<H160, EthError> {
     let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestation", runs).await?;
+        get_contract_artifacts(sol_code_path, "DataAttestationMulti", runs).await?;
 
     let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
         parse_calls_to_accounts(calls_to_accounts)?
@@ -520,7 +605,54 @@ pub async fn deploy_da_verifier_via_solidity(
 
     Ok(contract)
 }
+async fn deploy_single_da_contract(
+    client: EthersClient,
+    contract_instance_offset: usize,
+    client_address: alloy::primitives::Address,
+    scales: Vec<u32>,
+    call_to_accounts: CallToAccount,
+    sol_code_path: PathBuf,
+    runs: usize,
+) -> Result<H160, EthError> {
+    let (abi, bytecode, runtime_bytecode) =
+        get_contract_artifacts(sol_code_path, "DataAttestationSingle", runs).await?;
 
+    let (contract_address, call_data, decimals) = parse_call_to_account(call_to_accounts)?;
+
+    let factory = get_sol_contract_factory(
+        abi,
+        bytecode,
+        runtime_bytecode,
+        client,
+        Some((
+            // address _contractAddress,
+            WordToken(contract_address.into_word()),
+            // bytes memory _callData,
+            PackedSeqToken(call_data.as_ref()),
+            // uint256 _decimals,
+            WordToken(B256::from(decimals).into()),
+            // uint[] memory _scales,
+            DynSeqToken(
+                scales
+                    .into_iter()
+                    .map(|i| WordToken(U256::from(i).into()))
+                    .collect_vec(),
+            ),
+            //  uint8 _instanceOffset,
+            WordToken(U256::from(contract_instance_offset as u32).into()),
+            // address _admin
+            WordToken(client_address.into_word()),
+        )),
+    )?;
+
+    debug!("call_data: {:#?}", call_data);
+    debug!("contract_addresses: {:#?}", contract_address);
+    debug!("decimals: {:#?}", decimals);
+
+    let contract = factory.deploy().await?;
+
+    Ok(contract)
+}
 type ParsedCallsToAccount = (Vec<H160>, Vec<Vec<Bytes>>, Vec<Vec<U256>>);
 
 fn parse_calls_to_accounts(
@@ -543,6 +675,16 @@ fn parse_calls_to_accounts(
     }
     Ok((contract_addresses, call_data, decimals))
 }
+type ParsedCallToAccount = (H160, Bytes, U256);
+
+fn parse_call_to_account(call_to_account: CallToAccount) -> Result<ParsedCallToAccount, EthError> {
+    let contract_address_bytes = hex::decode(&call_to_account.address)?;
+    let contract_address = H160::from_slice(&contract_address_bytes);
+    let call_data_bytes = hex::decode(&call_to_account.call_data)?;
+    let call_data = Bytes::from(call_data_bytes);
+    let decimal = I256::from_dec_str(&call_to_account.decimals.to_string())?.unsigned_abs();
+    Ok((contract_address, call_data, decimal))
+}
 
 pub async fn update_account_calls(
     addr: H160,
@@ -553,57 +695,102 @@ pub async fn update_account_calls(
 
     // The data that will be stored in the test contracts that will eventually be read from.
     let mut calls_to_accounts = vec![];
+    let mut call_to_account = None;
 
     if let DataSource::OnChain(source) = input.input_data {
-        for call in source.calls {
-            calls_to_accounts.push(call);
+        match source.calls {
+            Calls::Multiple(calls) => {
+                for call in calls {
+                    calls_to_accounts.push(call);
+                }
+            }
+            Calls::Single(call) => {
+                call_to_account = Some(call);
+            }
         }
     }
 
     if let Some(DataSource::OnChain(source)) = input.output_data {
-        for call in source.calls {
-            calls_to_accounts.push(call);
+        match source.calls {
+            Calls::Multiple(calls) => {
+                for call in calls {
+                    calls_to_accounts.push(call);
+                }
+            }
+            Calls::Single(call) => {
+                call_to_account = Some(call);
+            }
         }
     }
 
-    let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
-        parse_calls_to_accounts(calls_to_accounts)?
-    } else {
-        return Err(EthError::OnChainDataSource);
-    };
+    match call_to_account {
+        Some(call) => {
+            let (contract_address, call_data, decimals) = parse_call_to_account(call)?;
 
-    let (client, client_address) = setup_eth_backend(rpc_url, None).await?;
+            let (client, client_address) = setup_eth_backend(rpc_url, None).await?;
+            let contract = DataAttestationSingle::new(addr, &client);
 
-    let contract = DataAttestation::new(addr, &client);
+            let _ = contract
+                .updateAccountCalls(contract_address, call_data.clone(), decimals)
+                .from(client_address)
+                .send()
+                .await?;
 
-    info!("contract_addresses: {:#?}", contract_addresses);
+            // update contract signer with non admin account
+            let contract = DataAttestationSingle::new(addr, client.clone());
 
-    let _ = contract
-        .updateAccountCalls(
-            contract_addresses.clone(),
-            call_data.clone(),
-            decimals.clone(),
-        )
-        .from(client_address)
-        .send()
-        .await?;
+            // call to update_account_call should fail
+            if (contract
+                .updateAccountCalls(contract_address, call_data, decimals)
+                .send()
+                .await)
+                .is_err()
+            {
+                info!("updateAccountCall failed as expected");
+            } else {
+                return Err(EthError::UpdateAccountCalls);
+            }
+        }
+        None => {
+            let (contract_addresses, call_data, decimals) = if !calls_to_accounts.is_empty() {
+                parse_calls_to_accounts(calls_to_accounts)?
+            } else {
+                return Err(EthError::OnChainDataSource);
+            };
 
-    // update contract signer with non admin account
-    let contract = DataAttestation::new(addr, client.clone());
+            let (client, client_address) = setup_eth_backend(rpc_url, None).await?;
+            let contract = DataAttestationMulti::new(addr, &client);
 
-    info!("contract_addresses: {:#?}", contract_addresses);
+            info!("contract_addresses: {:#?}", contract_addresses);
 
-    // call to update_account_calls should fail
+            let _ = contract
+                .updateAccountCalls(
+                    contract_addresses.clone(),
+                    call_data.clone(),
+                    decimals.clone(),
+                )
+                .from(client_address)
+                .send()
+                .await?;
 
-    if (contract
-        .updateAccountCalls(contract_addresses, call_data, decimals)
-        .send()
-        .await)
-        .is_err()
-    {
-        info!("updateAccountCalls failed as expected");
-    } else {
-        return Err(EthError::UpdateAccountCalls);
+            // update contract signer with non admin account
+            let contract = DataAttestationMulti::new(addr, client.clone());
+
+            info!("contract_addresses: {:#?}", contract_addresses);
+
+            // call to update_account_calls should fail
+
+            if (contract
+                .updateAccountCalls(contract_addresses, call_data, decimals)
+                .send()
+                .await)
+                .is_err()
+            {
+                info!("updateAccountCalls failed as expected");
+            } else {
+                return Err(EthError::UpdateAccountCalls);
+            }
+        }
     }
 
     Ok(())
@@ -823,7 +1010,7 @@ pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
 }
 
 /// Reads on-chain inputs, returning the raw encoded data returned from making all the calls in on_chain_input_data
-pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>(
+pub async fn read_on_chain_inputs_multi<M: 'static + Provider<Http<Client>, Ethereum>>(
     client: Arc<M>,
     address: H160,
     data: &Vec<CallsToAccount>,
@@ -855,8 +1042,31 @@ pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>
     Ok((fetched_inputs, decimals))
 }
 
+/// Reads on-chain inputs, returning the raw encoded data returned from making the single call in on_chain_input_data
+/// that returns the array of input data we will attest to.
+pub async fn read_on_chain_inputs_single<M: 'static + Provider<Http<Client>, Ethereum>>(
+    client: Arc<M>,
+    address: H160,
+    data: CallToAccount,
+) -> Result<(Bytes, u8), EthError> {
+    // Iterate over all on-chain inputs
+    let contract_address_bytes = hex::decode(&data.address)?;
+    let contract_address = H160::from_slice(&contract_address_bytes);
+    let call_data_bytes = hex::decode(&data.call_data)?;
+    let input: TransactionInput = call_data_bytes.into();
+    let tx = TransactionRequest::default()
+        .to(contract_address)
+        .from(address)
+        .input(input);
+    debug!("transaction {:#?}", tx);
+
+    let result = client.call(&tx).await?;
+    debug!("return data {:#?}", result);
+    Ok((result, data.decimals))
+}
+
 ///
-pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
+pub async fn evm_quantize_multi<M: 'static + Provider<Http<Client>, Ethereum>>(
     client: Arc<M>,
     scales: Vec<crate::Scale>,
     data: &(Vec<Bytes>, Vec<u8>),
@@ -886,7 +1096,59 @@ pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
     debug!("fetched_inputs: {:#?}", fetched_inputs);
 
     let results = contract
-        .quantize_data(fetched_inputs, decimals, scales)
+        .quantize_data_multi(fetched_inputs, decimals, scales)
+        .call()
+        .await?
+        .quantized_data;
+
+    debug!("evm quantization results: {:#?}", results);
+
+    let mut felts = vec![];
+
+    for x in results {
+        let felt = match i64::from_str(&x.to_string()) {
+            Ok(x) => contract.to_field_element(vec![x]).call().await?.output[0],
+            Err(_) => {
+                contract
+                    .check_is_valid_field_element(vec![x])
+                    .call()
+                    .await?
+                    .output[0]
+            }
+        };
+        felts.push(PrimeField::from_str_vartime(&felt.to_string()).unwrap());
+    }
+
+    debug!("evm quantized felts: {:#?}", felts,);
+    Ok(felts)
+}
+
+pub async fn evm_quantize_single<M: 'static + Provider<Http<Client>, Ethereum>>(
+    client: Arc<M>,
+    scales: Vec<crate::Scale>,
+    data: &Bytes,
+    decimals: u8,
+) -> Result<Vec<Fr>, EthError> {
+    let contract = QuantizeData::deploy(&client).await?;
+
+    let fetched_inputs = data;
+
+    let fetched_inputs =
+        Result::<_, std::convert::Infallible>::Ok(Bytes::from(fetched_inputs.to_vec()))?;
+
+    let decimals = I256::from_dec_str(&decimals.to_string())?.unsigned_abs();
+
+    let scales = scales
+        .iter()
+        .map(|x| Ok(I256::from_dec_str(&x.to_string())?.unsigned_abs()))
+        .collect::<Result<Vec<U256>, ParseSignedError>>()?;
+
+    debug!("scales: {:#?}", scales);
+    debug!("decimals: {:#?}", decimals);
+    debug!("fetched_inputs: {:#?}", fetched_inputs);
+
+    let results = contract
+        .quantize_data_single(fetched_inputs, decimals, scales)
         .call()
         .await?
         .quantized_data;
@@ -1016,7 +1278,7 @@ pub async fn get_contract_artifacts(
 }
 
 /// Sets the constants stored in the da verifier
-pub fn fix_da_sol(
+pub fn fix_da_multi_sol(
     input_data: Option<Vec<CallsToAccount>>,
     output_data: Option<Vec<CallsToAccount>>,
     commitment_bytes: Option<Vec<u8>>,
@@ -1061,7 +1323,7 @@ pub fn fix_da_sol(
         );
     }
 
-    // if both input and output data is none then we will only deploy the DataAttest contract, adding in the verifyWithDataAttestation function
+    // if both input and output data is none then we will only deploy the DataAttest contract, adding in the verifyWithDataAttestationMulti function
     if input_data.is_none()
         && output_data.is_none()
         && commitment_bytes.as_ref().is_some()
@@ -1069,7 +1331,7 @@ pub fn fix_da_sol(
     {
         contract = contract.replace(
             "contract SwapProofCommitments {",
-            "contract DataAttestation {",
+            "contract DataAttestationMulti {",
         );
 
         // Remove everything past the end of the checkKzgCommits function
@@ -1100,5 +1362,29 @@ pub fn fix_da_sol(
         );
     }
 
+    Ok(contract)
+}
+
+/// Sets the constants stored in the da verifier
+pub fn fix_da_single_sol(
+    input_len: Option<usize>,
+    output_len: Option<usize>,
+) -> Result<String, EthError> {
+    let mut contract = ATTESTDATA_SOL.to_string();
+
+    // fill in the quantization params and total calls
+    // as constants to the contract to save on gas
+    if let Some(input_len) = &input_len {
+        contract = contract.replace(
+            "uint256 constant INPUT_LEN = 0;",
+            &format!("uint256 constant INPUT_LEN = {};", input_len),
+        );
+    }
+    if let Some(output_len) = &output_len {
+        contract = contract.replace(
+            "uint256 constant OUTPUT_LEN = 0;",
+            &format!("uint256 constant OUTPUT_LEN = {};", output_len),
+        );
+    }
     Ok(contract)
 }

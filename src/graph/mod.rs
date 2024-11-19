@@ -1004,11 +1004,24 @@ impl GraphCircuit {
         shapes: &Vec<Vec<usize>>,
         scales: Vec<crate::Scale>,
     ) -> Result<Vec<Tensor<Fp>>, GraphError> {
-        use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
+        use crate::eth::{
+            evm_quantize_multi, evm_quantize_single, read_on_chain_inputs_multi,
+            read_on_chain_inputs_single, setup_eth_backend,
+        };
         let (client, client_address) = setup_eth_backend(Some(&source.rpc), None).await?;
-        let inputs = read_on_chain_inputs(client.clone(), client_address, &source.calls).await?;
-        // quantize the supplied data using the provided scale + QuantizeData.sol
-        let quantized_evm_inputs = evm_quantize(client, scales, &inputs).await?;
+        let quantized_evm_inputs = match source.calls {
+            input::Calls::Single(call) => {
+                let (inputs, decimals) =
+                    read_on_chain_inputs_single(client.clone(), client_address, call).await?;
+
+                evm_quantize_single(client, scales, &inputs, decimals).await?
+            }
+            input::Calls::Multiple(calls) => {
+                let inputs =
+                    read_on_chain_inputs_multi(client.clone(), client_address, &calls).await?;
+                evm_quantize_multi(client, scales, &inputs).await?
+            }
+        };
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<Fp>> = vec![];
         for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
