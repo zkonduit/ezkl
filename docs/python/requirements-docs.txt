@@ -1,4 +1,4 @@
-ezkl==0.0.0
+ezkl
 sphinx
 sphinx-rtd-theme
 sphinxcontrib-napoleon
