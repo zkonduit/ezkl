@@ -1,4 +1,4 @@
-name: Build and Publish Python Bindings
+t name: Build and Publish Python Bindings
 
 on:
   workflow_dispatch:
@@ -283,8 +283,6 @@ jobs:
         platform:
           - target: aarch64-unknown-linux-musl
             arch: aarch64
-          - target: armv7-unknown-linux-musleabihf
-            arch: armv7
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
