@@ -1,4 +1,4 @@
-t name: Build and Publish Python Bindings
+name: Build and Publish Python Bindings
 
 on:
   workflow_dispatch:
