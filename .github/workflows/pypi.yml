@@ -168,7 +168,7 @@ jobs:
           name: wheels
           path: dist
 
-  # TODO: There's a problem with the maturin-action toolchain for arm arch leading to failed builds
+  #  There's a problem with the maturin-action toolchain for arm arch leading to failed builds
   # linux-cross:
   #   runs-on: ubuntu-latest
   #   strategy:
@@ -306,7 +306,7 @@ jobs:
           manylinux: musllinux_1_2
           args: --release --out dist --features python-bindings
 
-      - uses: uraimo/run-on-arch-action@v2.5.0
+      - uses: uraimo/run-on-arch-action@v2.8.1
         name: Install built wheel
         with:
           arch: ${{ matrix.platform.arch }}
