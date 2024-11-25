@@ -1664,7 +1664,7 @@ pub mod nonlinearities {
     ///     Some(&[2, 15, 2, 1, 1, 0]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = exp(&x, 1.0);
+    /// let result = exp(&x, 1.0,  std::f64::consts::E);
     /// let expected = Tensor::<IntegerRep>::new(Some(&[7, 3269017, 7, 3, 3, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     ///
@@ -1673,7 +1673,7 @@ pub mod nonlinearities {
     ///    Some(&[37, 12, 41]),
     ///   &[3],
     /// ).unwrap();
-    /// let result = exp(&x, 512.0);
+    /// let result = exp(&x, 512.0, std::f64::consts::E);
     ///
     /// let expected = Tensor::<IntegerRep>::new(Some(&[550, 524, 555]), &[3]).unwrap();
     ///
