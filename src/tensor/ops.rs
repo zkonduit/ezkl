@@ -1679,10 +1679,10 @@ pub mod nonlinearities {
     ///
     /// assert_eq!(result, expected);
     /// ```
-    pub fn exp(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
+    pub fn exp(a: &Tensor<IntegerRep>, scale_input: f64, base: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
-            let fout = scale_input * kix.exp();
+            let fout = scale_input * base.powf(kix);
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
         })
