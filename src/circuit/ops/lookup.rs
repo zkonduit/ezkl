@@ -19,7 +19,7 @@ pub enum LookupOp {
     PowersOfTwo { scale: utils::F32 },
     Ln { scale: utils::F32 },
     Sigmoid { scale: utils::F32 },
-    Exp { scale: utils::F32 },
+    Exp { scale: utils::F32, base: utils::F32 },
     Cos { scale: utils::F32 },
     ACos { scale: utils::F32 },
     Cosh { scale: utils::F32 },
@@ -55,7 +55,7 @@ impl LookupOp {
             LookupOp::Div { denom } => format!("div_{}", denom),
             LookupOp::Sigmoid { scale } => format!("sigmoid_{}", scale),
             LookupOp::Erf { scale } => format!("erf_{}", scale),
-            LookupOp::Exp { scale } => format!("exp_{}", scale),
+            LookupOp::Exp { scale, base } => format!("exp_{}_{}", scale, base),
             LookupOp::Cos { scale } => format!("cos_{}", scale),
             LookupOp::ACos { scale } => format!("acos_{}", scale),
             LookupOp::Cosh { scale } => format!("cosh_{}", scale),
@@ -99,9 +99,9 @@ impl LookupOp {
                 LookupOp::Erf { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::erffunc(&x, scale.into()))
                 }
-                LookupOp::Exp { scale } => {
-                    Ok::<_, TensorError>(tensor::ops::nonlinearities::exp(&x, scale.into()))
-                }
+                LookupOp::Exp { scale, base } => Ok::<_, TensorError>(
+                    tensor::ops::nonlinearities::exp(&x, scale.into(), base.into()),
+                ),
                 LookupOp::Cos { scale } => {
                     Ok::<_, TensorError>(tensor::ops::nonlinearities::cos(&x, scale.into()))
                 }
@@ -165,7 +165,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Lookup
             LookupOp::Div { denom, .. } => format!("DIV(denom={})", denom),
             LookupOp::Sigmoid { scale } => format!("SIGMOID(scale={})", scale),
             LookupOp::Erf { scale } => format!("ERF(scale={})", scale),
-            LookupOp::Exp { scale } => format!("EXP(scale={})", scale),
+            LookupOp::Exp { scale, base } => format!("EXP(scale={}, base={})", scale, base),
             LookupOp::Tan { scale } => format!("TAN(scale={})", scale),
             LookupOp::ATan { scale } => format!("ATAN(scale={})", scale),
             LookupOp::Tanh { scale } => format!("TANH(scale={})", scale),

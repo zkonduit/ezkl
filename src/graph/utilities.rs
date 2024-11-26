@@ -279,6 +279,8 @@ pub fn new_op_from_onnx(
     symbol_values: &SymbolValues,
     run_args: &crate::RunArgs,
 ) -> Result<(SupportedOp, Vec<usize>), GraphError> {
+    use std::f64::consts::E;
+
     use tract_onnx::tract_core::ops::array::Trilu;
 
     use crate::circuit::InputType;
@@ -855,6 +857,7 @@ pub fn new_op_from_onnx(
         }
         "Exp" => SupportedOp::Nonlinear(LookupOp::Exp {
             scale: scale_to_multiplier(input_scales[0]).into(),
+            base: E.into(),
         }),
         "Ln" => {
             if run_args.bounded_log_lookup {
@@ -1134,7 +1137,22 @@ pub fn new_op_from_onnx(
                     })
                 }
             } else {
-                unimplemented!("only support constant pow for now")
+                if let Some(c) = inputs[0].opkind().get_mutable_constant() {
+                    inputs[0].decrement_use();
+                    deleted_indices.push(0);
+                    if c.raw_values.len() > 1 {
+                        unimplemented!("only support scalar base")
+                    }
+
+                    let base = c.raw_values[0];
+
+                    SupportedOp::Nonlinear(LookupOp::Exp {
+                        scale: scale_to_multiplier(input_scales[1]).into(),
+                        base: base.into(),
+                    })
+                } else {
+                    unimplemented!("only support constant base or pow for now")
+                }
             }
         }
         "Cube" => SupportedOp::Linear(PolyOp::Pow(3)),

@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    f64::consts::E,
     ops::Range,
 };
 
@@ -5624,7 +5625,10 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         config,
         region,
         &[sub],
-        &LookupOp::Exp { scale: input_scale },
+        &LookupOp::Exp {
+            scale: input_scale,
+            base: E.into(),
+        },
     )?;
 
     percent(config, region, &[ex.clone()], input_scale, output_scale)
