@@ -1155,6 +1155,41 @@ pub fn new_op_from_onnx(
                 }
             }
         }
+        "Div" => {
+            let const_idx = inputs
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| n.is_constant())
+                .map(|(i, _)| i)
+                .collect::<Vec<_>>();
+
+            if const_idx.len() > 1 {
+                return Err(GraphError::InvalidDims(idx, "div".to_string()));
+            }
+
+            let const_idx = const_idx[0];
+
+            if const_idx != 1 {
+                unimplemented!("only support div with constant as second input")
+            }
+
+            if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
+                if c.raw_values.len() == 1 && c.raw_values[0] != 0. {
+                    inputs[const_idx].decrement_use();
+                    deleted_indices.push(const_idx);
+                    // get the non constant index
+                    let denom = c.raw_values[0];
+
+                    SupportedOp::Hybrid(HybridOp::Div {
+                        denom: denom.into(),
+                    })
+                } else {
+                    unimplemented!("only support non zero divisors of size 1")
+                }
+            } else {
+                unimplemented!("only support div with constant as second input")
+            }
+        }
         "Cube" => SupportedOp::Linear(PolyOp::Pow(3)),
         "Square" => SupportedOp::Linear(PolyOp::Pow(2)),
         "Conv" => {
