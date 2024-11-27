@@ -492,7 +492,7 @@ mod native_tests {
             #[cfg(feature="icicle")]
             seq!(N in 0..=2 {
             #(#[test_case(TESTS_AGGR[N])])*
-            fn aggr_prove_and_verify_(test: &str) {
+            fn kzg_aggr_prove_and_verify_(test: &str) {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(test_dir.path().to_str().unwrap(), test);
