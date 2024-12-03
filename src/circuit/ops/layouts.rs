@@ -1696,10 +1696,9 @@ pub(crate) fn get_missing_set_elements<
     values: &[ValTensor<F>; 2],
     ordered: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let (mut input, mut fullset) = (values[0].clone(), values[1].clone());
+    let (mut input, fullset) = (values[0].clone(), values[1].clone());
     let set_len = fullset.len();
     input.flatten();
-    fullset.flatten();
 
     // while fullset is less than len of input concat
 

@@ -29,11 +29,11 @@ tm.compile(optimizer='adam', loss='mse')
 shape = [1, 4, 1]
 index_shape = [1, 4]
 # After training, export to onnx (network.onnx) and create a data file (input.json)
-x = np.random.randint(0, 10, shape)
+x = np.random.randint(0, 4, shape)
 # w = random int tensor
-w = np.random.randint(0, 10, index_shape)
+w = np.random.randint(0, 4, index_shape)
 
-spec = tf.TensorSpec(shape, tf.float32, name='input_0')
+spec = tf.TensorSpec(shape, tf.int32, name='input_0')
 index_spec = tf.TensorSpec(index_shape, tf.int32, name='input_1')
 
 model_path = "network.onnx"
