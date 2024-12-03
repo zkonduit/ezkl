@@ -120,7 +120,7 @@ pub fn version() -> &'static str {
     }
 }
 
-/// Bindings managment
+/// Bindings management
 #[cfg(any(
     feature = "ios-bindings",
     all(target_arch = "wasm32", target_os = "unknown"),
