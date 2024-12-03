@@ -1687,6 +1687,7 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
     Ok(output.into())
 }
 
+// assumes unique values in fullset
 pub(crate) fn get_missing_set_elements<
     F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
 >(
@@ -1698,6 +1699,8 @@ pub(crate) fn get_missing_set_elements<
     let (mut input, fullset) = (values[0].clone(), values[1].clone());
     let set_len = fullset.len();
     input.flatten();
+
+    // while fullset is less than len of input concat
 
     let is_assigned = !input.any_unknowns()? && !fullset.any_unknowns()?;
 

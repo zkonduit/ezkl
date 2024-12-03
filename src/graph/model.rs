@@ -656,7 +656,7 @@ impl Model {
 
         let mut symbol_values = SymbolValues::default();
         for (symbol, value) in run_args.variables.iter() {
-            let symbol = model.symbol_table.sym(symbol);
+            let symbol = model.symbols.sym(symbol);
             symbol_values = symbol_values.with(&symbol, *value as i64);
             debug!("set {} to {}", symbol, value);
         }
@@ -1199,9 +1199,9 @@ impl Model {
             // Then number of columns in the circuits
             #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
             region.debug_report();
-            debug!("input indices: {:?}", node.inputs());
-            debug!("output scales: {:?}", node.out_scales());
-            debug!(
+            trace!("input indices: {:?}", node.inputs());
+            trace!("output scales: {:?}", node.out_scales());
+            trace!(
                 "input scales: {:?}",
                 node.inputs()
                     .iter()
@@ -1220,8 +1220,8 @@ impl Model {
                 // we re-assign inputs, always from the 0 outlet
                 vec![results.get(idx).ok_or(GraphError::MissingResults)?[0].clone()]
             };
-            debug!("output dims: {:?}", node.out_dims());
-            debug!(
+            trace!("output dims: {:?}", node.out_dims());
+            trace!(
                 "input dims {:?}",
                 values.iter().map(|v| v.dims()).collect_vec()
             );

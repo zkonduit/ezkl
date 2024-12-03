@@ -1007,21 +1007,21 @@ pub fn new_op_from_onnx(
             op
         }
         "Iff" => SupportedOp::Linear(PolyOp::Iff),
-        "Less" => {
+        "<" => {
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::Less)
             } else {
                 return Err(GraphError::InvalidDims(idx, "less".to_string()));
             }
         }
-        "LessEqual" => {
+        "<=" => {
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::LessEqual)
             } else {
                 return Err(GraphError::InvalidDims(idx, "less equal".to_string()));
             }
         }
-        "Greater" => {
+        ">" => {
             // Extract the slope layer hyperparams
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::Greater)
@@ -1029,7 +1029,7 @@ pub fn new_op_from_onnx(
                 return Err(GraphError::InvalidDims(idx, "greater".to_string()));
             }
         }
-        "GreaterEqual" => {
+        ">=" => {
             // Extract the slope layer hyperparams
             if inputs.len() == 2 {
                 SupportedOp::Hybrid(HybridOp::GreaterEqual)
@@ -1250,7 +1250,7 @@ pub fn new_op_from_onnx(
         "And" => SupportedOp::Linear(PolyOp::And),
         "Or" => SupportedOp::Linear(PolyOp::Or),
         "Xor" => SupportedOp::Linear(PolyOp::Xor),
-        "Equals" => SupportedOp::Hybrid(HybridOp::Equals),
+        "==" => SupportedOp::Hybrid(HybridOp::Equals),
         "Deconv" => {
             let deconv_node: &Deconv = match node.op().downcast_ref::<Deconv>() {
                 Some(b) => b,

@@ -1109,6 +1109,13 @@ impl<T: Clone + TensorType> Tensor<T> {
     ///
     /// ```
     pub fn expand(&self, shape: &[usize]) -> Result<Self, TensorError> {
+        // if both have length 1 then we can just return the tensor
+        if self.dims().iter().product::<usize>() == 1 && shape.iter().product::<usize>() == 1 {
+            let mut output = self.clone();
+            output.reshape(shape)?;
+            return Ok(output);
+        }
+
         if self.dims().len() > shape.len() {
             return Err(TensorError::DimError(format!(
                 "Cannot expand {:?} to the smaller shape {:?}",
