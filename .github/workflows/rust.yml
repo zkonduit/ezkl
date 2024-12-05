@@ -651,6 +651,8 @@ jobs:
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
       - name: Postgres tutorials
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::felt_conversion_test_ --no-capture
+      - name: Postgres tutorials
         run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --no-capture
       - name: Tictactoe tutorials
         run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
