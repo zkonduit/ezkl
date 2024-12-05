@@ -4,6 +4,7 @@ use crate::circuit::modules::poseidon::{
     PoseidonChip,
 };
 use crate::circuit::modules::Module;
+use crate::circuit::InputType;
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::*;
 use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
@@ -316,6 +317,65 @@ impl FromStr for PyCommitments {
     }
 }
 
+#[pyclass]
+#[derive(Debug, Clone)]
+#[gen_stub_pyclass_enum]
+enum PyInputType {
+    ///
+    Bool,
+    ///
+    F16,
+    ///
+    F32,
+    ///
+    F64,
+    ///
+    Int,
+    ///
+    TDim,
+}
+
+impl From<InputType> for PyInputType {
+    fn from(input_type: InputType) -> Self {
+        match input_type {
+            InputType::Bool => PyInputType::Bool,
+            InputType::F16 => PyInputType::F16,
+            InputType::F32 => PyInputType::F32,
+            InputType::F64 => PyInputType::F64,
+            InputType::Int => PyInputType::Int,
+            InputType::TDim => PyInputType::TDim,
+        }
+    }
+}
+
+impl From<PyInputType> for InputType {
+    fn from(py_input_type: PyInputType) -> Self {
+        match py_input_type {
+            PyInputType::Bool => InputType::Bool,
+            PyInputType::F16 => InputType::F16,
+            PyInputType::F32 => InputType::F32,
+            PyInputType::F64 => InputType::F64,
+            PyInputType::Int => InputType::Int,
+            PyInputType::TDim => InputType::TDim,
+        }
+    }
+}
+
+impl FromStr for PyInputType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "bool" => Ok(PyInputType::Bool),
+            "f16" => Ok(PyInputType::F16),
+            "f32" => Ok(PyInputType::F32),
+            "f64" => Ok(PyInputType::F64),
+            "int" => Ok(PyInputType::Int),
+            "tdim" => Ok(PyInputType::TDim),
+            _ => Err("Invalid value for InputType".to_string()),
+        }
+    }
+}
+
 /// Converts a field element hex string to big endian
 ///
 /// Arguments
@@ -396,6 +456,9 @@ fn felt_to_float(felt: PyFelt, scale: crate::Scale) -> PyResult<f64> {
 /// scale: float
 ///     The scaling factor used to quantize the float into a field element
 ///
+/// input_type: PyInputType
+///     The type of the input
+///
 /// Returns
 /// -------
 /// str
@@ -403,10 +466,12 @@ fn felt_to_float(felt: PyFelt, scale: crate::Scale) -> PyResult<f64> {
 ///
 #[pyfunction(signature = (
     input,
-    scale
+    scale,
+    input_type=PyInputType::F64
 ))]
 #[gen_stub_pyfunction]
-fn float_to_felt(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
+fn float_to_felt(mut input: f64, scale: crate::Scale, input_type: PyInputType) -> PyResult<PyFelt> {
+    InputType::roundtrip(&input_type.into(), &mut input);
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = integer_rep_to_felt(int_rep);
@@ -1968,6 +2033,7 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
     m.add_class::<PyCommitments>()?;
+    m.add_class::<PyInputType>()?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(felt_to_big_endian, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_int, m)?)?;
