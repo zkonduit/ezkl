@@ -211,6 +211,10 @@ required-features = ["ezkl"]
 name = "ios_gen_bindings"
 required-features = ["ios-bindings", "uuid", "camino", "uniffi_bindgen"]
 
+[[bin]]
+name = "py_stub_gen"
+required-features = ["python-bindings"]
+
 [features]
 web = ["wasm-bindgen-rayon"]
 default = [
