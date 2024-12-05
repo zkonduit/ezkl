@@ -189,6 +189,17 @@ mod py_tests {
                 anvil_child.kill().unwrap();
             }
             });
+
+            #[test]
+            fn felt_conversion_test_notebook() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("felt_conversion_test").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "felt_conversion_test.ipynb");
+                run_notebook(path, "felt_conversion_test.ipynb");
+                test_dir.close().unwrap();
+            }
+
             #[test]
             fn voice_notebook_() {
                 crate::py_tests::init_binary();

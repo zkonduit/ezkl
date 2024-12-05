@@ -22,6 +22,7 @@ use halo2curves::{
     bn256::{Bn256, Fr, G1Affine},
     ff::PrimeField,
 };
+use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_console_logger::DEFAULT_LOGGER;
 
@@ -113,9 +114,15 @@ pub fn feltToFloat(
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn floatToFelt(
-    input: f64,
+    mut input: f64,
     scale: crate::Scale,
+    input_type: &str,
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
+    crate::circuit::InputType::roundtrip(
+        &crate::circuit::InputType::from_str(input_type)
+            .map_err(|e| JsError::new(&format!("{}", e)))?,
+        &mut input,
+    );
     let int_rep =
         quantize_float(&input, 0.0, scale).map_err(|e| JsError::new(&format!("{}", e)))?;
     let felt = integer_rep_to_felt(int_rep);

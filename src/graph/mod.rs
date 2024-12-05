@@ -60,7 +60,10 @@ use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
+use pyo3::types::PyDictMethods;
+#[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
+
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 pub use utilities::*;
@@ -343,10 +346,10 @@ impl ToPyObject for GraphWitness {
         if let Some(processed_inputs) = &self.processed_inputs {
             //poseidon_hash
             if let Some(processed_inputs_poseidon_hash) = &processed_inputs.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_inputs, processed_inputs_poseidon_hash).unwrap();
+                insert_poseidon_hash_pydict(&dict_inputs, processed_inputs_poseidon_hash).unwrap();
             }
             if let Some(processed_inputs_polycommit) = &processed_inputs.polycommit {
-                insert_polycommit_pydict(dict_inputs, processed_inputs_polycommit).unwrap();
+                insert_polycommit_pydict(&dict_inputs, processed_inputs_polycommit).unwrap();
             }
 
             dict.set_item("processed_inputs", dict_inputs).unwrap();
@@ -354,10 +357,10 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_params) = &self.processed_params {
             if let Some(processed_params_poseidon_hash) = &processed_params.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_params, processed_params_poseidon_hash).unwrap();
+                insert_poseidon_hash_pydict(&dict_params, processed_params_poseidon_hash).unwrap();
             }
             if let Some(processed_params_polycommit) = &processed_params.polycommit {
-                insert_polycommit_pydict(dict_inputs, processed_params_polycommit).unwrap();
+                insert_polycommit_pydict(&dict_params, processed_params_polycommit).unwrap();
             }
 
             dict.set_item("processed_params", dict_params).unwrap();
@@ -365,10 +368,11 @@ impl ToPyObject for GraphWitness {
 
         if let Some(processed_outputs) = &self.processed_outputs {
             if let Some(processed_outputs_poseidon_hash) = &processed_outputs.poseidon_hash {
-                insert_poseidon_hash_pydict(dict_outputs, processed_outputs_poseidon_hash).unwrap();
+                insert_poseidon_hash_pydict(&dict_outputs, processed_outputs_poseidon_hash)
+                    .unwrap();
             }
             if let Some(processed_outputs_polycommit) = &processed_outputs.polycommit {
-                insert_polycommit_pydict(dict_inputs, processed_outputs_polycommit).unwrap();
+                insert_polycommit_pydict(&dict_outputs, processed_outputs_polycommit).unwrap();
             }
 
             dict.set_item("processed_outputs", dict_outputs).unwrap();
@@ -379,7 +383,10 @@ impl ToPyObject for GraphWitness {
 }
 
 #[cfg(feature = "python-bindings")]
-fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) -> Result<(), PyErr> {
+fn insert_poseidon_hash_pydict(
+    pydict: &Bound<'_, PyDict>,
+    poseidon_hash: &Vec<Fp>,
+) -> Result<(), PyErr> {
     let poseidon_hash: Vec<String> = poseidon_hash.iter().map(field_to_string).collect();
     pydict.set_item("poseidon_hash", poseidon_hash)?;
 
@@ -387,7 +394,10 @@ fn insert_poseidon_hash_pydict(pydict: &PyDict, poseidon_hash: &Vec<Fp>) -> Resu
 }
 
 #[cfg(feature = "python-bindings")]
-fn insert_polycommit_pydict(pydict: &PyDict, commits: &Vec<Vec<G1Affine>>) -> Result<(), PyErr> {
+fn insert_polycommit_pydict(
+    pydict: &Bound<'_, PyDict>,
+    commits: &Vec<Vec<G1Affine>>,
+) -> Result<(), PyErr> {
     use crate::bindings::python::PyG1Affine;
     let poseidon_hash: Vec<Vec<PyG1Affine>> = commits
         .iter()

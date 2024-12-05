@@ -9,8 +9,7 @@ use itertools::Itertools;
 use log::debug;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
-    exceptions::PyValueError, types::PyString, FromPyObject, IntoPy, PyAny, PyObject, PyResult,
-    PyTryFrom, Python, ToPyObject,
+    exceptions::PyValueError, FromPyObject, IntoPy, PyObject, PyResult, Python, ToPyObject,
 };
 
 use serde::{Deserialize, Serialize};
@@ -137,10 +136,8 @@ impl IntoPy<PyObject> for Visibility {
 #[cfg(feature = "python-bindings")]
 /// Obtains Visibility from PyObject (Required for Visibility to be compatible with Python)
 impl<'source> FromPyObject<'source> for Visibility {
-    fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
-        let strval = trystr.to_string();
-
+    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
+        let strval = String::extract_bound(ob)?;
         let strval = strval.as_str();
 
         if strval.contains("hashed/private") {
