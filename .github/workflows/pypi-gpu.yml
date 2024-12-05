@@ -98,14 +98,14 @@ jobs:
       # publishes to PyPI
       - name: Publish package distributions to PyPI
         continue-on-error: true
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@release/v1.11.0
         with:
           packages-dir: ./
 
       # publishes to TestPyPI
       - name: Publish package distribution to TestPyPI
         continue-on-error: true
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@release/v1.11.0
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: ./
