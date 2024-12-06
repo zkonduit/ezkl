@@ -4,6 +4,7 @@ use crate::circuit::modules::poseidon::{
     PoseidonChip,
 };
 use crate::circuit::modules::Module;
+use crate::circuit::InputType;
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::*;
 use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
@@ -26,7 +27,12 @@ use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
+use pyo3_stub_gen::{
+    define_stub_info_gatherer, derive::gen_stub_pyclass, derive::gen_stub_pyclass_enum,
+    derive::gen_stub_pyfunction, TypeInfo,
+};
 use snark_verifier::util::arithmetic::PrimeField;
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::{fs::File, path::PathBuf};
 
@@ -35,6 +41,7 @@ type PyFelt = String;
 /// pyclass representing an enum
 #[pyclass]
 #[derive(Debug, Clone)]
+#[gen_stub_pyclass_enum]
 enum PyTestDataSource {
     /// The data is loaded from a file
     File,
@@ -54,6 +61,7 @@ impl From<PyTestDataSource> for TestDataSource {
 /// pyclass containing the struct used for G1, this is mostly a helper class
 #[pyclass]
 #[derive(Debug, Clone)]
+#[gen_stub_pyclass]
 struct PyG1 {
     #[pyo3(get, set)]
     /// Field Element representing x
@@ -100,6 +108,7 @@ impl pyo3::ToPyObject for PyG1 {
 /// pyclass containing the struct used for G1
 #[pyclass]
 #[derive(Debug, Clone)]
+#[gen_stub_pyclass]
 pub struct PyG1Affine {
     #[pyo3(get, set)]
     ///
@@ -145,6 +154,7 @@ impl pyo3::ToPyObject for PyG1Affine {
 ///
 #[pyclass]
 #[derive(Clone)]
+#[gen_stub_pyclass]
 struct PyRunArgs {
     #[pyo3(get, set)]
     /// float: The tolerance for error on model outputs
@@ -259,6 +269,7 @@ impl Into<PyRunArgs> for RunArgs {
 
 #[pyclass]
 #[derive(Debug, Clone)]
+#[gen_stub_pyclass_enum]
 /// pyclass representing an enum, denoting the type of commitment
 pub enum PyCommitments {
     /// KZG commitment
@@ -306,6 +317,65 @@ impl FromStr for PyCommitments {
     }
 }
 
+#[pyclass]
+#[derive(Debug, Clone)]
+#[gen_stub_pyclass_enum]
+enum PyInputType {
+    ///
+    Bool,
+    ///
+    F16,
+    ///
+    F32,
+    ///
+    F64,
+    ///
+    Int,
+    ///
+    TDim,
+}
+
+impl From<InputType> for PyInputType {
+    fn from(input_type: InputType) -> Self {
+        match input_type {
+            InputType::Bool => PyInputType::Bool,
+            InputType::F16 => PyInputType::F16,
+            InputType::F32 => PyInputType::F32,
+            InputType::F64 => PyInputType::F64,
+            InputType::Int => PyInputType::Int,
+            InputType::TDim => PyInputType::TDim,
+        }
+    }
+}
+
+impl From<PyInputType> for InputType {
+    fn from(py_input_type: PyInputType) -> Self {
+        match py_input_type {
+            PyInputType::Bool => InputType::Bool,
+            PyInputType::F16 => InputType::F16,
+            PyInputType::F32 => InputType::F32,
+            PyInputType::F64 => InputType::F64,
+            PyInputType::Int => InputType::Int,
+            PyInputType::TDim => InputType::TDim,
+        }
+    }
+}
+
+impl FromStr for PyInputType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "bool" => Ok(PyInputType::Bool),
+            "f16" => Ok(PyInputType::F16),
+            "f32" => Ok(PyInputType::F32),
+            "f64" => Ok(PyInputType::F64),
+            "int" => Ok(PyInputType::Int),
+            "tdim" => Ok(PyInputType::TDim),
+            _ => Err("Invalid value for InputType".to_string()),
+        }
+    }
+}
+
 /// Converts a field element hex string to big endian
 ///
 /// Arguments
@@ -322,6 +392,7 @@ impl FromStr for PyCommitments {
 #[pyfunction(signature = (
     felt,
 ))]
+#[gen_stub_pyfunction]
 fn felt_to_big_endian(felt: PyFelt) -> PyResult<String> {
     let felt = crate::pfsys::string_to_field::<Fr>(&felt);
     Ok(format!("{:?}", felt))
@@ -341,6 +412,7 @@ fn felt_to_big_endian(felt: PyFelt) -> PyResult<String> {
 #[pyfunction(signature = (
     felt,
 ))]
+#[gen_stub_pyfunction]
 fn felt_to_int(felt: PyFelt) -> PyResult<IntegerRep> {
     let felt = crate::pfsys::string_to_field::<Fr>(&felt);
     let int_rep = felt_to_integer_rep(felt);
@@ -365,6 +437,7 @@ fn felt_to_int(felt: PyFelt) -> PyResult<IntegerRep> {
     felt,
     scale
 ))]
+#[gen_stub_pyfunction]
 fn felt_to_float(felt: PyFelt, scale: crate::Scale) -> PyResult<f64> {
     let felt = crate::pfsys::string_to_field::<Fr>(&felt);
     let int_rep = felt_to_integer_rep(felt);
@@ -383,6 +456,9 @@ fn felt_to_float(felt: PyFelt, scale: crate::Scale) -> PyResult<f64> {
 /// scale: float
 ///     The scaling factor used to quantize the float into a field element
 ///
+/// input_type: PyInputType
+///     The type of the input
+///
 /// Returns
 /// -------
 /// str
@@ -390,9 +466,12 @@ fn felt_to_float(felt: PyFelt, scale: crate::Scale) -> PyResult<f64> {
 ///
 #[pyfunction(signature = (
     input,
-    scale
+    scale,
+    input_type=PyInputType::F64
 ))]
-fn float_to_felt(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
+#[gen_stub_pyfunction]
+fn float_to_felt(mut input: f64, scale: crate::Scale, input_type: PyInputType) -> PyResult<PyFelt> {
+    InputType::roundtrip(&input_type.into(), &mut input);
     let int_rep = quantize_float(&input, 0.0, scale)
         .map_err(|_| PyIOError::new_err("Failed to quantize input"))?;
     let felt = integer_rep_to_felt(int_rep);
@@ -414,6 +493,7 @@ fn float_to_felt(input: f64, scale: crate::Scale) -> PyResult<PyFelt> {
 #[pyfunction(signature = (
     buffer
 ))]
+#[gen_stub_pyfunction]
 fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
     fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
         let mut n: u128 = 0;
@@ -486,6 +566,7 @@ fn buffer_to_felts(buffer: Vec<u8>) -> PyResult<Vec<String>> {
 #[pyfunction(signature = (
     message,
 ))]
+#[gen_stub_pyfunction]
 fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
     let message: Vec<Fr> = message
         .iter()
@@ -531,6 +612,7 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     srs_path=None
 ))]
+#[gen_stub_pyfunction]
 fn kzg_commit(
     message: Vec<PyFelt>,
     vk_path: PathBuf,
@@ -589,6 +671,7 @@ fn kzg_commit(
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     srs_path=None
 ))]
+#[gen_stub_pyfunction]
 fn ipa_commit(
     message: Vec<PyFelt>,
     vk_path: PathBuf,
@@ -635,6 +718,7 @@ fn ipa_commit(
     proof_path=PathBuf::from(DEFAULT_PROOF),
     witness_path=PathBuf::from(DEFAULT_WITNESS),
 ))]
+#[gen_stub_pyfunction]
 fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResult<()> {
     crate::execute::swap_proof_commitments_cmd(proof_path, witness_path)
         .map_err(|_| PyIOError::new_err("Failed to swap commitments"))?;
@@ -664,6 +748,7 @@ fn swap_proof_commitments(proof_path: PathBuf, witness_path: PathBuf) -> PyResul
     circuit_settings_path=PathBuf::from(DEFAULT_SETTINGS),
     vk_output_path=PathBuf::from(DEFAULT_VK),
 ))]
+#[gen_stub_pyfunction]
 fn gen_vk_from_pk_single(
     path_to_pk: PathBuf,
     circuit_settings_path: PathBuf,
@@ -701,6 +786,7 @@ fn gen_vk_from_pk_single(
     path_to_pk=PathBuf::from(DEFAULT_PK_AGGREGATED),
     vk_output_path=PathBuf::from(DEFAULT_VK_AGGREGATED),
 ))]
+#[gen_stub_pyfunction]
 fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult<bool> {
     let pk = load_pk::<KZGCommitmentScheme<Bn256>, AggregationCircuit>(path_to_pk, ())
         .map_err(|_| PyIOError::new_err("Failed to load pk"))?;
@@ -730,6 +816,7 @@ fn gen_vk_from_pk_aggr(path_to_pk: PathBuf, vk_output_path: PathBuf) -> PyResult
     model = PathBuf::from(DEFAULT_MODEL),
     py_run_args = None
 ))]
+#[gen_stub_pyfunction]
 fn table(model: PathBuf, py_run_args: Option<PyRunArgs>) -> PyResult<String> {
     let run_args: RunArgs = py_run_args.unwrap_or_else(PyRunArgs::new).into();
     let mut reader = File::open(model).map_err(|_| PyIOError::new_err("Failed to open model"))?;
@@ -755,6 +842,7 @@ fn table(model: PathBuf, py_run_args: Option<PyRunArgs>) -> PyResult<String> {
     srs_path,
     logrows,
 ))]
+#[gen_stub_pyfunction]
 fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
     let params = ezkl_gen_srs::<KZGCommitmentScheme<Bn256>>(logrows as u32);
     save_params::<KZGCommitmentScheme<Bn256>>(&srs_path, &params)?;
@@ -787,6 +875,7 @@ fn gen_srs(srs_path: PathBuf, logrows: usize) -> PyResult<()> {
     srs_path=None,
     commitment=None,
 ))]
+#[gen_stub_pyfunction]
 fn get_srs(
     py: Python,
     settings_path: Option<PathBuf>,
@@ -799,7 +888,7 @@ fn get_srs(
         None => None,
     };
 
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::get_srs_cmd(srs_path, settings_path, logrows, commitment)
             .await
             .map_err(|e| {
@@ -833,6 +922,7 @@ fn get_srs(
     output=PathBuf::from(DEFAULT_SETTINGS),
     py_run_args = None,
 ))]
+#[gen_stub_pyfunction]
 fn gen_settings(
     model: PathBuf,
     output: PathBuf,
@@ -888,6 +978,7 @@ fn gen_settings(
     scale_rebase_multiplier = DEFAULT_SCALE_REBASE_MULTIPLIERS.split(",").map(|x| x.parse().unwrap()).collect(),
     max_logrows = None,
 ))]
+#[gen_stub_pyfunction]
 fn calibrate_settings(
     py: Python,
     data: PathBuf,
@@ -899,7 +990,7 @@ fn calibrate_settings(
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::calibrate(
             model,
             data,
@@ -951,6 +1042,7 @@ fn calibrate_settings(
     vk_path=None,
     srs_path=None,
 ))]
+#[gen_stub_pyfunction]
 fn gen_witness(
     py: Python,
     data: PathBuf,
@@ -959,7 +1051,7 @@ fn gen_witness(
     vk_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let output = crate::execute::gen_witness(model, data, output, vk_path, srs_path)
             .await
             .map_err(|e| {
@@ -988,6 +1080,7 @@ fn gen_witness(
     witness=PathBuf::from(DEFAULT_WITNESS),
     model=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
 ))]
+#[gen_stub_pyfunction]
 fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     crate::execute::mock(model, witness).map_err(|e| {
         let err_str = format!("Failed to run mock: {}", e);
@@ -1018,6 +1111,7 @@ fn mock(witness: PathBuf, model: PathBuf) -> PyResult<bool> {
     logrows=DEFAULT_AGGREGATED_LOGROWS.parse().unwrap(),
     split_proofs = false,
 ))]
+#[gen_stub_pyfunction]
 fn mock_aggregate(
     aggregation_snarks: Vec<PathBuf>,
     logrows: u32,
@@ -1065,6 +1159,7 @@ fn mock_aggregate(
     witness_path = None,
     disable_selector_compression=DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap(),
 ))]
+#[gen_stub_pyfunction]
 fn setup(
     model: PathBuf,
     vk_path: PathBuf,
@@ -1123,6 +1218,7 @@ fn setup(
     proof_type=ProofType::default(),
     srs_path=None,
 ))]
+#[gen_stub_pyfunction]
 fn prove(
     witness: PathBuf,
     model: PathBuf,
@@ -1178,6 +1274,7 @@ fn prove(
     srs_path=None,
     reduced_srs=DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse::<bool>().unwrap(),
 ))]
+#[gen_stub_pyfunction]
 fn verify(
     proof_path: PathBuf,
     settings_path: PathBuf,
@@ -1237,6 +1334,7 @@ fn verify(
     disable_selector_compression=DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap(),
     commitment=DEFAULT_COMMITMENT.parse().unwrap(),
 ))]
+#[gen_stub_pyfunction]
 fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
     vk_path: PathBuf,
@@ -1287,6 +1385,7 @@ fn setup_aggregate(
     compiled_circuit=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
 ))]
+#[gen_stub_pyfunction]
 fn compile_circuit(
     model: PathBuf,
     compiled_circuit: PathBuf,
@@ -1346,6 +1445,7 @@ fn compile_circuit(
     srs_path=None,
     commitment=DEFAULT_COMMITMENT.parse().unwrap(),
 ))]
+#[gen_stub_pyfunction]
 fn aggregate(
     aggregation_snarks: Vec<PathBuf>,
     proof_path: PathBuf,
@@ -1411,6 +1511,7 @@ fn aggregate(
     reduced_srs=DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION.parse().unwrap(),
     srs_path=None,
 ))]
+#[gen_stub_pyfunction]
 fn verify_aggr(
     proof_path: PathBuf,
     vk_path: PathBuf,
@@ -1458,6 +1559,7 @@ fn verify_aggr(
     calldata=PathBuf::from(DEFAULT_CALLDATA),
     addr_vk=None,
 ))]
+#[gen_stub_pyfunction]
 fn encode_evm_calldata<'a>(
     proof: PathBuf,
     calldata: PathBuf,
@@ -1510,6 +1612,7 @@ fn encode_evm_calldata<'a>(
     srs_path=None,
     reusable = DEFAULT_RENDER_REUSABLE.parse().unwrap(),
 ))]
+#[gen_stub_pyfunction]
 fn create_evm_verifier(
     py: Python,
     vk_path: PathBuf,
@@ -1519,7 +1622,7 @@ fn create_evm_verifier(
     srs_path: Option<PathBuf>,
     reusable: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::create_evm_verifier(
             vk_path,
             srs_path,
@@ -1569,6 +1672,7 @@ fn create_evm_verifier(
     abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
     srs_path=None
 ))]
+#[gen_stub_pyfunction]
 fn create_evm_vka(
     py: Python,
     vk_path: PathBuf,
@@ -1577,7 +1681,7 @@ fn create_evm_vka(
     abi_path: PathBuf,
     srs_path: Option<PathBuf>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::create_evm_vka(vk_path, srs_path, settings_path, sol_code_path, abi_path)
             .await
             .map_err(|e| {
@@ -1616,6 +1720,7 @@ fn create_evm_vka(
     abi_path=PathBuf::from(DEFAULT_VERIFIER_DA_ABI),
     witness_path=None,
 ))]
+#[gen_stub_pyfunction]
 fn create_evm_data_attestation(
     py: Python,
     input_data: PathBuf,
@@ -1624,7 +1729,7 @@ fn create_evm_data_attestation(
     abi_path: PathBuf,
     witness_path: Option<PathBuf>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::create_evm_data_attestation(
             settings_path,
             sol_code_path,
@@ -1676,6 +1781,7 @@ fn create_evm_data_attestation(
     output_source,
     rpc_url=None,
 ))]
+#[gen_stub_pyfunction]
 fn setup_test_evm_witness(
     py: Python,
     data_path: PathBuf,
@@ -1685,7 +1791,7 @@ fn setup_test_evm_witness(
     output_source: PyTestDataSource,
     rpc_url: Option<String>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::setup_test_evm_witness(
             data_path,
             compiled_circuit_path,
@@ -1713,6 +1819,7 @@ fn setup_test_evm_witness(
     optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
     private_key=None,
 ))]
+#[gen_stub_pyfunction]
 fn deploy_evm(
     py: Python,
     addr_path: PathBuf,
@@ -1722,7 +1829,7 @@ fn deploy_evm(
     optimizer_runs: usize,
     private_key: Option<String>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::deploy_evm(
             sol_code_path,
             rpc_url,
@@ -1751,6 +1858,7 @@ fn deploy_evm(
     optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
     private_key=None
 ))]
+#[gen_stub_pyfunction]
 fn deploy_da_evm(
     py: Python,
     addr_path: PathBuf,
@@ -1761,7 +1869,7 @@ fn deploy_da_evm(
     optimizer_runs: usize,
     private_key: Option<String>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::deploy_da_evm(
             input_data,
             settings_path,
@@ -1809,6 +1917,7 @@ fn deploy_da_evm(
     addr_da = None,
     addr_vk = None,
 ))]
+#[gen_stub_pyfunction]
 fn verify_evm<'a>(
     py: Python<'a>,
     addr_verifier: &'a str,
@@ -1831,7 +1940,7 @@ fn verify_evm<'a>(
         None
     };
 
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::verify_evm(proof_path, addr_verifier, rpc_url, addr_da, addr_vk)
             .await
             .map_err(|e| {
@@ -1881,6 +1990,7 @@ fn verify_evm<'a>(
     srs_path=None,
     reusable = DEFAULT_RENDER_REUSABLE.parse().unwrap(),
 ))]
+#[gen_stub_pyfunction]
 fn create_evm_verifier_aggr(
     py: Python,
     aggregation_settings: Vec<PathBuf>,
@@ -1891,7 +2001,7 @@ fn create_evm_verifier_aggr(
     srs_path: Option<PathBuf>,
     reusable: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_asyncio::tokio::future_into_py(py, async move {
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::create_evm_aggregate_verifier(
             vk_path,
             srs_path,
@@ -1911,15 +2021,19 @@ fn create_evm_verifier_aggr(
     })
 }
 
+// Define a function to gather stub information.
+define_stub_info_gatherer!(stub_info);
+
 // Python Module
 #[pymodule]
-fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
     m.add_class::<PyRunArgs>()?;
     m.add_class::<PyG1Affine>()?;
     m.add_class::<PyG1>()?;
     m.add_class::<PyTestDataSource>()?;
     m.add_class::<PyCommitments>()?;
+    m.add_class::<PyInputType>()?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(felt_to_big_endian, m)?)?;
     m.add_function(wrap_pyfunction!(felt_to_int, m)?)?;
@@ -1957,4 +2071,49 @@ fn ezkl(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
     m.add_function(wrap_pyfunction!(encode_evm_calldata, m)?)?;
     Ok(())
+}
+
+impl pyo3_stub_gen::PyStubType for CalibrationTarget {
+    fn type_output() -> TypeInfo {
+        TypeInfo {
+            name: "str".to_string(),
+            import: HashSet::new(),
+        }
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for ProofType {
+    fn type_output() -> TypeInfo {
+        TypeInfo {
+            name: "str".to_string(),
+            import: HashSet::new(),
+        }
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for TranscriptType {
+    fn type_output() -> TypeInfo {
+        TypeInfo {
+            name: "str".to_string(),
+            import: HashSet::new(),
+        }
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for CheckMode {
+    fn type_output() -> TypeInfo {
+        TypeInfo {
+            name: "str".to_string(),
+            import: HashSet::new(),
+        }
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for ContractType {
+    fn type_output() -> TypeInfo {
+        TypeInfo {
+            name: "str".to_string(),
+            import: HashSet::new(),
+        }
+    }
 }

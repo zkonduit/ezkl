@@ -105,7 +105,10 @@ impl InputType {
     }
 
     ///
-    pub fn roundtrip<T: num::ToPrimitive + num::FromPrimitive + Clone>(&self, input: &mut T) {
+    pub fn roundtrip<T: num::ToPrimitive + num::FromPrimitive + Clone + std::fmt::Debug>(
+        &self,
+        input: &mut T,
+    ) {
         match self {
             InputType::Bool => {
                 let boolean_input = input.clone().to_i64().unwrap();
@@ -118,7 +121,7 @@ impl InputType {
                 *input = T::from_f32(f32_input).unwrap();
             }
             InputType::F32 => {
-                let f32_input = input.clone().to_f32().unwrap();
+                let f32_input: f32 = input.clone().to_f32().unwrap();
                 *input = T::from_f32(f32_input).unwrap();
             }
             InputType::F64 => {
@@ -129,6 +132,22 @@ impl InputType {
                 let int_input = input.clone().to_i64().unwrap();
                 *input = T::from_i64(int_input).unwrap();
             }
+        }
+    }
+}
+
+impl std::str::FromStr for InputType {
+    type Err = CircuitError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "bool" => Ok(InputType::Bool),
+            "f16" => Ok(InputType::F16),
+            "f32" => Ok(InputType::F32),
+            "f64" => Ok(InputType::F64),
+            "int" => Ok(InputType::Int),
+            "tdim" => Ok(InputType::TDim),
+            e => Err(CircuitError::InvalidInputType(e.to_string())),
         }
     }
 }

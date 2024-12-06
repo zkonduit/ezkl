@@ -8,10 +8,9 @@ use halo2_proofs::{
 use log::debug;
 #[cfg(feature = "python-bindings")]
 use pyo3::{
-    conversion::{FromPyObject, PyTryFrom},
+    conversion::{FromPyObject, IntoPy},
     exceptions::PyValueError,
     prelude::*,
-    types::PyString,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
@@ -139,10 +138,9 @@ impl IntoPy<PyObject> for CheckMode {
 #[cfg(feature = "python-bindings")]
 /// Obtains CheckMode from PyObject (Required for CheckMode to be compatible with Python)
 impl<'source> FromPyObject<'source> for CheckMode {
-    fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        let trystr = <PyString as PyTryFrom>::try_from(ob)?;
-        let strval = trystr.to_string();
-        match strval.to_lowercase().as_str() {
+    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
+        let trystr = String::extract_bound(ob)?;
+        match trystr.to_lowercase().as_str() {
             "safe" => Ok(CheckMode::SAFE),
             "unsafe" => Ok(CheckMode::UNSAFE),
             _ => Err(PyValueError::new_err("Invalid value for CheckMode")),
@@ -161,8 +159,8 @@ impl IntoPy<PyObject> for Tolerance {
 #[cfg(feature = "python-bindings")]
 /// Obtains Tolerance from PyObject (Required for Tolerance to be compatible with Python)
 impl<'source> FromPyObject<'source> for Tolerance {
-    fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        if let Ok((val, scale)) = ob.extract::<(f32, f32)>() {
+    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
+        if let Ok((val, scale)) = <(f32, f32)>::extract_bound(ob) {
             Ok(Tolerance {
                 val,
                 scale: utils::F32(scale),

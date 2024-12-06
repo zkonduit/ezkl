@@ -211,7 +211,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             self.min_lookup_inputs().to_string().green(),
             self.max_range_size().to_string().green(),
             self.dynamic_lookup_col_coord().to_string().green(),
-            self.shuffle_col_coord().to_string().green(), 
+            self.shuffle_col_coord().to_string().green(),
             self.max_dynamic_input_len().to_string().green()
         );
     }
@@ -474,7 +474,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         Ok(())
     }
 
-    /// Update the max and min forcefully 
+    /// Update the max and min forcefully
     pub fn update_max_min_lookup_inputs_force(
         &mut self,
         min: IntegerRep,
@@ -611,7 +611,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         var: &VarTensor,
         values: &ValTensor<F>,
     ) -> Result<(ValTensor<F>, usize), CircuitError> {
-
         self.update_max_dynamic_input_len(values.len());
 
         if let Some(region) = &self.region {
