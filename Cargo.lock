@@ -944,7 +944,7 @@ dependencies = [
  "bitflags 2.5.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.12.1",
  "lazy_static",
  "lazycell",
  "log",
@@ -1929,7 +1929,7 @@ dependencies = [
  "gag",
  "getrandom",
  "halo2_gadgets",
- "halo2_proofs 0.3.0 (git+https://github.com/zkonduit/halo2#0654e92bdf725fd44d849bfef3643870a8c7d50b)",
+ "halo2_proofs",
  "halo2_solidity_verifier",
  "halo2curves 0.7.0",
  "hex",
@@ -2377,41 +2377,18 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/optional-selector-poly#54f54453cf186aa5d89579c4e7663f9a27cfb89a"
+source = "git+https://github.com/zkonduit/halo2#0654e92bdf725fd44d849bfef3643870a8c7d50b"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec",
  "ff",
  "group",
- "halo2_proofs 0.3.0 (git+https://github.com/zkonduit/halo2#0654e92bdf725fd44d849bfef3643870a8c7d50b)",
+ "halo2_proofs",
  "halo2curves 0.1.0",
  "lazy_static",
  "rand 0.8.5",
  "subtle",
  "uint",
-]
-
-[[package]]
-name = "halo2_proofs"
-version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0"
-dependencies = [
- "bincode",
- "blake2b_simd",
- "env_logger",
- "ff",
- "group",
- "halo2curves 0.7.0",
- "instant",
- "lazy_static",
- "log",
- "maybe-rayon",
- "rand_chacha",
- "rand_core 0.6.4",
- "rustc-hash 2.0.0",
- "serde",
- "sha3 0.9.1",
- "tracing",
 ]
 
 [[package]]
@@ -2443,11 +2420,11 @@ dependencies = [
 [[package]]
 name = "halo2_solidity_verifier"
 version = "0.1.0"
-source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier?branch=ac/update-h2-curves#eede1db7f3e599112bd1186e9d1913286bdcb539"
+source = "git+https://github.com/alexander-camuto/halo2-solidity-verifier#7def6101d32331182f91483832e4fd293d75f33e"
 dependencies = [
  "askama",
  "blake2b_simd",
- "halo2_proofs 0.3.0 (git+https://github.com/zkonduit/halo2?branch=ac/cache-lookup-commitments#8b13a0d2a7a34d8daab010dadb2c47dfa47d37d0?branch=ac/cache-lookup-commitments)",
+ "halo2_proofs",
  "hex",
  "itertools 0.11.0",
  "ruint",
@@ -2564,7 +2541,7 @@ name = "halo2wrong"
 version = "0.1.0"
 source = "git+https://github.com/zkonduit/halo2wrong?branch=ac/chunked-mv-lookup#b43ebe30e84825d0d004fa27803d99c4187d419f"
 dependencies = [
- "halo2_proofs 0.3.0 (git+https://github.com/zkonduit/halo2#0654e92bdf725fd44d849bfef3643870a8c7d50b)",
+ "halo2_proofs",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -5168,7 +5145,7 @@ version = "0.1.1"
 source = "git+https://github.com/zkonduit/snark-verifier?branch=ac/chunked-mv-lookup#8762701ab8fa04e7d243a346030afd85633ec970"
 dependencies = [
  "ecc",
- "halo2_proofs 0.3.0 (git+https://github.com/zkonduit/halo2#0654e92bdf725fd44d849bfef3643870a8c7d50b)",
+ "halo2_proofs",
  "halo2curves 0.6.1",
  "hex",
  "itertools 0.10.5",
@@ -6848,8 +6825,3 @@ dependencies = [
  "once_cell",
  "simd-adler32",
 ]
-
-[[patch.unused]]
-name = "icicle"
-version = "0.1.0"
-source = "git+https://github.com/ingonyama-zk/icicle?rev=45b00fb?branch=fix/vhnat/ezkl-build-fix#45b00fb1966cb236979f03f9068f6db9bf59f41e"
