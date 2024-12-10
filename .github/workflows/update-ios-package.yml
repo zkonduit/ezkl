@@ -97,6 +97,7 @@ jobs:
         run: |
           cd ezkl-swift-package
           git add Sources/EzklCoreBindings Tests/EzklAssets
+          git commit -m "Automatically updated EzklCoreBindings for EZKL"
           
           if ! git push origin; then
             echo "::error::Failed to push changes to ${{ env.EZKL_SWIFT_PACKAGE_REPO }}. Please ensure that EZKL_PORTER_TOKEN has the correct permissions."
