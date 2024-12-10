@@ -89,6 +89,8 @@ jobs:
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git remote set-url origin https://zkonduit:${EZKL_SWIFT_PACKAGE_REPO_TOKEN}@${{ env.EZKL_SWIFT_PACKAGE_REPO }}
+        env:
+          EZKL_SWIFT_PACKAGE_REPO_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
 
       - name: Commit and Push Changes
         if: steps.check_changes.outputs.no_changes == 'false'
@@ -100,8 +102,6 @@ jobs:
             echo "::error::Failed to push changes to ${{ env.EZKL_SWIFT_PACKAGE_REPO }}. Please ensure that EZKL_PORTER_TOKEN has the correct permissions."
             exit 1
           fi
-        env:
-          EZKL_SWIFT_PACKAGE_REPO_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
 
       - name: Tag the latest commit
         run: |
@@ -112,5 +112,3 @@ jobs:
             echo "::error::Failed to push tag '${{ github.event.inputs.tag }}' to ${{ env.EZKL_SWIFT_PACKAGE_REPO }}. Please ensure EZKL_PORTER_TOKEN has correct permissions."
             exit 1
           fi
-        env:
-          EZKL_SWIFT_PACKAGE_REPO_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
