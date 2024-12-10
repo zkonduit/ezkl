@@ -13,12 +13,14 @@ on:
 jobs:
   build-and-update:
     runs-on: macos-latest
+    env:
+      EZKL_SWIFT_PACKAGE_REPO: github.com/zkonduit/ezkl-swift-package.git
 
     steps:
       - name: Checkout EZKL
         uses: actions/checkout@v3
 
-      - name: Install Rust
+      - name: Install Rust (nightly)
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -29,7 +31,7 @@ jobs:
 
       - name: Clone ezkl-swift-package repository
         run: |
-          git clone https://github.com/zkonduit/ezkl-swift-package.git
+          git clone https://${{ env.EZKL_SWIFT_PACKAGE_REPO }}
 
       - name: Copy EzklCoreBindings
         run: |
@@ -39,18 +41,29 @@ jobs:
       - name: Copy Test Files
         run: |
           rm -rf ezkl-swift-package/Tests/EzklAssets/*
-          
           cp tests/assets/kzg ezkl-swift-package/Tests/EzklAssets/kzg.srs
           cp tests/assets/input.json ezkl-swift-package/Tests/EzklAssets/input.json
           cp tests/assets/model.compiled ezkl-swift-package/Tests/EzklAssets/network.ezkl
           cp tests/assets/settings.json ezkl-swift-package/Tests/EzklAssets/settings.json
 
+      - name: Check for changes
+        id: check_changes
+        run: |
+          cd ezkl-swift-package
+          if git diff --quiet Sources/EzklCoreBindings Tests/EzklAssets; then
+            echo "no_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "no_changes=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Set up Xcode environment
+        if: steps.check_changes.outputs.no_changes == 'false'
         run: |
           sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
           sudo xcodebuild -license accept
 
       - name: Run Package Tests
+        if: steps.check_changes.outputs.no_changes == 'false'
         run: |
           cd ezkl-swift-package
           xcodebuild test \
@@ -59,6 +72,7 @@ jobs:
             -resultBundlePath ../testResults
 
       - name: Run Example App Tests
+        if: steps.check_changes.outputs.no_changes == 'false'
         run: |
           cd ezkl-swift-package/Example
           xcodebuild test \
@@ -69,17 +83,30 @@ jobs:
             -resultBundlePath ../../exampleTestResults \
             -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder
 
-      - name: Commit and Push Changes to feat/ezkl-direct-integration
+      - name: Commit and Push Changes
+        if: steps.check_changes.outputs.no_changes == 'false'
         run: |
           cd ezkl-swift-package
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
-          git add Sources/EzklCoreBindings
-          git add Tests/EzklAssets
-          git commit -m "Automatically updated EzklCoreBindings for EZKL"
-          git tag ${{ github.event.inputs.tag }}
-          git remote set-url origin https://zkonduit:${EZKL_PORTER_TOKEN}@github.com/zkonduit/ezkl-swift-package.git
-          git push origin
-          git push origin tag ${{ github.event.inputs.tag }}
+          git add Sources/EzklCoreBindings Tests/EzklAssets
+          
+          git remote set-url origin https://zkonduit:${EZKL_SWIFT_PACKAGE_REPO_TOKEN}@${{ env.EZKL_SWIFT_PACKAGE_REPO }}
+          if ! git push origin; then
+            echo "::error::Failed to push changes to ${{ env.EZKL_SWIFT_PACKAGE_REPO }}. Please ensure that EZKL_PORTER_TOKEN has the correct permissions."
+            exit 1
+          fi
         env:
-          EZKL_PORTER_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
+          EZKL_SWIFT_PACKAGE_REPO_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
+
+      - name: Tag the latest commit
+        run: |
+          cd ezkl-swift-package
+          # Tag the latest commit on the current branch
+          git tag ${{ github.event.inputs.tag }}
+          if ! git push origin ${{ github.event.inputs.tag }}; then
+            echo "::error::Failed to push tag '${{ github.event.inputs.tag }}' to ${{ env.EZKL_SWIFT_PACKAGE_REPO }}. Please ensure EZKL_PORTER_TOKEN has correct permissions."
+            exit 1
+          fi
+        env:
+          EZKL_SWIFT_PACKAGE_REPO_TOKEN: ${{ secrets.EZKL_PORTER_TOKEN }}
