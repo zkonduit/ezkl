@@ -6,9 +6,6 @@ on:
       tag:
         description: "The tag to release"
         required: true
-  push:
-    tags:
-      - "*"
 
 jobs:
   build-and-update:
