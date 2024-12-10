@@ -83,15 +83,19 @@ jobs:
             -resultBundlePath ../../exampleTestResults \
             -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder
 
-      - name: Commit and Push Changes
-        if: steps.check_changes.outputs.no_changes == 'false'
+      - name: Setup Git
         run: |
           cd ezkl-swift-package
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
+          git remote set-url origin https://zkonduit:${EZKL_SWIFT_PACKAGE_REPO_TOKEN}@${{ env.EZKL_SWIFT_PACKAGE_REPO }}
+
+      - name: Commit and Push Changes
+        if: steps.check_changes.outputs.no_changes == 'false'
+        run: |
+          cd ezkl-swift-package
           git add Sources/EzklCoreBindings Tests/EzklAssets
           
-          git remote set-url origin https://zkonduit:${EZKL_SWIFT_PACKAGE_REPO_TOKEN}@${{ env.EZKL_SWIFT_PACKAGE_REPO }}
           if ! git push origin; then
             echo "::error::Failed to push changes to ${{ env.EZKL_SWIFT_PACKAGE_REPO }}. Please ensure that EZKL_PORTER_TOKEN has the correct permissions."
             exit 1
