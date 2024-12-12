@@ -68,6 +68,8 @@ mod py_tests {
                     "install",
                     "torch-geometric==2.5.2",
                     "torch==2.2.2",
+                    "datasets==3.2.0",
+                    "torchtext==0.17.2",
                     "torchvision==0.17.2",
                     "pandas==2.2.1",
                     "numpy==1.26.4",
@@ -189,6 +191,16 @@ mod py_tests {
                 anvil_child.kill().unwrap();
             }
             });
+
+            #[test]
+            fn neural_bag_of_words_notebook() {
+                crate::py_tests::init_binary();
+                let test_dir: TempDir = TempDir::new("neural_bow").unwrap();
+                let path = test_dir.path().to_str().unwrap();
+                crate::py_tests::mv_test_(path, "neural_bow.ipynb");
+                run_notebook(path, "neural_bow.ipynb");
+                test_dir.close().unwrap();
+            }
 
             #[test]
             fn felt_conversion_test_notebook() {
