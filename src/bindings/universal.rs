@@ -141,10 +141,11 @@ pub(crate) fn gen_vk(
     .map_err(|e| EZKLError::InternalError(format!("Failed to create verifying key: {}", e)))?;
 
     let mut serialized_vk = Vec::new();
-    vk.write(&mut serialized_vk, halo2_proofs::SerdeFormat::RawBytes)
-        .map_err(|e| {
-            EZKLError::InternalError(format!("Failed to serialize verifying key: {}", e))
-        })?;
+    vk.write(
+        &mut serialized_vk,
+        halo2_proofs::SerdeFormat::RawBytesUnchecked,
+    )
+    .map_err(|e| EZKLError::InternalError(format!("Failed to serialize verifying key: {}", e)))?;
 
     Ok(serialized_vk)
 }
@@ -165,7 +166,7 @@ pub(crate) fn gen_pk(
     let mut reader = BufReader::new(&vk[..]);
     let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        halo2_proofs::SerdeFormat::RawBytesUnchecked,
         circuit.settings().clone(),
     )
     .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize verifying key: {}", e)))?;
@@ -197,7 +198,7 @@ pub(crate) fn verify(
     let mut reader = BufReader::new(&vk[..]);
     let vk = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        halo2_proofs::SerdeFormat::RawBytesUnchecked,
         circuit_settings.clone(),
     )
     .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize vk: {}", e)))?;
@@ -277,7 +278,7 @@ pub(crate) fn verify_aggr(
     let mut reader = BufReader::new(&vk[..]);
     let vk = VerifyingKey::<G1Affine>::read::<_, AggregationCircuit>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        halo2_proofs::SerdeFormat::RawBytesUnchecked,
         (),
     )
     .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize vk: {}", e)))?;
@@ -365,7 +366,7 @@ pub(crate) fn prove(
     let mut reader = BufReader::new(&pk[..]);
     let pk = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        halo2_proofs::SerdeFormat::RawBytesUnchecked,
         circuit.settings().clone(),
     )
     .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize proving key: {}", e)))?;
@@ -487,7 +488,7 @@ pub(crate) fn vk_validation(vk: Vec<u8>, settings: Vec<u8>) -> Result<bool, EZKL
     let mut reader = BufReader::new(&vk[..]);
     let _ = VerifyingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        halo2_proofs::SerdeFormat::RawBytesUnchecked,
         circuit_settings,
     )
     .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize verifying key: {}", e)))?;
@@ -504,7 +505,7 @@ pub(crate) fn pk_validation(pk: Vec<u8>, settings: Vec<u8>) -> Result<bool, EZKL
     let mut reader = BufReader::new(&pk[..]);
     let _ = ProvingKey::<G1Affine>::read::<_, GraphCircuit>(
         &mut reader,
-        halo2_proofs::SerdeFormat::RawBytes,
+        halo2_proofs::SerdeFormat::RawBytesUnchecked,
         circuit_settings,
     )
     .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize proving key: {}", e)))?;
