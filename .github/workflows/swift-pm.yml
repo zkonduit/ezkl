@@ -3,6 +3,7 @@ name: Build and Publish EZKL iOS SPM package
 on:
   push:
     tags:
+      # Only support SemVer versioning tags
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - '[0-9]+.[0-9]+.[0-9]+'
 
@@ -21,7 +22,7 @@ jobs:
           # github.ref_name is provided by GitHub Actions and contains the tag name directly.
           TAG="${{ github.ref_name }}"
           echo "Original TAG: $TAG"
-          # Remove leading 'v' if present
+          # Remove leading 'v' if present to match the Swift Package Manager version format.
           NEW_TAG=${TAG#v}
           echo "Stripped TAG: $NEW_TAG"
           echo "TAG=$NEW_TAG" >> $GITHUB_ENV
