@@ -1,11 +1,10 @@
 name: Build and Publish EZKL iOS SPM package
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "The tag to release"
-        required: true
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   build-and-update:
@@ -16,6 +15,16 @@ jobs:
     steps:
       - name: Checkout EZKL
         uses: actions/checkout@v3
+
+      - name: Extract TAG from github.ref_name
+        run: |
+          # github.ref_name is provided by GitHub Actions and contains the tag name directly.
+          TAG="${{ github.ref_name }}"
+          echo "Original TAG: $TAG"
+          # Remove leading 'v' if present
+          NEW_TAG=${TAG#v}
+          echo "Stripped TAG: $NEW_TAG"
+          echo "TAG=$NEW_TAG" >> $GITHUB_ENV
 
       - name: Install Rust (nightly)
         uses: actions-rs/toolchain@v1
@@ -104,9 +113,16 @@ jobs:
       - name: Tag the latest commit
         run: |
           cd ezkl-swift-package
+          source $GITHUB_ENV
+          
           # Tag the latest commit on the current branch
-          git tag ${{ github.event.inputs.tag }}
-          if ! git push origin ${{ github.event.inputs.tag }}; then
-            echo "::error::Failed to push tag '${{ github.event.inputs.tag }}' to ${{ env.EZKL_SWIFT_PACKAGE_REPO }}. Please ensure EZKL_PORTER_TOKEN has correct permissions."
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists locally. Skipping tag creation."
+          else
+            git tag "$TAG"
+          fi
+
+          if ! git push origin "$TAG"; then
+            echo "::error::Failed to push tag '$TAG' to ${{ env.EZKL_SWIFT_PACKAGE_REPO }}. Please ensure EZKL_PORTER_TOKEN has correct permissions."
             exit 1
           fi
