@@ -34,6 +34,7 @@ jobs:
         run: |
             mv pyproject.toml pyproject.toml.orig
             sed "s/ezkl/ezkl-gpu/" pyproject.toml.orig >pyproject.toml
+            sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" pyproject.toml.orig >pyproject.toml
 
       - uses: actions-rs/toolchain@v1
         with:

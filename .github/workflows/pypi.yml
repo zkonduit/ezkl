@@ -233,6 +233,14 @@ jobs:
           python-version: 3.12
           architecture: x64
 
+      - name: Set pyproject.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv pyproject.toml pyproject.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" pyproject.toml.orig >pyproject.toml
+
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
@@ -242,7 +250,6 @@ jobs:
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
-
       - name: Install required libraries
         shell: bash
         run: |
