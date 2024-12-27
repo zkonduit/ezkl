@@ -1,5 +1,5 @@
 use crate::{circuit::region::ConstantsMap, fieldutils::felt_to_integer_rep};
-use maybe_rayon::slice::Iter;
+use maybe_rayon::slice::{Iter, ParallelSlice};
 
 use super::{
     ops::{intercalate_values, pad, resize},
@@ -902,46 +902,101 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         }
     }
 
-    /// gets constants
+    /// filter constant zero values constants
     pub fn get_const_zero_indices(&self) -> Vec<usize> {
-        match self {
-            ValTensor::Value { inner: v, .. } => v
-                .par_iter()
-                .enumerate()
-                .filter_map(|(i, e)| {
-                    if let ValType::Constant(r) = e {
-                        if *r == F::ZERO {
-                            return Some(i);
+        let size_threshold = 1_000_000; // Tuned using the benchmarks
+
+        if self.len() < size_threshold {
+            // Use single-threaded for smaller arrays
+            match &self {
+                ValTensor::Value { inner: v, .. } => v
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, e)| {
+                        match e {
+                            // Combine both match arms to reduce branching
+                            ValType::Constant(r) | ValType::AssignedConstant(_, r) => {
+                                (*r == F::ZERO).then_some(i)
+                            }
+                            _ => None,
                         }
-                    } else if let ValType::AssignedConstant(_, r) = e {
-                        if *r == F::ZERO {
-                            return Some(i);
-                        }
-                    }
-                    None
-                })
-                .collect(),
-            ValTensor::Instance { .. } => vec![],
+                    })
+                    .collect(),
+                ValTensor::Instance { .. } => vec![],
+            }
+        } else {
+            // Use parallel for larger arrays
+            let num_cores = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1);
+            let chunk_size = (self.len() / num_cores).max(100_000);
+
+            match &self {
+                ValTensor::Value { inner: v, .. } => v
+                    .par_chunks(chunk_size)
+                    .enumerate()
+                    .flat_map(|(chunk_idx, chunk)| {
+                        chunk
+                            .par_iter() // Make sure we use par_iter() here
+                            .enumerate()
+                            .filter_map(move |(i, e)| match e {
+                                ValType::Constant(r) | ValType::AssignedConstant(_, r) => {
+                                    (*r == F::ZERO).then_some(chunk_idx * chunk_size + i)
+                                }
+                                _ => None,
+                            })
+                    })
+                    .collect::<Vec<_>>(),
+                ValTensor::Instance { .. } => vec![],
+            }
         }
     }
 
-    /// gets constants
+    /// gets constant indices
     pub fn get_const_indices(&self) -> Vec<usize> {
-        match self {
-            ValTensor::Value { inner: v, .. } => v
-                .par_iter()
-                .enumerate()
-                .filter_map(|(i, e)| {
-                    if let ValType::Constant(_) = e {
-                        Some(i)
-                    } else if let ValType::AssignedConstant(_, _) = e {
-                        Some(i)
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-            ValTensor::Instance { .. } => vec![],
+        let size_threshold = 1_000_000; // Tuned using the benchmarks
+
+        if self.len() < size_threshold {
+            // Use single-threaded for smaller arrays
+            match &self {
+                ValTensor::Value { inner: v, .. } => v
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, e)| {
+                        match e {
+                            // Combine both match arms to reduce branching
+                            ValType::Constant(_) | ValType::AssignedConstant(_, _) => Some(i),
+                            _ => None,
+                        }
+                    })
+                    .collect(),
+                ValTensor::Instance { .. } => vec![],
+            }
+        } else {
+            // Use parallel for larger arrays
+            let num_cores = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1);
+            let chunk_size = (self.len() / num_cores).max(100_000);
+
+            match &self {
+                ValTensor::Value { inner: v, .. } => v
+                    .par_chunks(chunk_size)
+                    .enumerate()
+                    .flat_map(|(chunk_idx, chunk)| {
+                        chunk
+                            .par_iter() // Make sure we use par_iter() here
+                            .enumerate()
+                            .filter_map(move |(i, e)| match e {
+                                ValType::Constant(_) | ValType::AssignedConstant(_, _) => {
+                                    Some(chunk_idx * chunk_size + i)
+                                }
+                                _ => None,
+                            })
+                    })
+                    .collect::<Vec<_>>(),
+                ValTensor::Instance { .. } => vec![],
+            }
         }
     }
 
