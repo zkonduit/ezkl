@@ -6,7 +6,7 @@ use super::{
     *,
 };
 use halo2_proofs::{arithmetic::Field, circuit::Cell, plonk::Instance};
-use maybe_rayon::iter::{FilterMap, IntoParallelIterator, ParallelIterator};
+use maybe_rayon::iter::{FilterMap, ParallelIterator};
 
 pub(crate) fn create_constant_tensor<
     F: PrimeField + TensorType + std::marker::Send + std::marker::Sync + PartialOrd,
@@ -455,7 +455,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         }
     }
 
-    /// Returns the number of constants in the [ValTensor].
+    /// Returns an iterator over the [ValTensor]'s constants.
     pub fn create_constants_map_iterator(
         &self,
     ) -> FilterMap<Iter<'_, ValType<F>>, fn(&ValType<F>) -> Option<(F, ValType<F>)>> {
@@ -473,20 +473,48 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         }
     }
 
-    /// Returns the number of constants in the [ValTensor].
+    /// Returns a map of the constants in the [ValTensor].
     pub fn create_constants_map(&self) -> ConstantsMap<F> {
-        match self {
-            ValTensor::Value { inner, .. } => inner
-                .par_iter()
-                .filter_map(|x| {
-                    if let ValType::Constant(v) = x {
-                        Some((*v, x.clone()))
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-            ValTensor::Instance { .. } => ConstantsMap::new(),
+        let threshold = 1_000_000; // Tuned using the benchmarks
+
+        if self.len() < threshold {
+            match self {
+                ValTensor::Value { inner, .. } => inner
+                    .par_iter()
+                    .filter_map(|x| {
+                        if let ValType::Constant(v) = x {
+                            Some((*v, x.clone()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+                ValTensor::Instance { .. } => ConstantsMap::new(),
+            }
+        } else {
+            // Use parallel for larger arrays
+            let num_cores = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1);
+            let chunk_size = (self.len() / num_cores).max(100_000);
+
+            match self {
+                ValTensor::Value { inner, .. } => inner
+                    .par_chunks(chunk_size)
+                    .flat_map(|chunk| {
+                        chunk
+                            .par_iter() // Make sure we use par_iter() here
+                            .filter_map(|x| {
+                                if let ValType::Constant(v) = x {
+                                    Some((*v, x.clone()))
+                                } else {
+                                    None
+                                }
+                            })
+                    })
+                    .collect(),
+                ValTensor::Instance { .. } => ConstantsMap::new(),
+            }
         }
     }
 
@@ -878,27 +906,63 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
 
     /// remove constant zero values constants
     pub fn remove_const_zero_values(&mut self) {
-        match self {
-            ValTensor::Value { inner: v, dims, .. } => {
-                *v = v
-                    .clone()
-                    .into_par_iter()
-                    .filter_map(|e| {
-                        if let ValType::Constant(r) = e {
-                            if r == F::ZERO {
-                                return None;
+        let size_threshold = 1_000_000; // Tuned using the benchmarks
+
+        if self.len() < size_threshold {
+            match self {
+                ValTensor::Value { inner: v, dims, .. } => {
+                    *v = v
+                        .clone()
+                        .into_iter()
+                        .filter_map(|e| {
+                            if let ValType::Constant(r) = e {
+                                if r == F::ZERO {
+                                    return None;
+                                }
+                            } else if let ValType::AssignedConstant(_, r) = e {
+                                if r == F::ZERO {
+                                    return None;
+                                }
                             }
-                        } else if let ValType::AssignedConstant(_, r) = e {
-                            if r == F::ZERO {
-                                return None;
-                            }
-                        }
-                        Some(e)
-                    })
-                    .collect();
-                *dims = v.dims().to_vec();
+                            Some(e)
+                        })
+                        .collect();
+                    *dims = v.dims().to_vec();
+                }
+                ValTensor::Instance { .. } => {}
             }
-            ValTensor::Instance { .. } => {}
+        } else {
+            // Use parallel for larger arrays
+            let num_cores = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1);
+            let chunk_size = (self.len() / num_cores).max(100_000);
+
+            match self {
+                ValTensor::Value { inner: v, dims, .. } => {
+                    *v = v
+                        .par_chunks_mut(chunk_size)
+                        .flat_map(|chunk| {
+                            chunk
+                                .par_iter_mut() // Make sure we use par_iter() here
+                                .filter_map(|e| {
+                                    if let ValType::Constant(r) = e {
+                                        if *r == F::ZERO {
+                                            return None;
+                                        }
+                                    } else if let ValType::AssignedConstant(_, r) = e {
+                                        if *r == F::ZERO {
+                                            return None;
+                                        }
+                                    }
+                                    Some(e.clone())
+                                })
+                        })
+                        .collect();
+                    *dims = v.dims().to_vec();
+                }
+                ValTensor::Instance { .. } => {}
+            }
         }
     }
 
