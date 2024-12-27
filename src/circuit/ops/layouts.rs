@@ -30,6 +30,8 @@ use crate::{
 use super::*;
 use crate::circuit::ops::lookup::LookupOp;
 
+const ASCII_ALPHABER: &str = "abcdefghijklmnopqrstuvwxyz";
+
 /// Calculate the L1 distance between two tensors.
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -403,11 +405,19 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let mut values = values.clone();
 
     // this section has been optimized to death, don't mess with it
+    let start = instant::Instant::now();
     let mut removal_indices = values[0].get_const_zero_indices();
     let second_zero_indices = values[1].get_const_zero_indices();
+    log::debug!("zero indices took {:?}", start.elapsed());
+    let start = instant::Instant::now();
     removal_indices.extend(second_zero_indices);
+    log::debug!("extending zero indices took {:?}", start.elapsed());
+    let start = instant::Instant::now();
     removal_indices.par_sort_unstable();
+    log::debug!("sorting zero indices took {:?}", start.elapsed());
+    let start = instant::Instant::now();
     removal_indices.dedup();
+    log::debug!("deduping zero indices took {:?}", start.elapsed());
 
     // if empty return a const
     if removal_indices.len() == values[0].len() {
@@ -2670,11 +2680,20 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     lhs.expand(&broadcasted_shape)?;
     rhs.expand(&broadcasted_shape)?;
 
+    let time = instant::Instant::now();
+
     let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
 
-    let sign = sign(config, region, &[diff])?;
+    log::debug!("sub took {:?}", time.elapsed());
 
-    equals(config, region, &[sign, create_unit_tensor(1)])
+    let time = instant::Instant::now();
+    let sign = sign(config, region, &[diff])?;
+    log::debug!("sign took {:?}", time.elapsed());
+
+    let time = instant::Instant::now();
+    let e = equals(config, region, &[sign, create_unit_tensor(1)])?;
+    log::debug!("equals took {:?}", time.elapsed());
+    Ok(e)
 }
 
 /// Greater equals than operation.
@@ -2716,14 +2735,19 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let (lhs, rhs) = (values[0].clone(), values[1].clone());
 
     // add 1 to lhs
+    let time = instant::Instant::now();
     let lhs_plus_one = pairwise(
         config,
         region,
         &[lhs.clone(), create_unit_tensor(1)],
         BaseOp::Add,
     )?;
+    log::debug!("lhs plus one took {:?}", time.elapsed());
 
-    greater(config, region, &[lhs_plus_one, rhs])
+    let time = instant::Instant::now();
+    let g = greater(config, region, &[lhs_plus_one, rhs])?;
+    log::debug!("greater took {:?}", time.elapsed());
+    Ok(g)
 }
 
 /// Less than to operation.
@@ -5286,75 +5310,86 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     base: &usize,
     n: &usize,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let input = values[0].clone();
+    let start = std::time::Instant::now();
+    let mut input = values[0].clone();
 
     let is_assigned = !input.all_prev_assigned();
 
-    let bases: ValTensor<F> = Tensor::from(
-        (0..*n)
-            .rev()
-            .map(|x| ValType::Constant(integer_rep_to_felt(base.pow(x as u32) as IntegerRep))),
+    if !is_assigned {
+        input = region.assign(&config.custom_gates.inputs[0], &input)?;
+    }
+
+    let mut bases: ValTensor<F> = Tensor::from(
+        // repeat it input.len() times
+        (0..input.len())
+            .flat_map(|_| {
+                (0..*n).rev().map(|x| {
+                    ValType::Constant(integer_rep_to_felt(base.pow(x as u32) as IntegerRep))
+                })
+            }),
     )
     .into();
+    let mut bases_dims = input.dims().to_vec();
+    bases_dims.push(*n);
+    bases.reshape(&bases_dims)?;
 
-    let cartesian_coord = input
-        .dims()
-        .iter()
-        .map(|x| 0..*x)
-        .multi_cartesian_product()
-        .collect::<Vec<_>>();
+    let mut decomposed_dims = input.dims().to_vec();
+    decomposed_dims.push(*n + 1);
 
-    let mut output: Tensor<Tensor<ValType<F>>> = Tensor::new(None, input.dims())?;
+    let claimed_output = if region.witness_gen() {
+        input.decompose(*base, *n)?
+    } else {
+        let decomposed_len = decomposed_dims.iter().product();
+        let claimed_output = Tensor::new(
+            Some(&vec![ValType::Value(Value::unknown()); decomposed_len]),
+            &decomposed_dims,
+        )?;
 
-    let inner_loop_function =
-        |i: usize, region: &mut RegionCtx<F>| -> Result<Tensor<ValType<F>>, CircuitError> {
-            let coord = cartesian_coord[i].clone();
-            let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
-            let mut sliced_input = input.get_slice(&slice)?;
-            sliced_input.flatten();
+        claimed_output.into()
+    };
+    region.assign(&config.custom_gates.output, &claimed_output)?;
+    region.increment(claimed_output.len());
+    log::debug!("decompose took {:?}", start.elapsed());
 
-            if !is_assigned {
-                sliced_input = region.assign(&config.custom_gates.inputs[0], &sliced_input)?;
-            }
+    let start = std::time::Instant::now();
 
-            let mut claimed_output_slice = if region.witness_gen() {
-                sliced_input.decompose(*base, *n)?
-            } else {
-                Tensor::from(vec![ValType::Value(Value::unknown()); *n + 1].into_iter()).into()
-            };
+    let input_slice = input.dims().iter().map(|x| 0..*x).collect::<Vec<_>>();
+    let mut sign_slice = input_slice.clone();
+    sign_slice.push(0..1);
+    let mut rest_slice = input_slice.clone();
+    rest_slice.push(1..n + 1);
 
-            claimed_output_slice =
-                region.assign(&config.custom_gates.inputs[1], &claimed_output_slice)?;
-            claimed_output_slice.flatten();
+    let sign = claimed_output.get_slice(&sign_slice)?;
+    let rest = claimed_output.get_slice(&rest_slice)?;
+    log::debug!("slicing took {:?}", start.elapsed());
 
-            region.increment(claimed_output_slice.len());
+    let start = std::time::Instant::now();
+    let sign = range_check(config, region, &[sign], &(-1, 1))?;
+    let rest = range_check(config, region, &[rest], &(0, (*base - 1) as i128))?;
+    log::debug!("range_check took {:?}", start.elapsed());
 
-            // get the sign bit and make sure it is valid
-            let sign = claimed_output_slice.first()?;
-            let sign = range_check(config, region, &[sign], &(-1, 1))?;
+    // equation needs to be constructed as ij,ij->i but for arbitrary n dims we need to construct this dynamically
+    // indices should map in order of the alphabet
+    // start with lhs
+    let start = std::time::Instant::now();
+    let lhs = ASCII_ALPHABER.chars().take(rest.dims().len()).join("");
+    let rhs = ASCII_ALPHABER.chars().take(rest.dims().len() - 1).join("");
+    let equation = format!("{},{}->{}", lhs, lhs, rhs);
 
-            // get the rest of the thing and make sure it is in the correct range
-            let rest = claimed_output_slice.get_slice(&[1..claimed_output_slice.len()])?;
+    // now add the rhs
 
-            let rest = range_check(config, region, &[rest], &(0, (base - 1) as i128))?;
+    let prod_decomp = einsum(config, region, &[rest.clone(), bases], &equation)?;
+    log::debug!("einsum (d={:?}) took {:?}", rest.dims(), start.elapsed());
 
-            let prod_decomp = dot(config, region, &[rest, bases.clone()])?;
+    let start = std::time::Instant::now();
+    let signed_decomp = pairwise(config, region, &[prod_decomp, sign], BaseOp::Mult)?;
+    log::debug!("pairwise took {:?}", start.elapsed());
 
-            let signed_decomp = pairwise(config, region, &[prod_decomp, sign], BaseOp::Mult)?;
+    let start = std::time::Instant::now();
+    enforce_equality(config, region, &[input, signed_decomp])?;
+    log::debug!("enforce_equality took {:?}", start.elapsed());
 
-            enforce_equality(config, region, &[sliced_input, signed_decomp])?;
-
-            Ok(claimed_output_slice.get_inner_tensor()?.clone())
-        };
-
-    region.apply_in_loop(&mut output, inner_loop_function)?;
-
-    let mut combined_output = output.combine()?;
-    let mut output_dims = input.dims().to_vec();
-    output_dims.push(*n + 1);
-    combined_output.reshape(&output_dims)?;
-
-    Ok(combined_output.into())
+    Ok(claimed_output)
 }
 
 pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -5362,9 +5397,13 @@ pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
+    let start = std::time::Instant::now();
     let mut decomp = decompose(config, region, values, &region.base(), &region.legs())?;
+    log::debug!("decompose took {:?}", start.elapsed());
     // get every n elements now, which correspond to the sign bit
+    let start = std::time::Instant::now();
     decomp.get_every_n(region.legs() + 1)?;
+    log::debug!("get_every_n took {:?}", start.elapsed());
     decomp.reshape(values[0].dims())?;
 
     Ok(decomp)
