@@ -2674,8 +2674,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
     let sign = sign(config, region, &[diff])?;
-    let e = equals(config, region, &[sign, create_unit_tensor(1)])?;
-    Ok(e)
+    equals(config, region, &[sign, create_unit_tensor(1)])
 }
 
 /// Greater equals than operation.
@@ -2724,8 +2723,7 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         BaseOp::Add,
     )?;
 
-    let g = greater(config, region, &[lhs_plus_one, rhs])?;
-    Ok(g)
+    greater(config, region, &[lhs_plus_one, rhs])
 }
 
 /// Less than to operation.
