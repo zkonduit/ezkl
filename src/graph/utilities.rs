@@ -1136,23 +1136,21 @@ pub fn new_op_from_onnx(
                         a: crate::circuit::utils::F32(exponent),
                     })
                 }
-            } else {
-                if let Some(c) = inputs[0].opkind().get_mutable_constant() {
-                    inputs[0].decrement_use();
-                    deleted_indices.push(0);
-                    if c.raw_values.len() > 1 {
-                        unimplemented!("only support scalar base")
-                    }
-
-                    let base = c.raw_values[0];
-
-                    SupportedOp::Nonlinear(LookupOp::Exp {
-                        scale: scale_to_multiplier(input_scales[1]).into(),
-                        base: base.into(),
-                    })
-                } else {
-                    unimplemented!("only support constant base or pow for now")
+            } else if let Some(c) = inputs[0].opkind().get_mutable_constant() {
+                inputs[0].decrement_use();
+                deleted_indices.push(0);
+                if c.raw_values.len() > 1 {
+                    unimplemented!("only support scalar base")
                 }
+
+                let base = c.raw_values[0];
+
+                SupportedOp::Nonlinear(LookupOp::Exp {
+                    scale: scale_to_multiplier(input_scales[1]).into(),
+                    base: base.into(),
+                })
+            } else {
+                unimplemented!("only support constant base or pow for now")
             }
         }
         "Div" => {

@@ -148,6 +148,10 @@ runner = 'wasm-bindgen-test-runner'
 
 
 [[bench]]
+name = "zero_finder"
+harness = false
+
+[[bench]]
 name = "accum_dot"
 harness = false
 
