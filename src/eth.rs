@@ -488,7 +488,8 @@ pub async fn deploy_da_verifier_via_solidity(
         }
     }
 
-    let contract = match call_to_account {
+    
+    match call_to_account {
         Some(call) => {
             deploy_single_da_contract(
                 client,
@@ -514,8 +515,7 @@ pub async fn deploy_da_verifier_via_solidity(
             )
             .await
         }
-    };
-    return contract;
+    }
 }
 
 async fn deploy_multi_da_contract(
@@ -630,7 +630,7 @@ async fn deploy_single_da_contract(
             // bytes memory _callData,
             PackedSeqToken(call_data.as_ref()),
             // uint256 _decimals,
-            WordToken(B256::from(decimals).into()),
+            WordToken(B256::from(decimals)),
             // uint[] memory _scales,
             DynSeqToken(
                 scales
