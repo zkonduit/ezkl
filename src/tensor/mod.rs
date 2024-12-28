@@ -638,41 +638,43 @@ impl<T: Clone + TensorType> Tensor<T> {
     where
         T: Send + Sync,
     {
-        if indices.is_empty() {
+        // Fast path: empty indices or full tensor slice
+        if indices.is_empty()
+            || indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims
+        {
             return Ok(self.clone());
         }
+
+        // Validate dimensions
         if self.dims.len() < indices.len() {
             return Err(TensorError::DimError(format!(
                 "The dimensionality of the slice {:?} is greater than the tensor's {:?}",
                 indices, self.dims
             )));
-        } else if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims {
-            // else if slice is the same as dims, return self
-            return Ok(self.clone());
         }
 
-        // if indices weren't specified we fill them in as required
-        let mut full_indices = indices.to_vec();
+        // Pre-allocate the full indices vector with capacity
+        let mut full_indices = Vec::with_capacity(self.dims.len());
+        full_indices.extend_from_slice(indices);
 
-        for i in 0..(self.dims.len() - indices.len()) {
-            full_indices.push(0..self.dims()[indices.len() + i])
-        }
+        // Fill remaining dimensions
+        full_indices.extend((indices.len()..self.dims.len()).map(|i| 0..self.dims[i]));
 
-        let cartesian_coord: Vec<Vec<usize>> = full_indices
+        // Pre-calculate total size and allocate result vector
+        let total_size: usize = full_indices
             .iter()
-            .cloned()
-            .multi_cartesian_product()
-            .collect();
+            .map(|range| range.end - range.start)
+            .product();
+        let mut res = Vec::with_capacity(total_size);
 
-        let res: Vec<T> = cartesian_coord
-            .par_iter()
-            .map(|e| {
-                let index = self.get_index(e);
-                self[index].clone()
-            })
-            .collect();
-
+        // Calculate new dimensions once
         let dims: Vec<usize> = full_indices.iter().map(|e| e.end - e.start).collect();
+
+        // Use iterator directly without collecting into intermediate Vec
+        for coord in full_indices.iter().cloned().multi_cartesian_product() {
+            let index = self.get_index(&coord);
+            res.push(self[index].clone());
+        }
 
         Tensor::new(Some(&res), &dims)
     }
