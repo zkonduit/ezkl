@@ -1226,7 +1226,7 @@ impl Model {
                 values.iter().map(|v| v.dims()).collect_vec()
             );
 
-            let start = std::time::Instant::now();
+            let start = instant::Instant::now();
             match &node {
                 NodeType::Node(n) => {
                     let res = if node.is_constant() && node.num_uses() == 1 {
