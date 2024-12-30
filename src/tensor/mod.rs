@@ -833,30 +833,16 @@ impl<T: Clone + TensorType> Tensor<T> {
         num_repeats: usize,
         initial_offset: usize,
     ) -> Result<Tensor<T>, TensorError> {
-        // Pre-calculate capacity to avoid reallocations
-        let duplicates = (self.inner.len() + n - 1) / n; // Ceiling division
-        let estimated_size = self.inner.len() + duplicates * num_repeats;
-        let mut inner = Vec::with_capacity(estimated_size);
-
-        // Avoid cloning the entire vector upfront
-        let mut i = 0;
-        while i < self.inner.len() {
-            let elem = &self.inner[i];
-
-            // Check if current position needs duplication
-            if (i + initial_offset + 1) % n == 0 {
-                // Add original element plus duplicates
-                inner.push(elem.clone());
-                for _ in 0..num_repeats {
-                    inner.push(elem.clone());
-                }
+        let mut inner: Vec<T> = Vec::with_capacity(self.inner.len());
+        let mut offset = initial_offset;
+        for (i, elem) in self.inner.clone().into_iter().enumerate() {
+            if (i + offset + 1) % n == 0 {
+                inner.extend(vec![elem; 1 + num_repeats]);
+                offset += num_repeats;
             } else {
                 inner.push(elem.clone());
             }
-
-            i += 1;
         }
-
         Tensor::new(Some(&inner), &[inner.len()])
     }
 
