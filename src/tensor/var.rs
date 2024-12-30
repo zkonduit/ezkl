@@ -577,8 +577,7 @@ impl VarTensor {
                     if at_end_of_column {
                         // if we are at the end of the column, we need to copy the cell to the next column
                         prev_cell = Some(cell.clone());
-                    }
-                    if coord > 0 && at_beginning_of_column  {
+                    } else if coord > 0 && at_beginning_of_column  {
                         if let Some(prev_cell) = prev_cell.as_ref() {
                             let cell = cell.cell().ok_or({
                                 error!("Error getting cell: {:?}", (x,y));
