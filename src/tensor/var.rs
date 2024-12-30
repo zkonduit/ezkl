@@ -495,15 +495,55 @@ impl VarTensor {
     }
 
     /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
+    pub fn assign_with_duplication_unconstrained<
+        F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
+    >(
+        &self,
+        region: &mut Region<F>,
+        offset: usize,
+        values: &ValTensor<F>,
+        constants: &mut ConstantsMap<F>,
+    ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
+        match values {
+            ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
+            ValTensor::Value { inner: v, dims , ..} => {
+
+                let duplication_freq = self.block_size();
+
+                let num_repeats = self.num_inner_cols();
+
+                let duplication_offset = offset;
+
+                // duplicates every nth element to adjust for column overflow
+                let v = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
+                let mut res: ValTensor<F> = {
+                    v.enum_map(|coord, k| {
+                    let cell = self.assign_value(region, offset, k.clone(), coord, constants)?;
+                    Ok::<_, halo2_proofs::plonk::Error>(cell)
+
+                })?.into()};
+                let total_used_len = res.len();
+                res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
+
+                res.reshape(dims).unwrap();
+                res.set_scale(values.scale());
+
+                Ok((res, total_used_len))
+            }
+        }
+    }
+
+    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
     /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two.
-    pub fn assign_with_duplication<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+    pub fn assign_with_duplication_constrained<
+        F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
+    >(
         &self,
         region: &mut Region<F>,
         row: usize,
         offset: usize,
         values: &ValTensor<F>,
         check_mode: &CheckMode,
-        single_inner_col: bool,
         constants: &mut ConstantsMap<F>,
     ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
         let mut prev_cell = None;
@@ -512,34 +552,16 @@ impl VarTensor {
             ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
             ValTensor::Value { inner: v, dims , ..} => {
 
-                let duplication_freq = if single_inner_col {
-                    self.col_size()
-                } else {
-                    self.block_size()
-                };
-
-                let num_repeats = if single_inner_col {
-                    1
-                } else {
-                    self.num_inner_cols()
-                };
-
-                let duplication_offset = if single_inner_col {
-                    row
-                } else {
-                    offset
-                };
+                let duplication_freq = self.col_size();
+                let num_repeats = 1;
+                let duplication_offset = row;
 
                 // duplicates every nth element to adjust for column overflow
                 let v = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
                 let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
 
-                    let step = if !single_inner_col {
-                        1
-                    } else {
-                        self.num_inner_cols()
-                    };
+                    let step = self.num_inner_cols();
 
                     let (x, y, z) = self.cartesian_coord(offset + coord * step);
                     if matches!(check_mode, CheckMode::SAFE) && coord > 0 && z == 0 && y == 0 {
@@ -549,11 +571,14 @@ impl VarTensor {
 
                     let cell = self.assign_value(region, offset, k.clone(), coord * step, constants)?;
 
-                    if single_inner_col {
-                    if z == 0 {
+                    let at_end_of_column = (coord + 1) % duplication_freq == 0;
+                    let at_beginning_of_column = coord % duplication_freq == 0;
+
+                    if at_end_of_column {
                         // if we are at the end of the column, we need to copy the cell to the next column
                         prev_cell = Some(cell.clone());
-                    } else if coord > 0 && z == 0 && single_inner_col {
+                    }
+                    if coord > 0 && at_beginning_of_column  {
                         if let Some(prev_cell) = prev_cell.as_ref() {
                             let cell = cell.cell().ok_or({
                                 error!("Error getting cell: {:?}", (x,y));
@@ -563,10 +588,10 @@ impl VarTensor {
                                 halo2_proofs::plonk::Error::Synthesis})?;
                             region.constrain_equal(prev_cell,cell)?;
                         } else {
-                            error!("Error copy-constraining previous value: {:?}", (x,y));
+                            error!("Previous cell was not set");
                             return Err(halo2_proofs::plonk::Error::Synthesis);
                         }
-                    }}
+                    }
 
                     Ok(cell)
 
@@ -576,20 +601,6 @@ impl VarTensor {
 
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());
-
-                if matches!(check_mode, CheckMode::SAFE) {
-                     // during key generation this will be 0 so we use this as a flag to check
-                     // TODO: this isn't very safe and would be better to get the phase directly
-                    let res_evals = res.int_evals().unwrap();
-                    let is_assigned = res_evals
-                    .iter()
-                    .all(|&x| x == 0);
-                    if !is_assigned {
-                        assert_eq!(
-                           values.int_evals().unwrap(),
-                           res_evals
-                    )};
-                }
 
                 Ok((res, total_used_len))
             }

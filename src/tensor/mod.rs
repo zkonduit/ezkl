@@ -833,16 +833,30 @@ impl<T: Clone + TensorType> Tensor<T> {
         num_repeats: usize,
         initial_offset: usize,
     ) -> Result<Tensor<T>, TensorError> {
-        let mut inner: Vec<T> = vec![];
-        let mut offset = initial_offset;
-        for (i, elem) in self.inner.clone().into_iter().enumerate() {
-            if (i + offset + 1) % n == 0 {
-                inner.extend(vec![elem; 1 + num_repeats]);
-                offset += num_repeats;
+        // Pre-calculate capacity to avoid reallocations
+        let duplicates = (self.inner.len() + n - 1) / n; // Ceiling division
+        let estimated_size = self.inner.len() + duplicates * num_repeats;
+        let mut inner = Vec::with_capacity(estimated_size);
+
+        // Avoid cloning the entire vector upfront
+        let mut i = 0;
+        while i < self.inner.len() {
+            let elem = &self.inner[i];
+
+            // Check if current position needs duplication
+            if (i + initial_offset + 1) % n == 0 {
+                // Add original element plus duplicates
+                inner.push(elem.clone());
+                for _ in 0..num_repeats {
+                    inner.push(elem.clone());
+                }
             } else {
                 inner.push(elem.clone());
             }
+
+            i += 1;
         }
+
         Tensor::new(Some(&inner), &[inner.len()])
     }
 
@@ -862,20 +876,22 @@ impl<T: Clone + TensorType> Tensor<T> {
         num_repeats: usize,
         initial_offset: usize,
     ) -> Result<Tensor<T>, TensorError> {
-        let mut inner: Vec<T> = vec![];
-        let mut indices_to_remove = std::collections::HashSet::new();
-        for i in 0..self.inner.len() {
-            if (i + initial_offset + 1) % n == 0 {
-                for j in 1..(1 + num_repeats) {
-                    indices_to_remove.insert(i + j);
-                }
-            }
-        }
+        // Pre-calculate capacity to avoid reallocations
+        let estimated_size = self.inner.len() - (self.inner.len() / n) * num_repeats;
+        let mut inner = Vec::with_capacity(estimated_size);
 
-        let old_inner = self.inner.clone();
-        for (i, elem) in old_inner.into_iter().enumerate() {
-            if !indices_to_remove.contains(&i) {
-                inner.push(elem.clone());
+        // Use iterator directly instead of creating intermediate collections
+        let mut i = 0;
+        while i < self.inner.len() {
+            // Add the current element
+            inner.push(self.inner[i].clone());
+
+            // If this is an nth position (accounting for offset)
+            if (i + initial_offset + 1) % n == 0 {
+                // Skip the next num_repeats elements
+                i += num_repeats + 1;
+            } else {
+                i += 1;
             }
         }
 

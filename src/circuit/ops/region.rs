@@ -671,22 +671,17 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     }
 
     /// Assign a valtensor to a vartensor with duplication
-    pub fn assign_with_duplication(
+    pub fn assign_with_duplication_unconstrained(
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
-        check_mode: &crate::circuit::CheckMode,
-        single_inner_col: bool,
     ) -> Result<(ValTensor<F>, usize), Error> {
         if let Some(region) = &self.region {
             // duplicates every nth element to adjust for column overflow
-            let (res, len) = var.assign_with_duplication(
+            let (res, len) = var.assign_with_duplication_unconstrained(
                 &mut region.borrow_mut(),
-                self.row,
                 self.linear_coord,
                 values,
-                check_mode,
-                single_inner_col,
                 &mut self.assigned_constants,
             )?;
             Ok((res, len))
@@ -695,7 +690,37 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 self.row,
                 self.linear_coord,
                 values,
-                single_inner_col,
+                false,
+                &mut self.assigned_constants,
+            )?;
+            Ok((values.clone(), len))
+        }
+    }
+
+    /// Assign a valtensor to a vartensor with duplication
+    pub fn assign_with_duplication_constrained(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+        check_mode: &crate::circuit::CheckMode,
+    ) -> Result<(ValTensor<F>, usize), Error> {
+        if let Some(region) = &self.region {
+            // duplicates every nth element to adjust for column overflow
+            let (res, len) = var.assign_with_duplication_constrained(
+                &mut region.borrow_mut(),
+                self.row,
+                self.linear_coord,
+                values,
+                check_mode,
+                &mut self.assigned_constants,
+            )?;
+            Ok((res, len))
+        } else {
+            let (_, len) = var.dummy_assign_with_duplication(
+                self.row,
+                self.linear_coord,
+                values,
+                true,
                 &mut self.assigned_constants,
             )?;
             Ok((values.clone(), len))
