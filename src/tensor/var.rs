@@ -571,8 +571,8 @@ impl VarTensor {
 
                     let cell = self.assign_value(region, offset, k.clone(), coord * step, constants)?;
 
-                    let at_end_of_column = (coord + 1) % duplication_freq == 0;
-                    let at_beginning_of_column = coord % duplication_freq == 0;
+                    let at_end_of_column = z == duplication_freq - 1;
+                    let at_beginning_of_column = z == 0;
 
                     if at_end_of_column {
                         // if we are at the end of the column, we need to copy the cell to the next column
