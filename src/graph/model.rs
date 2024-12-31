@@ -1226,6 +1226,7 @@ impl Model {
                 values.iter().map(|v| v.dims()).collect_vec()
             );
 
+            let start = instant::Instant::now();
             match &node {
                 NodeType::Node(n) => {
                     let res = if node.is_constant() && node.num_uses() == 1 {
@@ -1363,6 +1364,7 @@ impl Model {
                     results.insert(*idx, full_results);
                 }
             }
+            debug!("------------ layout of {} took {:?}", idx, start.elapsed());
         }
 
         // we do this so we can support multiple passes of the same model and have deterministic results (Non-assigned inputs etc... etc...)

@@ -420,10 +420,6 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     values[0].remove_indices(&mut removal_indices, true)?;
     values[1].remove_indices(&mut removal_indices, true)?;
 
-    let elapsed = global_start.elapsed();
-    trace!("filtering const zero indices took: {:?}", elapsed);
-
-    let start = instant::Instant::now();
     let mut inputs = vec![];
     let block_width = config.custom_gates.output.num_inner_cols();
 
@@ -431,37 +427,22 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     for (i, input) in values.iter_mut().enumerate() {
         input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
         let inp = {
-            let (res, len) = region.assign_with_duplication(
-                &config.custom_gates.inputs[i],
-                input,
-                &config.check_mode,
-                false,
-            )?;
+            let (res, len) = region
+                .assign_with_duplication_unconstrained(&config.custom_gates.inputs[i], input)?;
             assigned_len = len;
             res.get_inner()?
         };
         inputs.push(inp);
     }
 
-    let elapsed = start.elapsed();
-    trace!("assigning inputs took: {:?}", elapsed);
-
     // Now we can assign the dot product
     // time this step
-    let start = instant::Instant::now();
     let accumulated_dot = accumulated::dot(&[inputs[0].clone(), inputs[1].clone()], block_width)?;
-    let elapsed = start.elapsed();
-    trace!("calculating accumulated dot took: {:?}", elapsed);
-
-    let start = instant::Instant::now();
-    let (output, output_assigned_len) = region.assign_with_duplication(
+    let (output, output_assigned_len) = region.assign_with_duplication_constrained(
         &config.custom_gates.output,
         &accumulated_dot.into(),
         &config.check_mode,
-        true,
     )?;
-    let elapsed = start.elapsed();
-    trace!("assigning output took: {:?}", elapsed);
 
     // enable the selectors
     if !region.is_dummy() {
@@ -1002,7 +983,6 @@ fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let start = instant::Instant::now();
     let (mut input, index) = (values[0].clone(), values[1].clone());
     input.flatten();
 
@@ -1029,9 +1009,6 @@ fn select<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let (_, assigned_output) =
         dynamic_lookup(config, region, &[index, output], &[dim_indices, input])?;
-
-    let end = start.elapsed();
-    trace!("select took: {:?}", end);
 
     Ok(assigned_output)
 }
@@ -1094,7 +1071,6 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
     lookups: &[ValTensor<F>; 2],
     tables: &[ValTensor<F>; 2],
 ) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
-    let start = instant::Instant::now();
     // if not all lookups same length err
     if lookups[0].len() != lookups[1].len() {
         return Err(CircuitError::MismatchedLookupLength(
@@ -1128,27 +1104,19 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
     }
     let table_len = table_0.len();
 
-    trace!("assigning tables took: {:?}", start.elapsed());
-
     // now create a vartensor of constants for the dynamic lookup index
     let table_index = create_constant_tensor(F::from(dynamic_lookup_index as u64), table_len);
     let _table_index =
         region.assign_dynamic_lookup(&config.dynamic_lookups.tables[2], &table_index)?;
 
-    trace!("assigning table index took: {:?}", start.elapsed());
-
     let lookup_0 = region.assign(&config.dynamic_lookups.inputs[0], &lookup_0)?;
     let lookup_1 = region.assign(&config.dynamic_lookups.inputs[1], &lookup_1)?;
     let lookup_len = lookup_0.len();
-
-    trace!("assigning lookups took: {:?}", start.elapsed());
 
     // now set the lookup index
     let lookup_index = create_constant_tensor(F::from(dynamic_lookup_index as u64), lookup_len);
 
     let _lookup_index = region.assign(&config.dynamic_lookups.inputs[2], &lookup_index)?;
-
-    trace!("assigning lookup index took: {:?}", start.elapsed());
 
     let mut lookup_block = 0;
 
@@ -1195,9 +1163,6 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
     region.increment_dynamic_lookup_col_coord(table_len + flush_len_0);
     region.increment_dynamic_lookup_index(1);
     region.increment(lookup_len);
-
-    let end = start.elapsed();
-    trace!("dynamic lookup took: {:?}", end);
 
     Ok((lookup_0, lookup_1))
 }
@@ -1443,7 +1408,6 @@ pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd + 
     dim: usize,
     is_flat_index: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let start_time = instant::Instant::now();
     let index = values[0].clone();
     if !is_flat_index {
         assert_eq!(index.dims().len(), dims.len());
@@ -1516,9 +1480,6 @@ pub(crate) fn linearize_element_index<F: PrimeField + TensorType + PartialOrd + 
     };
 
     region.apply_in_loop(&mut output, inner_loop_function)?;
-
-    let elapsed = start_time.elapsed();
-    trace!("linearize_element_index took: {:?}", elapsed);
 
     Ok(output.into())
 }
@@ -1951,15 +1912,10 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     region.flush()?;
     // time this entire function run
-    let global_start = instant::Instant::now();
-
     let mut values = values.clone();
 
     // this section has been optimized to death, don't mess with it
     values[0].remove_const_zero_values();
-
-    let elapsed = global_start.elapsed();
-    trace!("filtering const zero indices took: {:?}", elapsed);
 
     // if empty return a const
     if values[0].is_empty() {
@@ -1972,12 +1928,8 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let input = {
         let mut input = values[0].clone();
         input.pad_to_zero_rem(block_width, ValType::Constant(F::ZERO))?;
-        let (res, len) = region.assign_with_duplication(
-            &config.custom_gates.inputs[1],
-            &input,
-            &config.check_mode,
-            false,
-        )?;
+        let (res, len) =
+            region.assign_with_duplication_unconstrained(&config.custom_gates.inputs[1], &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -1985,11 +1937,10 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // Now we can assign the dot product
     let accumulated_sum = accumulated::sum(&input, block_width)?;
 
-    let (output, output_assigned_len) = region.assign_with_duplication(
+    let (output, output_assigned_len) = region.assign_with_duplication_constrained(
         &config.custom_gates.output,
         &accumulated_sum.into(),
         &config.check_mode,
-        true,
     )?;
 
     // enable the selectors
@@ -2055,13 +2006,10 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     region.flush()?;
     // time this entire function run
-    let global_start = instant::Instant::now();
 
     // this section has been optimized to death, don't mess with it
     let removal_indices = values[0].get_const_zero_indices();
 
-    let elapsed = global_start.elapsed();
-    trace!("finding const zero indices took: {:?}", elapsed);
     // if empty return a const
     if !removal_indices.is_empty() {
         return Ok(create_zero_tensor(1));
@@ -2072,12 +2020,8 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let input = {
         let mut input = values[0].clone();
         input.pad_to_zero_rem(block_width, ValType::Constant(F::ONE))?;
-        let (res, len) = region.assign_with_duplication(
-            &config.custom_gates.inputs[1],
-            &input,
-            &config.check_mode,
-            false,
-        )?;
+        let (res, len) =
+            region.assign_with_duplication_unconstrained(&config.custom_gates.inputs[1], &input)?;
         assigned_len = len;
         res.get_inner()?
     };
@@ -2085,11 +2029,10 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // Now we can assign the dot product
     let accumulated_prod = accumulated::prod(&input, block_width)?;
 
-    let (output, output_assigned_len) = region.assign_with_duplication(
+    let (output, output_assigned_len) = region.assign_with_duplication_constrained(
         &config.custom_gates.output,
         &accumulated_prod.into(),
         &config.check_mode,
-        true,
     )?;
 
     // enable the selectors
@@ -2442,7 +2385,6 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     let orig_lhs = lhs.clone();
     let orig_rhs = rhs.clone();
 
-    let start = instant::Instant::now();
     let first_zero_indices = HashSet::from_iter(lhs.get_const_zero_indices());
     let second_zero_indices = HashSet::from_iter(rhs.get_const_zero_indices());
 
@@ -2457,7 +2399,6 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         BaseOp::Sub => second_zero_indices.clone(),
         _ => return Err(CircuitError::UnsupportedOp),
     };
-    trace!("setting up indices took {:?}", start.elapsed());
 
     if lhs.len() != rhs.len() {
         return Err(CircuitError::DimMismatch(format!(
@@ -2482,7 +2423,6 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 
     // Now we can assign the dot product
     // time the calc
-    let start = instant::Instant::now();
     let op_result = match op {
         BaseOp::Add => add(&inputs),
         BaseOp::Sub => sub(&inputs),
@@ -2493,20 +2433,13 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         error!("{}", e);
         halo2_proofs::plonk::Error::Synthesis
     })?;
-    trace!("pairwise {} calc took {:?}", op.as_str(), start.elapsed());
 
-    let start = instant::Instant::now();
     let assigned_len = op_result.len() - removal_indices.len();
     let mut output = region.assign_with_omissions(
         &config.custom_gates.output,
         &op_result.into(),
         &removal_indices,
     )?;
-    trace!(
-        "pairwise {} input assign took {:?}",
-        op.as_str(),
-        start.elapsed()
-    );
 
     // Enable the selectors
     if !region.is_dummy() {
