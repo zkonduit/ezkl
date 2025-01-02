@@ -488,7 +488,6 @@ pub async fn deploy_da_verifier_via_solidity(
         }
     }
 
-    
     match call_to_account {
         Some(call) => {
             deploy_single_da_contract(
