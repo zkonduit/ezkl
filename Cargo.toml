@@ -280,7 +280,10 @@ no-update = []
 
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#0654e92bdf725fd44d849bfef3643870a8c7d50b", package = "halo2_proofs" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#6d72498928cdb69ce0de9f2230d2873ca2cf5324", package = "halo2_proofs" }
+
+[patch.'https://github.com/zkonduit/halo2#0654e92bdf725fd44d849bfef3643870a8c7d50b']
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#6d72498928cdb69ce0de9f2230d2873ca2cf5324", package = "halo2_proofs" }
 
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }

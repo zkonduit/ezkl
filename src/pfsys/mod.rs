@@ -822,6 +822,7 @@ where
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
     debug!("loading proving key from {:?}", path);
+    let start = instant::Instant::now();
     let f = File::open(path.clone()).map_err(|e| PfsysError::LoadPk(format!("{}", e)))?;
     let mut reader = BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
     let pk = ProvingKey::<Scheme::Curve>::read::<_, C>(
@@ -830,7 +831,8 @@ where
         params,
     )
     .map_err(|e| PfsysError::LoadPk(format!("{}", e)))?;
-    info!("loaded proving key ✅");
+    let elapsed = start.elapsed();
+    info!("loaded proving key in {:?}", elapsed);
     Ok(pk)
 }
 
