@@ -420,3 +420,30 @@ where
     let b = s[pos + 2..].parse()?;
     Ok((a, b))
 }
+
+/// Check if the version string matches the artifact version
+/// If the version string does not match the artifact version, log a warning
+pub fn check_version_string_matches(artifact_version: &str) {
+    if artifact_version == "0.0.0"
+        || artifact_version == "source - no compatibility guaranteed"
+        || artifact_version.is_empty()
+    {
+        log::warn!("Artifact version is 0.0.0, skipping version check");
+        return;
+    }
+
+    let version = crate::version();
+
+    if version == "source - no compatibility guaranteed" {
+        log::warn!("Compiled source version is not guaranteed to match artifact version");
+        return;
+    }
+
+    if version != artifact_version {
+        log::warn!(
+            "Version mismatch: CLI version is {} but artifact version is {}",
+            version,
+            artifact_version
+        );
+    }
+}

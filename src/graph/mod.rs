@@ -280,7 +280,13 @@ impl GraphWitness {
         })?;
 
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
-        serde_json::from_reader(reader).map_err(|e| e.into())
+        let witness: GraphWitness =
+            serde_json::from_reader(reader).map_err(|e| Into::<GraphError>::into(e))?;
+
+        // check versions match
+        crate::check_version_string_matches(witness.version.as_deref().unwrap_or(""));
+
+        Ok(witness)
     }
 
     /// Save the model input to a file
@@ -572,10 +578,14 @@ impl GraphSettings {
         // buf reader
         let reader =
             std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::open(path)?);
-        serde_json::from_reader(reader).map_err(|e| {
+        let settings: GraphSettings = serde_json::from_reader(reader).map_err(|e| {
             error!("failed to load settings file at {}", e);
             std::io::Error::new(std::io::ErrorKind::Other, e)
-        })
+        })?;
+
+        crate::check_version_string_matches(&settings.version);
+
+        Ok(settings)
     }
 
     /// Export the ezkl configuration as json
@@ -696,6 +706,9 @@ impl GraphCircuit {
         })?;
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
         let result: GraphCircuit = bincode::deserialize_from(reader)?;
+
+        // check the versions matche
+        crate::check_version_string_matches(&result.core.settings.version);
 
         Ok(result)
     }
