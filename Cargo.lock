@@ -2394,7 +2394,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2#d7ecad83c7439fa1cb450ee4a89c2d0b45604ceb#d7ecad83c7439fa1cb450ee4a89c2d0b45604ceb"
+source = "git+https://github.com/zkonduit/halo2#445b49bc2cdd7b070c23a8367abf7c6c1cddb5c4#445b49bc2cdd7b070c23a8367abf7c6c1cddb5c4"
 dependencies = [
  "bincode",
  "blake2b_simd",
