@@ -859,7 +859,7 @@ pub(crate) fn gen_random_data(
 
     let input_facts = tract_model
         .input_outlets()
-        .map_err(|e| e.to_string().into())
+        .map_err(|e| e.to_string().into())?
         .iter()
         .map(|&i| tract_model.outlet_fact(i))
         .collect::<tract_onnx::prelude::TractResult<Vec<_>>>()
