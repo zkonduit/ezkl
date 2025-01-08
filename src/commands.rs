@@ -90,6 +90,8 @@ pub const DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION: &str = "false";
 pub const DEFAULT_ONLY_RANGE_CHECK_REBASE: &str = "false";
 /// Default commitment
 pub const DEFAULT_COMMITMENT: &str = "kzg";
+/// Default seed used to generate random data
+pub const DEFAULT_SEED: &str = "21242";
 
 #[cfg(feature = "python-bindings")]
 /// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
@@ -422,7 +424,21 @@ pub enum Commands {
         #[clap(flatten)]
         args: RunArgs,
     },
-
+    /// Generate random data for a model
+    GenRandomData {
+        /// The path to the .onnx model file
+        #[arg(short = 'M', long, default_value = DEFAULT_MODEL, value_hint = clap::ValueHint::FilePath)]
+        model: Option<PathBuf>,
+        /// The path to the .json data file
+        #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
+        data: Option<PathBuf>,
+        /// Hand-written parser for graph variables, eg. batch_size=1
+        #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'V', long, value_parser = crate::parse_key_val::<String, usize>, default_value = "batch_size->1", value_delimiter = ',', value_hint = clap::ValueHint::Other))]
+        variables: Vec<(String, usize)>,
+        /// random seed for reproducibility (optional)
+        #[arg(long, value_hint = clap::ValueHint::Other, default_value = DEFAULT_SEED)]
+        seed: u64,
+    },
     /// Calibrates the proving scale, lookup bits and logrows from a circuit settings file.
     CalibrateSettings {
         /// The path to the .json calibration data file.

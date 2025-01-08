@@ -557,6 +557,34 @@ impl GraphData {
         Ok(inputs)
     }
 
+    // not wasm
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    /// Convert the tract data to tract data
+    pub fn from_tract_data(tensors: &[TractTensor]) -> Result<Self, GraphError> {
+        use tract_onnx::prelude::DatumType;
+
+        let mut input_data = vec![];
+        for tensor in tensors {
+            match tensor.datum_type() {
+                tract_onnx::prelude::DatumType::Bool => {
+                    let tensor = tensor.to_array_view::<bool>()?;
+                    let tensor = tensor.iter().map(|e| FileSourceInner::Bool(*e)).collect();
+                    input_data.push(tensor);
+                }
+                _ => {
+                    let cast_tensor = tensor.cast_to_dt(DatumType::F64)?;
+                    let tensor = cast_tensor.to_array_view::<f64>()?;
+                    let tensor = tensor.iter().map(|e| FileSourceInner::Float(*e)).collect();
+                    input_data.push(tensor);
+                }
+            }
+        }
+        Ok(GraphData {
+            input_data: DataSource::File(input_data),
+            output_data: None,
+        })
+    }
+
     ///
     pub fn new(input_data: DataSource) -> Self {
         GraphData {

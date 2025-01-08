@@ -78,6 +78,8 @@ pub enum EZKLError {
     ExecutionError(#[from] execute::ExecutionError),
     #[error("[srs] {0}")]
     SrsError(#[from] pfsys::srs::SrsError),
+    #[error("[generic] {0}")]
+    TractError(#[from] tract_onnx::tract_hir::internal::TractError),
 }
 
 impl From<&str> for EZKLError {

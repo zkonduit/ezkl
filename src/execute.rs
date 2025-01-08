@@ -65,6 +65,8 @@ use std::str::FromStr;
 use std::time::Duration;
 use tabled::Tabled;
 use thiserror::Error;
+use tract_onnx::prelude::IntoTensor;
+use tract_onnx::prelude::Tensor as TractTensor;
 
 use lazy_static::lazy_static;
 
@@ -133,6 +135,17 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             model.unwrap_or(DEFAULT_MODEL.into()),
             settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
             args,
+        ),
+        Commands::GenRandomData {
+            model,
+            data,
+            variables,
+            seed,
+        } => gen_random_data(
+            model.unwrap_or(DEFAULT_MODEL.into()),
+            data.unwrap_or(DEFAULT_DATA.into()),
+            variables,
+            seed,
         ),
         Commands::CalibrateSettings {
             model,
@@ -825,6 +838,71 @@ pub(crate) fn gen_circuit_settings(
     let circuit = GraphCircuit::from_run_args(&run_args, &model_path)?;
     let params = circuit.settings();
     params.save(&params_output)?;
+    Ok(String::new())
+}
+
+/// Generate a circuit settings file
+pub(crate) fn gen_random_data(
+    model_path: PathBuf,
+    data_path: PathBuf,
+    variables: Vec<(String, usize)>,
+    seed: u64,
+) -> Result<String, EZKLError> {
+    let mut file = std::fs::File::open(&model_path).map_err(|e| {
+        crate::graph::errors::GraphError::ReadWriteFileError(
+            model_path.display().to_string(),
+            e.to_string(),
+        )
+    })?;
+
+    let (tract_model, _symbol_values) = Model::load_onnx_using_tract(&mut file, &variables)?;
+
+    let input_facts = tract_model
+        .input_outlets()
+        .map_err(|e| EZKLError::TractError(e.into()))?
+        .iter()
+        .map(|&i| tract_model.outlet_fact(i))
+        .collect::<tract_onnx::prelude::TractResult<Vec<_>>>()
+        .map_err(|e| EZKLError::TractError(e.into()))?;
+
+    /// Generates a random tensor of a given size and type.
+    fn random(
+        sizes: &[usize],
+        datum_type: tract_onnx::prelude::DatumType,
+        seed: u64,
+    ) -> TractTensor {
+        use rand::{Rng, SeedableRng};
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        let mut tensor = TractTensor::zero::<f32>(sizes).unwrap();
+        let slice = tensor.as_slice_mut::<f32>().unwrap();
+        slice.iter_mut().for_each(|x| *x = rng.gen());
+        tensor.cast_to_dt(datum_type).unwrap().into_owned()
+    }
+
+    fn tensor_for_fact(fact: &tract_onnx::prelude::TypedFact, seed: u64) -> TractTensor {
+        if let Some(value) = &fact.konst {
+            return value.clone().into_tensor();
+        }
+
+        random(
+            fact.shape
+                .as_concrete()
+                .expect("Expected concrete shape, found: {fact:?}"),
+            fact.datum_type,
+            seed,
+        )
+    }
+
+    let generated = input_facts
+        .iter()
+        .map(|v| tensor_for_fact(v, seed))
+        .collect_vec();
+
+    let data = GraphData::from_tract_data(&generated)?;
+
+    data.save(data_path)?;
+
     Ok(String::new())
 }
 
