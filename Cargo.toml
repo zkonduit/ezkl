@@ -91,7 +91,6 @@ pyo3-async-runtimes = { git = "https://github.com/PyO3/pyo3-async-runtimes", ver
 pyo3-log = { version = "0.12.0", default-features = false, optional = true }
 tract-onnx = { git = "https://github.com/sonos/tract/", rev = "37132e0397d0a73e5bd3a8615d932dabe44f6736", default-features = false, optional = true }
 tabled = { version = "0.12.0", optional = true }
-metal = { git = "https://github.com/gfx-rs/metal-rs", optional = true }
 objc = { version = "0.2.4", optional = true }
 mimalloc = { version = "0.1", optional = true }
 pyo3-stub-gen = { version = "0.6.0", optional = true }
@@ -230,7 +229,7 @@ default = [
 ]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-async-runtimes", "pyo3-stub-gen"]
-ios-bindings = ["mv-lookup", "precompute-coset", "parallel-poly-read", "uniffi"]
+ios-bindings = ["mv-lookup", "precompute-coset", "parallel-poly-read", "uniffi", "halo2_proofs/ios"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
     "onnx",
@@ -277,13 +276,13 @@ icicle = ["halo2_proofs/icicle_gpu"]
 empty-cmd = []
 no-banner = []
 no-update = []
-
+metal = ["halo2_proofs/macos"]
 
 [patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#ee4e1a09ebdb1f79f797685b78951c6034c430a6", package = "halo2_proofs" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#bf9d0057a82443be48c4779bbe14961c18fb5996", package = "halo2_proofs" }
 
 [patch.'https://github.com/zkonduit/halo2#0654e92bdf725fd44d849bfef3643870a8c7d50b']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#ee4e1a09ebdb1f79f797685b78951c6034c430a6", package = "halo2_proofs" }
+halo2_proofs = { git = "https://github.com/zkonduit/halo2#bf9d0057a82443be48c4779bbe14961c18fb5996", package = "halo2_proofs" }
 
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
