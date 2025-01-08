@@ -859,11 +859,11 @@ pub(crate) fn gen_random_data(
 
     let input_facts = tract_model
         .input_outlets()
-        .map_err(|e| EZKLError::TractError(e.into()))?
+        .map_err(|e| e.to_string().into())
         .iter()
         .map(|&i| tract_model.outlet_fact(i))
         .collect::<tract_onnx::prelude::TractResult<Vec<_>>>()
-        .map_err(|e| EZKLError::TractError(e.into()))?;
+        .map_err(|e| e.to_string().into())?;
 
     /// Generates a random tensor of a given size and type.
     fn random(
