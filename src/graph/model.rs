@@ -621,16 +621,18 @@ impl Model {
     /// * `scale` - The scale to use for quantization.
     /// * `public_params` - Whether to make the params public.
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    fn load_onnx_using_tract(
+    pub(crate) fn load_onnx_using_tract(
         reader: &mut dyn std::io::Read,
-        run_args: &RunArgs,
+        variables: &[(String, usize)],
     ) -> Result<TractResult, GraphError> {
         use tract_onnx::tract_hir::internal::GenericFactoid;
 
         let mut model = tract_onnx::onnx().model_for_read(reader)?;
 
         let variables: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::from_iter(run_args.variables.clone());
+            std::collections::HashMap::from_iter(
+                variables.into_iter().map(|(k, v)| (k.clone(), *v)),
+            );
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node_mut(id.node);
@@ -655,7 +657,7 @@ impl Model {
         }
 
         let mut symbol_values = SymbolValues::default();
-        for (symbol, value) in run_args.variables.iter() {
+        for (symbol, value) in variables.iter() {
             let symbol = model.symbols.sym(symbol);
             symbol_values = symbol_values.with(&symbol, *value as i64);
             debug!("set {} to {}", symbol, value);
@@ -683,7 +685,7 @@ impl Model {
     ) -> Result<ParsedNodes, GraphError> {
         let start_time = instant::Instant::now();
 
-        let (model, symbol_values) = Self::load_onnx_using_tract(reader, run_args)?;
+        let (model, symbol_values) = Self::load_onnx_using_tract(reader, &run_args.variables)?;
 
         let scales = VarScales::from_args(run_args);
         let nodes = Self::nodes_from_graph(
@@ -964,7 +966,7 @@ impl Model {
             GraphError::ReadWriteFileError(model_path.display().to_string(), e.to_string())
         })?;
 
-        let (model, _) = Model::load_onnx_using_tract(&mut file, run_args)?;
+        let (model, _) = Model::load_onnx_using_tract(&mut file, &run_args.variables)?;
 
         let datum_types: Vec<DatumType> = model
             .input_outlets()?

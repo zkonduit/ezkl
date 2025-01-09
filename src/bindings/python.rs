@@ -938,6 +938,45 @@ fn gen_settings(
     Ok(true)
 }
 
+/// Generates random data for the model
+///
+/// Arguments
+/// ---------
+/// model: str
+///     Path to the onnx file
+///
+/// output: str
+///     Path to create the data file
+///
+/// seed: int
+///     Random seed to use for generated data
+///
+/// variables
+/// Returns
+/// -------
+/// bool
+///
+#[pyfunction(signature = (
+    model=PathBuf::from(DEFAULT_MODEL),
+    output=PathBuf::from(DEFAULT_SETTINGS),
+    variables=Vec::from([("batch_size".to_string(), 1)]),
+    seed=DEFAULT_SEED.parse().unwrap(),
+))]
+#[gen_stub_pyfunction]
+fn gen_random_data(
+    model: PathBuf,
+    output: PathBuf,
+    variables: Vec<(String, usize)>,
+    seed: u64,
+) -> Result<bool, PyErr> {
+    crate::execute::gen_random_data(model, output, variables, seed).map_err(|e| {
+        let err_str = format!("Failed to generate settings: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
+
+    Ok(true)
+}
+
 /// Calibrates the circuit settings
 ///
 /// Arguments
@@ -2055,6 +2094,7 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_srs, m)?)?;
     m.add_function(wrap_pyfunction!(gen_witness, m)?)?;
     m.add_function(wrap_pyfunction!(gen_settings, m)?)?;
+    m.add_function(wrap_pyfunction!(gen_random_data, m)?)?;
     m.add_function(wrap_pyfunction!(calibrate_settings, m)?)?;
     m.add_function(wrap_pyfunction!(aggregate, m)?)?;
     m.add_function(wrap_pyfunction!(mock_aggregate, m)?)?;
