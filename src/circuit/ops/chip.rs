@@ -75,6 +75,16 @@ impl FromStr for CheckMode {
     }
 }
 
+impl CheckMode {
+    /// Returns the value of the check mode
+    pub fn is_safe(&self) -> bool {
+        match self {
+            CheckMode::SAFE => true,
+            CheckMode::UNSAFE => false,
+        }
+    }
+}
+
 #[allow(missing_docs)]
 /// An enum representing the tolerance we can accept for the accumulated arguments, either absolute or percentage
 #[derive(Clone, Default, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
