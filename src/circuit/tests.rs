@@ -1175,7 +1175,7 @@ mod conv_col_ultra_overflow {
 
     use super::*;
 
-    const K: usize = 4;
+    const K: usize = 6;
     const LEN: usize = 10;
 
     #[derive(Clone)]
@@ -1195,9 +1195,10 @@ mod conv_col_ultra_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN * LEN);
+            let _constant = VarTensor::constant_cols(cs, K, LEN * LEN * LEN * LEN, false);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
