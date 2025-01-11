@@ -281,7 +281,7 @@ impl GraphWitness {
 
         let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, file);
         let witness: GraphWitness =
-            serde_json::from_reader(reader).map_err(|e| Into::<GraphError>::into(e))?;
+            serde_json::from_reader(reader).map_err(Into::<GraphError>::into)?;
 
         // check versions match
         crate::check_version_string_matches(witness.version.as_deref().unwrap_or(""));
