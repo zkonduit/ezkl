@@ -6,17 +6,6 @@ on:
         description: "Test scenario tags"
 
 jobs:
-  bench_elgamal:
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2023-06-27
-          override: true
-          components: rustfmt, clippy
-      - name: Bench elgamal
-        run: cargo bench --verbose --bench elgamal
 
   bench_poseidon:
     runs-on: self-hosted

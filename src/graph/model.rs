@@ -630,9 +630,7 @@ impl Model {
         let mut model = tract_onnx::onnx().model_for_read(reader)?;
 
         let variables: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::from_iter(
-                variables.into_iter().map(|(k, v)| (k.clone(), *v)),
-            );
+            std::collections::HashMap::from_iter(variables.iter().map(|(k, v)| (k.clone(), *v)));
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node_mut(id.node);
