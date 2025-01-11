@@ -906,7 +906,6 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let window_b = assigned_sort.get_slice(&[1..assigned_sort.len()])?;
 
     let is_greater = greater_equal(config, region, &[window_b.clone(), window_a.clone()])?;
-
     let unit = create_unit_tensor(is_greater.len());
 
     enforce_equality(config, region, &[unit, is_greater])?;
@@ -2381,25 +2380,6 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     lhs.expand(&broadcasted_shape)?;
     rhs.expand(&broadcasted_shape)?;
 
-    // original values
-    let orig_lhs = lhs.clone();
-    let orig_rhs = rhs.clone();
-
-    let first_zero_indices = HashSet::from_iter(lhs.get_const_zero_indices());
-    let second_zero_indices = HashSet::from_iter(rhs.get_const_zero_indices());
-
-    let removal_indices = match op {
-        BaseOp::Add | BaseOp::Mult => {
-            // join the zero indices
-            first_zero_indices
-                .union(&second_zero_indices)
-                .cloned()
-                .collect()
-        }
-        BaseOp::Sub => second_zero_indices.clone(),
-        _ => return Err(CircuitError::UnsupportedOp),
-    };
-
     if lhs.len() != rhs.len() {
         return Err(CircuitError::DimMismatch(format!(
             "pairwise {} layout",
@@ -2411,11 +2391,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         .iter()
         .enumerate()
         .map(|(i, input)| {
-            let res = region.assign_with_omissions(
-                &config.custom_gates.inputs[i],
-                input,
-                &removal_indices,
-            )?;
+            let res = region.assign(&config.custom_gates.inputs[i], input)?;
 
             Ok(res.get_inner()?)
         })
@@ -2434,12 +2410,8 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         halo2_proofs::plonk::Error::Synthesis
     })?;
 
-    let assigned_len = op_result.len() - removal_indices.len();
-    let mut output = region.assign_with_omissions(
-        &config.custom_gates.output,
-        &op_result.into(),
-        &removal_indices,
-    )?;
+    let assigned_len = op_result.len();
+    let mut output = region.assign(&config.custom_gates.output, &op_result.into())?;
 
     // Enable the selectors
     if !region.is_dummy() {
@@ -2456,44 +2428,6 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
             .collect::<Result<Vec<_>, CircuitError>>()?;
     }
     region.increment(assigned_len);
-
-    let a_tensor = orig_lhs.get_inner_tensor()?;
-    let b_tensor = orig_rhs.get_inner_tensor()?;
-
-    // infill the zero indices with the correct values from values[0] or values[1]
-    if !removal_indices.is_empty() {
-        output
-            .get_inner_tensor_mut()?
-            .par_enum_map_mut_filtered(&removal_indices, |i| {
-                let val = match op {
-                    BaseOp::Add => {
-                        let a_is_null = first_zero_indices.contains(&i);
-                        let b_is_null = second_zero_indices.contains(&i);
-
-                        if a_is_null && b_is_null {
-                            ValType::Constant(F::ZERO)
-                        } else if a_is_null {
-                            b_tensor[i].clone()
-                        } else {
-                            a_tensor[i].clone()
-                        }
-                    }
-                    BaseOp::Sub => {
-                        let a_is_null = first_zero_indices.contains(&i);
-                        // by default b is null in this case for sub
-                        if a_is_null {
-                            ValType::Constant(F::ZERO)
-                        } else {
-                            a_tensor[i].clone()
-                        }
-                    }
-                    BaseOp::Mult => ValType::Constant(F::ZERO),
-                    // can safely panic as the prior check ensures this is not called
-                    _ => unreachable!(),
-                };
-                Ok::<_, TensorError>(val)
-            })?;
-    }
 
     output.reshape(&broadcasted_shape)?;
 
@@ -2607,7 +2541,8 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let diff = pairwise(config, region, &[lhs, rhs], BaseOp::Sub)?;
     let sign = sign(config, region, &[diff])?;
-    equals(config, region, &[sign, create_unit_tensor(1)])
+    let eq = equals(config, region, &[sign, create_unit_tensor(1)])?;
+    Ok(eq)
 }
 
 /// Greater equals than operation.
@@ -2881,6 +2816,7 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 ) -> Result<ValTensor<F>, CircuitError> {
     let values = values[0].clone();
     let values_inverse = values.inverse()?;
+
     let product_values_and_invert = pairwise(
         config,
         region,
@@ -3249,32 +3185,30 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    output
-        .iter_mut()
-        .enumerate()
-        .map(|(flat_index, o)| {
-            let coord = &cartesian_coord[flat_index];
-            let (b, i) = (coord[0], coord[1]);
+    let inner_loop_function = |idx: usize, region: &mut RegionCtx<F>| {
+        let coord = &cartesian_coord[idx];
+        let (b, i) = (coord[0], coord[1]);
 
-            let mut slice = vec![b..b + 1, i..i + 1];
-            slice.extend(
-                coord[2..]
-                    .iter()
-                    .zip(stride.iter())
-                    .zip(pool_dims.iter())
-                    .map(|((c, s), k)| {
-                        let start = c * s;
-                        let end = start + k;
-                        start..end
-                    }),
-            );
+        let mut slice = vec![b..b + 1, i..i + 1];
+        slice.extend(
+            coord[2..]
+                .iter()
+                .zip(stride.iter())
+                .zip(pool_dims.iter())
+                .map(|((c, s), k)| {
+                    let start = c * s;
+                    let end = start + k;
+                    start..end
+                }),
+        );
 
-            let slice = padded_image.get_slice(&slice)?;
-            let max_w = max(config, region, &[slice])?;
-            *o = max_w.get_inner_tensor()?[0].clone();
-            Ok(())
-        })
-        .collect::<Result<Vec<_>, CircuitError>>()?;
+        let slice = padded_image.get_slice(&slice)?;
+        let max_w = max(config, region, &[slice])?;
+
+        Ok::<_, CircuitError>(max_w.get_inner_tensor()?[0].clone())
+    };
+
+    region.apply_in_loop(&mut output, inner_loop_function)?;
 
     let res: ValTensor<F> = output.into();
 
@@ -4340,10 +4274,7 @@ pub(crate) fn max<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let input_len = values[0].len();
-    _sort_ascending(config, region, values)?
-        .get_slice(&[input_len - 1..input_len])
-        .map_err(|e| e.into())
+    Ok(_sort_ascending(config, region, values)?.last()?)
 }
 
 /// min layout
@@ -4352,9 +4283,7 @@ pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
-    _sort_ascending(config, region, values)?
-        .get_slice(&[0..1])
-        .map_err(|e| e.into())
+    Ok(_sort_ascending(config, region, values)?.first()?)
 }
 
 /// floor layout
