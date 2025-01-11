@@ -558,7 +558,7 @@ impl VarTensor {
 
                 // duplicates every nth element to adjust for column overflow
                 let v = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
-                let mut res: ValTensor<F> = {
+                let mut res: ValTensor<F> =
                     v.enum_map(|coord, k| {
 
                     let step = self.num_inner_cols();
@@ -579,12 +579,18 @@ impl VarTensor {
                         prev_cell = Some(cell.clone());
                     } else if coord > 0 && at_beginning_of_column  {
                         if let Some(prev_cell) = prev_cell.as_ref() {
-                            let cell = cell.cell().ok_or({
+                            let cell = if let Some(cell) = cell.cell() {
+                                cell
+                            } else {
                                 error!("Error getting cell: {:?}", (x,y));
-                                halo2_proofs::plonk::Error::Synthesis})?;
-                            let prev_cell = prev_cell.cell().ok_or({
-                                error!("Error getting cell: {:?}", (x,y));
-                                halo2_proofs::plonk::Error::Synthesis})?;
+                                return Err(halo2_proofs::plonk::Error::Synthesis);
+                            };
+                            let prev_cell = if let Some(prev_cell) = prev_cell.cell() {
+                                prev_cell
+                            } else {
+                                error!("Error getting prev cell: {:?}", (x,y));
+                                return Err(halo2_proofs::plonk::Error::Synthesis);
+                            };
                             region.constrain_equal(prev_cell,cell)?;
                         } else {
                             error!("Previous cell was not set");
@@ -594,7 +600,8 @@ impl VarTensor {
 
                     Ok(cell)
 
-                })?.into()};
+                })?.into();
+
                 let total_used_len = res.len();
                 res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
 
