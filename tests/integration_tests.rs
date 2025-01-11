@@ -205,7 +205,7 @@ mod native_tests {
         "1l_tiny_div",
     ];
 
-    const TESTS: [&str; 98] = [
+    const TESTS: [&str; 99] = [
         "1l_mlp", //0
         "1l_slice",
         "1l_concat",
@@ -308,6 +308,7 @@ mod native_tests {
         "log",         // 95
         "exp",         // 96
         "general_exp", // 97
+        "fr_age",      // 98
     ];
 
     const WASM_TESTS: [&str; 46] = [
@@ -546,7 +547,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=97 {
+            seq!(N in 0..=98 {
 
             #(#[test_case(TESTS[N])])*
             #[ignore]
