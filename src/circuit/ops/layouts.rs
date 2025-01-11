@@ -404,22 +404,6 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let mut values = values.clone();
 
-    // this section has been optimized to death, don't mess with it
-    let mut removal_indices = values[0].get_const_zero_indices();
-    let second_zero_indices = values[1].get_const_zero_indices();
-    removal_indices.extend(second_zero_indices);
-    removal_indices.par_sort_unstable();
-    removal_indices.dedup();
-
-    // if empty return a const
-    if removal_indices.len() == values[0].len() {
-        return Ok(create_zero_tensor(1));
-    }
-
-    // is already sorted
-    values[0].remove_indices(&mut removal_indices, true)?;
-    values[1].remove_indices(&mut removal_indices, true)?;
-
     let mut inputs = vec![];
     let block_width = config.custom_gates.output.num_inner_cols();
 
