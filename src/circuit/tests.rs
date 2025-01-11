@@ -1040,6 +1040,10 @@ mod conv {
             let a = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
             let b = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
             let output = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
+
+            // column for constants
+            let _constant = VarTensor::constant_cols(cs, K, 8, false);
+
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
