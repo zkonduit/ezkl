@@ -47,7 +47,8 @@ jobs:
 
       - name: Copy Test Files
         run: |
-          rm -rf ezkl-swift-package/Tests/EzklAssets/*
+          rm -rf ezkl-swift-package/Tests/EzklAssets/
+          mkdir -p ezkl-swift-package/Tests/EzklAssets/
           cp tests/assets/kzg ezkl-swift-package/Tests/EzklAssets/kzg.srs
           cp tests/assets/input.json ezkl-swift-package/Tests/EzklAssets/input.json
           cp tests/assets/model.compiled ezkl-swift-package/Tests/EzklAssets/network.ezkl
