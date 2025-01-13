@@ -1038,15 +1038,15 @@ impl Model {
             base_gate.configure_dynamic_lookup(
                 meta,
                 vars.advices[0..3].try_into()?,
-                vars.advices[3..6].try_into()?,
+                vars.get_dynamic_col_advice()[..].try_into()?,
             )?;
         }
 
         if settings.requires_shuffle() {
             base_gate.configure_shuffles(
                 meta,
-                vars.advices[0..2].try_into()?,
-                vars.advices[3..5].try_into()?,
+                vars.get_shuffle_col_input()[..].try_into()?,
+                vars.get_shuffle_col_reference()[..].try_into()?,
             )?;
         }
 

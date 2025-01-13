@@ -1251,7 +1251,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
                 let input_selector = config
                     .shuffles
                     .input_selectors
-                    .get(&(shuffle_block, (x, y)))
+                    .get(&(shuffle_block, x))
                     .ok_or(CircuitError::MissingSelectors(format!("{:?}", (x, y))))?;
 
                 region.enable(Some(input_selector), z)?;
