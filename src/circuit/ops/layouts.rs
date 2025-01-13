@@ -160,8 +160,18 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .into()
     };
     claimed_output.reshape(input_dims)?;
-    region.assign(&config.custom_gates.output, &claimed_output)?;
+    let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
     region.increment(claimed_output.len());
+
+    {
+        // ascertain that claimed output is less than integer_rep::MAX
+        let abs_value = abs(config, region, &[claimed_output.clone()])?;
+        let max_val = create_constant_tensor(integer_rep_to_felt(IntegerRep::MAX), 1);
+        let less_than_max = less(config, region, &[claimed_output.clone(), max_val])?;
+        // assert the result is 1
+        let comparison_unit = create_constant_tensor(F::ONE, less_than_max.len());
+        enforce_equality(config, region, &[abs_value, comparison_unit])?;
+    }
 
     let product = pairwise(
         config,
@@ -211,6 +221,16 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     claimed_output.reshape(input_dims)?;
     let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
     region.increment(claimed_output.len());
+
+    {
+        // ascertain that claimed output is less than integer_rep::MAX
+        let abs_value = abs(config, region, &[claimed_output.clone()])?;
+        let max_val = create_constant_tensor(integer_rep_to_felt(IntegerRep::MAX), 1);
+        let less_than_max = less(config, region, &[claimed_output.clone(), max_val])?;
+        // assert the result is 1
+        let comparison_unit = create_constant_tensor(F::ONE, less_than_max.len());
+        enforce_equality(config, region, &[abs_value, comparison_unit])?;
+    }
 
     // divide by input_scale
     let zero_inverse_val =
@@ -5180,6 +5200,23 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     let rest = claimed_output.get_slice(&rest_slice)?;
 
     let sign = range_check(config, region, &[sign], &(-1, 1))?;
+
+    // isZero(input) * sign == 0.
+    {
+        let is_zero = equals_zero(config, region, &[input.clone()])?;
+        // take the product of the sign and is_zero
+        let sign_is_zero = pairwise(config, region, &[sign.clone(), is_zero], BaseOp::Mult)?;
+        // constrain the sign_is_zero to be 0
+        enforce_equality(
+            config,
+            region,
+            &[
+                sign_is_zero.clone(),
+                create_constant_tensor(F::ZERO, sign_is_zero.len()),
+            ],
+        )?;
+    }
+
     let rest = range_check(config, region, &[rest], &(0, (*base - 1) as i128))?;
 
     // equation needs to be constructed as ij,ij->i but for arbitrary n dims we need to construct this dynamically

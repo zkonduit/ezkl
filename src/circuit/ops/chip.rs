@@ -374,6 +374,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
         if inputs[0].num_cols() != output.num_cols() {
             log::warn!("input and output shapes do not match");
         }
+        if inputs[0].num_inner_cols() != inputs[1].num_inner_cols() {
+            log::warn!("input number of inner columns do not match");
+        }
+        if inputs[0].num_inner_cols() != output.num_inner_cols() {
+            log::warn!("input and output number of inner columns do not match");
+        }
 
         for i in 0..output.num_blocks() {
             for j in 0..output.num_inner_cols() {
@@ -780,7 +786,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                 for y in 0..inputs[0].num_inner_cols() {
                     let s_input = cs.complex_selector();
 
-                    cs.lookup_any("lookup", |cs| {
+                    cs.shuffle("shuffle", |cs| {
                         let s_inputq = cs.query_selector(s_input);
                         let mut expression = vec![];
                         let s_referenceq = cs.query_selector(s_reference);
