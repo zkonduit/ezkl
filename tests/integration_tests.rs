@@ -187,13 +187,14 @@ mod native_tests {
 
     const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr_proof.json";
 
-    const LARGE_TESTS: [&str; 6] = [
+    const LARGE_TESTS: [&str; 7] = [
         "self_attention",
         "nanoGPT",
         "multihead_attention",
         "mobilenet",
         "mnist_gan",
         "smallworm",
+        "fr_age",
     ];
 
     const ACCURACY_CAL_TESTS: [&str; 6] = [
@@ -205,7 +206,7 @@ mod native_tests {
         "1l_tiny_div",
     ];
 
-    const TESTS: [&str; 99] = [
+    const TESTS: [&str; 98] = [
         "1l_mlp", //0
         "1l_slice",
         "1l_concat",
@@ -308,7 +309,6 @@ mod native_tests {
         "log",         // 95
         "exp",         // 96
         "general_exp", // 97
-        "fr_age",      // 98
     ];
 
     const WASM_TESTS: [&str; 46] = [
@@ -547,7 +547,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=98 {
+            seq!(N in 0..=97 {
 
             #(#[test_case(TESTS[N])])*
             #[ignore]
@@ -964,7 +964,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=5 {
+            seq!(N in 0..=6 {
 
             #(#[test_case(LARGE_TESTS[N])])*
             #[ignore]
