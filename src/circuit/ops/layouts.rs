@@ -222,16 +222,6 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
     region.increment(claimed_output.len());
 
-    {
-        // ascertain that claimed output is less than integer_rep::MAX
-        let abs_value = abs(config, region, &[claimed_output.clone()])?;
-        let max_val = create_constant_tensor(integer_rep_to_felt(IntegerRep::MAX), 1);
-        let less_than_max = less(config, region, &[claimed_output.clone(), max_val])?;
-        // assert the result is 1
-        let comparison_unit = create_constant_tensor(F::ONE, less_than_max.len());
-        enforce_equality(config, region, &[abs_value, comparison_unit])?;
-    }
-
     // divide by input_scale
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64)[0];
@@ -254,6 +244,23 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         region,
         &[equal_zero_mask.clone(), equal_inverse_mask],
     )?;
+
+    let masked_output = pairwise(
+        config,
+        region,
+        &[claimed_output.clone(), not_equal_zero_mask.clone()],
+        BaseOp::Mult,
+    )?;
+
+    {
+        // ascertain that claimed output is less than integer_rep::MAX
+        let abs_value = abs(config, region, &[masked_output.clone()])?;
+        let max_val = create_constant_tensor(integer_rep_to_felt(IntegerRep::MAX), 1);
+        let less_than_max = less(config, region, &[masked_output.clone(), max_val])?;
+        // assert the result is 1
+        let comparison_unit = create_constant_tensor(F::ONE, less_than_max.len());
+        enforce_equality(config, region, &[abs_value, comparison_unit])?;
+    }
 
     let err_func = |config: &BaseConfig<F>,
                     region: &mut RegionCtx<F>,
