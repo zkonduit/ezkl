@@ -27,7 +27,7 @@ pub fn get_rep(
     n: usize,
 ) -> Result<Vec<IntegerRep>, DecompositionError> {
     // check if x is too large
-    if x.abs() > (base.pow(n as u32) as IntegerRep) - 1 {
+    if (*x as i128).abs() > ((base as i128).pow(n as u32)) - 1 {
         return Err(DecompositionError::TooLarge(*x, base, n));
     }
     let mut rep = vec![0; n + 1];
@@ -43,8 +43,8 @@ pub fn get_rep(
     let mut x = x.abs();
     //
     for i in (1..rep.len()).rev() {
-        rep[i] = x % base as i128;
-        x /= base as i128;
+        rep[i] = x % base as IntegerRep;
+        x /= base as IntegerRep;
     }
 
     Ok(rep)
@@ -127,7 +127,7 @@ pub fn decompose(
         .flatten()
         .collect::<Vec<IntegerRep>>();
 
-    let output = Tensor::<i128>::new(Some(&resp), &dims)?;
+    let output = Tensor::<IntegerRep>::new(Some(&resp), &dims)?;
 
     Ok(output)
 }

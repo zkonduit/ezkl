@@ -80,7 +80,7 @@ pub const MAX_NUM_LOOKUP_COLS: usize = 12;
 
 /// Max representation of a lookup table input
 pub const MAX_LOOKUP_ABS: IntegerRep =
-    (MAX_NUM_LOOKUP_COLS as IntegerRep) * 2_i128.pow(MAX_PUBLIC_SRS);
+    (MAX_NUM_LOOKUP_COLS as IntegerRep) * 2_i64.pow(MAX_PUBLIC_SRS);
 
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 lazy_static! {
