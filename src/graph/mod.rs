@@ -80,7 +80,7 @@ pub const MAX_NUM_LOOKUP_COLS: usize = 12;
 
 /// Max representation of a lookup table input
 pub const MAX_LOOKUP_ABS: IntegerRep =
-    (MAX_NUM_LOOKUP_COLS as IntegerRep) * 2_i128.pow(MAX_PUBLIC_SRS);
+    (MAX_NUM_LOOKUP_COLS as IntegerRep) * 2_i64.pow(MAX_PUBLIC_SRS);
 
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 lazy_static! {
@@ -485,23 +485,20 @@ impl GraphSettings {
         (max_range as f32).log2().ceil() as u32
     }
 
+    fn dynamic_lookup_logrows_with_blinding(&self) -> u32 {
+        (self.max_dynamic_input_len as f64 + RESERVED_BLINDING_ROWS as f64)
+            .log2()
+            .ceil() as u32
+    }
+
+    fn shuffle_logrows_with_blinding(&self) -> u32 {
+        (self.total_shuffle_col_size as f64 + RESERVED_BLINDING_ROWS as f64)
+            .log2()
+            .ceil() as u32
+    }
+
     fn model_constraint_logrows_with_blinding(&self) -> u32 {
         (self.num_rows as f64 + RESERVED_BLINDING_ROWS as f64)
-            .log2()
-            .ceil() as u32
-    }
-
-    fn dynamic_lookup_and_shuffle_logrows(&self) -> u32 {
-        (self.total_dynamic_col_size as f64 + self.total_shuffle_col_size as f64)
-            .log2()
-            .ceil() as u32
-    }
-
-    /// calculate the number of rows required for the dynamic lookup and shuffle
-    pub fn dynamic_lookup_and_shuffle_logrows_with_blinding(&self) -> u32 {
-        (self.total_dynamic_col_size as f64
-            + self.total_shuffle_col_size as f64
-            + RESERVED_BLINDING_ROWS as f64)
             .log2()
             .ceil() as u32
     }
@@ -511,10 +508,6 @@ impl GraphSettings {
         (self.max_dynamic_input_len as f64 + RESERVED_BLINDING_ROWS as f64)
             .log2()
             .ceil() as u32
-    }
-
-    fn dynamic_lookup_and_shuffle_col_size(&self) -> usize {
-        self.total_dynamic_col_size + self.total_shuffle_col_size
     }
 
     /// calculate the number of rows required for the module constraints
@@ -1171,8 +1164,10 @@ impl GraphCircuit {
 
         // These are hard lower limits, we can't overflow instances or modules constraints
         let instance_logrows = self.settings().log2_total_instances();
-        let module_constraint_logrows = self.settings().module_constraint_logrows();
-        let dynamic_lookup_logrows = self.settings().dynamic_lookup_and_shuffle_logrows();
+        let module_constraint_logrows = self.settings().module_constraint_logrows_with_blinding();
+        let dynamic_lookup_logrows = self.settings().dynamic_lookup_logrows_with_blinding();
+        let shuffle_logrows = self.settings().shuffle_logrows_with_blinding();
+
         min_logrows = std::cmp::max(
             min_logrows,
             // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit
@@ -1180,6 +1175,7 @@ impl GraphCircuit {
                 instance_logrows,
                 module_constraint_logrows,
                 dynamic_lookup_logrows,
+                shuffle_logrows,
             ]
             .iter()
             .max()

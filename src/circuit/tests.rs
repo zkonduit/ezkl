@@ -1040,6 +1040,10 @@ mod conv {
             let a = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
             let b = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
             let output = VarTensor::new_advice(cs, K, 1, (LEN + 1) * LEN);
+
+            // column for constants
+            let _constant = VarTensor::constant_cols(cs, K, 8, false);
+
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -1171,7 +1175,7 @@ mod conv_col_ultra_overflow {
 
     use super::*;
 
-    const K: usize = 4;
+    const K: usize = 6;
     const LEN: usize = 10;
 
     #[derive(Clone)]
@@ -1191,9 +1195,10 @@ mod conv_col_ultra_overflow {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
-            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN * LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN * LEN);
+            let output = VarTensor::new_advice(cs, K, 1, LEN * LEN * LEN * LEN);
+            let _constant = VarTensor::constant_cols(cs, K, LEN * LEN * LEN * LEN, false);
             Self::Config::configure(cs, &[a, b], &output, CheckMode::SAFE)
         }
 
@@ -1750,7 +1755,7 @@ mod shuffle {
     use super::*;
 
     const K: usize = 6;
-    const LEN: usize = 4;
+    const LEN: usize = 6;
     const NUM_LOOP: usize = 5;
 
     #[derive(Clone)]
@@ -1770,9 +1775,9 @@ mod shuffle {
         }
 
         fn configure(cs: &mut ConstraintSystem<F>) -> Self::Config {
-            let a = VarTensor::new_advice(cs, K, 2, LEN);
-            let b = VarTensor::new_advice(cs, K, 2, LEN);
-            let c: VarTensor = VarTensor::new_advice(cs, K, 2, LEN);
+            let a = VarTensor::new_advice(cs, K, 1, LEN);
+            let b = VarTensor::new_advice(cs, K, 1, LEN);
+            let c: VarTensor = VarTensor::new_advice(cs, K, 1, LEN);
 
             let d = VarTensor::new_advice(cs, K, 1, LEN);
             let e = VarTensor::new_advice(cs, K, 1, LEN);
@@ -1826,7 +1831,7 @@ mod shuffle {
         let references = (0..NUM_LOOP)
             .map(|loop_idx| {
                 [ValTensor::from(Tensor::from((0..LEN).map(|i| {
-                    Value::known(F::from((i * loop_idx) as u64 + 1))
+                    Value::known(F::from((i * (loop_idx + 1)) as u64))
                 })))]
             })
             .collect::<Vec<_>>();
@@ -1834,7 +1839,7 @@ mod shuffle {
         let inputs = (0..NUM_LOOP)
             .map(|loop_idx| {
                 [ValTensor::from(Tensor::from((0..LEN).rev().map(|i| {
-                    Value::known(F::from((i * loop_idx) as u64 + 1))
+                    Value::known(F::from((i * (loop_idx + 1)) as u64))
                 })))]
             })
             .collect::<Vec<_>>();

@@ -600,23 +600,19 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         }
     }
 
-    ///
-    pub fn combined_dynamic_shuffle_coord(&self) -> usize {
-        self.dynamic_lookup_col_coord() + self.shuffle_col_coord()
-    }
-
     /// Assign a valtensor to a vartensor
-    pub fn assign_dynamic_lookup(
+    fn assign_no_overflow_lookups(
         &mut self,
         var: &VarTensor,
         values: &ValTensor<F>,
+        offset: usize,
     ) -> Result<(ValTensor<F>, usize), CircuitError> {
         self.update_max_dynamic_input_len(values.len());
 
         if let Some(region) = &self.region {
             Ok(var.assign_exact_column(
                 &mut region.borrow_mut(),
-                self.combined_dynamic_shuffle_coord(),
+                offset,
                 values,
                 &mut self.assigned_constants,
             )?)
@@ -626,11 +622,21 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
                 self.assigned_constants.par_extend(values_map);
             }
 
-            let flush_len = var.get_column_flush(self.combined_dynamic_shuffle_coord(), values)?;
+            let flush_len = var.get_column_flush(offset, values)?;
 
             // get the diff between the current column and the next row
             Ok((values.clone(), flush_len))
         }
+    }
+
+    /// Assign a valtensor to a vartensor
+    pub fn assign_dynamic_lookup(
+        &mut self,
+        var: &VarTensor,
+        values: &ValTensor<F>,
+    ) -> Result<(ValTensor<F>, usize), CircuitError> {
+        self.update_max_dynamic_input_len(values.len());
+        self.assign_no_overflow_lookups(var, values, self.dynamic_lookup_col_coord())
     }
 
     /// Assign a valtensor to a vartensor
@@ -639,7 +645,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         var: &VarTensor,
         values: &ValTensor<F>,
     ) -> Result<(ValTensor<F>, usize), CircuitError> {
-        self.assign_dynamic_lookup(var, values)
+        self.update_max_dynamic_input_len(values.len());
+        self.assign_no_overflow_lookups(var, values, self.shuffle_col_coord())
     }
 
     /// Assign a valtensor to a vartensor
