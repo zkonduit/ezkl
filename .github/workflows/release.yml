@@ -50,6 +50,9 @@ jobs:
           components: rustfmt, clippy
       - name: Checkout repo
         uses: actions/checkout@v4
+        with: 
+          persist-credentials: false
+
 
       - name: Get release version from tag
         shell: bash
@@ -132,6 +135,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with: 
+          persist-credentials: false
 
       - name: Get release version from tag
         shell: bash
