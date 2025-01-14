@@ -37,6 +37,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -49,6 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -61,6 +65,8 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -84,6 +90,8 @@ jobs:
   #     ENABLE_ICICLE_GPU: true
   #   steps:
   #     - uses: actions/checkout@v4
+        # with:
+        #   persist-credentials: false
   #     - uses: actions-rs/toolchain@v1
   #       with:
   #         toolchain: nightly-2024-07-18
@@ -117,6 +125,8 @@ jobs:
     runs-on: non-gpu
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -150,6 +160,8 @@ jobs:
     runs-on: non-gpu
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -183,6 +195,8 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -199,6 +213,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -225,6 +241,8 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -288,6 +306,8 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -298,6 +318,8 @@ jobs:
           crate: cargo-nextest
           locked: true
       - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
       - name: Use pnpm 8
         uses: pnpm/action-setup@v2
         with:
@@ -367,6 +389,8 @@ jobs:
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -382,6 +406,8 @@ jobs:
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
       - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
       - name: Use pnpm 8
         uses: pnpm/action-setup@v2
         with:
@@ -444,6 +470,8 @@ jobs:
   #     ENABLE_ICICLE_GPU: true
   #   steps:
   #     - uses: actions/checkout@v4
+        # with:
+        #   persist-credentials: false
   #     - uses: actions-rs/toolchain@v1
   #       with:
   #         toolchain: nightly-2024-07-18
@@ -478,6 +506,8 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -496,6 +526,8 @@ jobs:
   #     ENABLE_ICICLE_GPU: true
   #   steps:
   #     - uses: actions/checkout@v4
+        # with:
+        #   persist-credentials: false
   #     - uses: actions-rs/toolchain@v1
   #       with:
   #         toolchain: nightly-2024-07-18
@@ -513,6 +545,8 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -530,6 +564,8 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -551,6 +587,8 @@ jobs:
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
@@ -568,6 +606,8 @@ jobs:
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v4
         with:
           python-version: "3.12"
@@ -594,6 +634,8 @@ jobs:
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v4
         with:
           python-version: "3.12"
@@ -641,6 +683,8 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v4
         with:
           python-version: "3.11"
@@ -693,6 +737,8 @@ jobs:
       runs-on: macos-latest
       steps:
         - uses: actions/checkout@v4
+          with:
+            persist-credentials: false
         - uses: actions-rs/toolchain@v1
           with:
             toolchain: nightly-2024-07-18
@@ -711,6 +757,8 @@ jobs:
 
       steps:
         - uses: actions/checkout@v4
+          with:
+            persist-credentials: false
         - uses: actions-rs/toolchain@v1
           with:
             toolchain: nightly-2024-07-18
@@ -727,6 +775,15 @@ jobs:
           run: |
             rm -rf ezkl-swift-package/Sources/EzklCoreBindings
             cp -r build/EzklCoreBindings ezkl-swift-package/Sources/
+
+        - name: Copy Test Files
+          run: |
+            rm -rf ezkl-swift-package/Tests/EzklAssets/
+            mkdir -p ezkl-swift-package/Tests/EzklAssets/
+            cp tests/assets/kzg ezkl-swift-package/Tests/EzklAssets/kzg.srs
+            cp tests/assets/input.json ezkl-swift-package/Tests/EzklAssets/input.json
+            cp tests/assets/model.compiled ezkl-swift-package/Tests/EzklAssets/network.ezkl
+            cp tests/assets/settings.json ezkl-swift-package/Tests/EzklAssets/settings.json
 
         - name: Set up Xcode environment
           run: |

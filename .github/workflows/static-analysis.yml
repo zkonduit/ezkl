@@ -1,0 +1,32 @@
+name: Static Analysis
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-07-18
+          override: true
+          components: rustfmt, clippy
+
+      # Run Zizmor static analysis
+
+      - name: Install Zizmor
+        run: cargo install --locked zizmor
+
+      - name: Run Zizmor Analysis
+        run: zizmor .
+
+
+    
