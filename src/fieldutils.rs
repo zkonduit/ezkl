@@ -3,7 +3,7 @@ use halo2_proofs::arithmetic::Field;
 use halo2curves::ff::PrimeField;
 
 /// Integer representation of a PrimeField element.
-pub type IntegerRep = i64;
+pub type IntegerRep = i128;
 
 /// Converts an integer rep to a PrimeField element.
 pub fn integer_rep_to_felt<F: PrimeField>(x: IntegerRep) -> F {
@@ -55,19 +55,19 @@ mod test {
         let res: F = integer_rep_to_felt(-15);
         assert_eq!(res, -F::from(15));
 
-        let res: F = integer_rep_to_felt(2_i64.pow(17));
+        let res: F = integer_rep_to_felt(2_i128.pow(17));
         assert_eq!(res, F::from(131072));
 
         let res: F = integer_rep_to_felt(-15);
         assert_eq!(res, -F::from(15));
 
-        let res: F = integer_rep_to_felt(2_i64.pow(17));
+        let res: F = integer_rep_to_felt(2_i128.pow(17));
         assert_eq!(res, F::from(131072));
     }
 
     #[test]
     fn felttointegerrep() {
-        for x in -(2_i64.pow(16))..(2_i64.pow(16)) {
+        for x in -(2_i128.pow(16))..(2_i128.pow(16)) {
             let fieldx: F = integer_rep_to_felt::<F>(x);
             let xf: IntegerRep = felt_to_integer_rep::<F>(fieldx);
             assert_eq!(x, xf);

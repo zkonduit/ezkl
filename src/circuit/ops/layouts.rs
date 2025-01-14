@@ -166,7 +166,7 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // here we decompose and extract the sign of the input
     let sign = sign(config, region, &[claimed_output.clone()])?;
     // check if x is too large only if the decomp would support overflow in the previous op
-    if (IntegerRep::MAX as i128).abs() < ((region.base() as i128).pow(region.legs() as u32)) - 1 {
+    if (IntegerRep::MAX).abs() < ((region.base() as i128).pow(region.legs() as u32)) - 1 {
         let abs_value = pairwise(
             config,
             region,
@@ -262,7 +262,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // here we decompose and extract the sign of the input
     let sign = sign(config, region, &[masked_output.clone()])?;
     // check if x is too large only if the decomp would support overflow in the previous op
-    if (IntegerRep::MAX as i128).abs() < ((region.base() as i128).pow(region.legs() as u32)) - 1 {
+    if (IntegerRep::MAX).abs() < ((region.base() as i128).pow(region.legs() as u32)) - 1 {
         let abs_value = pairwise(
             config,
             region,

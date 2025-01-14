@@ -27,7 +27,7 @@ pub fn get_rep(
     n: usize,
 ) -> Result<Vec<IntegerRep>, DecompositionError> {
     // check if x is too large
-    if (*x as i128).abs() > ((base as i128).pow(n as u32)) - 1 {
+    if (*x).abs() > ((base as i128).pow(n as u32)) - 1 {
         return Err(DecompositionError::TooLarge(*x, base, n));
     }
     let mut rep = vec![0; n + 1];
