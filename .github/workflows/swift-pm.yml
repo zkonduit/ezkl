@@ -12,15 +12,18 @@ jobs:
     runs-on: macos-latest
     env:
       EZKL_SWIFT_PACKAGE_REPO: github.com/zkonduit/ezkl-swift-package.git
+      RELEASE_TAG: ${{ github.ref_name }}
 
     steps:
       - name: Checkout EZKL
         uses: actions/checkout@v3
+        with: 
+          persist-credentials: false
 
       - name: Extract TAG from github.ref_name
         run: |
           # github.ref_name is provided by GitHub Actions and contains the tag name directly.
-          TAG="${{ github.ref_name }}"
+          TAG="${RELEASE_TAG}"
           echo "Original TAG: $TAG"
           # Remove leading 'v' if present to match the Swift Package Manager version format.
           NEW_TAG=${TAG#v}
@@ -106,7 +109,6 @@ jobs:
           cd ezkl-swift-package
           git add Sources/EzklCoreBindings Tests/EzklAssets
           git commit -m "Automatically updated EzklCoreBindings for EZKL"
-          
           if ! git push origin; then
             echo "::error::Failed to push changes to ${{ env.EZKL_SWIFT_PACKAGE_REPO }}. Please ensure that EZKL_PORTER_TOKEN has the correct permissions."
             exit 1
@@ -116,7 +118,6 @@ jobs:
         run: |
           cd ezkl-swift-package
           source $GITHUB_ENV
-          
           # Tag the latest commit on the current branch
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists locally. Skipping tag creation."
