@@ -715,6 +715,15 @@ jobs:
             rm -rf ezkl-swift-package/Sources/EzklCoreBindings
             cp -r build/EzklCoreBindings ezkl-swift-package/Sources/
 
+        - name: Copy Test Files
+          run: |
+            rm -rf ezkl-swift-package/Tests/EzklAssets/
+            mkdir -p ezkl-swift-package/Tests/EzklAssets/
+            cp tests/assets/kzg ezkl-swift-package/Tests/EzklAssets/kzg.srs
+            cp tests/assets/input.json ezkl-swift-package/Tests/EzklAssets/input.json
+            cp tests/assets/model.compiled ezkl-swift-package/Tests/EzklAssets/network.ezkl
+            cp tests/assets/settings.json ezkl-swift-package/Tests/EzklAssets/settings.json
+
         - name: Set up Xcode environment
           run: |
             sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
