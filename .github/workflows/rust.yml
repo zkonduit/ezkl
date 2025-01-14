@@ -24,6 +24,8 @@ jobs:
     runs-on: large-self-hosted
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2024-07-18
