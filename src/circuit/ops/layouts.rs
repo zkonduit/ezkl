@@ -1148,7 +1148,7 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
         (0..table_len)
             .map(|i| {
                 let (x, _, z) = config.dynamic_lookups.tables[0]
-                    .cartesian_coord(region.dynamic_lookup_col_coord() + i + flush_len_0);
+                    .cartesian_coord(region.combined_dynamic_shuffle_coord() + i + flush_len_0);
 
                 if lookup_block != x {
                     lookup_block = x;
@@ -1224,10 +1224,8 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         ));
     }
 
-    let (input, flush_len) = region.assign_shuffle(&config.shuffles.inputs[0], &input)?;
-    region.assign_shuffle(&config.shuffles.inputs[1], &index)?;
-
-    assert_eq!(flush_len, flush_len_ref, "Flush len mismatch");
+    let input = region.assign(&config.shuffles.inputs[0], &input)?;
+    region.assign(&config.shuffles.inputs[1], &index)?;
 
     let mut shuffle_block = 0;
 
@@ -1235,7 +1233,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         (0..reference_len)
             .map(|i| {
                 let (x, _, z) = config.shuffles.references[0]
-                    .cartesian_coord(region.shuffle_col_coord() + i + flush_len_ref);
+                    .cartesian_coord(region.combined_dynamic_shuffle_coord() + i + flush_len_ref);
                 shuffle_block = x;
                 let ref_selector = config.shuffles.reference_selectors[shuffle_block];
                 region.enable(Some(&ref_selector), z)?;
