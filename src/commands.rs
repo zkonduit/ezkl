@@ -83,7 +83,7 @@ pub const DEFAULT_VK_SOL: &str = "vk.sol";
 /// Default VK abi path
 pub const DEFAULT_VK_ABI: &str = "vk.abi";
 /// Default scale rebase multipliers for calibration
-pub const DEFAULT_SCALE_REBASE_MULTIPLIERS: &str = "1,2,10";
+pub const DEFAULT_SCALE_REBASE_MULTIPLIERS: &str = "1,10";
 /// Default use reduced srs for verification
 pub const DEFAULT_USE_REDUCED_SRS_FOR_VERIFICATION: &str = "false";
 /// Default only check for range check rebase
