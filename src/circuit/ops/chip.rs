@@ -786,7 +786,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                 for y in 0..inputs[0].num_inner_cols() {
                     let s_input = cs.complex_selector();
 
-                    cs.shuffle("shuffle", |cs| {
+                    cs.lookup_any("shuffle", |cs| {
                         let s_inputq = cs.query_selector(s_input);
                         let mut expression = vec![];
                         let s_referenceq = cs.query_selector(s_reference);
