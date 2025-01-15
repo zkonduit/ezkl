@@ -396,29 +396,29 @@ mod native_tests {
     const TESTS_AGGR: [&str; 3] = ["1l_mlp", "1l_flatten", "1l_average"];
 
     const TESTS_EVM: [&str; 23] = [
-        "1l_mlp",
-        "1l_flatten",
-        "1l_average",
-        "1l_reshape",
-        "1l_sigmoid",
-        "1l_div",
-        "1l_sqrt",
-        "1l_prelu",
-        "1l_var",
-        "1l_leakyrelu",
-        "1l_gelu_noappx",
-        "1l_relu",
-        "1l_tanh",
-        "2l_relu_sigmoid_small",
-        "2l_relu_small",
-        "min",
-        "max",
-        "1l_max_pool",
-        "idolmodel",
-        "1l_identity",
-        "lstm",
-        "rnn",
-        "quantize_dequantize",
+        "1l_mlp",                // 0
+        "1l_flatten",            // 1
+        "1l_average",            // 2
+        "1l_reshape",            // 3
+        "1l_sigmoid",            // 4
+        "1l_div",                // 5
+        "1l_sqrt",               // 6
+        "1l_prelu",              // 7
+        "1l_var",                // 8
+        "1l_leakyrelu",          // 9
+        "1l_gelu_noappx",        // 10
+        "1l_relu",               // 11
+        "1l_tanh",               // 12
+        "2l_relu_sigmoid_small", // 13
+        "2l_relu_small",         // 14
+        "min",                   // 15
+        "max",                   // 16
+        "1l_max_pool",           // 17
+        "idolmodel",             // 18
+        "1l_identity",           // 19
+        "lstm",                  // 20
+        "rnn",                   // 21
+        "quantize_dequantize",   // 22
     ];
 
     const TESTS_EVM_AGGR: [&str; 18] = [
