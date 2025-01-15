@@ -1237,7 +1237,17 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
                 shuffle_block = x;
                 let ref_selector = config.shuffles.reference_selectors[shuffle_block];
                 region.enable(Some(&ref_selector), z)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, CircuitError>>()?;
+    }
 
+    if !region.is_dummy() {
+        // Enable the selectors
+        (0..reference_len)
+            .map(|i| {
+                let (x, y, z) =
+                    config.custom_gates.inputs[0].cartesian_coord(region.linear_coord() + i);
                 let input_selector = config
                     .shuffles
                     .input_selectors
