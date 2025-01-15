@@ -485,20 +485,23 @@ impl GraphSettings {
         (max_range as f32).log2().ceil() as u32
     }
 
-    fn dynamic_lookup_logrows_with_blinding(&self) -> u32 {
-        (self.max_dynamic_input_len as f64 + RESERVED_BLINDING_ROWS as f64)
-            .log2()
-            .ceil() as u32
-    }
-
-    fn shuffle_logrows_with_blinding(&self) -> u32 {
-        (self.total_shuffle_col_size as f64 + RESERVED_BLINDING_ROWS as f64)
-            .log2()
-            .ceil() as u32
-    }
-
     fn model_constraint_logrows_with_blinding(&self) -> u32 {
         (self.num_rows as f64 + RESERVED_BLINDING_ROWS as f64)
+            .log2()
+            .ceil() as u32
+    }
+
+    fn dynamic_lookup_and_shuffle_logrows(&self) -> u32 {
+        (self.total_dynamic_col_size as f64 + self.total_shuffle_col_size as f64)
+            .log2()
+            .ceil() as u32
+    }
+
+    /// calculate the number of rows required for the dynamic lookup and shuffle
+    pub fn dynamic_lookup_and_shuffle_logrows_with_blinding(&self) -> u32 {
+        (self.total_dynamic_col_size as f64
+            + self.total_shuffle_col_size as f64
+            + RESERVED_BLINDING_ROWS as f64)
             .log2()
             .ceil() as u32
     }
@@ -1168,10 +1171,8 @@ impl GraphCircuit {
 
         // These are hard lower limits, we can't overflow instances or modules constraints
         let instance_logrows = self.settings().log2_total_instances();
-        let module_constraint_logrows = self.settings().module_constraint_logrows_with_blinding();
-        let dynamic_lookup_logrows = self.settings().dynamic_lookup_logrows_with_blinding();
-        let shuffle_logrows = self.settings().shuffle_logrows_with_blinding();
-
+        let module_constraint_logrows = self.settings().module_constraint_logrows();
+        let dynamic_lookup_logrows = self.settings().dynamic_lookup_and_shuffle_logrows();
         min_logrows = std::cmp::max(
             min_logrows,
             // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit
@@ -1179,7 +1180,6 @@ impl GraphCircuit {
                 instance_logrows,
                 module_constraint_logrows,
                 dynamic_lookup_logrows,
-                shuffle_logrows,
             ]
             .iter()
             .max()
