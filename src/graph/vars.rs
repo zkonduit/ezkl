@@ -342,36 +342,9 @@ pub struct ModelVars<F: PrimeField + TensorType + PartialOrd> {
     pub advices: Vec<VarTensor>,
     #[allow(missing_docs)]
     pub instance: Option<ValTensor<F>>,
-    #[allow(missing_docs)]
-    pub dynamic_col_indices: Vec<usize>,
-    #[allow(missing_docs)]
-    pub shuffle_col_input_indices: Vec<usize>,
-    #[allow(missing_docs)]
-    pub shuffle_col_reference_indices: Vec<usize>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
-    pub(crate) fn get_dynamic_col_advice(&self) -> Vec<VarTensor> {
-        self.dynamic_col_indices
-            .iter()
-            .map(|i| self.advices[*i].clone())
-            .collect()
-    }
-
-    pub(crate) fn get_shuffle_col_input(&self) -> Vec<VarTensor> {
-        self.shuffle_col_input_indices
-            .iter()
-            .map(|i| self.advices[*i].clone())
-            .collect()
-    }
-
-    pub(crate) fn get_shuffle_col_reference(&self) -> Vec<VarTensor> {
-        self.shuffle_col_reference_indices
-            .iter()
-            .map(|i| self.advices[*i].clone())
-            .collect()
-    }
-
     /// Get instance col
     pub fn get_instance_col(&self) -> Option<&Column<Instance>> {
         if let Some(instance) = &self.instance {
@@ -455,37 +428,21 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
         let module_requires_fixed = params.module_requires_fixed();
         let requires_dynamic_lookup = params.requires_dynamic_lookup();
         let requires_shuffle = params.requires_shuffle();
+        let dynamic_lookup_and_shuffle_size = params.dynamic_lookup_and_shuffle_col_size();
 
         let mut advices = (0..3)
             .map(|_| VarTensor::new_advice(cs, logrows, num_inner_cols, var_len))
             .collect_vec();
 
-        let mut dynamic_col_indices = vec![];
-        if requires_dynamic_lookup {
-            for _ in 0..3 {
-                dynamic_col_indices.push(advices.len());
+        if requires_dynamic_lookup || requires_shuffle {
+            let num_cols = if requires_dynamic_lookup { 3 } else { 2 };
+            for _ in 0..num_cols {
                 let dynamic_lookup =
-                    VarTensor::new_advice(cs, logrows, 1, params.total_dynamic_col_size);
+                    VarTensor::new_advice(cs, logrows, 1, dynamic_lookup_and_shuffle_size);
                 if dynamic_lookup.num_blocks() > 1 {
                     warn!("dynamic lookup has {} blocks", dynamic_lookup.num_blocks());
                 };
                 advices.push(dynamic_lookup);
-            }
-        }
-
-        let mut shuffle_col_input_indices = vec![];
-        let mut shuffle_col_reference_indices = vec![];
-        if requires_shuffle {
-            // 2 inputs and 2 outputs that can't be dynamically sized
-            shuffle_col_input_indices.extend(advices.len()..advices.len() + 2);
-            shuffle_col_reference_indices.extend(advices.len() + 2..advices.len() + 4);
-
-            for _ in 0..4 {
-                let shuffle = VarTensor::new_advice(cs, logrows, 1, params.total_shuffle_col_size);
-                if shuffle.num_blocks() > 1 {
-                    warn!("shuffle has {} blocks", shuffle.num_blocks());
-                };
-                advices.push(shuffle);
             }
         }
 
@@ -502,9 +459,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
         ModelVars {
             advices,
             instance: None,
-            dynamic_col_indices,
-            shuffle_col_input_indices,
-            shuffle_col_reference_indices,
         }
     }
 
@@ -513,9 +467,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
         ModelVars {
             advices: vec![],
             instance: None,
-            dynamic_col_indices: vec![],
-            shuffle_col_input_indices: vec![],
-            shuffle_col_reference_indices: vec![],
         }
     }
 }

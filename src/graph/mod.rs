@@ -510,6 +510,10 @@ impl GraphSettings {
             .ceil() as u32
     }
 
+    fn dynamic_lookup_and_shuffle_col_size(&self) -> usize {
+        self.total_dynamic_col_size + self.total_shuffle_col_size
+    }
+
     /// calculate the number of rows required for the module constraints
     pub fn module_constraint_logrows(&self) -> u32 {
         (self.module_sizes.max_constraints() as f64).log2().ceil() as u32

@@ -217,7 +217,7 @@ impl DynamicLookups {
 #[derive(Clone, Debug, Default)]
 pub struct Shuffles {
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
-    pub input_selectors: BTreeMap<(usize, usize), Selector>,
+    pub input_selectors: BTreeMap<(usize, (usize, usize)), Selector>,
     /// Selectors for the dynamic lookup tables
     pub reference_selectors: Vec<Selector>,
     /// Inputs:
@@ -345,7 +345,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             custom_gates: CustomGates::dummy(col_size, num_inner_cols),
             static_lookups: StaticLookups::dummy(col_size, num_inner_cols),
             dynamic_lookups: DynamicLookups::dummy(col_size, num_inner_cols),
-            shuffles: Shuffles::dummy(col_size, 1),
+            shuffles: Shuffles::dummy(col_size, num_inner_cols),
             range_checks: RangeChecks::dummy(col_size, num_inner_cols),
             check_mode: CheckMode::SAFE,
             _marker: PhantomData,
@@ -691,8 +691,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                         let s_lookupq = cs.query_selector(s_lookup);
                         let mut expression = vec![];
                         let s_ltableq = cs.query_selector(s_ltable);
-
                         let mut lookup_queries = vec![one.clone()];
+
                         for lookup in lookups {
                             lookup_queries.push(match lookup {
                                 VarTensor::Advice { inner: advices, .. } => {
@@ -742,6 +742,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
     }
 
     /// Configures and creates lookup selectors
+    #[allow(clippy::too_many_arguments)]
     pub fn configure_shuffles(
         &mut self,
         cs: &mut ConstraintSystem<F>,
@@ -776,48 +777,51 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             ));
         }
 
-        // let one = Expression::Constant(F::ONE);
+        let one = Expression::Constant(F::ONE);
 
         for q in 0..references[0].num_blocks() {
             let s_reference = cs.complex_selector();
 
             for x in 0..inputs[0].num_blocks() {
-                let s_input = cs.complex_selector();
-                cs.shuffle("shuffle", |cs| {
-                    let s_inputq = cs.query_selector(s_input);
-                    let mut expression = vec![];
-                    let s_referenceq = cs.query_selector(s_reference);
-                    let mut input_queries = vec![];
+                for y in 0..inputs[0].num_inner_cols() {
+                    let s_input = cs.complex_selector();
 
-                    for input in inputs {
-                        input_queries.push(match input {
-                            VarTensor::Advice { inner: advices, .. } => {
-                                cs.query_advice(advices[x][0], Rotation(0))
-                            }
-                            _ => unreachable!(),
-                        });
-                    }
+                    cs.shuffle("shuffle", |cs| {
+                        let s_inputq = cs.query_selector(s_input);
+                        let mut expression = vec![];
+                        let s_referenceq = cs.query_selector(s_reference);
+                        let mut input_queries = vec![one.clone()];
 
-                    let mut ref_queries = vec![];
-                    for reference in references {
-                        ref_queries.push(match reference {
-                            VarTensor::Advice { inner: advices, .. } => {
-                                cs.query_advice(advices[q][0], Rotation(0))
-                            }
-                            _ => unreachable!(),
-                        });
-                    }
+                        for input in inputs {
+                            input_queries.push(match input {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    cs.query_advice(advices[x][y], Rotation(0))
+                                }
+                                _ => unreachable!(),
+                            });
+                        }
 
-                    let lhs = input_queries.into_iter().map(|c| c * s_inputq.clone());
-                    let rhs = ref_queries.into_iter().map(|c| c * s_referenceq.clone());
-                    expression.extend(lhs.zip(rhs));
+                        let mut ref_queries = vec![one.clone()];
+                        for reference in references {
+                            ref_queries.push(match reference {
+                                VarTensor::Advice { inner: advices, .. } => {
+                                    cs.query_advice(advices[q][0], Rotation(0))
+                                }
+                                _ => unreachable!(),
+                            });
+                        }
 
-                    expression
-                });
-                self.shuffles
-                    .input_selectors
-                    .entry((q, x))
-                    .or_insert(s_input);
+                        let lhs = input_queries.into_iter().map(|c| c * s_inputq.clone());
+                        let rhs = ref_queries.into_iter().map(|c| c * s_referenceq.clone());
+                        expression.extend(lhs.zip(rhs));
+
+                        expression
+                    });
+                    self.shuffles
+                        .input_selectors
+                        .entry((q, (x, y)))
+                        .or_insert(s_input);
+                }
             }
             self.shuffles.reference_selectors.push(s_reference);
         }
