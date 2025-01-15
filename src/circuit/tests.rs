@@ -1781,13 +1781,18 @@ mod shuffle {
 
             let d = VarTensor::new_advice(cs, K, 1, LEN);
             let e = VarTensor::new_advice(cs, K, 1, LEN);
+            let f: VarTensor = VarTensor::new_advice(cs, K, 1, LEN);
 
             let _constant = VarTensor::constant_cols(cs, K, LEN * NUM_LOOP, false);
 
             let mut config =
                 Self::Config::configure(cs, &[a.clone(), b.clone()], &c, CheckMode::SAFE);
             config
-                .configure_shuffles(cs, &[a.clone(), b.clone()], &[d.clone(), e.clone()])
+                .configure_shuffles(
+                    cs,
+                    &[a.clone(), b.clone(), c.clone()],
+                    &[d.clone(), e.clone(), f.clone()],
+                )
                 .unwrap();
             config
         }

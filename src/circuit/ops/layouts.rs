@@ -1217,6 +1217,57 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     let index = create_constant_tensor(F::from(shuffle_index as u64), reference_len);
     let (index, flush_len_index) = region.assign_shuffle(&config.shuffles.references[1], &index)?;
 
+    // now found the position of each element of the reference to the input
+
+    let is_known = !input.any_unknowns()? && !reference.any_unknowns()?;
+
+    let claimed_index_output = if is_known {
+        let input = input.int_evals()?;
+        let reference = reference.int_evals()?;
+
+        // Keep track of which positions we've used for each value
+        let mut used_positions: HashMap<usize, bool> = HashMap::new();
+
+        let index_output = reference
+            .iter()
+            .map(|x| {
+                // Find all positions of the current element
+                let positions: Vec<usize> = input
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, y)| *y == x)
+                    .map(|(i, _)| i)
+                    .collect();
+
+                // Find the first unused position for this element
+                let pos = positions
+                    .iter()
+                    .find(|&&i| !used_positions.get(&i).unwrap_or(&false))
+                    .ok_or(CircuitError::MissingShuffleElement)?;
+
+                // Mark this position as used
+                used_positions.insert(*pos, true);
+
+                Ok::<_, CircuitError>(Value::known(F::from(*pos as u64)))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Verify all indices were used exactly once
+        if !used_positions.values().all(|&x| x) {
+            return Err(CircuitError::MissingShuffleElement);
+        }
+
+        Tensor::from(index_output.into_iter()).into()
+    } else {
+        Tensor::new(
+            Some(&vec![Value::<F>::unknown(); reference_len]),
+            &[reference_len],
+        )?
+        .into()
+    };
+
+    region.assign_shuffle(&config.shuffles.references[2], &claimed_index_output)?;
+
     if flush_len_index != flush_len_ref {
         return Err(CircuitError::MismatchedShuffleLength(
             flush_len_index,
@@ -1226,6 +1277,12 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 
     let input = region.assign(&config.shuffles.inputs[0], &input)?;
     region.assign(&config.shuffles.inputs[1], &index)?;
+
+    // the incrementing index is the set of numbered values for the input tensor 0...n
+    let incrementing_index: ValTensor<F> =
+        Tensor::from((0..input.len() as u64).map(|x| ValType::Constant(F::from(x)))).into();
+
+    region.assign(&config.shuffles.inputs[2], &incrementing_index)?;
 
     let mut shuffle_block = 0;
 

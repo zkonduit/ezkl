@@ -235,8 +235,12 @@ impl Shuffles {
         Self {
             input_selectors: BTreeMap::new(),
             reference_selectors: vec![],
-            inputs: vec![dummy_var.clone(), dummy_var.clone()],
-            references: vec![single_col_dummy_var.clone(), single_col_dummy_var.clone()],
+            inputs: vec![dummy_var.clone(), dummy_var.clone(), dummy_var.clone()],
+            references: vec![
+                single_col_dummy_var.clone(),
+                single_col_dummy_var.clone(),
+                single_col_dummy_var.clone(),
+            ],
         }
     }
 }
@@ -746,8 +750,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
     pub fn configure_shuffles(
         &mut self,
         cs: &mut ConstraintSystem<F>,
-        inputs: &[VarTensor; 2],
-        references: &[VarTensor; 2],
+        inputs: &[VarTensor; 3],
+        references: &[VarTensor; 3],
     ) -> Result<(), CircuitError>
     where
         F: Field,
