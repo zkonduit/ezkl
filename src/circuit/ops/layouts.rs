@@ -1253,6 +1253,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 
     region.increment_shuffle_col_coord(reference_len + flush_len_ref);
     region.increment_shuffle_index(1);
+    region.increment(reference_len);
 
     Ok(input)
 }
