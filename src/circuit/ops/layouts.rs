@@ -1243,7 +1243,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
                 let pos = positions
                     .iter()
                     .find(|&&i| !used_positions.get(&i).unwrap_or(&false))
-                    .ok_or(CircuitError::MissingShuffleElement)?;
+                    .unwrap_or(&0);
 
                 // Mark this position as used
                 used_positions.insert(*pos, true);
