@@ -1212,16 +1212,25 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     let (reference, flush_len_ref) =
         region.assign_shuffle(&config.shuffles.references[0], &reference)?;
     let reference_len = reference.len();
+    let input = region.assign(&config.shuffles.inputs[0], &input)?;
 
     // now create a vartensor of constants for the shuffle index
     let index = create_constant_tensor(F::from(shuffle_index as u64), reference_len);
     let (index, flush_len_index) = region.assign_shuffle(&config.shuffles.references[1], &index)?;
+    region.assign(&config.shuffles.inputs[1], &index)?;
+
+    if flush_len_index != flush_len_ref {
+        return Err(CircuitError::MismatchedShuffleLength(
+            flush_len_index,
+            flush_len_ref,
+        ));
+    }
 
     // now found the position of each element of the reference to the input
 
     let is_known = !input.any_unknowns()? && !reference.any_unknowns()?;
 
-    let claimed_index_output = if is_known {
+    let claimed_index_input = if is_known {
         let input = input.int_evals()?;
         let reference = reference.int_evals()?;
 
@@ -1266,23 +1275,13 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         .into()
     };
 
-    region.assign_shuffle(&config.shuffles.references[2], &claimed_index_output)?;
-
-    if flush_len_index != flush_len_ref {
-        return Err(CircuitError::MismatchedShuffleLength(
-            flush_len_index,
-            flush_len_ref,
-        ));
-    }
-
-    let input = region.assign(&config.shuffles.inputs[0], &input)?;
-    region.assign(&config.shuffles.inputs[1], &index)?;
+    region.assign(&config.shuffles.inputs[2], &claimed_index_input)?;
 
     // the incrementing index is the set of numbered values for the input tensor 0...n
     let incrementing_index: ValTensor<F> =
         Tensor::from((0..input.len() as u64).map(|x| ValType::Constant(F::from(x)))).into();
 
-    region.assign(&config.shuffles.inputs[2], &incrementing_index)?;
+    region.assign_shuffle(&config.shuffles.references[2], &incrementing_index)?;
 
     let mut shuffle_block = 0;
 
@@ -1778,6 +1777,8 @@ pub(crate) fn get_missing_set_elements<
 
     // assign the claimed output
     claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
+
+    region.increment(claimed_output.len());
 
     // input and claimed output should be the shuffles of fullset
     // concatentate input and claimed output
