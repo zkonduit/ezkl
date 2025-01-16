@@ -322,9 +322,9 @@ pub struct RunArgs {
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "kzg", value_hint = clap::ValueHint::Other))]
     pub commitment: Option<Commitments>,
     /// the base used for decompositions
-    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "8192", value_hint = clap::ValueHint::Other))]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "16384", value_hint = clap::ValueHint::Other))]
     pub decomp_base: usize,
-    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "4", value_hint = clap::ValueHint::Other))]
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "2", value_hint = clap::ValueHint::Other))]
     /// the number of legs used for decompositions
     pub decomp_legs: usize,
     #[cfg_attr(

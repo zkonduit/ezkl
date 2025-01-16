@@ -1243,11 +1243,11 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         // Keep track of which positions we've used for each value
         let mut used_positions: HashMap<usize, bool> = HashMap::new();
 
-        let index_output = input
+        let index_output = output
             .iter()
             .map(|x| {
                 // Find all positions of the current element
-                let positions: Vec<usize> = output
+                let positions: Vec<usize> = input
                     .iter()
                     .enumerate()
                     .filter(|(_, y)| *y == x)
