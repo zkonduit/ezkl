@@ -1192,31 +1192,37 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
 }
 
 /// Shuffle arg
+/// 1. the input is a set of pairs (index_input, value_input) -- looked up against a (dynamic) set of values (index_output, value_output).
+/// 2. index_input is copy constrained to values in a fixed column and is thus a fixed set of incrementing values over the input
+/// 3. value_input is just the input that we are ascertaining is shuffled
+/// 4. index_output is (typically) a prover generated witness committed to in an advice column
+/// 5. value_output is (typically) a prover generated witness committed to in an advice column
+/// 6. Given the above, and given the fixed index_input , we go through every (index_input, value_input) pair and ascertain that it is contained in the input.
+/// Given the fixed incrementing index index_input, we avoid multiplicity in the output by leveraging this surrogate index: if index_output isn't matched to the exact value where for `index_input=index_output` -> `value_input=value_output`, then the lookup fails
 pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
+    output: &[ValTensor<F>; 1],
     input: &[ValTensor<F>; 1],
-    reference: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     let shuffle_index = region.shuffle_index();
-    let (input, reference) = (input[0].clone(), reference[0].clone());
+    let (output, input) = (output[0].clone(), input[0].clone());
 
     // assert input and reference are same length
-    if input.len() != reference.len() {
+    if output.len() != input.len() {
         return Err(CircuitError::MismatchedShuffleLength(
+            output.len(),
             input.len(),
-            reference.len(),
         ));
     }
 
-    let (reference, flush_len_ref) =
-        region.assign_shuffle(&config.shuffles.references[0], &reference)?;
-    let reference_len = reference.len();
+    let (output, flush_len_ref) = region.assign_shuffle(&config.shuffles.outputs[0], &output)?;
+    let output_len = output.len();
     let input = region.assign(&config.shuffles.inputs[0], &input)?;
 
     // now create a vartensor of constants for the shuffle index
-    let index = create_constant_tensor(F::from(shuffle_index as u64), reference_len);
-    let (index, flush_len_index) = region.assign_shuffle(&config.shuffles.references[1], &index)?;
+    let index = create_constant_tensor(F::from(shuffle_index as u64), output_len);
+    let (index, flush_len_index) = region.assign_shuffle(&config.shuffles.outputs[1], &index)?;
     region.assign(&config.shuffles.inputs[1], &index)?;
 
     if flush_len_index != flush_len_ref {
@@ -1228,20 +1234,20 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 
     // now found the position of each element of the reference to the input
 
-    let is_known = !input.any_unknowns()? && !reference.any_unknowns()?;
+    let is_known = !output.any_unknowns()? && !input.any_unknowns()?;
 
-    let claimed_index_input = if is_known {
+    let claimed_index_output = if is_known {
         let input = input.int_evals()?;
-        let reference = reference.int_evals()?;
+        let output = output.int_evals()?;
 
         // Keep track of which positions we've used for each value
         let mut used_positions: HashMap<usize, bool> = HashMap::new();
 
-        let index_output = reference
+        let index_output = input
             .iter()
             .map(|x| {
                 // Find all positions of the current element
-                let positions: Vec<usize> = input
+                let positions: Vec<usize> = output
                     .iter()
                     .enumerate()
                     .filter(|(_, y)| *y == x)
@@ -1269,29 +1275,28 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
         Tensor::from(index_output.into_iter()).into()
     } else {
         Tensor::new(
-            Some(&vec![Value::<F>::unknown(); reference_len]),
-            &[reference_len],
+            Some(&vec![Value::<F>::unknown(); output_len]),
+            &[output_len],
         )?
         .into()
     };
 
-    region.assign(&config.shuffles.inputs[2], &claimed_index_input)?;
+    region.assign_shuffle(&config.shuffles.outputs[2], &claimed_index_output)?;
 
-    // the incrementing index is the set of numbered values for the input tensor 0...n
+    // the incrementing index is the set of numbered values for the input tensor 0...n, and is FIXED
     let incrementing_index: ValTensor<F> =
-        Tensor::from((0..input.len() as u64).map(|x| ValType::Constant(F::from(x)))).into();
-
-    region.assign_shuffle(&config.shuffles.references[2], &incrementing_index)?;
+        Tensor::from((0..output.len() as u64).map(|x| ValType::Constant(F::from(x)))).into();
+    region.assign(&config.shuffles.inputs[2], &incrementing_index)?;
 
     let mut shuffle_block = 0;
 
     if !region.is_dummy() {
-        (0..reference_len)
+        (0..output_len)
             .map(|i| {
-                let (x, _, z) = config.shuffles.references[0]
+                let (x, _, z) = config.shuffles.outputs[0]
                     .cartesian_coord(region.combined_dynamic_shuffle_coord() + i + flush_len_ref);
                 shuffle_block = x;
-                let ref_selector = config.shuffles.reference_selectors[shuffle_block];
+                let ref_selector = config.shuffles.output_selectors[shuffle_block];
                 region.enable(Some(&ref_selector), z)?;
                 Ok(())
             })
@@ -1300,7 +1305,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 
     if !region.is_dummy() {
         // Enable the selectors
-        (0..reference_len)
+        (0..output_len)
             .map(|i| {
                 let (x, y, z) =
                     config.custom_gates.inputs[0].cartesian_coord(region.linear_coord() + i);
@@ -1317,11 +1322,11 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
             .collect::<Result<Vec<_>, CircuitError>>()?;
     }
 
-    region.increment_shuffle_col_coord(reference_len + flush_len_ref);
+    region.increment_shuffle_col_coord(output_len + flush_len_ref);
     region.increment_shuffle_index(1);
-    region.increment(reference_len);
+    region.increment(output_len);
 
-    Ok(input)
+    Ok(output)
 }
 
 /// One hot accumulated layout

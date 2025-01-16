@@ -215,15 +215,16 @@ impl DynamicLookups {
 
 /// A struct representing the selectors for the dynamic lookup tables
 #[derive(Clone, Debug, Default)]
+
 pub struct Shuffles {
     /// [Selector]s generated when configuring the layer. We use a [BTreeMap] as we expect to configure many dynamic lookup ops.
     pub input_selectors: BTreeMap<(usize, (usize, usize)), Selector>,
     /// Selectors for the dynamic lookup tables
-    pub reference_selectors: Vec<Selector>,
+    pub output_selectors: Vec<Selector>,
     /// Inputs:
     pub inputs: Vec<VarTensor>,
     /// tables
-    pub references: Vec<VarTensor>,
+    pub outputs: Vec<VarTensor>,
 }
 
 impl Shuffles {
@@ -234,9 +235,9 @@ impl Shuffles {
 
         Self {
             input_selectors: BTreeMap::new(),
-            reference_selectors: vec![],
+            output_selectors: vec![],
             inputs: vec![dummy_var.clone(), dummy_var.clone(), dummy_var.clone()],
-            references: vec![
+            outputs: vec![
                 single_col_dummy_var.clone(),
                 single_col_dummy_var.clone(),
                 single_col_dummy_var.clone(),
@@ -751,7 +752,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
         &mut self,
         cs: &mut ConstraintSystem<F>,
         inputs: &[VarTensor; 3],
-        references: &[VarTensor; 3],
+        outputs: &[VarTensor; 3],
     ) -> Result<(), CircuitError>
     where
         F: Field,
@@ -762,14 +763,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             }
         }
 
-        for t in references.iter() {
+        for t in outputs.iter() {
             if !t.is_advice() || t.num_inner_cols() > 1 {
                 return Err(CircuitError::WrongDynamicColumnType(t.name().to_string()));
             }
         }
 
         // assert all tables have the same number of blocks
-        if references
+        if outputs
             .iter()
             .map(|t| t.num_blocks())
             .collect::<Vec<_>>()
@@ -777,14 +778,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             .any(|w| w[0] != w[1])
         {
             return Err(CircuitError::WrongDynamicColumnType(
-                "references inner cols".to_string(),
+                "outputs inner cols".to_string(),
             ));
         }
 
         let one = Expression::Constant(F::ONE);
 
-        for q in 0..references[0].num_blocks() {
-            let s_reference = cs.complex_selector();
+        for q in 0..outputs[0].num_blocks() {
+            let s_output = cs.complex_selector();
 
             for x in 0..inputs[0].num_blocks() {
                 for y in 0..inputs[0].num_inner_cols() {
@@ -793,7 +794,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                     cs.lookup_any("shuffle", |cs| {
                         let s_inputq = cs.query_selector(s_input);
                         let mut expression = vec![];
-                        let s_referenceq = cs.query_selector(s_reference);
+                        let s_outputq = cs.query_selector(s_output);
                         let mut input_queries = vec![one.clone()];
 
                         for input in inputs {
@@ -805,9 +806,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                             });
                         }
 
-                        let mut ref_queries = vec![one.clone()];
-                        for reference in references {
-                            ref_queries.push(match reference {
+                        let mut output_queries = vec![one.clone()];
+                        for output in outputs {
+                            output_queries.push(match output {
                                 VarTensor::Advice { inner: advices, .. } => {
                                     cs.query_advice(advices[q][0], Rotation(0))
                                 }
@@ -816,7 +817,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                         }
 
                         let lhs = input_queries.into_iter().map(|c| c * s_inputq.clone());
-                        let rhs = ref_queries.into_iter().map(|c| c * s_referenceq.clone());
+                        let rhs = output_queries.into_iter().map(|c| c * s_outputq.clone());
                         expression.extend(lhs.zip(rhs));
 
                         expression
@@ -827,13 +828,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                         .or_insert(s_input);
                 }
             }
-            self.shuffles.reference_selectors.push(s_reference);
+            self.shuffles.output_selectors.push(s_output);
         }
 
         // if we haven't previously initialized the input/output, do so now
-        if self.shuffles.references.is_empty() {
-            debug!("assigning shuffles reference");
-            self.shuffles.references = references.to_vec();
+        if self.shuffles.outputs.is_empty() {
+            debug!("assigning shuffles output");
+            self.shuffles.outputs = outputs.to_vec();
         }
         if self.shuffles.inputs.is_empty() {
             debug!("assigning shuffles input");
