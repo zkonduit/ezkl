@@ -100,4 +100,7 @@ pub enum CircuitError {
     #[error("invalid input type {0}")]
     /// Invalid input type
     InvalidInputType(String),
+    #[error("an element is missing from the shuffled version of the tensor")]
+    /// An element is missing from the shuffled version of the tensor
+    MissingShuffleElement,
 }

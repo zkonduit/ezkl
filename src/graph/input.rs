@@ -14,7 +14,6 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
-use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::BufReader;
 use std::io::BufWriter;
@@ -515,7 +514,7 @@ impl<'de> Deserialize<'de> for DataSource {
 
 /// Input to graph as a datasource
 /// Always use JSON serialization for GraphData. Seriously.
-#[derive(Clone, Debug, Deserialize, Default, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Default, PartialEq, Serialize)]
 pub struct GraphData {
     /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
     pub input_data: DataSource,
@@ -766,18 +765,6 @@ impl ToPyObject for FileSourceInner {
             FileSourceInner::Bool(data) => data.to_object(py),
             FileSourceInner::Float(data) => data.to_object(py),
         }
-    }
-}
-
-impl Serialize for GraphData {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("GraphData", 4)?;
-        state.serialize_field("input_data", &self.input_data)?;
-        state.serialize_field("output_data", &self.output_data)?;
-        state.end()
     }
 }
 

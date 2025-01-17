@@ -435,7 +435,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
             .collect_vec();
 
         if requires_dynamic_lookup || requires_shuffle {
-            let num_cols = if requires_dynamic_lookup { 3 } else { 2 };
+            let num_cols = 3;
             for _ in 0..num_cols {
                 let dynamic_lookup =
                     VarTensor::new_advice(cs, logrows, 1, dynamic_lookup_and_shuffle_size);

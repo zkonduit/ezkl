@@ -19,6 +19,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+
+  fr-age-test:
+    runs-on: large-self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-07-18
+          override: true
+          components: rustfmt, clippy
+      - name: fr age Mock
+        run: cargo test --release --verbose tests::large_mock_::large_tests_6_expects -- --include-ignored
+
   build:
     runs-on: ubuntu-latest
 
@@ -617,7 +632,7 @@ jobs:
         run: source .env/bin/activate; pip install pytest-asyncio; pytest -vv
 
   accuracy-measurement-tests:
-    runs-on: ubuntu-latest-32-cores
+    runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4

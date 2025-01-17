@@ -100,9 +100,6 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         let rc_a = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
         let rc_b = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
 
-        for input in hash_inputs.iter().take(WIDTH) {
-            meta.enable_equality(*input);
-        }
         meta.enable_constant(rc_b[0]);
 
         Self::configure_with_cols(
@@ -152,9 +149,6 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         let rc_a = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
         let rc_b = (0..WIDTH).map(|_| meta.fixed_column()).collect::<Vec<_>>();
 
-        for input in hash_inputs.iter().take(WIDTH) {
-            meta.enable_equality(*input);
-        }
         meta.enable_constant(rc_b[0]);
 
         let instance = meta.instance_column();
