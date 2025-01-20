@@ -437,7 +437,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: KZG prove and verify tests (public outputs)
-        run: cargo nextest run --release --features macos-metal --verbose tests::kzg_prove_and_verify_::t --test-threads 1
+        run: cargo nextest run --release --features macos-metal --verbose tests::kzg_prove_and_verify_::t --no-capture
 
 
   prove-and-verify-tests:
