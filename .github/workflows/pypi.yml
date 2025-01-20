@@ -49,6 +49,13 @@ jobs:
           components: rustfmt, clippy
 
       - name: Build wheels
+        if: matrix.target == 'universal2-apple-darwin'
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --features python-bindings,macos-metal
+      - name: Build wheels
+        if: matrix.target == 'x86_64'
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
