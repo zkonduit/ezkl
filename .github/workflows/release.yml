@@ -10,6 +10,9 @@ on:
       - "*"
 jobs:
   create-release:
+    permissions:
+      contents: read
+      packages: write
     name: create-release
     runs-on: ubuntu-22.04
     if: startsWith(github.ref, 'refs/tags/')
@@ -33,6 +36,9 @@ jobs:
           tag_name: ${{ env.EZKL_VERSION }}
 
   build-release-gpu:
+    permissions:
+      contents: read
+      packages: write
     name: build-release-gpu
     needs: ["create-release"]
     runs-on: GPU
@@ -94,6 +100,10 @@ jobs:
           asset_content_type: application/octet-stream
 
   build-release:
+    permissions:
+      contents: read
+      packages: write
+      issues: write
     name: build-release
     needs: ["create-release"]
     runs-on: ${{ matrix.os }}

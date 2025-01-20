@@ -9,6 +9,9 @@ on:
 
 jobs:
   build-and-update:
+    permissions:
+      contents: read
+      packages: write
     runs-on: macos-latest
     env:
       EZKL_SWIFT_PACKAGE_REPO: github.com/zkonduit/ezkl-swift-package.git

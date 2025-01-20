@@ -15,6 +15,9 @@ defaults:
     working-directory: .
 jobs:
   publish-wasm-bindings:
+    permissions:
+      contents: read
+      packages: write
     name: publish-wasm-bindings
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
@@ -186,6 +189,9 @@ jobs:
 
 
   in-browser-evm-ver-publish:
+    permissions:
+      contents: read
+      packages: write
     name: publish-in-browser-evm-verifier-package
     needs: [publish-wasm-bindings]
     runs-on: ubuntu-latest
