@@ -24,9 +24,6 @@ use std::path::PathBuf;
 pub use val::*;
 pub use var::*;
 
-#[cfg(feature = "metal")]
-use instant::Instant;
-
 use crate::{
     circuit::utils,
     fieldutils::{integer_rep_to_felt, IntegerRep},
@@ -40,39 +37,12 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use itertools::Itertools;
-#[cfg(feature = "metal")]
-use metal::{Device, MTLResourceOptions, MTLSize};
 use std::error::Error;
 use std::fmt::Debug;
 use std::io::Read;
 use std::iter::Iterator;
 use std::ops::{Add, Deref, DerefMut, Div, Mul, Neg, Range, Sub};
 use std::{cmp::max, ops::Rem};
-
-#[cfg(feature = "metal")]
-use std::collections::HashMap;
-
-#[cfg(feature = "metal")]
-const LIB_DATA: &[u8] = include_bytes!("metal/tensor_ops.metallib");
-
-#[cfg(feature = "metal")]
-lazy_static::lazy_static! {
-    static ref DEVICE: Device = Device::system_default().expect("no device found");
-
-    static ref LIB: metal::Library = DEVICE.new_library_with_data(LIB_DATA).unwrap();
-
-    static ref QUEUE: metal::CommandQueue = DEVICE.new_command_queue();
-
-    static ref PIPELINES: HashMap<String, metal::ComputePipelineState> = {
-        let mut map = HashMap::new();
-        for name in ["add", "sub", "mul"] {
-            let function = LIB.get_function(name, None).unwrap();
-            let pipeline = DEVICE.new_compute_pipeline_state_with_function(&function).unwrap();
-            map.insert(name.to_string(), pipeline);
-        }
-        map
-    };
-}
 
 /// The (inner) type of tensor elements.
 pub trait TensorType: Clone + Debug + 'static {
@@ -1404,10 +1374,6 @@ impl<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync> Ad
         let lhs = self.expand(&broadcasted_shape).unwrap();
         let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        #[cfg(feature = "metal")]
-        let res = metal_tensor_op(&lhs, &rhs, "add");
-
-        #[cfg(not(feature = "metal"))]
         let res = {
             let mut res: Tensor<T> = lhs
                 .par_iter()
@@ -1505,10 +1471,6 @@ impl<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync> Su
         let lhs = self.expand(&broadcasted_shape).unwrap();
         let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        #[cfg(feature = "metal")]
-        let res = metal_tensor_op(&lhs, &rhs, "sub");
-
-        #[cfg(not(feature = "metal"))]
         let res = {
             let mut res: Tensor<T> = lhs
                 .par_iter()
@@ -1576,10 +1538,6 @@ impl<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync> Mu
         let lhs = self.expand(&broadcasted_shape).unwrap();
         let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        #[cfg(feature = "metal")]
-        let res = metal_tensor_op(&lhs, &rhs, "mul");
-
-        #[cfg(not(feature = "metal"))]
         let res = {
             let mut res: Tensor<T> = lhs
                 .par_iter()
@@ -1810,67 +1768,5 @@ mod tests {
         let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
         let b = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2, 1]).unwrap();
         assert_eq!(a.get_slice(&[0..2, 0..1]).unwrap(), b);
-    }
-
-    #[test]
-    #[cfg(feature = "metal")]
-    fn tensor_metal_int() {
-        let a = Tensor::<i64>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
-        let b = Tensor::<i64>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
-        let c = metal_tensor_op(&a, &b, "add");
-        assert_eq!(c, Tensor::new(Some(&[2, 4, 6, 8]), &[2, 2]).unwrap());
-
-        let c = metal_tensor_op(&a, &b, "sub");
-        assert_eq!(c, Tensor::new(Some(&[0, 0, 0, 0]), &[2, 2]).unwrap());
-
-        let c = metal_tensor_op(&a, &b, "mul");
-        assert_eq!(c, Tensor::new(Some(&[1, 4, 9, 16]), &[2, 2]).unwrap());
-    }
-
-    #[test]
-    #[cfg(feature = "metal")]
-    fn tensor_metal_felt() {
-        use halo2curves::bn256::Fr;
-
-        let a = Tensor::<Fr>::new(
-            Some(&[Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
-            &[2, 2],
-        )
-        .unwrap();
-        let b = Tensor::<Fr>::new(
-            Some(&[Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
-            &[2, 2],
-        )
-        .unwrap();
-
-        let c = metal_tensor_op(&a, &b, "add");
-        assert_eq!(
-            c,
-            Tensor::<Fr>::new(
-                Some(&[Fr::from(2), Fr::from(4), Fr::from(6), Fr::from(8)]),
-                &[2, 2],
-            )
-            .unwrap()
-        );
-
-        let c = metal_tensor_op(&a, &b, "sub");
-        assert_eq!(
-            c,
-            Tensor::<Fr>::new(
-                Some(&[Fr::from(0), Fr::from(0), Fr::from(0), Fr::from(0)]),
-                &[2, 2],
-            )
-            .unwrap()
-        );
-
-        let c = metal_tensor_op(&a, &b, "mul");
-        assert_eq!(
-            c,
-            Tensor::<Fr>::new(
-                Some(&[Fr::from(1), Fr::from(4), Fr::from(9), Fr::from(16)]),
-                &[2, 2],
-            )
-            .unwrap()
-        );
     }
 }
