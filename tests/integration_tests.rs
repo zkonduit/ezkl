@@ -2795,7 +2795,10 @@ mod native_tests {
             "--features",
             "icicle",
         ];
-        #[cfg(not(feature = "icicle"))]
+        #[cfg(feature = "metal")]
+        let args = ["build", "--release", "--bin", "ezkl", "--features", "metal"];
+        // not metal and not icicle
+        #[cfg(all(not(feature = "icicle"), not(feature = "metal")))]
         let args = ["build", "--release", "--bin", "ezkl"];
         #[cfg(not(feature = "mv-lookup"))]
         let args = [
