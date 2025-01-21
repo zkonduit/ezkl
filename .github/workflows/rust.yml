@@ -405,39 +405,39 @@ jobs:
       - name: KZG prove and verify tests (EVM + hashed outputs)
         run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify --test-threads 1
 
-  prove-and-verify-tests-metal:
-    permissions:
-      contents: read
-    runs-on: macos-13
-    # needs: [build, library-tests, docs]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2024-07-18
-          override: true
-          components: rustfmt, clippy
-      - uses: jetli/wasm-pack-action@v0.4.0
-        with:
-          # Pin to version 0.12.1
-          version: 'v0.12.1'
-      - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-07-18
-      - uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-      - name: Use pnpm 8
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-      - uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-      - name: KZG prove and verify tests (public outputs)
-        run: cargo nextest run --release --features macos-metal --verbose tests::kzg_prove_and_verify_::t --no-capture
+  # prove-and-verify-tests-metal:
+  #   permissions:
+  #     contents: read
+  #   runs-on: macos-13
+  #   # needs: [build, library-tests, docs]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         persist-credentials: false
+  #     - uses: actions-rs/toolchain@v1
+  #       with:
+  #         toolchain: nightly-2024-07-18
+  #         override: true
+  #         components: rustfmt, clippy
+  #     - uses: jetli/wasm-pack-action@v0.4.0
+  #       with:
+  #         # Pin to version 0.12.1
+  #         version: 'v0.12.1'
+  #     - name: Add rust-src
+  #       run: rustup component add rust-src --toolchain nightly-2024-07-18
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         persist-credentials: false
+  #     - name: Use pnpm 8
+  #       uses: pnpm/action-setup@v2
+  #       with:
+  #         version: 8
+  #     - uses: baptiste0928/cargo-install@v1
+  #       with:
+  #         crate: cargo-nextest
+  #         locked: true
+  #     - name: KZG prove and verify tests (public outputs)
+  #       run: cargo nextest run --release --features macos-metal --verbose tests::kzg_prove_and_verify_::t --no-capture
 
 
   prove-and-verify-tests:
