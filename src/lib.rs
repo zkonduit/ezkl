@@ -25,6 +25,7 @@
 #![allow(clippy::single_range_in_vec_init)]
 #![feature(buf_read_has_data_left)]
 #![feature(stmt_expr_attributes)]
+#![feature(int_roundings)]
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
