@@ -17,7 +17,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-01-01
           override: true
           components: rustfmt, clippy
 
