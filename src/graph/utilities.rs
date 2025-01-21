@@ -1637,6 +1637,7 @@ pub fn homogenize_input_scales(
 }
 
 #[cfg(test)]
+/// tests for the utility module
 pub mod tests {
 
     use super::*;
