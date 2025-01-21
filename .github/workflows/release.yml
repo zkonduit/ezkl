@@ -206,7 +206,7 @@ jobs:
 
       - name: Build release binary (metal)
         if: matrix.build == 'macos-aarch64'
-        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features metal
+        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features macos-metal
 
       - name: Strip release binary
         if: matrix.build != 'windows-msvc' && matrix.build != 'linux-aarch64'

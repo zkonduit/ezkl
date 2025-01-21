@@ -53,7 +53,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --features python-bindings,macos-metal
+          args: --release --out dist --features python-bindings
       - name: Build wheels
         if: matrix.target == 'x86_64'
         uses: PyO3/maturin-action@v1
