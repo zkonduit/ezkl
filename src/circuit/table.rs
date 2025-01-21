@@ -141,7 +141,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
 ///
 pub fn num_cols_required(range_len: IntegerRep, col_size: usize) -> usize {
     // number of cols needed to store the range
-    (range_len.div_ceil(col_size as IntegerRep)) as usize + 1
+    (range_len / col_size as IntegerRep) as usize + 1
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
