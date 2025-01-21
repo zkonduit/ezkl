@@ -1836,6 +1836,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_filter"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "186e05a59d4c50738528153b83b0b0194d3a29507dfec16eccd4b342903397d0"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1846,6 +1856,19 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcaee3d8e3cfc3fd92428d477bc97fc29ec8716d180c0d74c643bb26166660e0"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "humantime",
+ "log",
 ]
 
 [[package]]
@@ -1923,7 +1946,7 @@ dependencies = [
  "console_error_panic_hook",
  "criterion 0.5.1",
  "ecc",
- "env_logger",
+ "env_logger 0.10.2",
  "ethabi",
  "foundry-compilers",
  "gag",
@@ -1931,7 +1954,7 @@ dependencies = [
  "halo2_gadgets",
  "halo2_proofs",
  "halo2_solidity_verifier",
- "halo2curves 0.7.0",
+ "halo2curves 0.7.0 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=b753a832e92d5c86c5c997327a9cf9de86a18851)",
  "hex",
  "indicatif",
  "instant",
@@ -1939,7 +1962,6 @@ dependencies = [
  "lazy_static",
  "log",
  "maybe-rayon",
- "metal",
  "mimalloc",
  "mnist",
  "num",
@@ -2394,14 +2416,14 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2#ee4e1a09ebdb1f79f797685b78951c6034c430a6#ee4e1a09ebdb1f79f797685b78951c6034c430a6"
+source = "git+https://github.com/zkonduit/halo2#bf9d0057a82443be48c4779bbe14961c18fb5996#bf9d0057a82443be48c4779bbe14961c18fb5996"
 dependencies = [
  "bincode",
  "blake2b_simd",
- "env_logger",
+ "env_logger 0.10.2",
  "ff",
  "group",
- "halo2curves 0.7.0",
+ "halo2curves 0.7.0 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=b753a832e92d5c86c5c997327a9cf9de86a18851)",
  "icicle-bn254",
  "icicle-core",
  "icicle-cuda-runtime",
@@ -2409,6 +2431,7 @@ dependencies = [
  "lazy_static",
  "log",
  "maybe-rayon",
+ "mopro-msm",
  "rand_chacha",
  "rand_core 0.6.4",
  "rustc-hash 2.0.0",
@@ -2497,13 +2520,14 @@ dependencies = [
 [[package]]
 name = "halo2curves"
 version = "0.7.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2curves?rev=b753a832e92d5c86c5c997327a9cf9de86a18851#b753a832e92d5c86c5c997327a9cf9de86a18851"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d380afeef3f1d4d3245b76895172018cfb087d9976a7cabcd5597775b2933e07"
 dependencies = [
  "blake2",
  "digest 0.10.7",
  "ff",
  "group",
- "halo2derive",
+ "halo2derive 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex",
  "lazy_static",
  "num-bigint",
@@ -2521,6 +2545,49 @@ dependencies = [
  "static_assertions",
  "subtle",
  "unroll",
+]
+
+[[package]]
+name = "halo2curves"
+version = "0.7.0"
+source = "git+https://github.com/privacy-scaling-explorations/halo2curves?rev=b753a832e92d5c86c5c997327a9cf9de86a18851#b753a832e92d5c86c5c997327a9cf9de86a18851"
+dependencies = [
+ "blake2",
+ "digest 0.10.7",
+ "ff",
+ "group",
+ "halo2derive 0.1.0 (git+https://github.com/privacy-scaling-explorations/halo2curves?rev=b753a832e92d5c86c5c997327a9cf9de86a18851)",
+ "hex",
+ "lazy_static",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "pairing",
+ "pasta_curves",
+ "paste",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "rayon",
+ "serde",
+ "serde_arrays",
+ "sha2",
+ "static_assertions",
+ "subtle",
+ "unroll",
+]
+
+[[package]]
+name = "halo2derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bdb99e7492b4f5ff469d238db464131b86c2eaac814a78715acba369f64d2c76"
+dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3283,7 +3350,8 @@ dependencies = [
 [[package]]
 name = "metal"
 version = "0.29.0"
-source = "git+https://github.com/gfx-rs/metal-rs#0e1918b34689c4b8cd13a43372f9898680547ee9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ecfd3296f8c56b7c1f6fbac3c71cefa9d78ce009850c45000015f206dc7fa21"
 dependencies = [
  "bitflags 2.5.0",
  "block",
@@ -3352,6 +3420,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2126097226757059ceb317a872fb9e3b289e67af0ba2681b1e1cf389b763c260"
 dependencies = [
  "byteorder",
+]
+
+[[package]]
+name = "mopro-msm"
+version = "0.1.0"
+source = "git+https://github.com/zkonduit/metal-msm-gpu-acceleration.git#be5f647b1a6c1a6ea9024390744a2b4d87f5d002"
+dependencies = [
+ "bincode",
+ "env_logger 0.11.6",
+ "halo2curves 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "instant",
+ "itertools 0.13.0",
+ "lazy_static",
+ "log",
+ "metal",
+ "objc",
+ "once_cell",
+ "rand 0.8.5",
+ "rayon",
+ "serde",
+ "thiserror",
+ "walkdir",
 ]
 
 [[package]]

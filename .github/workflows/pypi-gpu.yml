@@ -18,6 +18,9 @@ defaults:
 jobs:
 
   linux:
+    permissions:
+      contents: read
+      packages: write
     runs-on: GPU
     strategy:
       matrix:

@@ -16,6 +16,8 @@ defaults:
 
 jobs:
   macos:
+    permissions:
+      contents: read
     runs-on: macos-latest
     if: startsWith(github.ref, 'refs/tags/')
     strategy:
@@ -47,6 +49,13 @@ jobs:
           components: rustfmt, clippy
 
       - name: Build wheels
+        if: matrix.target == 'universal2-apple-darwin'
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --features python-bindings,macos-metal
+      - name: Build wheels
+        if: matrix.target == 'x86_64'
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
@@ -64,6 +73,8 @@ jobs:
           path: dist
 
   windows:
+    permissions:
+      contents: read
     runs-on: windows-latest
     if: startsWith(github.ref, 'refs/tags/')
     strategy:
@@ -111,6 +122,8 @@ jobs:
           path: dist
 
   linux:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     strategy:
@@ -226,6 +239,8 @@ jobs:
   #       path: dist
 
   musllinux:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     strategy:
@@ -291,6 +306,8 @@ jobs:
           path: dist
 
   musllinux-cross:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     strategy:
@@ -378,6 +395,8 @@ jobs:
           packages-dir: ./
 
   doc-publish:
+    permissions:
+      contents: read
     name: Trigger ReadTheDocs Build
     runs-on: ubuntu-latest
     needs: pypi-publish

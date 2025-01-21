@@ -6,6 +6,8 @@ on:
         description: "Test scenario tags"
 jobs:
   large-tests:
+    permissions:
+      contents: read
     runs-on: kaiju
     steps:
       - uses: actions/checkout@v4

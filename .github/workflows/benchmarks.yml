@@ -8,6 +8,8 @@ on:
 jobs:
 
   bench_poseidon:
+    permissions:
+      contents: read
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +24,8 @@ jobs:
         run: cargo bench --verbose --bench poseidon
 
   bench_einsum_accum_matmul:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:
@@ -37,6 +41,8 @@ jobs:
         run: cargo bench --verbose --bench accum_einsum_matmul
 
   bench_accum_matmul_relu:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:
@@ -52,6 +58,8 @@ jobs:
         run: cargo bench --verbose --bench accum_matmul_relu
 
   bench_accum_matmul_relu_overflow:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:
@@ -67,6 +75,8 @@ jobs:
         run: cargo bench --verbose --bench accum_matmul_relu_overflow
 
   bench_relu:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:
@@ -82,6 +92,8 @@ jobs:
         run: cargo bench --verbose --bench relu
 
   bench_accum_dot:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:
@@ -97,6 +109,8 @@ jobs:
         run: cargo bench --verbose --bench accum_dot
 
   bench_accum_conv:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:
@@ -112,6 +126,8 @@ jobs:
         run: cargo bench --verbose --bench accum_conv
 
   bench_accum_sumpool:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:
@@ -127,6 +143,8 @@ jobs:
         run: cargo bench --verbose --bench accum_sumpool
 
   bench_pairwise_add:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:
@@ -142,6 +160,8 @@ jobs:
         run: cargo bench --verbose --bench pairwise_add
 
   bench_accum_sum:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:
@@ -157,6 +177,8 @@ jobs:
         run: cargo bench --verbose --bench accum_sum
 
   bench_pairwise_pow:
+    permissions:
+      contents: read
     runs-on: self-hosted
     needs: [bench_poseidon]
     steps:

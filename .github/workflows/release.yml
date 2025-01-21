@@ -10,6 +10,9 @@ on:
       - "*"
 jobs:
   create-release:
+    permissions:
+      contents: read
+      packages: write
     name: create-release
     runs-on: ubuntu-22.04
     if: startsWith(github.ref, 'refs/tags/')
@@ -33,6 +36,9 @@ jobs:
           tag_name: ${{ env.EZKL_VERSION }}
 
   build-release-gpu:
+    permissions:
+      contents: read
+      packages: write
     name: build-release-gpu
     needs: ["create-release"]
     runs-on: GPU
@@ -94,6 +100,10 @@ jobs:
           asset_content_type: application/octet-stream
 
   build-release:
+    permissions:
+      contents: read
+      packages: write
+      issues: write
     name: build-release
     needs: ["create-release"]
     runs-on: ${{ matrix.os }}
@@ -186,13 +196,17 @@ jobs:
           echo "target flag is: ${{ env.TARGET_FLAGS }}"
           echo "target dir is: ${{ env.TARGET_DIR }}"
 
-      - name: Build release binary (no asm)
-        if: matrix.build != 'linux-gnu'
+      - name: Build release binary (no asm or metal) 
+        if: matrix.build != 'linux-gnu' && matrix.build != 'macos-aarch64'
         run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
 
       - name: Build release binary (asm)
         if: matrix.build == 'linux-gnu'
         run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features asm
+
+      - name: Build release binary (metal)
+        if: matrix.build == 'macos-aarch64'
+        run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry --features metal
 
       - name: Strip release binary
         if: matrix.build != 'windows-msvc' && matrix.build != 'linux-aarch64'
