@@ -11,6 +11,12 @@ pub enum GraphError {
     /// Shape mismatch in circuit construction
     #[error("invalid dimensions used for node {0} ({1})")]
     InvalidDims(usize, String),
+    /// Non scalar power
+    #[error("we only support scalar powers")]
+    NonScalarPower,
+    /// Non scalar base for exponentiation
+    #[error("we only support scalar bases for exponentiation")]
+    NonScalarBase,
     /// Wrong method was called to configure an op
     #[error("wrong method was called to configure node {0} ({1})")]
     WrongMethod(usize, String),
@@ -143,4 +149,7 @@ pub enum GraphError {
     /// Invalid RunArg
     #[error("invalid RunArgs: {0}")]
     InvalidRunArgs(String),
+    /// Only nearest neighbor interpolation is supported
+    #[error("only nearest neighbor interpolation is supported")]
+    InvalidInterpolation,
 }

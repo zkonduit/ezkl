@@ -72,11 +72,10 @@ mod py_tests {
                     "torchtext==0.17.2",
                     "torchvision==0.17.2",
                     "pandas==2.2.1",
-                    "numpy==1.26.4",
                     "seaborn==0.13.2",
                     "notebook==7.1.2",
                     "nbconvert==7.16.3",
-                    "onnx==1.16.0",
+                    "onnx==1.17.0",
                     "kaggle==1.6.8",
                     "py-solc-x==2.0.3",
                     "web3==7.5.0",
@@ -90,12 +89,13 @@ mod py_tests {
                     "xgboost==2.0.3",
                     "hummingbird-ml==0.4.11",
                     "lightgbm==4.3.0",
+                    "numpy==1.26.4",
                 ])
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
             let status = Command::new("pip")
-                .args(["install", "numpy==1.23"])
+                .args(["install", "numpy==1.26.4"])
                 .status()
                 .expect("failed to execute process");
 

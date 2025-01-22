@@ -132,21 +132,16 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         (first_element, op_f.output[0])
     }
 
-    ///
+    /// calculates the column size given the number of rows and reserved blinding rows
     pub fn cal_col_size(logrows: usize, reserved_blinding_rows: usize) -> usize {
         2usize.pow(logrows as u32) - reserved_blinding_rows
-    }
-
-    ///
-    pub fn cal_bit_range(bits: usize, reserved_blinding_rows: usize) -> usize {
-        2usize.pow(bits as u32) - reserved_blinding_rows
     }
 }
 
 ///
 pub fn num_cols_required(range_len: IntegerRep, col_size: usize) -> usize {
     // number of cols needed to store the range
-    (range_len / (col_size as IntegerRep)) as usize + 1
+    (range_len / col_size as IntegerRep) as usize + 1
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
@@ -355,14 +350,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
         integer_rep_to_felt(chunk * (self.col_size as IntegerRep) + self.range.0)
     }
 
-    ///
+    /// calculates the column size
     pub fn cal_col_size(logrows: usize, reserved_blinding_rows: usize) -> usize {
         2usize.pow(logrows as u32) - reserved_blinding_rows
-    }
-
-    ///
-    pub fn cal_bit_range(bits: usize, reserved_blinding_rows: usize) -> usize {
-        2usize.pow(bits as u32) - reserved_blinding_rows
     }
 
     /// get column index given input
