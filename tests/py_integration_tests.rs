@@ -95,7 +95,7 @@ mod py_tests {
                 .expect("failed to execute process");
             assert!(status.success());
             let status = Command::new("pip")
-                .args(["install", "numpy==1.23"])
+                .args(["install", "numpy==1.26.4"])
                 .status()
                 .expect("failed to execute process");
 
