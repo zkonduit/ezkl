@@ -656,9 +656,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                     };
 
                     let sel = cs.query_selector(multi_col_selector);
-                    let expr = sel.clone() * range_check_on_synthetic_sel.clone();
 
-                    Constraints::with_selector(sel, vec![expr])
+                    Constraints::with_selector(sel, vec![range_check_on_synthetic_sel])
                 });
 
                 self.static_lookups
@@ -994,9 +993,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                     };
 
                     let sel = cs.query_selector(multi_col_selector);
-                    let expr = sel.clone() * range_check_on_synthetic_sel.clone();
 
-                    Constraints::with_selector(sel, vec![expr])
+                    Constraints::with_selector(sel, vec![range_check_on_synthetic_sel])
                 });
 
                 self.range_checks
