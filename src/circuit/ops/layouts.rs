@@ -75,7 +75,7 @@ fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::
     region: &mut RegionCtx<F>,
     x: &ValTensor<F>,
     f: impl Fn(&BaseConfig<F>, &mut RegionCtx<F>, &ValTensor<F>) -> Result<ValTensor<F>, CircuitError>,
-) -> Result<(), CircuitError> {
+) -> Result<ValTensor<F>, CircuitError> {
     let one = create_constant_tensor(F::from(1), 1);
 
     let f_x = f(config, region, x)?;
@@ -97,13 +97,7 @@ fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::
 
     let is_opt = and(config, region, &[f_x_is_opt_lhs, f_x_is_opt_rhs])?;
 
-    let mut comparison_unit = create_constant_tensor(F::ONE, is_opt.len());
-    comparison_unit.reshape(is_opt.dims())?;
-
-    // assert that the result is 1
-    enforce_equality(config, region, &[is_opt, comparison_unit])?;
-
-    Ok(())
+    Ok(is_opt)
 }
 
 /// Err is less than some constant
@@ -291,7 +285,14 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         Ok(distance)
     };
 
-    optimum_convex_function(config, region, &claimed_output, err_func)?;
+    // we need to add 1 to the points where it is zero to ignore the cvx opt conditions at those points
+    let mut is_opt = optimum_convex_function(config, region, &claimed_output, err_func)?;
+    is_opt = pairwise(config, region, &[is_opt, equal_zero_mask], BaseOp::Add)?;
+
+    let mut comparison_unit = create_constant_tensor(F::ONE, is_opt.len());
+    comparison_unit.reshape(is_opt.dims())?;
+    // assert that the result is 1
+    enforce_equality(config, region, &[is_opt, comparison_unit])?;
 
     Ok(claimed_output)
 }
@@ -363,7 +364,13 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         Ok(distance)
     };
 
-    optimum_convex_function(config, region, &claimed_output, err_func)?;
+    let is_opt = optimum_convex_function(config, region, &claimed_output, err_func)?;
+
+    let mut comparison_unit = create_constant_tensor(F::ONE, is_opt.len());
+    comparison_unit.reshape(is_opt.dims())?;
+
+    // assert that the result is 1
+    enforce_equality(config, region, &[is_opt, comparison_unit])?;
 
     Ok(claimed_output)
 }
