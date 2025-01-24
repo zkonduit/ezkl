@@ -75,7 +75,7 @@ fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::
     region: &mut RegionCtx<F>,
     x: &ValTensor<F>,
     f: impl Fn(&BaseConfig<F>, &mut RegionCtx<F>, &ValTensor<F>) -> Result<ValTensor<F>, CircuitError>,
-) -> Result<(), CircuitError> {
+) -> Result<ValTensor<F>, CircuitError> {
     let one = create_constant_tensor(F::from(1), 1);
 
     let f_x = f(config, region, x)?;
@@ -87,22 +87,17 @@ fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::
     let f_x_minus_1 = f(config, region, &x_minus_1)?;
 
     // because the function is convex, the result should be the minimum of the three
-    // not that we offset the x by 1 to get the next value
-    // f(x) <= f(x+1) and f(x) <= f(x-1)
+    // note that we offset the x by 1 to get the next value
+    // f(x) <= f(x+1) and f(x) < f(x-1)
     // the result is 1 if the function is optimal solely because of the convexity of the function
-    // the distances can be equal but this is only possible if f(x) and f(x+1) are both optimal (or f(x) and f(x-1)).
+    // the distances can be equal but this is only possible if f(x) and f(x+1) are both optimal, but if (f(x) = f(x + 1))
+    // f(x+1) is not smaller than f(x + 1 - 1) = f(x) and thus f(x) is unique
     let f_x_is_opt_rhs = less_equal(config, region, &[f_x.clone(), f_x_plus_1.clone()])?;
-    let f_x_is_opt_lhs = less_equal(config, region, &[f_x.clone(), f_x_minus_1.clone()])?;
+    let f_x_is_opt_lhs = less(config, region, &[f_x.clone(), f_x_minus_1.clone()])?;
 
     let is_opt = and(config, region, &[f_x_is_opt_lhs, f_x_is_opt_rhs])?;
 
-    let mut comparison_unit = create_constant_tensor(F::ONE, is_opt.len());
-    comparison_unit.reshape(is_opt.dims())?;
-
-    // assert that the result is 1
-    enforce_equality(config, region, &[is_opt, comparison_unit])?;
-
-    Ok(())
+    Ok(is_opt)
 }
 
 /// Err is less than some constant
@@ -290,7 +285,14 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         Ok(distance)
     };
 
-    optimum_convex_function(config, region, &claimed_output, err_func)?;
+    // we need to add 1 to the points where it is zero to ignore the cvx opt conditions at those points
+    let mut is_opt = optimum_convex_function(config, region, &claimed_output, err_func)?;
+    is_opt = pairwise(config, region, &[is_opt, equal_zero_mask], BaseOp::Add)?;
+
+    let mut comparison_unit = create_constant_tensor(F::ONE, is_opt.len());
+    comparison_unit.reshape(is_opt.dims())?;
+    // assert that the result is 1
+    enforce_equality(config, region, &[is_opt, comparison_unit])?;
 
     Ok(claimed_output)
 }
@@ -362,7 +364,13 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         Ok(distance)
     };
 
-    optimum_convex_function(config, region, &claimed_output, err_func)?;
+    let is_opt = optimum_convex_function(config, region, &claimed_output, err_func)?;
+
+    let mut comparison_unit = create_constant_tensor(F::ONE, is_opt.len());
+    comparison_unit.reshape(is_opt.dims())?;
+
+    // assert that the result is 1
+    enforce_equality(config, region, &[is_opt, comparison_unit])?;
 
     Ok(claimed_output)
 }
