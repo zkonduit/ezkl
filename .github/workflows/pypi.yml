@@ -32,6 +32,14 @@ jobs:
           python-version: 3.12
           architecture: x64
 
+      - name: Set pyproject.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv pyproject.toml pyproject.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" pyproject.toml.orig >pyproject.toml
+
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
@@ -89,6 +97,14 @@ jobs:
           python-version: 3.12
           architecture: ${{ matrix.target }}
 
+      - name: Set pyproject.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv pyproject.toml pyproject.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" pyproject.toml.orig >pyproject.toml
+
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
@@ -138,6 +154,14 @@ jobs:
           python-version: 3.12
           architecture: x64
 
+      - name: Set pyproject.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv pyproject.toml pyproject.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" pyproject.toml.orig >pyproject.toml
+
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
@@ -147,7 +171,6 @@ jobs:
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
-
 
       - name: Install required libraries
         shell: bash
@@ -187,57 +210,6 @@ jobs:
           name: wheels
           path: dist
 
-  #  There's a problem with the maturin-action toolchain for arm arch leading to failed builds
-  # linux-cross:
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       target: [aarch64, armv7]
-  #   steps:
-  #   - uses: actions/checkout@v4
-  #   - uses: actions/setup-python@v4
-  #     with:
-  #       python-version: 3.12
-
-  #   - name: Install cross-compilation tools for aarch64
-  #     if: matrix.target == 'aarch64'
-  #     run: |
-  #       sudo apt-get update
-  #       sudo apt-get install -y gcc make gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross libusb-1.0-0-dev libatomic1-arm64-cross
-
-  #   - name: Install cross-compilation tools for armv7
-  #     if: matrix.target == 'armv7'
-  #     run: |
-  #       sudo apt-get update
-  #       sudo apt-get install -y gcc make gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross libusb-1.0-0-dev libatomic1-armhf-cross
-
-  #   - name: Build wheels
-  #     uses: PyO3/maturin-action@v1
-  #     with:
-  #       target: ${{ matrix.target }}
-  #       manylinux: auto
-  #       args: --release --out dist --features python-bindings
-
-  #   - uses: uraimo/run-on-arch-action@v2.5.0
-  #     name: Install built wheel
-  #     with:
-  #       arch: ${{ matrix.target }}
-  #       distro: ubuntu20.04
-  #       githubToken: ${{ github.token }}
-  #       install: |
-  #         apt-get update
-  #         apt-get install -y --no-install-recommends python3 python3-pip
-  #         pip3 install -U pip
-  #       run: |
-  #         pip3 install ezkl --no-index --find-links dist/ --force-reinstall
-  #         python3 -c "import ezkl"
-
-  #   - name: Upload wheels
-  #     uses: actions/upload-artifact@v3
-  #     with:
-  #       name: wheels
-  #       path: dist
-
   musllinux:
     permissions:
       contents: read
@@ -273,6 +245,7 @@ jobs:
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.toml.orig >Cargo.toml
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
+
       - name: Install required libraries
         shell: bash
         run: |
@@ -323,6 +296,14 @@ jobs:
         with:
           python-version: 3.12
 
+      - name: Set pyproject.toml version to match github tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          mv pyproject.toml pyproject.toml.orig
+          sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" pyproject.toml.orig >pyproject.toml
+
       - name: Set Cargo.toml version to match github tag
         shell: bash
         env:
@@ -366,8 +347,6 @@ jobs:
     permissions:
       id-token: write
     if: "startsWith(github.ref, 'refs/tags/')"
-    # TODO: Uncomment if linux-cross is working
-    # needs: [ macos, windows, linux, linux-cross, musllinux, musllinux-cross ]
     needs: [macos, windows, linux, musllinux, musllinux-cross]
     steps:
       - uses: actions/download-artifact@v3
@@ -375,24 +354,20 @@ jobs:
           name: wheels
       - name: List Files
         run: ls -R
-
-      # Both publish steps will fail if there is no trusted publisher setup
-      # On failure the publish step will then simply continue to the next one
+      
+      # publishes to TestPyPI
+      # - name: Publish package distribution to TestPyPI
+      #   uses: pypa/gh-action-pypi-publish@unstable/v1
+      #   with:
+      #     repository-url: https://test.pypi.org/legacy/
+      #     packages-dir: ./
 
       # publishes to PyPI
       - name: Publish package distributions to PyPI
-        continue-on-error: true
         uses: pypa/gh-action-pypi-publish@unstable/v1
         with:
           packages-dir: ./
 
-      # publishes to TestPyPI
-      - name: Publish package distribution to TestPyPI
-        continue-on-error: true
-        uses: pypa/gh-action-pypi-publish@unstable/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          packages-dir: ./
 
   doc-publish:
     permissions:
