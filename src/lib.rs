@@ -19,8 +19,7 @@
     unused_extern_crates,
     unused_import_braces,
     missing_debug_implementations,
-    unsafe_code,
-    unused_crate_dependencies
+    unsafe_code
 )]
 // we allow this for our dynamic range based indexing scheme
 #![allow(clippy::single_range_in_vec_init)]
