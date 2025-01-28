@@ -403,7 +403,9 @@ impl VarTensor {
         values: &ValTensor<F>,
     ) -> Result<usize, halo2_proofs::plonk::Error> {
         if values.len() > self.col_size() {
-            error!("Values are too large for the column");
+            error!(
+                "There are too many values to flush for this column size, try setting the logrows to a higher value (eg. --logrows 22 on the cli)"
+            );
             return Err(halo2_proofs::plonk::Error::Synthesis);
         }
 

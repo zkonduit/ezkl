@@ -19,7 +19,8 @@
     unused_extern_crates,
     unused_import_braces,
     missing_debug_implementations,
-    unsafe_code
+    unsafe_code,
+    unused_crate_dependencies
 )]
 // we allow this for our dynamic range based indexing scheme
 #![allow(clippy::single_range_in_vec_init)]
@@ -28,6 +29,9 @@
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
+
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+use mimalloc as _;
 
 /// Error type
 // #[cfg_attr(not(feature = "ezkl"), derive(uniffi::Error))]

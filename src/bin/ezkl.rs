@@ -1,7 +1,11 @@
 // ignore file if compiling for wasm
+
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+use mimalloc::MiMalloc;
+
 #[global_allocator]
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::{CommandFactory, Parser};
