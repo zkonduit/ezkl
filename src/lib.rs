@@ -29,6 +29,9 @@
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
 
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+use mimalloc as _;
+
 /// Error type
 // #[cfg_attr(not(feature = "ezkl"), derive(uniffi::Error))]
 #[derive(thiserror::Error, Debug)]
