@@ -1591,6 +1591,7 @@ pub fn homogenize_input_scales(
 ) -> Result<Box<dyn Op<Fp>>, GraphError> {
     let relevant_input_scales = inputs_to_scale
         .iter()
+        .filter(|idx| input_scales.len() > **idx)
         .map(|&idx| input_scales[idx])
         .collect_vec();
 
