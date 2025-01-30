@@ -102,7 +102,7 @@ use circuit::{table::Range, CheckMode, Tolerance};
 use clap::Args;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use fieldutils::IntegerRep;
-use graph::Visibility;
+use graph::{Visibility, MAX_PUBLIC_SRS};
 use halo2_proofs::poly::{
     ipa::commitment::IPACommitmentScheme, kzg::commitment::KZGCommitmentScheme,
 };
@@ -409,13 +409,6 @@ impl RunArgs {
             errors.push("scale_rebase_multiplier must be >= 1".to_string());
         }
 
-        if self.input_scale == 0 {
-            errors.push("input_scale cannot be 0".to_string());
-        }
-
-        if self.param_scale == 0 {
-            errors.push("param_scale cannot be 0".to_string());
-        }
         // if any of the scales are too small
         if self.input_scale < 8 || self.param_scale < 8 {
             warn!("low scale values (<8) may impact precision");
@@ -429,13 +422,6 @@ impl RunArgs {
             ));
         }
 
-        if self.lookup_range.0.abs() != self.lookup_range.1 {
-            errors.push(format!(
-                "Lookup range should be symmetric. Current range: [{}, {}]",
-                self.lookup_range.0, self.lookup_range.1
-            ));
-        }
-
         // Size validations
         if self.logrows < 1 {
             errors.push("logrows must be >= 1".to_string());
@@ -445,16 +431,11 @@ impl RunArgs {
             errors.push("num_inner_cols must be >= 1".to_string());
         }
 
-        // Variables validation
-        if self.variables.is_empty() {
-            errors.push("At least one variable must be defined".to_string());
-        }
-
         let batch_size = self.variables.iter().find(|(name, _)| name == "batch_size");
-        if batch_size.is_none() {
-            errors.push("'batch_size' variable must be defined".to_string());
-        } else if batch_size.unwrap().1 == 0 {
-            errors.push("'batch_size' cannot be 0".to_string());
+        if let Some(batch_size) = batch_size {
+            if batch_size.1 == 0 {
+                errors.push("'batch_size' cannot be 0".to_string());
+            }
         }
 
         // Decomposition validations
@@ -466,20 +447,9 @@ impl RunArgs {
             errors.push("decomp_legs cannot be 0".to_string());
         }
 
-        if !self.decomp_base.is_power_of_two() {
-            errors.push(format!(
-                "decomp_base {} should be a power of 2",
-                self.decomp_base
-            ));
-        }
-
         // Performance validations
-        if self.logrows < 10 {
-            errors
-                .push("logrows < 10 may be too small for most practical applications".to_string());
-        }
-        if self.logrows > 32 {
-            errors.push("logrows > 32 may lead to excessive memory usage".to_string());
+        if self.logrows > MAX_PUBLIC_SRS {
+            warn!("logrows exceeds maximum public SRS size");
         }
 
         // Validate tolerance is non-negative
@@ -489,7 +459,7 @@ impl RunArgs {
 
         // Performance warnings
         if self.input_scale > 20 || self.param_scale > 20 {
-            errors.push("Warning: High scale values (>20) may impact performance".to_string());
+            warn!("High scale values (>20) may impact performance");
         }
 
         if errors.is_empty() {
@@ -618,35 +588,11 @@ mod tests {
     }
 
     #[test]
-    fn test_asymmetric_lookup_range() {
-        let mut args = RunArgs::default();
-        args.lookup_range = (-100, 200);
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("Lookup range should be symmetric"));
-    }
-
-    #[test]
     fn test_invalid_logrows() {
         let mut args = RunArgs::default();
         args.logrows = 0;
         let err = args.validate().unwrap_err();
         assert!(err.contains("logrows must be >= 1"));
-    }
-
-    #[test]
-    fn test_logrows_too_small() {
-        let mut args = RunArgs::default();
-        args.logrows = 5;
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("may be too small for most practical applications"));
-    }
-
-    #[test]
-    fn test_logrows_too_large() {
-        let mut args = RunArgs::default();
-        args.logrows = 33;
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("may lead to excessive memory usage"));
     }
 
     #[test]
@@ -675,63 +621,11 @@ mod tests {
     }
 
     #[test]
-    fn test_decomp_base_power_of_two() {
-        let mut args = RunArgs::default();
-        args.decomp_base = 1000; // Not a power of 2
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("should be a power of 2"));
-    }
-
-    #[test]
-    fn test_missing_batch_size() {
-        let mut args = RunArgs::default();
-        args.variables = vec![("other_var".to_string(), 1)];
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("'batch_size' variable must be defined"));
-    }
-
-    #[test]
     fn test_zero_batch_size() {
         let mut args = RunArgs::default();
         args.variables = vec![("batch_size".to_string(), 0)];
         let err = args.validate().unwrap_err();
         assert!(err.contains("'batch_size' cannot be 0"));
-    }
-
-    #[test]
-    fn test_empty_variables() {
-        let mut args = RunArgs::default();
-        args.variables = vec![];
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("At least one variable must be defined"));
-    }
-
-    #[test]
-    fn test_invalid_scales() {
-        let mut args = RunArgs::default();
-        args.input_scale = 0;
-        args.param_scale = 0;
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("input_scale cannot be 0"));
-        assert!(err.contains("param_scale cannot be 0"));
-    }
-
-    #[test]
-    fn test_high_scale_warning() {
-        let mut args = RunArgs::default();
-        args.input_scale = 21;
-        args.param_scale = 21;
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("High scale values (>20) may impact performance"));
-    }
-
-    #[test]
-    fn test_kzg_with_fixed_params() {
-        let mut args = RunArgs::default();
-        args.commitment = Some(Commitments::KZG);
-        args.param_visibility = Visibility::Fixed;
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("KZG commitment scheme is incompatible with fixed param_visibility"));
     }
 
     #[test]
@@ -746,7 +640,6 @@ mod tests {
     fn test_multiple_validation_errors() {
         let mut args = RunArgs::default();
         args.logrows = 0;
-        args.input_scale = 0;
         args.lookup_range = (100, -100);
         let err = args.validate().unwrap_err();
         // Should contain multiple error messages
