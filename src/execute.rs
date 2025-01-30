@@ -118,7 +118,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
         } => gen_srs_cmd(
             srs_path,
             logrows as u32,
-            commitment.unwrap_or_else(|_| Commitments::from_str(DEFAULT_COMMITMENT).unwrap()),
+            commitment.unwrap_or_else(|| Commitments::from_str(DEFAULT_COMMITMENT).unwrap()),
         ),
         Commands::GetSrs {
             srs_path,
