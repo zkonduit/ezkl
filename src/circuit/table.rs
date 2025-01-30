@@ -176,6 +176,11 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
             Some(inputs) => {
                 // validate enough columns are provided to store the range
                 if inputs.len() < num_cols {
+                    warn!(
+                        "Insufficient columns provided for table. Expected {}, got {}. Padding to required amount.",
+                        num_cols,
+                        inputs.len()
+                    );
                     // add columns to match the required number of columns
                     let diff = num_cols - inputs.len();
                     for _ in 0..diff {
