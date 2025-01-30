@@ -1693,7 +1693,7 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync + P
             .zip(rhs)
             .map(|(o, r)| {
                 if let Some(zero) = T::zero() {
-                    if r == zero {
+                    if r != zero {
                         *o = o.clone() % r;
                         Ok(())
                     } else {
@@ -1742,7 +1742,6 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync + P
 /// assert_eq!(c, vec![2, 3]);
 ///
 /// ```
-
 pub fn get_broadcasted_shape(
     shape_a: &[usize],
     shape_b: &[usize],
