@@ -38,4 +38,10 @@ pub enum TensorError {
     /// Decomposition error
     #[error("decomposition error: {0}")]
     DecompositionError(#[from] DecompositionError),
+    /// Invalid argument
+    #[error("invalid argument: {0}")]
+    InvalidArgument(String),
+    /// Index out of bounds
+    #[error("index {0} out of bounds for dimension {1}")]
+    IndexOutOfBounds(usize, usize),
 }

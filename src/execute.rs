@@ -118,7 +118,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
         } => gen_srs_cmd(
             srs_path,
             logrows as u32,
-            commitment.unwrap_or(Commitments::from_str(DEFAULT_COMMITMENT).unwrap()),
+            commitment.unwrap_or_else(Commitments::from_str(DEFAULT_COMMITMENT).unwrap()),
         ),
         Commands::GetSrs {
             srs_path,
@@ -1535,7 +1535,7 @@ pub(crate) async fn create_evm_data_attestation(
     trace!("params computed");
 
     // if input is not provided, we just instantiate dummy input data
-    let data = GraphData::from_path(input).unwrap_or(GraphData::new(DataSource::File(vec![])));
+    let data = GraphData::from_path(input).unwrap_or_else(GraphData::new(DataSource::File(vec![])));
 
     // The number of input and output instances we attest to for the single call data attestation
     let mut input_len = None;
@@ -2126,6 +2126,7 @@ pub(crate) fn mock_aggregate(
     Ok(String::new())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn setup_aggregate(
     sample_snarks: Vec<PathBuf>,
     vk_path: PathBuf,

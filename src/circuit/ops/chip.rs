@@ -528,20 +528,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
         }
 
         // we borrow mutably twice so we need to do this dance
+        let mut prexisting_inputs = None;
 
         let table = if !self.static_lookups.tables.contains_key(nl) {
             // as all tables have the same input we see if there's another table who's input we can reuse
-            let table = if let Some(table) = self.static_lookups.tables.values().next() {
-                Table::<F>::configure(
-                    cs,
-                    lookup_range,
-                    logrows,
-                    nl,
-                    Some(table.table_inputs.clone()),
-                )
-            } else {
-                Table::<F>::configure(cs, lookup_range, logrows, nl, None)
-            };
+            let table =
+                Table::<F>::configure(cs, lookup_range, logrows, nl, &mut prexisting_inputs);
             self.static_lookups.tables.insert(nl.clone(), table.clone());
             table
         } else {

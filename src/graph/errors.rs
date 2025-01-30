@@ -119,13 +119,13 @@ pub enum GraphError {
     /// Missing input for a node
     #[error("missing input for node {0}")]
     MissingInput(usize),
-    ///
+    /// Ranges can only be constant
     #[error("range only supports constant inputs in a zk circuit")]
     NonConstantRange,
-    ///
+    /// Trilu diagonal must be constant
     #[error("trilu only supports constant diagonals in a zk circuit")]
     NonConstantTrilu,
-    ///
+    /// The witness was too short
     #[error("insufficient witness values to generate a fixed output")]
     InsufficientWitnessValues,
     /// Missing scale

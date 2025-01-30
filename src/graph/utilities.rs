@@ -227,10 +227,7 @@ pub fn extract_tensor_value(
                 .iter()
                 .map(|x| match x.to_i64() {
                     Ok(v) => Ok(v as f32),
-                    Err(_) => match x.to_i64() {
-                        Ok(v) => Ok(v as f32),
-                        Err(_) => Err(GraphError::UnsupportedDataType(0, "TDim".to_string())),
-                    },
+                    Err(_) => Err(GraphError::UnsupportedDataType(0, "TDim".to_string())),
                 })
                 .collect();
 
@@ -1591,12 +1588,9 @@ pub fn homogenize_input_scales(
     input_scales: Vec<crate::Scale>,
     inputs_to_scale: Vec<usize>,
 ) -> Result<Box<dyn Op<Fp>>, GraphError> {
-    let relevant_input_scales = input_scales
-        .clone()
-        .into_iter()
-        .enumerate()
-        .filter(|(idx, _)| inputs_to_scale.contains(idx))
-        .map(|(_, scale)| scale)
+    let relevant_input_scales = inputs_to_scale
+        .iter()
+        .map(|&idx| input_scales[idx])
         .collect_vec();
 
     if inputs_to_scale.is_empty() {

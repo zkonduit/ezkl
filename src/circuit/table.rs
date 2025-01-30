@@ -163,7 +163,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         range: Range,
         logrows: usize,
         nonlinearity: &LookupOp,
-        preexisting_inputs: Option<Vec<TableColumn>>,
+        preexisting_inputs: &mut Option<Vec<TableColumn>>,
     ) -> Table<F> {
         let factors = cs.blinding_factors() + RESERVED_BLINDING_ROWS_PAD;
         let col_size = Self::cal_col_size(logrows, factors);
@@ -172,13 +172,26 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
 
         debug!("table range: {:?}", range);
 
-        let table_inputs = preexisting_inputs.unwrap_or_else(|| {
-            let mut cols = vec![];
-            for _ in 0..num_cols {
-                cols.push(cs.lookup_table_column());
+        let table_inputs = match preexisting_inputs {
+            Some(inputs) => {
+                // validate enough columns are provided to store the range
+                if inputs.len() < num_cols {
+                    // add columns to match the required number of columns
+                    let diff = num_cols - inputs.len();
+                    for _ in 0..diff {
+                        inputs.push(cs.lookup_table_column());
+                    }
+                }
+                inputs.clone()
             }
-            cols
-        });
+            None => {
+                let mut cols = vec![];
+                for _ in 0..num_cols {
+                    cols.push(cs.lookup_table_column());
+                }
+                cols
+            }
+        };
 
         let num_cols = table_inputs.len();
 

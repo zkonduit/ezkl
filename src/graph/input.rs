@@ -24,6 +24,7 @@ use tract_onnx::tract_core::{
     tract_data::{prelude::Tensor as TractTensor, TVec},
     value::TValue,
 };
+
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::tract_hir::tract_num_traits::ToPrimitive;
 
@@ -31,29 +32,94 @@ type Decimals = u8;
 type Call = String;
 type RPCUrl = String;
 
-///
+/// Represents different types of values that can be stored in a file source
+/// Used for handling various input types in zero-knowledge proofs
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum FileSourceInner {
-    /// Inner elements of float inputs coming from a file
+    /// Floating point value (64-bit)
     Float(f64),
-    /// Inner elements of bool inputs coming from a file
+    /// Boolean value
     Bool(bool),
-    /// Inner elements of inputs coming from a witness
+    /// Field element value for direct use in circuits
     Field(Fp),
 }
 
 impl FileSourceInner {
-    ///
+    /// Returns true if the value is a floating point number
     pub fn is_float(&self) -> bool {
         matches!(self, FileSourceInner::Float(_))
     }
-    ///
+
+    /// Returns true if the value is a boolean
     pub fn is_bool(&self) -> bool {
         matches!(self, FileSourceInner::Bool(_))
     }
-    ///
+
+    /// Returns true if the value is a field element
     pub fn is_field(&self) -> bool {
         matches!(self, FileSourceInner::Field(_))
+    }
+
+    /// Creates a new floating point value
+    pub fn new_float(f: f64) -> Self {
+        FileSourceInner::Float(f)
+    }
+
+    /// Creates a new field element value
+    pub fn new_field(f: Fp) -> Self {
+        FileSourceInner::Field(f)
+    }
+
+    /// Creates a new boolean value
+    pub fn new_bool(f: bool) -> Self {
+        FileSourceInner::Bool(f)
+    }
+
+    /// Adjusts the value according to the specified input type
+    ///
+    /// # Arguments
+    /// * `input_type` - Type specification to convert the value to
+    pub fn as_type(&mut self, input_type: &InputType) {
+        match self {
+            FileSourceInner::Float(f) => input_type.roundtrip(f),
+            FileSourceInner::Bool(_) => assert!(matches!(input_type, InputType::Bool)),
+            FileSourceInner::Field(_) => {}
+        }
+    }
+
+    /// Converts the value to a field element using appropriate scaling
+    ///
+    /// # Arguments
+    /// * `scale` - Scaling factor for floating point conversion
+    pub fn to_field(&self, scale: crate::Scale) -> Fp {
+        match self {
+            FileSourceInner::Float(f) => {
+                integer_rep_to_felt(quantize_float(f, 0.0, scale).unwrap())
+            }
+            FileSourceInner::Bool(f) => {
+                if *f {
+                    Fp::one()
+                } else {
+                    Fp::zero()
+                }
+            }
+            FileSourceInner::Field(f) => *f,
+        }
+    }
+
+    /// Converts the value to a floating point number
+    pub fn to_float(&self) -> f64 {
+        match self {
+            FileSourceInner::Float(f) => *f,
+            FileSourceInner::Bool(f) => {
+                if *f {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            FileSourceInner::Field(f) => crate::fieldutils::felt_to_integer_rep(*f) as f64,
+        }
     }
 }
 
@@ -70,8 +136,8 @@ impl Serialize for FileSourceInner {
     }
 }
 
-// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
-// UNTAGGED ENUMS WONT WORK :( as highlighted here:
+// Deserialization implementation for FileSourceInner
+// Uses JSON deserialization to handle the different variants
 impl<'de> Deserialize<'de> for FileSourceInner {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -98,102 +164,22 @@ impl<'de> Deserialize<'de> for FileSourceInner {
     }
 }
 
-/// Elements of inputs coming from a file
+/// A collection of input values from a file source
+/// Organized as a vector of vectors where each inner vector represents a row/entry
 pub type FileSource = Vec<Vec<FileSourceInner>>;
 
-impl FileSourceInner {
-    /// Create a new FileSourceInner
-    pub fn new_float(f: f64) -> Self {
-        FileSourceInner::Float(f)
-    }
-    /// Create a new FileSourceInner
-    pub fn new_field(f: Fp) -> Self {
-        FileSourceInner::Field(f)
-    }
-    /// Create a new FileSourceInner
-    pub fn new_bool(f: bool) -> Self {
-        FileSourceInner::Bool(f)
-    }
-
-    ///
-    pub fn as_type(&mut self, input_type: &InputType) {
-        match self {
-            FileSourceInner::Float(f) => input_type.roundtrip(f),
-            FileSourceInner::Bool(_) => assert!(matches!(input_type, InputType::Bool)),
-            FileSourceInner::Field(_) => {}
-        }
-    }
-
-    /// Convert to a field element
-    pub fn to_field(&self, scale: crate::Scale) -> Fp {
-        match self {
-            FileSourceInner::Float(f) => {
-                integer_rep_to_felt(quantize_float(f, 0.0, scale).unwrap())
-            }
-            FileSourceInner::Bool(f) => {
-                if *f {
-                    Fp::one()
-                } else {
-                    Fp::zero()
-                }
-            }
-            FileSourceInner::Field(f) => *f,
-        }
-    }
-    /// Convert to a float
-    pub fn to_float(&self) -> f64 {
-        match self {
-            FileSourceInner::Float(f) => *f,
-            FileSourceInner::Bool(f) => {
-                if *f {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
-            FileSourceInner::Field(f) => crate::fieldutils::felt_to_integer_rep(*f) as f64,
-        }
-    }
-}
-
-/// Call type for attested inputs on-chain
+/// Represents different types of calls for fetching on-chain data
 #[derive(Clone, Debug, PartialOrd, PartialEq)]
 pub enum Calls {
-    /// Vector of calls to accounts, each returning an attested data point
+    /// Multiple calls to different accounts, each returning individual values
     Multiple(Vec<CallsToAccount>),
-    /// Single call to account, returning an array of attested data points
+    /// Single call returning an array of values
     Single(CallToAccount),
 }
 
 impl Default for Calls {
     fn default() -> Self {
         Calls::Multiple(Vec::new())
-    }
-}
-/// Inner elements of inputs/outputs coming from on-chain
-#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
-pub struct OnChainSource {
-    /// Calls to accounts
-    pub calls: Calls,
-    /// RPC url
-    pub rpc: RPCUrl,
-}
-
-impl OnChainSource {
-    /// Create a new OnChainSource with multiple calls
-    pub fn new_multiple(calls: Vec<CallsToAccount>, rpc: RPCUrl) -> Self {
-        OnChainSource {
-            calls: Calls::Multiple(calls),
-            rpc,
-        }
-    }
-
-    /// Create a new OnChainSource with a single call
-    pub fn new_single(call: CallToAccount, rpc: RPCUrl) -> Self {
-        OnChainSource {
-            calls: Calls::Single(call),
-            rpc,
-        }
     }
 }
 
@@ -217,7 +203,6 @@ impl<'de> Deserialize<'de> for Calls {
         D: Deserializer<'de>,
     {
         let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
-
         let multiple_try: Result<Vec<CallsToAccount>, _> = serde_json::from_str(this_json.get());
         if let Ok(t) = multiple_try {
             return Ok(Calls::Multiple(t));
@@ -227,111 +212,52 @@ impl<'de> Deserialize<'de> for Calls {
             return Ok(Calls::Single(t));
         }
 
-        Err(serde::de::Error::custom(
-            "failed to deserialize FileSourceInner",
-        ))
+        Err(serde::de::Error::custom("failed to deserialize Calls"))
     }
 }
-
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-/// Inner elements of inputs/outputs coming from postgres DB
+/// Configuration for accessing on-chain data sources
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
-pub struct PostgresSource {
-    /// postgres host
-    pub host: RPCUrl,
-    /// user to connect to postgres
-    pub user: String,
-    /// password to connect to postgres
-    pub password: String,
-    /// query to execute
-    pub query: String,
-    /// dbname
-    pub dbname: String,
-    /// port
-    pub port: String,
-}
-
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-impl PostgresSource {
-    /// Create a new PostgresSource
-    pub fn new(
-        host: RPCUrl,
-        port: String,
-        user: String,
-        query: String,
-        dbname: String,
-        password: String,
-    ) -> Self {
-        PostgresSource {
-            host,
-            user,
-            password,
-            query,
-            dbname,
-            port,
-        }
-    }
-
-    /// Fetch data from postgres
-    pub async fn fetch(&self) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, GraphError> {
-        // clone to move into thread
-        let user = self.user.clone();
-        let host = self.host.clone();
-        let query = self.query.clone();
-        let dbname = self.dbname.clone();
-        let port = self.port.clone();
-        let password = self.password.clone();
-
-        let config = if password.is_empty() {
-            format!(
-                "host={} user={} dbname={} port={}",
-                host, user, dbname, port
-            )
-        } else {
-            format!(
-                "host={} user={} dbname={} port={} password={}",
-                host, user, dbname, port, password
-            )
-        };
-
-        let mut client = Client::connect(&config).await?;
-        let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
-        // extract rows from query
-        for row in client.query(&query, &[]).await? {
-            // extract features from row
-            for i in 0..row.len() {
-                res.push(row.get(i));
-            }
-        }
-        Ok(vec![res])
-    }
-
-    /// Fetch data from postgres and format it as a FileSource
-    pub async fn fetch_and_format_as_file(&self) -> Result<Vec<Vec<FileSourceInner>>, GraphError> {
-        Ok(self
-            .fetch()
-            .await?
-            .iter()
-            .map(|d| {
-                d.iter()
-                    .map(|d| {
-                        FileSourceInner::Float(
-                            d.n.as_ref()
-                                .unwrap()
-                                .to_f64()
-                                .ok_or("could not convert decimal to f64")
-                                .unwrap(),
-                        )
-                    })
-                    .collect()
-            })
-            .collect())
-    }
+pub struct OnChainSource {
+    /// Call specifications for fetching data
+    pub calls: Calls,
+    /// RPC endpoint URL for accessing the chain
+    pub rpc: RPCUrl,
 }
 
 impl OnChainSource {
+    /// Creates a new OnChainSource with multiple calls
+    ///
+    /// # Arguments
+    /// * `calls` - Vector of call specifications
+    /// * `rpc` - RPC endpoint URL
+    pub fn new_multiple(calls: Vec<CallsToAccount>, rpc: RPCUrl) -> Self {
+        OnChainSource {
+            calls: Calls::Multiple(calls),
+            rpc,
+        }
+    }
+
+    /// Creates a new OnChainSource with a single call
+    ///
+    /// # Arguments
+    /// * `call` - Call specification
+    /// * `rpc` - RPC endpoint URL
+    pub fn new_single(call: CallToAccount, rpc: RPCUrl) -> Self {
+        OnChainSource {
+            calls: Calls::Single(call),
+            rpc,
+        }
+    }
+
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    /// Create dummy local on-chain data to test the OnChain data source
+    /// Creates test data for the OnChain data source
+    /// Used for testing and development purposes
+    ///
+    /// # Arguments
+    /// * `data` - Sample file data to use
+    /// * `scales` - Scaling factors for each input
+    /// * `shapes` - Shapes of the input tensors
+    /// * `rpc` - Optional RPC endpoint override
     pub async fn test_from_file_data(
         data: &FileSource,
         scales: Vec<crate::Scale>,
@@ -398,48 +324,40 @@ impl OnChainSource {
     }
 }
 
-/// Defines the view only calls to accounts to fetch the on-chain input data.
-/// This data will be included as part of the first elements in the publicInputs
-/// for the sol evm verifier and will be  verifyWithDataAttestation.sol
+/// Specification for view-only calls to fetch on-chain data
+/// Used for data attestation in smart contract verification
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
 pub struct CallsToAccount {
-    /// A vector of tuples, where index 0 of tuples
-    /// are the byte strings representing the ABI encoded function calls to
-    /// read the data from the address. This call must return a single
-    /// elementary type (<https://docs.soliditylang.org/en/v0.8.20/abi-spec.html#types>).
-    /// The second index of the tuple is the number of decimals for f32 conversion.
-    /// We don't support dynamic types currently.
+    /// Vector of (call data, decimals) pairs
+    /// call_data: ABI-encoded function call
+    /// decimals: Number of decimal places for float conversion
     pub call_data: Vec<(Call, Decimals)>,
-    /// Address of the contract to read the data from.
+    /// Contract address to call
     pub address: String,
 }
 
-/// Defines a view only call to accounts to fetch the on-chain input data.
-/// This data will be included as part of the first elements in the publicInputs
-/// for the sol evm verifier and will be  verifyWithDataAttestation.sol
+/// Specification for a single view-only call returning an array
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
 pub struct CallToAccount {
-    /// The call_data is a byte strings representing the ABI encoded function call to
-    /// read the data from the address. This call must return a single array of integers that can be
-    /// be safely cast to the int128 type in solidity.
+    /// ABI-encoded function call data
     pub call_data: Call,
-    /// The number of decimals for f32 conversion of all of the elements returned from the
-    /// call.
+    /// Number of decimal places for float conversion
     pub decimals: Decimals,
-    /// Address of the contract to read the data from.
+    /// Contract address to call
     pub address: String,
-    /// The number of elements returned from the call.
+    /// Expected length of returned array
     pub len: usize,
 }
-/// Enum that defines source of the inputs/outputs to the EZKL model
+
+/// Represents different sources of input/output data for the EZKL model
 #[derive(Clone, Debug, Serialize, PartialOrd, PartialEq)]
 #[serde(untagged)]
 pub enum DataSource {
-    /// .json File data source.
+    /// Data from a JSON file containing arrays of values
     File(FileSource),
-    /// On-chain data source. The first element is the calls to the account, and the second is the RPC url.
+    /// Data fetched from blockchain contracts
     OnChain(OnChainSource),
-    /// Postgres DB
+    /// Data from a PostgreSQL database
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     DB(PostgresSource),
 }
@@ -482,8 +400,7 @@ impl From<OnChainSource> for DataSource {
     }
 }
 
-// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
-// UNTAGGED ENUMS WONT WORK :( as highlighted here:
+// Note: Always use JSON serialization for untagged enums
 impl<'de> Deserialize<'de> for DataSource {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -491,15 +408,19 @@ impl<'de> Deserialize<'de> for DataSource {
     {
         let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
 
+        // Try deserializing as FileSource first
         let first_try: Result<FileSource, _> = serde_json::from_str(this_json.get());
-
         if let Ok(t) = first_try {
             return Ok(DataSource::File(t));
         }
+
+        // Try deserializing as OnChainSource
         let second_try: Result<OnChainSource, _> = serde_json::from_str(this_json.get());
         if let Ok(t) = second_try {
             return Ok(DataSource::OnChain(t));
         }
+
+        // Try deserializing as PostgresSource if feature enabled
         #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
         {
             let third_try: Result<PostgresSource, _> = serde_json::from_str(this_json.get());
@@ -512,22 +433,29 @@ impl<'de> Deserialize<'de> for DataSource {
     }
 }
 
-/// Input to graph as a datasource
-/// Always use JSON serialization for GraphData. Seriously.
+/// Container for input and output data for graph computations
+///
+/// Important: Always use JSON serialization for GraphData to handle enum variants correctly
 #[derive(Clone, Debug, Deserialize, Default, PartialEq, Serialize)]
 pub struct GraphData {
-    /// Inputs to the model / computational graph (can be empty vectors if inputs are coming from on-chain).
+    /// Input data for the model/graph
+    /// Can be empty if inputs come from on-chain sources
     pub input_data: DataSource,
-    /// Outputs of the model / computational graph (can be empty vectors if outputs are coming from on-chain).
+
+    /// Optional output data for the model/graph
+    /// Can be empty if outputs come from on-chain sources
     pub output_data: Option<DataSource>,
 }
 
 impl UnwindSafe for GraphData {}
 
 impl GraphData {
-    // not wasm
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    /// Convert the input data to tract data
+    /// Converts the input data to tract's tensor format
+    ///
+    /// # Arguments
+    /// * `shapes` - Expected shapes for each input tensor
+    /// * `datum_types` - Expected data types for each input
     pub fn to_tract_data(
         &self,
         shapes: &[Vec<usize>],
@@ -556,9 +484,14 @@ impl GraphData {
         Ok(inputs)
     }
 
-    // not wasm
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    /// Convert the tract data to tract data
+    /// Converts tract tensor data into GraphData format
+    ///
+    /// # Arguments
+    /// * `tensors` - Array of tract tensors to convert
+    ///
+    /// # Returns
+    /// A new GraphData instance containing the converted tensor data
     pub fn from_tract_data(tensors: &[TractTensor]) -> Result<Self, GraphError> {
         use tract_onnx::prelude::DatumType;
 
@@ -584,7 +517,10 @@ impl GraphData {
         })
     }
 
+    /// Creates a new GraphData instance with given input data
     ///
+    /// # Arguments
+    /// * `input_data` - The input data source
     pub fn new(input_data: DataSource) -> Self {
         GraphData {
             input_data,
@@ -592,7 +528,13 @@ impl GraphData {
         }
     }
 
-    /// Load the model input from a file
+    /// Loads graph input data from a file
+    ///
+    /// # Arguments
+    /// * `path` - Path to the input file
+    ///
+    /// # Returns
+    /// A new GraphData instance containing the loaded data
     pub fn from_path(path: std::path::PathBuf) -> Result<Self, GraphError> {
         let reader = std::fs::File::open(&path).map_err(|e| {
             GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
@@ -606,23 +548,35 @@ impl GraphData {
         Ok(graph_input)
     }
 
-    /// Save the model input to a file
+    /// Saves the graph data to a file
+    ///
+    /// # Arguments
+    /// * `path` - Path where to save the data
     pub fn save(&self, path: std::path::PathBuf) -> Result<(), GraphError> {
         let file = std::fs::File::create(path.clone()).map_err(|e| {
             GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
         })?;
-        // buf writer
         let writer = BufWriter::with_capacity(*EZKL_BUF_CAPACITY, file);
         serde_json::to_writer(writer, self)?;
         Ok(())
     }
 
+    /// Splits the input data into multiple batches based on input shapes
     ///
+    /// # Arguments
+    /// * `input_shapes` - Vector of shapes for each input tensor
+    ///
+    /// # Returns
+    /// Vector of GraphData instances, one for each batch
+    ///
+    /// # Errors
+    /// Returns error if:
+    /// - Data is from on-chain source
+    /// - Input size is not evenly divisible by batch size
     pub async fn split_into_batches(
         &self,
         input_shapes: Vec<Vec<usize>>,
     ) -> Result<Vec<Self>, GraphError> {
-        // split input data into batches
         let mut batched_inputs = vec![];
 
         let iterable = match self {
@@ -646,10 +600,12 @@ impl GraphData {
             } => data.fetch_and_format_as_file().await?,
         };
 
+        // Process each input tensor according to its shape
         for (i, shape) in input_shapes.iter().enumerate() {
-            // ensure the input is evenly divisible by batch_size
             let input_size = shape.clone().iter().product::<usize>();
             let input = &iterable[i];
+
+            // Validate input size is divisible by batch size
             if input.len() % input_size != 0 {
                 return Err(GraphError::InvalidDims(
                     0,
@@ -657,6 +613,8 @@ impl GraphData {
                         .to_string(),
                 ));
             }
+
+            // Split input into batches
             let mut batches = vec![];
             for batch in input.chunks(input_size) {
                 batches.push(batch.to_vec());
@@ -664,18 +622,18 @@ impl GraphData {
             batched_inputs.push(batches);
         }
 
-        // now merge all the batches for each input into a vector of batches
-        // first assert each input has the same number of batches
+        // Merge batches across inputs
         let num_batches = if batched_inputs.is_empty() {
             0
         } else {
             let num_batches = batched_inputs[0].len();
+            // Verify all inputs have same number of batches
             for input in batched_inputs.iter() {
                 assert_eq!(input.len(), num_batches);
             }
             num_batches
         };
-        // now merge the batches
+
         let mut input_batches = vec![];
         for i in 0..num_batches {
             let mut batch = vec![];
@@ -685,17 +643,188 @@ impl GraphData {
             input_batches.push(DataSource::File(batch));
         }
 
+        // Ensure at least one batch exists
         if input_batches.is_empty() {
             input_batches.push(DataSource::File(vec![vec![]]));
         }
 
-        // create a new GraphWitness for each batch
+        // Create GraphData instance for each batch
         let batches = input_batches
             .into_iter()
             .map(GraphData::new)
             .collect::<Vec<GraphData>>();
 
         Ok(batches)
+    }
+}
+
+#[cfg(feature = "python-bindings")]
+impl ToPyObject for CallsToAccount {
+    /// Converts CallsToAccount to Python object
+    fn to_object(&self, py: Python) -> PyObject {
+        let dict = PyDict::new(py);
+        dict.set_item("account", &self.address).unwrap();
+        dict.set_item("call_data", &self.call_data).unwrap();
+        dict.to_object(py)
+    }
+}
+
+// Additional Python bindings for various types...
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_postgres_source_new() {
+        #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+        {
+            let source = PostgresSource::new(
+                "localhost".to_string(),
+                "5432".to_string(),
+                "user".to_string(),
+                "SELECT * FROM table".to_string(),
+                "database".to_string(),
+                "password".to_string(),
+            );
+
+            assert_eq!(source.host, "localhost");
+            assert_eq!(source.port, "5432");
+            assert_eq!(source.user, "user");
+            assert_eq!(source.query, "SELECT * FROM table");
+            assert_eq!(source.dbname, "database");
+            assert_eq!(source.password, "password");
+        }
+    }
+
+    #[test]
+    fn test_data_source_serialization_round_trip() {
+        // Test backwards compatibility with old format
+        let source = DataSource::from(vec![vec![0.053_262_424, 0.074_970_566, 0.052_355_476]]);
+        let serialized = serde_json::to_string(&source).unwrap();
+        const JSON: &str = r#"[[0.053262424,0.074970566,0.052355476]]"#;
+        assert_eq!(serialized, JSON);
+
+        let expect = serde_json::from_str::<DataSource>(JSON)
+            .map_err(|e| e.to_string())
+            .unwrap();
+        assert_eq!(expect, source);
+    }
+
+    #[test]
+    fn test_graph_input_serialization_round_trip() {
+        // Test serialization/deserialization of graph input
+        let file = GraphData::new(DataSource::from(vec![vec![
+            0.05326242372393608,
+            0.07497056573629379,
+            0.05235547572374344,
+        ]]));
+
+        let serialized = serde_json::to_string(&file).unwrap();
+        const JSON: &str = r#"{"input_data":[[0.05326242372393608,0.07497056573629379,0.05235547572374344]],"output_data":null}"#;
+        assert_eq!(serialized, JSON);
+
+        let graph_input3 = serde_json::from_str::<GraphData>(JSON)
+            .map_err(|e| e.to_string())
+            .unwrap();
+        assert_eq!(graph_input3, file);
+    }
+
+    #[test]
+    fn test_python_compat() {
+        // Test compatibility with mclbn256 library serialization
+        let source = Fp::from_raw([18445520602771460712, 838677322461845011, 3079992810, 0]);
+        let original_addr = "0x000000000000000000000000b794f5ea0ba39494ce839613fffba74279579268";
+        assert_eq!(format!("{:?}", source), original_addr);
+    }
+}
+
+/// Source data from a PostgreSQL database
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
+pub struct PostgresSource {
+    /// Database host address
+    pub host: RPCUrl,
+    /// Database user name
+    pub user: String,
+    /// Database password
+    pub password: String,
+    /// SQL query to execute
+    pub query: String,
+    /// Database name
+    pub dbname: String,
+    /// Database port
+    pub port: String,
+}
+
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+impl PostgresSource {
+    /// Creates a new PostgreSQL data source
+    pub fn new(
+        host: RPCUrl,
+        port: String,
+        user: String,
+        query: String,
+        dbname: String,
+        password: String,
+    ) -> Self {
+        PostgresSource {
+            host,
+            user,
+            password,
+            query,
+            dbname,
+            port,
+        }
+    }
+
+    /// Fetches data from the PostgreSQL database
+    pub async fn fetch(&self) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, GraphError> {
+        // Configuration string
+        let config = if self.password.is_empty() {
+            format!(
+                "host={} user={} dbname={} port={}",
+                self.host, self.user, self.dbname, self.port
+            )
+        } else {
+            format!(
+                "host={} user={} dbname={} port={} password={}",
+                self.host, self.user, self.dbname, self.port, self.password
+            )
+        };
+
+        let mut client = Client::connect(&config).await?;
+        let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
+
+        // Extract rows from query
+        for row in client.query(&self.query, &[]).await? {
+            for i in 0..row.len() {
+                res.push(row.get(i));
+            }
+        }
+        Ok(vec![res])
+    }
+
+    /// Fetches and formats data as FileSource
+    pub async fn fetch_and_format_as_file(&self) -> Result<Vec<Vec<FileSourceInner>>, GraphError> {
+        Ok(self
+            .fetch()
+            .await?
+            .iter()
+            .map(|d| {
+                d.iter()
+                    .map(|d| {
+                        FileSourceInner::Float(
+                            d.n.as_ref()
+                                .unwrap()
+                                .to_f64()
+                                .ok_or("could not convert decimal to f64")
+                                .unwrap(),
+                        )
+                    })
+                    .collect()
+            })
+            .collect())
     }
 }
 
@@ -743,6 +872,7 @@ impl ToPyObject for DataSource {
                     .unwrap();
                 dict.to_object(py)
             }
+            #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
             DataSource::DB(source) => {
                 let dict = PyDict::new(py);
                 dict.set_item("host", &source.host).unwrap();
@@ -755,9 +885,6 @@ impl ToPyObject for DataSource {
 }
 
 #[cfg(feature = "python-bindings")]
-use crate::pfsys::field_to_string;
-
-#[cfg(feature = "python-bindings")]
 impl ToPyObject for FileSourceInner {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
@@ -765,59 +892,5 @@ impl ToPyObject for FileSourceInner {
             FileSourceInner::Bool(data) => data.to_object(py),
             FileSourceInner::Float(data) => data.to_object(py),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    // this is for backwards compatibility with the old format
-    fn test_data_source_serialization_round_trip() {
-        let source = DataSource::from(vec![vec![0.053_262_424, 0.074_970_566, 0.052_355_476]]);
-
-        let serialized = serde_json::to_string(&source).unwrap();
-
-        const JSON: &str = r#"[[0.053262424,0.074970566,0.052355476]]"#;
-
-        assert_eq!(serialized, JSON);
-
-        let expect = serde_json::from_str::<DataSource>(JSON)
-            .map_err(|e| e.to_string())
-            .unwrap();
-
-        assert_eq!(expect, source);
-    }
-
-    #[test]
-    // this is for backwards compatibility with the old format
-    fn test_graph_input_serialization_round_trip() {
-        let file = GraphData::new(DataSource::from(vec![vec![
-            0.05326242372393608,
-            0.07497056573629379,
-            0.05235547572374344,
-        ]]));
-
-        let serialized = serde_json::to_string(&file).unwrap();
-
-        const JSON: &str = r#"{"input_data":[[0.05326242372393608,0.07497056573629379,0.05235547572374344]],"output_data":null}"#;
-
-        assert_eq!(serialized, JSON);
-
-        let graph_input3 = serde_json::from_str::<GraphData>(JSON)
-            .map_err(|e| e.to_string())
-            .unwrap();
-        assert_eq!(graph_input3, file);
-    }
-
-    //  test for the compatibility with the serialized elements from the mclbn256 library
-    #[test]
-    fn test_python_compat() {
-        let source = Fp::from_raw([18445520602771460712, 838677322461845011, 3079992810, 0]);
-
-        let original_addr = "0x000000000000000000000000b794f5ea0ba39494ce839613fffba74279579268";
-
-        assert_eq!(format!("{:?}", source), original_addr);
     }
 }

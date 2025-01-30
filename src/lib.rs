@@ -28,7 +28,7 @@
 
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
-
+use log::warn;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use mimalloc as _;
 
@@ -168,7 +168,6 @@ pub mod srs_sha;
 pub mod tensor;
 #[cfg(feature = "ios-bindings")]
 uniffi::setup_scaffolding!();
-
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use lazy_static::lazy_static;
 
@@ -183,11 +182,9 @@ lazy_static! {
         .unwrap_or("8000".to_string())
         .parse()
         .unwrap();
-
     /// The serialization format for the keys
     pub static ref EZKL_KEY_FORMAT: String = std::env::var("EZKL_KEY_FORMAT")
         .unwrap_or("raw-bytes".to_string());
-
 }
 
 #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
@@ -269,76 +266,96 @@ impl From<String> for Commitments {
 }
 
 /// Parameters specific to a proving run
+///
+/// RunArgs contains all configuration parameters needed to control the proving process,
+/// including scaling factors, visibility settings, and circuit parameters.
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, PartialOrd)]
 #[cfg_attr(
     all(feature = "ezkl", not(target_arch = "wasm32")),
     derive(Args, ToFlags)
 )]
 pub struct RunArgs {
-    /// The tolerance for error on model outputs
+    /// Error tolerance for model outputs
+    /// Only applicable when outputs are public
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'T', long, default_value = "0", value_hint = clap::ValueHint::Other))]
     pub tolerance: Tolerance,
-    /// The denominator in the fixed point representation used when quantizing inputs
+    /// Fixed point scaling factor for quantizing inputs
+    /// Higher values provide more precision but increase circuit complexity
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'S', long, default_value = "7", value_hint = clap::ValueHint::Other))]
     pub input_scale: Scale,
-    /// The denominator in the fixed point representation used when quantizing parameters
+    /// Fixed point scaling factor for quantizing parameters
+    /// Higher values provide more precision but increase circuit complexity
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "7", value_hint = clap::ValueHint::Other))]
     pub param_scale: Scale,
-    /// if the scale is ever > scale_rebase_multiplier * input_scale then the scale is rebased to input_scale (this a more advanced parameter, use with caution)
-    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "1",  value_hint = clap::ValueHint::Other))]
+    /// Scale rebase threshold multiplier
+    /// When scale exceeds input_scale * multiplier, it is rebased to input_scale
+    /// Advanced parameter that should be used with caution
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "1", value_hint = clap::ValueHint::Other))]
     pub scale_rebase_multiplier: u32,
-    /// The min and max elements in the lookup table input column
+    /// Range for lookup table input column values
+    /// Specified as (min, max) pair
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'B', long, value_parser = parse_key_val::<IntegerRep, IntegerRep>, default_value = "-32768->32768"))]
     pub lookup_range: Range,
-    /// The log_2 number of rows
+    /// Log2 of the number of rows in the circuit
+    /// Controls circuit size and proving time
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'K', long, default_value = "17", value_hint = clap::ValueHint::Other))]
     pub logrows: u32,
-    /// The log_2 number of rows
+    /// Number of inner columns per block
+    /// Affects circuit layout and efficiency
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'N', long, default_value = "2", value_hint = clap::ValueHint::Other))]
     pub num_inner_cols: usize,
-    /// Hand-written parser for graph variables, eg. batch_size=1
+    /// Graph variables for parameterizing the computation
+    /// Format: "name->value", e.g. "batch_size->1"
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'V', long, value_parser = parse_key_val::<String, usize>, default_value = "batch_size->1", value_delimiter = ',', value_hint = clap::ValueHint::Other))]
     pub variables: Vec<(String, usize)>,
-    /// Flags whether inputs are public, private, fixed, hashed, polycommit
+    /// Visibility setting for input values
+    /// Controls whether inputs are public or private in the circuit
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "private", value_hint = clap::ValueHint::Other))]
     pub input_visibility: Visibility,
-    /// Flags whether outputs are public, private, fixed, hashed, polycommit
+    /// Visibility setting for output values
+    /// Controls whether outputs are public or private in the circuit
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "public", value_hint = clap::ValueHint::Other))]
     pub output_visibility: Visibility,
-    /// Flags whether params are fixed, private, hashed, polycommit
+    /// Visibility setting for parameters
+    /// Controls how parameters are handled in the circuit
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "private", value_hint = clap::ValueHint::Other))]
     pub param_visibility: Visibility,
-    #[cfg_attr(
-        all(feature = "ezkl", not(target_arch = "wasm32")),
-        arg(long, default_value = "false")
-    )]
-    /// Should constants with 0.0 fraction be rebased to scale 0
+    /// Whether to rebase constants with zero fractional part to scale 0
+    /// Can improve efficiency for integer constants
     #[cfg_attr(
         all(feature = "ezkl", not(target_arch = "wasm32")),
         arg(long, default_value = "false")
     )]
     pub rebase_frac_zero_constants: bool,
-    /// check mode (safe, unsafe, etc)
+    /// Circuit checking mode
+    /// Controls level of constraint verification
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "unsafe", value_hint = clap::ValueHint::Other))]
     pub check_mode: CheckMode,
-    /// commitment scheme
+    /// Commitment scheme for circuit proving
+    /// Affects proof size and verification time
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "kzg", value_hint = clap::ValueHint::Other))]
     pub commitment: Option<Commitments>,
-    /// the base used for decompositions
+    /// Base for number decomposition
+    /// Must be a power of 2
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "16384", value_hint = clap::ValueHint::Other))]
     pub decomp_base: usize,
+    /// Number of decomposition legs
+    /// Controls decomposition granularity
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long, default_value = "2", value_hint = clap::ValueHint::Other))]
-    /// the number of legs used for decompositions
     pub decomp_legs: usize,
+    /// Whether to use bounded lookup for logarithm computation
     #[cfg_attr(
         all(feature = "ezkl", not(target_arch = "wasm32")),
         arg(long, default_value = "false")
     )]
-    /// use unbounded lookup for the log
     pub bounded_log_lookup: bool,
 }
 
 impl Default for RunArgs {
+    /// Creates a new RunArgs instance with default values
+    ///
+    /// Default configuration is optimized for common use cases
+    /// while maintaining reasonable proving time and circuit size
     fn default() -> Self {
         Self {
             bounded_log_lookup: false,
@@ -363,49 +380,162 @@ impl Default for RunArgs {
 }
 
 impl RunArgs {
+    /// Validates the RunArgs configuration
     ///
+    /// Performs comprehensive validation of all parameters to ensure they are within
+    /// acceptable ranges and follow required constraints. Returns accumulated errors
+    /// if any validations fail.
+    ///
+    /// # Returns
+    /// - Ok(()) if all validations pass
+    /// - Err(String) with detailed error message if any validation fails
     pub fn validate(&self) -> Result<(), String> {
+        let mut errors = Vec::new();
+
+        // Visibility validations
         if self.param_visibility == Visibility::Public {
-            return Err(
-                "params cannot be public instances, you are probably trying to use `fixed` or `kzgcommit`"
-                    .into(),
+            errors.push(
+                "Parameters cannot be public instances. Use 'fixed' or 'kzgcommit' instead"
+                    .to_string(),
             );
         }
-        if self.scale_rebase_multiplier < 1 {
-            return Err("scale_rebase_multiplier must be >= 1".into());
-        }
-        if self.lookup_range.0 > self.lookup_range.1 {
-            return Err("lookup_range min is greater than max".into());
-        }
-        if self.logrows < 1 {
-            return Err("logrows must be >= 1".into());
-        }
-        if self.num_inner_cols < 1 {
-            return Err("num_inner_cols must be >= 1".into());
-        }
+
         if self.tolerance.val > 0.0 && self.output_visibility != Visibility::Public {
-            return Err("tolerance > 0.0 requires output_visibility to be public".into());
+            errors.push("Non-zero tolerance requires output_visibility to be public".to_string());
         }
-        Ok(())
+
+        // Scale validations
+        if self.scale_rebase_multiplier < 1 {
+            errors.push("scale_rebase_multiplier must be >= 1".to_string());
+        }
+
+        if self.input_scale == 0 {
+            errors.push("input_scale cannot be 0".to_string());
+        }
+
+        if self.param_scale == 0 {
+            errors.push("param_scale cannot be 0".to_string());
+        }
+        // if any of the scales are too small
+        if self.input_scale < 8 || self.param_scale < 8 {
+            warn!("low scale values (<8) may impact precision");
+        }
+
+        // Lookup range validations
+        if self.lookup_range.0 > self.lookup_range.1 {
+            errors.push(format!(
+                "Invalid lookup range: min ({}) is greater than max ({})",
+                self.lookup_range.0, self.lookup_range.1
+            ));
+        }
+
+        if self.lookup_range.0.abs() != self.lookup_range.1 {
+            errors.push(format!(
+                "Lookup range should be symmetric. Current range: [{}, {}]",
+                self.lookup_range.0, self.lookup_range.1
+            ));
+        }
+
+        // Size validations
+        if self.logrows < 1 {
+            errors.push("logrows must be >= 1".to_string());
+        }
+
+        if self.num_inner_cols < 1 {
+            errors.push("num_inner_cols must be >= 1".to_string());
+        }
+
+        // Variables validation
+        if self.variables.is_empty() {
+            errors.push("At least one variable must be defined".to_string());
+        }
+
+        let batch_size = self.variables.iter().find(|(name, _)| name == "batch_size");
+        if batch_size.is_none() {
+            errors.push("'batch_size' variable must be defined".to_string());
+        } else if batch_size.unwrap().1 == 0 {
+            errors.push("'batch_size' cannot be 0".to_string());
+        }
+
+        // Decomposition validations
+        if self.decomp_base == 0 {
+            errors.push("decomp_base cannot be 0".to_string());
+        }
+
+        if self.decomp_legs == 0 {
+            errors.push("decomp_legs cannot be 0".to_string());
+        }
+
+        if !self.decomp_base.is_power_of_two() {
+            errors.push(format!(
+                "decomp_base {} should be a power of 2",
+                self.decomp_base
+            ));
+        }
+
+        // Performance validations
+        if self.logrows < 10 {
+            errors
+                .push("logrows < 10 may be too small for most practical applications".to_string());
+        }
+        if self.logrows > 32 {
+            errors.push("logrows > 32 may lead to excessive memory usage".to_string());
+        }
+
+        // Validate tolerance is non-negative
+        if self.tolerance.val < 0.0 {
+            errors.push("tolerance cannot be negative".to_string());
+        }
+
+        // Performance warnings
+        if self.input_scale > 20 || self.param_scale > 20 {
+            errors.push("Warning: High scale values (>20) may impact performance".to_string());
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("\n"))
+        }
     }
 
-    /// Export the ezkl configuration as json
+    /// Exports the configuration as JSON
+    ///
+    /// Serializes the RunArgs instance to a JSON string
+    ///
+    /// # Returns
+    /// * `Ok(String)` containing JSON representation
+    /// * `Err` if serialization fails
     pub fn as_json(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let serialized = match serde_json::to_string(&self) {
-            Ok(s) => s,
-            Err(e) => {
-                return Err(Box::new(e));
-            }
-        };
-        Ok(serialized)
+        let res = serde_json::to_string(&self)?;
+        Ok(res)
     }
-    /// Parse an ezkl configuration from a json
+
+    /// Parses configuration from JSON
+    ///
+    /// Deserializes a RunArgs instance from a JSON string
+    ///
+    /// # Arguments
+    /// * `arg_json` - JSON string containing configuration
+    ///
+    /// # Returns
+    /// * `Ok(RunArgs)` if parsing succeeds
+    /// * `Err` if parsing fails
     pub fn from_json(arg_json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(arg_json)
     }
 }
 
-/// Parse a single key-value pair
+// Additional helper functions for the module
+
+/// Parses a key-value pair from a string in the format "key->value"
+///
+/// # Arguments
+/// * `s` - Input string in the format "key->value"
+///
+/// # Returns
+/// * `Ok((T, U))` - Parsed key and value
+/// * `Err` - If parsing fails
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 fn parse_key_val<T, U>(
     s: &str,
@@ -418,14 +548,15 @@ where
 {
     let pos = s
         .find("->")
-        .ok_or_else(|| format!("invalid x->y: no `->` found in `{s}`"))?;
-    let a = s[..pos].parse()?;
-    let b = s[pos + 2..].parse()?;
-    Ok((a, b))
+        .ok_or_else(|| format!("invalid KEY->VALUE: no `->` found in `{s}`"))?;
+    Ok((s[..pos].parse()?, s[pos + 2..].parse()?))
 }
 
-/// Check if the version string matches the artifact version
-/// If the version string does not match the artifact version, log a warning
+/// Verifies that a version string matches the expected artifact version
+/// Logs warnings for version mismatches or unversioned artifacts
+///
+/// # Arguments
+/// * `artifact_version` - Version string from the artifact
 pub fn check_version_string_matches(artifact_version: &str) {
     if artifact_version == "0.0.0"
         || artifact_version == "source - no compatibility guaranteed"
@@ -448,5 +579,177 @@ pub fn check_version_string_matches(artifact_version: &str) {
             version,
             artifact_version
         );
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_default_args() {
+        let args = RunArgs::default();
+        assert!(args.validate().is_ok());
+    }
+
+    #[test]
+    fn test_invalid_param_visibility() {
+        let mut args = RunArgs::default();
+        args.param_visibility = Visibility::Public;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("Parameters cannot be public instances"));
+    }
+
+    #[test]
+    fn test_invalid_scale_rebase() {
+        let mut args = RunArgs::default();
+        args.scale_rebase_multiplier = 0;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("scale_rebase_multiplier must be >= 1"));
+    }
+
+    #[test]
+    fn test_invalid_lookup_range() {
+        let mut args = RunArgs::default();
+        args.lookup_range = (100, -100);
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("Invalid lookup range"));
+    }
+
+    #[test]
+    fn test_asymmetric_lookup_range() {
+        let mut args = RunArgs::default();
+        args.lookup_range = (-100, 200);
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("Lookup range should be symmetric"));
+    }
+
+    #[test]
+    fn test_invalid_logrows() {
+        let mut args = RunArgs::default();
+        args.logrows = 0;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("logrows must be >= 1"));
+    }
+
+    #[test]
+    fn test_logrows_too_small() {
+        let mut args = RunArgs::default();
+        args.logrows = 5;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("may be too small for most practical applications"));
+    }
+
+    #[test]
+    fn test_logrows_too_large() {
+        let mut args = RunArgs::default();
+        args.logrows = 33;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("may lead to excessive memory usage"));
+    }
+
+    #[test]
+    fn test_invalid_inner_cols() {
+        let mut args = RunArgs::default();
+        args.num_inner_cols = 0;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("num_inner_cols must be >= 1"));
+    }
+
+    #[test]
+    fn test_invalid_tolerance() {
+        let mut args = RunArgs::default();
+        args.tolerance.val = 1.0;
+        args.output_visibility = Visibility::Private;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("Non-zero tolerance requires output_visibility to be public"));
+    }
+
+    #[test]
+    fn test_negative_tolerance() {
+        let mut args = RunArgs::default();
+        args.tolerance.val = -1.0;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("tolerance cannot be negative"));
+    }
+
+    #[test]
+    fn test_decomp_base_power_of_two() {
+        let mut args = RunArgs::default();
+        args.decomp_base = 1000; // Not a power of 2
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("should be a power of 2"));
+    }
+
+    #[test]
+    fn test_missing_batch_size() {
+        let mut args = RunArgs::default();
+        args.variables = vec![("other_var".to_string(), 1)];
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("'batch_size' variable must be defined"));
+    }
+
+    #[test]
+    fn test_zero_batch_size() {
+        let mut args = RunArgs::default();
+        args.variables = vec![("batch_size".to_string(), 0)];
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("'batch_size' cannot be 0"));
+    }
+
+    #[test]
+    fn test_empty_variables() {
+        let mut args = RunArgs::default();
+        args.variables = vec![];
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("At least one variable must be defined"));
+    }
+
+    #[test]
+    fn test_invalid_scales() {
+        let mut args = RunArgs::default();
+        args.input_scale = 0;
+        args.param_scale = 0;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("input_scale cannot be 0"));
+        assert!(err.contains("param_scale cannot be 0"));
+    }
+
+    #[test]
+    fn test_high_scale_warning() {
+        let mut args = RunArgs::default();
+        args.input_scale = 21;
+        args.param_scale = 21;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("High scale values (>20) may impact performance"));
+    }
+
+    #[test]
+    fn test_kzg_with_fixed_params() {
+        let mut args = RunArgs::default();
+        args.commitment = Some(Commitments::KZG);
+        args.param_visibility = Visibility::Fixed;
+        let err = args.validate().unwrap_err();
+        assert!(err.contains("KZG commitment scheme is incompatible with fixed param_visibility"));
+    }
+
+    #[test]
+    fn test_json_serialization() {
+        let args = RunArgs::default();
+        let json = args.as_json().unwrap();
+        let deserialized = RunArgs::from_json(&json).unwrap();
+        assert_eq!(args, deserialized);
+    }
+
+    #[test]
+    fn test_multiple_validation_errors() {
+        let mut args = RunArgs::default();
+        args.logrows = 0;
+        args.input_scale = 0;
+        args.lookup_range = (100, -100);
+        let err = args.validate().unwrap_err();
+        // Should contain multiple error messages
+        assert!(err.matches("\n").count() >= 2);
     }
 }

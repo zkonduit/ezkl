@@ -5,33 +5,35 @@ use log::{debug, error, warn};
 use crate::circuit::{region::ConstantsMap, CheckMode};
 
 use super::*;
-/// A wrapper around Halo2's `Column<Fixed>` or `Column<Advice>`.
-/// Typically assign [ValTensor]s to [VarTensor]s when laying out a circuit.
+/// A wrapper around Halo2's Column types that represents a tensor of variables in the circuit.
+/// VarTensors are used to store and manage circuit columns, typically for assigning ValTensor
+/// values during circuit layout. The tensor organizes storage into blocks of columns, where each
+/// block contains multiple columns and each column contains multiple rows.
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub enum VarTensor {
     /// A VarTensor for holding Advice values, which are assigned at proving time.
     Advice {
         /// Vec of Advice columns, we have [[xx][xx][xx]...] where each inner vec is xx columns
         inner: Vec<Vec<Column<Advice>>>,
-        ///
+        /// The number of columns in each inner block
         num_inner_cols: usize,
         /// Number of rows available to be used in each column of the storage
         col_size: usize,
     },
-    /// Dummy var
+    /// A placeholder tensor used for testing or temporary storage
     Dummy {
-        ///
+        /// The number of columns in each inner block
         num_inner_cols: usize,
         /// Number of rows available to be used in each column of the storage
         col_size: usize,
     },
-    /// Empty var
+    /// An empty tensor with no storage
     #[default]
     Empty,
 }
 
 impl VarTensor {
-    /// name of the tensor
+    /// Returns the name of the tensor variant as a static string
     pub fn name(&self) -> &'static str {
         match self {
             VarTensor::Advice { .. } => "Advice",
@@ -40,22 +42,35 @@ impl VarTensor {
         }
     }
 
-    ///
+    /// Returns true if the tensor is an Advice variant
     pub fn is_advice(&self) -> bool {
         matches!(self, VarTensor::Advice { .. })
     }
 
+    /// Calculates the maximum number of usable rows in the constraint system
     ///
+    /// # Arguments
+    /// * `cs` - The constraint system
+    /// * `logrows` - Log base 2 of the total number of rows (including system and blinding rows)
+    ///
+    /// # Returns
+    /// The maximum number of usable rows after accounting for blinding factors
     pub fn max_rows<F: PrimeField>(cs: &ConstraintSystem<F>, logrows: usize) -> usize {
         let base = 2u32;
         base.pow(logrows as u32) as usize - cs.blinding_factors() - 1
     }
 
-    /// Create a new VarTensor::Advice that is unblinded
-    /// Arguments
-    /// * `cs` - The constraint system
-    /// * `logrows` - log2 number of rows in the matrix, including any system and blinding rows.
-    /// * `capacity` - The number of advice cells to allocate
+    /// Creates a new VarTensor::Advice with unblinded columns. Unblinded columns are used when
+    /// the values do not need to be hidden in the proof.
+    ///
+    /// # Arguments
+    /// * `cs` - The constraint system to create columns in
+    /// * `logrows` - Log base 2 of the total number of rows
+    /// * `num_inner_cols` - Number of columns in each inner block
+    /// * `capacity` - Total number of advice cells to allocate
+    ///
+    /// # Returns
+    /// A new VarTensor::Advice with unblinded columns enabled for equality constraints
     pub fn new_unblinded_advice<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
@@ -93,11 +108,17 @@ impl VarTensor {
         }
     }
 
-    /// Create a new VarTensor::Advice
-    /// Arguments
-    /// * `cs` - The constraint system
-    /// * `logrows` - log2 number of rows in the matrix, including any system and blinding rows.
-    /// * `capacity` - The number of advice cells to allocate
+    /// Creates a new VarTensor::Advice with standard (blinded) columns, used when
+    /// the values need to be hidden in the proof.
+    ///
+    /// # Arguments
+    /// * `cs` - The constraint system to create columns in
+    /// * `logrows` - Log base 2 of the total number of rows
+    /// * `num_inner_cols` - Number of columns in each inner block
+    /// * `capacity` - Total number of advice cells to allocate
+    ///
+    /// # Returns
+    /// A new VarTensor::Advice with blinded columns enabled for equality constraints
     pub fn new_advice<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
@@ -133,11 +154,17 @@ impl VarTensor {
         }
     }
 
-    /// Initializes fixed columns to support the VarTensor::Advice
-    /// Arguments
-    /// * `cs` - The constraint system
-    /// * `logrows` - log2 number of rows in the matrix, including any system and blinding rows.
-    /// * `capacity` - The number of advice cells to allocate
+    /// Initializes fixed columns in the constraint system to support the VarTensor::Advice
+    /// Fixed columns are used for constant values that are known at circuit creation time.
+    ///
+    /// # Arguments
+    /// * `cs` - The constraint system to create columns in
+    /// * `logrows` - Log base 2 of the total number of rows
+    /// * `num_constants` - Number of constant values needed
+    /// * `module_requires_fixed` - Whether the module requires at least one fixed column
+    ///
+    /// # Returns
+    /// The number of fixed columns created
     pub fn constant_cols<F: PrimeField>(
         cs: &mut ConstraintSystem<F>,
         logrows: usize,
@@ -169,7 +196,14 @@ impl VarTensor {
         modulo
     }
 
-    /// Create a new VarTensor::Dummy
+    /// Creates a new dummy VarTensor for testing or temporary storage
+    ///
+    /// # Arguments
+    /// * `logrows` - Log base 2 of the total number of rows
+    /// * `num_inner_cols` - Number of columns in each inner block
+    ///
+    /// # Returns
+    /// A new VarTensor::Dummy with the specified dimensions
     pub fn dummy(logrows: usize, num_inner_cols: usize) -> Self {
         let base = 2u32;
         let max_rows = base.pow(logrows as u32) as usize - 6;
@@ -179,7 +213,7 @@ impl VarTensor {
         }
     }
 
-    /// Gets the dims of the object the VarTensor represents
+    /// Returns the number of blocks in the tensor
     pub fn num_blocks(&self) -> usize {
         match self {
             VarTensor::Advice { inner, .. } => inner.len(),
@@ -187,7 +221,7 @@ impl VarTensor {
         }
     }
 
-    /// Num inner cols
+    /// Returns the number of columns in each inner block
     pub fn num_inner_cols(&self) -> usize {
         match self {
             VarTensor::Advice { num_inner_cols, .. } | VarTensor::Dummy { num_inner_cols, .. } => {
@@ -197,7 +231,7 @@ impl VarTensor {
         }
     }
 
-    /// Total number of columns
+    /// Returns the total number of columns across all blocks
     pub fn num_cols(&self) -> usize {
         match self {
             VarTensor::Advice { inner, .. } => inner[0].len() * inner.len(),
@@ -205,7 +239,7 @@ impl VarTensor {
         }
     }
 
-    /// Gets the size of each column
+    /// Returns the maximum number of rows in each column
     pub fn col_size(&self) -> usize {
         match self {
             VarTensor::Advice { col_size, .. } | VarTensor::Dummy { col_size, .. } => *col_size,
@@ -213,7 +247,7 @@ impl VarTensor {
         }
     }
 
-    /// Gets the size of each column
+    /// Returns the total size of each block (num_inner_cols * col_size)
     pub fn block_size(&self) -> usize {
         match self {
             VarTensor::Advice {
@@ -230,7 +264,13 @@ impl VarTensor {
         }
     }
 
-    /// Take a linear coordinate and output the (column, row) position in the storage block.
+    /// Converts a linear coordinate to (block, column, row) coordinates in the storage
+    ///
+    /// # Arguments
+    /// * `linear_coord` - The linear index to convert
+    ///
+    /// # Returns
+    /// A tuple of (block_index, column_index, row_index)
     pub fn cartesian_coord(&self, linear_coord: usize) -> (usize, usize, usize) {
         // x indexes over blocks of size num_inner_cols
         let x = linear_coord / self.block_size();
@@ -243,7 +283,17 @@ impl VarTensor {
 }
 
 impl VarTensor {
-    /// Retrieve the value of a specific cell in the tensor.
+    /// Queries a range of cells in the tensor during circuit synthesis
+    ///
+    /// # Arguments
+    /// * `meta` - Virtual cells accessor
+    /// * `x` - Block index
+    /// * `y` - Column index within block
+    /// * `z` - Starting row offset
+    /// * `rng` - Number of consecutive rows to query
+    ///
+    /// # Returns
+    /// A tensor of expressions representing the queried cells
     pub fn query_rng<F: PrimeField>(
         &self,
         meta: &mut VirtualCells<'_, F>,
@@ -268,7 +318,16 @@ impl VarTensor {
         }
     }
 
-    /// Retrieve the value of a specific block at an offset in the tensor.
+    /// Queries an entire block of cells at a given offset
+    ///
+    /// # Arguments
+    /// * `meta` - Virtual cells accessor
+    /// * `x` - Block index
+    /// * `z` - Row offset
+    /// * `rng` - Number of consecutive rows to query
+    ///
+    /// # Returns
+    /// A tensor of expressions representing the queried block
     pub fn query_whole_block<F: PrimeField>(
         &self,
         meta: &mut VirtualCells<'_, F>,
@@ -293,7 +352,16 @@ impl VarTensor {
         }
     }
 
-    /// Assigns a constant value to a specific cell in the tensor.
+    /// Assigns a constant value to a specific cell in the tensor
+    ///
+    /// # Arguments
+    /// * `region` - The region to assign values in
+    /// * `offset` - Base offset for the assignment
+    /// * `coord` - Coordinate within the tensor
+    /// * `constant` - The constant value to assign
+    ///
+    /// # Returns
+    /// The assigned cell or an error if assignment fails
     pub fn assign_constant<F: PrimeField + TensorType + PartialOrd>(
         &self,
         region: &mut Region<F>,
@@ -313,7 +381,17 @@ impl VarTensor {
         }
     }
 
-    /// Assigns [ValTensor] to the columns of the inner tensor.
+    /// Assigns values from a ValTensor to this tensor, excluding specified positions
+    ///
+    /// # Arguments
+    /// * `region` - The region to assign values in
+    /// * `offset` - Base offset for assignments
+    /// * `values` - The ValTensor containing values to assign
+    /// * `omissions` - Set of positions to skip during assignment
+    /// * `constants` - Map for tracking constant assignments
+    ///
+    /// # Returns
+    /// The assigned ValTensor or an error if assignment fails
     pub fn assign_with_omissions<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
         region: &mut Region<F>,
@@ -344,7 +422,16 @@ impl VarTensor {
         Ok(res)
     }
 
-    /// Assigns [ValTensor] to the columns of the inner tensor.
+    /// Assigns values from a ValTensor to this tensor
+    ///
+    /// # Arguments
+    /// * `region` - The region to assign values in
+    /// * `offset` - Base offset for assignments
+    /// * `values` - The ValTensor containing values to assign
+    /// * `constants` - Map for tracking constant assignments
+    ///
+    /// # Returns
+    /// The assigned ValTensor or an error if assignment fails
     pub fn assign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
         region: &mut Region<F>,
@@ -396,7 +483,14 @@ impl VarTensor {
         Ok(res)
     }
 
-    /// Helper function to get the remaining size of the column
+    /// Returns the remaining available space in a column for assignments
+    ///
+    /// # Arguments
+    /// * `offset` - Current offset in the column
+    /// * `values` - The ValTensor to check space for
+    ///
+    /// # Returns
+    /// The number of rows that need to be flushed or an error if space is insufficient
     pub fn get_column_flush<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
         offset: usize,
@@ -429,8 +523,16 @@ impl VarTensor {
         Ok(flush_len)
     }
 
-    /// Assigns [ValTensor] to the columns of the inner tensor. Whereby the values are assigned to a single column, without overflowing.
-    /// So for instance if we are assigning 10 values and we are at index 18 of the column, and the columns are of length 20, we skip the last 2 values of current column and start from the beginning of the next column.
+    /// Assigns values to a single column, avoiding column overflow by flushing to the next column if needed
+    ///
+    /// # Arguments
+    /// * `region` - The region to assign values in
+    /// * `offset` - Base offset for assignments
+    /// * `values` - The ValTensor containing values to assign
+    /// * `constants` - Map for tracking constant assignments
+    ///
+    /// # Returns
+    /// A tuple of (assigned ValTensor, number of rows flushed) or an error if assignment fails
     pub fn assign_exact_column<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
         region: &mut Region<F>,
@@ -445,8 +547,17 @@ impl VarTensor {
         Ok((assigned_vals, flush_len))
     }
 
-    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
-    /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two.
+    /// Assigns values with duplication in dummy mode, used for testing and simulation
+    ///
+    /// # Arguments
+    /// * `row` - Starting row for assignment
+    /// * `offset` - Base offset for assignments
+    /// * `values` - The ValTensor containing values to assign
+    /// * `single_inner_col` - Whether to treat as a single column
+    /// * `constants` - Map for tracking constant assignments
+    ///
+    /// # Returns
+    /// A tuple of (assigned ValTensor, total length used) or an error if assignment fails
     pub fn dummy_assign_with_duplication<
         F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
     >(
@@ -496,7 +607,16 @@ impl VarTensor {
         }
     }
 
-    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
+    /// Assigns values with duplication but without enforcing constraints between duplicated values
+    ///
+    /// # Arguments
+    /// * `region` - The region to assign values in
+    /// * `offset` - Base offset for assignments
+    /// * `values` - The ValTensor containing values to assign
+    /// * `constants` - Map for tracking constant assignments
+    ///
+    /// # Returns
+    /// A tuple of (assigned ValTensor, total length used) or an error if assignment fails
     pub fn assign_with_duplication_unconstrained<
         F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
     >(
@@ -535,8 +655,18 @@ impl VarTensor {
         }
     }
 
-    /// Assigns specific values (`ValTensor`) to the columns of the inner tensor but allows for column wrapping for accumulated operations.
-    /// Duplication occurs by copying the last cell of the column to the first cell next column and creating a copy constraint between the two.
+    /// Assigns values with duplication and enforces equality constraints between duplicated values
+    ///
+    /// # Arguments
+    /// * `region` - The region to assign values in
+    /// * `row` - Starting row for assignment
+    /// * `offset` - Base offset for assignments
+    /// * `values` - The ValTensor containing values to assign
+    /// * `check_mode` - Mode for checking equality constraints
+    /// * `constants` - Map for tracking constant assignments
+    ///
+    /// # Returns
+    /// A tuple of (assigned ValTensor, total length used) or an error if assignment fails
     pub fn assign_with_duplication_constrained<
         F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
     >(
@@ -615,6 +745,17 @@ impl VarTensor {
         }
     }
 
+    /// Assigns a single value to the tensor. This is a helper function used by other assignment methods.
+    ///
+    /// # Arguments
+    /// * `region` - The region to assign values in
+    /// * `offset` - Base offset for the assignment
+    /// * `k` - The value to assign
+    /// * `coord` - The coordinate where to assign the value
+    /// * `constants` - Map for tracking constant assignments
+    ///
+    /// # Returns
+    /// The assigned value or an error if assignment fails
     fn assign_value<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &self,
         region: &mut Region<F>,
@@ -625,24 +766,28 @@ impl VarTensor {
     ) -> Result<ValType<F>, halo2_proofs::plonk::Error> {
         let (x, y, z) = self.cartesian_coord(offset + coord);
         let res = match k {
+            // Handle direct value assignment
             ValType::Value(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
                     ValType::PrevAssigned(region.assign_advice(|| "k", advices[x][y], z, || v)?)
                 }
                 _ => unimplemented!(),
             },
+            // Handle copying previously assigned value
             ValType::PrevAssigned(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
                     ValType::PrevAssigned(v.copy_advice(|| "k", region, advices[x][y], z)?)
                 }
                 _ => unimplemented!(),
             },
+            // Handle copying previously assigned constant
             ValType::AssignedConstant(v, val) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
                     ValType::AssignedConstant(v.copy_advice(|| "k", region, advices[x][y], z)?, val)
                 }
                 _ => unimplemented!(),
             },
+            // Handle assigning evaluated value
             ValType::AssignedValue(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => ValType::PrevAssigned(
                     region
@@ -651,6 +796,7 @@ impl VarTensor {
                 ),
                 _ => unimplemented!(),
             },
+            // Handle constant value assignment with caching
             ValType::Constant(v) => {
                 if let std::collections::hash_map::Entry::Vacant(e) = constants.entry(v) {
                     let value = ValType::AssignedConstant(

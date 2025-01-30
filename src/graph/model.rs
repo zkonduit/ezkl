@@ -384,8 +384,7 @@ pub struct ParsedNodes {
 impl ParsedNodes {
     /// Returns the number of the computational graph's inputs
     pub fn num_inputs(&self) -> usize {
-        let input_nodes = self.inputs.iter();
-        input_nodes.len()
+        self.inputs.len()
     }
 
     /// Input types
@@ -425,8 +424,7 @@ impl ParsedNodes {
 
     /// Returns the number of the computational graph's outputs
     pub fn num_outputs(&self) -> usize {
-        let output_nodes = self.outputs.iter();
-        output_nodes.len()
+        self.outputs.len()
     }
 
     /// Returns shapes of the computational graph's outputs
@@ -1061,6 +1059,7 @@ impl Model {
     /// * `vars` - The variables for the circuit.
     /// * `witnessed_outputs` - The values to compare against.
     /// * `constants` - The constants for the circuit.
+    #[allow(clippy::too_many_arguments)]
     pub fn layout(
         &self,
         mut config: ModelConfig,
@@ -1460,7 +1459,7 @@ impl Model {
             .iter()
             .map(|x| {
                 x.get_felt_evals()
-                    .unwrap_or(Tensor::new(Some(&[Fp::ZERO]), &[1]).unwrap())
+                    .unwrap_or_else(Tensor::new(Some(&[Fp::ZERO]), &[1]).unwrap())
             })
             .collect();
 

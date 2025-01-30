@@ -517,6 +517,7 @@ pub async fn deploy_da_verifier_via_solidity(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn deploy_multi_da_contract(
     client: EthersClient,
     contract_instance_offset: usize,

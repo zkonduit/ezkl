@@ -353,6 +353,7 @@ where
     C::ScalarExt: Serialize + DeserializeOwned,
 {
     /// Create a new application snark from proof and instance variables ready for aggregation
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         protocol: Option<PlonkProtocol<C>>,
         instances: Vec<Vec<F>>,
@@ -528,7 +529,6 @@ pub fn create_keys<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     disable_selector_compression: bool,
 ) -> Result<ProvingKey<Scheme::Curve>, halo2_proofs::plonk::Error>
 where
-    C: Circuit<Scheme::Scalar>,
     <Scheme as CommitmentScheme>::Scalar: FromUniformBytes<64>,
 {
     //	Real proof
@@ -794,7 +794,6 @@ pub fn load_vk<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     params: <C as Circuit<Scheme::Scalar>>::Params,
 ) -> Result<VerifyingKey<Scheme::Curve>, PfsysError>
 where
-    C: Circuit<Scheme::Scalar>,
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {
@@ -817,7 +816,6 @@ pub fn load_pk<Scheme: CommitmentScheme, C: Circuit<Scheme::Scalar>>(
     params: <C as Circuit<Scheme::Scalar>>::Params,
 ) -> Result<ProvingKey<Scheme::Curve>, PfsysError>
 where
-    C: Circuit<Scheme::Scalar>,
     Scheme::Curve: SerdeObject + CurveAffine,
     Scheme::Scalar: PrimeField + SerdeObject + FromUniformBytes<64>,
 {

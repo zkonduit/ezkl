@@ -619,11 +619,6 @@ impl GraphSettings {
         }
     }
 
-    ///
-    pub fn uses_modules(&self) -> bool {
-        !self.module_sizes.max_constraints() > 0
-    }
-
     /// if any visibility is encrypted or hashed
     pub fn module_requires_fixed(&self) -> bool {
         self.run_args.input_visibility.is_hashed()
@@ -766,7 +761,7 @@ pub struct TestOnChainData {
     pub data: std::path::PathBuf,
     /// rpc endpoint
     pub rpc: Option<String>,
-    ///
+    /// data sources for the on chain data
     pub data_sources: TestSources,
 }
 
