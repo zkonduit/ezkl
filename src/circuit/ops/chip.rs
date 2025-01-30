@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use halo2_proofs::{
     circuit::Layouter,
-    plonk::{ConstraintSystem, Constraints, Expression, Selector},
+    plonk::{ConstraintSystem, Constraints, Expression, Selector, TableColumn},
     poly::Rotation,
 };
 use log::debug;
@@ -341,6 +341,8 @@ pub struct BaseConfig<F: PrimeField + TensorType + PartialOrd> {
     /// Activate sanity checks
     pub check_mode: CheckMode,
     _marker: PhantomData<F>,
+    /// shared table inputs
+    pub shared_table_inputs: Vec<TableColumn>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
@@ -353,6 +355,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             shuffles: Shuffles::dummy(col_size, num_inner_cols),
             range_checks: RangeChecks::dummy(col_size, num_inner_cols),
             check_mode: CheckMode::SAFE,
+            shared_table_inputs: vec![],
             _marker: PhantomData,
         }
     }
@@ -497,6 +500,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             dynamic_lookups: DynamicLookups::default(),
             shuffles: Shuffles::default(),
             range_checks: RangeChecks::default(),
+            shared_table_inputs: vec![],
             check_mode,
             _marker: PhantomData,
         }
@@ -527,13 +531,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
             return Err(CircuitError::WrongColumnType(output.name().to_string()));
         }
 
-        // we borrow mutably twice so we need to do this dance
-        let mut prexisting_inputs = None;
-
         let table = if !self.static_lookups.tables.contains_key(nl) {
-            // as all tables have the same input we see if there's another table who's input we can reuse
             let table =
-                Table::<F>::configure(cs, lookup_range, logrows, nl, &mut prexisting_inputs);
+                Table::<F>::configure(cs, lookup_range, logrows, nl, &mut self.shared_table_inputs);
             self.static_lookups.tables.insert(nl.clone(), table.clone());
             table
         } else {
@@ -892,7 +892,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
         let range_check = if let std::collections::btree_map::Entry::Vacant(e) =
             self.range_checks.ranges.entry(range)
         {
-            // as all tables have the same input we see if there's another table who's input we can reuse
             let range_check = RangeCheck::<F>::configure(cs, range, logrows);
             e.insert(range_check.clone());
             range_check
