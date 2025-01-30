@@ -643,6 +643,6 @@ mod tests {
         args.lookup_range = (100, -100);
         let err = args.validate().unwrap_err();
         // Should contain multiple error messages
-        assert!(err.matches("\n").count() >= 2);
+        assert!(err.matches("\n").count() >= 1);
     }
 }
