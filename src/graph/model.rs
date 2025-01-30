@@ -1150,6 +1150,15 @@ impl Model {
                                 witnessed_outputs[i].clone()
                             };
 
+                            // leverage decomposition to ensure that the outputs have not overflowed
+                            crate::circuit::layouts::decompose(
+                                &config.base,
+                                &mut thread_safe_region,
+                                &[output.clone()],
+                                &run_args.decomp_base,
+                                &run_args.decomp_legs,
+                            )?;
+
                             config
                                 .base
                                 .layout(

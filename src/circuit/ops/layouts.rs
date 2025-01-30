@@ -3935,6 +3935,30 @@ pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     Ok(output)
 }
 
+/// Identity constraint with decomposition check. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
+pub(crate) fn identity_with_decomp_check<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
+>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>; 1],
+) -> Result<ValTensor<F>, CircuitError> {
+    let mut output = values[0].clone();
+    if !output.all_prev_assigned() {
+        output = region.assign(&config.custom_gates.output, &values[0])?;
+        region.increment(output.len());
+    }
+    decompose(
+        config,
+        region,
+        &[output.clone()],
+        &region.base(),
+        &region.legs(),
+    )?;
+
+    Ok(output)
+}
+
 /// Boolean identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
 pub(crate) fn boolean_identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,

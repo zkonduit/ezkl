@@ -192,7 +192,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
                         true,
                     )?))
                 }
-                _ => Ok(Some(super::layouts::identity(
+                _ => Ok(Some(super::layouts::identity_with_decomp_check(
                     config,
                     region,
                     values[..].try_into()?,
@@ -308,7 +308,11 @@ impl<
             self.quantized_values.clone().try_into()?
         };
         // we gotta constrain it once if its used multiple times
-        Ok(Some(layouts::identity(config, region, &[value])?))
+        Ok(Some(layouts::identity_with_decomp_check(
+            config,
+            region,
+            &[value],
+        )?))
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {
