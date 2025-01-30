@@ -1757,6 +1757,10 @@ pub fn get_broadcasted_shape(
             broadcasted_shape.push(*max_dim);
         }
         Ok(broadcasted_shape)
+    } else if num_dims_a < num_dims_b {
+        Ok(shape_b.to_vec())
+    } else if num_dims_a > num_dims_b {
+        Ok(shape_a.to_vec())
     } else {
         Err(TensorError::DimError(
             "Unknown condition for broadcasting".to_string(),
