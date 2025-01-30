@@ -152,4 +152,10 @@ pub enum GraphError {
     /// Only nearest neighbor interpolation is supported
     #[error("only nearest neighbor interpolation is supported")]
     InvalidInterpolation,
+    /// Node has a missing output
+    #[error("node {0} has a missing output")]
+    MissingOutput(usize),
+    /// Inssuficient advice columns
+    #[error("insuficcient advice columns (need {0} at least)")]
+    InsufficientAdviceColumns(usize),
 }

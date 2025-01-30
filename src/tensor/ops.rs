@@ -385,6 +385,12 @@ pub fn resize<T: TensorType + Send + Sync>(
 pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sync>(
     t: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
+    if t.len() == 1 {
+        return Ok(t[0].clone());
+    } else if t.len() == 0 {
+        return Err(TensorError::DimMismatch("add".to_string()));
+    }
+
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
@@ -433,6 +439,11 @@ pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sy
 pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sync>(
     t: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
+    if t.len() == 1 {
+        return Ok(t[0].clone());
+    } else if t.len() == 0 {
+        return Err(TensorError::DimMismatch("sub".to_string()));
+    }
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 
@@ -479,6 +490,11 @@ pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sy
 pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::Sync>(
     t: &[Tensor<T>],
 ) -> Result<Tensor<T>, TensorError> {
+    if t.len() == 1 {
+        return Ok(t[0].clone());
+    } else if t.len() == 0 {
+        return Err(TensorError::DimMismatch("mult".to_string()));
+    }
     // calculate value of output
     let mut output: Tensor<T> = t[0].clone();
 

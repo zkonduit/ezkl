@@ -632,6 +632,10 @@ impl Model {
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node_mut(id.node);
+
+            if input.outputs.len() == 0 {
+                return Err(GraphError::MissingOutput(id.node));
+            }
             let mut fact: InferenceFact = input.outputs[0].fact.clone();
 
             for (i, x) in fact.clone().shape.dims().enumerate() {
@@ -1014,6 +1018,10 @@ impl Model {
         let required_lookups = settings.required_lookups.clone();
         let required_range_checks = settings.required_range_checks.clone();
 
+        if vars.advices.len() < 3 {
+            return Err(GraphError::InsufficientAdviceColumns(3));
+        }
+
         let mut base_gate = PolyConfig::configure(
             meta,
             vars.advices[0..2].try_into()?,
@@ -1033,6 +1041,10 @@ impl Model {
         }
 
         if settings.requires_dynamic_lookup() {
+            if vars.advices.len() < 6 {
+                return Err(GraphError::InsufficientAdviceColumns(6));
+            }
+
             base_gate.configure_dynamic_lookup(
                 meta,
                 vars.advices[0..3].try_into()?,
@@ -1041,6 +1053,9 @@ impl Model {
         }
 
         if settings.requires_shuffle() {
+            if vars.advices.len() < 6 {
+                return Err(GraphError::InsufficientAdviceColumns(6));
+            }
             base_gate.configure_shuffles(
                 meta,
                 vars.advices[0..3].try_into()?,
