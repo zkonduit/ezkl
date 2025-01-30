@@ -1459,7 +1459,7 @@ impl Model {
             .iter()
             .map(|x| {
                 x.get_felt_evals()
-                    .unwrap_or_else(Tensor::new(Some(&[Fp::ZERO]), &[1]).unwrap())
+                    .unwrap_or_else(|_| Tensor::new(Some(&[Fp::ZERO]), &[1]).unwrap())
             })
             .collect();
 
