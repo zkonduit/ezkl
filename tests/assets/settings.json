@@ -30,9 +30,9 @@
         "decomp_legs": 2,
         "bounded_log_lookup": false
     },
-    "num_rows": 46,
-    "total_assignments": 92,
-    "total_const_size": 3,
+    "num_rows": 236,
+    "total_assignments": 472,
+    "total_const_size": 4,
     "total_dynamic_col_size": 0,
     "max_dynamic_input_len": 0,
     "num_dynamic_lookups": 0,

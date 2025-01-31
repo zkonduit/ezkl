@@ -76,7 +76,7 @@ pub enum HybridOp {
         output_scale: utils::F32,
         axes: Vec<usize>,
     },
-    RangeCheck(Tolerance),
+    Output(Tolerance),
     Greater,
     GreaterEqual,
     Less,
@@ -178,7 +178,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                     input_scale, output_scale, axes
                 )
             }
-            HybridOp::RangeCheck(p) => format!("RANGECHECK (tol={:?})", p),
+            HybridOp::Output(p) => format!("OUTPUT (tol={:?})", p),
             HybridOp::Greater => "GREATER".to_string(),
             HybridOp::GreaterEqual => "GREATEREQUAL".to_string(),
             HybridOp::Less => "LESS".to_string(),
@@ -314,7 +314,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 *output_scale,
                 axes,
             )?,
-            HybridOp::RangeCheck(tol) => layouts::range_check_percent(
+            HybridOp::Output(tol) => layouts::range_check_percent(
                 config,
                 region,
                 values[..].try_into()?,

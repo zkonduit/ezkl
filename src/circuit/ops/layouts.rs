@@ -5667,19 +5667,37 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::
     scale: utils::F32,
     tol: f32,
 ) -> Result<ValTensor<F>, CircuitError> {
-    if tol == 0.0 {
-        // regular equality constraint
-        return enforce_equality(config, region, values);
+    let mut values = [values[0].clone(), values[1].clone()];
+    let is_assigned_0 = values[0].all_prev_assigned();
+    let is_assigned_1 = values[1].all_prev_assigned();
+
+    let mut total_assigned_0 = values[0].len();
+    if !is_assigned_0 {
+        values[0] = region.assign(&config.custom_gates.inputs[0], &values[0])?;
+        total_assigned_0 += values[0].len();
     }
 
-    let mut values = [values[0].clone(), values[1].clone()];
+    let mut total_assigned_1 = values[1].len();
+    if !is_assigned_1 {
+        values[1] = region.assign(&config.custom_gates.inputs[1], &values[1])?;
+        total_assigned_1 += values[1].len();
+    }
 
-    values[0] = region.assign(&config.custom_gates.inputs[0], &values[0])?;
-    values[1] = region.assign(&config.custom_gates.inputs[1], &values[1])?;
-    let total_assigned_0 = values[0].len();
-    let total_assigned_1 = values[1].len();
     let total_assigned = std::cmp::max(total_assigned_0, total_assigned_1);
     region.increment(total_assigned);
+
+    decompose(
+        config,
+        region,
+        &[values[0].clone()],
+        &region.base(),
+        &region.legs(),
+    )?;
+
+    if tol == 0.0 {
+        // regular equality constraint
+        return enforce_equality(config, region, &[values[0].clone(), values[1].clone()]);
+    }
 
     // Calculate the difference between the expected output and actual output
     let diff = pairwise(config, region, &values, BaseOp::Sub)?;

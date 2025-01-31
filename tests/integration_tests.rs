@@ -1,7 +1,6 @@
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 #[cfg(test)]
 mod native_tests {
-
     use ezkl::circuit::Tolerance;
     use ezkl::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
@@ -207,61 +206,61 @@ mod native_tests {
     ];
 
     const TESTS: [&str; 98] = [
-        "1l_mlp", //0
-        "1l_slice",
-        "1l_concat",
-        "1l_flatten",
+        "1l_mlp",     //0
+        "1l_slice",   //1
+        "1l_concat",  //2
+        "1l_flatten", //3
         // "1l_average",
-        "1l_div",
-        "1l_pad", // 5
-        "1l_reshape",
-        "1l_eltwise_div",
-        "1l_sigmoid",
-        "1l_sqrt",
-        "1l_softmax", //10
+        "1l_div",         //4
+        "1l_pad",         // 5
+        "1l_reshape",     //6
+        "1l_eltwise_div", //7
+        "1l_sigmoid",     //8
+        "1l_sqrt",        //9
+        "1l_softmax",     //10
         // "1l_instance_norm",
-        "1l_batch_norm",
-        "1l_prelu",
-        "1l_leakyrelu",
-        "1l_gelu_noappx",
+        "1l_batch_norm",  //11
+        "1l_prelu",       //12
+        "1l_leakyrelu",   //13
+        "1l_gelu_noappx", //14
         // "1l_gelu_tanh_appx",
-        "1l_relu", //15
-        "1l_downsample",
-        "1l_tanh",
-        "2l_relu_sigmoid_small",
-        "2l_relu_fc",
-        "2l_relu_small", //20
-        "2l_relu_sigmoid",
-        "1l_conv",
-        "2l_sigmoid_small",
-        "2l_relu_sigmoid_conv",
-        "3l_relu_conv_fc", //25
-        "4l_relu_conv_fc",
-        "1l_erf",
-        "1l_var",
-        "1l_elu",
-        "min", //30
-        "max",
-        "1l_max_pool",
-        "1l_conv_transpose",
-        "1l_upsample",
-        "1l_identity", //35
-        "idolmodel",   // too big evm
-        "trig",        // too big evm
-        "prelu_gmm",
-        "lstm",
-        "rnn", //40
-        "quantize_dequantize",
-        "1l_where",
-        "boolean",
-        "boolean_identity",
-        "decision_tree", // 45
-        "random_forest",
-        "gradient_boosted_trees",
-        "1l_topk",
-        "xgboost",
-        "lightgbm", //50
-        "hummingbird_decision_tree",
+        "1l_relu",                   //15
+        "1l_downsample",             //16
+        "1l_tanh",                   //17
+        "2l_relu_sigmoid_small",     //18
+        "2l_relu_fc",                //19
+        "2l_relu_small",             //20
+        "2l_relu_sigmoid",           //21
+        "1l_conv",                   //22
+        "2l_sigmoid_small",          //23
+        "2l_relu_sigmoid_conv",      //24
+        "3l_relu_conv_fc",           //25
+        "4l_relu_conv_fc",           //26
+        "1l_erf",                    //27
+        "1l_var",                    //28
+        "1l_elu",                    //29
+        "min",                       //30
+        "max",                       //31
+        "1l_max_pool",               //32
+        "1l_conv_transpose",         //33
+        "1l_upsample",               //34
+        "1l_identity",               //35
+        "idolmodel",                 // too big evm
+        "trig",                      // too big evm
+        "prelu_gmm",                 //38
+        "lstm",                      //39
+        "rnn",                       //40
+        "quantize_dequantize",       //41
+        "1l_where",                  //42
+        "boolean",                   //43
+        "boolean_identity",          //44
+        "decision_tree",             // 45
+        "random_forest",             //46
+        "gradient_boosted_trees",    //47
+        "1l_topk",                   //48
+        "xgboost",                   //49
+        "lightgbm",                  //50
+        "hummingbird_decision_tree", //51
         "oh_decision_tree",
         "linear_svc",
         "gather_elements",
@@ -2786,6 +2785,14 @@ mod native_tests {
     }
 
     fn build_ezkl() {
+        // delete ezkl::circuit::table::LOOKUP_CACHE; directoryu
+        let status = Command::new("rm")
+            .args(["-rf", &format!("{}", *ezkl::circuit::table::LOOKUP_CACHE)])
+            .status()
+            .expect("failed to execute process");
+
+        assert!(status.success());
+
         #[cfg(feature = "icicle")]
         let args = [
             "build",
@@ -2796,7 +2803,14 @@ mod native_tests {
             "icicle",
         ];
         #[cfg(feature = "macos-metal")]
-        let args = ["build", "--release", "--bin", "ezkl", "--features", "macos-metal"];
+        let args = [
+            "build",
+            "--release",
+            "--bin",
+            "ezkl",
+            "--features",
+            "macos-metal",
+        ];
         // not macos-metal and not icicle
         #[cfg(all(not(feature = "icicle"), not(feature = "macos-metal")))]
         let args = ["build", "--release", "--bin", "ezkl"];

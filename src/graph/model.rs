@@ -1150,21 +1150,12 @@ impl Model {
                                 witnessed_outputs[i].clone()
                             };
 
-                            // leverage decomposition to ensure that the outputs have not overflowed
-                            crate::circuit::layouts::decompose(
-                                &config.base,
-                                &mut thread_safe_region,
-                                &[output.clone()],
-                                &run_args.decomp_base,
-                                &run_args.decomp_legs,
-                            )?;
-
                             config
                                 .base
                                 .layout(
                                     &mut thread_safe_region,
                                     &[output.clone(), comparators],
-                                    Box::new(HybridOp::RangeCheck(tolerance)),
+                                    Box::new(HybridOp::Output(tolerance)),
                                 )
                                 .map_err(|e| e.into())
                         })
@@ -1447,7 +1438,7 @@ impl Model {
                     dummy_config.layout(
                         &mut region,
                         &[output.clone(), comparator],
-                        Box::new(HybridOp::RangeCheck(tolerance)),
+                        Box::new(HybridOp::Output(tolerance)),
                     )
                 })
                 .collect::<Result<Vec<_>, _>>();
