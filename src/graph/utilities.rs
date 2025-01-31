@@ -384,7 +384,11 @@ pub fn new_op_from_onnx(
             // Quantize the raw value (integers)
             let quantized_value = quantize_tensor(raw_value.clone(), 0, &Visibility::Fixed)?;
 
-            let c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
+            let c = crate::circuit::ops::Constant::new(
+                quantized_value,
+                raw_value,
+                run_args.range_check_inputs_outputs,
+            );
             // Create a constant op
             SupportedOp::Constant(c)
         }
@@ -446,6 +450,7 @@ pub fn new_op_from_onnx(
                 inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
                     scale: 0,
                     datum_type: InputType::TDim,
+                    decomp: false,
                 }));
                 inputs[1].bump_scale(0);
             }
@@ -522,6 +527,7 @@ pub fn new_op_from_onnx(
                 inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
                     scale: 0,
                     datum_type: InputType::TDim,
+                    decomp: run_args.range_check_inputs_outputs,
                 }));
                 inputs[1].bump_scale(0);
             }
@@ -558,6 +564,7 @@ pub fn new_op_from_onnx(
                 inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
                     scale: 0,
                     datum_type: InputType::TDim,
+                    decomp: run_args.range_check_inputs_outputs,
                 }));
                 inputs[1].bump_scale(0);
             }
@@ -595,6 +602,7 @@ pub fn new_op_from_onnx(
                 inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
                     scale: 0,
                     datum_type: InputType::TDim,
+                    decomp: run_args.range_check_inputs_outputs,
                 }));
                 inputs[1].bump_scale(0);
             }
@@ -632,6 +640,7 @@ pub fn new_op_from_onnx(
                 inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
                     scale: 0,
                     datum_type: InputType::TDim,
+                    decomp: run_args.range_check_inputs_outputs,
                 }));
                 inputs[1].bump_scale(0);
             }
@@ -706,7 +715,11 @@ pub fn new_op_from_onnx(
                 constant_scale,
                 &run_args.param_visibility,
             )?;
-            let c = crate::circuit::ops::Constant::new(quantized_value, raw_value);
+            let c = crate::circuit::ops::Constant::new(
+                quantized_value,
+                raw_value,
+                run_args.range_check_inputs_outputs,
+            );
             // Create a constant op
             SupportedOp::Constant(c)
         }
@@ -969,7 +982,11 @@ pub fn new_op_from_onnx(
                 DatumType::F64 => (scales.input, InputType::F64),
                 _ => return Err(GraphError::UnsupportedDataType(idx, format!("{:?}", dt))),
             };
-            SupportedOp::Input(crate::circuit::ops::Input { scale, datum_type })
+            SupportedOp::Input(crate::circuit::ops::Input {
+                scale,
+                datum_type,
+                decomp: run_args.range_check_inputs_outputs,
+            })
         }
         "Cast" => {
             let op = load_op::<Cast>(node.op(), idx, node.op().name().to_string())?;

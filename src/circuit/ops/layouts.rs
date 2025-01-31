@@ -156,7 +156,7 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     };
     claimed_output.reshape(input_dims)?;
     // implicitly check if the prover provided output is within range
-    let claimed_output = identity(config, region, &[claimed_output])?;
+    let claimed_output = identity(config, region, &[claimed_output], true)?;
     // check if x is too large only if the decomp would support overflow in the previous op
     if (IntegerRep::MAX).abs() < ((region.base() as i128).pow(region.legs() as u32)) - 1 {
         // here we decompose and extract the sign of the input
@@ -223,7 +223,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     claimed_output.reshape(input_dims)?;
 
     // implicitly check if the prover provided output is within range
-    let claimed_output = identity(config, region, &[claimed_output])?;
+    let claimed_output = identity(config, region, &[claimed_output], true)?;
     // divide by input_scale
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64)[0];
@@ -3919,18 +3919,24 @@ pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
+    decomp: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut output = values[0].clone();
     if !output.all_prev_assigned() {
         // checks they are in range
-        output = decompose(
-            config,
-            region,
-            &[output.clone()],
-            &region.base(),
-            &region.legs(),
-        )?
-        .1;
+        if decomp {
+            output = decompose(
+                config,
+                region,
+                &[output.clone()],
+                &region.base(),
+                &region.legs(),
+            )?
+            .1;
+        } else {
+            output = region.assign(&config.custom_gates.output, &values[0])?;
+            region.increment(output.len());
+        }
     }
 
     Ok(output)
@@ -4672,7 +4678,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .into()
     };
     claimed_output.reshape(input.dims())?;
-    let claimed_output = identity(&config, region, &[claimed_output])?;
+    let claimed_output = identity(&config, region, &[claimed_output], true)?;
     region.increment(claimed_output.len());
 
     let pow2_of_claimed_output = nonlinearity(
@@ -5628,17 +5634,18 @@ pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     values: &[ValTensor<F>; 2],
     scale: utils::F32,
     tol: f32,
+    decomp: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut values = [values[0].clone(), values[1].clone()];
 
     if !values[0].all_prev_assigned() {
         // range check the outputs
-        values[0] = layouts::identity(config, region, &[values[0].clone()])?;
+        values[0] = layouts::identity(config, region, &[values[0].clone()], decomp)?;
     }
 
     if !values[1].all_prev_assigned() {
         // range check the outputs
-        values[1] = layouts::identity(config, region, &[values[1].clone()])?;
+        values[1] = layouts::identity(config, region, &[values[1].clone()], decomp)?;
     }
 
     if tol == 0.0 {

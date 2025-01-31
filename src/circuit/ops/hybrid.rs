@@ -76,7 +76,10 @@ pub enum HybridOp {
         output_scale: utils::F32,
         axes: Vec<usize>,
     },
-    Output(Tolerance),
+    Output {
+        tol: Tolerance,
+        decomp: bool,
+    },
     Greater,
     GreaterEqual,
     Less,
@@ -178,7 +181,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                     input_scale, output_scale, axes
                 )
             }
-            HybridOp::Output(p) => format!("OUTPUT (tol={:?})", p),
+            HybridOp::Output { tol, decomp } => {
+                format!("OUTPUT (tol={:?}, decomp={})", tol, decomp)
+            }
             HybridOp::Greater => "GREATER".to_string(),
             HybridOp::GreaterEqual => "GREATEREQUAL".to_string(),
             HybridOp::Less => "LESS".to_string(),
@@ -314,9 +319,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 *output_scale,
                 axes,
             )?,
-            HybridOp::Output(tol) => {
-                layouts::output(config, region, values[..].try_into()?, tol.scale, tol.val)?
-            }
+            HybridOp::Output { tol, decomp } => layouts::output(
+                config,
+                region,
+                values[..].try_into()?,
+                tol.scale,
+                tol.val,
+                *decomp,
+            )?,
             HybridOp::Greater => layouts::greater(config, region, values[..].try_into()?)?,
             HybridOp::GreaterEqual => {
                 layouts::greater_equal(config, region, values[..].try_into()?)?

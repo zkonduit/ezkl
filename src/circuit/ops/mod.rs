@@ -159,6 +159,8 @@ pub struct Input {
     pub scale: crate::Scale,
     ///
     pub datum_type: InputType,
+    /// decomp check
+    pub decomp: bool,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input {
@@ -196,6 +198,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
                     config,
                     region,
                     values[..].try_into()?,
+                    self.decomp,
                 )?)),
             }
         } else {
@@ -251,15 +254,18 @@ pub struct Constant<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> {
     ///
     #[serde(skip)]
     pub pre_assigned_val: Option<ValTensor<F>>,
+    ///
+    pub decomp: bool,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
     ///
-    pub fn new(quantized_values: Tensor<F>, raw_values: Tensor<f32>) -> Self {
+    pub fn new(quantized_values: Tensor<F>, raw_values: Tensor<f32>, decomp: bool) -> Self {
         Self {
             quantized_values,
             raw_values,
             pre_assigned_val: None,
+            decomp,
         }
     }
     /// Rebase the scale of the constant
@@ -311,7 +317,12 @@ impl<
             self.quantized_values.clone().try_into()?
         };
         // we gotta constrain it once if its used multiple times
-        Ok(Some(layouts::identity(config, region, &[value])?))
+        Ok(Some(layouts::identity(
+            config,
+            region,
+            &[value],
+            self.decomp,
+        )?))
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {

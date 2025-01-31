@@ -28,7 +28,8 @@
         "commitment": "KZG",
         "decomp_base": 128,
         "decomp_legs": 2,
-        "bounded_log_lookup": false
+        "bounded_log_lookup": false,
+        "range_check_inputs_outputs": false
     },
     "num_rows": 236,
     "total_assignments": 472,
