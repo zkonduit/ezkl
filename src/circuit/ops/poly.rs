@@ -252,6 +252,12 @@ impl<
             )?,
             PolyOp::GatherElements { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
+                    if values.len() != 1 {
+                        return Err(TensorError::DimError(
+                            "GatherElements only accepts single inputs".to_string(),
+                        )
+                        .into());
+                    }
                     tensor::ops::gather_elements(values[0].get_inner_tensor()?, idx, *dim)?.into()
                 } else {
                     layouts::gather_elements(config, region, values[..].try_into()?, *dim)?.0
@@ -269,6 +275,12 @@ impl<
             }
             PolyOp::ScatterElements { dim, constant_idx } => {
                 if let Some(idx) = constant_idx {
+                    if values.len() != 2 {
+                        return Err(TensorError::DimError(
+                            "ScatterElements requires two inputs".to_string(),
+                        )
+                        .into());
+                    }
                     tensor::ops::scatter(
                         values[0].get_inner_tensor()?,
                         idx,

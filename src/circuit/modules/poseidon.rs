@@ -170,7 +170,10 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         message: &[ValTensor<Fp>],
         constants: &mut ConstantsMap<Fp>,
     ) -> Result<Self::InputAssignments, ModuleError> {
-        assert_eq!(message.len(), 1);
+        if message.len() != 1 {
+            return Err(ModuleError::InputWrongLength(message.len()));
+        }
+
         let message = message[0].clone();
 
         let start_time = instant::Instant::now();
@@ -225,7 +228,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
                                         }
                                         e => Err(ModuleError::WrongInputType(
                                             format!("{:?}", e),
-                                            "PrevAssigned".to_string(),
+                                            "AssignedValue".to_string(),
                                         )),
                                     }
                                 })
@@ -290,6 +293,12 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         constants: &mut ConstantsMap<Fp>,
     ) -> Result<ValTensor<Fp>, ModuleError> {
         let (mut input_cells, zero_val) = self.layout_inputs(layouter, input, constants)?;
+
+        // empty hash case
+        if input_cells.is_empty() {
+            return Ok(input[0].clone());
+        }
+
         // extract the values from the input cells
         let mut assigned_input: Tensor<ValType<Fp>> =
             input_cells.iter().map(|e| ValType::from(e.clone())).into();
@@ -509,6 +518,21 @@ mod tests {
 
             Ok(())
         }
+    }
+
+    #[test]
+    fn poseidon_hash_empty() {
+        let message = [];
+        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE, 2>::run(message.to_vec()).unwrap();
+        let mut message: Tensor<ValType<Fp>> =
+            message.into_iter().map(|m| Value::known(m).into()).into();
+        let k = 9;
+        let circuit = HashCircuit::<PoseidonSpec, 2> {
+            message: message.into(),
+            _spec: PhantomData,
+        };
+        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
+        assert_eq!(prover.verify(), Ok(()))
     }
 
     #[test]

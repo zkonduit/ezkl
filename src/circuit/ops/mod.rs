@@ -264,7 +264,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
     }
     /// Rebase the scale of the constant
     pub fn rebase_scale(&mut self, new_scale: crate::Scale) -> Result<(), CircuitError> {
-        let visibility = self.quantized_values.visibility().unwrap();
+        let visibility = match self.quantized_values.visibility() {
+            Some(v) => v,
+            None => return Err(CircuitError::UnsetVisibility),
+        };
         self.quantized_values = quantize_tensor(self.raw_values.clone(), new_scale, &visibility)?;
         Ok(())
     }

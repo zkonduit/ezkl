@@ -10,6 +10,7 @@ use rand::Rng;
 
 // Assuming these are your types
 #[derive(Clone)]
+#[allow(dead_code)]
 enum ValType {
     Constant(F),
     AssignedConstant(usize, F),

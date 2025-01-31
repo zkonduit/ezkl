@@ -284,7 +284,6 @@ impl GraphModules {
                 log::error!("Poseidon config not initialized");
                 return Err(Error::Synthesis);
             }
-            // If the module is encrypted, then we need to encrypt the inputs
         }
 
         Ok(())
