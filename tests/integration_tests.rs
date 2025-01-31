@@ -2785,12 +2785,6 @@ mod native_tests {
     }
 
     fn build_ezkl() {
-        // delete ezkl::circuit::table::LOOKUP_CACHE; directoryu
-        let status = Command::new("rm")
-            .args(["-rf", &format!("{}", *ezkl::circuit::table::LOOKUP_CACHE)])
-            .status()
-            .expect("failed to execute process");
-
         assert!(status.success());
 
         #[cfg(feature = "icicle")]
