@@ -119,13 +119,13 @@ pub enum GraphError {
     /// Missing input for a node
     #[error("missing input for node {0}")]
     MissingInput(usize),
-    ///
+    /// Ranges can only be constant
     #[error("range only supports constant inputs in a zk circuit")]
     NonConstantRange,
-    ///
+    /// Trilu diagonal must be constant
     #[error("trilu only supports constant diagonals in a zk circuit")]
     NonConstantTrilu,
-    ///
+    /// The witness was too short
     #[error("insufficient witness values to generate a fixed output")]
     InsufficientWitnessValues,
     /// Missing scale
@@ -152,4 +152,10 @@ pub enum GraphError {
     /// Only nearest neighbor interpolation is supported
     #[error("only nearest neighbor interpolation is supported")]
     InvalidInterpolation,
+    /// Node has a missing output
+    #[error("node {0} has a missing output")]
+    MissingOutput(usize),
+    /// Inssuficient advice columns
+    #[error("insuficcient advice columns (need {0} at least)")]
+    InsufficientAdviceColumns(usize),
 }

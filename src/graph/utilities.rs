@@ -45,6 +45,7 @@ use tract_onnx::tract_hir::{
 };
 
 /// Quantizes an iterable of f64 to a [Tensor] of IntegerRep using a fixed point representation.
+/// NAN gets mapped to 0. INFINITY and NEG_INFINITY error out.
 /// Arguments
 ///
 /// * `elem` - the element to quantize.
@@ -58,7 +59,7 @@ pub fn quantize_float(
     let mult = scale_to_multiplier(scale);
     let max_value = ((IntegerRep::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
 
-    if *elem > max_value {
+    if *elem > max_value || *elem < -max_value {
         return Err(TensorError::SigBitTruncationError);
     }
 
@@ -227,10 +228,7 @@ pub fn extract_tensor_value(
                 .iter()
                 .map(|x| match x.to_i64() {
                     Ok(v) => Ok(v as f32),
-                    Err(_) => match x.to_i64() {
-                        Ok(v) => Ok(v as f32),
-                        Err(_) => Err(GraphError::UnsupportedDataType(0, "TDim".to_string())),
-                    },
+                    Err(_) => Err(GraphError::UnsupportedDataType(0, "TDim".to_string())),
                 })
                 .collect();
 
@@ -1591,12 +1589,10 @@ pub fn homogenize_input_scales(
     input_scales: Vec<crate::Scale>,
     inputs_to_scale: Vec<usize>,
 ) -> Result<Box<dyn Op<Fp>>, GraphError> {
-    let relevant_input_scales = input_scales
-        .clone()
-        .into_iter()
-        .enumerate()
-        .filter(|(idx, _)| inputs_to_scale.contains(idx))
-        .map(|(_, scale)| scale)
+    let relevant_input_scales = inputs_to_scale
+        .iter()
+        .filter(|idx| input_scales.len() > **idx)
+        .map(|&idx| input_scales[idx])
         .collect_vec();
 
     if inputs_to_scale.is_empty() {
@@ -1641,6 +1637,25 @@ pub fn homogenize_input_scales(
 pub mod tests {
 
     use super::*;
+
+    // quantization tests
+    #[test]
+    fn test_quantize_tensor() {
+        let tensor: Tensor<f32> = (0..10).map(|x| x as f32).into();
+        let reference: Tensor<Fp> = (0..10).map(|x| x.into()).into();
+        let scale = 0;
+        let visibility = &Visibility::Public;
+        let quantized: Tensor<Fp> = quantize_tensor(tensor, scale, visibility).unwrap();
+        assert_eq!(quantized.len(), 10);
+        assert_eq!(quantized, reference);
+    }
+
+    #[test]
+    fn test_quantize_edge_cases() {
+        assert_eq!(quantize_float(&f64::NAN, 0.0, 0).unwrap(), 0);
+        assert!(quantize_float(&f64::INFINITY, 0.0, 0).is_err());
+        assert!(quantize_float(&f64::NEG_INFINITY, 0.0, 0).is_err());
+    }
 
     #[test]
     fn test_flatten_valtensors() {

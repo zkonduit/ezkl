@@ -74,9 +74,8 @@ mod native_tests {
         });
     }
 
-    ///
     #[allow(dead_code)]
-    pub fn init_wasm() {
+    fn init_wasm() {
         COMPILE_WASM.call_once(|| {
             build_wasm_ezkl();
         });
@@ -2246,6 +2245,7 @@ mod native_tests {
     }
 
     // prove-serialize-verify, the usual full path
+    #[allow(clippy::too_many_arguments)]
     fn kzg_evm_prove_and_verify_reusable_verifier(
         num_inner_columns: usize,
         test_dir: &str,

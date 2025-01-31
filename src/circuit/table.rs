@@ -163,7 +163,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
         range: Range,
         logrows: usize,
         nonlinearity: &LookupOp,
-        preexisting_inputs: Option<Vec<TableColumn>>,
+        preexisting_inputs: &mut Vec<TableColumn>,
     ) -> Table<F> {
         let factors = cs.blinding_factors() + RESERVED_BLINDING_ROWS_PAD;
         let col_size = Self::cal_col_size(logrows, factors);
@@ -172,28 +172,28 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
 
         debug!("table range: {:?}", range);
 
-        let table_inputs = preexisting_inputs.unwrap_or_else(|| {
-            let mut cols = vec![];
-            for _ in 0..num_cols {
-                cols.push(cs.lookup_table_column());
+        // validate enough columns are provided to store the range
+        if preexisting_inputs.len() < num_cols {
+            // add columns to match the required number of columns
+            let diff = num_cols - preexisting_inputs.len();
+            for _ in 0..diff {
+                preexisting_inputs.push(cs.lookup_table_column());
             }
-            cols
-        });
+        }
 
-        let num_cols = table_inputs.len();
-
+        let num_cols = preexisting_inputs.len();
         if num_cols > 1 {
             warn!("Using {} columns for non-linearity table.", num_cols);
         }
 
-        let table_outputs = table_inputs
+        let table_outputs = preexisting_inputs
             .iter()
             .map(|_| cs.lookup_table_column())
             .collect::<Vec<_>>();
 
         Table {
             nonlinearity: nonlinearity.clone(),
-            table_inputs,
+            table_inputs: preexisting_inputs.clone(),
             table_outputs,
             is_assigned: false,
             selector_constructor: SelectorConstructor::new(num_cols),
