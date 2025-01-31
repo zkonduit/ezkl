@@ -2785,8 +2785,6 @@ mod native_tests {
     }
 
     fn build_ezkl() {
-        assert!(status.success());
-
         #[cfg(feature = "icicle")]
         let args = [
             "build",
