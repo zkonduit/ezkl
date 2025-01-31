@@ -257,8 +257,6 @@ jobs:
       contents: read
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
-    env:
-      LOOKUP_CACHE: ""
     steps:
       - uses: actions/checkout@v4
         with:
@@ -325,8 +323,6 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
-    env:
-      LOOKUP_CACHE: ""
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
@@ -446,8 +442,6 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
-    env:
-      LOOKUP_CACHE: ""
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -675,8 +669,6 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
-    env:
-      LOOKUP_CACHE: ""
     needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@v4
@@ -707,8 +699,6 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
-    env:
-      LOOKUP_CACHE: ""
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
