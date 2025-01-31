@@ -155,13 +155,13 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .into()
     };
     claimed_output.reshape(input_dims)?;
-    let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
-    region.increment(claimed_output.len());
-
-    // here we decompose and extract the sign of the input
-    let sign = sign(config, region, &[claimed_output.clone()])?;
+    // implicitly check if the prover provided output is within range
+    let claimed_output = identity(config, region, &[claimed_output])?;
     // check if x is too large only if the decomp would support overflow in the previous op
     if (IntegerRep::MAX).abs() < ((region.base() as i128).pow(region.legs() as u32)) - 1 {
+        // here we decompose and extract the sign of the input
+        let sign = sign(config, region, &[claimed_output.clone()])?;
+
         let abs_value = pairwise(
             config,
             region,
@@ -221,9 +221,9 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .into()
     };
     claimed_output.reshape(input_dims)?;
-    let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
-    region.increment(claimed_output.len());
 
+    // implicitly check if the prover provided output is within range
+    let claimed_output = identity(config, region, &[claimed_output])?;
     // divide by input_scale
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64)[0];
@@ -254,10 +254,10 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         BaseOp::Mult,
     )?;
 
-    // here we decompose and extract the sign of the input
-    let sign = sign(config, region, &[masked_output.clone()])?;
     // check if x is too large only if the decomp would support overflow in the previous op
     if (IntegerRep::MAX).abs() < ((region.base() as i128).pow(region.legs() as u32)) - 1 {
+        // here we decompose and extract the sign of the input
+        let sign = sign(config, region, &[masked_output.clone()])?;
         let abs_value = pairwise(
             config,
             region,
@@ -346,12 +346,8 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .into()
     };
     claimed_output.reshape(input_dims)?;
-    let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
-    region.increment(claimed_output.len());
-
-    // force the output to be positive or zero
+    // force the output to be positive or zero, also implicitly checks that the ouput is in range
     let claimed_output = abs(config, region, &[claimed_output.clone()])?;
-
     // rescaled input
     let rescaled_input = pairwise(config, region, &[input.clone(), unit_scale], BaseOp::Mult)?;
 
@@ -3926,33 +3922,16 @@ pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut output = values[0].clone();
     if !output.all_prev_assigned() {
-        output = region.assign(&config.custom_gates.output, &values[0])?;
-        region.increment(output.len());
+        // checks they are in range
+        output = decompose(
+            config,
+            region,
+            &[output.clone()],
+            &region.base(),
+            &region.legs(),
+        )?
+        .1;
     }
-
-    Ok(output)
-}
-
-/// Identity constraint with decomposition check. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
-pub(crate) fn identity_with_decomp_check<
-    F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
->(
-    config: &BaseConfig<F>,
-    region: &mut RegionCtx<F>,
-    values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, CircuitError> {
-    let mut output = values[0].clone();
-    if !output.all_prev_assigned() {
-        output = region.assign(&config.custom_gates.output, &values[0])?;
-        region.increment(output.len());
-    }
-    decompose(
-        config,
-        region,
-        &[output.clone()],
-        &region.base(),
-        &region.legs(),
-    )?;
 
     Ok(output)
 }
@@ -3972,23 +3951,8 @@ pub(crate) fn boolean_identity<F: PrimeField + TensorType + PartialOrd + std::ha
     } else {
         values[0].clone()
     };
-    // Enable the selectors
-    if !region.is_dummy() {
-        (0..output.len())
-            .map(|j| {
-                let index = region.linear_coord() - j - 1;
 
-                let (x, y, z) = config.custom_gates.output.cartesian_coord(index);
-                let selector = config
-                    .custom_gates
-                    .selectors
-                    .get(&(BaseOp::IsBoolean, x, y));
-
-                region.enable(selector, z)?;
-                Ok(())
-            })
-            .collect::<Result<Vec<_>, CircuitError>>()?;
-    }
+    range_check(config, region, values, &(0, 1))?;
 
     Ok(output)
 }
@@ -4441,7 +4405,7 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -4554,7 +4518,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -4708,7 +4672,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .into()
     };
     claimed_output.reshape(input.dims())?;
-    region.assign(&config.custom_gates.output, &claimed_output)?;
+    let claimed_output = identity(&config, region, &[claimed_output])?;
     region.increment(claimed_output.len());
 
     let pow2_of_claimed_output = nonlinearity(
@@ -4954,7 +4918,7 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -5098,7 +5062,7 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -5267,12 +5231,10 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     values: &[ValTensor<F>; 1],
     base: &usize,
     n: &usize,
-) -> Result<ValTensor<F>, CircuitError> {
+) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
     let mut input = values[0].clone();
 
-    let is_assigned = !input.all_prev_assigned();
-
-    if !is_assigned {
+    if !input.all_prev_assigned() {
         input = region.assign(&config.custom_gates.inputs[0], &input)?;
     }
 
@@ -5303,7 +5265,7 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 
         claimed_output.into()
     };
-    region.assign(&config.custom_gates.output, &claimed_output)?;
+    let claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
     region.increment(claimed_output.len());
 
     let input_slice = input.dims().iter().map(|x| 0..*x).collect::<Vec<_>>();
@@ -5348,9 +5310,9 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 
     let signed_decomp = pairwise(config, region, &[prod_decomp, sign], BaseOp::Mult)?;
 
-    enforce_equality(config, region, &[input, signed_decomp])?;
+    enforce_equality(config, region, &[input.clone(), signed_decomp])?;
 
-    Ok(claimed_output)
+    Ok((claimed_output, input))
 }
 
 pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
@@ -5358,7 +5320,7 @@ pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let mut decomp = decompose(config, region, values, &region.base(), &region.legs())?;
+    let mut decomp = decompose(config, region, values, &region.base(), &region.legs())?.0;
     // get every n elements now, which correspond to the sign bit
     decomp.get_every_n(region.legs() + 1)?;
     decomp.reshape(values[0].dims())?;
@@ -5640,7 +5602,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
-/// use ezkl::circuit::ops::layouts::range_check_percent;
+/// use ezkl::circuit::ops::layouts::output;
 ///  use ezkl::tensor::val::ValTensor;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -5658,9 +5620,9 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[101, 201, 302, 403, 503, 603]),
 ///   &[2, 3],
 /// ).unwrap());
-/// let result = range_check_percent::<Fp>(&dummy_config, &mut dummy_region, &[x, y], 1024.0.into(), 1.0).unwrap();
+/// let result = output::<Fp>(&dummy_config, &mut dummy_region, &[x, y], 1024.0.into(), 1.0).unwrap();
 /// ```
-pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
+pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
@@ -5668,31 +5630,16 @@ pub fn range_check_percent<F: PrimeField + TensorType + PartialOrd + std::hash::
     tol: f32,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut values = [values[0].clone(), values[1].clone()];
-    let is_assigned_0 = values[0].all_prev_assigned();
-    let is_assigned_1 = values[1].all_prev_assigned();
 
-    let mut total_assigned_0 = values[0].len();
-    if !is_assigned_0 {
-        values[0] = region.assign(&config.custom_gates.inputs[0], &values[0])?;
-        total_assigned_0 += values[0].len();
+    if !values[0].all_prev_assigned() {
+        // range check the outputs
+        values[0] = layouts::identity(config, region, &[values[0].clone()])?;
     }
 
-    let mut total_assigned_1 = values[1].len();
-    if !is_assigned_1 {
-        values[1] = region.assign(&config.custom_gates.inputs[1], &values[1])?;
-        total_assigned_1 += values[1].len();
+    if !values[1].all_prev_assigned() {
+        // range check the outputs
+        values[1] = layouts::identity(config, region, &[values[1].clone()])?;
     }
-
-    let total_assigned = std::cmp::max(total_assigned_0, total_assigned_1);
-    region.increment(total_assigned);
-
-    decompose(
-        config,
-        region,
-        &[values[0].clone()],
-        &region.base(),
-        &region.legs(),
-    )?;
 
     if tol == 0.0 {
         // regular equality constraint

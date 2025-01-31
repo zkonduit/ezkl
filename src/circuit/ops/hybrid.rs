@@ -314,13 +314,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 *output_scale,
                 axes,
             )?,
-            HybridOp::Output(tol) => layouts::range_check_percent(
-                config,
-                region,
-                values[..].try_into()?,
-                tol.scale,
-                tol.val,
-            )?,
+            HybridOp::Output(tol) => {
+                layouts::output(config, region, values[..].try_into()?, tol.scale, tol.val)?
+            }
             HybridOp::Greater => layouts::greater(config, region, values[..].try_into()?)?,
             HybridOp::GreaterEqual => {
                 layouts::greater_equal(config, region, values[..].try_into()?)?
