@@ -22,6 +22,8 @@ mod native_tests {
     static COMPILE_WASM: Once = Once::new();
     static ENV_SETUP: Once = Once::new();
 
+    const TEST_BINARY: &str = "test-runs/ezkl";
+
     //Sure to run this once
     #[derive(Debug)]
     #[allow(dead_code)]
@@ -102,7 +104,7 @@ mod native_tests {
 
     fn download_srs(logrows: u32, commitment: Commitments) {
         // if does not exist, download it
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "get-srs",
                 "--logrows",
@@ -1554,7 +1556,7 @@ mod native_tests {
                 .save(format!("{}/{}/witness_bad.json", test_dir, example_name).into())
                 .unwrap();
 
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                 .args([
                     "mock",
                     "-W",
@@ -1566,7 +1568,7 @@ mod native_tests {
                 .expect("failed to execute process");
             assert!(status.success());
 
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                 .args([
                     "mock",
                     "-W",
@@ -1578,7 +1580,7 @@ mod native_tests {
                 .expect("failed to execute process");
             assert!(status.success());
 
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                 .args([
                     "mock",
                     "-W",
@@ -1590,7 +1592,7 @@ mod native_tests {
                 .expect("failed to execute process");
             assert!(!status.success());
         } else {
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                 .args([
                     "mock",
                     "-W",
@@ -1651,7 +1653,7 @@ mod native_tests {
             args.push("--bounded-log-lookup".to_string());
         }
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(args)
             .status()
             .expect("failed to execute process");
@@ -1681,7 +1683,7 @@ mod native_tests {
             calibrate_args.push(scales);
         }
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(calibrate_args)
             .status()
             .expect("failed to execute process");
@@ -1705,7 +1707,7 @@ mod native_tests {
             *tolerance = 0.0;
         }
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "compile-circuit",
                 "-M",
@@ -1722,7 +1724,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "gen-witness",
                 "-D",
@@ -1790,7 +1792,7 @@ mod native_tests {
 
     // Mock prove (fast, but does not cover some potential issues)
     fn render_circuit(test_dir: &str, example_name: String) {
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "render-circuit",
                 "-M",
@@ -1821,7 +1823,7 @@ mod native_tests {
             Commitments::KZG,
             2,
         );
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "mock-aggregate",
                 "--logrows=23",
@@ -1859,7 +1861,7 @@ mod native_tests {
 
         download_srs(23, commitment);
         // now setup-aggregate
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "setup-aggregate",
                 "--sample-snarks",
@@ -1875,7 +1877,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "aggregate",
                 "--logrows=23",
@@ -1890,7 +1892,7 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "verify-aggr",
                 "--logrows=23",
@@ -1940,7 +1942,7 @@ mod native_tests {
         let private_key = format!("--private-key={}", *ANVIL_DEFAULT_PRIVATE_KEY);
 
         // create encoded calldata
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "encode-evm-calldata",
                 "--proof-path",
@@ -1962,7 +1964,7 @@ mod native_tests {
 
         let args = build_args(base_args, &sol_arg);
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(args)
             .status()
             .expect("failed to execute process");
@@ -1978,7 +1980,7 @@ mod native_tests {
             private_key.as_str(),
         ];
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
@@ -2000,14 +2002,14 @@ mod native_tests {
             rpc_arg.as_str(),
         ];
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&base_args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
         // As sanity check, add example that should fail.
         base_args[2] = PF_FAILURE_AGGR;
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(base_args)
             .status()
             .expect("failed to execute process");
@@ -2058,7 +2060,7 @@ mod native_tests {
 
         init_params(settings_path.clone().into());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "setup",
                 "-M",
@@ -2073,7 +2075,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "prove",
                 "-W",
@@ -2091,7 +2093,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "swap-proof-commitments",
                 "--proof-path",
@@ -2103,7 +2105,7 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "verify",
                 format!("--settings-path={}", settings_path).as_str(),
@@ -2126,7 +2128,7 @@ mod native_tests {
         // get_srs for the graph_settings_num_instances
         download_srs(1, graph_settings.run_args.commitment.into());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "verify",
                 format!("--settings-path={}", settings_path).as_str(),
@@ -2176,7 +2178,7 @@ mod native_tests {
         let settings_arg = format!("--settings-path={}", settings_path);
 
         // create encoded calldata
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "encode-evm-calldata",
                 "--proof-path",
@@ -2196,7 +2198,7 @@ mod native_tests {
         args.push("--sol-code-path");
         args.push(sol_arg.as_str());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
@@ -2208,7 +2210,7 @@ mod native_tests {
         args.push("--sol-code-path");
         args.push(sol_arg.as_str());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
@@ -2230,14 +2232,14 @@ mod native_tests {
             deployed_addr_arg.as_str(),
         ];
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
         // As sanity check, add example that should fail.
         args[2] = PF_FAILURE;
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(args)
             .status()
             .expect("failed to execute process");
@@ -2296,7 +2298,7 @@ mod native_tests {
                     "--reusable",
                 ];
 
-                let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                     .args(&args)
                     .status()
                     .expect("failed to execute process");
@@ -2311,7 +2313,7 @@ mod native_tests {
                     "-C=verifier/reusable",
                 ];
 
-                let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+                let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                     .args(&args)
                     .status()
                     .expect("failed to execute process");
@@ -2340,7 +2342,7 @@ mod native_tests {
             &sol_arg_vk,
         ];
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
@@ -2355,7 +2357,7 @@ mod native_tests {
             "-C=vka",
         ];
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
@@ -2368,7 +2370,7 @@ mod native_tests {
         let deployed_addr_arg_vk = format!("--addr-vk={}", addr_vk);
 
         // create encoded calldata
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "encode-evm-calldata",
                 "--proof-path",
@@ -2391,7 +2393,7 @@ mod native_tests {
             deployed_addr_arg_vk.as_str(),
         ];
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
@@ -2424,7 +2426,7 @@ mod native_tests {
             // Verify the modified proof (should fail)
             let mut args_mod = args.clone();
             args_mod[2] = &modified_pf_arg;
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                 .args(&args_mod)
                 .status()
                 .expect("failed to execute process");
@@ -2502,7 +2504,7 @@ mod native_tests {
         let test_input_source = format!("--input-source={}", input_source);
         let test_output_source = format!("--output-source={}", output_source);
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "setup",
                 "-M",
@@ -2517,7 +2519,7 @@ mod native_tests {
         assert!(status.success());
 
         // generate the witness, passing the vk path to generate the necessary kzg commits
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "gen-witness",
                 "-D",
@@ -2574,7 +2576,7 @@ mod native_tests {
             }
             input.save(data_path.clone().into()).unwrap();
 
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                 .args([
                     "setup-test-evm-data",
                     "-D",
@@ -2592,7 +2594,7 @@ mod native_tests {
             assert!(status.success());
         }
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "prove",
                 "-W",
@@ -2613,7 +2615,7 @@ mod native_tests {
         let settings_arg = format!("--settings-path={}", settings_path);
 
         // create encoded calldata
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "encode-evm-calldata",
                 "--proof-path",
@@ -2632,7 +2634,7 @@ mod native_tests {
         args.push("--sol-code-path");
         args.push(sol_arg.as_str());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
@@ -2653,7 +2655,7 @@ mod native_tests {
         args.push("--sol-code-path");
         args.push(sol_arg.as_str());
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
@@ -2676,7 +2678,7 @@ mod native_tests {
             create_da_args.push(test_on_chain_data_path.as_str());
         }
 
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&create_da_args)
             .status()
             .expect("failed to execute process");
@@ -2689,7 +2691,7 @@ mod native_tests {
         };
 
         let addr_path_da_arg = format!("--addr-path={}/{}/addr_da.txt", test_dir, example_name);
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args([
                 "deploy-evm-da",
                 format!("--settings-path={}", settings_path).as_str(),
@@ -2727,14 +2729,14 @@ mod native_tests {
             deployed_addr_da_arg.as_str(),
             rpc_arg.as_str(),
         ];
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(&args)
             .status()
             .expect("failed to execute process");
         assert!(status.success());
         // Create a new set of test on chain data only for the on-chain input source
         if input_source != "file" || output_source != "file" {
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                 .args([
                     "setup-test-evm-data",
                     "-D",
@@ -2761,7 +2763,7 @@ mod native_tests {
                 test_on_chain_data_path.as_str(),
                 rpc_arg.as_str(),
             ];
-            let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
                 .args(&args)
                 .status()
                 .expect("failed to execute process");
@@ -2777,7 +2779,7 @@ mod native_tests {
             deployed_addr_da_arg.as_str(),
             rpc_arg.as_str(),
         ];
-        let status = Command::new(format!("{}/release/ezkl", *CARGO_TARGET_DIR))
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, *TEST_BINARY))
             .args(args)
             .status()
             .expect("failed to execute process");
