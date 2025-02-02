@@ -354,7 +354,7 @@ pub struct RunArgs {
         all(feature = "ezkl", not(target_arch = "wasm32")),
         arg(long, default_value = "true")
     )]
-    pub range_check_inputs_outputs: bool,
+    pub ignore_range_check_inputs_outputs: bool,
 }
 
 impl Default for RunArgs {
@@ -381,7 +381,7 @@ impl Default for RunArgs {
             commitment: None,
             decomp_base: 16384,
             decomp_legs: 2,
-            range_check_inputs_outputs: true,
+            ignore_range_check_inputs_outputs: false,
         }
     }
 }

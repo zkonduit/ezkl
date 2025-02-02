@@ -1641,6 +1641,11 @@ mod native_tests {
             format!("--commitment={}", commitment),
         ];
 
+        // if output-visibility is fixed set --range-check-inputs-outputs to False
+        if output_visibility == "fixed" {
+            args.push("--ignore-range-check-inputs-outputs=true".to_string());
+        }
+
         if let Some(decomp_base) = decomp_base {
             args.push(format!("--decomp-base={}", decomp_base));
         }

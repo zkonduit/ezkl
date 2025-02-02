@@ -209,7 +209,7 @@ struct PyRunArgs {
     pub bounded_log_lookup: bool,
     /// bool: Should the circuit use range checks for inputs and outputs (set to false if the input is a felt)
     #[pyo3(get, set)]
-    pub range_check_inputs_outputs: bool,
+    pub ignore_range_check_inputs_outputs: bool,
 }
 
 /// default instantiation of PyRunArgs
@@ -242,7 +242,7 @@ impl From<PyRunArgs> for RunArgs {
             commitment: Some(py_run_args.commitment.into()),
             decomp_base: py_run_args.decomp_base,
             decomp_legs: py_run_args.decomp_legs,
-            range_check_inputs_outputs: py_run_args.range_check_inputs_outputs,
+            ignore_range_check_inputs_outputs: py_run_args.ignore_range_check_inputs_outputs,
         }
     }
 }
@@ -267,7 +267,7 @@ impl Into<PyRunArgs> for RunArgs {
             commitment: self.commitment.into(),
             decomp_base: self.decomp_base,
             decomp_legs: self.decomp_legs,
-            range_check_inputs_outputs: self.range_check_inputs_outputs,
+            ignore_range_check_inputs_outputs: self.ignore_range_check_inputs_outputs,
         }
     }
 }

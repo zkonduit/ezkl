@@ -908,7 +908,7 @@ impl Model {
                             n.opkind = SupportedOp::Input(Input {
                                 scale,
                                 datum_type: inp.datum_type,
-                                decomp: run_args.range_check_inputs_outputs,
+                                decomp: !run_args.ignore_range_check_inputs_outputs,
                             });
                             input_idx += 1;
                             n.out_scale = scale;
@@ -1172,7 +1172,7 @@ impl Model {
                                     &[output.clone(), comparators],
                                     Box::new(HybridOp::Output {
                                         tol,
-                                        decomp: run_args.range_check_inputs_outputs,
+                                        decomp: !run_args.ignore_range_check_inputs_outputs,
                                     }),
                                 )
                                 .map_err(|e| e.into())
@@ -1458,7 +1458,7 @@ impl Model {
                         &[output.clone(), comparator],
                         Box::new(HybridOp::Output {
                             tol,
-                            decomp: run_args.range_check_inputs_outputs,
+                            decomp: !run_args.ignore_range_check_inputs_outputs,
                         }),
                     )
                 })
