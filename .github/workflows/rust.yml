@@ -200,9 +200,9 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
-        run: cargo nextest run --release lookup_ultra_overflow --no-capture -- --include-ignored
+        run: cargo nextest run lookup_ultra_overflow --no-capture -- --include-ignored
       - name: Matmul overflow
-        run: RUST_LOG=debug cargo nextest run --release matmul_col_ultra_overflow --no-capture -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv overflow
         run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv + relu overflow

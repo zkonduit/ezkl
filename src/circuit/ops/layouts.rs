@@ -5244,15 +5244,20 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
         input = region.assign(&config.custom_gates.inputs[0], &input)?;
     }
 
-    let mut bases: ValTensor<F> = Tensor::from(
-        // repeat it input.len() times
+    // to force the bases to be assigned
+    if input.is_singleton() {
+        input.reshape(&[1])?;
+    }
+
+    let mut bases: ValTensor<F> = Tensor::from({
         (0..input.len()).flat_map(|_| {
             (0..*n)
                 .rev()
                 .map(|x| ValType::Constant(integer_rep_to_felt(base.pow(x as u32) as IntegerRep)))
-        }),
-    )
+        })
+    })
     .into();
+
     let mut bases_dims = input.dims().to_vec();
     bases_dims.push(*n);
     bases.reshape(&bases_dims)?;
