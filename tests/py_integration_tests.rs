@@ -126,10 +126,10 @@ mod py_tests {
     }
 
     const TESTS: [&str; 35] = [
-        "ezkl_demo_batch.ipynb",                   // 0
-        "proof_splitting.ipynb",                   // 1
-        "variance.ipynb",                          // 2
-        "mnist_gan.ipynb",                         // 3
+        "mnist_gan.ipynb",                         // 0
+        "ezkl_demo_batch.ipynb",                   // 1
+        "proof_splitting.ipynb",                   // 2
+        "variance.ipynb",                          // 3
         "keras_simple_demo.ipynb",                 // 4
         "mnist_gan_proof_splitting.ipynb",         // 5
         "hashed_vis.ipynb",                        // 6
