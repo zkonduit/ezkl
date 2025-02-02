@@ -2788,7 +2788,7 @@ mod native_tests {
         #[cfg(feature = "icicle")]
         let args = [
             "build",
-            "--release",
+            "--profile=test-runs",
             "--bin",
             "ezkl",
             "--features",
@@ -2797,7 +2797,7 @@ mod native_tests {
         #[cfg(feature = "macos-metal")]
         let args = [
             "build",
-            "--release",
+            "--profile=test-runs",
             "--bin",
             "ezkl",
             "--features",
@@ -2805,11 +2805,11 @@ mod native_tests {
         ];
         // not macos-metal and not icicle
         #[cfg(all(not(feature = "icicle"), not(feature = "macos-metal")))]
-        let args = ["build", "--release", "--bin", "ezkl"];
+        let args = ["build", "--profile=test-runs", "--bin", "ezkl"];
         #[cfg(not(feature = "mv-lookup"))]
         let args = [
             "build",
-            "--release",
+            "--profile=test-runs",
             "--bin",
             "ezkl",
             "--no-default-features",
@@ -2830,7 +2830,7 @@ mod native_tests {
         let status = Command::new("wasm-pack")
             .args([
                 "build",
-                "--release",
+                "--profile=test-runs",
                 "--target",
                 "nodejs",
                 "--out-dir",
