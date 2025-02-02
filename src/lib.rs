@@ -352,7 +352,7 @@ pub struct RunArgs {
     /// Range check inputs and outputs (turn off if the inputs are felts)
     #[cfg_attr(
         all(feature = "ezkl", not(target_arch = "wasm32")),
-        arg(long, default_value = "true")
+        arg(long, default_value = "false")
     )]
     pub ignore_range_check_inputs_outputs: bool,
 }
