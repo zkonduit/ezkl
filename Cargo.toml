@@ -288,8 +288,12 @@ uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "fea
 rustflags = ["-C", "relocation-model=pic"]
 lto = "fat"
 codegen-units = 1
-# panic = "abort"
+#panic = "abort"
 
+
+[profile.test-runs]
+inherits = "dev"
+opt-level = 3
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = [
