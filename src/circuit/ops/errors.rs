@@ -106,4 +106,7 @@ pub enum CircuitError {
     /// Visibility has not been set
     #[error("visibility has not been set")]
     UnsetVisibility,
+    /// A decomposition base overflowed
+    #[error("decomposition base overflowed")]
+    DecompositionBaseOverflow,
 }
