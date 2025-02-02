@@ -32,8 +32,12 @@ jobs:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
       - name: fr age Mock
-        run: cargo nextest run --verbose tests::large_mock_::large_tests_6_expects -- --include-ignored
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_6_expects -- --include-ignored
 
   build:
     permissions:
@@ -158,13 +162,13 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
-        run: cargo nextest run --profile=test-runs lookup_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: cargo nextest run --release lookup_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
       - name: Matmul overflow
-        run: RUST_LOG=debug cargo nextest run --profile=test-runs matmul_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release matmul_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
       - name: Conv overflow
-        run: RUST_LOG=debug cargo nextest run --profile=test-runs conv_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
       - name: Conv + relu overflow
-        run: cargo nextest run --profile=test-runs conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: cargo nextest run --release conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
 
   ultra-overflow-tests:
     permissions:
@@ -195,13 +199,13 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
-        run: cargo nextest run --profile=test-runs lookup_ultra_overflow --no-capture -- --include-ignored
+        run: cargo nextest run --release lookup_ultra_overflow --no-capture -- --include-ignored
       - name: Matmul overflow
-        run: RUST_LOG=debug cargo nextest run --profile=test-runs matmul_col_ultra_overflow --no-capture -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release matmul_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv overflow
-        run: RUST_LOG=debug cargo nextest run --profile=test-runs conv_col_ultra_overflow --no-capture -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv + relu overflow
-        run: cargo nextest run --profile=test-runs conv_relu_col_ultra_overflow --no-capture -- --include-ignored
+        run: cargo nextest run --release conv_relu_col_ultra_overflow --no-capture -- --include-ignored
 
   model-serialization:
     permissions:
@@ -663,7 +667,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Examples
-        run: cargo nextest run --profile=test-runs tests_examples
+        run: cargo nextest run --release tests_examples
 
   python-tests:
     permissions:
