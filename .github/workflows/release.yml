@@ -30,7 +30,7 @@ jobs:
 
       - name: Create Github Release
         id: create-release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  #v2.2.1
         with:
           token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: ${{ env.EZKL_VERSION }}
@@ -49,14 +49,14 @@ jobs:
       RUST_BACKTRACE: 1
       PCRE2_SYS_STATIC: 1
     steps:
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
       - name: Checkout repo
-        uses: actions/checkout@v4
-        with: 
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
           persist-credentials: false
 
 
@@ -90,7 +90,7 @@ jobs:
           echo "ASSET=build-artifacts/ezkl-linux-gpu.tar.gz" >> $GITHUB_ENV
 
       - name: Upload release archive
-        uses: actions/upload-release-asset@v1.0.2
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5  #v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
@@ -144,8 +144,8 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
-        with: 
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
           persist-credentials: false
 
       - name: Get release version from tag
@@ -170,7 +170,7 @@ jobs:
           fi
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
         with:
           target: ${{ matrix.target }}
 
@@ -196,7 +196,7 @@ jobs:
           echo "target flag is: ${{ env.TARGET_FLAGS }}"
           echo "target dir is: ${{ env.TARGET_DIR }}"
 
-      - name: Build release binary (no asm or metal) 
+      - name: Build release binary (no asm or metal)
         if: matrix.build != 'linux-gnu' && matrix.build != 'macos-aarch64'
         run: ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }} -Z sparse-registry
 
@@ -233,7 +233,7 @@ jobs:
           echo "ASSET=build-artifacts/ezkl-win.zip" >> $GITHUB_ENV
 
       - name: Upload release archive
-        uses: actions/upload-release-asset@v1.0.2
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5  #v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
