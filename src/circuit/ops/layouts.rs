@@ -1246,8 +1246,6 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
 
                 region.enable(Some(lookup_selector), z)?;
 
-                // region.enable(Some(lookup_selector), z)?;
-
                 Ok(())
             })
             .collect::<Result<Vec<_>, CircuitError>>()?;
@@ -1267,7 +1265,7 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
 /// 4. index_output is (typically) a prover generated witness committed to in an advice column
 /// 5. value_output is (typically) a prover generated witness committed to in an advice column
 /// 6. Given the above, and given the fixed index_input , we go through every (index_input, value_input) pair and ascertain that it is contained in the input.
-/// Given the fixed incrementing index index_input, we avoid multiplicity in the output by leveraging this surrogate index: if index_output isn't matched to the exact value where for `index_input=index_output` -> `value_input=value_output`, then the lookup fails
+/// 7. Given the fixed incrementing index index_input, we avoid multiplicity in the output by leveraging this surrogate index: if index_output isn't matched to the exact value where for `index_input=index_output` -> `value_input=value_output`, then the lookup fails
 pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -3052,7 +3050,7 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let lhs_and_rhs_not = and(config, region, &[lhs, rhs_not.clone()])?;
     let lhs_not_and_rhs = and(config, region, &[rhs, lhs_not])?;
 
-    // we can safely use add and not OR here because we know that lhs_and_rhs_not and lhs_not_and_rhs are =1 at different incices
+    // we can safely use add and not OR here because we know that lhs_and_rhs_not and lhs_not_and_rhs are =1 at different indices
     let res: ValTensor<F> = pairwise(
         config,
         region,
@@ -3329,11 +3327,11 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .map(|(i, d)| {
             let d = padding[i].0 + d + padding[i].1;
             d.checked_sub(pool_dims[i])
-                .ok_or_else(|| TensorError::Overflow("conv".to_string()))?
+                .ok_or_else(|| TensorError::Overflow("max_pool".to_string()))?
                 .checked_div(stride[i])
-                .ok_or_else(|| TensorError::Overflow("conv".to_string()))?
+                .ok_or_else(|| TensorError::Overflow("max_pool".to_string()))?
                 .checked_add(1)
-                .ok_or_else(|| TensorError::Overflow("conv".to_string()))
+                .ok_or_else(|| TensorError::Overflow("max_pool".to_string()))
         })
         .collect::<Result<Vec<_>, TensorError>>()?;
 
@@ -5031,6 +5029,7 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         1,
     );
     let assigned_midway_point = region.assign(&config.custom_gates.inputs[1], &midway_point)?;
+    region.increment(assigned_midway_point.len());
 
     let dims = decomposition.dims().to_vec();
     let first_dims = decomposition.dims().to_vec()[..decomposition.dims().len() - 1].to_vec();
@@ -5296,6 +5295,7 @@ pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 
             if !is_assigned {
                 sliced_input = region.assign(&config.custom_gates.inputs[0], &sliced_input)?;
+                region.increment(sliced_input.len());
             }
 
             // get the sign bit and make sure it is valid

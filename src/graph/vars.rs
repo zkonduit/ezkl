@@ -11,35 +11,34 @@ use log::debug;
 use pyo3::{
     exceptions::PyValueError, FromPyObject, IntoPy, PyObject, PyResult, Python, ToPyObject,
 };
-
 use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
 use self::errors::GraphError;
-
 use super::*;
 
-/// Label enum to track whether model input, model parameters, and model output are public, private, or hashed
+/// Defines the visibility level of values within the zero-knowledge circuit
+/// Controls how values are handled during proof generation and verification
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Visibility {
-    /// Mark an item as private to the prover (not in the proof submitted for verification)
+    /// Value is private to the prover and not included in proof
     #[default]
     Private,
-    /// Mark an item as public (sent in the proof submitted for verification)
+    /// Value is public and included in proof for verification
     Public,
-    /// Mark an item as publicly committed to (hash sent in the proof submitted for verification)
+    /// Value is hashed and the hash is included in proof
     Hashed {
-        /// Whether the hash is used as an instance (sent in the proof submitted for verification)
-        /// if false the hash is used as an advice (not in the proof submitted for verification) and is then sent to the computational graph
-        /// if true the hash is used as an instance (sent in the proof submitted for verification) the *inputs* to the hashing function are then sent to the computational graph
+        /// Controls how the hash is handled in proof
+        /// true - hash is included directly in proof (public)
+        /// false - hash is used as advice and passed to computational graph
         hash_is_public: bool,
-        ///
+        /// Specifies which outputs this hash affects
         outlets: Vec<usize>,
     },
-    /// Mark an item as publicly committed to (KZG commitment sent in the proof submitted for verification)
+    /// Value is committed using KZG commitment scheme
     KZGCommit,
-    /// assigned as a constant in the circuit
+    /// Value is assigned as a constant in the circuit
     Fixed,
 }
 
@@ -66,15 +65,17 @@ impl Display for Visibility {
 
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 impl ToFlags for Visibility {
+    /// Converts visibility to command line flags
     fn to_flags(&self) -> Vec<String> {
         vec![format!("{}", self)]
     }
 }
 
 impl<'a> From<&'a str> for Visibility {
+    /// Converts string representation to Visibility
     fn from(s: &'a str) -> Self {
         if s.contains("hashed/private") {
-            // split on last occurrence of '/'
+            // Split on last occurrence of '/'
             let (_, outlets) = s.split_at(s.rfind('/').unwrap());
             let outlets = outlets
                 .trim_start_matches('/')
@@ -106,8 +107,8 @@ impl<'a> From<&'a str> for Visibility {
 }
 
 #[cfg(feature = "python-bindings")]
-/// Converts Visibility into a PyObject (Required for Visibility to be compatible with Python)
 impl IntoPy<PyObject> for Visibility {
+    /// Converts Visibility to Python object
     fn into_py(self, py: Python) -> PyObject {
         match self {
             Visibility::Private => "private".to_object(py),
@@ -134,14 +135,13 @@ impl IntoPy<PyObject> for Visibility {
 }
 
 #[cfg(feature = "python-bindings")]
-/// Obtains Visibility from PyObject (Required for Visibility to be compatible with Python)
 impl<'source> FromPyObject<'source> for Visibility {
+    /// Extracts Visibility from Python object
     fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
         let strval = String::extract_bound(ob)?;
         let strval = strval.as_str();
 
         if strval.contains("hashed/private") {
-            // split on last occurence of '/'
             let (_, outlets) = strval.split_at(strval.rfind('/').unwrap());
             let outlets = outlets
                 .trim_start_matches('/')
@@ -174,29 +174,32 @@ impl<'source> FromPyObject<'source> for Visibility {
 }
 
 impl Visibility {
-    #[allow(missing_docs)]
+    /// Returns true if visibility is Fixed
     pub fn is_fixed(&self) -> bool {
         matches!(&self, Visibility::Fixed)
     }
-    #[allow(missing_docs)]
+
+    /// Returns true if visibility is Private or hashed private
     pub fn is_private(&self) -> bool {
         matches!(&self, Visibility::Private) || self.is_hashed_private()
     }
 
-    #[allow(missing_docs)]
+    /// Returns true if visibility is Public
     pub fn is_public(&self) -> bool {
         matches!(&self, Visibility::Public)
     }
-    #[allow(missing_docs)]
+
+    /// Returns true if visibility involves hashing
     pub fn is_hashed(&self) -> bool {
         matches!(&self, Visibility::Hashed { .. })
     }
-    #[allow(missing_docs)]
+
+    /// Returns true if visibility uses KZG commitment
     pub fn is_polycommit(&self) -> bool {
         matches!(&self, Visibility::KZGCommit)
     }
 
-    #[allow(missing_docs)]
+    /// Returns true if visibility is hashed with public hash
     pub fn is_hashed_public(&self) -> bool {
         if let Visibility::Hashed {
             hash_is_public: true,
@@ -207,7 +210,8 @@ impl Visibility {
         }
         false
     }
-    #[allow(missing_docs)]
+
+    /// Returns true if visibility is hashed with private hash
     pub fn is_hashed_private(&self) -> bool {
         if let Visibility::Hashed {
             hash_is_public: false,
@@ -219,11 +223,12 @@ impl Visibility {
         false
     }
 
-    #[allow(missing_docs)]
+    /// Returns true if visibility requires additional processing
     pub fn requires_processing(&self) -> bool {
         matches!(&self, Visibility::Hashed { .. }) | matches!(&self, Visibility::KZGCommit)
     }
-    #[allow(missing_docs)]
+
+    /// Returns vector of output indices that this visibility setting affects
     pub fn overwrites_inputs(&self) -> Vec<usize> {
         if let Visibility::Hashed { outlets, .. } = self {
             return outlets.clone();
@@ -232,14 +237,14 @@ impl Visibility {
     }
 }
 
-/// Represents the scale of the model input, model parameters.
+/// Manages scaling factors for different parts of the model
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, PartialOrd)]
 pub struct VarScales {
-    ///
+    /// Scale factor for input values
     pub input: crate::Scale,
-    ///
+    /// Scale factor for parameter values
     pub params: crate::Scale,
-    ///
+    /// Multiplier for scale rebasing
     pub rebase_multiplier: u32,
 }
 
@@ -250,17 +255,17 @@ impl std::fmt::Display for VarScales {
 }
 
 impl VarScales {
-    ///
+    /// Returns maximum scale value
     pub fn get_max(&self) -> crate::Scale {
         std::cmp::max(self.input, self.params)
     }
 
-    ///
+    /// Returns minimum scale value
     pub fn get_min(&self) -> crate::Scale {
         std::cmp::min(self.input, self.params)
     }
 
-    /// Place in [VarScales] struct.
+    /// Creates VarScales from runtime arguments
     pub fn from_args(args: &RunArgs) -> Self {
         Self {
             input: args.input_scale,
@@ -270,16 +275,17 @@ impl VarScales {
     }
 }
 
-/// Represents whether the model input, model parameters, and model output are Public or Private to the prover.
+/// Controls visibility settings for different parts of the model
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, PartialOrd)]
 pub struct VarVisibility {
-    /// Input to the model or computational graph
+    /// Visibility of model inputs
     pub input: Visibility,
-    /// Parameters, such as weights and biases, in the model
+    /// Visibility of model parameters (weights, biases)
     pub params: Visibility,
-    /// Output of the model or computational graph
+    /// Visibility of model outputs
     pub output: Visibility,
 }
+
 impl std::fmt::Display for VarVisibility {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
@@ -301,8 +307,7 @@ impl Default for VarVisibility {
 }
 
 impl VarVisibility {
-    /// Read from cli args whether the model input, model parameters, and model output are Public or Private to the prover.
-    /// Place in [VarVisibility] struct.
+    /// Creates visibility settings from runtime arguments
     pub fn from_args(args: &RunArgs) -> Result<Self, GraphError> {
         let input_vis = &args.input_visibility;
         let params_vis = &args.param_visibility;
@@ -313,17 +318,17 @@ impl VarVisibility {
         }
 
         if !output_vis.is_public()
-            & !params_vis.is_public()
-            & !input_vis.is_public()
-            & !output_vis.is_fixed()
-            & !params_vis.is_fixed()
-            & !input_vis.is_fixed()
-            & !output_vis.is_hashed()
-            & !params_vis.is_hashed()
-            & !input_vis.is_hashed()
-            & !output_vis.is_polycommit()
-            & !params_vis.is_polycommit()
-            & !input_vis.is_polycommit()
+            && !params_vis.is_public()
+            && !input_vis.is_public()
+            && !output_vis.is_fixed()
+            && !params_vis.is_fixed()
+            && !input_vis.is_fixed()
+            && !output_vis.is_hashed()
+            && !params_vis.is_hashed()
+            && !input_vis.is_hashed()
+            && !output_vis.is_polycommit()
+            && !params_vis.is_polycommit()
+            && !input_vis.is_polycommit()
         {
             return Err(GraphError::Visibility);
         }
@@ -335,17 +340,17 @@ impl VarVisibility {
     }
 }
 
-/// A wrapper for holding all columns that will be assigned to by a model.
+/// Container for circuit columns used by a model
 #[derive(Clone, Debug)]
 pub struct ModelVars<F: PrimeField + TensorType + PartialOrd> {
-    #[allow(missing_docs)]
+    /// Advice columns for circuit assignments
     pub advices: Vec<VarTensor>,
-    #[allow(missing_docs)]
+    /// Optional instance column for public inputs
     pub instance: Option<ValTensor<F>>,
 }
 
 impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
-    /// Get instance col
+    /// Gets reference to instance column if it exists
     pub fn get_instance_col(&self) -> Option<&Column<Instance>> {
         if let Some(instance) = &self.instance {
             match instance {
@@ -357,14 +362,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
         }
     }
 
-    /// Set the initial instance offset
+    /// Sets initial offset for instance values
     pub fn set_initial_instance_offset(&mut self, offset: usize) {
         if let Some(instance) = &mut self.instance {
             instance.set_initial_instance_offset(offset);
         }
     }
 
-    /// Get the total instance len
+    /// Gets total length of instance data
     pub fn get_instance_len(&self) -> usize {
         if let Some(instance) = &self.instance {
             instance.get_total_instance_len()
@@ -373,21 +378,21 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
         }
     }
 
-    /// Increment the instance offset
+    /// Increments instance index
     pub fn increment_instance_idx(&mut self) {
         if let Some(instance) = &mut self.instance {
             instance.increment_idx();
         }
     }
 
-    /// Reset the instance offset
+    /// Sets instance index to specific value
     pub fn set_instance_idx(&mut self, val: usize) {
         if let Some(instance) = &mut self.instance {
             instance.set_idx(val);
         }
     }
 
-    /// Get the instance offset
+    /// Gets current instance index
     pub fn get_instance_idx(&self) -> usize {
         if let Some(instance) = &self.instance {
             instance.get_idx()
@@ -396,7 +401,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
         }
     }
 
-    ///
+    /// Initializes instance column with specified dimensions and scale
     pub fn instantiate_instance(
         &mut self,
         cs: &mut ConstraintSystem<F>,
@@ -417,7 +422,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ModelVars<F> {
         };
     }
 
-    /// Allocate all columns that will be assigned to by a model.
+    /// Creates new ModelVars with allocated columns based on settings
     pub fn new(cs: &mut ConstraintSystem<F>, params: &GraphSettings) -> Self {
         debug!("number of blinding factors: {}", cs.blinding_factors());
 

@@ -1,10 +1,19 @@
+// Import dependencies for scaling operations
 use super::scale_to_multiplier;
+
+// Import ONNX-specific utilities when EZKL feature is enabled
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use super::utilities::node_output_shapes;
+
+// Import scale management types for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use super::VarScales;
+
+// Import visibility settings for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use super::Visibility;
+
+// Import operation types for different circuit components
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::poly::PolyOp;
@@ -13,28 +22,49 @@ use crate::circuit::Constant;
 use crate::circuit::Input;
 use crate::circuit::Op;
 use crate::circuit::Unknown;
+
+// Import graph error types for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::graph::errors::GraphError;
+
+// Import ONNX operation conversion utilities
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::graph::new_op_from_onnx;
+
+// Import tensor error handling
 use crate::tensor::TensorError;
+
+// Import curve-specific field type
 use halo2curves::bn256::Fr as Fp;
+
+// Import logging for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use log::trace;
+
+// Import serialization traits
 use serde::Deserialize;
 use serde::Serialize;
+
+// Import data structures for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use std::collections::BTreeMap;
+
+// Import formatting traits for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use std::fmt;
+
+// Import table display formatting for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tabled::Tabled;
+
+// Import ONNX-specific types and traits for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::{
     self,
     prelude::{Node as OnnxNode, SymbolValues, TypedFact, TypedOp},
 };
 
+/// Helper function to format vectors for display
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     if !v.is_empty() {
@@ -44,29 +74,35 @@ fn display_vector<T: fmt::Debug>(v: &Vec<T>) -> String {
     }
 }
 
+/// Helper function to format operation kinds for display
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 fn display_opkind(v: &SupportedOp) -> String {
     v.as_string()
 }
 
-/// A wrapper for an operation that has been rescaled.
+/// A wrapper for an operation that has been rescaled to handle different precision requirements.
+/// This enables operations to work with inputs that have been scaled to different fixed-point representations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Rescaled {
-    /// The operation that has to be rescaled.
+    /// The underlying operation that needs to be rescaled
     pub inner: Box<SupportedOp>,
-    /// The scale of the operation's inputs.
+    /// Vector of (index, scale) pairs defining how each input should be scaled
     pub scale: Vec<(usize, u128)>,
 }
 
+/// Implementation of the Op trait for Rescaled operations
 impl Op<Fp> for Rescaled {
+    /// Convert to Any type for runtime type checking
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
+    /// Get string representation of the operation
     fn as_string(&self) -> String {
         format!("RESCALED INPUT ({})", self.inner.as_string())
     }
 
+    /// Calculate output scale based on input scales
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         let in_scales = in_scales
             .into_iter()
@@ -77,6 +113,7 @@ impl Op<Fp> for Rescaled {
         Op::<Fp>::out_scale(&*self.inner, in_scales)
     }
 
+    /// Layout the operation in the circuit
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<Fp>,
@@ -93,28 +130,40 @@ impl Op<Fp> for Rescaled {
         self.inner.layout(config, region, res)
     }
 
+    /// Create a cloned boxed copy of this operation
     fn clone_dyn(&self) -> Box<dyn Op<Fp>> {
-        Box::new(self.clone()) // Forward to the derive(Clone) impl
+        Box::new(self.clone())
     }
 }
 
-/// A wrapper for an operation that has been rescaled.
+/// A wrapper for operations that require scale rebasing
+/// This handles cases where operation scales need to be adjusted to a target scale
+/// while preserving the numerical relationships
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RebaseScale {
-    /// The operation that has to be rescaled.
+    /// The operation that needs to be rescaled
     pub inner: Box<SupportedOp>,
-    /// rebase op
+    /// Operation used for rebasing, typically division
     pub rebase_op: HybridOp,
-    /// scale being rebased to
+    /// Scale that we're rebasing to
     pub target_scale: i32,
-    /// The original scale of the operation's inputs.
+    /// Original scale of operation's inputs before rebasing
     pub original_scale: i32,
-    /// multiplier
+    /// Scaling multiplier used in rebasing
     pub multiplier: f64,
 }
 
 impl RebaseScale {
+    /// Creates a rebased version of an operation if needed
     ///
+    /// # Arguments
+    /// * `inner` - Operation to potentially rebase
+    /// * `global_scale` - Base scale for the system
+    /// * `op_out_scale` - Current output scale of the operation
+    /// * `scale_rebase_multiplier` - Factor determining when rebasing should occur
+    ///
+    /// # Returns
+    /// Original or rebased operation depending on scale relationships
     pub fn rebase(
         inner: SupportedOp,
         global_scale: crate::Scale,
@@ -155,7 +204,15 @@ impl RebaseScale {
         }
     }
 
+    /// Creates a rebased operation with increased scale
     ///
+    /// # Arguments
+    /// * `inner` - Operation to potentially rebase
+    /// * `target_scale` - Scale to rebase to
+    /// * `op_out_scale` - Current output scale of the operation
+    ///
+    /// # Returns
+    /// Original or rebased operation with increased scale
     pub fn rebase_up(
         inner: SupportedOp,
         target_scale: crate::Scale,
@@ -192,10 +249,12 @@ impl RebaseScale {
 }
 
 impl Op<Fp> for RebaseScale {
+    /// Convert to Any type for runtime type checking
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
+    /// Get string representation of the operation
     fn as_string(&self) -> String {
         format!(
             "REBASED (div={:?}, rebasing_op={}) ({})",
@@ -205,10 +264,12 @@ impl Op<Fp> for RebaseScale {
         )
     }
 
+    /// Calculate output scale based on input scales
     fn out_scale(&self, _: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         Ok(self.target_scale)
     }
 
+    /// Layout the operation in the circuit
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<Fp>,
@@ -222,34 +283,40 @@ impl Op<Fp> for RebaseScale {
         self.rebase_op.layout(config, region, &[original_res])
     }
 
+    /// Create a cloned boxed copy of this operation
     fn clone_dyn(&self) -> Box<dyn Op<Fp>> {
-        Box::new(self.clone()) // Forward to the derive(Clone) impl
+        Box::new(self.clone())
     }
 }
 
-/// A single operation in a [crate::graph::Model].
+/// Represents all supported operation types in the circuit
+/// Each variant encapsulates a different type of operation with specific behavior
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SupportedOp {
-    /// A linear operation.
+    /// Linear operations (polynomial-based)
     Linear(PolyOp),
-    /// A nonlinear operation.
+    /// Nonlinear operations requiring lookup tables
     Nonlinear(LookupOp),
-    /// A hybrid operation.
+    /// Mixed operations combining different approaches
     Hybrid(HybridOp),
-    ///
+    /// Input values to the circuit
     Input(Input),
-    ///
+    /// Constant values in the circuit
     Constant(Constant<Fp>),
-    ///
+    /// Placeholder for unsupported operations
     Unknown(Unknown),
-    ///
+    /// Operations requiring rescaling of inputs
     Rescaled(Rescaled),
-    ///
+    /// Operations requiring scale rebasing
     RebaseScale(RebaseScale),
 }
 
 impl SupportedOp {
+    /// Checks if the operation is a lookup operation
     ///
+    /// # Returns
+    /// * `true` if operation requires lookup table
+    /// * `false` otherwise
     pub fn is_lookup(&self) -> bool {
         match self {
             SupportedOp::Nonlinear(_) => true,
@@ -257,7 +324,12 @@ impl SupportedOp {
             _ => false,
         }
     }
+
+    /// Returns input operation if this is an input
     ///
+    /// # Returns
+    /// * `Some(Input)` if this is an input operation
+    /// * `None` otherwise
     pub fn get_input(&self) -> Option<Input> {
         match self {
             SupportedOp::Input(op) => Some(op.clone()),
@@ -265,7 +337,11 @@ impl SupportedOp {
         }
     }
 
+    /// Returns reference to rebased operation if this is a rebased operation
     ///
+    /// # Returns
+    /// * `Some(&RebaseScale)` if this is a rebased operation
+    /// * `None` otherwise
     pub fn get_rebased(&self) -> Option<&RebaseScale> {
         match self {
             SupportedOp::RebaseScale(op) => Some(op),
@@ -273,7 +349,11 @@ impl SupportedOp {
         }
     }
 
+    /// Returns reference to lookup operation if this is a lookup operation
     ///
+    /// # Returns
+    /// * `Some(&LookupOp)` if this is a lookup operation
+    /// * `None` otherwise
     pub fn get_lookup(&self) -> Option<&LookupOp> {
         match self {
             SupportedOp::Nonlinear(op) => Some(op),
@@ -281,7 +361,11 @@ impl SupportedOp {
         }
     }
 
+    /// Returns reference to constant if this is a constant
     ///
+    /// # Returns
+    /// * `Some(&Constant)` if this is a constant
+    /// * `None` otherwise
     pub fn get_constant(&self) -> Option<&Constant<Fp>> {
         match self {
             SupportedOp::Constant(op) => Some(op),
@@ -289,7 +373,11 @@ impl SupportedOp {
         }
     }
 
+    /// Returns mutable reference to constant if this is a constant
     ///
+    /// # Returns
+    /// * `Some(&mut Constant)` if this is a constant
+    /// * `None` otherwise
     pub fn get_mutable_constant(&mut self) -> Option<&mut Constant<Fp>> {
         match self {
             SupportedOp::Constant(op) => Some(op),
@@ -297,18 +385,19 @@ impl SupportedOp {
         }
     }
 
+    /// Creates a homogeneously rescaled version of this operation if needed
+    /// Only available with EZKL feature enabled
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     fn homogenous_rescale(
         &self,
         in_scales: Vec<crate::Scale>,
     ) -> Result<Box<dyn Op<Fp>>, GraphError> {
         let inputs_to_scale = self.requires_homogenous_input_scales();
-        // creates a rescaled op if the inputs are not homogenous
         let op = self.clone_dyn();
         super::homogenize_input_scales(op, in_scales, inputs_to_scale)
     }
 
-    /// Since each associated value of `SupportedOp` implements `Op`, let's define a helper method to retrieve it.
+    /// Returns reference to underlying Op implementation
     fn as_op(&self) -> &dyn Op<Fp> {
         match self {
             SupportedOp::Linear(op) => op,
@@ -322,9 +411,10 @@ impl SupportedOp {
         }
     }
 
-    /// check if is the identity operation
+    /// Checks if this is an identity operation
+    ///
     /// # Returns
-    /// * `true` if the operation is the identity operation
+    /// * `true` if this operation passes input through unchanged
     /// * `false` otherwise
     pub fn is_identity(&self) -> bool {
         match self {
@@ -361,9 +451,11 @@ impl From<Box<dyn Op<Fp>>> for SupportedOp {
         if let Some(op) = value.as_any().downcast_ref::<Unknown>() {
             return SupportedOp::Unknown(op.clone());
         };
+
         if let Some(op) = value.as_any().downcast_ref::<Rescaled>() {
             return SupportedOp::Rescaled(op.clone());
         };
+
         if let Some(op) = value.as_any().downcast_ref::<RebaseScale>() {
             return SupportedOp::RebaseScale(op.clone());
         };
@@ -375,6 +467,7 @@ impl From<Box<dyn Op<Fp>>> for SupportedOp {
 }
 
 impl Op<Fp> for SupportedOp {
+    /// Layout this operation in the circuit
     fn layout(
         &self,
         config: &mut crate::circuit::BaseConfig<Fp>,
@@ -384,54 +477,61 @@ impl Op<Fp> for SupportedOp {
         self.as_op().layout(config, region, values)
     }
 
+    /// Check if this is an input operation
     fn is_input(&self) -> bool {
         self.as_op().is_input()
     }
 
+    /// Check if this is a constant operation
     fn is_constant(&self) -> bool {
         self.as_op().is_constant()
     }
 
+    /// Get which inputs require homogeneous scales
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
         self.as_op().requires_homogenous_input_scales()
     }
 
+    /// Create a clone of this operation
     fn clone_dyn(&self) -> Box<dyn Op<Fp>> {
         self.as_op().clone_dyn()
     }
 
+    /// Get string representation
     fn as_string(&self) -> String {
         self.as_op().as_string()
     }
 
+    /// Convert to Any type
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
+    /// Calculate output scale from input scales
     fn out_scale(&self, in_scales: Vec<crate::Scale>) -> Result<crate::Scale, CircuitError> {
         self.as_op().out_scale(in_scales)
     }
 }
 
-/// A node's input is a tensor from another node's output.
+/// Represents a connection to another node's output
+/// First element is node index, second is output slot index
 pub type Outlet = (usize, usize);
 
-/// A single operation in a [crate::graph::Model].
+/// Represents a single computational node in the circuit graph
+/// Contains all information needed to execute and connect operations
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Node {
-    /// [Op] i.e what operation this node represents.
+    /// The operation this node performs
     pub opkind: SupportedOp,
-    /// The denominator in the fixed point representation for the node's output. Tensors of differing scales should not be combined.
+    /// Fixed point scale factor for this node's output
     pub out_scale: i32,
-    // Usually there is a simple in and out shape of the node as an operator.  For example, an Affine node has three input_shapes (one for the input, weight, and bias),
-    // but in_dim is [in], out_dim is [out]
-    /// The indices of the node's inputs.
+    /// Connections to other nodes' outputs that serve as inputs
     pub inputs: Vec<Outlet>,
-    /// Dimensions of output.
+    /// Shape of this node's output tensor
     pub out_dims: Vec<usize>,
-    /// The node's unique identifier.
+    /// Unique identifier for this node
     pub idx: usize,
-    /// The node's num of uses
+    /// Number of times this node's output is used
     pub num_uses: usize,
 }
 
@@ -469,12 +569,19 @@ impl PartialEq for Node {
 }
 
 impl Node {
-    /// Converts a tract [OnnxNode] into an ezkl [Node].
-    /// # Arguments:
-    /// * `node` - [OnnxNode]
-    /// * `other_nodes` - [BTreeMap] of other previously initialized [Node]s in the computational graph.
-    /// * `public_params` - flag if parameters of model are public
-    /// * `idx` - The node's unique identifier.
+    /// Creates a new Node from an ONNX node
+    /// Only available when EZKL feature is enabled
+    ///
+    /// # Arguments
+    /// * `node` - Source ONNX node
+    /// * `other_nodes` - Map of existing nodes in the graph
+    /// * `scales` - Scale factors for variables
+    /// * `idx` - Unique identifier for this node
+    /// * `symbol_values` - ONNX symbol values
+    /// * `run_args` - Runtime configuration arguments
+    ///
+    /// # Returns
+    /// New Node instance or error if creation fails
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -612,16 +719,14 @@ impl Node {
         })
     }
 
-    /// check if it is a softmax node
+    /// Check if this node performs softmax operation
     pub fn is_softmax(&self) -> bool {
-        if let SupportedOp::Hybrid(HybridOp::Softmax { .. }) = self.opkind {
-            true
-        } else {
-            false
-        }
+        matches!(self.opkind, SupportedOp::Hybrid(HybridOp::Softmax { .. }))
     }
 }
 
+/// Helper function to rescale constants that are only used once
+/// Only available when EZKL feature is enabled
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 fn rescale_const_with_single_use(
     constant: &mut Constant<Fp>,

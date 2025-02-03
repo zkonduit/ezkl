@@ -133,7 +133,6 @@ pub fn aggregate<'a>(
                 .collect_vec()
         }));
 
-        // loader.ctx().constrain_equal(cell_0, cell_1)
         let mut transcript = PoseidonTranscript::<Rc<Halo2Loader>, _>::new(loader, snark.proof());
         let proof = PlonkSuccinctVerifier::read_proof(svk, &protocol, &instances, &mut transcript)
             .map_err(|_| plonk::Error::Synthesis)?;
@@ -309,11 +308,11 @@ impl AggregationCircuit {
         })
     }
 
-    ///
+    /// Number of limbs used for decomposition
     pub fn num_limbs() -> usize {
         LIMBS
     }
-    ///
+    /// Number of bits used for decomposition
     pub fn num_bits() -> usize {
         BITS
     }

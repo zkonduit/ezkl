@@ -803,6 +803,12 @@ impl<T: Clone + TensorType> Tensor<T> {
         num_repeats: usize,
         initial_offset: usize,
     ) -> Result<Tensor<T>, TensorError> {
+        if n == 0 {
+            return Err(TensorError::InvalidArgument(
+                "Cannot duplicate every 0th element".to_string(),
+            ));
+        }
+
         let mut inner: Vec<T> = Vec::with_capacity(self.inner.len());
         let mut offset = initial_offset;
         for (i, elem) in self.inner.clone().into_iter().enumerate() {
@@ -832,11 +838,17 @@ impl<T: Clone + TensorType> Tensor<T> {
         num_repeats: usize,
         initial_offset: usize,
     ) -> Result<Tensor<T>, TensorError> {
+        if n == 0 {
+            return Err(TensorError::InvalidArgument(
+                "Cannot remove every 0th element".to_string(),
+            ));
+        }
+
         // Pre-calculate capacity to avoid reallocations
         let estimated_size = self.inner.len() - (self.inner.len() / n) * num_repeats;
         let mut inner = Vec::with_capacity(estimated_size);
 
-        // Use iterator directly instead of creating intermediate collections
+        // Use iterator directly instead of creating intermediate collectionsif
         let mut i = 0;
         while i < self.inner.len() {
             // Add the current element
@@ -855,7 +867,6 @@ impl<T: Clone + TensorType> Tensor<T> {
     }
 
     /// Remove indices
-    /// WARN: assumes indices are in ascending order for speed
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::fieldutils::IntegerRep;
@@ -882,7 +893,11 @@ impl<T: Clone + TensorType> Tensor<T> {
         }
         // remove indices
         for elem in indices.iter().rev() {
-            inner.remove(*elem);
+            if *elem < self.len() {
+                inner.remove(*elem);
+            } else {
+                return Err(TensorError::IndexOutOfBounds(*elem, self.len()));
+            }
         }
 
         Tensor::new(Some(&inner), &[inner.len()])
@@ -1643,7 +1658,9 @@ impl<T: TensorType + Div<Output = T> + std::marker::Send + std::marker::Sync> Di
 }
 
 // implement remainder
-impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync> Rem for Tensor<T> {
+impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync + PartialEq> Rem
+    for Tensor<T>
+{
     type Output = Result<Tensor<T>, TensorError>;
 
     /// Elementwise remainder of a tensor with another tensor.
@@ -1672,9 +1689,25 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync> Re
         let mut lhs = self.expand(&broadcasted_shape).unwrap();
         let rhs = rhs.expand(&broadcasted_shape).unwrap();
 
-        lhs.par_iter_mut().zip(rhs).for_each(|(o, r)| {
-            *o = o.clone() % r;
-        });
+        lhs.par_iter_mut()
+            .zip(rhs)
+            .map(|(o, r)| {
+                if let Some(zero) = T::zero() {
+                    if r != zero {
+                        *o = o.clone() % r;
+                        Ok(())
+                    } else {
+                        Err(TensorError::InvalidArgument(
+                            "Cannot divide by zero in remainder".to_string(),
+                        ))
+                    }
+                } else {
+                    Err(TensorError::InvalidArgument(
+                        "Undefined zero value".to_string(),
+                    ))
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(lhs)
     }
@@ -1709,7 +1742,6 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync> Re
 /// assert_eq!(c, vec![2, 3]);
 ///
 /// ```
-
 pub fn get_broadcasted_shape(
     shape_a: &[usize],
     shape_b: &[usize],
@@ -1717,20 +1749,21 @@ pub fn get_broadcasted_shape(
     let num_dims_a = shape_a.len();
     let num_dims_b = shape_b.len();
 
-    match (num_dims_a, num_dims_b) {
-        (a, b) if a == b => {
-            let mut broadcasted_shape = Vec::with_capacity(num_dims_a);
-            for (dim_a, dim_b) in shape_a.iter().zip(shape_b.iter()) {
-                let max_dim = dim_a.max(dim_b);
-                broadcasted_shape.push(*max_dim);
-            }
-            Ok(broadcasted_shape)
+    if num_dims_a == num_dims_b {
+        let mut broadcasted_shape = Vec::with_capacity(num_dims_a);
+        for (dim_a, dim_b) in shape_a.iter().zip(shape_b.iter()) {
+            let max_dim = dim_a.max(dim_b);
+            broadcasted_shape.push(*max_dim);
         }
-        (a, b) if a < b => Ok(shape_b.to_vec()),
-        (a, b) if a > b => Ok(shape_a.to_vec()),
-        _ => Err(TensorError::DimError(
+        Ok(broadcasted_shape)
+    } else if num_dims_a < num_dims_b {
+        Ok(shape_b.to_vec())
+    } else if num_dims_a > num_dims_b {
+        Ok(shape_a.to_vec())
+    } else {
+        Err(TensorError::DimError(
             "Unknown condition for broadcasting".to_string(),
-        )),
+        ))
     }
 }
 ////////////////////////

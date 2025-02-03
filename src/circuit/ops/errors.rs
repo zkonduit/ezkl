@@ -25,7 +25,7 @@ pub enum CircuitError {
     /// This operation is unsupported
     #[error("unsupported operation in graph")]
     UnsupportedOp,
-    ///
+    /// Invalid einsum expression
     #[error("invalid einsum expression")]
     InvalidEinsum,
     /// Flush error
@@ -103,4 +103,7 @@ pub enum CircuitError {
     #[error("an element is missing from the shuffled version of the tensor")]
     /// An element is missing from the shuffled version of the tensor
     MissingShuffleElement,
+    /// Visibility has not been set
+    #[error("visibility has not been set")]
+    UnsetVisibility,
 }

@@ -384,8 +384,7 @@ pub struct ParsedNodes {
 impl ParsedNodes {
     /// Returns the number of the computational graph's inputs
     pub fn num_inputs(&self) -> usize {
-        let input_nodes = self.inputs.iter();
-        input_nodes.len()
+        self.inputs.len()
     }
 
     /// Input types
@@ -425,8 +424,7 @@ impl ParsedNodes {
 
     /// Returns the number of the computational graph's outputs
     pub fn num_outputs(&self) -> usize {
-        let output_nodes = self.outputs.iter();
-        output_nodes.len()
+        self.outputs.len()
     }
 
     /// Returns shapes of the computational graph's outputs
@@ -634,6 +632,10 @@ impl Model {
 
         for (i, id) in model.clone().inputs.iter().enumerate() {
             let input = model.node_mut(id.node);
+
+            if input.outputs.len() == 0 {
+                return Err(GraphError::MissingOutput(id.node));
+            }
             let mut fact: InferenceFact = input.outputs[0].fact.clone();
 
             for (i, x) in fact.clone().shape.dims().enumerate() {
@@ -1016,6 +1018,10 @@ impl Model {
         let required_lookups = settings.required_lookups.clone();
         let required_range_checks = settings.required_range_checks.clone();
 
+        if vars.advices.len() < 3 {
+            return Err(GraphError::InsufficientAdviceColumns(3));
+        }
+
         let mut base_gate = PolyConfig::configure(
             meta,
             vars.advices[0..2].try_into()?,
@@ -1035,6 +1041,10 @@ impl Model {
         }
 
         if settings.requires_dynamic_lookup() {
+            if vars.advices.len() < 6 {
+                return Err(GraphError::InsufficientAdviceColumns(6));
+            }
+
             base_gate.configure_dynamic_lookup(
                 meta,
                 vars.advices[0..3].try_into()?,
@@ -1043,6 +1053,9 @@ impl Model {
         }
 
         if settings.requires_shuffle() {
+            if vars.advices.len() < 6 {
+                return Err(GraphError::InsufficientAdviceColumns(6));
+            }
             base_gate.configure_shuffles(
                 meta,
                 vars.advices[0..3].try_into()?,
@@ -1061,6 +1074,7 @@ impl Model {
     /// * `vars` - The variables for the circuit.
     /// * `witnessed_outputs` - The values to compare against.
     /// * `constants` - The constants for the circuit.
+    #[allow(clippy::too_many_arguments)]
     pub fn layout(
         &self,
         mut config: ModelConfig,
@@ -1460,7 +1474,7 @@ impl Model {
             .iter()
             .map(|x| {
                 x.get_felt_evals()
-                    .unwrap_or(Tensor::new(Some(&[Fp::ZERO]), &[1]).unwrap())
+                    .unwrap_or_else(|_| Tensor::new(Some(&[Fp::ZERO]), &[1]).unwrap())
             })
             .collect();
 
