@@ -628,7 +628,7 @@ mod native_tests {
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                 // gen random number between 0.0 and 1.0
                 let tolerance = rand::thread_rng().gen_range(0.0..1.0) * 100.0;
-                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None, tolerance, false, Some(8194), Some(5));
+                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None, tolerance, false, Some(32776), Some(5));
                 test_dir.close().unwrap();
             }
 
