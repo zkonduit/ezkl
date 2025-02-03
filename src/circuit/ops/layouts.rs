@@ -5231,7 +5231,7 @@ pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     // now add the rhs
     let prod_recomp = einsum(config, region, &[rest.clone(), bases], &equation)?;
     let mut signed_recomp = pairwise(config, region, &[prod_recomp, sign], BaseOp::Mult)?;
-    signed_recomp.reshape(&first_dims);
+    signed_recomp.reshape(&first_dims)?;
 
     Ok(signed_recomp.into())
 }
