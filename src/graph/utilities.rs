@@ -527,7 +527,7 @@ pub fn new_op_from_onnx(
                 inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
                     scale: 0,
                     datum_type: InputType::TDim,
-                    decomp: run_args.ignore_range_check_inputs_outputs,
+                    decomp: !run_args.ignore_range_check_inputs_outputs,
                 }));
                 inputs[1].bump_scale(0);
             }
@@ -564,7 +564,7 @@ pub fn new_op_from_onnx(
                 inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
                     scale: 0,
                     datum_type: InputType::TDim,
-                    decomp: run_args.ignore_range_check_inputs_outputs,
+                    decomp: !run_args.ignore_range_check_inputs_outputs,
                 }));
                 inputs[1].bump_scale(0);
             }
@@ -602,7 +602,7 @@ pub fn new_op_from_onnx(
                 inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
                     scale: 0,
                     datum_type: InputType::TDim,
-                    decomp: run_args.ignore_range_check_inputs_outputs,
+                    decomp: !run_args.ignore_range_check_inputs_outputs,
                 }));
                 inputs[1].bump_scale(0);
             }
@@ -640,7 +640,7 @@ pub fn new_op_from_onnx(
                 inputs[1].replace_opkind(SupportedOp::Input(crate::circuit::ops::Input {
                     scale: 0,
                     datum_type: InputType::TDim,
-                    decomp: run_args.ignore_range_check_inputs_outputs,
+                    decomp: !run_args.ignore_range_check_inputs_outputs,
                 }));
                 inputs[1].bump_scale(0);
             }
@@ -985,7 +985,7 @@ pub fn new_op_from_onnx(
             SupportedOp::Input(crate::circuit::ops::Input {
                 scale,
                 datum_type,
-                decomp: run_args.ignore_range_check_inputs_outputs,
+                decomp: !run_args.ignore_range_check_inputs_outputs,
             })
         }
         "Cast" => {
