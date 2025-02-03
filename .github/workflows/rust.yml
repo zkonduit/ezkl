@@ -261,7 +261,6 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
-    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -277,6 +276,20 @@ jobs:
           locked: true
       # - name: The Worm Mock
       #   run: cargo nextest run --verbose tests::large_mock_::large_tests_5_expects -- --include-ignored
+      - name: MNIST Gan Mock
+        run: cargo nextest run --verbose tests::large_mock_::large_tests_4_expects -- --include-ignored
+      - name: NanoGPT Mock
+        run: cargo nextest run --verbose tests::large_mock_::large_tests_1_expects -- --include-ignored
+      - name: Self Attention Mock
+        run: cargo nextest run --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
+      - name: Multihead Attention Mock
+        run: cargo nextest run --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
+      - name: public outputs
+        run: cargo nextest run --verbose tests::mock_public_outputs_ --test-threads 32
+      - name: public inputs
+        run: cargo nextest run --verbose tests::mock_public_inputs_ --test-threads 32
+      - name: fixed params
+        run: cargo nextest run --verbose tests::mock_fixed_params_ --test-threads 32
       - name: public outputs and bounded lookup log
         run: cargo nextest run --verbose tests::mock_bounded_lookup_log --test-threads 32
       - name: public outputs and tolerance > 0
@@ -309,20 +322,6 @@ jobs:
         run: cargo nextest run --verbose tests::mock_hashed_all_::t  --test-threads 32
       - name: hashed inputs + fixed params
         run: cargo nextest run --verbose tests::mock_hashed_output_fixed_params_::t  --test-threads 32
-      - name: MNIST Gan Mock
-        run: cargo nextest run --verbose tests::large_mock_::large_tests_4_expects -- --include-ignored
-      - name: NanoGPT Mock
-        run: cargo nextest run --verbose tests::large_mock_::large_tests_1_expects -- --include-ignored
-      - name: Self Attention Mock
-        run: cargo nextest run --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
-      - name: Multihead Attention Mock
-        run: cargo nextest run --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
-      - name: public outputs
-        run: cargo nextest run --verbose tests::mock_public_outputs_ --test-threads 32
-      - name: public inputs
-        run: cargo nextest run --verbose tests::mock_public_inputs_ --test-threads 32
-      - name: fixed params
-        run: cargo nextest run --verbose tests::mock_fixed_params_ --test-threads 32
 
   prove-and-verify-evm-tests:
     permissions:
