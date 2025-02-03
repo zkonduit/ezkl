@@ -907,9 +907,13 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 #[derive(Debug, Clone, Copy)]
-enum SortCollisionMode {
+/// Determines how to handle collisions in sorting.
+pub enum SortCollisionMode {
+    /// Do not sort (no rule)
     Unsorted,
+    /// Sort by smallest index first
     SmallestIndexFirst,
+    /// Sort by largest index first on collision
     LargestIndexFirst,
 }
 
@@ -926,15 +930,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let sorted = if is_assigned {
         let mut int_evals = input.int_evals()?;
-        match collision_handling {
-            SortCollisionMode::Unsorted => int_evals.sort_unstable(),
-            SortCollisionMode::SmallestIndexFirst => {
-                int_evals.sort_unstable_by(|a, b| a.cmp(b).then(a.cmp(b)))
-            }
-            SortCollisionMode::LargestIndexFirst => {
-                int_evals.sort_unstable_by(|a, b| a.cmp(b).then(b.cmp(a)))
-            }
-        }
+        int_evals.sort_unstable();
         int_evals
             .par_iter()
             .map(|x| Value::known(integer_rep_to_felt(*x)))
@@ -949,7 +945,13 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let assigned_sort = region.assign(&config.custom_gates.inputs[0], &sorted.into())?;
     region.increment(assigned_sort.len());
     // assert that this is a permutation/shuffle
-    let indices = shuffles(config, region, &[assigned_sort.clone()], &[input.clone()])?;
+    let indices = shuffles(
+        config,
+        region,
+        &[assigned_sort.clone()],
+        &[input.clone()],
+        collision_handling,
+    )?;
 
     let window_a = assigned_sort.get_slice(&[0..assigned_sort.len() - 1])?;
     let window_b = assigned_sort.get_slice(&[1..assigned_sort.len()])?;
@@ -1271,6 +1273,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     region: &mut RegionCtx<F>,
     output: &[ValTensor<F>; 1],
     input: &[ValTensor<F>; 1],
+    collision_handling: SortCollisionMode,
 ) -> Result<ValTensor<F>, CircuitError> {
     let shuffle_index = region.shuffle_index();
     let (output, input) = (output[0].clone(), input[0].clone());
@@ -1314,12 +1317,25 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
             .iter()
             .map(|x| {
                 // Find all positions of the current element
-                let positions: Vec<usize> = input
+                let mut positions: Vec<usize> = input
                     .iter()
                     .enumerate()
                     .filter(|(_, y)| *y == x)
                     .map(|(i, _)| i)
                     .collect();
+
+                match collision_handling {
+                    SortCollisionMode::Unsorted => {}
+                    SortCollisionMode::SmallestIndexFirst => {
+                        // Sort the positions by the index of the input element
+                        positions.sort_unstable_by(|a, b| input[*a].cmp(&input[*b]));
+                    }
+
+                    SortCollisionMode::LargestIndexFirst => {
+                        // Sort the positions by the index of the input element
+                        positions.reverse();
+                    }
+                }
 
                 // Find the first unused position for this element
                 let pos = positions
@@ -1862,6 +1878,7 @@ pub(crate) fn get_missing_set_elements<
         region,
         &[input_and_claimed_output.clone()],
         &[fullset.clone()],
+        SortCollisionMode::Unsorted,
     )?;
 
     if ordered {
@@ -4282,9 +4299,10 @@ pub(crate) fn argmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[values[0].clone(), assigned_argmax.clone()],
     )?;
 
-    let (max_val, indices) =
+    let (sorted_val, indices) =
         _sort_ascending(config, region, values, SortCollisionMode::LargestIndexFirst)?;
-    enforce_equality(config, region, &[claimed_val, max_val.last()?])?;
+
+    enforce_equality(config, region, &[claimed_val, sorted_val.last()?])?;
     enforce_equality(config, region, &[assigned_argmax.clone(), indices.last()?])?;
 
     Ok(assigned_argmax)
