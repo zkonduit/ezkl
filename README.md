@@ -150,6 +150,13 @@ Ezkl is unaudited, beta software undergoing rapid development. There may be bugs
 
 > NOTE: Because operations are quantized when they are converted from an onnx file to a zk-circuit, outputs in python and ezkl may differ slightly. 
 
+
+### Advanced security topics 
+
+Check out `docs/advanced_security` for more advanced information on potential threat vectors. 
+
+
+
 ### no warranty
 
 Copyright (c) 2024 Zkonduit Inc. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
