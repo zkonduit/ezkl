@@ -274,11 +274,9 @@ pub fn new_op_from_onnx(
     symbol_values: &SymbolValues,
     run_args: &crate::RunArgs,
 ) -> Result<(SupportedOp, Vec<usize>), GraphError> {
-    use std::f64::consts::E;
-
-    use tract_onnx::tract_core::ops::array::Trilu;
-
     use crate::circuit::InputType;
+    use std::f64::consts::E;
+    use tract_onnx::tract_core::ops::array::Trilu;
 
     let input_scales = inputs
         .iter()
@@ -1274,9 +1272,19 @@ pub fn new_op_from_onnx(
                     // get the non constant index
                     let denom = c.raw_values[0];
 
-                    SupportedOp::Hybrid(HybridOp::Div {
+                    let op = SupportedOp::Hybrid(HybridOp::Div {
                         denom: denom.into(),
-                    })
+                    });
+
+                    // if the input is scale 0 we re up to the max scale
+                    if input_scales[0] == 0 {
+                        SupportedOp::Rescaled(Rescaled {
+                            inner: Box::new(op),
+                            scale: vec![(0, scale_to_multiplier(scales.get_max()) as u128)],
+                        })
+                    } else {
+                        op
+                    }
                 } else {
                     return Err(GraphError::MisformedParams(
                         "only support non zero divisors of size 1".to_string(),
