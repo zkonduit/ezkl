@@ -908,6 +908,7 @@ impl Model {
                             n.opkind = SupportedOp::Input(Input {
                                 scale,
                                 datum_type: inp.datum_type,
+                                decomp: !run_args.ignore_range_check_inputs_outputs,
                             });
                             input_idx += 1;
                             n.out_scale = scale;
@@ -1145,8 +1146,8 @@ impl Model {
                         .iter()
                         .enumerate()
                         .map(|(i, output)| {
-                            let mut tolerance = run_args.tolerance;
-                            tolerance.scale = scale_to_multiplier(output_scales[i]).into();
+                            let mut tol: crate::circuit::Tolerance = run_args.tolerance;
+                            tol.scale = scale_to_multiplier(output_scales[i]).into();
 
                             let comparators = if run_args.output_visibility == Visibility::Public {
                                 let res = vars
@@ -1169,7 +1170,10 @@ impl Model {
                                 .layout(
                                     &mut thread_safe_region,
                                     &[output.clone(), comparators],
-                                    Box::new(HybridOp::RangeCheck(tolerance)),
+                                    Box::new(HybridOp::Output {
+                                        tol,
+                                        decomp: !run_args.ignore_range_check_inputs_outputs,
+                                    }),
                                 )
                                 .map_err(|e| e.into())
                         })
@@ -1446,13 +1450,16 @@ impl Model {
                         .into();
                     comparator.reshape(output.dims())?;
 
-                    let mut tolerance = run_args.tolerance;
-                    tolerance.scale = scale_to_multiplier(output_scales[i]).into();
+                    let mut tol = run_args.tolerance;
+                    tol.scale = scale_to_multiplier(output_scales[i]).into();
 
                     dummy_config.layout(
                         &mut region,
                         &[output.clone(), comparator],
-                        Box::new(HybridOp::RangeCheck(tolerance)),
+                        Box::new(HybridOp::Output {
+                            tol,
+                            decomp: !run_args.ignore_range_check_inputs_outputs,
+                        }),
                     )
                 })
                 .collect::<Result<Vec<_>, _>>();
@@ -1544,6 +1551,7 @@ impl Model {
                         let mut op = crate::circuit::Constant::new(
                             c.quantized_values.clone(),
                             c.raw_values.clone(),
+                            c.decomp,
                         );
                         op.pre_assign(consts[const_idx].clone());
                         n.opkind = SupportedOp::Constant(op);

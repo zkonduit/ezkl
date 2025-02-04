@@ -394,7 +394,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                 nonaccum_selectors.insert((BaseOp::Add, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::Sub, i, j), meta.selector());
                 nonaccum_selectors.insert((BaseOp::Mult, i, j), meta.selector());
-                nonaccum_selectors.insert((BaseOp::IsBoolean, i, j), meta.selector());
             }
         }
 
@@ -428,24 +427,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                 // Get output expressions for each input channel
                 let (rotation_offset, rng) = base_op.query_offset_rng();
 
-                let constraints = match base_op {
-                    BaseOp::IsBoolean => {
-                        let expected_output: Tensor<Expression<F>> = output
-                            .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
-                            .expect("non accum: output query failed");
+                let constraints = {
+                    let expected_output: Tensor<Expression<F>> = output
+                        .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
+                        .expect("non accum: output query failed");
 
-                        let output = expected_output[base_op.constraint_idx()].clone();
-
-                        vec![(output.clone()) * (output.clone() - Expression::Constant(F::from(1)))]
-                    }
-                    _ => {
-                        let expected_output: Tensor<Expression<F>> = output
-                            .query_rng(meta, *block_idx, *inner_col_idx, rotation_offset, rng)
-                            .expect("non accum: output query failed");
-
-                        let res = base_op.nonaccum_f((qis[0].clone(), qis[1].clone()));
-                        vec![expected_output[base_op.constraint_idx()].clone() - res]
-                    }
+                    let res = base_op.nonaccum_f((qis[0].clone(), qis[1].clone()));
+                    vec![expected_output[base_op.constraint_idx()].clone() - res]
                 };
 
                 Constraints::with_selector(selector, constraints)
