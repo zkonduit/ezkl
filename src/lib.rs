@@ -349,6 +349,12 @@ pub struct RunArgs {
         arg(long, default_value = "false")
     )]
     pub bounded_log_lookup: bool,
+    /// Range check inputs and outputs (turn off if the inputs are felts)
+    #[cfg_attr(
+        all(feature = "ezkl", not(target_arch = "wasm32")),
+        arg(long, default_value = "false")
+    )]
+    pub ignore_range_check_inputs_outputs: bool,
 }
 
 impl Default for RunArgs {
@@ -375,6 +381,7 @@ impl Default for RunArgs {
             commitment: None,
             decomp_base: 16384,
             decomp_legs: 2,
+            ignore_range_check_inputs_outputs: false,
         }
     }
 }

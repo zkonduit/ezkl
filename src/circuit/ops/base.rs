@@ -17,7 +17,6 @@ pub enum BaseOp {
     Sub,
     SumInit,
     Sum,
-    IsBoolean,
 }
 
 /// Matches a [BaseOp] to an operation over inputs
@@ -34,7 +33,6 @@ impl BaseOp {
             BaseOp::Add => a + b,
             BaseOp::Sub => a - b,
             BaseOp::Mult => a * b,
-            BaseOp::IsBoolean => b,
             _ => panic!("nonaccum_f called on accumulating operation"),
         }
     }
@@ -74,7 +72,6 @@ impl BaseOp {
             BaseOp::Mult => "MULT",
             BaseOp::Sum => "SUM",
             BaseOp::SumInit => "SUMINIT",
-            BaseOp::IsBoolean => "ISBOOLEAN",
         }
     }
 
@@ -90,7 +87,6 @@ impl BaseOp {
             BaseOp::Mult => (0, 1),
             BaseOp::Sum => (-1, 2),
             BaseOp::SumInit => (0, 1),
-            BaseOp::IsBoolean => (0, 1),
         }
     }
 
@@ -106,7 +102,6 @@ impl BaseOp {
             BaseOp::Mult => 2,
             BaseOp::Sum => 1,
             BaseOp::SumInit => 1,
-            BaseOp::IsBoolean => 0,
         }
     }
 
@@ -122,7 +117,6 @@ impl BaseOp {
             BaseOp::SumInit => 0,
             BaseOp::CumProd => 1,
             BaseOp::CumProdInit => 0,
-            BaseOp::IsBoolean => 0,
         }
     }
 }
