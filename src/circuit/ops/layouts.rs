@@ -11,7 +11,6 @@ use log::{error, trace};
 use maybe_rayon::{
     iter::IntoParallelRefIterator,
     prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-    slice::ParallelSliceMut,
 };
 
 use self::tensor::{create_constant_tensor, create_zero_tensor};
@@ -903,11 +902,23 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(output)
 }
 
+#[derive(Debug, Clone, Copy)]
+/// Determines how to handle collisions in sorting.
+pub enum SortCollisionMode {
+    /// Do not sort (no rule)
+    Unsorted,
+    /// Sort by smallest index first
+    SmallestIndexFirst,
+    /// Sort by largest index first on collision
+    LargestIndexFirst,
+}
+
 fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
-) -> Result<ValTensor<F>, CircuitError> {
+    collision_handling: SortCollisionMode,
+) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
     let mut input = values[0].clone();
     input.flatten();
 
@@ -915,7 +926,7 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     let sorted = if is_assigned {
         let mut int_evals = input.int_evals()?;
-        int_evals.par_sort_unstable_by(|a, b| a.cmp(b));
+        int_evals.sort_unstable();
         int_evals
             .par_iter()
             .map(|x| Value::known(integer_rep_to_felt(*x)))
@@ -928,21 +939,73 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     };
 
     let assigned_sort = region.assign(&config.custom_gates.inputs[0], &sorted.into())?;
-
     region.increment(assigned_sort.len());
+    // assert that this is a permutation/shuffle
+    let indices = shuffles(
+        config,
+        region,
+        &[assigned_sort.clone()],
+        &[input.clone()],
+        collision_handling,
+    )?;
 
     let window_a = assigned_sort.get_slice(&[0..assigned_sort.len() - 1])?;
     let window_b = assigned_sort.get_slice(&[1..assigned_sort.len()])?;
 
-    let is_greater = greater_equal(config, region, &[window_b.clone(), window_a.clone()])?;
-    let unit = create_unit_tensor(is_greater.len());
+    let indices_a = indices.get_slice(&[0..indices.len() - 1])?;
+    let indices_b = indices.get_slice(&[1..indices.len()])?;
 
-    enforce_equality(config, region, &[unit, is_greater])?;
+    let unit = create_unit_tensor(window_a.len());
 
-    // assert that this is a permutation/shuffle
-    shuffles(config, region, &[assigned_sort.clone()], &[input.clone()])?;
+    match collision_handling {
+        SortCollisionMode::Unsorted => {
+            let is_greater = greater_equal(config, region, &[window_b.clone(), window_a.clone()])?;
+            enforce_equality(config, region, &[unit, is_greater])?;
+        }
+        SortCollisionMode::SmallestIndexFirst => {
+            let is_greater = greater(config, region, &[window_b.clone(), window_a.clone()])?;
+            let is_equal = equals(config, region, &[window_b.clone(), window_a.clone()])?;
+            let is_greater_indices =
+                greater(config, region, &[indices_b.clone(), indices_a.clone()])?;
 
-    Ok(assigned_sort)
+            let is_equal_and_is_greater_indices =
+                and(config, region, &[is_equal, is_greater_indices])?;
+
+            let is_greater_or_is_equal_and_is_greater_indices = or(
+                config,
+                region,
+                &[is_greater, is_equal_and_is_greater_indices],
+            )?;
+
+            enforce_equality(
+                config,
+                region,
+                &[unit, is_greater_or_is_equal_and_is_greater_indices],
+            )?;
+        }
+        SortCollisionMode::LargestIndexFirst => {
+            let is_greater = greater(config, region, &[window_b.clone(), window_a.clone()])?;
+            let is_equal = equals(config, region, &[window_b.clone(), window_a.clone()])?;
+            let is_lesser_indices = less(config, region, &[indices_b.clone(), indices_a.clone()])?;
+
+            let is_equal_and_is_lesser_indices =
+                and(config, region, &[is_equal, is_lesser_indices])?;
+
+            let is_greater_or_is_equal_and_is_greater_indices = or(
+                config,
+                region,
+                &[is_greater, is_equal_and_is_lesser_indices],
+            )?;
+
+            enforce_equality(
+                config,
+                region,
+                &[unit, is_greater_or_is_equal_and_is_greater_indices],
+            )?;
+        }
+    }
+
+    Ok((assigned_sort, indices))
 }
 
 /// Returns top K values.
@@ -953,7 +1016,7 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     k: usize,
     largest: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let mut sorted = _sort_ascending(config, region, values)?;
+    let mut sorted = _sort_ascending(config, region, values, SortCollisionMode::Unsorted)?.0;
     if largest {
         sorted.reverse()?;
     }
@@ -1206,6 +1269,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     region: &mut RegionCtx<F>,
     output: &[ValTensor<F>; 1],
     input: &[ValTensor<F>; 1],
+    collision_handling: SortCollisionMode,
 ) -> Result<ValTensor<F>, CircuitError> {
     let shuffle_index = region.shuffle_index();
     let (output, input) = (output[0].clone(), input[0].clone());
@@ -1249,12 +1313,25 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
             .iter()
             .map(|x| {
                 // Find all positions of the current element
-                let positions: Vec<usize> = input
+                let mut positions: Vec<usize> = input
                     .iter()
                     .enumerate()
                     .filter(|(_, y)| *y == x)
                     .map(|(i, _)| i)
                     .collect();
+
+                match collision_handling {
+                    SortCollisionMode::Unsorted => {}
+                    SortCollisionMode::SmallestIndexFirst => {
+                        // Sort the positions by the index of the input element
+                        positions.sort_unstable_by(|a, b| input[*a].cmp(&input[*b]));
+                    }
+
+                    SortCollisionMode::LargestIndexFirst => {
+                        // Sort the positions by the index of the input element
+                        positions.reverse();
+                    }
+                }
 
                 // Find the first unused position for this element
                 let pos = positions
@@ -1328,7 +1405,7 @@ pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     region.increment_shuffle_index(1);
     region.increment(output_len);
 
-    Ok(output)
+    Ok(claimed_index_output)
 }
 
 /// One hot accumulated layout
@@ -1797,11 +1874,18 @@ pub(crate) fn get_missing_set_elements<
         region,
         &[input_and_claimed_output.clone()],
         &[fullset.clone()],
+        SortCollisionMode::Unsorted,
     )?;
 
     if ordered {
         // assert that the claimed output is sorted
-        claimed_output = _sort_ascending(config, region, &[claimed_output])?;
+        claimed_output = _sort_ascending(
+            config,
+            region,
+            &[claimed_output],
+            SortCollisionMode::Unsorted,
+        )?
+        .0;
     }
 
     Ok(claimed_output)
@@ -4209,9 +4293,11 @@ pub(crate) fn argmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[values[0].clone(), assigned_argmax.clone()],
     )?;
 
-    let max_val = max(config, region, &[values[0].clone()])?;
+    let (sorted_val, indices) =
+        _sort_ascending(config, region, values, SortCollisionMode::LargestIndexFirst)?;
 
-    enforce_equality(config, region, &[claimed_val, max_val])?;
+    enforce_equality(config, region, &[claimed_val, sorted_val.last()?])?;
+    enforce_equality(config, region, &[assigned_argmax.clone(), indices.last()?])?;
 
     Ok(assigned_argmax)
 }
@@ -4245,9 +4331,14 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         region,
         &[values[0].clone(), assigned_argmin.clone()],
     )?;
-    let min_val = min(config, region, &[values[0].clone()])?;
-
-    enforce_equality(config, region, &[claimed_val, min_val])?;
+    let (min_val, indices) = _sort_ascending(
+        config,
+        region,
+        values,
+        SortCollisionMode::SmallestIndexFirst,
+    )?;
+    enforce_equality(config, region, &[claimed_val, min_val.first()?])?;
+    enforce_equality(config, region, &[assigned_argmin.clone(), indices.first()?])?;
 
     Ok(assigned_argmin)
 }
@@ -4362,7 +4453,11 @@ pub(crate) fn max<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
-    Ok(_sort_ascending(config, region, values)?.last()?)
+    Ok(
+        _sort_ascending(config, region, values, SortCollisionMode::Unsorted)?
+            .0
+            .last()?,
+    )
 }
 
 /// min layout
@@ -4371,7 +4466,11 @@ pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
-    Ok(_sort_ascending(config, region, values)?.first()?)
+    Ok(
+        _sort_ascending(config, region, values, SortCollisionMode::Unsorted)?
+            .0
+            .first()?,
+    )
 }
 
 /// floor layout
