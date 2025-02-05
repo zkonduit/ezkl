@@ -345,7 +345,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Use pnpm 8
-        uses: pnpm/action-setup@0b715c7ebbf3cf2174d1386336c5f6d3d8d5504a  #v2.3.0
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
         with:
           version: 8
       - name: Use Node.js 18.12.1
@@ -432,7 +432,7 @@ jobs:
   #       with:
   #         persist-credentials: false
   #     - name: Use pnpm 8
-  #       uses: pnpm/action-setup@0b715c7ebbf3cf2174d1386336c5f6d3d8d5504a  #v2.3.0
+  #       uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
   #       with:
   #         version: 8
   #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -469,7 +469,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Use pnpm 8
-        uses: pnpm/action-setup@0b715c7ebbf3cf2174d1386336c5f6d3d8d5504a  #v2.3.0
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
         with:
           version: 8
       - name: Use Node.js 18.12.1

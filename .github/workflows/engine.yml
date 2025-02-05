@@ -228,7 +228,7 @@ jobs:
           NR==400{$0="  /@ezkljs/engine@" tag ":"}
           NR==401{$0="    resolution: {integrity: \"" integrity "\"}"} 1' in-browser-evm-verifier/pnpm-lock.yaml > temp.yaml && mv temp.yaml in-browser-evm-verifier/pnpm-lock.yaml
       - name: Use pnpm 8
-        uses: pnpm/action-setup@0b715c7ebbf3cf2174d1386336c5f6d3d8d5504a  #v2.3.0
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
         with:
           version: 8
       - name: Set up Node.js
