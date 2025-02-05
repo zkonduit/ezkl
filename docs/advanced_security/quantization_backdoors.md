@@ -14,6 +14,7 @@ Limitations:
 
 - Attack effectiveness depends on calibration settings and internal rescaling operations. 
 - Further research needed on backdoor persistence through witness/proof stages.
+- Can be mitigated by evaluating the quantized model (using `ezkl gen-witness`), rather than relying on the evaluation of the original model. 
 
 References:
 
