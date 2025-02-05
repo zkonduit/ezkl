@@ -157,7 +157,9 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // implicitly check if the prover provided output is within range
     let claimed_output = identity(config, region, &[claimed_output], true)?;
     // check if x is too large only if the decomp would support overflow in the previous op
-    if (IntegerRep::MAX).abs() < ((region.base() as i128).pow(region.legs() as u32)) - 1 {
+    if F::from_u128(IntegerRep::MAX as u128)
+        < F::from_u128(region.base() as u128).pow([region.legs() as u64]) - F::ONE
+    {
         // here we decompose and extract the sign of the input
         let sign = sign(config, region, &[claimed_output.clone()])?;
 
@@ -254,7 +256,9 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     )?;
 
     // check if x is too large only if the decomp would support overflow in the previous op
-    if (IntegerRep::MAX).abs() < ((region.base() as i128).pow(region.legs() as u32)) - 1 {
+    if F::from_u128(IntegerRep::MAX as u128)
+        < F::from_u128(region.base() as u128).pow([region.legs() as u64]) - F::ONE
+    {
         // here we decompose and extract the sign of the input
         let sign = sign(config, region, &[masked_output.clone()])?;
         let abs_value = pairwise(
@@ -2652,9 +2656,9 @@ pub fn mean_of_squares_axes<F: PrimeField + TensorType + PartialOrd + std::hash:
     let squared = pow(config, region, values, 2)?;
     let sum_squared = sum_axes(config, region, &[squared], axes)?;
 
-    let dividand: usize = values[0].len() / sum_squared.len();
+    let dividend: usize = values[0].len() / sum_squared.len();
 
-    let mean_squared = div(config, region, &[sum_squared], F::from(dividand as u64))?;
+    let mean_squared = div(config, region, &[sum_squared], F::from(dividend as u64))?;
     Ok(mean_squared)
 }
 
