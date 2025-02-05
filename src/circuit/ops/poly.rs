@@ -323,7 +323,9 @@ impl<
             PolyOp::Mult => {
                 layouts::pairwise(config, region, values[..].try_into()?, BaseOp::Mult)?
             }
-            PolyOp::Identity { .. } => layouts::identity(config, region, values[..].try_into()?)?,
+            PolyOp::Identity { .. } => {
+                layouts::identity(config, region, values[..].try_into()?, false)?
+            }
             PolyOp::Reshape(d) | PolyOp::Flatten(d) => layouts::reshape(values[..].try_into()?, d)?,
             PolyOp::Pad(p) => {
                 if values.len() != 1 {

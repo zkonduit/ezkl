@@ -20,6 +20,7 @@ env:
 
 jobs:
   fr-age-test:
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     permissions:
       contents: read
     runs-on: large-self-hosted
@@ -32,8 +33,12 @@ jobs:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          locked: true
       - name: fr age Mock
-        run: cargo test --release --verbose tests::large_mock_::large_tests_6_expects -- --include-ignored
+        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_6_expects -- --include-ignored
 
   build:
     permissions:
@@ -158,13 +163,13 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
-        run: cargo nextest run  --release lookup_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: cargo nextest run --release lookup_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
       - name: Matmul overflow
-        run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release matmul_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
       - name: Conv overflow
-        run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
       - name: Conv + relu overflow
-        run: cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: cargo nextest run --release conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
 
   ultra-overflow-tests:
     permissions:
@@ -195,13 +200,13 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
-        run: cargo nextest run  --release lookup_ultra_overflow --no-capture -- --include-ignored
+        run: cargo nextest run lookup_ultra_overflow --no-capture -- --include-ignored
       - name: Matmul overflow
         run: RUST_LOG=debug cargo nextest run matmul_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv overflow
-        run: RUST_LOG=debug cargo nextest run conv_col_ultra_overflow --no-capture -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture -- --include-ignored
       - name: Conv + relu overflow
-        run: cargo nextest run  --release conv_relu_col_ultra_overflow --no-capture -- --include-ignored
+        run: cargo nextest run --release conv_relu_col_ultra_overflow --no-capture -- --include-ignored
 
   model-serialization:
     permissions:
@@ -226,7 +231,7 @@ jobs:
   wasm32-tests:
     permissions:
       contents: read
-    runs-on: ubuntu-latest
+    runs-on: non-gpu
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -256,7 +261,6 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
-    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -271,53 +275,53 @@ jobs:
           crate: cargo-nextest
           locked: true
       # - name: The Worm Mock
-      #   run: cargo nextest run --release --verbose tests::large_mock_::large_tests_5_expects -- --include-ignored
-      - name: public outputs and bounded lookup log
-        run: cargo nextest run --release --verbose tests::mock_bounded_lookup_log --test-threads 32
-      - name: public outputs and tolerance > 0
-        run: cargo nextest run --release --verbose tests::mock_tolerance_public_outputs_ --test-threads 32
-      - name: public outputs + batch size == 10
-        run: cargo nextest run --release --verbose tests::mock_large_batch_public_outputs_ --test-threads 16
-      - name: kzg inputs
-        run: cargo nextest run --release --verbose tests::mock_kzg_input_::t  --test-threads 32
-      - name: kzg params
-        run: cargo nextest run --release --verbose tests::mock_kzg_params_::t  --test-threads 32
-      - name: kzg outputs
-        run: cargo nextest run --release --verbose tests::mock_kzg_output_::t  --test-threads 32
-      - name: kzg inputs + params + outputs
-        run: cargo nextest run --release --verbose tests::mock_kzg_all_::t  --test-threads 32
-      - name: Mock fixed inputs
-        run: cargo nextest run --release --verbose tests::mock_fixed_inputs_ --test-threads 32
-      - name: Mock fixed outputs
-        run: cargo nextest run --release --verbose tests::mock_fixed_outputs --test-threads 32
-      - name: Mock accuracy calibration
-        run: cargo nextest run --release --verbose tests::mock_accuracy_cal_tests::a
-      - name: hashed inputs
-        run: cargo nextest run --release --verbose tests::mock_hashed_input_::t  --test-threads 32
-      - name: hashed params
-        run: cargo nextest run --release --verbose tests::mock_hashed_params_::t  --test-threads 32
-      - name: hashed params public inputs
-        run: cargo nextest run --release --verbose tests::mock_hashed_params_public_inputs_::t  --test-threads 32
-      - name: hashed outputs
-        run: cargo nextest run --release --verbose tests::mock_hashed_output_::t  --test-threads 32
-      - name: hashed inputs + params + outputs
-        run: cargo nextest run --release --verbose tests::mock_hashed_all_::t  --test-threads 32
-      - name: hashed inputs + fixed params
-        run: cargo nextest run --release --verbose tests::mock_hashed_output_fixed_params_::t  --test-threads 32
+      #   run: cargo nextest run --verbose tests::large_mock_::large_tests_5_expects -- --include-ignored
       - name: MNIST Gan Mock
-        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_4_expects -- --include-ignored
+        run: cargo nextest run --verbose tests::large_mock_::large_tests_4_expects -- --include-ignored
       - name: NanoGPT Mock
-        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_1_expects -- --include-ignored
+        run: cargo nextest run --verbose tests::large_mock_::large_tests_1_expects -- --include-ignored
       - name: Self Attention Mock
-        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
+        run: cargo nextest run --verbose tests::large_mock_::large_tests_0_expects -- --include-ignored
       - name: Multihead Attention Mock
-        run: cargo nextest run --release --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
+        run: cargo nextest run --verbose tests::large_mock_::large_tests_2_expects -- --include-ignored
       - name: public outputs
-        run: cargo nextest run --release --verbose tests::mock_public_outputs_ --test-threads 32
+        run: cargo nextest run --verbose tests::mock_public_outputs_ --test-threads 32
       - name: public inputs
-        run: cargo nextest run --release --verbose tests::mock_public_inputs_ --test-threads 32
+        run: cargo nextest run --verbose tests::mock_public_inputs_ --test-threads 32
       - name: fixed params
-        run: cargo nextest run --release --verbose tests::mock_fixed_params_ --test-threads 32
+        run: cargo nextest run --verbose tests::mock_fixed_params_ --test-threads 32
+      - name: public outputs and bounded lookup log
+        run: cargo nextest run --verbose tests::mock_bounded_lookup_log --test-threads 32
+      - name: public outputs and tolerance > 0
+        run: cargo nextest run --verbose tests::mock_tolerance_public_outputs_ --test-threads 32
+      - name: public outputs + batch size == 10
+        run: cargo nextest run --verbose tests::mock_large_batch_public_outputs_ --test-threads 16
+      - name: kzg inputs
+        run: cargo nextest run --verbose tests::mock_kzg_input_::t  --test-threads 32
+      - name: kzg params
+        run: cargo nextest run --verbose tests::mock_kzg_params_::t  --test-threads 32
+      - name: kzg outputs
+        run: cargo nextest run --verbose tests::mock_kzg_output_::t  --test-threads 32
+      - name: kzg inputs + params + outputs
+        run: cargo nextest run --verbose tests::mock_kzg_all_::t  --test-threads 32
+      - name: Mock fixed inputs
+        run: cargo nextest run --verbose tests::mock_fixed_inputs_ --test-threads 32
+      - name: Mock fixed outputs
+        run: cargo nextest run --verbose tests::mock_fixed_outputs --test-threads 32
+      - name: Mock accuracy calibration
+        run: cargo nextest run --verbose tests::mock_accuracy_cal_tests::a
+      - name: hashed inputs
+        run: cargo nextest run --verbose tests::mock_hashed_input_::t  --test-threads 32
+      - name: hashed params
+        run: cargo nextest run --verbose tests::mock_hashed_params_::t  --test-threads 32
+      - name: hashed params public inputs
+        run: cargo nextest run --verbose tests::mock_hashed_params_public_inputs_::t  --test-threads 32
+      - name: hashed outputs
+        run: cargo nextest run --verbose tests::mock_hashed_output_::t  --test-threads 32
+      - name: hashed inputs + params + outputs
+        run: cargo nextest run --verbose tests::mock_hashed_all_::t  --test-threads 32
+      - name: hashed inputs + fixed params
+        run: cargo nextest run --verbose tests::mock_hashed_output_fixed_params_::t  --test-threads 32
 
   prove-and-verify-evm-tests:
     permissions:
@@ -360,7 +364,7 @@ jobs:
           NODE_ENV: development
       - name: Build wasm package for nodejs target.
         run: |
-          wasm-pack build --release --target nodejs --out-dir ./in-browser-evm-verifier/nodejs . -- -Z build-std="panic_abort,std"
+          wasm-pack build --target nodejs --out-dir ./in-browser-evm-verifier/nodejs . -- -Z build-std="panic_abort,std"
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" in-browser-evm-verifier/nodejs/ezkl.js
@@ -374,35 +378,35 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: KZG prove and verify tests (EVM + reusable verifier + col-overflow)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify_reusable_verifier --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_prove_and_verify_reusable_verifier --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg all)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_kzg_all_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_kzg_all_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg inputs)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_kzg_input_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_kzg_input_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + kzg params)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_kzg_params_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_kzg_params_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_input_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain outputs)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_output_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_output_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs & outputs)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_input_output_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs & kzg outputs + params)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_kzg_output_kzg_params_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_input_kzg_output_kzg_params_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain outputs & kzg inputs + params)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_output_kzg_input_kzg_params_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_output_kzg_input_kzg_params_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain all kzg)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_all_kzg_params_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_all_kzg_params_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + on chain inputs & outputs hashes)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_on_chain_input_output_hashed_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_on_chain_input_output_hashed_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed inputs)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_hashed_input_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed params)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_hashed_params_prove_and_verify --test-threads 1
       - name: KZG prove and verify tests (EVM + hashed outputs)
-        run: cargo nextest run --release --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify --test-threads 1
+        run: cargo nextest run --verbose tests_evm::kzg_evm_hashed_output_prove_and_verify --test-threads 1
 
   # prove-and-verify-tests-metal:
   #   permissions:
@@ -436,7 +440,7 @@ jobs:
   #         crate: cargo-nextest
   #         locked: true
   #     - name: KZG prove and verify tests (public outputs)
-  #       run: cargo nextest run --release --features macos-metal --verbose tests::kzg_prove_and_verify_::t --no-capture
+  #       run: cargo nextest run --features macos-metal --verbose tests::kzg_prove_and_verify_::t --no-capture
 
   prove-and-verify-tests:
     permissions:
@@ -485,40 +489,40 @@ jobs:
           locked: true
       - name: Build wasm package for nodejs target.
         run: |
-          wasm-pack build --release --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
+          wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
       - name: Replace memory definition in nodejs
         run: |
           sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - name: KZG prove and verify tests (public outputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_
       - name: KZG prove and verify tests (hashed inputs + column overflow)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_hashed_inputs_
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_hashed_inputs_
       - name: KZG prove and verify tests (public outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_tight_lookup_::t
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_tight_lookup_::t
       - name: IPA prove and verify tests
-        run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_::t --test-threads 1
+        run: cargo nextest run --verbose tests::ipa_prove_and_verify_::t --test-threads 1
       - name: IPA prove and verify tests (ipa outputs)
-        run: cargo nextest run --release --verbose tests::ipa_prove_and_verify_ipa_output
+        run: cargo nextest run --verbose tests::ipa_prove_and_verify_ipa_output
       - name: KZG prove and verify tests single inner col
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_single_col
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_single_col
       - name: KZG prove and verify tests triple inner col
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_triple_col
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_triple_col
       - name: KZG prove and verify tests quadruple inner col
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_quadruple_col
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_quadruple_col
       - name: KZG prove and verify tests octuple inner col
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_octuple_col --test-threads 8
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_octuple_col --test-threads 8
       - name: KZG prove and verify tests (kzg outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output
       - name: KZG prove and verify tests (public outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_::t
       - name: KZG prove and verify tests (public inputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_public_input
       - name: KZG prove and verify tests (fixed params)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_fixed_params
       - name: KZG prove and verify tests (hashed outputs)
-        run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed
+        run: cargo nextest run --verbose tests::kzg_prove_and_verify_hashed
 
   # prove-and-verify-tests-gpu:
   #   runs-on: GPU
@@ -541,21 +545,21 @@ jobs:
   #         crate: cargo-nextest
   #         locked: true
   #     - name: KZG prove and verify tests (kzg outputs)
-  #       run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_kzg_output --features icicle --test-threads 1
+  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_kzg_output --features icicle --test-threads 1
   #     - name: KZG prove and verify tests (public outputs + column overflow)
-  #       run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_::w --features icicle  --test-threads 1
+  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w --features icicle  --test-threads 1
   #     - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
-  #       run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features icicle  --test-threads 1
+  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_fixed_params_ --features icicle  --test-threads 1
   #     - name: KZG prove and verify tests (public outputs)
-  #       run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
+  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
   #     - name: KZG prove and verify tests (public outputs + column overflow)
-  #       run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
+  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_::t --features icicle  --test-threads 1
   #     - name: KZG prove and verify tests (public inputs)
-  #       run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_public_input --features icicle  --test-threads 1
+  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_public_input --features icicle  --test-threads 1
   #     - name: KZG prove and verify tests (fixed params)
-  #       run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_fixed_params --features icicle  --test-threads 1
+  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_fixed_params --features icicle  --test-threads 1
   #     - name: KZG prove and verify tests (hashed outputs)
-  #       run: cargo nextest run --release --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 1
+  #       run: cargo nextest run --verbose tests::kzg_prove_and_verify_hashed --features icicle  --test-threads 1
 
   prove-and-verify-mock-aggr-tests:
     permissions:
@@ -576,7 +580,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Mock aggr tests (KZG)
-        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_  --test-threads 8
+        run: cargo nextest run --verbose tests_aggr::kzg_aggr_mock_prove_and_verify_  --test-threads 8
 
   # prove-and-verify-aggr-tests-gpu:
   #   runs-on: GPU
@@ -617,7 +621,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: KZG tests
-        run: cargo nextest run --release --verbose tests_aggr::kzg_aggr_prove_and_verify_  --test-threads 4 -- --include-ignored
+        run: cargo nextest run --verbose tests_aggr::kzg_aggr_prove_and_verify_  --test-threads 4 -- --include-ignored
 
   prove-and-verify-aggr-evm-tests:
     permissions:
@@ -642,7 +646,7 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: KZG prove and verify aggr tests
-        run: cargo nextest run  --release --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 4 -- --include-ignored
+        run: cargo nextest run  --verbose tests_evm::kzg_evm_aggr_prove_and_verify_::t --test-threads 4 -- --include-ignored
 
   examples:
     permissions:
@@ -691,7 +695,7 @@ jobs:
       - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: Build python ezkl
-        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
       - name: Run pytest
         run: source .env/bin/activate; pip install pytest-asyncio; pytest -vv
 
@@ -719,15 +723,15 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
       - name: Build python ezkl
-        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
       - name: Public inputs
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_inputs_
+        run: source .env/bin/activate; cargo nextest run --verbose tests::accuracy_measurement_public_inputs_
       - name: fixed params
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_fixed_params_
+        run: source .env/bin/activate; cargo nextest run --verbose tests::accuracy_measurement_fixed_params_
       - name: Public outputs
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::accuracy_measurement_public_outputs_
+        run: source .env/bin/activate; cargo nextest run --verbose tests::accuracy_measurement_public_outputs_
       - name: Public outputs + resources
-        run: source .env/bin/activate; cargo nextest run --release --verbose tests::resources_accuracy_measurement_public_outputs_
+        run: source .env/bin/activate; cargo nextest run --verbose tests::resources_accuracy_measurement_public_outputs_
 
   python-integration-tests:
     permissions:
@@ -776,7 +780,9 @@ jobs:
       - name: Setup Virtual Env and Install python dependencies
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt; python -m ensurepip --upgrade
       - name: Build python ezkl
-        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --release
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
+      - name: All notebooks
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
       - name: Voice tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
       - name: Neural bow
@@ -796,8 +802,6 @@ jobs:
       #     # now dump the contents of the file into a file called kaggle.json
       #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
       #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
-      - name: All notebooks
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       # - name: Reusable verifier tutorial

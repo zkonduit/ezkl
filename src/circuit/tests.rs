@@ -1813,6 +1813,7 @@ mod shuffle {
                                 &mut region,
                                 &self.inputs[i],
                                 &self.references[i],
+                                layouts::SortCollisionMode::Unsorted,
                             )
                             .map_err(|_| Error::Synthesis)?;
                         }
