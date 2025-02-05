@@ -944,7 +944,7 @@ dependencies = [
  "bitflags 2.5.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "lazy_static",
  "lazycell",
  "log",
@@ -2397,7 +2397,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.2.0"
-source = "git+https://github.com/zkonduit/halo2#d7ecad83c7439fa1cb450ee4a89c2d0b45604ceb"
+source = "git+https://github.com/zkonduit/halo2#e5bc949e7e554bffd560e7d6057c7497dfc56b07"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec",
@@ -2414,7 +2414,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/zkonduit/halo2#bf9d0057a82443be48c4779bbe14961c18fb5996#bf9d0057a82443be48c4779bbe14961c18fb5996"
+source = "git+https://github.com/zkonduit/halo2#e5bc949e7e554bffd560e7d6057c7497dfc56b07#e5bc949e7e554bffd560e7d6057c7497dfc56b07"
 dependencies = [
  "bincode",
  "blake2b_simd",
@@ -3139,7 +3139,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]

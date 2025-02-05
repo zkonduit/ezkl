@@ -14,14 +14,11 @@ use serde::{Deserialize, Serialize};
 use super::errors::GraphError;
 use super::{VarVisibility, Visibility};
 
-/// poseidon len to hash in tree
-pub const POSEIDON_LEN_GRAPH: usize = 32;
 /// Poseidon number of instances
 pub const POSEIDON_INSTANCES: usize = 1;
 
 /// Poseidon module type
-pub type ModulePoseidon =
-    PoseidonChip<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>;
+pub type ModulePoseidon = PoseidonChip<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>;
 /// Poseidon module config
 pub type ModulePoseidonConfig = PoseidonConfig<POSEIDON_WIDTH, POSEIDON_RATE>;
 
