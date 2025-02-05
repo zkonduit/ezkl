@@ -43,6 +43,9 @@ jobs:
             sed "s/ezkl/ezkl-gpu/" pyproject.toml.orig >pyproject.toml
             sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" pyproject.toml.orig >pyproject.toml
 
+      - name: rename ezkl.pyi to ezkl-gpu.pyi
+        run: mv ezkl.pyi ezkl-gpu.pyi
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly-2023-06-27
