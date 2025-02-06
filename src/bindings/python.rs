@@ -8,7 +8,6 @@ use crate::circuit::InputType;
 use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::*;
 use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
-use crate::graph::modules::POSEIDON_LEN_GRAPH;
 use crate::graph::TestDataSource;
 use crate::graph::{
     quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
@@ -578,10 +577,7 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
         .map(crate::pfsys::string_to_field::<Fr>)
         .collect::<Vec<_>>();
 
-    let output =
-        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(
-            message.clone(),
-        )
+    let output = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::run(message.clone())
         .map_err(|_| PyIOError::new_err("Failed to run poseidon"))?;
 
     let hash = output[0]
