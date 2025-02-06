@@ -1,6 +1,7 @@
 use std::any::Any;
 
 use serde::{Deserialize, Serialize};
+use tract_onnx::prelude::DatumType;
 
 use crate::{
     graph::quantize_tensor,
@@ -96,6 +97,8 @@ pub enum InputType {
     Int,
     ///
     TDim,
+    ///
+    Unknown,
 }
 
 impl InputType {
@@ -132,6 +135,7 @@ impl InputType {
                 let int_input = input.clone().to_i64().unwrap();
                 *input = T::from_i64(int_input).unwrap();
             }
+            InputType::Unknown => {}
         }
     }
 }
@@ -148,6 +152,27 @@ impl std::str::FromStr for InputType {
             "int" => Ok(InputType::Int),
             "tdim" => Ok(InputType::TDim),
             e => Err(CircuitError::InvalidInputType(e.to_string())),
+        }
+    }
+}
+
+impl From<DatumType> for InputType {
+    fn from(datum_type: DatumType) -> Self {
+        match datum_type {
+            DatumType::Bool => InputType::Bool,
+            DatumType::F16 => InputType::F16,
+            DatumType::F32 => InputType::F32,
+            DatumType::F64 => InputType::F64,
+            DatumType::I8 => InputType::Int,
+            DatumType::I16 => InputType::Int,
+            DatumType::I32 => InputType::Int,
+            DatumType::I64 => InputType::Int,
+            DatumType::U8 => InputType::Int,
+            DatumType::U16 => InputType::Int,
+            DatumType::U32 => InputType::Int,
+            DatumType::U64 => InputType::Int,
+            DatumType::TDim => InputType::TDim,
+            _ => unimplemented!(),
         }
     }
 }
