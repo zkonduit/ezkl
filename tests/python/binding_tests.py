@@ -59,7 +59,7 @@ def test_poseidon_hash():
     message = [ezkl.float_to_felt(x, 7) for x in message]
     res = ezkl.poseidon_hash(message)
     assert ezkl.felt_to_big_endian(
-        res[0]) == "0x0da7e5e5c8877242fa699f586baf770d731defd54f952d4adeb85047a0e32f45"
+        res[0]) == "0x2369898875588bf49b6539376b09705ea69aee318a58e6fcc1e68fc3e7ad81ab"
 
 
 

@@ -11,7 +11,6 @@ mod wasm32 {
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
     use ezkl::circuit::modules::Module;
-    use ezkl::graph::modules::POSEIDON_LEN_GRAPH;
     use ezkl::graph::GraphCircuit;
     use ezkl::graph::{GraphSettings, GraphWitness};
     use ezkl::pfsys;
@@ -227,11 +226,9 @@ mod wasm32 {
         let hash: Vec<Vec<Fr>> = serde_json::from_slice(&hash[..]).unwrap();
 
         let reference_hash =
-            PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(
-                message.clone(),
-            )
-            .map_err(|_| "failed")
-            .unwrap();
+            PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::run(message.clone())
+                .map_err(|_| "failed")
+                .unwrap();
 
         assert_eq!(hash, reference_hash)
     }

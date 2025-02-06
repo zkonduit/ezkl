@@ -73,9 +73,9 @@ jobs:
           python -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: dist-macos-${{ matrix.target }}
           path: dist
 
   windows:
@@ -130,9 +130,9 @@ jobs:
           python -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: dist-windows-${{ matrix.target }}
           path: dist
 
   linux:
@@ -203,9 +203,9 @@ jobs:
           python -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: dist-linux-${{ matrix.target }}
           path: dist
 
   musllinux:
@@ -271,9 +271,9 @@ jobs:
             python3 -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: dist-musllinux-${{ matrix.target }}
           path: dist
 
   musllinux-cross:
@@ -334,9 +334,9 @@ jobs:
             python3 -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: dist-musllinux-${{ matrix.platform.target }}
           path: dist
 
   pypi-publish:
@@ -347,9 +347,11 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/')"
     needs: [macos, windows, linux, musllinux, musllinux-cross]
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: wheels
+          pattern: dist-*
+          merge-multiple: true
+          path: wheels
       - name: List Files
         run: ls -R
       
@@ -364,7 +366,7 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@unstable/v1
         with:
-          packages-dir: ./
+          packages-dir: ./wheels
 
 
   doc-publish:
@@ -375,7 +377,7 @@ jobs:
     needs: pypi-publish
     steps:
       - uses: actions/checkout@v4
-        with: 
+        with:
           persist-credentials: false
       - name: Trigger RTDs build
         uses: dfm/rtds-action@v1
