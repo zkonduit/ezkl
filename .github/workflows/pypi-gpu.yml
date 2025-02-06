@@ -109,7 +109,7 @@ jobs:
         continue-on-error: true
         uses: pypa/gh-action-pypi-publish@unstable/v1
         with:
-          packages-dir: ./
+          packages-dir: ./wheels
 
       # publishes to TestPyPI
       - name: Publish package distribution to TestPyPI
@@ -117,4 +117,4 @@ jobs:
         uses: pypa/gh-action-pypi-publish@unstable/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-          packages-dir: ./
+          packages-dir: ./wheels
