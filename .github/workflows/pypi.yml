@@ -351,7 +351,7 @@ jobs:
         with:
           pattern: dist-*
           merge-multiple: true
-          path: dist
+          path: wheels
       - name: List Files
         run: ls -R
       
