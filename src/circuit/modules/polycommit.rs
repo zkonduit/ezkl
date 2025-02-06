@@ -1,7 +1,7 @@
 /*
 An easy-to-use implementation of the Poseidon Hash in the form of a Halo2 Chip. While the Poseidon Hash function
 is already implemented in halo2_gadgets, there is no wrapper chip that makes it easy to use in other circuits.
-Thanks to https://github.com/summa-dev/summa-solvency/blob/master/src/chips/poseidon/hash.rs for the inspiration (and also helping us understand how to use this).
+Thanks to https://github.com/summa-dev/summa-solvency/blob/master/zk_prover/src/chips/poseidon/hash.rs for the inspiration (and also helping us understand how to use this).
 */
 
 use std::collections::HashMap;
