@@ -8,13 +8,11 @@ pub mod poseidon_params;
 pub mod spec;
 
 // This chip adds a set of advice columns to the gadget Chip to store the inputs of the hash
-use halo2_gadgets::poseidon::{primitives::*, Hash, Pow5Chip, Pow5Config};
-use halo2_proofs::arithmetic::Field;
+use halo2_gadgets::poseidon::{
+    primitives::VariableLength, primitives::*, Hash, Pow5Chip, Pow5Config,
+};
 use halo2_proofs::halo2curves::bn256::Fr as Fp;
 use halo2_proofs::{circuit::*, plonk::*};
-// use maybe_rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator};
-use maybe_rayon::prelude::ParallelIterator;
-use maybe_rayon::slice::ParallelSlice;
 
 use std::marker::PhantomData;
 
@@ -40,22 +38,17 @@ pub struct PoseidonConfig<const WIDTH: usize, const RATE: usize> {
     pub pow5_config: Pow5Config<Fp, WIDTH, RATE>,
 }
 
-type InputAssignments = (Vec<AssignedCell<Fp, Fp>>, AssignedCell<Fp, Fp>);
+type InputAssignments = Vec<AssignedCell<Fp, Fp>>;
 
 /// PoseidonChip is a wrapper around the Pow5Chip that adds a set of advice columns to the gadget Chip to store the inputs of the hash
 #[derive(Debug, Clone)]
-pub struct PoseidonChip<
-    S: Spec<Fp, WIDTH, RATE> + Sync,
-    const WIDTH: usize,
-    const RATE: usize,
-    const L: usize,
-> {
+pub struct PoseidonChip<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize> {
     config: PoseidonConfig<WIDTH, RATE>,
     _marker: PhantomData<S>,
 }
 
-impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, const L: usize>
-    PoseidonChip<S, WIDTH, RATE, L>
+impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize>
+    PoseidonChip<S, WIDTH, RATE>
 {
     /// Creates a new PoseidonChip
     pub fn configure_with_cols(
@@ -82,8 +75,8 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     }
 }
 
-impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, const L: usize>
-    PoseidonChip<S, WIDTH, RATE, L>
+impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize>
+    PoseidonChip<S, WIDTH, RATE>
 {
     /// Configuration of the PoseidonChip
     pub fn configure_with_optional_instance(
@@ -113,8 +106,8 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
     }
 }
 
-impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, const L: usize>
-    Module<Fp> for PoseidonChip<S, WIDTH, RATE, L>
+impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize> Module<Fp>
+    for PoseidonChip<S, WIDTH, RATE>
 {
     type Config = PoseidonConfig<WIDTH, RATE>;
     type InputAssignments = InputAssignments;
@@ -183,95 +176,81 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         let res = layouter.assign_region(
             || "load message",
             |mut region| {
-                let assigned_message: Result<Vec<AssignedCell<Fp, Fp>>, ModuleError> =
-                    match &message {
-                        ValTensor::Value { inner: v, .. } => {
-                            v.iter()
-                                .enumerate()
-                                .map(|(i, value)| {
-                                    let x = i % WIDTH;
-                                    let y = i / WIDTH;
+                let assigned_message: Result<Vec<AssignedCell<Fp, Fp>>, _> = match &message {
+                    ValTensor::Value { inner: v, .. } => v
+                        .iter()
+                        .enumerate()
+                        .map(|(i, value)| {
+                            let x = i % WIDTH;
+                            let y = i / WIDTH;
 
-                                    match value {
-                                        ValType::Value(v) => region
-                                            .assign_advice(
-                                                || format!("load message_{}", i),
-                                                self.config.hash_inputs[x],
-                                                y,
-                                                || *v,
-                                            )
-                                            .map_err(|e| e.into()),
-                                        ValType::PrevAssigned(v)
-                                        | ValType::AssignedConstant(v, ..) => Ok(v.clone()),
-                                        ValType::Constant(f) => {
-                                            if local_constants.contains_key(f) {
-                                                Ok(constants
-                                                    .get(f)
-                                                    .unwrap()
-                                                    .assigned_cell()
-                                                    .ok_or(ModuleError::ConstantNotAssigned)?)
-                                            } else {
-                                                let res = region.assign_advice_from_constant(
-                                                    || format!("load message_{}", i),
-                                                    self.config.hash_inputs[x],
-                                                    y,
-                                                    *f,
-                                                )?;
-
-                                                constants.insert(
-                                                    *f,
-                                                    ValType::AssignedConstant(res.clone(), *f),
-                                                );
-
-                                                Ok(res)
-                                            }
-                                        }
-                                        e => Err(ModuleError::WrongInputType(
-                                            format!("{:?}", e),
-                                            "AssignedValue".to_string(),
-                                        )),
-                                    }
-                                })
-                                .collect()
-                        }
-                        ValTensor::Instance {
-                            dims,
-                            inner: col,
-                            idx,
-                            initial_offset,
-                            ..
-                        } => {
-                            // this should never ever fail
-                            let num_elems = dims[*idx].iter().product::<usize>();
-                            (0..num_elems)
-                                .map(|i| {
-                                    let x = i % WIDTH;
-                                    let y = i / WIDTH;
-                                    region.assign_advice_from_instance(
-                                        || "pub input anchor",
-                                        *col,
-                                        initial_offset + i,
+                            match value {
+                                ValType::Value(v) => region
+                                    .assign_advice(
+                                        || format!("load message_{}", i),
                                         self.config.hash_inputs[x],
                                         y,
+                                        || *v,
                                     )
-                                })
-                                .collect::<Result<Vec<_>, _>>()
-                                .map_err(|e| e.into())
-                        }
-                    };
+                                    .map_err(|e| e.into()),
+                                ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                                    Ok(v.clone())
+                                }
+                                ValType::Constant(f) => {
+                                    if local_constants.contains_key(f) {
+                                        Ok(constants
+                                            .get(f)
+                                            .unwrap()
+                                            .assigned_cell()
+                                            .ok_or(ModuleError::ConstantNotAssigned)?)
+                                    } else {
+                                        let res = region.assign_advice_from_constant(
+                                            || format!("load message_{}", i),
+                                            self.config.hash_inputs[x],
+                                            y,
+                                            *f,
+                                        )?;
 
-                let offset = message.len() / WIDTH + 1;
+                                        constants
+                                            .insert(*f, ValType::AssignedConstant(res.clone(), *f));
 
-                let zero_val = region
-                    .assign_advice_from_constant(
-                        || "",
-                        self.config.hash_inputs[0],
-                        offset,
-                        Fp::ZERO,
-                    )
-                    .unwrap();
+                                        Ok(res)
+                                    }
+                                }
+                                e => Err(ModuleError::WrongInputType(
+                                    format!("{:?}", e),
+                                    "AssignedValue".to_string(),
+                                )),
+                            }
+                        })
+                        .collect(),
+                    ValTensor::Instance {
+                        dims,
+                        inner: col,
+                        idx,
+                        initial_offset,
+                        ..
+                    } => {
+                        // this should never ever fail
+                        let num_elems = dims[*idx].iter().product::<usize>();
+                        (0..num_elems)
+                            .map(|i| {
+                                let x = i % WIDTH;
+                                let y = i / WIDTH;
+                                region.assign_advice_from_instance(
+                                    || "pub input anchor",
+                                    *col,
+                                    initial_offset + i,
+                                    self.config.hash_inputs[x],
+                                    y,
+                                )
+                            })
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(|e| e.into())
+                    }
+                };
 
-                Ok((assigned_message?, zero_val))
+                Ok(assigned_message?)
             },
         );
         log::trace!(
@@ -292,7 +271,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
         row_offset: usize,
         constants: &mut ConstantsMap<Fp>,
     ) -> Result<ValTensor<Fp>, ModuleError> {
-        let (mut input_cells, zero_val) = self.layout_inputs(layouter, input, constants)?;
+        let input_cells = self.layout_inputs(layouter, input, constants)?;
 
         // empty hash case
         if input_cells.is_empty() {
@@ -306,52 +285,25 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
 
         let start_time = instant::Instant::now();
 
-        let mut one_iter = false;
-        // do the Tree dance baby
-        while input_cells.len() > 1 || !one_iter {
-            let hashes: Result<Vec<AssignedCell<Fp, Fp>>, ModuleError> = input_cells
-                .chunks(L)
-                .enumerate()
-                .map(|(i, block)| {
-                    let _start_time = instant::Instant::now();
+        let pow5_chip = Pow5Chip::construct(self.config.pow5_config.clone());
+        // initialize the hasher
+        let hasher = Hash::<_, _, S, VariableLength, WIDTH, RATE>::init(
+            pow5_chip,
+            layouter.namespace(|| "block_hasher"),
+        )?;
 
-                    let mut block = block.to_vec();
-                    let remainder = block.len() % L;
-
-                    if remainder != 0 {
-                        block.extend(vec![zero_val.clone(); L - remainder]);
-                    }
-
-                    let pow5_chip = Pow5Chip::construct(self.config.pow5_config.clone());
-                    // initialize the hasher
-                    let hasher = Hash::<_, _, S, ConstantLength<L>, WIDTH, RATE>::init(
-                        pow5_chip,
-                        layouter.namespace(|| "block_hasher"),
-                    )?;
-
-                    let hash = hasher.hash(
-                        layouter.namespace(|| "hash"),
-                        block.to_vec().try_into().map_err(|_| Error::Synthesis)?,
-                    );
-
-                    if i == 0 {
-                        log::trace!("block (L={:?}) took: {:?}", L, _start_time.elapsed());
-                    }
-
-                    hash
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| e.into());
-
-            log::trace!("hashes (N={:?}) took: {:?}", len, start_time.elapsed());
-            one_iter = true;
-            input_cells = hashes?;
-        }
+        let hash: AssignedCell<Fp, Fp> = hasher.hash(
+            layouter.namespace(|| "hash"),
+            input_cells
+                .to_vec()
+                .try_into()
+                .map_err(|_| Error::Synthesis)?,
+        )?;
 
         let duration = start_time.elapsed();
         log::trace!("layout (N={:?}) took: {:?}", len, duration);
 
-        let result = Tensor::from(input_cells.iter().map(|e| ValType::from(e.clone())));
+        let result = Tensor::from(vec![ValType::from(hash.clone())].into_iter());
 
         let output = match result[0].clone() {
             ValType::PrevAssigned(v) => v,
@@ -390,69 +342,59 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize, con
 
     ///
     fn run(message: Vec<Fp>) -> Result<Vec<Vec<Fp>>, ModuleError> {
-        let mut hash_inputs = message;
-
-        let len = hash_inputs.len();
+        let len = message.len();
+        if len == 0 {
+            return Ok(vec![vec![]]);
+        }
 
         let start_time = instant::Instant::now();
 
-        let mut one_iter = false;
-        // do the Tree dance baby
-        while hash_inputs.len() > 1 || !one_iter {
-            let hashes: Vec<Fp> = hash_inputs
-                .par_chunks(L)
-                .map(|block| {
-                    let mut block = block.to_vec();
-                    let remainder = block.len() % L;
-
-                    if remainder != 0 {
-                        block.extend(vec![Fp::ZERO; L - remainder].iter());
-                    }
-
-                    let block_len = block.len();
-
-                    let message = block
-                        .try_into()
-                        .map_err(|_| ModuleError::InputWrongLength(block_len))?;
-
-                    Ok(halo2_gadgets::poseidon::primitives::Hash::<
-                        _,
-                        S,
-                        ConstantLength<L>,
-                        { WIDTH },
-                        { RATE },
-                    >::init()
-                    .hash(message))
-                })
-                .collect::<Result<Vec<_>, ModuleError>>()?;
-            one_iter = true;
-            hash_inputs = hashes;
-        }
+        let hash = halo2_gadgets::poseidon::primitives::Hash::<
+            _,
+            S,
+            VariableLength,
+            { WIDTH },
+            { RATE },
+        >::init()
+        .hash(message);
 
         let duration = start_time.elapsed();
         log::trace!("run (N={:?}) took: {:?}", len, duration);
 
-        Ok(vec![hash_inputs])
+        Ok(vec![vec![hash]])
     }
 
-    fn num_rows(mut input_len: usize) -> usize {
+    fn num_rows(input_len: usize) -> usize {
         // this was determined by running the circuit and looking at the number of constraints
         // in the test called hash_for_a_range_of_input_sizes, then regressing in python to find the slope
-        let fixed_cost: usize = 41 * L;
+        // import numpy as np
+        // from scipy import stats
 
-        let mut num_rows = 0;
+        // x = np.array([32, 64, 96, 128, 160, 192])
+        // y = np.array([1298, 2594, 3890, 5186, 6482, 7778])
 
-        loop {
-            // the number of times the input_len is divisible by L
-            let num_chunks = input_len / L + 1;
-            num_rows += num_chunks * fixed_cost;
-            if num_chunks == 1 {
-                break;
-            }
-            input_len = num_chunks;
-        }
+        // slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
 
-        num_rows
+        // print(f"slope: {slope}")
+        // print(f"intercept: {intercept}")
+        // print(f"R^2: {r_value**2}")
+
+        // # Predict for any x
+        // def predict(x):
+        // return slope * x + intercept
+
+        // # Test prediction
+        // test_x = 256
+        // print(f"Predicted value for x={test_x}: {predict(test_x)}")
+        // our output:
+        // slope: 40.5
+        // intercept: 2.0
+        // R^2: 1.0
+        // Predicted value for x=256: 10370.0
+        let fixed_cost: usize = 41 * input_len;
+
+        // the cost of the hash function is linear with the number of inputs
+        fixed_cost + 2
     }
 }
 
@@ -479,12 +421,12 @@ mod tests {
     const RATE: usize = POSEIDON_RATE;
     const R: usize = 240;
 
-    struct HashCircuit<S: Spec<Fp, WIDTH, RATE>, const L: usize> {
+    struct HashCircuit<S: Spec<Fp, WIDTH, RATE>> {
         message: ValTensor<Fp>,
         _spec: PhantomData<S>,
     }
 
-    impl<S: Spec<Fp, WIDTH, RATE>, const L: usize> Circuit<Fp> for HashCircuit<S, L> {
+    impl<S: Spec<Fp, WIDTH, RATE>> Circuit<Fp> for HashCircuit<S> {
         type Config = PoseidonConfig<WIDTH, RATE>;
         type FloorPlanner = ModulePlanner;
         type Params = ();
@@ -500,7 +442,7 @@ mod tests {
         }
 
         fn configure(meta: &mut ConstraintSystem<Fp>) -> PoseidonConfig<WIDTH, RATE> {
-            PoseidonChip::<PoseidonSpec, WIDTH, RATE, L>::configure(meta, ())
+            PoseidonChip::<PoseidonSpec, WIDTH, RATE>::configure(meta, ())
         }
 
         fn synthesize(
@@ -508,7 +450,7 @@ mod tests {
             config: PoseidonConfig<WIDTH, RATE>,
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), Error> {
-            let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE, L> = PoseidonChip::new(config);
+            let chip: PoseidonChip<PoseidonSpec, WIDTH, RATE> = PoseidonChip::new(config);
             chip.layout(
                 &mut layouter,
                 &[self.message.clone()],
@@ -523,15 +465,15 @@ mod tests {
     #[test]
     fn poseidon_hash_empty() {
         let message = [];
-        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE, 2>::run(message.to_vec()).unwrap();
+        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE>::run(message.to_vec()).unwrap();
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
         let k = 9;
-        let circuit = HashCircuit::<PoseidonSpec, 2> {
+        let circuit = HashCircuit::<PoseidonSpec> {
             message: message.into(),
             _spec: PhantomData,
         };
-        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, output).unwrap();
+        let prover = halo2_proofs::dev::MockProver::run(k, &circuit, vec![vec![]]).unwrap();
         assert_eq!(prover.verify(), Ok(()))
     }
 
@@ -540,13 +482,13 @@ mod tests {
         let rng = rand::rngs::OsRng;
 
         let message = [Fp::random(rng), Fp::random(rng)];
-        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE, 2>::run(message.to_vec()).unwrap();
+        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE>::run(message.to_vec()).unwrap();
 
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
 
         let k = 9;
-        let circuit = HashCircuit::<PoseidonSpec, 2> {
+        let circuit = HashCircuit::<PoseidonSpec> {
             message: message.into(),
             _spec: PhantomData,
         };
@@ -559,13 +501,13 @@ mod tests {
         let rng = rand::rngs::OsRng;
 
         let message = [Fp::random(rng), Fp::random(rng), Fp::random(rng)];
-        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE, 3>::run(message.to_vec()).unwrap();
+        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE>::run(message.to_vec()).unwrap();
 
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
 
         let k = 9;
-        let circuit = HashCircuit::<PoseidonSpec, 3> {
+        let circuit = HashCircuit::<PoseidonSpec> {
             message: message.into(),
             _spec: PhantomData,
         };
@@ -581,23 +523,21 @@ mod tests {
         #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
         env_logger::init();
 
-        {
-            let i = 32;
+        for i in (32..128).step_by(32) {
             // print a bunch of new lines
-            println!(
+            log::info!(
                 "i is {} -------------------------------------------------",
                 i
             );
 
             let message: Vec<Fp> = (0..i).map(|_| Fp::random(rng)).collect::<Vec<_>>();
-            let output =
-                PoseidonChip::<PoseidonSpec, WIDTH, RATE, 32>::run(message.clone()).unwrap();
+            let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE>::run(message.clone()).unwrap();
 
             let mut message: Tensor<ValType<Fp>> =
                 message.into_iter().map(|m| Value::known(m).into()).into();
 
             let k = 17;
-            let circuit = HashCircuit::<PoseidonSpec, 32> {
+            let circuit = HashCircuit::<PoseidonSpec> {
                 message: message.into(),
                 _spec: PhantomData,
             };
@@ -614,13 +554,13 @@ mod tests {
 
         let mut message: Vec<Fp> = (0..2048).map(|_| Fp::random(rng)).collect::<Vec<_>>();
 
-        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE, 25>::run(message.clone()).unwrap();
+        let output = PoseidonChip::<PoseidonSpec, WIDTH, RATE>::run(message.clone()).unwrap();
 
         let mut message: Tensor<ValType<Fp>> =
             message.into_iter().map(|m| Value::known(m).into()).into();
 
         let k = 17;
-        let circuit = HashCircuit::<PoseidonSpec, 25> {
+        let circuit = HashCircuit::<PoseidonSpec> {
             message: message.into(),
             _spec: PhantomData,
         };

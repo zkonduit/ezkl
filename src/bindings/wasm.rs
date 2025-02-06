@@ -8,10 +8,7 @@ use crate::{
         Module,
     },
     fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
-    graph::{
-        modules::POSEIDON_LEN_GRAPH, quantize_float, scale_to_multiplier, GraphCircuit,
-        GraphSettings,
-    },
+    graph::{quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings},
 };
 use console_error_panic_hook;
 use halo2_proofs::{
@@ -231,10 +228,7 @@ pub fn poseidonHash(
     let message: Vec<Fr> = serde_json::from_slice(&message[..])
         .map_err(|e| JsError::new(&format!("Failed to deserialize message: {}", e)))?;
 
-    let output =
-        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, POSEIDON_LEN_GRAPH>::run(
-            message.clone(),
-        )
+    let output = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::run(message.clone())
         .map_err(|e| JsError::new(&format!("{}", e)))?;
 
     Ok(wasm_bindgen::Clamped(serde_json::to_vec(&output).map_err(

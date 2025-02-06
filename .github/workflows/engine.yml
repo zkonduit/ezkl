@@ -47,6 +47,10 @@ jobs:
           curl -L https://github.com/WebAssembly/binaryen/releases/download/version_116/binaryen-version_116-x86_64-linux.tar.gz | tar xzf -
           export PATH=$PATH:$PWD/binaryen-version_116/bin
           wasm-opt --version
+      - name: Build wasm files for both web and nodejs compilation targets
+        run: |
+            wasm-pack build --release --target nodejs --out-dir ./pkg/nodejs . -- -Z build-std="panic_abort,std"
+            wasm-pack build --release --target web --out-dir ./pkg/web . -- -Z build-std="panic_abort,std" --features web
       - name: Create package.json in pkg folder
         shell: bash
         run: |
