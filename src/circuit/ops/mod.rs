@@ -1,6 +1,7 @@
 use std::any::Any;
 
 use serde::{Deserialize, Serialize};
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::prelude::DatumType;
 
 use crate::{
@@ -156,6 +157,7 @@ impl std::str::FromStr for InputType {
     }
 }
 
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 impl From<DatumType> for InputType {
     fn from(datum_type: DatumType) -> Self {
         match datum_type {
