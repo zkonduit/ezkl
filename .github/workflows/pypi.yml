@@ -366,7 +366,7 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@unstable/v1
         with:
-          packages-dir: ./
+          packages-dir: ./wheels
 
 
   doc-publish:
