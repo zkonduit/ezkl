@@ -26,10 +26,10 @@ jobs:
     env:
         RELEASE_TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
-        with: 
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
           persist-credentials: false
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: 3.12
           architecture: x64
@@ -48,7 +48,7 @@ jobs:
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
@@ -56,13 +56,13 @@ jobs:
 
       - name: Build wheels
         if: matrix.target == 'universal2-apple-darwin'
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@5f8a1b3b0aad13193f46c9131f9b9e663def8ce5  #v1.46.0
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --features python-bindings
       - name: Build wheels
         if: matrix.target == 'x86_64'
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@5f8a1b3b0aad13193f46c9131f9b9e663def8ce5  #v1.46.0
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --features python-bindings
@@ -73,7 +73,7 @@ jobs:
           python -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  #v4.6.0
         with:
           name: dist-macos-${{ matrix.target }}
           path: dist
@@ -87,10 +87,10 @@ jobs:
       matrix:
         target: [x64, x86]
     steps:
-      - uses: actions/checkout@v4
-        with: 
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
           persist-credentials: false
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: 3.12
           architecture: ${{ matrix.target }}
@@ -113,14 +113,14 @@ jobs:
           mv Cargo.lock Cargo.lock.orig
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
 
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@5f8a1b3b0aad13193f46c9131f9b9e663def8ce5  #v1.46.0
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --features python-bindings
@@ -130,7 +130,7 @@ jobs:
           python -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  #v4.6.0 #v4.6.0
         with:
           name: dist-windows-${{ matrix.target }}
           path: dist
@@ -144,10 +144,10 @@ jobs:
       matrix:
         target: [x86_64]
     steps:
-      - uses: actions/checkout@v4
-        with: 
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
           persist-credentials: false
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: 3.12
           architecture: x64
@@ -176,7 +176,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y openssl pkg-config libssl-dev
 
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@5f8a1b3b0aad13193f46c9131f9b9e663def8ce5  #v1.46.0
         with:
           target: ${{ matrix.target }}
           manylinux: auto
@@ -203,7 +203,7 @@ jobs:
           python -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  #v4.6.0
         with:
           name: dist-linux-${{ matrix.target }}
           path: dist
@@ -218,10 +218,10 @@ jobs:
         target:
           - x86_64-unknown-linux-musl
     steps:
-      - uses: actions/checkout@v4
-        with: 
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
           persist-credentials: false
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: 3.12
           architecture: x64
@@ -250,7 +250,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
 
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@5f8a1b3b0aad13193f46c9131f9b9e663def8ce5  #v1.46.0
         with:
           target: ${{ matrix.target }}
           manylinux: musllinux_1_2
@@ -271,7 +271,7 @@ jobs:
             python3 -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  #v4.6.0
         with:
           name: dist-musllinux-${{ matrix.target }}
           path: dist
@@ -287,10 +287,10 @@ jobs:
           - target: aarch64-unknown-linux-musl
             arch: aarch64
     steps:
-      - uses: actions/checkout@v4
-        with: 
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
           persist-credentials: false
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: 3.12
 
@@ -313,13 +313,13 @@ jobs:
           sed "s/0\\.0\\.0/${RELEASE_TAG//v}/" Cargo.lock.orig >Cargo.lock
 
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        uses: PyO3/maturin-action@5f8a1b3b0aad13193f46c9131f9b9e663def8ce5  #v1.46.0
         with:
           target: ${{ matrix.platform.target }}
           manylinux: musllinux_1_2
           args: --release --out dist --features python-bindings
 
-      - uses: uraimo/run-on-arch-action@v2.8.1
+      - uses: uraimo/run-on-arch-action@5397f9e30a9b62422f302092631c99ae1effcd9e  #v2.8.1
         name: Install built wheel
         with:
           arch: ${{ matrix.platform.arch }}
@@ -334,7 +334,7 @@ jobs:
             python3 -c "import ezkl"
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  #v4.6.0
         with:
           name: dist-musllinux-${{ matrix.platform.target }}
           path: dist
@@ -347,24 +347,24 @@ jobs:
     if: "startsWith(github.ref, 'refs/tags/')"
     needs: [macos, windows, linux, musllinux, musllinux-cross]
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  #v4.1.8
         with:
           pattern: dist-*
           merge-multiple: true
           path: wheels
       - name: List Files
         run: ls -R
-      
+
       # # publishes to TestPyPI
       # - name: Publish package distribution to TestPyPI
-      #   uses: pypa/gh-action-pypi-publish@unstable/v1
+      #   uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc  #v1.12.4
       #   with:
       #     repository-url: https://test.pypi.org/legacy/
       #     packages-dir: ./
 
       # publishes to PyPI
       - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@unstable/v1
+        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc  #v1.12.4
         with:
           packages-dir: ./wheels
 

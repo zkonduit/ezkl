@@ -11,12 +11,12 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Bump version and push tag
         id: tag_version
-        uses: mathieudutour/github-tag-action@v6.2
+        uses: mathieudutour/github-tag-action@a22cf08638b34d5badda920f9daf6e72c477b07b  #v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -46,7 +46,7 @@ jobs:
           git tag $RELEASE_TAG
 
       - name: Push changes
-        uses: ad-m/github-push-action@master
+        uses: ad-m/github-push-action@77c5b412c50b723d2a4fbc6d71fb5723bcd439aa  #master
         env:
           RELEASE_TAG: ${{ steps.tag_version.outputs.new_tag }}
         with:
