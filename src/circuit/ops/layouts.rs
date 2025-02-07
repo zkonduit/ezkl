@@ -24,6 +24,7 @@ use crate::{
         ops::{accumulated, add, mult, sub},
         Tensor, TensorError, ValType,
     },
+    tensor::{DataFormat, KernelFormat},
 };
 
 use super::*;
@@ -3251,9 +3252,13 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     stride: &[usize],
     kernel_shape: &[usize],
     normalized: bool,
+    data_format: DataFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let batch_size = values[0].dims()[0];
-    let image_channels = values[0].dims()[1];
+    let mut image = values[0].clone();
+    let new_data_rep = data_format.invert_rep_to_default(&mut image)?;
+
+    let batch_size = image.dims()[0];
+    let image_channels = image.dims()[1];
 
     let kernel_len = kernel_shape.iter().product();
 
@@ -3278,7 +3283,16 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .map(|coord| {
             let (b, i) = (coord[0], coord[1]);
             let input = values[0].get_slice(&[b..b + 1, i..i + 1])?;
-            let output = conv(config, region, &[input, kernel.clone()], padding, stride, 1)?;
+            let output = conv(
+                config,
+                region,
+                &[input, kernel.clone()],
+                padding,
+                stride,
+                1,
+                DataFormat::default(),
+                KernelFormat::default(),
+            )?;
             res.push(output);
             Ok(())
         })
@@ -3293,6 +3307,9 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     if normalized {
         last_elem = div(config, region, &[last_elem], F::from(kernel_len as u64))?;
     }
+
+    new_data_rep.match_rep_to_target(&data_format, &mut last_elem)?;
+
     Ok(last_elem)
 }
 
@@ -3328,8 +3345,10 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     padding: &[(usize, usize)],
     stride: &[usize],
     pool_dims: &[usize],
+    data_format: DataFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let image = values[0].clone();
+    let mut image = values[0].clone();
+    let new_data_rep = data_format.invert_rep_to_default(&mut image)?;
 
     let image_dims = image.dims();
 
@@ -3388,7 +3407,9 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     region.apply_in_loop(&mut output, inner_loop_function)?;
 
-    let res: ValTensor<F> = output.into();
+    let mut res: ValTensor<F> = output.into();
+
+    new_data_rep.match_rep_to_target(&data_format, &mut res)?;
 
     Ok(res)
 }
@@ -3531,9 +3552,14 @@ pub fn deconv<
     output_padding: &[usize],
     stride: &[usize],
     num_groups: usize,
+    data_format: DataFormat,
+    kernel_format: KernelFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = inputs.len() == 3;
-    let (image, kernel) = (&inputs[0], &inputs[1]);
+    let (mut image, mut kernel) = (inputs[0].clone(), inputs[1].clone());
+
+    let new_data_rep = data_format.invert_rep_to_default(&mut image)?;
+    kernel_format.invert_rep_to_default(&mut kernel)?;
 
     if stride.iter().any(|&s| s == 0) {
         return Err(TensorError::DimMismatch(
@@ -3610,14 +3636,18 @@ pub fn deconv<
 
     let conv_dim = kernel.dims()[2..].len();
 
-    let output = conv(
+    let mut output = conv(
         config,
         region,
         &conv_input,
         &vec![(0, 0); conv_dim],
         &vec![1; conv_dim],
         num_groups,
+        DataFormat::default(),
+        KernelFormat::default(),
     )?;
+
+    new_data_rep.match_rep_to_target(&data_format, &mut output)?;
 
     Ok(output)
 }
@@ -3700,9 +3730,14 @@ pub fn conv<
     padding: &[(usize, usize)],
     stride: &[usize],
     num_groups: usize,
+    _data_format: DataFormat,
+    _kernel_format: KernelFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = values.len() == 3;
     let (mut image, mut kernel) = (values[0].clone(), values[1].clone());
+
+    // let new_rep_data = data_format.invert_rep_to_default(&mut image)?;
+    // kernel_format.invert_rep_to_default(&mut kernel)?;
 
     if stride.iter().any(|&s| s == 0) {
         return Err(TensorError::DimMismatch(
@@ -3730,10 +3765,11 @@ pub fn conv<
         region.increment(*assigned_len.iter().max().unwrap());
     }
 
-    // if image is 3d add a dummy batch dimension
-    if image.dims().len() == kernel.dims().len() - 1 {
-        image.reshape(&[1, image.dims()[0], image.dims()[1], image.dims()[2]])?;
-    }
+    println!("image: {:?}", image.dims());
+    println!("kernel: {:?}", kernel.dims());
+
+    println!("padding: {:?}", padding);
+    println!("stride: {:?}", stride);
 
     let image_dims = image.dims();
     let kernel_dims = kernel.dims();
@@ -3832,6 +3868,9 @@ pub fn conv<
 
         local_kernel.flatten();
 
+        println!("local_image: {:?}", local_image.dims());
+        println!("local_kernel: {:?}", local_kernel.dims());
+
         // this is dot product notation in einsum format
         let mut res = einsum(config, region, &[local_image, local_kernel], "i,i->")?;
 
@@ -3866,6 +3905,8 @@ pub fn conv<
     reshape_output(&mut output)?;
 
     let output: ValTensor<_> = output.into();
+
+    // new_rep_data.match_rep_to_target(&data_format, &mut output)?;
 
     Ok(output)
 }
