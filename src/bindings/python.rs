@@ -337,8 +337,6 @@ enum PyInputType {
     Int,
     ///
     TDim,
-    ///
-    Unknown,
 }
 
 impl From<InputType> for PyInputType {
@@ -350,7 +348,6 @@ impl From<InputType> for PyInputType {
             InputType::F64 => PyInputType::F64,
             InputType::Int => PyInputType::Int,
             InputType::TDim => PyInputType::TDim,
-            InputType::Unknown => PyInputType::Unknown,
         }
     }
 }
@@ -364,7 +361,6 @@ impl From<PyInputType> for InputType {
             PyInputType::F64 => InputType::F64,
             PyInputType::Int => InputType::Int,
             PyInputType::TDim => InputType::TDim,
-            PyInputType::Unknown => InputType::Unknown,
         }
     }
 }
@@ -379,7 +375,6 @@ impl FromStr for PyInputType {
             "f64" => Ok(PyInputType::F64),
             "int" => Ok(PyInputType::Int),
             "tdim" => Ok(PyInputType::TDim),
-            "unknown" => Ok(PyInputType::Unknown),
             _ => Err("Invalid value for InputType".to_string()),
         }
     }

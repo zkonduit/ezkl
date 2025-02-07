@@ -64,7 +64,6 @@ use pyo3::types::PyDictMethods;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
 
-use core::result::Result::Ok;
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 pub use utilities::*;
@@ -458,6 +457,8 @@ pub struct GraphSettings {
     pub timestamp: Option<u128>,
     /// Model inputs types (if any)
     pub input_types: Option<Vec<InputType>>,
+    /// Model outputs types (if any)
+    pub output_types: Option<Vec<InputType>>,
 }
 
 impl GraphSettings {
