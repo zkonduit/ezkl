@@ -49,7 +49,7 @@ pub const DEFAULT_ANVIL_ENDPOINT: &str = "http://localhost:8545";
 // Generate contract bindings OUTSIDE the functions so they are part of library
 abigen!(
     #[allow(missing_docs)]
-    #[sol(rpc, bytecode="60806040523461012d576102008038038061001981610131565b9283398101602090818382031261012d5782516001600160401b039384821161012d57019080601f8301121561012d5781519384116100fb5760059184831b908480610066818501610131565b80988152019282010192831161012d5784809101915b83831061011d57505050505f5b835181101561010f578281831b850101515f54680100000000000000008110156100fb5760018101805f558110156100e7575f8052845f2001555f1981146100d357600101610089565b634e487b7160e01b5f52601160045260245ffd5b634e487b7160e01b5f52603260045260245ffd5b634e487b7160e01b5f52604160045260245ffd5b60405160a990816101578239f35b825181529181019185910161007c565b5f80fd5b6040519190601f01601f191682016001600160401b038111838210176100fb5760405256fe60808060405260043610156011575f80fd5b5f90813560e01c6371e5ee5f146025575f80fd5b34606f576020366003190112606f576004358254811015606b5782602093527f290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e56301548152f35b8280fd5b5080fdfea2646970667358221220dc28d7ff0d25a49f74c6b97a87c7c6039ee98d715c0f61be72cc4d180d40a41e64736f6c63430008140033")]
+    #[sol(rpc, bytecode="608060405234801561000f575f80fd5b506040516105c13803806105c183398181016040528101906100319190610229565b5f5b815181101561008e575f8282815181106100505761004f610270565b5b6020026020010151908060018154018082558091505060019003905f5260205f20015f90919091909150558080610086906102d3565b915050610033565b505061031a565b5f604051905090565b5f80fd5b5f80fd5b5f80fd5b5f601f19601f8301169050919050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b6100f0826100aa565b810181811067ffffffffffffffff8211171561010f5761010e6100ba565b5b80604052505050565b5f610121610095565b905061012d82826100e7565b919050565b5f67ffffffffffffffff82111561014c5761014b6100ba565b5b602082029050602081019050919050565b5f80fd5b5f819050919050565b61017381610161565b811461017d575f80fd5b50565b5f8151905061018e8161016a565b92915050565b5f6101a66101a184610132565b610118565b905080838252602082019050602084028301858111156101c9576101c861015d565b5b835b818110156101f257806101de8882610180565b8452602084019350506020810190506101cb565b5050509392505050565b5f82601f8301126102105761020f6100a6565b5b8151610220848260208601610194565b91505092915050565b5f6020828403121561023e5761023d61009e565b5b5f82015167ffffffffffffffff81111561025b5761025a6100a2565b5b610267848285016101fc565b91505092915050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f819050919050565b5f6102dd826102ca565b91507fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff820361030f5761030e61029d565b5b600182019050919050565b61029a806103275f395ff3fe608060405234801561000f575f80fd5b5060043610610034575f3560e01c806341f654f71461003857806371e5ee5f14610056575b5f80fd5b610040610086565b60405161004d91906101ba565b60405180910390f35b610070600480360381019061006b9190610211565b6100db565b60405161007d919061024b565b60405180910390f35b60605f8054806020026020016040519081016040528092919081815260200182805480156100d157602002820191905f5260205f20905b8154815260200190600101908083116100bd575b5050505050905090565b5f81815481106100e9575f80fd5b905f5260205f20015f915090505481565b5f81519050919050565b5f82825260208201905092915050565b5f819050602082019050919050565b5f819050919050565b61013581610123565b82525050565b5f610146838361012c565b60208301905092915050565b5f602082019050919050565b5f610168826100fa565b6101728185610104565b935061017d83610114565b805f5b838110156101ad578151610194888261013b565b975061019f83610152565b925050600181019050610180565b5085935050505092915050565b5f6020820190508181035f8301526101d2818461015e565b905092915050565b5f80fd5b5f819050919050565b6101f0816101de565b81146101fa575f80fd5b50565b5f8135905061020b816101e7565b92915050565b5f60208284031215610226576102256101da565b5b5f610233848285016101fd565b91505092915050565b61024581610123565b82525050565b5f60208201905061025e5f83018461023c565b9291505056fea26469706673582212204750739470e91a44d3644a347a636f68dc57278161e9b45547ed2b4eab8eccda64736f6c63430008140033")]
     contract TestReads {
         int[] public arr;
 
@@ -57,6 +57,9 @@ abigen!(
             for (uint256 i = 0; i < _numbers.length; i++) {
                 arr.push(_numbers[i]);
             }
+        }
+        function readAll() public view returns (int[] memory) {
+            return arr;
         }
     }
 );
@@ -986,7 +989,7 @@ pub async fn verify_proof_with_data_attestation(
 /// Tests on-chain data storage by deploying a contract that stores the network input and or output
 /// data in its storage. It does this by converting the floating point values to integers and storing the
 /// the number of decimals of the floating point value on chain.
-pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
+pub async fn test_on_chain_data_multi<M: 'static + Provider<Http<Client>, Ethereum>>(
     client: Arc<M>,
     data: &[Vec<FileSourceInner>],
 ) -> Result<Vec<CallsToAccount>, EthError> {
@@ -1007,6 +1010,28 @@ pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
     };
     info!("calls_to_account: {:#?}", calls_to_account);
     Ok(vec![calls_to_account])
+}
+
+/// Tests on-chain data storage by deploying a contract that stores the network input and or output
+/// data in its storage. It does this by converting the floating point values to integers and storing the
+/// the number of decimals of the floating point value on chain.
+pub async fn test_on_chain_data_single<M: 'static + Provider<Http<Client>, Ethereum>>(
+    client: Arc<M>,
+    data: &[Vec<FileSourceInner>],
+) -> Result<CallToAccount, EthError> {
+    let (contract, decimals) = setup_test_contract(client, data).await?;
+
+    // Get the encoded calldata for the input
+    let builder = contract.readAll();
+    let call = builder.calldata();
+    let call_to_account = CallToAccount {
+        call_data: hex::encode(call),
+        decimals: decimals[0],
+        address: hex::encode(contract.address().0 .0),
+        len: decimals.len(),
+    };
+    info!("call_to_account: {:#?}", call_to_account);
+    Ok(call_to_account)
 }
 
 /// Reads on-chain inputs, returning the raw encoded data returned from making all the calls in on_chain_input_data
@@ -1369,6 +1394,7 @@ pub fn fix_da_multi_sol(
 pub fn fix_da_single_sol(
     input_len: Option<usize>,
     output_len: Option<usize>,
+    commitment_bytes: Option<Vec<u8>>,
 ) -> Result<String, EthError> {
     let mut contract = ATTESTDATA_SOL.to_string();
 
@@ -1384,6 +1410,23 @@ pub fn fix_da_single_sol(
         contract = contract.replace(
             "uint256 constant OUTPUT_LEN = 0;",
             &format!("uint256 constant OUTPUT_LEN = {};", output_len),
+        );
+    }
+
+    // The case where a combination of on-chain data source + kzg commit is provided.
+    if commitment_bytes.is_some() && !commitment_bytes.as_ref().unwrap().is_empty() {
+        let commitment_bytes = commitment_bytes.as_ref().unwrap();
+        let hex_string = hex::encode(commitment_bytes);
+        contract = contract.replace(
+            "bytes constant COMMITMENT_KZG = hex\"\";",
+            &format!("bytes constant COMMITMENT_KZG = hex\"{}\";", hex_string),
+        );
+    } else {
+        // Remove the SwapProofCommitments inheritance and the checkKzgCommits function call if no commitment is provided
+        contract = contract.replace(", SwapProofCommitments", "");
+        contract = contract.replace(
+            "require(checkKzgCommits(encoded), \"Invalid KZG commitments\");",
+            "",
         );
     }
     Ok(contract)

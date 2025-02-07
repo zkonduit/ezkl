@@ -300,6 +300,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             rpc_url,
             input_source,
             output_source,
+            single_call,
         } => {
             setup_test_evm_witness(
                 data.unwrap_or(DEFAULT_DATA.into()),
@@ -308,6 +309,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
                 rpc_url,
                 input_source,
                 output_source,
+                single_call.unwrap_or(DEFAULT_SINGLE_CALL.parse().unwrap()),
             )
             .await
         }
@@ -1604,7 +1606,7 @@ pub(crate) async fn create_evm_data_attestation(
 
     // if either input_len or output_len is Some then we are in the single call data attestation mode
     if input_len.is_some() || output_len.is_some() {
-        let output = fix_da_single_sol(input_len, output_len)?;
+        let output: String = fix_da_single_sol(input_len, output_len, commitment_bytes)?;
         let mut f = File::create(sol_code_path.clone())?;
         let _ = f.write(output.as_bytes());
         // fetch abi of the contract
@@ -1874,6 +1876,7 @@ pub(crate) async fn setup_test_evm_witness(
     rpc_url: Option<String>,
     input_source: TestDataSource,
     output_source: TestDataSource,
+    single: bool,
 ) -> Result<String, EZKLError> {
     use crate::graph::TestOnChainData;
 
@@ -1896,7 +1899,7 @@ pub(crate) async fn setup_test_evm_witness(
     };
 
     circuit
-        .populate_on_chain_test_data(&mut data, test_on_chain_data)
+        .populate_on_chain_test_data(&mut data, test_on_chain_data, single)
         .await?;
 
     Ok(String::new())

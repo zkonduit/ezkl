@@ -41,6 +41,10 @@ contract LoadInstances {
                 )
             }
         }
+        require(
+            funcSig == 0xaf83a18d || funcSig == 0x1e8e1e13,
+            "Invalid function signature"
+        );
     }
     /**
      * @dev Parse the instances array from the Halo2Verifier encoded calldata.
@@ -90,6 +94,10 @@ contract LoadInstances {
                 )
             }
         }
+        require(
+            funcSig == 0xaf83a18d || funcSig == 0x1e8e1e13,
+            "Invalid function signature"
+        );
     }
 }
 
@@ -189,6 +197,8 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
         uint256(
             0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
         );
+
+    uint256 constant HALF_ORDER = ORDER >> 1;
 
     uint256 constant INPUT_LEN = 0;
 
@@ -313,6 +323,9 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
         if (mulmod(uint256(x), _scale, _decimals) * 2 >= _decimals) {
             output += 1;
         }
+        if (output > HALF_ORDER) {
+            revert("Overflow field modulus");
+        }
         quantized_data = neg ? -int256(output) : int256(output);
     }
     /**
@@ -367,24 +380,14 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
             _accountCall.callData
         );
         int256[] memory x = abi.decode(returnData, (int256[]));
-        uint _offset;
-        int output = quantizeData(x[0], _accountCall.decimals, _scales[0]);
-        uint field_element = toFieldElement(output);
+        int output;
+        uint fieldElement;
         for (uint i = 0; i < x.length; i++) {
-            if (field_element != instances[i + instanceOffset]) {
-                _offset += 1;
-            } else {
-                break;
-            }
-        }
-        uint length = x.length - _offset;
-        for (uint i = 1; i < length; i++) {
             output = quantizeData(x[i], _accountCall.decimals, _scales[i]);
-            field_element = toFieldElement(output);
-            require(
-                field_element == instances[i + instanceOffset + _offset],
-                "Public input does not match"
-            );
+            fieldElement = toFieldElement(output);
+            if (fieldElement != instances[i + instanceOffset]) {
+                revert("Public input does not match");
+            }
         }
     }
 
@@ -399,6 +402,7 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
     ) public view returns (bool) {
         require(verifier.code.length > 0, "Address: call to non-contract");
         attestData(getInstancesCalldata(encoded));
+        require(checkKzgCommits(encoded), "Invalid KZG commitments");
         // static call the verifier contract to verify the proof
         (bool success, bytes memory returndata) = verifier.staticcall(encoded);
 
@@ -451,6 +455,8 @@ contract DataAttestationMulti is LoadInstances, SwapProofCommitments {
         uint256(
             0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
         );
+
+    uint256 constant HALF_ORDER = ORDER >> 1;
 
     uint256 constant INPUT_CALLS = 0;
 
@@ -596,6 +602,9 @@ contract DataAttestationMulti is LoadInstances, SwapProofCommitments {
         if (mulmod(uint256(x), scale, decimals) * 2 >= decimals) {
             output += 1;
         }
+        // if (output > HALF_ORDER) {
+        //     revert("Overflow field modulus");
+        // }
         quantized_data = neg ? -int256(output) : int256(output);
     }
     /**

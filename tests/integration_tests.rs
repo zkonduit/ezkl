@@ -1050,7 +1050,8 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, hardfork);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private", "private");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private", "private", false);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "private", "private", true);
                     // test_dir.close().unwrap();
                 }
 
@@ -1060,7 +1061,8 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public", "private");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public", "private", false);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public", "private", true);
                     // test_dir.close().unwrap();
                 }
 
@@ -1070,7 +1072,8 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "public", "public", "private");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "public", "public", "private", false);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "public", "public", "private", true);
                     test_dir.close().unwrap();
                 }
 
@@ -1080,7 +1083,8 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed", "private");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed", "private", false);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "on-chain", "hashed", "hashed", "private", true);
                     test_dir.close().unwrap();
                 }
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
@@ -1089,7 +1093,8 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "polycommit", "polycommit");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "polycommit", "polycommit", false);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "on-chain", "file", "public", "polycommit", "polycommit", true);
                     test_dir.close().unwrap();
                 }
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
@@ -1098,7 +1103,8 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "polycommit", "public", "polycommit");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "polycommit", "public", "polycommit", false);
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "polycommit", "public", "polycommit", true);
                     test_dir.close().unwrap();
                 }
                 #(#[test_case(TESTS_ON_CHAIN_INPUT[N])])*
@@ -1107,7 +1113,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "file", "polycommit", "polycommit", "polycommit");
+                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "file", "polycommit", "polycommit", "polycommit", false);
                     test_dir.close().unwrap();
                 }
             });
@@ -2477,6 +2483,7 @@ mod native_tests {
         input_visibility: &str,
         output_visibility: &str,
         param_visibility: &str,
+        single_call: bool,
     ) {
         gen_circuit_settings_and_witness(
             test_dir,
@@ -2581,20 +2588,24 @@ mod native_tests {
                 ));
             }
             input.save(data_path.clone().into()).unwrap();
+            let mut args = vec![
+                "setup-test-evm-data",
+                "-D",
+                data_path.as_str(),
+                "-M",
+                &model_path,
+                "--test-data",
+                test_on_chain_data_path.as_str(),
+                rpc_arg.as_str(),
+                test_input_source.as_str(),
+                test_output_source.as_str(),
+            ];
+            if single_call {
+                args.push("--single-call");
+            }
 
             let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args([
-                    "setup-test-evm-data",
-                    "-D",
-                    data_path.as_str(),
-                    "-M",
-                    &model_path,
-                    "--test-data",
-                    test_on_chain_data_path.as_str(),
-                    rpc_arg.as_str(),
-                    test_input_source.as_str(),
-                    test_output_source.as_str(),
-                ])
+                .args(args)
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
@@ -2742,19 +2753,23 @@ mod native_tests {
         assert!(status.success());
         // Create a new set of test on chain data only for the on-chain input source
         if input_source != "file" || output_source != "file" {
+            let mut args = vec![
+                "setup-test-evm-data",
+                "-D",
+                data_path.as_str(),
+                "-M",
+                &model_path,
+                "--test-data",
+                test_on_chain_data_path.as_str(),
+                rpc_arg.as_str(),
+                test_input_source.as_str(),
+                test_output_source.as_str(),
+            ];
+            if single_call {
+                args.push("--single-call");
+            };
             let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args([
-                    "setup-test-evm-data",
-                    "-D",
-                    data_path.as_str(),
-                    "-M",
-                    &model_path,
-                    "--test-data",
-                    test_on_chain_data_path.as_str(),
-                    rpc_arg.as_str(),
-                    test_input_source.as_str(),
-                    test_output_source.as_str(),
-                ])
+                .args(args)
                 .status()
                 .expect("failed to execute process");
 

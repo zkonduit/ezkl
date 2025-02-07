@@ -263,9 +263,11 @@ impl OnChainSource {
         scales: Vec<crate::Scale>,
         mut shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
+        single: bool,
     ) -> Result<(Vec<Tensor<Fp>>, Self), GraphError> {
         use crate::eth::{
-            evm_quantize_multi, read_on_chain_inputs_multi, test_on_chain_data,
+            evm_quantize_multi, evm_quantize_single, read_on_chain_inputs_multi,
+            read_on_chain_inputs_single, test_on_chain_data_multi, test_on_chain_data_single,
             DEFAULT_ANVIL_ENDPOINT,
         };
         use log::debug;
@@ -281,30 +283,57 @@ impl OnChainSource {
                 shapes[idx] = vec![i.len()];
             }
         }
-
-        let calls_to_accounts = test_on_chain_data(client.clone(), data).await?;
-        debug!("Calls to accounts: {:?}", calls_to_accounts);
-        let inputs =
-            read_on_chain_inputs_multi(client.clone(), client_address, &calls_to_accounts).await?;
-        debug!("Inputs: {:?}", inputs);
-
         let mut quantized_evm_inputs = vec![];
+        let used_rpc = rpc.unwrap_or(DEFAULT_ANVIL_ENDPOINT).to_string();
 
-        let mut prev = 0;
-        for (idx, i) in data.iter().enumerate() {
-            quantized_evm_inputs.extend(
-                evm_quantize_multi(
-                    client.clone(),
-                    vec![scales[idx]; i.len()],
-                    &(
-                        inputs.0[prev..i.len()].to_vec(),
-                        inputs.1[prev..i.len()].to_vec(),
-                    ),
-                )
-                .await?,
-            );
-            prev += i.len();
-        }
+        let source: Self = if single {
+            let call_to_account = test_on_chain_data_single(client.clone(), data).await?;
+            debug!("Call to account: {:?}", call_to_account);
+            let inputs = read_on_chain_inputs_single(
+                client.clone(),
+                client_address,
+                call_to_account.clone(),
+            )
+            .await?;
+            debug!("Inputs: {:?}", inputs);
+
+            for (idx, i) in data.iter().enumerate() {
+                quantized_evm_inputs.extend(
+                    evm_quantize_single(
+                        client.clone(),
+                        vec![scales[idx]; i.len()],
+                        &inputs.0,
+                        inputs.1,
+                    )
+                    .await?,
+                );
+            }
+            OnChainSource::new_single(call_to_account, used_rpc)
+        } else {
+            let calls_to_accounts = test_on_chain_data_multi(client.clone(), data).await?;
+            debug!("Calls to accounts: {:?}", calls_to_accounts);
+            let inputs =
+                read_on_chain_inputs_multi(client.clone(), client_address, &calls_to_accounts)
+                    .await?;
+            debug!("Inputs: {:?}", inputs);
+
+            let mut prev = 0;
+            for (idx, i) in data.iter().enumerate() {
+                quantized_evm_inputs.extend(
+                    evm_quantize_multi(
+                        client.clone(),
+                        vec![scales[idx]; i.len()],
+                        &(
+                            inputs.0[prev..i.len()].to_vec(),
+                            inputs.1[prev..i.len()].to_vec(),
+                        ),
+                    )
+                    .await?,
+                );
+                prev += i.len();
+            }
+            OnChainSource::new_multiple(calls_to_accounts.clone(), used_rpc)
+        };
 
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<Fp>> = vec![];
@@ -314,13 +343,8 @@ impl OnChainSource {
             inputs.push(t);
         }
 
-        let used_rpc = rpc.unwrap_or(DEFAULT_ANVIL_ENDPOINT).to_string();
-
         // Fill the input_data field of the GraphData struct
-        Ok((
-            inputs,
-            OnChainSource::new_multiple(calls_to_accounts.clone(), used_rpc),
-        ))
+        Ok((inputs, source))
     }
 }
 

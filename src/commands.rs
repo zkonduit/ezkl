@@ -92,6 +92,8 @@ pub const DEFAULT_ONLY_RANGE_CHECK_REBASE: &str = "false";
 pub const DEFAULT_COMMITMENT: &str = "kzg";
 /// Default seed used to generate random data
 pub const DEFAULT_SEED: &str = "21242";
+/// Default single call
+pub const DEFAULT_SINGLE_CALL: &str = "false";
 
 #[cfg(feature = "python-bindings")]
 /// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
@@ -645,6 +647,9 @@ pub enum Commands {
         /// where the output data come from
         #[arg(long, default_value = "on-chain", value_hint = clap::ValueHint::Other)]
         output_source: TestDataSource,
+        /// Whether to generate test data for single call or multiple calls
+        #[arg(long, default_value = DEFAULT_SINGLE_CALL, action = clap::ArgAction::SetTrue)]
+        single_call: Option<bool>,
     },
     /// The Data Attestation Verifier contract stores the account calls to fetch data to feed into ezkl. This call data can be updated by an admin account. This tests that admin account is able to update this call data.
     #[command(arg_required_else_help = true)]

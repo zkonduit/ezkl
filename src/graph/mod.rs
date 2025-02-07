@@ -1433,6 +1433,7 @@ impl GraphCircuit {
         &mut self,
         data: &mut GraphData,
         test_on_chain_data: TestOnChainData,
+        single: bool,
     ) -> Result<(), GraphError> {
         // Set up local anvil instance for reading on-chain data
 
@@ -1464,6 +1465,7 @@ impl GraphCircuit {
                 input_scales,
                 input_shapes,
                 test_on_chain_data.rpc.as_deref(),
+                single,
             )
             .await?;
             data.input_data = datam.1.into();
@@ -1487,6 +1489,7 @@ impl GraphCircuit {
                 output_scales,
                 output_shapes,
                 test_on_chain_data.rpc.as_deref(),
+                single,
             )
             .await?;
             data.output_data = Some(datum.1.into());
