@@ -1,5 +1,6 @@
 use crate::circuit::ops::poly::PolyOp;
 use crate::circuit::*;
+use crate::tensor::{DataFormat, KernelFormat};
 use crate::tensor::{Tensor, TensorType, ValTensor, VarTensor};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -1065,6 +1066,8 @@ mod conv {
                                     padding: vec![(1, 1); 2],
                                     stride: vec![2; 2],
                                     group: 1,
+                                    data_format: DataFormat::default(),
+                                    kernel_format: KernelFormat::default(),
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1220,6 +1223,8 @@ mod conv_col_ultra_overflow {
                                     padding: vec![(1, 1); 2],
                                     stride: vec![2; 2],
                                     group: 1,
+                                    data_format: DataFormat::default(),
+                                    kernel_format: KernelFormat::default(),
                                 }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -1377,6 +1382,8 @@ mod conv_relu_col_ultra_overflow {
                                     padding: vec![(1, 1); 2],
                                     stride: vec![2; 2],
                                     group: 1,
+                                    data_format: DataFormat::default(),
+                                    kernel_format: KernelFormat::default(),
                                 }),
                             )
                             .map_err(|_| Error::Synthesis);

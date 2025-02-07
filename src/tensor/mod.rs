@@ -9,6 +9,7 @@ pub mod var;
 
 pub use errors::TensorError;
 
+use core::hash::Hash;
 use halo2curves::ff::PrimeField;
 use maybe_rayon::{
     prelude::{
@@ -1767,6 +1768,193 @@ pub fn get_broadcasted_shape(
     }
 }
 ////////////////////////
+///
+
+/// The shape of data for some operations
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Copy)]
+pub enum DataFormat {
+    /// NCHW
+    NCHW,
+    /// NHWC
+    #[default]
+    NHWC,
+    /// CHW
+    CHW,
+    /// HWC
+    HWC,
+}
+
+// as str
+impl core::fmt::Display for DataFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataFormat::NCHW => write!(f, "NCHW"),
+            DataFormat::NHWC => write!(f, "NHWC"),
+            DataFormat::CHW => write!(f, "CHW"),
+            DataFormat::HWC => write!(f, "HWC"),
+        }
+    }
+}
+
+impl DataFormat {
+    /// Invert the representation to the default of NCHW or CHW
+    /// return the new representation
+    pub fn invert_rep_to_default<F: PrimeField + TensorType + PartialOrd + Hash>(
+        &self,
+        tensor: &mut ValTensor<F>,
+    ) -> Result<DataFormat, TensorError> {
+        match self {
+            DataFormat::NHWC => {
+                // move axis 3 to 1 we now have NCHW
+                tensor.move_axis(3, 1)?;
+                Ok(DataFormat::NCHW)
+            }
+            DataFormat::HWC => {
+                // move axis 2 to 0 we now have CHW
+                tensor.move_axis(2, 0)?;
+                Ok(DataFormat::CHW)
+            }
+            _ => {
+                // no change
+                Ok(self.clone())
+            }
+        }
+    }
+
+    /// Match the representation to the target
+    ///
+    pub fn match_rep_to_target<F: PrimeField + TensorType + PartialOrd + Hash>(
+        &self,
+        target: &DataFormat,
+        tensor: &mut ValTensor<F>,
+    ) -> Result<(), TensorError> {
+        if self == target {
+            return Ok(());
+        }
+        match self {
+            DataFormat::NHWC => {
+                if target == &DataFormat::NCHW {
+                    self.invert_rep_to_default(tensor)?;
+                } else {
+                    return Err(TensorError::InvalidDataConversion(
+                        self.clone(),
+                        target.clone(),
+                    ));
+                }
+            }
+            DataFormat::HWC => {
+                if target == &DataFormat::CHW {
+                    self.invert_rep_to_default(tensor)?;
+                } else {
+                    return Err(TensorError::InvalidDataConversion(
+                        self.clone(),
+                        target.clone(),
+                    ));
+                }
+            }
+            DataFormat::CHW => {
+                if target == &DataFormat::HWC {
+                    // move axis 0 to 2 we now have HWC
+                    tensor.move_axis(0, 2)?;
+                } else {
+                    return Err(TensorError::InvalidDataConversion(
+                        self.clone(),
+                        target.clone(),
+                    ));
+                }
+            }
+            DataFormat::NCHW => {
+                if target == &DataFormat::NHWC {
+                    // move axis 1 to 3 we now have NHWC
+                    tensor.move_axis(1, 3)?;
+                } else {
+                    return Err(TensorError::InvalidDataConversion(
+                        self.clone(),
+                        target.clone(),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The shape of the kernel for some operations
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Copy)]
+pub enum KernelFormat {
+    /// HWIO
+    HWIO,
+    /// OIHW
+    #[default]
+    OIHW,
+    /// OHWI
+    OHWI,
+}
+
+impl core::fmt::Display for KernelFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KernelFormat::HWIO => write!(f, "HWIO"),
+            KernelFormat::OIHW => write!(f, "OIHW"),
+            KernelFormat::OHWI => write!(f, "OHWI"),
+        }
+    }
+}
+
+impl KernelFormat {
+    /// Invert the representation to the default of OIHW
+    pub fn invert_rep_to_default<F: PrimeField + TensorType + PartialOrd + Hash>(
+        &self,
+        tensor: &mut ValTensor<F>,
+    ) -> Result<KernelFormat, TensorError> {
+        match self {
+            KernelFormat::HWIO => {
+                // move axis 3 to 0 we now have OHWI
+                tensor.move_axis(3, 0)?;
+                KernelFormat::OHWI.invert_rep_to_default(tensor)?;
+                Ok(KernelFormat::OIHW)
+            }
+            KernelFormat::OHWI => {
+                // move axis 3 to 1 we now have OIHW
+                tensor.move_axis(3, 1)?;
+                Ok(KernelFormat::OIHW)
+            }
+            _ => {
+                // no change
+                Ok(self.clone())
+            }
+        }
+    }
+}
+
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+impl From<tract_onnx::tract_hir::ops::nn::DataFormat> for DataFormat {
+    fn from(fmt: tract_onnx::tract_hir::ops::nn::DataFormat) -> Self {
+        match fmt {
+            tract_onnx::tract_hir::ops::nn::DataFormat::NCHW => DataFormat::NCHW,
+            tract_onnx::tract_hir::ops::nn::DataFormat::NHWC => DataFormat::NHWC,
+            tract_onnx::tract_hir::ops::nn::DataFormat::CHW => DataFormat::CHW,
+            tract_onnx::tract_hir::ops::nn::DataFormat::HWC => DataFormat::HWC,
+        }
+    }
+}
+
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+impl From<tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat> for KernelFormat {
+    fn from(fmt: tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat) -> Self {
+        match fmt {
+            tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat::HWIO => {
+                KernelFormat::HWIO
+            }
+            tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat::OIHW => {
+                KernelFormat::OIHW
+            }
+            tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat::OHWI => {
+                KernelFormat::OHWI
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
