@@ -23,8 +23,6 @@ use halo2curves::bn256::{Bn256, Fr};
 use rand::rngs::OsRng;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
-const L: usize = 10;
-
 #[derive(Clone, Debug)]
 struct MyCircuit {
     image: ValTensor<Fr>,
@@ -40,7 +38,7 @@ impl Circuit<Fr> for MyCircuit {
     }
 
     fn configure(cs: &mut ConstraintSystem<Fr>) -> Self::Config {
-        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, 10>::configure(cs, ())
+        PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::configure(cs, ())
     }
 
     fn synthesize(
@@ -48,7 +46,7 @@ impl Circuit<Fr> for MyCircuit {
         config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        let chip: PoseidonChip<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, L> =
+        let chip: PoseidonChip<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE> =
             PoseidonChip::new(config);
         chip.layout(&mut layouter, &[self.image.clone()], 0, &mut HashMap::new())?;
         Ok(())
@@ -59,7 +57,7 @@ fn runposeidon(c: &mut Criterion) {
     let mut group = c.benchmark_group("poseidon");
 
     for size in [64, 784, 2352, 12288].iter() {
-        let k = (PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, L>::num_rows(*size)
+        let k = (PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::num_rows(*size)
             as f32)
             .log2()
             .ceil() as u32;
@@ -67,7 +65,7 @@ fn runposeidon(c: &mut Criterion) {
 
         let message = (0..*size).map(|_| Fr::random(OsRng)).collect::<Vec<_>>();
         let _output =
-            PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE, L>::run(message.to_vec())
+            PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::run(message.to_vec())
                 .unwrap();
 
         let mut image = Tensor::from(message.into_iter().map(Value::known));
