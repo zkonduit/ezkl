@@ -597,7 +597,7 @@ fn poseidon_hash(message: Vec<PyFelt>) -> PyResult<Vec<PyFelt>> {
 /// Arguments
 /// -------
 /// message: list[str]
-///     List of field elements represnted as strings
+///     List of field elements represented as strings
 ///
 /// vk_path: str
 ///     Path to the verification key
@@ -656,7 +656,7 @@ fn kzg_commit(
 /// Arguments
 /// -------
 /// message: list[str]
-///     List of field elements represnted as strings
+///     List of field elements represented as strings
 ///
 /// vk_path: str
 ///     Path to the verification key
@@ -1950,7 +1950,7 @@ fn deploy_da_evm(
 ///     does the verifier use data attestation ?
 ///
 /// addr_vk: str
-///     The addess of the separate VK contract (if the verifier key is rendered as a separate contract)
+///     The address of the separate VK contract (if the verifier key is rendered as a separate contract)
 /// Returns
 /// -------
 /// bool
