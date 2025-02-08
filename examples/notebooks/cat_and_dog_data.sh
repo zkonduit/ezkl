@@ -1,7 +1,7 @@
 # download tess data
 # check if first argument has been set 
 if [ ! -z "$1" ]; then
-    DATA_DIR=$1/data
+    DATA_DIR=$1
 else
     DATA_DIR=data
 fi
