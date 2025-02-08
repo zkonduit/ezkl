@@ -1634,7 +1634,10 @@ mod native_tests {
                 "--settings-path={}/{}/settings.json",
                 test_dir, example_name
             ),
-            format!("--variables=batch_size->{}", batch_size),
+            format!(
+                "--variables=batch_size->{},sequence_length->100,<Sym1>->1",
+                batch_size
+            ),
             format!("--input-visibility={}", input_visibility),
             format!("--param-visibility={}", param_visibility),
             format!("--output-visibility={}", output_visibility),
