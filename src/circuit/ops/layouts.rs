@@ -3226,6 +3226,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// use ezkl::tensor::ValTensor;
+/// use ezkl::tensor::DataFormat;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
@@ -3235,12 +3236,12 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
-/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x.clone()], &vec![(0, 0); 2], &vec![1;2], &vec![2, 2], false).unwrap();
+/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x.clone()], &vec![(0, 0); 2], &vec![1;2], &vec![2, 2], false, DataFormat::default()).unwrap();
 /// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[11, 8, 8, 10]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 ///
 /// // This time with normalization
-/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2],  &vec![2, 2], true).unwrap();
+/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2],  &vec![2, 2], true, DataFormat::default()).unwrap();
 /// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[3, 2, 2, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 /// ```
@@ -3256,6 +3257,12 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut image = values[0].clone();
     data_format.to_canonical(&mut image)?;
+
+    if data_format.has_no_batch() {
+        let mut dims = image.dims().to_vec();
+        dims.insert(0, 1);
+        image.reshape(&dims)?;
+    }
 
     let batch_size = image.dims()[0];
     let image_channels = image.dims()[1];
@@ -3319,6 +3326,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::max_pool;
+/// use ezkl::tensor::DataFormat;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
 /// use ezkl::circuit::region::RegionSettings;
@@ -3333,7 +3341,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
-/// let pooled = max_pool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2], &vec![2;2]).unwrap();
+/// let pooled = max_pool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2], &vec![2;2], DataFormat::default()).unwrap();
 /// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[5, 4, 4, 6]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 ///
@@ -3349,6 +3357,12 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut image = values[0].clone();
     data_format.to_canonical(&mut image)?;
+
+    if data_format.has_no_batch() {
+        let mut dims = image.dims().to_vec();
+        dims.insert(0, 1);
+        image.reshape(&dims)?;
+    }
 
     let image_dims = image.dims();
 

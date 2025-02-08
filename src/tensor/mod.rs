@@ -1774,9 +1774,9 @@ pub fn get_broadcasted_shape(
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Copy)]
 pub enum DataFormat {
     /// NCHW
+    #[default]
     NCHW,
     /// NHWC
-    #[default]
     NHWC,
     /// CHW
     CHW,
