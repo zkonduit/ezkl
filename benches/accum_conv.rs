@@ -73,6 +73,8 @@ impl Circuit<Fr> for MyCircuit {
                             padding: vec![(0, 0)],
                             stride: vec![1; 2],
                             group: 1,
+                            data_format: DataFormat::NCHW,
+                            kernel_format: KernelFormat::OIHW,
                         }),
                     )
                     .unwrap();

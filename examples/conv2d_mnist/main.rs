@@ -31,6 +31,7 @@ use instant::Instant;
 use mnist::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
+use tract_onnx::tract_core::ndarray::Data;
 
 mod params;
 
@@ -208,6 +209,8 @@ where
                         padding: vec![(PADDING, PADDING); 2],
                         stride: vec![STRIDE; 2],
                         group: 1,
+                        data_format: DataFormat::NCHW,
+                        kernel_format: KernelFormat::OIHW,
                     };
                     let x = config
                         .layer_config
