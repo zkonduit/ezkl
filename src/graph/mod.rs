@@ -455,6 +455,10 @@ pub struct GraphSettings {
     pub num_blinding_factors: Option<usize>,
     /// unix time timestamp
     pub timestamp: Option<u128>,
+    /// Model inputs types (if any)
+    pub input_types: Option<Vec<InputType>>,
+    /// Model outputs types (if any)
+    pub output_types: Option<Vec<InputType>>,
 }
 
 impl GraphSettings {

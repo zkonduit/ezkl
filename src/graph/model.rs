@@ -379,9 +379,15 @@ pub struct ParsedNodes {
     pub nodes: BTreeMap<usize, NodeType>,
     inputs: Vec<usize>,
     outputs: Vec<Outlet>,
+    output_types: Vec<InputType>,
 }
 
 impl ParsedNodes {
+    /// Returns the output types of the computational graph.
+    pub fn get_output_types(&self) -> Vec<InputType> {
+        self.output_types.clone()
+    }
+
     /// Returns the number of the computational graph's inputs
     pub fn num_inputs(&self) -> usize {
         self.inputs.len()
@@ -491,6 +497,16 @@ impl Model {
         Ok(om)
     }
 
+    /// Gets the input types from the parsed nodes
+    pub fn get_input_types(&self) -> Result<Vec<InputType>, GraphError> {
+        self.graph.get_input_types()
+    }
+
+    /// Gets the output types from the parsed nodes
+    pub fn get_output_types(&self) -> Vec<InputType> {
+        self.graph.get_output_types()
+    }
+
     ///
     pub fn save(&self, path: PathBuf) -> Result<(), GraphError> {
         let f = std::fs::File::create(&path).map_err(|e| {
@@ -574,6 +590,11 @@ impl Model {
             required_range_checks: res.range_checks.into_iter().collect(),
             model_output_scales: self.graph.get_output_scales()?,
             model_input_scales: self.graph.get_input_scales(),
+            input_types: match self.get_input_types() {
+                Ok(x) => Some(x),
+                Err(_) => None,
+            },
+            output_types: Some(self.get_output_types()),
             num_dynamic_lookups: res.num_dynamic_lookups,
             total_dynamic_col_size: res.dynamic_lookup_col_coord,
             num_shuffles: res.num_shuffles,
@@ -704,6 +725,11 @@ impl Model {
             nodes,
             inputs: model.inputs.iter().map(|o| o.node).collect(),
             outputs: model.outputs.iter().map(|o| (o.node, o.slot)).collect(),
+            output_types: model
+                .outputs
+                .iter()
+                .map(|o| Ok::<InputType, GraphError>(model.outlet_fact(*o)?.datum_type.into()))
+                .collect::<Result<Vec<_>, GraphError>>()?,
         };
 
         let duration = start_time.elapsed();
@@ -862,6 +888,15 @@ impl Model {
                         nodes: subgraph_nodes,
                         inputs: model.inputs.iter().map(|o| o.node).collect(),
                         outputs: model.outputs.iter().map(|o| (o.node, o.slot)).collect(),
+                        output_types: model
+                            .outputs
+                            .iter()
+                            .map(|o| {
+                                Ok::<InputType, GraphError>(
+                                    model.outlet_fact(*o)?.datum_type.into(),
+                                )
+                            })
+                            .collect::<Result<Vec<_>, GraphError>>()?,
                     };
 
                     let om = Model {
@@ -1578,5 +1613,17 @@ impl Model {
             instance_shapes.extend(self.graph.output_shapes()?);
         }
         Ok(instance_shapes)
+    }
+
+    /// Input types of the computational graph's public inputs (if any)
+    pub fn instance_types(&self) -> Result<Vec<InputType>, GraphError> {
+        let mut instance_types = vec![];
+        if self.visibility.input.is_public() {
+            instance_types.extend(self.graph.get_input_types()?);
+        }
+        if self.visibility.output.is_public() {
+            instance_types.extend(self.graph.get_output_types());
+        }
+        Ok(instance_types)
     }
 }
