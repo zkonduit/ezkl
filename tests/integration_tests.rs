@@ -966,7 +966,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=6 {
+            seq!(N in 0..=7 {
 
             #(#[test_case(LARGE_TESTS[N])])*
             #[ignore]

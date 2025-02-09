@@ -873,7 +873,8 @@ def get_examples():
         'linear_regression',
         "mnist_gan",
         "smallworm",
-        "fr_age"
+        "fr_age",
+        "1d_conv",
     ]
     examples = []
     for subdir, _, _ in os.walk(os.path.join(examples_path, "onnx")):
