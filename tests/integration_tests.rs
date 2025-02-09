@@ -1644,6 +1644,7 @@ mod native_tests {
             format!("--num-inner-cols={}", num_inner_columns),
             format!("--tolerance={}", tolerance),
             format!("--commitment={}", commitment),
+            format!("--logrows={}", 22),
         ];
 
         // if output-visibility is fixed set --range-check-inputs-outputs to False
