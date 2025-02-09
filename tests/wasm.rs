@@ -337,7 +337,7 @@ mod wasm32 {
         // Run compiled circuit validation on onnx network (should fail)
         let circuit = compiledCircuitValidation(wasm_bindgen::Clamped(NETWORK.to_vec()));
         assert!(circuit.is_err());
-        // Run compiled circuit validation on comiled network (should pass)
+        // Run compiled circuit validation on compiled network (should pass)
         let circuit = compiledCircuitValidation(wasm_bindgen::Clamped(NETWORK_COMPILED.to_vec()));
         assert!(circuit.is_ok());
         // Run input validation on witness (should fail)

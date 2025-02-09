@@ -349,7 +349,7 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .into()
     };
     claimed_output.reshape(input_dims)?;
-    // force the output to be positive or zero, also implicitly checks that the ouput is in range
+    // force the output to be positive or zero, also implicitly checks that the output is in range
     let claimed_output = abs(config, region, &[claimed_output.clone()])?;
     // rescaled input
     let rescaled_input = pairwise(config, region, &[input.clone(), unit_scale], BaseOp::Mult)?;
@@ -1841,7 +1841,7 @@ pub(crate) fn get_missing_set_elements<
 
         // get the difference between the two vectors
         for eval in input_evals.iter() {
-            // delete first occurence of that value
+            // delete first occurrence of that value
             if let Some(pos) = fullset_evals.iter().position(|x| x == eval) {
                 fullset_evals.remove(pos);
             }
@@ -1869,7 +1869,7 @@ pub(crate) fn get_missing_set_elements<
     region.increment(claimed_output.len());
 
     // input and claimed output should be the shuffles of fullset
-    // concatentate input and claimed output
+    // concatenate input and claimed output
     let input_and_claimed_output = input.concat(claimed_output.clone())?;
 
     // assert that this is a permutation/shuffle
@@ -3396,7 +3396,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Performs a deconvolution on the given input tensor.
 /// # Examples
 /// ```
-// // expected ouputs are taken from pytorch torch.nn.functional.conv_transpose2d
+// // expected outputs are taken from pytorch torch.nn.functional.conv_transpose2d
 ///
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
@@ -3624,7 +3624,7 @@ pub fn deconv<
 
 /// Applies convolution over a ND tensor of shape C x H x D1...DN (and adds a bias).
 /// ```
-/// // expected ouputs are taken from pytorch torch.nn.functional.conv2d
+/// // expected outputs are taken from pytorch torch.nn.functional.conv2d
 ///
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
@@ -3908,7 +3908,7 @@ pub(crate) fn rescale<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     Ok(rescaled_inputs)
 }
 
-/// Dummy (no contraints) reshape layout
+/// Dummy (no constraints) reshape layout
 pub(crate) fn reshape<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     values: &[ValTensor<F>; 1],
     new_dims: &[usize],
@@ -3918,7 +3918,7 @@ pub(crate) fn reshape<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     Ok(t)
 }
 
-/// Dummy (no contraints) move_axis layout
+/// Dummy (no constraints) move_axis layout
 pub(crate) fn move_axis<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     values: &[ValTensor<F>; 1],
     source: usize,
