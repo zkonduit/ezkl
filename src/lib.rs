@@ -100,7 +100,6 @@ use std::str::FromStr;
 use circuit::{table::Range, CheckMode, Tolerance};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::Args;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use fieldutils::IntegerRep;
 use graph::{Visibility, MAX_PUBLIC_SRS};
 use halo2_proofs::poly::{
