@@ -156,25 +156,6 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     claimed_output.reshape(input_dims)?;
     // implicitly check if the prover provided output is within range
     let claimed_output = identity(config, region, &[claimed_output], true)?;
-    // check if x is too large only if the decomp would support overflow in the previous op
-    if F::from_u128(IntegerRep::MAX as u128)
-        < F::from_u128(region.base() as u128).pow([region.legs() as u64]) - F::ONE
-    {
-        // here we decompose and extract the sign of the input
-        let sign = sign(config, region, &[claimed_output.clone()])?;
-
-        let abs_value = pairwise(
-            config,
-            region,
-            &[claimed_output.clone(), sign],
-            BaseOp::Mult,
-        )?;
-        let max_val = create_constant_tensor(integer_rep_to_felt(IntegerRep::MAX), 1);
-        let less_than_max = less(config, region, &[abs_value.clone(), max_val])?;
-        // assert the result is 1
-        let comparison_unit = create_constant_tensor(F::ONE, less_than_max.len());
-        enforce_equality(config, region, &[abs_value, comparison_unit])?;
-    }
 
     let product = pairwise(
         config,
@@ -247,32 +228,6 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         region,
         &[equal_zero_mask.clone(), equal_inverse_mask],
     )?;
-
-    let masked_output = pairwise(
-        config,
-        region,
-        &[claimed_output.clone(), not_equal_zero_mask.clone()],
-        BaseOp::Mult,
-    )?;
-
-    // check if x is too large only if the decomp would support overflow in the previous op
-    if F::from_u128(IntegerRep::MAX as u128)
-        < F::from_u128(region.base() as u128).pow([region.legs() as u64]) - F::ONE
-    {
-        // here we decompose and extract the sign of the input
-        let sign = sign(config, region, &[masked_output.clone()])?;
-        let abs_value = pairwise(
-            config,
-            region,
-            &[claimed_output.clone(), sign],
-            BaseOp::Mult,
-        )?;
-        let max_val = create_constant_tensor(integer_rep_to_felt(IntegerRep::MAX), 1);
-        let less_than_max = less(config, region, &[abs_value.clone(), max_val])?;
-        // assert the result is 1
-        let comparison_unit = create_constant_tensor(F::ONE, less_than_max.len());
-        enforce_equality(config, region, &[abs_value, comparison_unit])?;
-    }
 
     let err_func = |config: &BaseConfig<F>,
                     region: &mut RegionCtx<F>,
