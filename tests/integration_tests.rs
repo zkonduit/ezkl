@@ -187,7 +187,7 @@ mod native_tests {
 
     const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr_proof.json";
 
-    const LARGE_TESTS: [&str; 7] = [
+    const LARGE_TESTS: [&str; 8] = [
         "self_attention",
         "nanoGPT",
         "multihead_attention",
@@ -195,6 +195,7 @@ mod native_tests {
         "mnist_gan",
         "smallworm",
         "fr_age",
+        "1d_conv",
     ];
 
     const ACCURACY_CAL_TESTS: [&str; 6] = [
@@ -206,7 +207,7 @@ mod native_tests {
         "1l_tiny_div",
     ];
 
-    const TESTS: [&str; 100] = [
+    const TESTS: [&str; 99] = [
         "1l_mlp",     //0
         "1l_slice",   //1
         "1l_concat",  //2
@@ -310,7 +311,6 @@ mod native_tests {
         "exp",         // 96
         "general_exp", // 97
         "integer_div", // 98
-        "1d_conv",     // 99
     ];
 
     const WASM_TESTS: [&str; 46] = [
@@ -549,7 +549,7 @@ mod native_tests {
             }
         });
 
-            seq!(N in 0..=99 {
+            seq!(N in 0..=98 {
 
             #(#[test_case(TESTS[N])])*
             #[ignore]
@@ -1730,7 +1730,6 @@ mod native_tests {
                     test_dir, example_name
                 ),
             ])
-            .stdout(std::process::Stdio::null())
             .status()
             .expect("failed to execute process");
         assert!(status.success());
