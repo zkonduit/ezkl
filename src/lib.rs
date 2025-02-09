@@ -401,7 +401,7 @@ impl RunArgs {
 
         // check if the largest represented integer in the decomposed form overflows IntegerRep
         //  try it with the largest possible value
-        let max_decomp = self.decomp_base.checked_pow(self.decomp_legs as u32);
+        let max_decomp = (self.decomp_base as IntegerRep).checked_pow(self.decomp_legs as u32);
         if max_decomp.is_none() {
             errors.push(format!(
                 "decomp_base^decomp_legs overflows IntegerRep: {}^{}",
