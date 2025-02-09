@@ -905,7 +905,7 @@ async def test_all_examples(model_file, input_file):
     run_args.variables = [("batch_size", 1), ("sequence_length", 100), ("<Sym1>", 1)]
     run_args.logrows = 22
 
-    res = ezkl.gen_settings(model_file, settings_path)
+    res = ezkl.gen_settings(model_file, settings_path, py_run_args=run_args)
     assert res
 
     res = await ezkl.calibrate_settings(
