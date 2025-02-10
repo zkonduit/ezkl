@@ -162,7 +162,7 @@ contract SwapProofCommitments {
                 let wordCommitment := mload(add(commitment, i))
                 equal := eq(wordProof, wordCommitment)
                 if eq(equal, 0) {
-                    return(0, 0)
+                    break
                 }
             }
         }
