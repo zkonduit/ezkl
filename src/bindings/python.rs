@@ -156,9 +156,6 @@ impl pyo3::ToPyObject for PyG1Affine {
 #[gen_stub_pyclass]
 struct PyRunArgs {
     #[pyo3(get, set)]
-    /// float: The tolerance for error on model outputs
-    pub tolerance: f32,
-    #[pyo3(get, set)]
     /// int: The denominator in the fixed point representation used when quantizing inputs
     pub input_scale: crate::Scale,
     #[pyo3(get, set)]
@@ -225,7 +222,6 @@ impl From<PyRunArgs> for RunArgs {
     fn from(py_run_args: PyRunArgs) -> Self {
         RunArgs {
             bounded_log_lookup: py_run_args.bounded_log_lookup,
-            tolerance: Tolerance::from(py_run_args.tolerance),
             input_scale: py_run_args.input_scale,
             param_scale: py_run_args.param_scale,
             num_inner_cols: py_run_args.num_inner_cols,
@@ -250,7 +246,6 @@ impl Into<PyRunArgs> for RunArgs {
     fn into(self) -> PyRunArgs {
         PyRunArgs {
             bounded_log_lookup: self.bounded_log_lookup,
-            tolerance: self.tolerance.val,
             input_scale: self.input_scale,
             param_scale: self.param_scale,
             num_inner_cols: self.num_inner_cols,
