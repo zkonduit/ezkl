@@ -85,55 +85,6 @@ impl CheckMode {
     }
 }
 
-#[allow(missing_docs)]
-/// An enum representing the tolerance we can accept for the accumulated arguments, either absolute or percentage
-#[derive(Clone, Default, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Copy)]
-pub struct Tolerance {
-    pub val: f32,
-    pub scale: utils::F32,
-}
-
-impl std::fmt::Display for Tolerance {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:.2}", self.val)
-    }
-}
-
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-impl ToFlags for Tolerance {
-    /// Convert the struct to a subcommand string
-    fn to_flags(&self) -> Vec<String> {
-        vec![format!("{}", self)]
-    }
-}
-
-impl FromStr for Tolerance {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(val) = s.parse::<f32>() {
-            Ok(Tolerance {
-                val,
-                scale: utils::F32(1.0),
-            })
-        } else {
-            Err(
-                "Invalid tolerance value provided. It should expressed as a percentage (f32)."
-                    .to_string(),
-            )
-        }
-    }
-}
-
-impl From<f32> for Tolerance {
-    fn from(value: f32) -> Self {
-        Tolerance {
-            val: value,
-            scale: utils::F32(1.0),
-        }
-    }
-}
-
 #[cfg(feature = "python-bindings")]
 /// Converts CheckMode into a PyObject (Required for CheckMode to be compatible with Python)
 impl IntoPy<PyObject> for CheckMode {
@@ -154,29 +105,6 @@ impl<'source> FromPyObject<'source> for CheckMode {
             "safe" => Ok(CheckMode::SAFE),
             "unsafe" => Ok(CheckMode::UNSAFE),
             _ => Err(PyValueError::new_err("Invalid value for CheckMode")),
-        }
-    }
-}
-
-#[cfg(feature = "python-bindings")]
-/// Converts Tolerance into a PyObject (Required for Tolerance to be compatible with Python)
-impl IntoPy<PyObject> for Tolerance {
-    fn into_py(self, py: Python) -> PyObject {
-        (self.val, self.scale.0).to_object(py)
-    }
-}
-
-#[cfg(feature = "python-bindings")]
-/// Obtains Tolerance from PyObject (Required for Tolerance to be compatible with Python)
-impl<'source> FromPyObject<'source> for Tolerance {
-    fn extract_bound(ob: &pyo3::Bound<'source, pyo3::PyAny>) -> PyResult<Self> {
-        if let Ok((val, scale)) = <(f32, f32)>::extract_bound(ob) {
-            Ok(Tolerance {
-                val,
-                scale: utils::F32(scale),
-            })
-        } else {
-            Err(PyValueError::new_err("Invalid tolerance value provided. "))
         }
     }
 }

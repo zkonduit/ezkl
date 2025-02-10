@@ -1,7 +1,6 @@
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 #[cfg(test)]
 mod native_tests {
-    use ezkl::circuit::Tolerance;
     use ezkl::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};

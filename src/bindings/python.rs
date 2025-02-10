@@ -4,8 +4,8 @@ use crate::circuit::modules::poseidon::{
     PoseidonChip,
 };
 use crate::circuit::modules::Module;
+use crate::circuit::CheckMode;
 use crate::circuit::InputType;
-use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::*;
 use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
 use crate::graph::TestDataSource;
