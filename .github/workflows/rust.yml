@@ -276,6 +276,8 @@ jobs:
           locked: true
       # - name: The Worm Mock
       #   run: cargo nextest run --verbose tests::large_mock_::large_tests_5_expects -- --include-ignored
+      - name: Large 1D Conv Mock
+        run: cargo nextest run --verbose tests::large_mock_::large_tests_7_expects -- --include-ignored
       - name: MNIST Gan Mock
         run: cargo nextest run --verbose tests::large_mock_::large_tests_4_expects -- --include-ignored
       - name: NanoGPT Mock

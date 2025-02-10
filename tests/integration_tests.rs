@@ -187,7 +187,7 @@ mod native_tests {
 
     const PF_FAILURE_AGGR: &str = "examples/test_failure_aggr_proof.json";
 
-    const LARGE_TESTS: [&str; 7] = [
+    const LARGE_TESTS: [&str; 8] = [
         "self_attention",
         "nanoGPT",
         "multihead_attention",
@@ -195,6 +195,7 @@ mod native_tests {
         "mnist_gan",
         "smallworm",
         "fr_age",
+        "1d_conv",
     ];
 
     const ACCURACY_CAL_TESTS: [&str; 6] = [
@@ -965,7 +966,7 @@ mod native_tests {
 
             });
 
-            seq!(N in 0..=6 {
+            seq!(N in 0..=7 {
 
             #(#[test_case(LARGE_TESTS[N])])*
             #[ignore]
@@ -1633,13 +1634,17 @@ mod native_tests {
                 "--settings-path={}/{}/settings.json",
                 test_dir, example_name
             ),
-            format!("--variables=batch_size->{}", batch_size),
+            format!(
+                "--variables=batch_size->{},sequence_length->100,<Sym1>->1",
+                batch_size
+            ),
             format!("--input-visibility={}", input_visibility),
             format!("--param-visibility={}", param_visibility),
             format!("--output-visibility={}", output_visibility),
             format!("--num-inner-cols={}", num_inner_columns),
             format!("--tolerance={}", tolerance),
             format!("--commitment={}", commitment),
+            format!("--logrows={}", 22),
         ];
 
         // if output-visibility is fixed set --range-check-inputs-outputs to False
@@ -1725,7 +1730,6 @@ mod native_tests {
                     test_dir, example_name
                 ),
             ])
-            .stdout(std::process::Stdio::null())
             .status()
             .expect("failed to execute process");
         assert!(status.success());

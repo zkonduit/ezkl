@@ -32,6 +32,7 @@ use mnist::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
 
+
 mod params;
 
 const K: usize = 20;
@@ -208,6 +209,8 @@ where
                         padding: vec![(PADDING, PADDING); 2],
                         stride: vec![STRIDE; 2],
                         group: 1,
+                        data_format: DataFormat::NCHW,
+                        kernel_format: KernelFormat::OIHW,
                     };
                     let x = config
                         .layer_config

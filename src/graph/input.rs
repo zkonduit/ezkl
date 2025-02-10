@@ -609,8 +609,12 @@ impl GraphData {
             if input.len() % input_size != 0 {
                 return Err(GraphError::InvalidDims(
                     0,
-                    "calibration data length must be evenly divisible by the original input_size"
-                        .to_string(),
+                    format!(
+                        "calibration data length (={}) must be evenly divisible by the original input_size(={})",
+                        input.len(),
+                        input_size
+                    ),
+                    
                 ));
             }
 

@@ -39,9 +39,8 @@ use tract_onnx::tract_hir::{
     ops::array::{Pad, PadMode, TypedConcat},
     ops::cnn::PoolSpec,
     ops::konst::Const,
-    ops::nn::DataFormat,
     tract_core::ops::cast::Cast,
-    tract_core::ops::cnn::{conv::KernelFormat, MaxPool, SumPool},
+    tract_core::ops::cnn::{MaxPool, SumPool},
 };
 
 /// Quantizes an iterable of f64 to a [Tensor] of IntegerRep using a fixed point representation.
@@ -1146,13 +1145,6 @@ pub fn new_op_from_onnx(
 
             let pool_spec: &PoolSpec = &sumpool_node.pool_spec;
 
-            // only support pytorch type formatting for now
-            if pool_spec.data_format != DataFormat::NCHW {
-                return Err(GraphError::MissingParams(
-                    "data in wrong format".to_string(),
-                ));
-            }
-
             let stride = extract_strides(pool_spec)?;
             let padding = extract_padding(pool_spec, &input_dims[0])?;
             let kernel_shape = &pool_spec.kernel_shape;
@@ -1161,6 +1153,7 @@ pub fn new_op_from_onnx(
                 padding,
                 stride: stride.to_vec(),
                 pool_dims: kernel_shape.to_vec(),
+                data_format: pool_spec.data_format.into(),
             })
         }
         "Ceil" => {
@@ -1314,15 +1307,6 @@ pub fn new_op_from_onnx(
                 }
             }
 
-            if ((conv_node.pool_spec.data_format != DataFormat::NCHW)
-                && (conv_node.pool_spec.data_format != DataFormat::CHW))
-                || (conv_node.kernel_fmt != KernelFormat::OIHW)
-            {
-                return Err(GraphError::MisformedParams(
-                    "data or kernel in wrong format".to_string(),
-                ));
-            }
-
             let pool_spec = &conv_node.pool_spec;
 
             let stride = extract_strides(pool_spec)?;
@@ -1350,6 +1334,8 @@ pub fn new_op_from_onnx(
                 padding,
                 stride,
                 group,
+                data_format: conv_node.pool_spec.data_format.into(),
+                kernel_format: conv_node.kernel_fmt.into(),
             })
         }
         "Not" => SupportedOp::Linear(PolyOp::Not),
@@ -1371,14 +1357,6 @@ pub fn new_op_from_onnx(
                         "non unit dilations not supported".to_string(),
                     ));
                 }
-            }
-
-            if (deconv_node.pool_spec.data_format != DataFormat::NCHW)
-                || (deconv_node.kernel_format != KernelFormat::OIHW)
-            {
-                return Err(GraphError::MisformedParams(
-                    "data or kernel in wrong format".to_string(),
-                ));
             }
 
             let pool_spec = &deconv_node.pool_spec;
@@ -1406,6 +1384,8 @@ pub fn new_op_from_onnx(
                 output_padding: deconv_node.adjustments.to_vec(),
                 stride,
                 group: deconv_node.group,
+                data_format: deconv_node.pool_spec.data_format.into(),
+                kernel_format: deconv_node.kernel_format.into(),
             })
         }
         "Downsample" => {
@@ -1489,13 +1469,6 @@ pub fn new_op_from_onnx(
 
             let pool_spec: &PoolSpec = &sumpool_node.pool_spec;
 
-            // only support pytorch type formatting for now
-            if pool_spec.data_format != DataFormat::NCHW {
-                return Err(GraphError::MissingParams(
-                    "data in wrong format".to_string(),
-                ));
-            }
-
             let stride = extract_strides(pool_spec)?;
             let padding = extract_padding(pool_spec, &input_dims[0])?;
 
@@ -1504,6 +1477,7 @@ pub fn new_op_from_onnx(
                 stride: stride.to_vec(),
                 kernel_shape: pool_spec.kernel_shape.to_vec(),
                 normalized: sumpool_node.normalize,
+                data_format: pool_spec.data_format.into(),
             })
         }
         "Pad" => {
