@@ -1820,6 +1820,7 @@ fn create_evm_data_attestation(
     input_source,
     output_source,
     rpc_url=None,
+    single_call= DEFAULT_SINGLE_CALL.parse().unwrap(),
 ))]
 #[gen_stub_pyfunction]
 fn setup_test_evm_witness(
@@ -1830,6 +1831,7 @@ fn setup_test_evm_witness(
     input_source: PyTestDataSource,
     output_source: PyTestDataSource,
     rpc_url: Option<String>,
+    single_call: bool,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::setup_test_evm_witness(
@@ -1839,6 +1841,7 @@ fn setup_test_evm_witness(
             rpc_url,
             input_source.into(),
             output_source.into(),
+            single_call,
         )
         .await
         .map_err(|e| {

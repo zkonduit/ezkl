@@ -172,21 +172,21 @@ contract SwapProofCommitments {
 }
 
 contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
-    /**
-     * @notice Struct used to make view only call to account to fetch the data that EZKL reads from.
-     * @param the address of the account to make calls to
-     * @param the abi encoded function calls to make to the `contractAddress`
-     */
-    struct AccountCall {
-        address contractAddress;
-        bytes callData;
+    // the address of the account to make calls to
+    address public immutable contractAddress;
+
+    // the abi encoded function calls to make to the `contractAddress` that returns the attested to data
+    bytes public callData;
+
+    struct Scalars {
+        // The number of base 10 decimals to scale the data by.
+        // For most ERC20 tokens this is 1e18
         uint256 decimals;
+        // The number of fractional bits of the fixed point EZKL data points.
+        uint256 bits;
     }
-    AccountCall public accountCall;
 
-    uint[] scales;
-
-    address public admin;
+    Scalars[] public scalars;
 
     /**
      * @notice EZKL P value
@@ -214,46 +214,20 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
     constructor(
         address _contractAddresses,
         bytes memory _callData,
-        uint256 _decimals,
-        uint[] memory _scales,
-        uint8 _instanceOffset,
-        address _admin
+        uint256[] memory _decimals,
+        uint[] memory _bits,
+        uint8 _instanceOffset
     ) {
-        admin = _admin;
-        for (uint i; i < _scales.length; i++) {
-            scales.push(1 << _scales[i]);
+        require(
+            _bits.length == _decimals.length,
+            "Invalid scalar array lengths"
+        );
+        for (uint i; i < _bits.length; i++) {
+            scalars.push(Scalars(10 ** _decimals[i], 1 << _bits[i]));
         }
-        populateAccountCalls(_contractAddresses, _callData, _decimals);
+        contractAddress = _contractAddresses;
+        callData = _callData;
         instanceOffset = _instanceOffset;
-    }
-
-    function updateAdmin(address _admin) external {
-        require(msg.sender == admin, "Only admin can update admin");
-        if (_admin == address(0)) {
-            revert();
-        }
-        admin = _admin;
-    }
-
-    function updateAccountCalls(
-        address _contractAddresses,
-        bytes memory _callData,
-        uint256 _decimals
-    ) external {
-        require(msg.sender == admin, "Only admin can update account calls");
-        populateAccountCalls(_contractAddresses, _callData, _decimals);
-    }
-
-    function populateAccountCalls(
-        address _contractAddresses,
-        bytes memory _callData,
-        uint256 _decimals
-    ) internal {
-        AccountCall memory _accountCall = accountCall;
-        _accountCall.contractAddress = _contractAddresses;
-        _accountCall.callData = _callData;
-        _accountCall.decimals = 10 ** _decimals;
-        accountCall = _accountCall;
     }
 
     function mulDiv(
@@ -308,19 +282,20 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
     /**
      * @dev Quantize the data returned from the account calls to the scale used by the EZKL model.
      * @param x - One of the elements of the data returned from the account calls
-     * @param _decimals - Number of base 10 decimals to scale the data by.
-     * @param _scale - The base 2 scale used to convert the floating point value into a fixed point value.
+     * @param _scalars - The scaling factors for the data returned from the account calls.
      *
      */
     function quantizeData(
         int x,
-        uint256 _decimals,
-        uint256 _scale
+        Scalars memory _scalars
     ) internal pure returns (int256 quantized_data) {
         bool neg = x < 0;
         if (neg) x = -x;
-        uint output = mulDiv(uint256(x), _scale, _decimals);
-        if (mulmod(uint256(x), _scale, _decimals) * 2 >= _decimals) {
+        uint output = mulDiv(uint256(x), _scalars.bits, _scalars.decimals);
+        if (
+            mulmod(uint256(x), _scalars.bits, _scalars.decimals) * 2 >=
+            _scalars.decimals
+        ) {
             output += 1;
         }
         if (output > HALF_ORDER) {
@@ -373,19 +348,14 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
             instances.length >= INPUT_LEN + OUTPUT_LEN,
             "Invalid public inputs length"
         );
-        AccountCall memory _accountCall = accountCall;
-        uint[] memory _scales = scales;
-        bytes memory returnData = staticCall(
-            _accountCall.contractAddress,
-            _accountCall.callData
-        );
+        bytes memory returnData = staticCall(contractAddress, callData);
         int256[] memory x = abi.decode(returnData, (int256[]));
         int output;
         uint fieldElement;
         for (uint i = 0; i < x.length; i++) {
-            output = quantizeData(x[i], _accountCall.decimals, _scales[i]);
+            output = quantizeData(x[i], scalars[i]);
             fieldElement = toFieldElement(output);
-            if (fieldElement != instances[i + instanceOffset]) {
+            if (fieldElement != instances[i]) {
                 revert("Public input does not match");
             }
         }
@@ -444,8 +414,6 @@ contract DataAttestationMulti is LoadInstances, SwapProofCommitments {
 
     uint[] public scales;
 
-    address public admin;
-
     /**
      * @notice EZKL P value
      * @dev In order to prevent the verifier from accepting two version of the same pubInput, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
@@ -474,32 +442,13 @@ contract DataAttestationMulti is LoadInstances, SwapProofCommitments {
         bytes[][] memory _callData,
         uint256[][] memory _decimals,
         uint[] memory _scales,
-        uint8 _instanceOffset,
-        address _admin
+        uint8 _instanceOffset
     ) {
-        admin = _admin;
         for (uint i; i < _scales.length; i++) {
             scales.push(1 << _scales[i]);
         }
         populateAccountCalls(_contractAddresses, _callData, _decimals);
         instanceOffset = _instanceOffset;
-    }
-
-    function updateAdmin(address _admin) external {
-        require(msg.sender == admin, "Only admin can update admin");
-        if (_admin == address(0)) {
-            revert();
-        }
-        admin = _admin;
-    }
-
-    function updateAccountCalls(
-        address[] memory _contractAddresses,
-        bytes[][] memory _callData,
-        uint256[][] memory _decimals
-    ) external {
-        require(msg.sender == admin, "Only admin can update account calls");
-        populateAccountCalls(_contractAddresses, _callData, _decimals);
     }
 
     function populateAccountCalls(
@@ -602,9 +551,9 @@ contract DataAttestationMulti is LoadInstances, SwapProofCommitments {
         if (mulmod(uint256(x), scale, decimals) * 2 >= decimals) {
             output += 1;
         }
-        // if (output > HALF_ORDER) {
-        //     revert("Overflow field modulus");
-        // }
+        if (output > HALF_ORDER) {
+            revert("Overflow field modulus");
+        }
         quantized_data = neg ? -int256(output) : int256(output);
     }
     /**

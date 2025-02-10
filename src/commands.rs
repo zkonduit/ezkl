@@ -651,19 +651,6 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_SINGLE_CALL, action = clap::ArgAction::SetTrue)]
         single_call: Option<bool>,
     },
-    /// The Data Attestation Verifier contract stores the account calls to fetch data to feed into ezkl. This call data can be updated by an admin account. This tests that admin account is able to update this call data.
-    #[command(arg_required_else_help = true)]
-    TestUpdateAccountCalls {
-        /// The path to the verifier contract's address
-        #[arg(long, value_hint = clap::ValueHint::Other)]
-        addr: H160Flag,
-        /// The path to the .json data file.
-        #[arg(short = 'D', long, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
-        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
-        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: Option<String>,
-    },
     /// Swaps the positions in the transcript that correspond to commitments
     SwapProofCommitments {
         /// The path to the proof file

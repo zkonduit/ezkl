@@ -289,25 +289,25 @@ impl OnChainSource {
         let source: Self = if single {
             let call_to_account = test_on_chain_data_single(client.clone(), data).await?;
             debug!("Call to account: {:?}", call_to_account);
-            let inputs = read_on_chain_inputs_single(
-                client.clone(),
-                client_address,
-                call_to_account.clone(),
-            )
-            .await?;
+            let inputs =
+                read_on_chain_inputs_single(client.clone(), client_address, &call_to_account)
+                    .await?;
             debug!("Inputs: {:?}", inputs);
 
-            for (idx, i) in data.iter().enumerate() {
-                quantized_evm_inputs.extend(
-                    evm_quantize_single(
-                        client.clone(),
-                        vec![scales[idx]; i.len()],
-                        &inputs.0,
-                        inputs.1,
-                    )
-                    .await?,
-                );
-            }
+            let scales_flattened = scales
+                .iter()
+                .enumerate()
+                .map(|(idx, s)| vec![*s; data[idx].len()])
+                .flatten()
+                .collect();
+
+            quantized_evm_inputs = evm_quantize_single(
+                client.clone(),
+                scales_flattened,
+                &inputs,
+                &call_to_account.decimals,
+            )
+            .await?;
             OnChainSource::new_single(call_to_account, used_rpc)
         } else {
             let calls_to_accounts = test_on_chain_data_multi(client.clone(), data).await?;
@@ -366,11 +366,9 @@ pub struct CallToAccount {
     /// ABI-encoded function call data
     pub call_data: Call,
     /// Number of decimal places for float conversion
-    pub decimals: Decimals,
+    pub decimals: Vec<Decimals>,
     /// Contract address to call
     pub address: String,
-    /// Expected length of returned array
-    pub len: usize,
 }
 
 /// Represents different sources of input/output data for the EZKL model
@@ -859,7 +857,6 @@ impl ToPyObject for CallToAccount {
         dict.set_item("account", &self.address).unwrap();
         dict.set_item("call_data", &self.call_data).unwrap();
         dict.set_item("decimals", &self.decimals).unwrap();
-        dict.set_item("len", &self.len).unwrap();
         dict.to_object(py)
     }
 }

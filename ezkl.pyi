@@ -706,7 +706,7 @@ def setup_aggregate(sample_snarks:typing.Sequence[str | os.PathLike | pathlib.Pa
     """
     ...
 
-def setup_test_evm_witness(data_path:str | os.PathLike | pathlib.Path,compiled_circuit_path:str | os.PathLike | pathlib.Path,test_data:str | os.PathLike | pathlib.Path,input_source:PyTestDataSource,output_source:PyTestDataSource,rpc_url:typing.Optional[str]) -> typing.Any:
+def setup_test_evm_witness(data_path:str | os.PathLike | pathlib.Path,compiled_circuit_path:str | os.PathLike | pathlib.Path,test_data:str | os.PathLike | pathlib.Path,input_source:PyTestDataSource,output_source:PyTestDataSource,rpc_url:typing.Optional[str],single_call:bool) -> typing.Any:
     r"""
     Setup test evm witness
     
@@ -729,6 +729,9 @@ def setup_test_evm_witness(data_path:str | os.PathLike | pathlib.Path,compiled_c
     
     rpc_url: str
         RPC URL for an EVM compatible node, if None, uses Anvil as a local RPC node
+
+    single_call: bool
+        Whether to use a single call to return the set of attested to data or multiple multiple calls (one for each data point)
     
     Returns
     -------

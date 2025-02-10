@@ -313,11 +313,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        Commands::TestUpdateAccountCalls {
-            addr,
-            data,
-            rpc_url,
-        } => test_update_account_calls(addr, data.unwrap_or(DEFAULT_DATA.into()), rpc_url).await,
         Commands::SwapProofCommitments {
             proof_path,
             witness_path,
@@ -1556,7 +1551,7 @@ pub(crate) async fn create_evm_data_attestation(
                 }
             }
             Calls::Single(call) => {
-                output_len = Some(call.len);
+                output_len = Some(call.decimals.len());
             }
         }
         Some(on_chain_output_data)
@@ -1576,7 +1571,7 @@ pub(crate) async fn create_evm_data_attestation(
                 }
             }
             Calls::Single(call) => {
-                input_len = Some(call.len);
+                input_len = Some(call.decimals.len());
             }
         }
         Some(on_chain_input_data)
@@ -1906,17 +1901,6 @@ pub(crate) async fn setup_test_evm_witness(
 }
 
 use crate::pfsys::ProofType;
-pub(crate) async fn test_update_account_calls(
-    addr: H160Flag,
-    data: PathBuf,
-    rpc_url: Option<String>,
-) -> Result<String, EZKLError> {
-    use crate::eth::update_account_calls;
-
-    update_account_calls(addr.into(), data, rpc_url.as_deref()).await?;
-
-    Ok(String::new())
-}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn prove(

@@ -1029,10 +1029,10 @@ impl GraphCircuit {
         let (client, client_address) = setup_eth_backend(Some(&source.rpc), None).await?;
         let quantized_evm_inputs = match source.calls {
             input::Calls::Single(call) => {
-                let (inputs, decimals) =
-                    read_on_chain_inputs_single(client.clone(), client_address, call).await?;
+                let input =
+                    read_on_chain_inputs_single(client.clone(), client_address, &call).await?;
 
-                evm_quantize_single(client, scales, &inputs, decimals).await?
+                evm_quantize_single(client, scales, &input, &call.decimals).await?
             }
             input::Calls::Multiple(calls) => {
                 let inputs =

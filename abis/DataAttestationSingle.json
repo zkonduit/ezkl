@@ -12,24 +12,19 @@
                 "type": "bytes"
             },
             {
-                "internalType": "uint256",
+                "internalType": "uint256[]",
                 "name": "_decimals",
-                "type": "uint256"
+                "type": "uint256[]"
             },
             {
                 "internalType": "uint256[]",
-                "name": "_scales",
+                "name": "_bits",
                 "type": "uint256[]"
             },
             {
                 "internalType": "uint8",
                 "name": "_instanceOffset",
                 "type": "uint8"
-            },
-            {
-                "internalType": "address",
-                "name": "_admin",
-                "type": "address"
             }
         ],
         "stateMutability": "nonpayable",
@@ -37,22 +32,12 @@
     },
     {
         "inputs": [],
-        "name": "accountCall",
+        "name": "callData",
         "outputs": [
             {
-                "internalType": "address",
-                "name": "contractAddress",
-                "type": "address"
-            },
-            {
                 "internalType": "bytes",
-                "name": "callData",
+                "name": "",
                 "type": "bytes"
-            },
-            {
-                "internalType": "uint256",
-                "name": "decimals",
-                "type": "uint256"
             }
         ],
         "stateMutability": "view",
@@ -60,7 +45,7 @@
     },
     {
         "inputs": [],
-        "name": "admin",
+        "name": "contractAddress",
         "outputs": [
             {
                 "internalType": "address",
@@ -87,37 +72,25 @@
     {
         "inputs": [
             {
-                "internalType": "address",
-                "name": "_contractAddresses",
-                "type": "address"
-            },
-            {
-                "internalType": "bytes",
-                "name": "_callData",
-                "type": "bytes"
-            },
-            {
                 "internalType": "uint256",
-                "name": "_decimals",
+                "name": "",
                 "type": "uint256"
             }
         ],
-        "name": "updateAccountCalls",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
+        "name": "scalars",
+        "outputs": [
             {
-                "internalType": "address",
-                "name": "_admin",
-                "type": "address"
+                "internalType": "uint256",
+                "name": "decimals",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "bits",
+                "type": "uint256"
             }
         ],
-        "name": "updateAdmin",
-        "outputs": [],
-        "stateMutability": "nonpayable",
+        "stateMutability": "view",
         "type": "function"
     },
     {

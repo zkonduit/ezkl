@@ -25,11 +25,6 @@
 				"internalType": "uint8",
 				"name": "_instanceOffset",
 				"type": "uint8"
-			},
-			{
-				"internalType": "address",
-				"name": "_admin",
-				"type": "address"
 			}
 		],
 		"stateMutability": "nonpayable",
@@ -54,19 +49,6 @@
 				"internalType": "uint256",
 				"name": "callCount",
 				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "admin",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
 			}
 		],
 		"stateMutability": "view",
@@ -102,42 +84,6 @@
 			}
 		],
 		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address[]",
-				"name": "_contractAddresses",
-				"type": "address[]"
-			},
-			{
-				"internalType": "bytes[][]",
-				"name": "_callData",
-				"type": "bytes[][]"
-			},
-			{
-				"internalType": "uint256[][]",
-				"name": "_decimals",
-				"type": "uint256[][]"
-			}
-		],
-		"name": "updateAccountCalls",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "_admin",
-				"type": "address"
-			}
-		],
-		"name": "updateAdmin",
-		"outputs": [],
-		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
