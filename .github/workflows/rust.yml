@@ -25,10 +25,10 @@ jobs:
       contents: read
     runs-on: large-self-hosted
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
@@ -45,10 +45,10 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
@@ -61,10 +61,10 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
@@ -77,15 +77,15 @@ jobs:
       contents: read
     runs-on: ubuntu-latest-32-cores
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -102,19 +102,19 @@ jobs:
   #   env:
   #     ENABLE_ICICLE_GPU: true
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   # with:
   #   persist-credentials: false
-  #     - uses: actions-rs/toolchain@v1
+  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
   #       with:
   #         toolchain: nightly-2024-07-18
   #         override: true
   #         components: rustfmt, clippy
-  #     - uses: baptiste0928/cargo-install@v1
+  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
   #       with:
   #         crate: cargo-nextest
   #         locked: true
-  #     - uses: mwilliamson/setup-wasmtime-action@v2
+  #     - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
   #       with:
   #         wasmtime-version: "3.0.1"
   #     - name: Install wasm32-wasi
@@ -139,19 +139,19 @@ jobs:
       contents: read
     runs-on: non-gpu
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
-      - uses: mwilliamson/setup-wasmtime-action@v2
+      - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
         with:
           wasmtime-version: "3.0.1"
       - name: Install wasm32-wasi
@@ -176,19 +176,19 @@ jobs:
       contents: read
     runs-on: non-gpu
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
-      - uses: mwilliamson/setup-wasmtime-action@v2
+      - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
         with:
           wasmtime-version: "3.0.1"
       - name: Install wasm32-wasi
@@ -213,15 +213,15 @@ jobs:
       contents: read
     runs-on: ubuntu-latest-16-cores
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -233,19 +233,19 @@ jobs:
       contents: read
     runs-on: non-gpu
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
         with:
           # Pin to version 0.12.1
           version: "v0.12.1"
-      - uses: nanasess/setup-chromedriver@v2
+      - uses: nanasess/setup-chromedriver@e93e57b843c0c92788f22483f1a31af8ee48db25  #v2.3.0
         # with:
         #   chromedriver-version: "115.0.5790.102"
       - name: Install wasm32-unknown-unknown
@@ -262,15 +262,15 @@ jobs:
       contents: read
     runs-on: non-gpu
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -329,27 +329,27 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Use pnpm 8
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
         with:
           version: 8
       - name: Use Node.js 18.12.1
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7  #v3.8.2
         with:
           node-version: "18.12.1"
           cache: "pnpm"
@@ -414,28 +414,28 @@ jobs:
   #   runs-on: macos-13
   #   # needs: [build, library-tests, docs]
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   #       with:
   #         persist-credentials: false
-  #     - uses: actions-rs/toolchain@v1
+  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
   #       with:
   #         toolchain: nightly-2024-07-18
   #         override: true
   #         components: rustfmt, clippy
-  #     - uses: jetli/wasm-pack-action@v0.4.0
+  #     - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
   #       with:
   #         # Pin to version 0.12.1
   #         version: 'v0.12.1'
   #     - name: Add rust-src
   #       run: rustup component add rust-src --toolchain nightly-2024-07-18
-  #     - uses: actions/checkout@v3
+  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   #       with:
   #         persist-credentials: false
   #     - name: Use pnpm 8
-  #       uses: pnpm/action-setup@v2
+  #       uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
   #       with:
   #         version: 8
-  #     - uses: baptiste0928/cargo-install@v1
+  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
   #       with:
   #         crate: cargo-nextest
   #         locked: true
@@ -448,15 +448,15 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
         with:
           # Pin to version 0.12.1
           version: "v0.12.1"
@@ -465,15 +465,15 @@ jobs:
 
       - name: Add rust-src
         run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
       - name: Use pnpm 8
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
         with:
           version: 8
       - name: Use Node.js 18.12.1
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7  #v3.8.2
         with:
           node-version: "18.12.1"
           cache: "pnpm"
@@ -483,7 +483,7 @@ jobs:
         env:
           CI: false
           NODE_ENV: development
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -529,18 +529,18 @@ jobs:
   #   env:
   #     ENABLE_ICICLE_GPU: true
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   # with:
   #   persist-credentials: false
-  #     - uses: actions-rs/toolchain@v1
+  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
   #       with:
   #         toolchain: nightly-2024-07-18
   #         override: true
   #         components: rustfmt, clippy
   #     - name: Add rust-src
   #       run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
-  #     - uses: actions/checkout@v3
-  #     - uses: baptiste0928/cargo-install@v1
+  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
   #       with:
   #         crate: cargo-nextest
   #         locked: true
@@ -567,15 +567,15 @@ jobs:
     runs-on: self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -587,15 +587,15 @@ jobs:
   #   env:
   #     ENABLE_ICICLE_GPU: true
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   # with:
   #   persist-credentials: false
-  #     - uses: actions-rs/toolchain@v1
+  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
   #       with:
   #         toolchain: nightly-2024-07-18
   #         override: true
   #         components: rustfmt, clippy
-  #     - uses: baptiste0928/cargo-install@v1
+  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
   #       with:
   #         crate: cargo-nextest
   #         locked: true
@@ -608,15 +608,15 @@ jobs:
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -629,15 +629,15 @@ jobs:
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -654,15 +654,15 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     needs: [build, library-tests, docs]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -675,13 +675,13 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.12"
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
@@ -705,18 +705,18 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.12"
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -756,18 +756,18 @@ jobs:
           # Maps tcp port 5432 on service container to the host
           - 5432:5432
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.11"
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -781,6 +781,8 @@ jobs:
         run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt; python -m ensurepip --upgrade
       - name: Build python ezkl
         run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
+      - name: Cat and Dog notebook
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::cat_and_dog_notebook_
       - name: All notebooks
         run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
       - name: Voice tutorial
@@ -812,15 +814,15 @@ jobs:
       contents: read
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@v1
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
         with:
           crate: cargo-nextest
           locked: true
@@ -834,10 +836,10 @@ jobs:
     needs: [ios-integration-tests]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
-      - uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2024-07-18
           override: true

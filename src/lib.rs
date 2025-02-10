@@ -100,7 +100,6 @@ use std::str::FromStr;
 use circuit::{table::Range, CheckMode, Tolerance};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::Args;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use fieldutils::IntegerRep;
 use graph::{Visibility, MAX_PUBLIC_SRS};
 use halo2_proofs::poly::{
@@ -398,6 +397,16 @@ impl RunArgs {
     /// - Err(String) with detailed error message if any validation fails
     pub fn validate(&self) -> Result<(), String> {
         let mut errors = Vec::new();
+
+        // check if the largest represented integer in the decomposed form overflows IntegerRep
+        //  try it with the largest possible value
+        let max_decomp = (self.decomp_base as IntegerRep).checked_pow(self.decomp_legs as u32);
+        if max_decomp.is_none() {
+            errors.push(format!(
+                "decomp_base^decomp_legs overflows IntegerRep: {}^{}",
+                self.decomp_base, self.decomp_legs
+            ));
+        }
 
         // Visibility validations
         if self.param_visibility == Visibility::Public {

@@ -387,7 +387,7 @@ pub fn add<T: TensorType + Add<Output = T> + std::marker::Send + std::marker::Sy
 ) -> Result<Tensor<T>, TensorError> {
     if t.len() == 1 {
         return Ok(t[0].clone());
-    } else if t.len() == 0 {
+    } else if t.is_empty() {
         return Err(TensorError::DimMismatch("add".to_string()));
     }
 
@@ -441,7 +441,7 @@ pub fn sub<T: TensorType + Sub<Output = T> + std::marker::Send + std::marker::Sy
 ) -> Result<Tensor<T>, TensorError> {
     if t.len() == 1 {
         return Ok(t[0].clone());
-    } else if t.len() == 0 {
+    } else if t.is_empty() {
         return Err(TensorError::DimMismatch("sub".to_string()));
     }
     // calculate value of output
@@ -492,7 +492,7 @@ pub fn mult<T: TensorType + Mul<Output = T> + std::marker::Send + std::marker::S
 ) -> Result<Tensor<T>, TensorError> {
     if t.len() == 1 {
         return Ok(t[0].clone());
-    } else if t.len() == 0 {
+    } else if t.is_empty() {
         return Err(TensorError::DimMismatch("mult".to_string()));
     }
     // calculate value of output
@@ -1326,7 +1326,6 @@ pub fn pad<T: TensorType>(
 ///
 /// # Errors
 /// Returns a TensorError if the tensors in `inputs` have incompatible dimensions for concatenation along the specified `axis`.
-
 pub fn concat<T: TensorType + Send + Sync>(
     inputs: &[&Tensor<T>],
     axis: usize,
@@ -2102,7 +2101,6 @@ pub mod nonlinearities {
     /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 25, 8, 1, 1, 0]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
-
     pub fn tanh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
