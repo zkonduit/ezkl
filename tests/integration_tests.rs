@@ -544,7 +544,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "fixed", "public", 1, "accuracy", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "public", "fixed", "public", 1, "accuracy", None, false, None, None);
                 test_dir.close().unwrap();
             }
         });
@@ -609,7 +609,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -619,21 +619,9 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None, 0.0, true, Some(8194), Some(4));
+                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None, true, Some(8194), Some(4));
                 test_dir.close().unwrap();
             }
-
-            #(#[test_case(TESTS[N])])*
-            fn mock_tolerance_public_outputs_(test: &str) {
-                crate::native_tests::init_binary();
-                let test_dir = TempDir::new(test).unwrap();
-                let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                // gen random number between 0.0 and 1.0
-                let tolerance = rand::thread_rng().gen_range(0.0..1.0) * 100.0;
-                mock(path, test.to_string(), "private", "private", "public", 1, "resources", None, tolerance, false, Some(32776), Some(5));
-                test_dir.close().unwrap();
-            }
-
 
 
             #(#[test_case(TESTS[N])])*
@@ -645,7 +633,7 @@ mod native_tests {
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let large_batch_dir = &format!("large_batches_{}", test);
                     crate::native_tests::mk_data_batches_(path, test, &large_batch_dir, 10);
-                    mock(path, large_batch_dir.to_string(), "private", "private", "public", 10, "resources", None, 0.0, false, None, None);
+                    mock(path, large_batch_dir.to_string(), "private", "private", "public", 10, "resources", None, false, None, None);
                     test_dir.close().unwrap();
                 }
             }
@@ -655,7 +643,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "private", "private", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "public", "private", "private", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -664,7 +652,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "hashed", "private", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "public", "hashed", "private", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -673,7 +661,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "fixed", "private", "private", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "fixed", "private", "private", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -682,7 +670,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "private", "fixed", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "private", "private", "fixed", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -691,7 +679,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "fixed", "private", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "private", "fixed", "private", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -700,7 +688,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "hashed", "private", "public", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "hashed", "private", "public", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -709,7 +697,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "polycommit", "private", "public", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "polycommit", "private", "public", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -719,7 +707,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "hashed", "public", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "private", "hashed", "public", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -729,7 +717,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "polycommit", "public", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "private", "polycommit", "public", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -738,7 +726,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "private", "hashed", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "public", "private", "hashed", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -748,7 +736,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "private", "polycommit", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "public", "private", "polycommit", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -757,7 +745,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "fixed", "hashed", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "public", "fixed", "hashed", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -767,7 +755,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "public", "polycommit", "hashed", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "public", "polycommit", "hashed", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -777,7 +765,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "polycommit", "polycommit", "polycommit", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "polycommit", "polycommit", "polycommit", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -787,7 +775,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "hashed", "private", "hashed", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(), "hashed", "private", "hashed", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -797,7 +785,7 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                 // needs an extra row for the large model
-                mock(path, test.to_string(),"hashed", "hashed", "public", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(),"hashed", "hashed", "public", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -807,7 +795,7 @@ mod native_tests {
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                 // needs an extra row for the large model
-                mock(path, test.to_string(),"hashed", "hashed", "hashed", 1, "resources", None, 0.0, false, None, None);
+                mock(path, test.to_string(),"hashed", "hashed", "hashed", 1, "resources", None, false, None, None);
                 test_dir.close().unwrap();
             }
 
@@ -984,7 +972,7 @@ mod native_tests {
                 crate::native_tests::init_binary();
                 let test_dir = TempDir::new(test).unwrap();
                 let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
-                mock(path, test.to_string(), "private", "fixed", "public", 1, "resources", None, 0.0, false, None, Some(5));
+                mock(path, test.to_string(), "private", "fixed", "public", 1, "resources", None, false, None, Some(5));
                 test_dir.close().unwrap();
             }
         });
@@ -1460,12 +1448,10 @@ mod native_tests {
         batch_size: usize,
         cal_target: &str,
         scales_to_use: Option<Vec<u32>>,
-        tolerance: f32,
         bounded_lookup_log: bool,
         decomp_base: Option<usize>,
         decomp_legs: Option<usize>,
     ) {
-        let mut tolerance = tolerance;
         gen_circuit_settings_and_witness(
             test_dir,
             example_name.clone(),
@@ -1476,7 +1462,6 @@ mod native_tests {
             cal_target,
             scales_to_use,
             2,
-            &mut tolerance,
             Commitments::KZG,
             2,
             bounded_lookup_log,
@@ -1484,128 +1469,17 @@ mod native_tests {
             decomp_legs,
         );
 
-        if tolerance > 0.0 {
-            // load witness and shift the output by a small amount that is less than tolerance percent
-            let witness = GraphWitness::from_path(
-                format!("{}/{}/witness.json", test_dir, example_name).into(),
-            )
-            .unwrap();
-            let witness = witness.clone();
-            let outputs = witness.outputs.clone();
-
-            // get values as i64
-            let output_perturbed_safe: Vec<Vec<halo2curves::bn256::Fr>> = outputs
-                .iter()
-                .map(|sv| {
-                    sv.iter()
-                        .map(|v| {
-                            // randomly perturb by a small amount less than tolerance
-                            let perturbation = if v == &halo2curves::bn256::Fr::zero() {
-                                halo2curves::bn256::Fr::zero()
-                            } else {
-                                integer_rep_to_felt(
-                                    (felt_to_integer_rep(*v) as f32
-                                        * (rand::thread_rng().gen_range(-0.01..0.01) * tolerance))
-                                        as IntegerRep,
-                                )
-                            };
-
-                            *v + perturbation
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
-
-            // get values as i64
-            let output_perturbed_bad: Vec<Vec<halo2curves::bn256::Fr>> = outputs
-                .iter()
-                .map(|sv| {
-                    sv.iter()
-                        .map(|v| {
-                            // randomly perturb by a small amount less than tolerance
-                            let perturbation = if v == &halo2curves::bn256::Fr::zero() {
-                                halo2curves::bn256::Fr::from(2)
-                            } else {
-                                integer_rep_to_felt(
-                                    (felt_to_integer_rep(*v) as f32
-                                        * (rand::thread_rng().gen_range(0.02..0.1) * tolerance))
-                                        as IntegerRep,
-                                )
-                            };
-                            *v + perturbation
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
-
-            let good_witness = GraphWitness {
-                outputs: output_perturbed_safe,
-                ..witness.clone()
-            };
-
-            // save
-            good_witness
-                .save(format!("{}/{}/witness_ok.json", test_dir, example_name).into())
-                .unwrap();
-
-            let bad_witness = GraphWitness {
-                outputs: output_perturbed_bad,
-                ..witness.clone()
-            };
-
-            // save
-            bad_witness
-                .save(format!("{}/{}/witness_bad.json", test_dir, example_name).into())
-                .unwrap();
-
-            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args([
-                    "mock",
-                    "-W",
-                    format!("{}/{}/witness.json", test_dir, example_name).as_str(),
-                    "-M",
-                    format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
-                ])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
-
-            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args([
-                    "mock",
-                    "-W",
-                    format!("{}/{}/witness_ok.json", test_dir, example_name).as_str(),
-                    "-M",
-                    format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
-                ])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
-
-            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args([
-                    "mock",
-                    "-W",
-                    format!("{}/{}/witness_bad.json", test_dir, example_name).as_str(),
-                    "-M",
-                    format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
-                ])
-                .status()
-                .expect("failed to execute process");
-            assert!(!status.success());
-        } else {
-            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args([
-                    "mock",
-                    "-W",
-                    format!("{}/{}/witness.json", test_dir, example_name).as_str(),
-                    "-M",
-                    format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
-                ])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
-        }
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
+            .args([
+                "mock",
+                "-W",
+                format!("{}/{}/witness.json", test_dir, example_name).as_str(),
+                "-M",
+                format!("{}/{}/network.compiled", test_dir, example_name).as_str(),
+            ])
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1619,7 +1493,6 @@ mod native_tests {
         cal_target: &str,
         scales_to_use: Option<Vec<u32>>,
         num_inner_columns: usize,
-        tolerance: &mut f32,
         commitment: Commitments,
         lookup_safety_margin: usize,
         bounded_lookup_log: bool,
@@ -1642,7 +1515,6 @@ mod native_tests {
             format!("--param-visibility={}", param_visibility),
             format!("--output-visibility={}", output_visibility),
             format!("--num-inner-cols={}", num_inner_columns),
-            format!("--tolerance={}", tolerance),
             format!("--commitment={}", commitment),
             format!("--logrows={}", 22),
         ];
@@ -1700,18 +1572,13 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let mut settings =
+        let settings =
             GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())
                 .unwrap();
 
         let any_output_scales_smol = settings.model_output_scales.iter().any(|s| *s <= 0);
 
         if any_output_scales_smol {
-            // set the tolerance to 0.0
-            settings.run_args.tolerance = Tolerance {
-                val: 0.0,
-                scale: 0.0.into(),
-            };
             settings
                 .save(&format!("{}/{}/settings.json", test_dir, example_name).into())
                 .unwrap();
