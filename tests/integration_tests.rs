@@ -1572,19 +1572,6 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        let settings =
-            GraphSettings::load(&format!("{}/{}/settings.json", test_dir, example_name).into())
-                .unwrap();
-
-        let any_output_scales_smol = settings.model_output_scales.iter().any(|s| *s <= 0);
-
-        if any_output_scales_smol {
-            settings
-                .save(&format!("{}/{}/settings.json", test_dir, example_name).into())
-                .unwrap();
-            *tolerance = 0.0;
-        }
-
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
             .args([
                 "compile-circuit",
