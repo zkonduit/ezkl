@@ -20,7 +20,6 @@ use crate::{
     circuit::{
         ops::base::BaseOp,
         table::{Range, RangeCheck, Table},
-        utils,
     },
     tensor::{Tensor, TensorType, ValTensor, VarTensor},
 };
