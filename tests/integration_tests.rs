@@ -1639,7 +1639,6 @@ mod native_tests {
             cal_target,
             None,
             2,
-            &mut 0.0,
             Commitments::KZG,
             2,
             false,
@@ -1925,7 +1924,6 @@ mod native_tests {
             target_str,
             scales_to_use,
             num_inner_columns,
-            &mut 0.0,
             commitment,
             lookup_safety_margin,
             false,
@@ -2360,7 +2358,6 @@ mod native_tests {
             // we need the accuracy
             Some(vec![4]),
             1,
-            &mut 0.0,
             Commitments::KZG,
             2,
             false,
