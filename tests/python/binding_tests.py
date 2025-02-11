@@ -48,7 +48,6 @@ def test_py_run_args():
     run_args = ezkl.PyRunArgs()
     run_args.input_visibility = "hashed"
     run_args.output_visibility = "hashed"
-    run_args.tolerance = 1.5
 
 
 def test_poseidon_hash():

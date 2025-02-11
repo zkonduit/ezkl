@@ -5838,14 +5838,12 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[101, 201, 302, 403, 503, 603]),
 ///   &[2, 3],
 /// ).unwrap());
-/// let result = output::<Fp>(&dummy_config, &mut dummy_region, &[x, y], 1024.0.into(), 1.0, false).unwrap();
+/// let result = output::<Fp>(&dummy_config, &mut dummy_region, &[x, y], false).unwrap();
 /// ```
 pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-    scale: utils::F32,
-    tol: f32,
     decomp: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut values = [values[0].clone(), values[1].clone()];
@@ -5860,43 +5858,6 @@ pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         values[1] = layouts::identity(config, region, &[values[1].clone()], decomp)?;
     }
 
-    if tol == 0.0 {
-        // regular equality constraint
-        return enforce_equality(config, region, &[values[0].clone(), values[1].clone()]);
-    }
-
-    // Calculate the difference between the expected output and actual output
-    let diff = pairwise(config, region, &values, BaseOp::Sub)?;
-
-    // integer scale
-    let int_scale = scale.0 as IntegerRep;
-    // felt scale
-    let felt_scale = integer_rep_to_felt(int_scale);
-    // input scale ratio we multiply by tol such that in the new scale range_check_len represents tol percent
-    let input_scale_ratio = (scale.0 * tol) as IntegerRep / 2 * 2;
-
-    let recip = recip(
-        config,
-        region,
-        &[values[0].clone()],
-        felt_scale,
-        felt_scale * F::from(100),
-    )?;
-
-    log::debug!("recip: {}", recip.show());
-
-    // Multiply the difference by the recip
-    let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
-
-    log::debug!("product: {}", product.show());
-    let rebased_product = div(
-        config,
-        region,
-        &[product],
-        integer_rep_to_felt(input_scale_ratio),
-    )?;
-    log::debug!("rebased_product: {}", rebased_product.show());
-
-    // check that it is within the tolerance range
-    range_check(config, region, &[rebased_product], &(-int_scale, int_scale))
+    // regular equality constraint
+    return enforce_equality(config, region, &[values[0].clone(), values[1].clone()]);
 }
