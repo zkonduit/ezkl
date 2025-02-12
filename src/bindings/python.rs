@@ -1076,7 +1076,7 @@ fn calibrate_settings(
 ///     Python object containing the witness values
 ///
 #[pyfunction(signature = (
-    data=PathBuf::from(DEFAULT_DATA),
+    data=String::from(DEFAULT_DATA),
     model=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
     output=PathBuf::from(DEFAULT_WITNESS),
     vk_path=None,
@@ -1085,7 +1085,7 @@ fn calibrate_settings(
 #[gen_stub_pyfunction]
 fn gen_witness(
     py: Python,
-    data: PathBuf,
+    data: String,
     model: PathBuf,
     output: Option<PathBuf>,
     vk_path: Option<PathBuf>,
@@ -1754,7 +1754,7 @@ fn create_evm_vka(
 /// bool
 ///
 #[pyfunction(signature = (
-    input_data=PathBuf::from(DEFAULT_DATA),
+    input_data=String::from(DEFAULT_DATA),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
     abi_path=PathBuf::from(DEFAULT_VERIFIER_DA_ABI),
@@ -1763,7 +1763,7 @@ fn create_evm_vka(
 #[gen_stub_pyfunction]
 fn create_evm_data_attestation(
     py: Python,
-    input_data: PathBuf,
+    input_data: String,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
@@ -1824,7 +1824,7 @@ fn create_evm_data_attestation(
 #[gen_stub_pyfunction]
 fn setup_test_evm_witness(
     py: Python,
-    data_path: PathBuf,
+    data_path: String,
     compiled_circuit_path: PathBuf,
     test_data: PathBuf,
     input_source: PyTestDataSource,
@@ -1902,7 +1902,7 @@ fn deploy_evm(
 fn deploy_da_evm(
     py: Python,
     addr_path: PathBuf,
-    input_data: PathBuf,
+    input_data: String,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
