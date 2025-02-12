@@ -1009,7 +1009,7 @@ fn gen_random_data(
 /// bool
 ///
 #[pyfunction(signature = (
-    data = PathBuf::from(DEFAULT_CALIBRATION_FILE),
+    data = String::from(DEFAULT_CALIBRATION_FILE),
     model = PathBuf::from(DEFAULT_MODEL),
     settings = PathBuf::from(DEFAULT_SETTINGS),
     target = CalibrationTarget::default(), // default is "resources
