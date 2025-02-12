@@ -19,6 +19,11 @@ pub fn integer_rep_to_felt<F: PrimeField>(x: IntegerRep) -> F {
 /// Converts a PrimeField element to an f64.
 pub fn felt_to_f64<F: PrimeField + PartialOrd + Field>(x: F) -> f64 {
     if x > F::from_u128(IntegerRep::MAX as u128) {
+        if x == -F::from_u128(IntegerRep::MAX as u128) - F::ONE {
+            return IntegerRep::MIN as f64;
+        } else if x < -F::from_u128(IntegerRep::MAX as u128) - F::ONE {
+            panic!("Felt value out of range for conversion to integer rep");
+        }
         let rep = (-x).to_repr();
         let negtmp: &[u8] = rep.as_ref();
         let lower_128: u128 = u128::from_le_bytes(negtmp[..16].try_into().unwrap());
@@ -31,11 +36,13 @@ pub fn felt_to_f64<F: PrimeField + PartialOrd + Field>(x: F) -> f64 {
     }
 }
 
-/// Converts a PrimeField element to an i64.
+/// Converts a PrimeField element to an integer rep.
 pub fn felt_to_integer_rep<F: PrimeField + PartialOrd + Field>(x: F) -> IntegerRep {
     if x > F::from_u128(IntegerRep::MAX as u128) {
         if x == -F::from_u128(IntegerRep::MAX as u128) - F::ONE {
             return IntegerRep::MIN;
+        } else if x < -F::from_u128(IntegerRep::MAX as u128) - F::ONE {
+            panic!("Felt value out of range for conversion to integer rep");
         }
         let rep = (-x).to_repr();
         let negtmp: &[u8] = rep.as_ref();
@@ -68,6 +75,13 @@ mod test {
 
         let res: F = integer_rep_to_felt(2_i128.pow(17));
         assert_eq!(res, F::from(131072));
+    }
+
+    #[test]
+    #[should_panic]
+    fn felttointegerrep_overflow() {
+        let fieldx: F = integer_rep_to_felt::<F>(IntegerRep::MIN) - F::ONE;
+        let _xf: IntegerRep = felt_to_integer_rep::<F>(fieldx);
     }
 
     #[test]
