@@ -396,8 +396,9 @@ pub enum Commands {
     /// Generates the witness from an input file.
     GenWitness {
         /// The path to the .json data file
+        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT, value_hint = clap::ValueHint::FilePath)]
         compiled_circuit: Option<PathBuf>,
@@ -429,7 +430,7 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL, value_hint = clap::ValueHint::FilePath)]
         model: Option<PathBuf>,
-        /// The path to the .json data file
+        /// The path to the .json data file to output
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
         data: Option<PathBuf>,
         /// Hand-written parser for graph variables, eg. batch_size=1
@@ -442,8 +443,9 @@ pub enum Commands {
     /// Calibrates the proving scale, lookup bits and logrows from a circuit settings file.
     CalibrateSettings {
         /// The path to the .json calibration data file.
+        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
         #[arg(short = 'D', long, default_value = DEFAULT_CALIBRATION_FILE, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL, value_hint = clap::ValueHint::FilePath)]
         model: Option<PathBuf>,
@@ -626,8 +628,9 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     SetupTestEvmData {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
         #[arg(short = 'D', long, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, value_hint = clap::ValueHint::FilePath)]
         compiled_circuit: Option<PathBuf>,
@@ -653,8 +656,9 @@ pub enum Commands {
         #[arg(long, value_hint = clap::ValueHint::Other)]
         addr: H160Flag,
         /// The path to the .json data file.
+        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
         #[arg(short = 'D', long, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
         rpc_url: Option<String>,
@@ -771,7 +775,7 @@ pub enum Commands {
         /// view functions that return the data that the network
         /// ingests as inputs.
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to the witness file. This is needed for proof swapping for kzg commitments.
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS, value_hint = clap::ValueHint::FilePath)]
         witness: Option<PathBuf>,
@@ -866,8 +870,9 @@ pub enum Commands {
     #[command(name = "deploy-evm-da")]
     DeployEvmDataAttestation {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
+        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(long, default_value = DEFAULT_SETTINGS, value_hint = clap::ValueHint::FilePath)]
         settings_path: Option<PathBuf>,
