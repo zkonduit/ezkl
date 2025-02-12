@@ -1021,7 +1021,7 @@ fn gen_random_data(
 #[gen_stub_pyfunction]
 fn calibrate_settings(
     py: Python,
-    data: PathBuf,
+    data: String,
     model: PathBuf,
     settings: PathBuf,
     target: CalibrationTarget,
