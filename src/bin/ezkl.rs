@@ -28,6 +28,8 @@ use std::env;
 #[tokio::main(flavor = "current_thread")]
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 pub async fn main() {
+    use log::debug;
+
     let args = Cli::parse();
 
     if let Some(generator) = args.generator {
@@ -42,7 +44,7 @@ pub async fn main() {
         } else {
             info!("Running with CPU");
         }
-        info!(
+        debug!(
             "command: \n {}",
             &command.as_json().to_colored_json_auto().unwrap()
         );
