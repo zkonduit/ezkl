@@ -78,8 +78,8 @@ abigen!(
     contract QuantizeData {
         /**
          * @notice EZKL P value
-         * @dev In order to prevent the verifier from accepting two version of the same instance, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
-         * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
+         * @dev In order to prevent the verifier from accepting two version of the same instance, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are strictly less than P. a
+         * @dev The reason for this is that the assembly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
          */
         uint256 constant ORDER =
             uint256(
