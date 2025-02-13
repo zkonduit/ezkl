@@ -383,7 +383,7 @@ pub async fn deploy_contract_via_solidity(
 ///
 pub async fn deploy_da_verifier_via_solidity(
     settings_path: PathBuf,
-    input: PathBuf,
+    input: String,
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
     runs: usize,
@@ -391,7 +391,7 @@ pub async fn deploy_da_verifier_via_solidity(
 ) -> Result<H160, EthError> {
     let (client, client_address) = setup_eth_backend(rpc_url, private_key).await?;
 
-    let input = GraphData::from_path(input).map_err(|_| EthError::GraphData)?;
+    let input = GraphData::from_str(&input).map_err(|_| EthError::GraphData)?;
 
     let settings = GraphSettings::load(&settings_path).map_err(|_| EthError::GraphSettings)?;
 
@@ -688,10 +688,10 @@ fn parse_call_to_account(call_to_account: CallToAccount) -> Result<ParsedCallToA
 
 pub async fn update_account_calls(
     addr: H160,
-    input: PathBuf,
+    input: String,
     rpc_url: Option<&str>,
 ) -> Result<(), EthError> {
-    let input = GraphData::from_path(input).map_err(|_| EthError::GraphData)?;
+    let input = GraphData::from_str(&input).map_err(|_| EthError::GraphData)?;
 
     // The data that will be stored in the test contracts that will eventually be read from.
     let mut calls_to_accounts = vec![];
