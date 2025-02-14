@@ -64,7 +64,7 @@ impl From<InnerEZKLError> for EZKLError {
 /// Encode verifier calldata from proof and ethereum vk_address
 #[cfg_attr(feature = "ios-bindings", uniffi::export)]
 pub(crate) fn encode_verifier_calldata(
-    // TODO - shuold it be pub(crate) or pub or pub(super)?
+    // TODO - should it be pub(crate) or pub or pub(super)?
     proof: Vec<u8>,
     vk_address: Option<Vec<u8>>,
 ) -> Result<Vec<u8>, EZKLError> {
