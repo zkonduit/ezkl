@@ -9,11 +9,11 @@ use std::io::Write;
 #[allow(dead_code)]
 pub fn level_color(level: &log::Level, msg: &str) -> String {
     match level {
-        Level::Error => msg.red(),
-        Level::Warn => msg.yellow(),
-        Level::Info => msg.blue(),
-        Level::Debug => msg.green(),
-        Level::Trace => msg.magenta(),
+        Level::Error => msg.red().to_string(),
+        Level::Warn => msg.yellow().to_string(),
+        Level::Info => msg.blue().to_string(),
+        Level::Debug => msg.green().to_string(),
+        Level::Trace => msg.magenta().to_string(),
     }
     .bold()
     .to_string()
@@ -22,11 +22,11 @@ pub fn level_color(level: &log::Level, msg: &str) -> String {
 /// sets the log level text color
 pub fn level_text_color(level: &log::Level, msg: &str) -> String {
     match level {
-        Level::Error => msg.red(),
-        Level::Warn => msg.yellow(),
-        Level::Info => msg.white(),
-        Level::Debug => msg.white(),
-        Level::Trace => msg.white(),
+        Level::Error => msg.red().to_string(),
+        Level::Warn => msg.yellow().to_string(),
+        Level::Info => msg.white().to_string(),
+        Level::Debug => msg.white().to_string(),
+        Level::Trace => msg.white().to_string(),
     }
     .bold()
     .to_string()
