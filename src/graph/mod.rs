@@ -1026,24 +1026,11 @@ impl GraphCircuit {
         shapes: &Vec<Vec<usize>>,
         scales: Vec<crate::Scale>,
     ) -> Result<Vec<Tensor<Fp>>, GraphError> {
-        use crate::eth::{
-            evm_quantize_multi, evm_quantize_single, read_on_chain_inputs_multi,
-            read_on_chain_inputs_single, setup_eth_backend,
-        };
+        use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
         let (client, client_address) = setup_eth_backend(Some(&source.rpc), None).await?;
-        let quantized_evm_inputs = match source.calls {
-            input::Calls::Single(call) => {
-                let input =
-                    read_on_chain_inputs_single(client.clone(), client_address, &call).await?;
-
-                evm_quantize_single(client, scales, &input, &call.decimals).await?
-            }
-            input::Calls::Multiple(calls) => {
-                let inputs =
-                    read_on_chain_inputs_multi(client.clone(), client_address, &calls).await?;
-                evm_quantize_multi(client, scales, &inputs).await?
-            }
-        };
+        let input = read_on_chain_inputs(client.clone(), client_address, &source.call).await?;
+        let quantized_evm_inputs =
+            evm_quantize(client, scales, &input, &source.call.decimals).await?;
         // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
         let mut inputs: Vec<Tensor<Fp>> = vec![];
         for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
@@ -1437,7 +1424,6 @@ impl GraphCircuit {
         &mut self,
         data: &mut GraphData,
         test_on_chain_data: TestOnChainData,
-        single: bool,
     ) -> Result<(), GraphError> {
         // Set up local anvil instance for reading on-chain data
 
@@ -1445,6 +1431,8 @@ impl GraphCircuit {
         let output_scales = self.model().graph.get_output_scales()?;
         let input_shapes = self.model().graph.input_shapes()?;
         let output_shapes = self.model().graph.output_shapes()?;
+        let mut input_data = None;
+        let mut output_data = None;
 
         if matches!(
             test_on_chain_data.data_sources.input,
@@ -1455,24 +1443,12 @@ impl GraphCircuit {
                 return Err(GraphError::OnChainDataSource);
             }
 
-            let input_data = match &data.input_data {
-                DataSource::File(input_data) => input_data,
+            input_data = match &data.input_data {
+                DataSource::File(input_data) => Some(input_data),
                 _ => {
-                    return Err(GraphError::OnChainDataSource);
+                    return Err(GraphError::MissingDataSource);
                 }
             };
-            // Get the flatten length of input_data
-            // if the input source is a field then set scale to 0
-
-            let datam: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
-                input_data,
-                input_scales,
-                input_shapes,
-                test_on_chain_data.rpc.as_deref(),
-                single,
-            )
-            .await?;
-            data.input_data = datam.1.into();
         }
         if matches!(
             test_on_chain_data.data_sources.output,
@@ -1483,21 +1459,43 @@ impl GraphCircuit {
                 return Err(GraphError::OnChainDataSource);
             }
 
-            let output_data = match &data.output_data {
-                Some(DataSource::File(output_data)) => output_data,
-                Some(DataSource::OnChain(_)) => return Err(GraphError::OnChainDataSource),
+            output_data = match &data.output_data {
+                Some(DataSource::File(output_data)) => Some(output_data),
                 _ => return Err(GraphError::MissingDataSource),
             };
-            let datum: (Vec<Tensor<Fp>>, OnChainSource) = OnChainSource::test_from_file_data(
-                output_data,
-                output_scales,
-                output_shapes,
-                test_on_chain_data.rpc.as_deref(),
-                single,
-            )
-            .await?;
-            data.output_data = Some(datum.1.into());
         }
+        // Merge the input and output data
+        let mut file_data: Vec<Vec<input::FileSourceInner>> = vec![];
+        let mut scales: Vec<crate::Scale> = vec![];
+        let mut shapes: Vec<Vec<usize>> = vec![];
+        if let Some(input_data) = input_data {
+            file_data.extend(input_data.clone());
+            scales.extend(input_scales.clone());
+            shapes.extend(input_shapes.clone());
+        }
+        if let Some(output_data) = output_data {
+            file_data.extend(output_data.clone());
+            scales.extend(output_scales.clone());
+            shapes.extend(output_shapes.clone());
+        };
+        // print file data
+        debug!("file data: {:?}", file_data);
+
+        let on_chain_data: OnChainSource = OnChainSource::test_from_file_data(
+            &file_data,
+            scales,
+            shapes,
+            test_on_chain_data.rpc.as_deref(),
+        )
+        .await?;
+        // Here we update the GraphData struct with the on-chain data
+        if input_data.is_some() {
+            data.input_data = on_chain_data.clone().into();
+        }
+        if output_data.is_some() {
+            data.output_data = Some(on_chain_data.into());
+        }
+        debug!("test on-chain data: {:?}", data);
         // Save the updated GraphData struct to the data_path
         data.save(test_on_chain_data.data)?;
         Ok(())
