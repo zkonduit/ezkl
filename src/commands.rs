@@ -399,7 +399,7 @@ pub enum Commands {
     GenWitness {
         /// The path to the .json data file
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT, value_hint = clap::ValueHint::FilePath)]
         compiled_circuit: Option<PathBuf>,
@@ -445,7 +445,7 @@ pub enum Commands {
     CalibrateSettings {
         /// The path to the .json calibration data file.
         #[arg(short = 'D', long, default_value = DEFAULT_CALIBRATION_FILE, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL, value_hint = clap::ValueHint::FilePath)]
         model: Option<PathBuf>,
@@ -629,7 +629,7 @@ pub enum Commands {
     SetupTestEvmData {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, value_hint = clap::ValueHint::FilePath)]
         compiled_circuit: Option<PathBuf>,
@@ -763,7 +763,7 @@ pub enum Commands {
         /// view functions that return the data that the network
         /// ingests as inputs.
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to the witness file. This is needed for proof swapping for kzg commitments.
         #[arg(short = 'W', long, default_value = DEFAULT_WITNESS, value_hint = clap::ValueHint::FilePath)]
         witness: Option<PathBuf>,
@@ -859,7 +859,7 @@ pub enum Commands {
     DeployEvmDataAttestation {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<PathBuf>,
+        data: Option<String>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(long, default_value = DEFAULT_SETTINGS, value_hint = clap::ValueHint::FilePath)]
         settings_path: Option<PathBuf>,

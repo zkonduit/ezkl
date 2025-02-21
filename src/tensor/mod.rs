@@ -9,6 +9,7 @@ pub mod var;
 
 pub use errors::TensorError;
 
+use core::hash::Hash;
 use halo2curves::ff::PrimeField;
 use maybe_rayon::{
     prelude::{
@@ -1767,6 +1768,229 @@ pub fn get_broadcasted_shape(
     }
 }
 ////////////////////////
+///
+
+/// The shape of data for some operations
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Copy)]
+pub enum DataFormat {
+    /// NCHW
+    #[default]
+    NCHW,
+    /// NHWC
+    NHWC,
+    /// CHW
+    CHW,
+    /// HWC
+    HWC,
+}
+
+// as str
+impl core::fmt::Display for DataFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DataFormat::NCHW => write!(f, "NCHW"),
+            DataFormat::NHWC => write!(f, "NHWC"),
+            DataFormat::CHW => write!(f, "CHW"),
+            DataFormat::HWC => write!(f, "HWC"),
+        }
+    }
+}
+
+impl DataFormat {
+    /// Get the format's canonical form
+    pub fn canonical(&self) -> DataFormat {
+        match self {
+            DataFormat::NHWC => DataFormat::NCHW,
+            DataFormat::HWC => DataFormat::CHW,
+            _ => self.clone(),
+        }
+    }
+
+    /// no batch dim
+    pub fn has_no_batch(&self) -> bool {
+        match self {
+            DataFormat::CHW | DataFormat::HWC => true,
+            _ => false,
+        }
+    }
+
+    /// Convert tensor to canonical format (NCHW or CHW)
+    pub fn to_canonical<F: PrimeField + TensorType + PartialOrd + Hash>(
+        &self,
+        tensor: &mut ValTensor<F>,
+    ) -> Result<(), TensorError> {
+        match self {
+            DataFormat::NHWC => {
+                // For ND: Move channels from last axis to position after batch
+                let ndims = tensor.dims().len();
+                if ndims > 2 {
+                    tensor.move_axis(ndims - 1, 1)?;
+                }
+            }
+            DataFormat::HWC => {
+                // For ND: Move channels from last axis to first position
+                let ndims = tensor.dims().len();
+                if ndims > 1 {
+                    tensor.move_axis(ndims - 1, 0)?;
+                }
+            }
+            _ => {} // NCHW/CHW are already in canonical format
+        }
+        Ok(())
+    }
+
+    /// Convert tensor from canonical format to target format
+    pub fn from_canonical<F: PrimeField + TensorType + PartialOrd + Hash>(
+        &self,
+        tensor: &mut ValTensor<F>,
+    ) -> Result<(), TensorError> {
+        match self {
+            DataFormat::NHWC => {
+                // Move channels from position 1 to end
+                let ndims = tensor.dims().len();
+                if ndims > 2 {
+                    tensor.move_axis(1, ndims - 1)?;
+                }
+            }
+            DataFormat::HWC => {
+                // Move channels from position 0 to end
+                let ndims = tensor.dims().len();
+                if ndims > 1 {
+                    tensor.move_axis(0, ndims - 1)?;
+                }
+            }
+            _ => {} // NCHW/CHW don't need conversion
+        }
+        Ok(())
+    }
+
+    /// Get the position of the channel dimension
+    pub fn get_channel_dim(&self, ndims: usize) -> usize {
+        match self {
+            DataFormat::NCHW => 1,
+            DataFormat::NHWC => ndims - 1,
+            DataFormat::CHW => 0,
+            DataFormat::HWC => ndims - 1,
+        }
+    }
+}
+/// The shape of the kernel for some operations
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default, Copy)]
+pub enum KernelFormat {
+    /// HWIO
+    HWIO,
+    /// OIHW
+    #[default]
+    OIHW,
+    /// OHWI
+    OHWI,
+}
+
+impl core::fmt::Display for KernelFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KernelFormat::HWIO => write!(f, "HWIO"),
+            KernelFormat::OIHW => write!(f, "OIHW"),
+            KernelFormat::OHWI => write!(f, "OHWI"),
+        }
+    }
+}
+
+impl KernelFormat {
+    /// Get the format's canonical form
+    pub fn canonical(&self) -> KernelFormat {
+        match self {
+            KernelFormat::HWIO => KernelFormat::OIHW,
+            KernelFormat::OHWI => KernelFormat::OIHW,
+            _ => self.clone(),
+        }
+    }
+
+    /// Convert kernel to canonical format (OIHW)
+    pub fn to_canonical<F: PrimeField + TensorType + PartialOrd + Hash>(
+        &self,
+        kernel: &mut ValTensor<F>,
+    ) -> Result<(), TensorError> {
+        match self {
+            KernelFormat::HWIO => {
+                let kdims = kernel.dims().len();
+                // Move output channels from last to first
+                kernel.move_axis(kdims - 1, 0)?;
+                // Move input channels from new last to second position
+                kernel.move_axis(kdims - 1, 1)?;
+            }
+            KernelFormat::OHWI => {
+                let kdims = kernel.dims().len();
+                // Move input channels from last to second position
+                kernel.move_axis(kdims - 1, 1)?;
+            }
+            _ => {} // OIHW is already canonical
+        }
+        Ok(())
+    }
+
+    /// Convert kernel from canonical format to target format
+    pub fn from_canonical<F: PrimeField + TensorType + PartialOrd + Hash>(
+        &self,
+        kernel: &mut ValTensor<F>,
+    ) -> Result<(), TensorError> {
+        match self {
+            KernelFormat::HWIO => {
+                let kdims = kernel.dims().len();
+                // Move input channels from second position to last
+                kernel.move_axis(1, kdims - 1)?;
+                // Move output channels from first to last
+                kernel.move_axis(0, kdims - 1)?;
+            }
+            KernelFormat::OHWI => {
+                let kdims = kernel.dims().len();
+                // Move input channels from second position to last
+                kernel.move_axis(1, kdims - 1)?;
+            }
+            _ => {} // OIHW doesn't need conversion
+        }
+        Ok(())
+    }
+
+    /// Get the position of input and output channel dimensions
+    pub fn get_channel_dims(&self, ndims: usize) -> (usize, usize) {
+        // (input_ch, output_ch)
+        match self {
+            KernelFormat::OIHW => (1, 0),
+            KernelFormat::HWIO => (ndims - 2, ndims - 1),
+            KernelFormat::OHWI => (ndims - 1, 0),
+        }
+    }
+}
+
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+impl From<tract_onnx::tract_hir::ops::nn::DataFormat> for DataFormat {
+    fn from(fmt: tract_onnx::tract_hir::ops::nn::DataFormat) -> Self {
+        match fmt {
+            tract_onnx::tract_hir::ops::nn::DataFormat::NCHW => DataFormat::NCHW,
+            tract_onnx::tract_hir::ops::nn::DataFormat::NHWC => DataFormat::NHWC,
+            tract_onnx::tract_hir::ops::nn::DataFormat::CHW => DataFormat::CHW,
+            tract_onnx::tract_hir::ops::nn::DataFormat::HWC => DataFormat::HWC,
+        }
+    }
+}
+
+#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+impl From<tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat> for KernelFormat {
+    fn from(fmt: tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat) -> Self {
+        match fmt {
+            tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat::HWIO => {
+                KernelFormat::HWIO
+            }
+            tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat::OIHW => {
+                KernelFormat::OIHW
+            }
+            tract_onnx::tract_hir::tract_core::ops::cnn::conv::KernelFormat::OHWI => {
+                KernelFormat::OHWI
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

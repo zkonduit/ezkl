@@ -24,6 +24,7 @@ use crate::{
         ops::{accumulated, add, mult, sub},
         Tensor, TensorError, ValType,
     },
+    tensor::{DataFormat, KernelFormat},
 };
 
 use super::*;
@@ -3180,6 +3181,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// use ezkl::tensor::ValTensor;
+/// use ezkl::tensor::DataFormat;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
@@ -3189,12 +3191,12 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
-/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x.clone()], &vec![(0, 0); 2], &vec![1;2], &vec![2, 2], false).unwrap();
+/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x.clone()], &vec![(0, 0); 2], &vec![1;2], &vec![2, 2], false, DataFormat::default()).unwrap();
 /// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[11, 8, 8, 10]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 ///
 /// // This time with normalization
-/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2],  &vec![2, 2], true).unwrap();
+/// let pooled = sumpool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2],  &vec![2, 2], true, DataFormat::default()).unwrap();
 /// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[3, 2, 2, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 /// ```
@@ -3206,9 +3208,19 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     stride: &[usize],
     kernel_shape: &[usize],
     normalized: bool,
+    data_format: DataFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let batch_size = values[0].dims()[0];
-    let image_channels = values[0].dims()[1];
+    let mut image = values[0].clone();
+    data_format.to_canonical(&mut image)?;
+
+    if data_format.has_no_batch() {
+        let mut dims = image.dims().to_vec();
+        dims.insert(0, 1);
+        image.reshape(&dims)?;
+    }
+
+    let batch_size = image.dims()[0];
+    let image_channels = image.dims()[1];
 
     let kernel_len = kernel_shape.iter().product();
 
@@ -3233,7 +3245,16 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .map(|coord| {
             let (b, i) = (coord[0], coord[1]);
             let input = values[0].get_slice(&[b..b + 1, i..i + 1])?;
-            let output = conv(config, region, &[input, kernel.clone()], padding, stride, 1)?;
+            let output = conv(
+                config,
+                region,
+                &[input, kernel.clone()],
+                padding,
+                stride,
+                1,
+                DataFormat::default(),
+                KernelFormat::default(),
+            )?;
             res.push(output);
             Ok(())
         })
@@ -3248,6 +3269,9 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     if normalized {
         last_elem = div(config, region, &[last_elem], F::from(kernel_len as u64))?;
     }
+
+    data_format.from_canonical(&mut last_elem)?;
+
     Ok(last_elem)
 }
 
@@ -3257,6 +3281,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::max_pool;
+/// use ezkl::tensor::DataFormat;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
 /// use ezkl::circuit::region::RegionSettings;
@@ -3271,7 +3296,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
 /// ).unwrap());
-/// let pooled = max_pool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2], &vec![2;2]).unwrap();
+/// let pooled = max_pool::<Fp>(&dummy_config, &mut dummy_region, &[x], &vec![(0, 0); 2], &vec![1;2], &vec![2;2], DataFormat::default()).unwrap();
 /// let expected: Tensor<IntegerRep> = Tensor::<IntegerRep>::new(Some(&[5, 4, 4, 6]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(pooled.int_evals().unwrap(), expected);
 ///
@@ -3283,8 +3308,16 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     padding: &[(usize, usize)],
     stride: &[usize],
     pool_dims: &[usize],
+    data_format: DataFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let image = values[0].clone();
+    let mut image = values[0].clone();
+    data_format.to_canonical(&mut image)?;
+
+    if data_format.has_no_batch() {
+        let mut dims = image.dims().to_vec();
+        dims.insert(0, 1);
+        image.reshape(&dims)?;
+    }
 
     let image_dims = image.dims();
 
@@ -3343,38 +3376,38 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     region.apply_in_loop(&mut output, inner_loop_function)?;
 
-    let res: ValTensor<F> = output.into();
+    let mut res: ValTensor<F> = output.into();
+
+    data_format.from_canonical(&mut res)?;
 
     Ok(res)
 }
 
 /// Performs a deconvolution on the given input tensor.
-/// # Examples
 /// ```
-// // expected outputs are taken from pytorch torch.nn.functional.conv_transpose2d
-///
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::deconv;
+/// use ezkl::tensor::{val::ValTensor, DataFormat, KernelFormat};
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
-/// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
 ///
+/// // Original test case 1: Channel expansion
 /// let c = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap());
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-///
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![1;2], &vec![2;2], 1).unwrap();
-/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 32, 0, 32, 0, 6, 0, 12, 0, 4, 0, 8, 0, 4, 0, 8, 0, 0, 0, 3, 0, 0, 0, 2]), &[1, 2, 3, 4]).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
+/// // Original test case 2: Basic deconvolution
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
@@ -3383,11 +3416,11 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[6, 14, 4, 2, 17, 21, 0, 1, 5]), &[1, 1, 3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-///
+/// // Original test case 3: With padding
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
@@ -3396,11 +3429,11 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[17]), &[1, 1, 1, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-///
+/// // Original test case 4: With stride
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
@@ -3409,10 +3442,11 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[10, 4, 0, 3]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
+/// // Original test case 5: Zero padding with stride
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
@@ -3421,10 +3455,11 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 1, 1, 5]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
+/// // Original test case 6: Different kernel shape
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
@@ -3433,10 +3468,11 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0]), &[1, 1, 2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
+/// // Original test case 7: Different kernel shape without padding
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
@@ -3445,20 +3481,21 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[3, 2]),
 ///     &[1, 1, 2, 1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 1, 4, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-///
+/// // Original test case 8: Channel expansion with stride
 /// let c = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap());
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 4, 0, 1]),
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
-///
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2], 1).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, c], &vec![(1, 1); 2], &vec![0;2], &vec![2;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 32, 0, 0, 6, 0, 0, 4, 0, 0, 0, 0]), &[1, 2, 2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Original test case 9: With bias
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[3, 8, 0, 8, 4, 9, 8, 1, 8]),
 ///     &[1, 1, 3, 3],
@@ -3471,11 +3508,89 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1]),
 ///     &[1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
+/// // Additional test case 1: NHWC format with HWIO kernel
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 2, 2, 1],  // NHWC format
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 1, 5, 3]),
+///     &[2, 2, 1, 1],  // HWIO format
+/// ).unwrap());
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::HWIO).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[27]), &[1, 1, 1, 1]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Additional test case 2: 1D deconvolution with NCHW format
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 3]),
+///     &[1, 1, 3],  // NCH format
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2]),
+///     &[1, 1, 2],  // OIH format
+/// ).unwrap());
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0)], &vec![0], &vec![1], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 7, 6]), &[1, 1, 4]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Additional test case 3: 3D deconvolution with NCHW format
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 3, 4]),
+///     &[1, 1, 2, 2, 1],  // NCDHW format
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 1]),
+///     &[1, 1, 1, 1, 2],  // OIDHW format
+/// ).unwrap());
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 3], &vec![0; 3], &vec![1; 3], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 2, 2, 3, 3, 4, 4]), &[1, 1, 2, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Additional test case 4: Multi-channel with NHWC format and OHWI kernel
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[2, 4, 0, 1, 3, 2, 1, 4]),  // 2 channels, 2x2 spatial
+///     &[1, 2, 2, 2],  // NHWC format [batch, height, width, channels]
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
+///     &[1, 2, 2, 2],  // OHWI format [out_channels, height, width, in_channels]
+/// ).unwrap());
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::OHWI).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[10, 24, 4, 41, 78, 27, 27, 66, 39]), &[1, 3, 3, 1]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Additional test case 5: CHW format (no batch dimension)
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[2, 4, 0, 1]),
+///     &[1, 2, 2],  // CHW format [channels, height, width]
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 3, 4]),
+///     &[1, 1, 2, 2],  // OIHW format [out_channels, in_channels, height, width]
+/// ).unwrap());
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::CHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[6, 6, 6]), &[1, 1, 1, 3]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Additional test case 6: HWC format with HWIO kernel
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[2, 3, 4, 1]),
+///     &[2, 2, 1],  // HWC format [height, width, channels]
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 1, 2]),
+///     &[2, 2, 1, 1],  // HWIO format [height, width, in_channels, out_channels]
+/// ).unwrap());
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![0;2], &vec![1;2], 1, DataFormat::HWC, KernelFormat::HWIO).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[6, 6, 6]), &[1, 1, 3, 1]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
+///
 pub fn deconv<
     F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + std::marker::Sync,
 >(
@@ -3486,9 +3601,14 @@ pub fn deconv<
     output_padding: &[usize],
     stride: &[usize],
     num_groups: usize,
+    data_format: DataFormat,
+    kernel_format: KernelFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = inputs.len() == 3;
-    let (image, kernel) = (&inputs[0], &inputs[1]);
+    let (mut working_image, mut working_kernel) = (inputs[0].clone(), inputs[1].clone());
+
+    data_format.to_canonical(&mut working_image)?;
+    kernel_format.to_canonical(&mut working_kernel)?;
 
     if stride.iter().any(|&s| s == 0) {
         return Err(TensorError::DimMismatch(
@@ -3498,26 +3618,23 @@ pub fn deconv<
     }
 
     let null_val = ValType::Constant(F::ZERO);
+    let mut expanded_image = working_image.clone();
 
-    let mut expanded_image = image.clone();
-
+    // Expand image by inserting zeros according to stride
     for (i, s) in stride.iter().enumerate() {
         expanded_image.intercalate_values(null_val.clone(), *s, 2 + i)?;
     }
 
+    // Pad to kernel size for each spatial dimension
     expanded_image.pad(
-        kernel.dims()[2..]
+        working_kernel.dims()[2..]
             .iter()
             .map(|d| (d - 1, d - 1))
             .collect::<Vec<_>>(),
         2,
-    )?; // pad to the kernel size
+    )?;
 
-    // flip order
-    let channel_coord = (0..kernel.dims()[0])
-        .cartesian_product(0..kernel.dims()[1])
-        .collect::<Vec<_>>();
-
+    // Calculate slice coordinates considering padding and output padding
     let slice_coord = expanded_image
         .dims()
         .iter()
@@ -3533,26 +3650,34 @@ pub fn deconv<
 
     let sliced_expanded_image = expanded_image.get_slice(&slice_coord)?;
 
-    let mut inverted_kernels = vec![];
+    // Generate channel coordinates for kernel transformation
+    let (in_ch_dim, out_ch_dim) =
+        KernelFormat::default().get_channel_dims(working_kernel.dims().len());
+    let channel_coord = (0..working_kernel.dims()[out_ch_dim])
+        .cartesian_product(0..working_kernel.dims()[in_ch_dim])
+        .collect::<Vec<_>>();
 
+    // Invert kernels for deconvolution
+    let mut inverted_kernels = vec![];
     for (i, j) in channel_coord {
-        let channel = kernel.get_slice(&[i..i + 1, j..j + 1])?;
+        let channel = working_kernel.get_slice(&[i..i + 1, j..j + 1])?;
         let mut channel = Tensor::from(channel.get_inner_tensor()?.clone().into_iter().rev());
-        channel.reshape(&kernel.dims()[2..])?;
+        channel.reshape(&working_kernel.dims()[2..])?;
         inverted_kernels.push(channel);
     }
 
     let mut deconv_kernel =
         Tensor::new(Some(&inverted_kernels), &[inverted_kernels.len()])?.combine()?;
-    deconv_kernel.reshape(kernel.dims())?;
+    deconv_kernel.reshape(working_kernel.dims())?;
 
-    // tensorflow formatting patch
-    if kernel.dims()[0] == sliced_expanded_image.dims()[1] {
+    // Handle tensorflow-style input/output channel ordering
+    if working_kernel.dims()[0] == sliced_expanded_image.dims()[1] {
         let mut dims = deconv_kernel.dims().to_vec();
         dims.swap(0, 1);
         deconv_kernel.reshape(&dims)?;
     }
 
+    // Prepare inputs for convolution
     let conv_input = if has_bias {
         vec![
             sliced_expanded_image,
@@ -3563,28 +3688,32 @@ pub fn deconv<
         vec![sliced_expanded_image, deconv_kernel.clone().into()]
     };
 
-    let conv_dim = kernel.dims()[2..].len();
+    let conv_dim = working_kernel.dims()[2..].len();
 
-    let output = conv(
+    // Perform convolution with canonical formats
+    let mut output = conv(
         config,
         region,
         &conv_input,
         &vec![(0, 0); conv_dim],
         &vec![1; conv_dim],
         num_groups,
+        data_format.canonical(),   // Use canonical format
+        kernel_format.canonical(), // Use canonical format
     )?;
+
+    // Convert output back to requested format
+    data_format.from_canonical(&mut output)?;
 
     Ok(output)
 }
 
 /// Applies convolution over a ND tensor of shape C x H x D1...DN (and adds a bias).
 /// ```
-/// // expected outputs are taken from pytorch torch.nn.functional.conv2d
-///
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
 /// use ezkl::circuit::ops::layouts::conv;
-/// use ezkl::tensor::val::ValTensor;
+/// use ezkl::tensor::{val::ValTensor, DataFormat, KernelFormat};
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
 /// use ezkl::circuit::region::RegionSettings;
@@ -3593,6 +3722,7 @@ pub fn deconv<
 /// let dummy_config = BaseConfig::dummy(12, 2);
 /// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
 ///
+/// // Test case 1: Basic 2D convolution with NCHW format (default)
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
 ///     &[1, 1, 3, 3],
@@ -3605,44 +3735,64 @@ pub fn deconv<
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-/// // Now test single channel
+/// // Test case 2: NHWC format with HWIO kernel
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[1, 2, 3, 3],
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3, 1],  // NHWC format
 /// ).unwrap());
 /// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
-///     Some(&[5, 1, 1, 1, 5, 2, 1, 1]),
-///     &[2, 1, 2, 2],
+///     Some(&[1, 1, 5, 1]),
+///     &[2, 2, 1, 1],  // HWIO format
+/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::HWIO).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[11, 24, 20, 14]), &[1, 2, 2, 1]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Test case 3: Multi-channel NHWC with OHWI kernel
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3, 2],  // NHWC format
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 1, 1, 2, 5, 2, 1, 2]),
+///     &[1, 2, 2, 2],  // OHWI format
 /// ).unwrap());
 /// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[1, 1]),
 ///     &[2],
 /// ).unwrap());
-///
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 2).unwrap();
-/// let expected =  Tensor::<IntegerRep>::new(Some(&[32, 17, 9, 27, 34, 20, 13, 26]), &[1, 2, 2, 2]).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::OHWI).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[64, 66, 46, 58]), &[1, 2, 2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-/// // Now test multi channel
+/// // Test case 4: 1D convolution with NCHW format
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
-///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
-///     &[1, 2, 3, 3],
+///     Some(&[1, 2, 3, 4, 5]),
+///     &[1, 1, 5],  // NCHW format
 /// ).unwrap());
 /// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
-///     Some(&[5, 1, 1, 1, 5, 2, 1, 1, 5, 3, 1, 1, 5, 4, 1, 1, 5, 1, 1, 1, 5, 2, 1, 1, 5, 3, 1, 1, 5, 4, 1, 1]),
-///     &[4, 2, 2, 2],
+///     Some(&[1, 2, 3]),
+///     &[1, 1, 3],  // OIHW format
 /// ).unwrap());
-/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
-///     Some(&[1, 1, 1, 1]),
-///     &[4],
-/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0)], &vec![1], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[14, 20, 26]), &[1, 1, 3]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
 ///
-/// let result =conv(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1).unwrap();
-/// let expected = Tensor::<IntegerRep>::new(Some(&[65, 36, 21, 52, 73, 48, 37, 48, 65, 36, 21, 52, 73, 48, 37, 48]), &[1, 4, 2, 2]).unwrap();
+/// // Test case 5: 3D convolution with NCHW format
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
+///     &[1, 1, 2, 2, 2],  // NCDHW format
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 1]),
+///     &[1, 1, 1, 1, 2],  // OIDHW format
+/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 3], &vec![1; 3], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[3, 7, 11, 15]), &[1, 1, 2, 2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 ///
@@ -3655,9 +3805,14 @@ pub fn conv<
     padding: &[(usize, usize)],
     stride: &[usize],
     num_groups: usize,
+    data_format: DataFormat,
+    kernel_format: KernelFormat,
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = values.len() == 3;
-    let (mut image, mut kernel) = (values[0].clone(), values[1].clone());
+    let (mut working_image, mut working_kernel) = (values[0].clone(), values[1].clone());
+
+    data_format.to_canonical(&mut working_image)?;
+    kernel_format.to_canonical(&mut working_kernel)?;
 
     if stride.iter().any(|&s| s == 0) {
         return Err(TensorError::DimMismatch(
@@ -3666,47 +3821,40 @@ pub fn conv<
         .into());
     }
 
-    // we specifically want to use the same kernel and image for all the convolutions and need to enforce this by assigning them
-    // 1. assign the kernel
+    // Assign tensors
     let mut assigned_len = vec![];
-
-    if !kernel.all_prev_assigned() {
-        kernel = region.assign(&config.custom_gates.inputs[0], &kernel)?;
-        assigned_len.push(kernel.len());
+    if !working_kernel.all_prev_assigned() {
+        working_kernel = region.assign(&config.custom_gates.inputs[0], &working_kernel)?;
+        assigned_len.push(working_kernel.len());
     }
-    // 2. assign the image
-    if !image.all_prev_assigned() {
-        image = region.assign(&config.custom_gates.inputs[1], &image)?;
-        assigned_len.push(image.len());
+    if !working_image.all_prev_assigned() {
+        working_image = region.assign(&config.custom_gates.inputs[1], &working_image)?;
+        assigned_len.push(working_image.len());
     }
 
     if !assigned_len.is_empty() {
-        // safe to unwrap since we've just checked it has at least one element
         region.increment(*assigned_len.iter().max().unwrap());
     }
 
-    // if image is 3d add a dummy batch dimension
-    if image.dims().len() == kernel.dims().len() - 1 {
-        image.reshape(&[1, image.dims()[0], image.dims()[1], image.dims()[2]])?;
+    if data_format.has_no_batch() {
+        let mut dim = working_image.dims().to_vec();
+        dim.insert(0, 1);
+        working_image.reshape(&dim)?;
     }
 
-    let image_dims = image.dims();
-    let kernel_dims = kernel.dims();
+    let image_dims = working_image.dims();
+    let kernel_dims = working_kernel.dims();
 
-    let mut padded_image = image.clone();
+    // Apply padding
+    let mut padded_image = working_image.clone();
     padded_image.pad(padding.to_vec(), 2)?;
 
+    // Extract dimensions
     let batch_size = image_dims[0];
     let input_channels = image_dims[1];
     let output_channels = kernel_dims[0];
 
-    log::debug!(
-        "batch_size: {}, output_channels: {}, input_channels: {}",
-        batch_size,
-        output_channels,
-        input_channels
-    );
-
+    // Calculate slides for each spatial dimension
     let slides = image_dims[2..]
         .iter()
         .enumerate()
@@ -3721,8 +3869,6 @@ pub fn conv<
         })
         .collect::<Result<Vec<_>, TensorError>>()?;
 
-    log::debug!("slides: {:?}", slides);
-
     let input_channels_per_group = input_channels / num_groups;
     let output_channels_per_group = output_channels / num_groups;
 
@@ -3730,24 +3876,15 @@ pub fn conv<
         return Err(TensorError::DimMismatch(format!(
             "Given groups={}, expected input channels and output channels to be divisible by groups, but got input_channels={}, output_channels={}",
             num_groups, input_channels, output_channels
-        ))
-        .into());
+        )).into());
     }
-
-    log::debug!(
-        "num_groups: {}, input_channels_per_group: {}, output_channels_per_group: {}",
-        num_groups,
-        input_channels_per_group,
-        output_channels_per_group
-    );
 
     let num_outputs =
         batch_size * num_groups * output_channels_per_group * slides.iter().product::<usize>();
 
-    log::debug!("num_outputs: {}", num_outputs);
-
     let mut output: Tensor<ValType<F>> = Tensor::new(None, &[num_outputs])?;
 
+    // Create iteration space
     let mut iterations = vec![0..batch_size, 0..num_groups, 0..output_channels_per_group];
     for slide in slides.iter() {
         iterations.push(0..*slide);
@@ -3759,6 +3896,13 @@ pub fn conv<
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
+    let batch_offset = if data_format.has_no_batch() {
+        2 // No batch dimension, start coordinates after channels
+    } else {
+        3 // Has batch dimension, start coordinates after batch and channels
+    };
+
+    // Main convolution loop
     let inner_loop_function = |idx: usize, region: &mut RegionCtx<F>| {
         let cartesian_coord_per_group = &cartesian_coord[idx];
         let (batch, group, i) = (
@@ -3772,22 +3916,19 @@ pub fn conv<
 
         let mut slices = vec![batch..batch + 1, start_channel..end_channel];
         for (i, stride) in stride.iter().enumerate() {
-            let coord = cartesian_coord_per_group[3 + i] * stride;
+            let coord = cartesian_coord_per_group[batch_offset + i] * stride;
             let kernel_dim = kernel_dims[2 + i];
             slices.push(coord..(coord + kernel_dim));
         }
 
         let mut local_image = padded_image.get_slice(&slices)?;
-
         local_image.flatten();
 
         let start_kernel_index = group * output_channels_per_group + i;
         let end_kernel_index = start_kernel_index + 1;
-        let mut local_kernel = kernel.get_slice(&[start_kernel_index..end_kernel_index])?;
-
+        let mut local_kernel = working_kernel.get_slice(&[start_kernel_index..end_kernel_index])?;
         local_kernel.flatten();
 
-        // this is dot product notation in einsum format
         let mut res = einsum(config, region, &[local_image, local_kernel], "i,i->")?;
 
         if has_bias {
@@ -3808,21 +3949,16 @@ pub fn conv<
     region.flush()?;
     region.apply_in_loop(&mut output, inner_loop_function)?;
 
-    let reshape_output = |output: &mut Tensor<ValType<F>>| -> Result<(), TensorError> {
-        // remove dummy batch dimension if we added one
-        let mut dims = vec![batch_size, output_channels];
-        dims.extend(slides.iter().cloned());
-        output.reshape(&dims)?;
+    // Reshape output
+    let mut dims = vec![batch_size, output_channels];
+    dims.extend(slides.iter().cloned());
+    output.reshape(&dims)?;
 
-        Ok(())
-    };
+    // Convert output back to requested format
+    let mut final_output: ValTensor<F> = output.into();
+    data_format.from_canonical(&mut final_output)?;
 
-    // remove dummy batch dimension if we added one
-    reshape_output(&mut output)?;
-
-    let output: ValTensor<_> = output.into();
-
-    Ok(output)
+    Ok(final_output)
 }
 
 /// Power accumulated layout
@@ -5702,14 +5838,12 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[101, 201, 302, 403, 503, 603]),
 ///   &[2, 3],
 /// ).unwrap());
-/// let result = output::<Fp>(&dummy_config, &mut dummy_region, &[x, y], 1024.0.into(), 1.0, false).unwrap();
+/// let result = output::<Fp>(&dummy_config, &mut dummy_region, &[x, y], false).unwrap();
 /// ```
 pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-    scale: utils::F32,
-    tol: f32,
     decomp: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut values = [values[0].clone(), values[1].clone()];
@@ -5724,43 +5858,6 @@ pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         values[1] = layouts::identity(config, region, &[values[1].clone()], decomp)?;
     }
 
-    if tol == 0.0 {
-        // regular equality constraint
-        return enforce_equality(config, region, &[values[0].clone(), values[1].clone()]);
-    }
-
-    // Calculate the difference between the expected output and actual output
-    let diff = pairwise(config, region, &values, BaseOp::Sub)?;
-
-    // integer scale
-    let int_scale = scale.0 as IntegerRep;
-    // felt scale
-    let felt_scale = integer_rep_to_felt(int_scale);
-    // input scale ratio we multiply by tol such that in the new scale range_check_len represents tol percent
-    let input_scale_ratio = (scale.0 * tol) as IntegerRep / 2 * 2;
-
-    let recip = recip(
-        config,
-        region,
-        &[values[0].clone()],
-        felt_scale,
-        felt_scale * F::from(100),
-    )?;
-
-    log::debug!("recip: {}", recip.show());
-
-    // Multiply the difference by the recip
-    let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
-
-    log::debug!("product: {}", product.show());
-    let rebased_product = div(
-        config,
-        region,
-        &[product],
-        integer_rep_to_felt(input_scale_ratio),
-    )?;
-    log::debug!("rebased_product: {}", rebased_product.show());
-
-    // check that it is within the tolerance range
-    range_check(config, region, &[rebased_product], &(-int_scale, int_scale))
+    // regular equality constraint
+    return enforce_equality(config, region, &[values[0].clone(), values[1].clone()]);
 }

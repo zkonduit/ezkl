@@ -722,7 +722,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, EZKLErr
 
 pub(crate) async fn gen_witness(
     compiled_circuit_path: PathBuf,
-    data: PathBuf,
+    data: String,
     output: Option<PathBuf>,
     vk_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
@@ -730,7 +730,7 @@ pub(crate) async fn gen_witness(
     // these aren't real values so the sanity checks are mostly meaningless
 
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
-    let data: GraphData = GraphData::from_path(data)?;
+    let data = GraphData::from_str(&data)?;
     let settings = circuit.settings().clone();
 
     let vk = if let Some(vk) = vk_path {
@@ -1041,7 +1041,7 @@ impl AccuracyResults {
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn calibrate(
     model_path: PathBuf,
-    data: PathBuf,
+    data: String,
     settings_path: PathBuf,
     target: CalibrationTarget,
     lookup_safety_margin: f64,
@@ -1055,7 +1055,7 @@ pub(crate) async fn calibrate(
 
     use crate::fieldutils::IntegerRep;
 
-    let data = GraphData::from_path(data)?;
+    let data = GraphData::from_str(&data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
@@ -1519,7 +1519,7 @@ pub(crate) async fn create_evm_data_attestation(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    input: PathBuf,
+    input: String,
     witness: Option<PathBuf>,
 ) -> Result<String, EZKLError> {
     #[allow(unused_imports)]
@@ -1533,7 +1533,7 @@ pub(crate) async fn create_evm_data_attestation(
 
     // if input is not provided, we just instantiate dummy input data
     let data =
-        GraphData::from_path(input).unwrap_or_else(|_| GraphData::new(DataSource::File(vec![])));
+        GraphData::from_str(&input).unwrap_or_else(|_| GraphData::new(DataSource::File(vec![])));
 
     // The number of input and output instances we attest to for the single call data attestation
     let mut input_len = None;
@@ -1622,7 +1622,7 @@ pub(crate) async fn create_evm_data_attestation(
 }
 
 pub(crate) async fn deploy_da_evm(
-    data: PathBuf,
+    data: String,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
@@ -1865,7 +1865,7 @@ pub(crate) fn setup(
 }
 
 pub(crate) async fn setup_test_evm_witness(
-    data_path: PathBuf,
+    data_path: String,
     compiled_circuit_path: PathBuf,
     test_data: PathBuf,
     rpc_url: Option<String>,
@@ -1875,7 +1875,7 @@ pub(crate) async fn setup_test_evm_witness(
 ) -> Result<String, EZKLError> {
     use crate::graph::TestOnChainData;
 
-    let mut data = GraphData::from_path(data_path)?;
+    let mut data = GraphData::from_str(&data_path)?;
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
     // if both input and output are from files fail

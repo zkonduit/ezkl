@@ -384,7 +384,7 @@ pub async fn deploy_contract_via_solidity(
 ///
 pub async fn deploy_da_verifier_via_solidity(
     settings_path: PathBuf,
-    input: PathBuf,
+    input: String,
     sol_code_path: PathBuf,
     rpc_url: Option<&str>,
     runs: usize,
@@ -392,7 +392,7 @@ pub async fn deploy_da_verifier_via_solidity(
 ) -> Result<H160, EthError> {
     let (client, client_address) = setup_eth_backend(rpc_url, private_key).await?;
 
-    let input = GraphData::from_path(input).map_err(|_| EthError::GraphData)?;
+    let input = GraphData::from_str(&input).map_err(|_| EthError::GraphData)?;
 
     let settings = GraphSettings::load(&settings_path).map_err(|_| EthError::GraphSettings)?;
 

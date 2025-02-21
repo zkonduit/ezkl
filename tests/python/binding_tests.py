@@ -48,7 +48,6 @@ def test_py_run_args():
     run_args = ezkl.PyRunArgs()
     run_args.input_visibility = "hashed"
     run_args.output_visibility = "hashed"
-    run_args.tolerance = 1.5
 
 
 def test_poseidon_hash():
@@ -873,7 +872,8 @@ def get_examples():
         'linear_regression',
         "mnist_gan",
         "smallworm",
-        "fr_age"
+        "fr_age",
+        "1d_conv",
     ]
     examples = []
     for subdir, _, _ in os.walk(os.path.join(examples_path, "onnx")):
@@ -900,7 +900,12 @@ async def test_all_examples(model_file, input_file):
     proof_path = os.path.join(folder_path, 'proof.json')
 
     print("Testing example: ", model_file)
-    res = ezkl.gen_settings(model_file, settings_path)
+
+    run_args = ezkl.PyRunArgs()
+    run_args.variables = [("batch_size", 1), ("sequence_length", 100), ("<Sym1>", 1)]
+    run_args.logrows = 22
+
+    res = ezkl.gen_settings(model_file, settings_path, py_run_args=run_args)
     assert res
 
     res = await ezkl.calibrate_settings(

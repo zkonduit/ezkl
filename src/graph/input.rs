@@ -550,6 +550,27 @@ impl GraphData {
         }
     }
 
+    /// Loads graph input data from a string, first seeing if it is a file path or JSON data
+    /// If it is a file path, it will load the data from the file
+    /// Otherwise, it will attempt to parse the string as JSON data
+    /// 
+    /// # Arguments
+    /// * `data` - String containing the input data
+    /// # Returns
+    /// A new GraphData instance containing the loaded data
+    pub fn from_str(data: &str) -> Result<Self, GraphError> {
+        let graph_input = serde_json::from_str(data); 
+        match graph_input {
+            Ok(graph_input) => {
+                return Ok(graph_input);
+            }
+            Err(_) => {
+                let path = std::path::PathBuf::from(data);
+                GraphData::from_path(path)
+            }
+        }
+    }
+
     /// Loads graph input data from a file
     ///
     /// # Arguments
@@ -631,8 +652,12 @@ impl GraphData {
             if input.len() % input_size != 0 {
                 return Err(GraphError::InvalidDims(
                     0,
-                    "calibration data length must be evenly divisible by the original input_size"
-                        .to_string(),
+                    format!(
+                        "calibration data length (={}) must be evenly divisible by the original input_size(={})",
+                        input.len(),
+                        input_size
+                    ),
+                    
                 ));
             }
 

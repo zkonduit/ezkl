@@ -4,8 +4,8 @@ use crate::circuit::modules::poseidon::{
     PoseidonChip,
 };
 use crate::circuit::modules::Module;
+use crate::circuit::CheckMode;
 use crate::circuit::InputType;
-use crate::circuit::{CheckMode, Tolerance};
 use crate::commands::*;
 use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
 use crate::graph::TestDataSource;
@@ -156,9 +156,6 @@ impl pyo3::ToPyObject for PyG1Affine {
 #[gen_stub_pyclass]
 struct PyRunArgs {
     #[pyo3(get, set)]
-    /// float: The tolerance for error on model outputs
-    pub tolerance: f32,
-    #[pyo3(get, set)]
     /// int: The denominator in the fixed point representation used when quantizing inputs
     pub input_scale: crate::Scale,
     #[pyo3(get, set)]
@@ -225,7 +222,6 @@ impl From<PyRunArgs> for RunArgs {
     fn from(py_run_args: PyRunArgs) -> Self {
         RunArgs {
             bounded_log_lookup: py_run_args.bounded_log_lookup,
-            tolerance: Tolerance::from(py_run_args.tolerance),
             input_scale: py_run_args.input_scale,
             param_scale: py_run_args.param_scale,
             num_inner_cols: py_run_args.num_inner_cols,
@@ -250,7 +246,6 @@ impl Into<PyRunArgs> for RunArgs {
     fn into(self) -> PyRunArgs {
         PyRunArgs {
             bounded_log_lookup: self.bounded_log_lookup,
-            tolerance: self.tolerance.val,
             input_scale: self.input_scale,
             param_scale: self.param_scale,
             num_inner_cols: self.num_inner_cols,
@@ -1014,7 +1009,7 @@ fn gen_random_data(
 /// bool
 ///
 #[pyfunction(signature = (
-    data = PathBuf::from(DEFAULT_CALIBRATION_FILE),
+    data = String::from(DEFAULT_CALIBRATION_FILE),
     model = PathBuf::from(DEFAULT_MODEL),
     settings = PathBuf::from(DEFAULT_SETTINGS),
     target = CalibrationTarget::default(), // default is "resources
@@ -1026,7 +1021,7 @@ fn gen_random_data(
 #[gen_stub_pyfunction]
 fn calibrate_settings(
     py: Python,
-    data: PathBuf,
+    data: String,
     model: PathBuf,
     settings: PathBuf,
     target: CalibrationTarget,
@@ -1081,7 +1076,7 @@ fn calibrate_settings(
 ///     Python object containing the witness values
 ///
 #[pyfunction(signature = (
-    data=PathBuf::from(DEFAULT_DATA),
+    data=String::from(DEFAULT_DATA),
     model=PathBuf::from(DEFAULT_COMPILED_CIRCUIT),
     output=PathBuf::from(DEFAULT_WITNESS),
     vk_path=None,
@@ -1090,7 +1085,7 @@ fn calibrate_settings(
 #[gen_stub_pyfunction]
 fn gen_witness(
     py: Python,
-    data: PathBuf,
+    data: String,
     model: PathBuf,
     output: Option<PathBuf>,
     vk_path: Option<PathBuf>,
@@ -1759,7 +1754,7 @@ fn create_evm_vka(
 /// bool
 ///
 #[pyfunction(signature = (
-    input_data=PathBuf::from(DEFAULT_DATA),
+    input_data=String::from(DEFAULT_DATA),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
     abi_path=PathBuf::from(DEFAULT_VERIFIER_DA_ABI),
@@ -1768,7 +1763,7 @@ fn create_evm_vka(
 #[gen_stub_pyfunction]
 fn create_evm_data_attestation(
     py: Python,
-    input_data: PathBuf,
+    input_data: String,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
@@ -1830,7 +1825,7 @@ fn create_evm_data_attestation(
 #[gen_stub_pyfunction]
 fn setup_test_evm_witness(
     py: Python,
-    data_path: PathBuf,
+    data_path: String,
     compiled_circuit_path: PathBuf,
     test_data: PathBuf,
     input_source: PyTestDataSource,
@@ -1910,7 +1905,7 @@ fn deploy_evm(
 fn deploy_da_evm(
     py: Python,
     addr_path: PathBuf,
-    input_data: PathBuf,
+    input_data: String,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
