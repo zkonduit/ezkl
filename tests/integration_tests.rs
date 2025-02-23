@@ -1048,7 +1048,7 @@ mod native_tests {
                     let test_dir = TempDir::new(test).unwrap();
                     let path = test_dir.path().to_str().unwrap(); crate::native_tests::mv_test_(path, test);
                     let _anvil_child = crate::native_tests::start_anvil(true, Hardfork::Latest);
-                    kzg_evm_on_chain_input_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public", "private");
+                    kzg_evm_on_chain_output_prove_and_verify(path, test.to_string(), "file", "on-chain", "private", "public", "private");
                     // test_dir.close().unwrap();
                 }
 
