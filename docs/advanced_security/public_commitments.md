@@ -7,7 +7,7 @@
 A common design pattern in a zero knowledge (zk) application is thus:
 - A prover has some data which is used within a circuit.
 - This data, as it may be high-dimensional or somewhat private, is pre-committed to using some hash function.
-- The zk-circuit which forms the core of the application then proves (para-phrasing) a statement of the form:
+- The zk-circuit which forms the core of the application then proves (paraphrasing) a statement of the form:
 >"I know some data D which when hashed corresponds to the pre-committed to value H + whatever else the circuit is proving over D". 
 
 From our own experience, we've implemented such patterns using snark-friendly hash functions like [Poseidon](https://www.poseidon-hash.info/), for which there is a relatively well vetted [implementation](https://docs.rs/halo2_gadgets/latest/halo2_gadgets/poseidon/index.html) in Halo2. Even then these hash functions can introduce lots of overhead and can be very expensive to generate proofs for if the dimensionality of the data D is large. 
