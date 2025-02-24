@@ -4,7 +4,6 @@ use crate::circuit::InputType;
 use crate::fieldutils::integer_rep_to_felt;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::graph::postgres::Client;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(feature = "python-bindings")]
@@ -587,17 +586,6 @@ impl GraphData {
     }
 }
 
-#[cfg(feature = "python-bindings")]
-impl ToPyObject for CallsToAccount {
-    /// Converts CallsToAccount to Python object
-    fn to_object(&self, py: Python) -> PyObject {
-        let dict = PyDict::new(py);
-        dict.set_item("account", &self.address).unwrap();
-        dict.set_item("call_data", &self.call_data).unwrap();
-        dict.to_object(py)
-    }
-}
-
 // Additional Python bindings for various types...
 
 #[cfg(test)]
@@ -765,16 +753,6 @@ impl ToPyObject for CallToAccount {
         dict.set_item("call_data", &self.call_data).unwrap();
         dict.set_item("decimals", &self.decimals).unwrap();
         dict.to_object(py)
-    }
-}
-
-#[cfg(feature = "python-bindings")]
-impl ToPyObject for Calls {
-    fn to_object(&self, py: Python) -> PyObject {
-        match self {
-            Calls::Multiple(calls) => calls.to_object(py),
-            Calls::Single(call) => call.to_object(py),
-        }
     }
 }
 

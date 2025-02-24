@@ -256,6 +256,26 @@ jobs:
         #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
         run: wasm-pack test --chrome --headless -- -Z build-std="panic_abort,std" --features web
 
+  foudry-solidity-tests:
+    permissions:
+      contents: read
+    runs-on: non-gpu
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run tests
+        run: | 
+          cd tests/foundry
+          forge test -vvv
+
+      - name: Run snapshot
+        run: forge snapshot
+
   mock-proving-tests:
     permissions:
       contents: read
