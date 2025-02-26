@@ -514,7 +514,7 @@ def ipa_commit(message:typing.Sequence[str],vk_path:str | os.PathLike | pathlib.
     Arguments
     -------
     message: list[str]
-        List of field elements represnted as strings
+        List of field elements represented as strings
     
     vk_path: str
         Path to the verification key
@@ -538,7 +538,7 @@ def kzg_commit(message:typing.Sequence[str],vk_path:str | os.PathLike | pathlib.
     Arguments
     -------
     message: list[str]
-        List of field elements represnted as strings
+        List of field elements represented as strings
     
     vk_path: str
         Path to the verification key
