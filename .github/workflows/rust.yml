@@ -117,10 +117,6 @@ jobs:
   #     - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
   #       with:
   #         wasmtime-version: "3.0.1"
-  #     - name: Install wasm32-wasi
-  #       run: rustup target add wasm32-wasi
-  #     - name: Install cargo-wasi
-  #       run: cargo install cargo-wasi
   #     # - name: Matmul overflow (wasi)
   #     #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
   #     # - name: Conv overflow (wasi)
@@ -154,10 +150,6 @@ jobs:
       - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
         with:
           wasmtime-version: "3.0.1"
-      - name: Install wasm32-wasi
-        run: rustup target add wasm32-wasi
-      - name: Install cargo-wasi
-        run: cargo install cargo-wasi
       # - name: Matmul overflow (wasi)
       #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Conv overflow (wasi)
@@ -191,10 +183,6 @@ jobs:
       - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
         with:
           wasmtime-version: "3.0.1"
-      - name: Install wasm32-wasi
-        run: rustup target add wasm32-wasi
-      - name: Install cargo-wasi
-        run: cargo install cargo-wasi
       # - name: Matmul overflow (wasi)
       #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Conv overflow (wasi)
