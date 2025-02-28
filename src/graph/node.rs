@@ -14,14 +14,14 @@ use super::VarScales;
 use super::Visibility;
 
 // Import operation types for different circuit components
-use crate::circuit::hybrid::HybridOp;
-use crate::circuit::lookup::LookupOp;
-use crate::circuit::poly::PolyOp;
 use crate::circuit::CircuitError;
 use crate::circuit::Constant;
 use crate::circuit::Input;
 use crate::circuit::Op;
 use crate::circuit::Unknown;
+use crate::circuit::hybrid::HybridOp;
+use crate::circuit::lookup::LookupOp;
+use crate::circuit::poly::PolyOp;
 
 // Import graph error types for EZKL
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
@@ -740,7 +740,7 @@ fn rescale_const_with_single_use(
         if scale_max > &current_scale {
             let raw_values = constant.raw_values.clone();
             constant.quantized_values =
-                super::quantize_tensor(raw_values, *scale_max, param_visibility)?;
+                super::quantize_tensor(raw_values, *scale_max, param_visibility, true)?;
         }
     }
 

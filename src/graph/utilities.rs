@@ -1,14 +1,14 @@
-use super::errors::GraphError;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use super::VarScales;
+use super::errors::GraphError;
 use super::{Rescaled, SupportedOp, Visibility};
+use crate::circuit::Op;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::circuit::hybrid::HybridOp;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::circuit::lookup::LookupOp;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::circuit::poly::PolyOp;
-use crate::circuit::Op;
 use crate::fieldutils::IntegerRep;
 use crate::tensor::{Tensor, TensorError, TensorType};
 use halo2curves::bn256::Fr as Fp;
@@ -22,6 +22,7 @@ use std::sync::Arc;
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::tract_core::ops::{
+    Downsample,
     array::{
         Gather, GatherElements, GatherNd, MultiBroadcastTo, OneHot, ScatterElements, ScatterNd,
         Slice, Topk,
@@ -31,7 +32,6 @@ use tract_onnx::tract_core::ops::{
     einsum::EinSum,
     element_wise::ElementWiseOp,
     nn::{LeakyRelu, Reduce, Softmax},
-    Downsample,
 };
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::tract_hir::{
@@ -60,6 +60,33 @@ pub fn quantize_float(
 
     if *elem > max_value || *elem < -max_value {
         return Err(TensorError::SigBitTruncationError);
+    }
+
+    // we parallelize the quantization process as it seems to be quite slow at times
+    let scaled = (mult * *elem + shift).round() as IntegerRep;
+
+    Ok(scaled)
+}
+
+/// Quantizes an iterable of f64 to a [Tensor] of IntegerRep using a fixed point representation.
+/// NAN gets mapped to 0. And values that exceed the max are capped.
+/// Arguments
+///
+/// * `elem` - the element to quantize.
+/// * `shift` - offset used in the fixed point representation.
+/// * `scale` - `2^scale` used in the fixed point representation.
+pub fn quantize_float_and_cap(
+    elem: &f64,
+    shift: f64,
+    scale: crate::Scale,
+) -> Result<IntegerRep, TensorError> {
+    let mult = scale_to_multiplier(scale);
+    let max_value = ((IntegerRep::MAX as f64 - shift) / mult).round(); // the maximum value that can be represented w/o sig bit truncation
+
+    if *elem > max_value {
+        return Ok(IntegerRep::MAX);
+    } else if *elem < -max_value {
+        return Ok(IntegerRep::MIN);
     }
 
     // we parallelize the quantization process as it seems to be quite slow at times
@@ -379,7 +406,7 @@ pub fn new_op_from_onnx(
             let range = (start..end).step_by(delta).collect::<Vec<_>>();
             let raw_value = range.iter().map(|x| *x as f32).collect::<Tensor<_>>();
             // Quantize the raw value (integers)
-            let quantized_value = quantize_tensor(raw_value.clone(), 0, &Visibility::Fixed)?;
+            let quantized_value = quantize_tensor(raw_value.clone(), 0, &Visibility::Fixed, false)?;
 
             let c = crate::circuit::ops::Constant::new(
                 quantized_value,
@@ -711,6 +738,7 @@ pub fn new_op_from_onnx(
                 raw_value.clone(),
                 constant_scale,
                 &run_args.param_visibility,
+                true,
             )?;
             let c = crate::circuit::ops::Constant::new(
                 quantized_value,
@@ -1550,13 +1578,20 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     const_value: Tensor<f32>,
     scale: crate::Scale,
     visibility: &Visibility,
+    cap: bool,
 ) -> Result<Tensor<F>, TensorError> {
     let mut value: Tensor<F> = const_value.par_enum_map(|_, x| {
-        Ok::<_, TensorError>(crate::fieldutils::integer_rep_to_felt::<F>(quantize_float(
-            &(x).into(),
-            0.0,
-            scale,
-        )?))
+        if cap {
+            Ok::<F, TensorError>(crate::fieldutils::integer_rep_to_felt::<F>(
+                quantize_float_and_cap(&(x).into(), 0.0, scale)?,
+            ))
+        } else {
+            Ok(crate::fieldutils::integer_rep_to_felt::<F>(quantize_float(
+                &(x).into(),
+                0.0,
+                scale,
+            )?))
+        }
     })?;
 
     value.set_scale(scale);
@@ -1644,7 +1679,7 @@ pub mod tests {
         let reference: Tensor<Fp> = (0..10).map(|x| x.into()).into();
         let scale = 0;
         let visibility = &Visibility::Public;
-        let quantized: Tensor<Fp> = quantize_tensor(tensor, scale, visibility).unwrap();
+        let quantized: Tensor<Fp> = quantize_tensor(tensor, scale, visibility, false).unwrap();
         assert_eq!(quantized.len(), 10);
         assert_eq!(quantized, reference);
     }

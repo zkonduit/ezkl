@@ -301,7 +301,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
             Some(v) => v,
             None => return Err(CircuitError::UnsetVisibility),
         };
-        self.quantized_values = quantize_tensor(self.raw_values.clone(), new_scale, &visibility)?;
+        self.quantized_values =
+            quantize_tensor(self.raw_values.clone(), new_scale, &visibility, true)?;
         Ok(())
     }
 
@@ -317,13 +318,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
 }
 
 impl<
-        F: PrimeField
-            + TensorType
-            + PartialOrd
-            + std::hash::Hash
-            + Serialize
-            + for<'de> Deserialize<'de>,
-    > Op<F> for Constant<F>
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Serialize + for<'de> Deserialize<'de>,
+> Op<F> for Constant<F>
 {
     fn as_any(&self) -> &dyn Any {
         self

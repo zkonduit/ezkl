@@ -18,13 +18,12 @@ use self::tensor::{create_constant_tensor, create_zero_tensor};
 use super::{chip::BaseConfig, region::RegionCtx};
 use crate::{
     circuit::{ops::base::BaseOp, utils},
-    fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep},
-    tensor::{
-        create_unit_tensor, get_broadcasted_shape,
-        ops::{accumulated, add, mult, sub},
-        Tensor, TensorError, ValType,
-    },
+    fieldutils::{IntegerRep, felt_to_integer_rep, integer_rep_to_felt},
     tensor::{DataFormat, KernelFormat},
+    tensor::{
+        Tensor, TensorError, ValType, create_unit_tensor, get_broadcasted_shape,
+        ops::{accumulated, add, mult, sub},
+    },
 };
 
 use super::*;
@@ -1751,15 +1750,15 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
             // assert than res is less than the product of the dims
             if region.witness_gen() {
                 assert!(
-                res.int_evals()?
-                    .iter()
-                    .all(|x| *x < dims.iter().product::<usize>() as IntegerRep),
-                "res is greater than the product of the dims {} (coord={}, index_dim_multiplier={}, res={})",
-                dims.iter().product::<usize>(),
-                index_val.show(),
-                index_dim_multiplier.show(),
-                res.show()
-            );
+                    res.int_evals()?
+                        .iter()
+                        .all(|x| *x < dims.iter().product::<usize>() as IntegerRep),
+                    "res is greater than the product of the dims {} (coord={}, index_dim_multiplier={}, res={})",
+                    dims.iter().product::<usize>(),
+                    index_val.show(),
+                    index_dim_multiplier.show(),
+                    res.show()
+                );
             }
         }
 
@@ -2211,12 +2210,12 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     axes: &[usize],
     // generic layout op
     op: impl Fn(
-            &BaseConfig<F>,
-            &mut RegionCtx<F>,
-            &[ValTensor<F>; 1],
-        ) -> Result<ValTensor<F>, CircuitError>
-        + Send
-        + Sync,
+        &BaseConfig<F>,
+        &mut RegionCtx<F>,
+        &[ValTensor<F>; 1],
+    ) -> Result<ValTensor<F>, CircuitError>
+    + Send
+    + Sync,
 ) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
 
@@ -4101,6 +4100,11 @@ pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     decomp: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut output = values[0].clone();
+
+    println!("output: {:?}", output);
+    println!("all prev assigned: {:?}", output.all_prev_assigned());
+    println!("decomp: {:?}", decomp);
+
     if !output.all_prev_assigned() {
         // checks they are in range
         if decomp {
@@ -5595,6 +5599,7 @@ pub(crate) fn leaky_relu<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
         Tensor::from([alpha.0; 1].into_iter()),
         *input_scale,
         &crate::graph::Visibility::Fixed,
+        false,
     )?;
 
     let alpha_tensor = create_constant_tensor(quantized_alpha[0], 1);
@@ -5617,12 +5622,12 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     values: &[ValTensor<F>; 1],
     axes: &[usize],
     op: impl Fn(
-            &BaseConfig<F>,
-            &mut RegionCtx<F>,
-            &[ValTensor<F>; 1],
-        ) -> Result<ValTensor<F>, CircuitError>
-        + Send
-        + Sync,
+        &BaseConfig<F>,
+        &mut RegionCtx<F>,
+        &[ValTensor<F>; 1],
+    ) -> Result<ValTensor<F>, CircuitError>
+    + Send
+    + Sync,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut input = values[0].clone();
 
