@@ -157,25 +157,6 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     claimed_output.reshape(input_dims)?;
     // implicitly check if the prover provided output is within range
     let claimed_output = identity(config, region, &[claimed_output], true)?;
-    // check if x is too large only if the decomp would support overflow in the previous op
-    if F::from_u128(IntegerRep::MAX as u128)
-        < F::from_u128(region.base() as u128).pow([region.legs() as u64]) - F::ONE
-    {
-        // here we decompose and extract the sign of the input
-        let sign = sign(config, region, &[claimed_output.clone()])?;
-
-        let abs_value = pairwise(
-            config,
-            region,
-            &[claimed_output.clone(), sign],
-            BaseOp::Mult,
-        )?;
-        let max_val = create_constant_tensor(integer_rep_to_felt(IntegerRep::MAX), 1);
-        let less_than_max = less(config, region, &[abs_value.clone(), max_val])?;
-        // assert the result is 1
-        let comparison_unit = create_constant_tensor(F::ONE, less_than_max.len());
-        enforce_equality(config, region, &[abs_value, comparison_unit])?;
-    }
 
     let product = pairwise(
         config,
@@ -248,32 +229,6 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         region,
         &[equal_zero_mask.clone(), equal_inverse_mask],
     )?;
-
-    let masked_output = pairwise(
-        config,
-        region,
-        &[claimed_output.clone(), not_equal_zero_mask.clone()],
-        BaseOp::Mult,
-    )?;
-
-    // check if x is too large only if the decomp would support overflow in the previous op
-    if F::from_u128(IntegerRep::MAX as u128)
-        < F::from_u128(region.base() as u128).pow([region.legs() as u64]) - F::ONE
-    {
-        // here we decompose and extract the sign of the input
-        let sign = sign(config, region, &[masked_output.clone()])?;
-        let abs_value = pairwise(
-            config,
-            region,
-            &[claimed_output.clone(), sign],
-            BaseOp::Mult,
-        )?;
-        let max_val = create_constant_tensor(integer_rep_to_felt(IntegerRep::MAX), 1);
-        let less_than_max = less(config, region, &[abs_value.clone(), max_val])?;
-        // assert the result is 1
-        let comparison_unit = create_constant_tensor(F::ONE, less_than_max.len());
-        enforce_equality(config, region, &[abs_value, comparison_unit])?;
-    }
 
     let err_func = |config: &BaseConfig<F>,
                     region: &mut RegionCtx<F>,
@@ -5883,14 +5838,12 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[101, 201, 302, 403, 503, 603]),
 ///   &[2, 3],
 /// ).unwrap());
-/// let result = output::<Fp>(&dummy_config, &mut dummy_region, &[x, y], 1024.0.into(), 1.0, false).unwrap();
+/// let result = output::<Fp>(&dummy_config, &mut dummy_region, &[x, y], false).unwrap();
 /// ```
 pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 2],
-    scale: utils::F32,
-    tol: f32,
     decomp: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut values = [values[0].clone(), values[1].clone()];
@@ -5905,43 +5858,6 @@ pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         values[1] = layouts::identity(config, region, &[values[1].clone()], decomp)?;
     }
 
-    if tol == 0.0 {
-        // regular equality constraint
-        return enforce_equality(config, region, &[values[0].clone(), values[1].clone()]);
-    }
-
-    // Calculate the difference between the expected output and actual output
-    let diff = pairwise(config, region, &values, BaseOp::Sub)?;
-
-    // integer scale
-    let int_scale = scale.0 as IntegerRep;
-    // felt scale
-    let felt_scale = integer_rep_to_felt(int_scale);
-    // input scale ratio we multiply by tol such that in the new scale range_check_len represents tol percent
-    let input_scale_ratio = (scale.0 * tol) as IntegerRep / 2 * 2;
-
-    let recip = recip(
-        config,
-        region,
-        &[values[0].clone()],
-        felt_scale,
-        felt_scale * F::from(100),
-    )?;
-
-    log::debug!("recip: {}", recip.show());
-
-    // Multiply the difference by the recip
-    let product = pairwise(config, region, &[diff, recip], BaseOp::Mult)?;
-
-    log::debug!("product: {}", product.show());
-    let rebased_product = div(
-        config,
-        region,
-        &[product],
-        integer_rep_to_felt(input_scale_ratio),
-    )?;
-    log::debug!("rebased_product: {}", rebased_product.show());
-
-    // check that it is within the tolerance range
-    range_check(config, region, &[rebased_product], &(-int_scale, int_scale))
+    // regular equality constraint
+    return enforce_equality(config, region, &[values[0].clone(), values[1].clone()]);
 }

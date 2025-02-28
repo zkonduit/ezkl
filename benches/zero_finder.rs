@@ -22,7 +22,7 @@ fn generate_test_data(size: usize, zero_probability: f64) -> Vec<ValType> {
     let mut rng = rand::thread_rng();
     (0..size)
         .map(|_i| {
-            if rng.gen::<f64>() < zero_probability {
+            if rng.r#gen::<f64>() < zero_probability {
                 ValType::Constant(F::ZERO)
             } else {
                 ValType::Constant(F::ONE) // Or some other non-zero value

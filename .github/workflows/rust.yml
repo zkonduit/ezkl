@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@v1
@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - name: Build
@@ -66,7 +66,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - name: Docs
@@ -82,7 +82,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -107,7 +107,7 @@ jobs:
   #   persist-credentials: false
   #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
   #       with:
-  #         toolchain: nightly-2024-07-18
+  #         toolchain: nightly-2025-02-17
   #         override: true
   #         components: rustfmt, clippy
   #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -117,10 +117,6 @@ jobs:
   #     - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
   #       with:
   #         wasmtime-version: "3.0.1"
-  #     - name: Install wasm32-wasi
-  #       run: rustup target add wasm32-wasi
-  #     - name: Install cargo-wasi
-  #       run: cargo install cargo-wasi
   #     # - name: Matmul overflow (wasi)
   #     #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
   #     # - name: Conv overflow (wasi)
@@ -144,7 +140,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -154,10 +150,6 @@ jobs:
       - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
         with:
           wasmtime-version: "3.0.1"
-      - name: Install wasm32-wasi
-        run: rustup target add wasm32-wasi
-      - name: Install cargo-wasi
-        run: cargo install cargo-wasi
       # - name: Matmul overflow (wasi)
       #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Conv overflow (wasi)
@@ -181,7 +173,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -191,10 +183,6 @@ jobs:
       - uses: mwilliamson/setup-wasmtime-action@bf814d7d8fc3c3a77dfe114bd9fb8a2c575f6ad6  #v2.0.0
         with:
           wasmtime-version: "3.0.1"
-      - name: Install wasm32-wasi
-        run: rustup target add wasm32-wasi
-      - name: Install cargo-wasi
-        run: cargo install cargo-wasi
       # - name: Matmul overflow (wasi)
       #   run: cargo wasi test matmul_col_ultra_overflow -- --include-ignored --nocapture
       # - name: Conv overflow (wasi)
@@ -218,7 +206,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -238,7 +226,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
@@ -251,7 +239,7 @@ jobs:
       - name: Install wasm32-unknown-unknown
         run: rustup target add wasm32-unknown-unknown
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
       - name: Run wasm verifier tests
         # on mac:
         #   AR=/opt/homebrew/opt/llvm/bin/llvm-ar CC=/opt/homebrew/opt/llvm/bin/clang wasm-pack test --firefox --headless -- -Z build-std="panic_abort,std" --features web
@@ -267,7 +255,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -294,8 +282,6 @@ jobs:
         run: cargo nextest run --verbose tests::mock_fixed_params_ --test-threads 32
       - name: public outputs and bounded lookup log
         run: cargo nextest run --verbose tests::mock_bounded_lookup_log --test-threads 32
-      - name: public outputs and tolerance > 0
-        run: cargo nextest run --verbose tests::mock_tolerance_public_outputs_ --test-threads 32
       - name: public outputs + batch size == 10
         run: cargo nextest run --verbose tests::mock_large_batch_public_outputs_ --test-threads 16
       - name: kzg inputs
@@ -336,7 +322,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -356,7 +342,7 @@ jobs:
           node-version: "18.12.1"
           cache: "pnpm"
       - name: "Add rust-src"
-        run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
       - name: Install dependencies for js tests and in-browser-evm-verifier package
         run: |
           pnpm install --frozen-lockfile
@@ -421,7 +407,7 @@ jobs:
   #         persist-credentials: false
   #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
   #       with:
-  #         toolchain: nightly-2024-07-18
+  #         toolchain: nightly-2025-02-17
   #         override: true
   #         components: rustfmt, clippy
   #     - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
@@ -429,7 +415,7 @@ jobs:
   #         # Pin to version 0.12.1
   #         version: 'v0.12.1'
   #     - name: Add rust-src
-  #       run: rustup component add rust-src --toolchain nightly-2024-07-18
+  #       run: rustup component add rust-src --toolchain nightly-2025-02-17
   #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   #       with:
   #         persist-credentials: false
@@ -455,7 +441,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: jetli/wasm-pack-action@0d096b08b4e5a7de8c28de67e11e945404e9eefa  #v0.4.0
@@ -466,7 +452,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Add rust-src
-        run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
+        run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
@@ -536,11 +522,11 @@ jobs:
   #   persist-credentials: false
   #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
   #       with:
-  #         toolchain: nightly-2024-07-18
+  #         toolchain: nightly-2025-02-17
   #         override: true
   #         components: rustfmt, clippy
   #     - name: Add rust-src
-  #       run: rustup component add rust-src --toolchain nightly-2024-07-18-x86_64-unknown-linux-gnu
+  #       run: rustup component add rust-src --toolchain nightly-2025-02-17-x86_64-unknown-linux-gnu
   #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
   #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
   #       with:
@@ -574,7 +560,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -594,7 +580,7 @@ jobs:
   #   persist-credentials: false
   #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
   #       with:
-  #         toolchain: nightly-2024-07-18
+  #         toolchain: nightly-2025-02-17
   #         override: true
   #         components: rustfmt, clippy
   #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -615,7 +601,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -636,7 +622,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -661,7 +647,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -685,7 +671,7 @@ jobs:
           python-version: "3.12"
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - name: Install cmake
@@ -715,7 +701,7 @@ jobs:
           python-version: "3.12"
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -766,7 +752,7 @@ jobs:
           python-version: "3.11"
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -821,7 +807,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
@@ -829,7 +815,7 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Run ios tests
-        run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2024-07-18-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
+        run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-02-17-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
 
   swift-package-tests:
     permissions:
@@ -843,7 +829,7 @@ jobs:
           persist-credentials: false
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
-          toolchain: nightly-2024-07-18
+          toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
       - name: Build EzklCoreBindings
