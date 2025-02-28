@@ -1017,7 +1017,7 @@ pub fn fix_da_sol(commitment_bytes: Option<Vec<u8>>, only_kzg: bool) -> Result<S
         let commitment_bytes = commitment_bytes.as_ref().unwrap();
         let hex_string = hex::encode(commitment_bytes);
         contract = contract.replace(
-            "bytes constant COMMITMENT_KZG = hex\"\";",
+            "bytes constant COMMITMENT_KZG = hex\"1234\";",
             &format!("bytes constant COMMITMENT_KZG = hex\"{}\";", hex_string),
         );
         if only_kzg {

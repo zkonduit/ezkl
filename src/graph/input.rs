@@ -764,7 +764,7 @@ impl ToPyObject for DataSource {
             DataSource::OnChain(source) => {
                 let dict = PyDict::new(py);
                 dict.set_item("rpc_url", &source.rpc).unwrap();
-                dict.set_item("calls_to_accounts", &source.calls.to_object(py))
+                dict.set_item("calls_to_accounts", &source.call.to_object(py))
                     .unwrap();
                 dict.to_object(py)
             }

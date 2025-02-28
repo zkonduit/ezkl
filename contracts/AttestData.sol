@@ -104,7 +104,7 @@ contract LoadInstances {
 // The kzg commitments of a given model, all aggregated into a single bytes array.
 // At solidity generation time, the commitments are hardcoded into the contract via the COMMITMENT_KZG constant.
 // It will be used to check that the proof commitments match the expected commitments.
-bytes constant COMMITMENT_KZG = hex"";
+bytes constant COMMITMENT_KZG = hex"1234";
 
 contract SwapProofCommitments {
     /**
@@ -186,14 +186,18 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
         uint256 bits;
     }
 
-    Scalars[] public scalars;
+    Scalars[] private scalars;
+
+    function getScalars(uint256 index) public view returns (Scalars memory) {
+        return scalars[index];
+    }
 
     /**
      * @notice EZKL P value
      * @dev In order to prevent the verifier from accepting two version of the same pubInput, n and the quantity (n + P),  where n + P <= 2^256, we require that all instances are stricly less than P. a
      * @dev The reason for this is that the assmebly code of the verifier performs all arithmetic operations modulo P and as a consequence can't distinguish between n and n + P.
      */
-    uint256 constant ORDER =
+    uint256 public constant ORDER =
         uint256(
             0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
         );
@@ -288,7 +292,10 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
     function quantizeData(
         int x,
         Scalars memory _scalars
-    ) internal pure returns (int256 quantized_data) {
+    ) public pure returns (int256 quantized_data) {
+        if (_scalars.bits == 1 && _scalars.decimals == 1) {
+            return x;
+        }
         bool neg = x < 0;
         if (neg) x = -x;
         uint output = mulDiv(uint256(x), _scalars.bits, _scalars.decimals);
@@ -312,7 +319,7 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
     function staticCall(
         address target,
         bytes memory data
-    ) internal view returns (bytes memory) {
+    ) public view returns (bytes memory) {
         (bool success, bytes memory returndata) = target.staticcall(data);
         if (success) {
             if (returndata.length == 0) {
@@ -333,7 +340,7 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
      */
     function toFieldElement(
         int256 x
-    ) internal pure returns (uint256 field_element) {
+    ) public pure returns (uint256 field_element) {
         // The casting down to uint256 is safe because the order is about 2^254, and the value
         // of x ranges of -2^127 to 2^127, so x + int(ORDER) is always positive.
         return uint256(x + int(ORDER)) % ORDER;
@@ -343,7 +350,7 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
      * @dev Make the account calls to fetch the data that EZKL reads from and attest to the data.
      * @param instances - The public instances to the proof (the data in the proof that publicly accessible to the verifier).
      */
-    function attestData(uint256[] memory instances) internal view {
+    function attestData(uint256[] memory instances) public view {
         bytes memory returnData = staticCall(contractAddress, callData);
         int256[] memory x = abi.decode(returnData, (int256[]));
         int output;

@@ -1932,7 +1932,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ezkl-gpu"
+name = "ezkl"
 version = "0.0.0"
 dependencies = [
  "alloy",
