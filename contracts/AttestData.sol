@@ -202,11 +202,7 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
             0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
         );
 
-    uint256 constant HALF_ORDER = ORDER >> 1;
-
-    uint256 constant INPUT_LEN = 0;
-
-    uint256 constant OUTPUT_LEN = 0;
+    uint256 public constant HALF_ORDER = ORDER >> 1;
 
     uint8 public instanceOffset;
 
@@ -238,7 +234,7 @@ contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
         uint256 x,
         uint256 y,
         uint256 denominator
-    ) internal pure returns (uint256 result) {
+    ) public pure returns (uint256 result) {
         unchecked {
             uint256 prod0;
             uint256 prod1;

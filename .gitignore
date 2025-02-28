@@ -9,6 +9,7 @@ pkg
 !AttestData.sol
 !VerifierBase.sol
 !LoadInstances.sol
+!AttestData.t.sol
 *.pf
 *.vk
 *.pk

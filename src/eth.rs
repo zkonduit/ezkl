@@ -530,7 +530,7 @@ async fn deploy_da_contract(
                     .map(|i| WordToken(B256::from(*i)))
                     .collect_vec(),
             ),
-            // uint[] memory _scales,
+            // uint[] memory _bits,
             DynSeqToken(
                 scales
                     .clone()

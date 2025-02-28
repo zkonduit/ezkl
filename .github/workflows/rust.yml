@@ -271,7 +271,7 @@ jobs:
       - name: Run tests
         run: | 
           cd tests/foundry
-          forge test -vvv
+          forge test -vvvv --fuzz-runs 64
 
       - name: Run snapshot
         run: forge snapshot
