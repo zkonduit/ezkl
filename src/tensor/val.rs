@@ -1342,9 +1342,11 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// Gets the total number of elements in the tensor
     pub fn len(&self) -> usize {
         match self {
-            ValTensor::Value { dims, .. } => {
+            ValTensor::Value { dims, inner, .. } => {
                 if !dims.is_empty() && (dims != &[0]) {
                     dims.iter().product::<usize>()
+                } else if dims.is_empty() {
+                    inner.inner.len()
                 } else {
                     0
                 }
