@@ -1,7 +1,6 @@
 use super::errors::GraphError;
 use super::extract_const_quantized_values;
 use super::node::*;
-use super::scale_to_multiplier;
 use super::vars::*;
 use super::GraphSettings;
 use crate::circuit::hybrid::HybridOp;
@@ -1173,17 +1172,10 @@ impl Model {
                     })?;
 
                 if run_args.output_visibility.is_public() || run_args.output_visibility.is_fixed() {
-                    let output_scales = self.graph.get_output_scales().map_err(|e| {
-                        error!("{}", e);
-                        halo2_proofs::plonk::Error::Synthesis
-                    })?;
                     let res = outputs
                         .iter()
                         .enumerate()
                         .map(|(i, output)| {
-                            let mut tol: crate::circuit::Tolerance = run_args.tolerance;
-                            tol.scale = scale_to_multiplier(output_scales[i]).into();
-
                             let comparators = if run_args.output_visibility == Visibility::Public {
                                 let res = vars
                                     .instance
@@ -1206,7 +1198,6 @@ impl Model {
                                     &mut thread_safe_region,
                                     &[output.clone(), comparators],
                                     Box::new(HybridOp::Output {
-                                        tol,
                                         decomp: !run_args.ignore_range_check_inputs_outputs,
                                     }),
                                 )
@@ -1468,11 +1459,9 @@ impl Model {
         let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
         if self.visibility.output.is_public() || self.visibility.output.is_fixed() {
-            let output_scales = self.graph.get_output_scales()?;
             let res = outputs
                 .iter()
-                .enumerate()
-                .map(|(i, output)| {
+                .map(|output| {
                     let mut comparator: ValTensor<Fp> = (0..output.len())
                         .map(|_| {
                             if !self.visibility.output.is_fixed() {
@@ -1485,14 +1474,10 @@ impl Model {
                         .into();
                     comparator.reshape(output.dims())?;
 
-                    let mut tol = run_args.tolerance;
-                    tol.scale = scale_to_multiplier(output_scales[i]).into();
-
                     dummy_config.layout(
                         &mut region,
                         &[output.clone(), comparator],
                         Box::new(HybridOp::Output {
-                            tol,
                             decomp: !run_args.ignore_range_check_inputs_outputs,
                         }),
                     )

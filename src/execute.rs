@@ -1,5 +1,6 @@
-use crate::circuit::region::RegionSettings;
+use crate::EZKL_BUF_CAPACITY;
 use crate::circuit::CheckMode;
+use crate::circuit::region::RegionSettings;
 use crate::commands::CalibrationTarget;
 use crate::eth::{
     deploy_contract_via_solidity, deploy_da_verifier_via_solidity, fix_da_multi_sol,
@@ -12,21 +13,21 @@ use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::{
-    create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
+    ProofSplitCommit, create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit,
 };
 use crate::pfsys::{
-    create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit, ProofSplitCommit,
+    Snark, StrategyType, TranscriptType, create_keys, load_pk, load_vk, save_params, save_pk,
 };
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
-use crate::EZKL_BUF_CAPACITY;
-use crate::{commands::*, EZKLError};
 use crate::{Commitments, RunArgs};
+use crate::{EZKLError, commands::*};
 use colored::Colorize;
 #[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{self, Circuit};
+use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params};
 use halo2_proofs::poly::commitment::{ParamsProver, Verifier};
 use halo2_proofs::poly::ipa::commitment::{IPACommitmentScheme, ParamsIPA};
@@ -39,7 +40,6 @@ use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy as KZGAccumulatorStra
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
-use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer};
 use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
@@ -50,12 +50,12 @@ use instant::Instant;
 use itertools::Itertools;
 use log::debug;
 use log::{info, trace, warn};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use snark_verifier::loader::native::NativeLoader;
+use snark_verifier::system::halo2::Config;
 use snark_verifier::system::halo2::compile;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
-use snark_verifier::system::halo2::Config;
 use std::fs::File;
 use std::io::BufWriter;
 use std::io::{Cursor, Write};
@@ -516,7 +516,9 @@ fn update_ezkl_binary(version: &Option<String>) -> Result<String, EZKLError> {
         .status()
         .is_err()
     {
-        log::warn!("bash is not installed on this system, trying to run the install script with sh (may fail)");
+        log::warn!(
+            "bash is not installed on this system, trying to run the install script with sh (may fail)"
+        );
         "sh"
     } else {
         "bash"
@@ -725,7 +727,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, EZKLErr
 
 pub(crate) async fn gen_witness(
     compiled_circuit_path: PathBuf,
-    data: PathBuf,
+    data: String,
     output: Option<PathBuf>,
     vk_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
@@ -733,7 +735,7 @@ pub(crate) async fn gen_witness(
     // these aren't real values so the sanity checks are mostly meaningless
 
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
-    let data: GraphData = GraphData::from_path(data)?;
+    let data = GraphData::from_str(&data)?;
     let settings = circuit.settings().clone();
 
     let vk = if let Some(vk) = vk_path {
@@ -876,7 +878,7 @@ pub(crate) fn gen_random_data(
 
         let mut tensor = TractTensor::zero::<f32>(sizes).unwrap();
         let slice = tensor.as_slice_mut::<f32>().unwrap();
-        slice.iter_mut().for_each(|x| *x = rng.gen());
+        slice.iter_mut().for_each(|x| *x = rng.r#gen());
         tensor.cast_to_dt(datum_type).unwrap().into_owned()
     }
 
@@ -1044,7 +1046,7 @@ impl AccuracyResults {
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn calibrate(
     model_path: PathBuf,
-    data: PathBuf,
+    data: String,
     settings_path: PathBuf,
     target: CalibrationTarget,
     lookup_safety_margin: f64,
@@ -1058,7 +1060,7 @@ pub(crate) async fn calibrate(
 
     use crate::fieldutils::IntegerRep;
 
-    let data = GraphData::from_path(data)?;
+    let data = GraphData::from_str(&data)?;
     // load the pre-generated settings
     let settings = GraphSettings::load(&settings_path)?;
     // now retrieve the run args
@@ -1522,7 +1524,7 @@ pub(crate) async fn create_evm_data_attestation(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     abi_path: PathBuf,
-    input: PathBuf,
+    input: String,
     witness: Option<PathBuf>,
 ) -> Result<String, EZKLError> {
     #[allow(unused_imports)]
@@ -1536,7 +1538,7 @@ pub(crate) async fn create_evm_data_attestation(
 
     // if input is not provided, we just instantiate dummy input data
     let data =
-        GraphData::from_path(input).unwrap_or_else(|_| GraphData::new(DataSource::File(vec![])));
+        GraphData::from_str(&input).unwrap_or_else(|_| GraphData::new(DataSource::File(vec![])));
 
     // The number of input and output instances we attest to for the single call data attestation
     let mut input_len = None;
@@ -1625,7 +1627,7 @@ pub(crate) async fn create_evm_data_attestation(
 }
 
 pub(crate) async fn deploy_da_evm(
-    data: PathBuf,
+    data: String,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
     rpc_url: Option<String>,
@@ -1868,7 +1870,7 @@ pub(crate) fn setup(
 }
 
 pub(crate) async fn setup_test_evm_witness(
-    data_path: PathBuf,
+    data_path: String,
     compiled_circuit_path: PathBuf,
     test_data: PathBuf,
     rpc_url: Option<String>,
@@ -1877,7 +1879,7 @@ pub(crate) async fn setup_test_evm_witness(
 ) -> Result<String, EZKLError> {
     use crate::graph::TestOnChainData;
 
-    let mut data = GraphData::from_path(data_path)?;
+    let mut data = GraphData::from_str(&data_path)?;
     let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
 
     // if both input and output are from files fail
@@ -1905,7 +1907,7 @@ pub(crate) async fn setup_test_evm_witness(
 use crate::pfsys::ProofType;
 pub(crate) async fn test_update_account_calls(
     addr: H160Flag,
-    data: PathBuf,
+    data: String,
     rpc_url: Option<String>,
 ) -> Result<String, EZKLError> {
     use crate::eth::update_account_calls;

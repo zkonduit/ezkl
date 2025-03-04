@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    circuit::{layouts, utils, Tolerance},
+    circuit::{layouts, utils},
     fieldutils::{integer_rep_to_felt, IntegerRep},
     graph::multiplier_to_scale,
     tensor::{self, DataFormat, Tensor, TensorType, ValTensor},
@@ -79,7 +79,6 @@ pub enum HybridOp {
         axes: Vec<usize>,
     },
     Output {
-        tol: Tolerance,
         decomp: bool,
     },
     Greater,
@@ -184,8 +183,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                     input_scale, output_scale, axes
                 )
             }
-            HybridOp::Output { tol, decomp } => {
-                format!("OUTPUT (tol={:?}, decomp={})", tol, decomp)
+            HybridOp::Output { decomp } => {
+                format!("OUTPUT (decomp={})", decomp)
             }
             HybridOp::Greater => "GREATER".to_string(),
             HybridOp::GreaterEqual => "GREATEREQUAL".to_string(),
@@ -326,14 +325,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 *output_scale,
                 axes,
             )?,
-            HybridOp::Output { tol, decomp } => layouts::output(
-                config,
-                region,
-                values[..].try_into()?,
-                tol.scale,
-                tol.val,
-                *decomp,
-            )?,
+            HybridOp::Output { decomp } => {
+                layouts::output(config, region, values[..].try_into()?, *decomp)?
+            }
             HybridOp::Greater => layouts::greater(config, region, values[..].try_into()?)?,
             HybridOp::GreaterEqual => {
                 layouts::greater_equal(config, region, values[..].try_into()?)?

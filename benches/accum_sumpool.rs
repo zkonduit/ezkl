@@ -69,6 +69,7 @@ impl Circuit<Fr> for MyCircuit {
                             stride: vec![1, 1],
                             kernel_shape: vec![2, 2],
                             normalized: false,
+                            data_format: DataFormat::NCHW,
                         }),
                     )
                     .unwrap();

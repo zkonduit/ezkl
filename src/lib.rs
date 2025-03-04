@@ -97,10 +97,9 @@ impl From<String> for EZKLError {
 
 use std::str::FromStr;
 
-use circuit::{table::Range, CheckMode, Tolerance};
+use circuit::{table::Range, CheckMode};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::Args;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use fieldutils::IntegerRep;
 use graph::{Visibility, MAX_PUBLIC_SRS};
 use halo2_proofs::poly::{
@@ -275,10 +274,6 @@ impl From<String> for Commitments {
     derive(Args, ToFlags)
 )]
 pub struct RunArgs {
-    /// Error tolerance for model outputs
-    /// Only applicable when outputs are public
-    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'T', long, default_value = "0", value_hint = clap::ValueHint::Other))]
-    pub tolerance: Tolerance,
     /// Fixed point scaling factor for quantizing inputs
     /// Higher values provide more precision but increase circuit complexity
     #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(short = 'S', long, default_value = "7", value_hint = clap::ValueHint::Other))]
@@ -365,7 +360,6 @@ impl Default for RunArgs {
     fn default() -> Self {
         Self {
             bounded_log_lookup: false,
-            tolerance: Tolerance::default(),
             input_scale: 7,
             param_scale: 7,
             scale_rebase_multiplier: 1,
@@ -399,16 +393,22 @@ impl RunArgs {
     pub fn validate(&self) -> Result<(), String> {
         let mut errors = Vec::new();
 
+        // check if the largest represented integer in the decomposed form overflows IntegerRep
+        //  try it with the largest possible value
+        let max_decomp = (self.decomp_base as IntegerRep).checked_pow(self.decomp_legs as u32);
+        if max_decomp.is_none() {
+            errors.push(format!(
+                "decomp_base^decomp_legs overflows IntegerRep: {}^{}",
+                self.decomp_base, self.decomp_legs
+            ));
+        }
+
         // Visibility validations
         if self.param_visibility == Visibility::Public {
             errors.push(
                 "Parameters cannot be public instances. Use 'fixed' or 'kzgcommit' instead"
                     .to_string(),
             );
-        }
-
-        if self.tolerance.val > 0.0 && self.output_visibility != Visibility::Public {
-            errors.push("Non-zero tolerance requires output_visibility to be public".to_string());
         }
 
         // Scale validations
@@ -457,11 +457,6 @@ impl RunArgs {
         // Performance validations
         if self.logrows > MAX_PUBLIC_SRS {
             warn!("logrows exceeds maximum public SRS size");
-        }
-
-        // Validate tolerance is non-negative
-        if self.tolerance.val < 0.0 {
-            errors.push("tolerance cannot be negative".to_string());
         }
 
         // Performance warnings
@@ -608,23 +603,6 @@ mod tests {
         args.num_inner_cols = 0;
         let err = args.validate().unwrap_err();
         assert!(err.contains("num_inner_cols must be >= 1"));
-    }
-
-    #[test]
-    fn test_invalid_tolerance() {
-        let mut args = RunArgs::default();
-        args.tolerance.val = 1.0;
-        args.output_visibility = Visibility::Private;
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("Non-zero tolerance requires output_visibility to be public"));
-    }
-
-    #[test]
-    fn test_negative_tolerance() {
-        let mut args = RunArgs::default();
-        args.tolerance.val = -1.0;
-        let err = args.validate().unwrap_err();
-        assert!(err.contains("tolerance cannot be negative"));
     }
 
     #[test]
