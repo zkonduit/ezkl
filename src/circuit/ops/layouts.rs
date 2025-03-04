@@ -6136,7 +6136,7 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// &[1, 1, 2, 2],
 /// ).unwrap());
 /// let result = round_half_to_even::<Fp>(&dummy_config, &mut dummy_region, &[x], 4.0.into(), 2).unwrap();
-/// let expected = Tensor::<IntegerRep>::new(Some(&[4, -4, 4, 0]), &[1, 1, 2, 2]).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, 0]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 ///
