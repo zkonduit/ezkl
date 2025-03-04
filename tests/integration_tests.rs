@@ -1,7 +1,7 @@
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 #[cfg(test)]
 mod native_tests {
-    
+
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
@@ -522,7 +522,7 @@ mod native_tests {
             use crate::native_tests::run_js_tests;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
-            
+
             use tempdir::TempDir;
             use ezkl::Commitments;
 
@@ -2450,6 +2450,22 @@ mod native_tests {
 
             let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
                 .args(args)
+                .status()
+                .expect("failed to execute process");
+            assert!(status.success());
+            // generate the witness, passing the vk path to generate the necessary kzg commits
+            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
+                .args([
+                    "gen-witness",
+                    "-D",
+                    &test_on_chain_data_path,
+                    "-M",
+                    &model_path,
+                    "-O",
+                    &witness_path,
+                    "--vk-path",
+                    &format!("{}/{}/key.vk", test_dir, example_name),
+                ])
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());

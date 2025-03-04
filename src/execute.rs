@@ -298,7 +298,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             input_source,
             output_source,
         } => {
-            setup_test_evm_witness(
+            setup_test_evm_data(
                 data.unwrap_or(DEFAULT_DATA.into()),
                 compiled_circuit.unwrap_or(DEFAULT_COMPILED_CIRCUIT.into()),
                 test_data,
@@ -1829,7 +1829,7 @@ pub(crate) fn setup(
     Ok(String::new())
 }
 
-pub(crate) async fn setup_test_evm_witness(
+pub(crate) async fn setup_test_evm_data(
     data_path: String,
     compiled_circuit_path: PathBuf,
     test_data: PathBuf,
