@@ -317,13 +317,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
 }
 
 impl<
-        F: PrimeField
-            + TensorType
-            + PartialOrd
-            + std::hash::Hash
-            + Serialize
-            + for<'de> Deserialize<'de>,
-    > Op<F> for Constant<F>
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Serialize + for<'de> Deserialize<'de>,
+> Op<F> for Constant<F>
 {
     fn as_any(&self) -> &dyn Any {
         self
