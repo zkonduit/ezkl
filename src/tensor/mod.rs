@@ -27,7 +27,7 @@ pub use var::*;
 
 use crate::{
     circuit::utils,
-    fieldutils::{integer_rep_to_felt, IntegerRep},
+    fieldutils::{IntegerRep, integer_rep_to_felt},
     graph::Visibility,
 };
 
@@ -415,7 +415,7 @@ impl<T: Clone + TensorType + PrimeField> Tensor<T> {
                 Err(_) => {
                     return Err(TensorError::FileLoadError(
                         "Failed to read tensor".to_string(),
-                    ))
+                    ));
                 }
             }
         }
@@ -1254,7 +1254,7 @@ impl<T: Clone + TensorType> Tensor<T> {
             None => {
                 return Err(TensorError::DimError(
                     "Cannot get last element of empty tensor".to_string(),
-                ))
+                ));
             }
         };
 
@@ -1279,7 +1279,7 @@ impl<T: Clone + TensorType> Tensor<T> {
             None => {
                 return Err(TensorError::DimError(
                     "Cannot get first element of empty tensor".to_string(),
-                ))
+                ));
             }
         };
 
@@ -1692,8 +1692,8 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync + P
 
         lhs.par_iter_mut()
             .zip(rhs)
-            .map(|(o, r)| {
-                match T::zero() { Some(zero) => {
+            .map(|(o, r)| match T::zero() {
+                Some(zero) => {
                     if r != zero {
                         *o = o.clone() % r;
                         Ok(())
@@ -1702,11 +1702,10 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync + P
                             "Cannot divide by zero in remainder".to_string(),
                         ))
                     }
-                } _ => {
-                    Err(TensorError::InvalidArgument(
-                        "Undefined zero value".to_string(),
-                    ))
-                }}
+                }
+                _ => Err(TensorError::InvalidArgument(
+                    "Undefined zero value".to_string(),
+                )),
             })
             .collect::<Result<Vec<_>, _>>()?;
 

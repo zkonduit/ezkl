@@ -1,12 +1,12 @@
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 #[cfg(test)]
 mod native_tests {
-    
+
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
+    use ezkl::Commitments;
     use ezkl::graph::input::{FileSource, FileSourceInner, GraphData};
     use ezkl::graph::{DataSource, GraphSettings, GraphWitness};
     use ezkl::pfsys::Snark;
-    use ezkl::Commitments;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2curves::bn256::Bn256;
     use lazy_static::lazy_static;
@@ -522,7 +522,7 @@ mod native_tests {
             use crate::native_tests::run_js_tests;
             use crate::native_tests::render_circuit;
             use crate::native_tests::model_serialization_different_binaries;
-            
+
             use tempdir::TempDir;
             use ezkl::Commitments;
 
@@ -2293,7 +2293,12 @@ mod native_tests {
                 .expect("failed to execute process");
 
             if status.success() {
-                log::error!("Verification unexpectedly succeeded for modified proof {}. Flipped bit {} in byte {}", i, random_bit, random_byte);
+                log::error!(
+                    "Verification unexpectedly succeeded for modified proof {}. Flipped bit {} in byte {}",
+                    i,
+                    random_bit,
+                    random_byte
+                );
             }
 
             assert!(

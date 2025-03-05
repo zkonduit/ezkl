@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use log::{debug, error, warn};
 
-use crate::circuit::{region::ConstantsMap, CheckMode};
+use crate::circuit::{CheckMode, region::ConstantsMap};
 
 use super::*;
 /// A wrapper around Halo2's Column types that represents a tensor of variables in the circuit.
@@ -403,7 +403,10 @@ impl VarTensor {
         let mut assigned_coord = 0;
         let mut res: ValTensor<F> = match values {
             ValTensor::Instance { .. } => {
-                unimplemented!("cannot assign instance to advice columns with omissions")
+                error!(
+                    "assignment with omissions is not supported on instance columns. increase K if you require more rows."
+                );
+                Err(halo2_proofs::plonk::Error::Synthesis)
             }
             ValTensor::Value { inner: v, .. } => Ok::<ValTensor<F>, halo2_proofs::plonk::Error>(
                 v.enum_map(|coord, k| {
@@ -569,8 +572,13 @@ impl VarTensor {
         constants: &mut ConstantsMap<F>,
     ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
         match values {
-            ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
-            ValTensor::Value { inner: v, dims , ..} => {
+            ValTensor::Instance { .. } => {
+                error!(
+                    "duplication is not supported on instance columns. increase K if you require more rows."
+                );
+                Err(halo2_proofs::plonk::Error::Synthesis)
+            }
+            ValTensor::Value { inner: v, dims, .. } => {
                 let duplication_freq = if single_inner_col {
                     self.col_size()
                 } else {
@@ -583,21 +591,20 @@ impl VarTensor {
                     self.num_inner_cols()
                 };
 
-                let duplication_offset = if single_inner_col {
-                    row
-                } else {
-                    offset
-                };
-
+                let duplication_offset = if single_inner_col { row } else { offset };
 
                 // duplicates every nth element to adjust for column overflow
-                let mut res: ValTensor<F> = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap().into();
+                let mut res: ValTensor<F> = v
+                    .duplicate_every_n(duplication_freq, num_repeats, duplication_offset)
+                    .unwrap()
+                    .into();
 
                 let constants_map = res.create_constants_map();
                 constants.extend(constants_map);
 
                 let total_used_len = res.len();
-                res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
+                res.remove_every_n(duplication_freq, num_repeats, duplication_offset)
+                    .unwrap();
 
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());
@@ -627,9 +634,13 @@ impl VarTensor {
         constants: &mut ConstantsMap<F>,
     ) -> Result<(ValTensor<F>, usize), halo2_proofs::plonk::Error> {
         match values {
-            ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
-            ValTensor::Value { inner: v, dims , ..} => {
-
+            ValTensor::Instance { .. } => {
+                error!(
+                    "duplication is not supported on instance columns. increase K if you require more rows."
+                );
+                Err(halo2_proofs::plonk::Error::Synthesis)
+            }
+            ValTensor::Value { inner: v, dims, .. } => {
                 let duplication_freq = self.block_size();
 
                 let num_repeats = self.num_inner_cols();
@@ -637,17 +648,31 @@ impl VarTensor {
                 let duplication_offset = offset;
 
                 // duplicates every nth element to adjust for column overflow
-                let v = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
+                let v = v
+                    .duplicate_every_n(duplication_freq, num_repeats, duplication_offset)
+                    .map_err(|e| {
+                        error!("Error duplicating values: {:?}", e);
+                        halo2_proofs::plonk::Error::Synthesis
+                    })?;
                 let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
-                    let cell = self.assign_value(region, offset, k.clone(), coord, constants)?;
-                    Ok::<_, halo2_proofs::plonk::Error>(cell)
-
-                })?.into()};
+                        let cell =
+                            self.assign_value(region, offset, k.clone(), coord, constants)?;
+                        Ok::<_, halo2_proofs::plonk::Error>(cell)
+                    })?
+                    .into()
+                };
                 let total_used_len = res.len();
-                res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
+                res.remove_every_n(duplication_freq, num_repeats, duplication_offset)
+                    .map_err(|e| {
+                        error!("Error duplicating values: {:?}", e);
+                        halo2_proofs::plonk::Error::Synthesis
+                    })?;
 
-                res.reshape(dims).unwrap();
+                res.reshape(dims).map_err(|e| {
+                    error!("Error duplicating values: {:?}", e);
+                    halo2_proofs::plonk::Error::Synthesis
+                })?;
                 res.set_scale(values.scale());
 
                 Ok((res, total_used_len))
@@ -681,61 +706,71 @@ impl VarTensor {
         let mut prev_cell = None;
 
         match values {
-            ValTensor::Instance { .. } => unimplemented!("duplication is not supported on instance columns. increase K if you require more rows."),
-            ValTensor::Value { inner: v, dims , ..} => {
-
+            ValTensor::Instance { .. } => {
+                error!(
+                    "duplication is not supported on instance columns. increase K if you require more rows."
+                );
+                Err(halo2_proofs::plonk::Error::Synthesis)
+            }
+            ValTensor::Value { inner: v, dims, .. } => {
                 let duplication_freq = self.col_size();
                 let num_repeats = 1;
                 let duplication_offset = row;
 
                 // duplicates every nth element to adjust for column overflow
-                let v = v.duplicate_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
-                let mut res: ValTensor<F> =
-                    v.enum_map(|coord, k| {
+                let v = v
+                    .duplicate_every_n(duplication_freq, num_repeats, duplication_offset)
+                    .unwrap();
+                let mut res: ValTensor<F> = v
+                    .enum_map(|coord, k| {
+                        let step = self.num_inner_cols();
 
-                    let step = self.num_inner_cols();
+                        let (x, y, z) = self.cartesian_coord(offset + coord * step);
+                        if matches!(check_mode, CheckMode::SAFE) && coord > 0 && z == 0 && y == 0 {
+                            // assert that duplication occurred correctly
+                            assert_eq!(
+                                Into::<IntegerRep>::into(k.clone()),
+                                Into::<IntegerRep>::into(v[coord - 1].clone())
+                            );
+                        };
 
-                    let (x, y, z) = self.cartesian_coord(offset + coord * step);
-                    if matches!(check_mode, CheckMode::SAFE) && coord > 0 && z == 0 && y == 0 {
-                        // assert that duplication occurred correctly
-                        assert_eq!(Into::<IntegerRep>::into(k.clone()), Into::<IntegerRep>::into(v[coord - 1].clone()));
-                    };
+                        let cell =
+                            self.assign_value(region, offset, k.clone(), coord * step, constants)?;
 
-                    let cell = self.assign_value(region, offset, k.clone(), coord * step, constants)?;
+                        let at_end_of_column = z == duplication_freq - 1;
+                        let at_beginning_of_column = z == 0;
 
-                    let at_end_of_column = z == duplication_freq - 1;
-                    let at_beginning_of_column = z == 0;
-
-                    if at_end_of_column {
-                        // if we are at the end of the column, we need to copy the cell to the next column
-                        prev_cell = Some(cell.clone());
-                    } else if coord > 0 && at_beginning_of_column  {
-                        if let Some(prev_cell) = prev_cell.as_ref() {
-                            let cell = if let Some(cell) = cell.cell() {
-                                cell
+                        if at_end_of_column {
+                            // if we are at the end of the column, we need to copy the cell to the next column
+                            prev_cell = Some(cell.clone());
+                        } else if coord > 0 && at_beginning_of_column {
+                            if let Some(prev_cell) = prev_cell.as_ref() {
+                                let cell = if let Some(cell) = cell.cell() {
+                                    cell
+                                } else {
+                                    error!("Error getting cell: {:?}", (x, y));
+                                    return Err(halo2_proofs::plonk::Error::Synthesis);
+                                };
+                                let prev_cell = if let Some(prev_cell) = prev_cell.cell() {
+                                    prev_cell
+                                } else {
+                                    error!("Error getting prev cell: {:?}", (x, y));
+                                    return Err(halo2_proofs::plonk::Error::Synthesis);
+                                };
+                                region.constrain_equal(prev_cell, cell)?;
                             } else {
-                                error!("Error getting cell: {:?}", (x,y));
+                                error!("Previous cell was not set");
                                 return Err(halo2_proofs::plonk::Error::Synthesis);
-                            };
-                            let prev_cell = if let Some(prev_cell) = prev_cell.cell() {
-                                prev_cell
-                            } else {
-                                error!("Error getting prev cell: {:?}", (x,y));
-                                return Err(halo2_proofs::plonk::Error::Synthesis);
-                            };
-                            region.constrain_equal(prev_cell,cell)?;
-                        } else {
-                            error!("Previous cell was not set");
-                            return Err(halo2_proofs::plonk::Error::Synthesis);
+                            }
                         }
-                    }
 
-                    Ok(cell)
-
-                })?.into();
+                        Ok(cell)
+                    })?
+                    .into();
 
                 let total_used_len = res.len();
-                res.remove_every_n(duplication_freq, num_repeats, duplication_offset).unwrap();
+                res.remove_every_n(duplication_freq, num_repeats, duplication_offset)
+                    .unwrap();
 
                 res.reshape(dims).unwrap();
                 res.set_scale(values.scale());
@@ -771,21 +806,30 @@ impl VarTensor {
                 VarTensor::Advice { inner: advices, .. } => {
                     ValType::PrevAssigned(region.assign_advice(|| "k", advices[x][y], z, || v)?)
                 }
-                _ => unimplemented!(),
+                _ => {
+                    error!("VarTensor was not initialized");
+                    return Err(halo2_proofs::plonk::Error::Synthesis);
+                }
             },
             // Handle copying previously assigned value
             ValType::PrevAssigned(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
                     ValType::PrevAssigned(v.copy_advice(|| "k", region, advices[x][y], z)?)
                 }
-                _ => unimplemented!(),
+                _ => {
+                    error!("VarTensor was not initialized");
+                    return Err(halo2_proofs::plonk::Error::Synthesis);
+                }
             },
             // Handle copying previously assigned constant
             ValType::AssignedConstant(v, val) => match &self {
                 VarTensor::Advice { inner: advices, .. } => {
                     ValType::AssignedConstant(v.copy_advice(|| "k", region, advices[x][y], z)?, val)
                 }
-                _ => unimplemented!(),
+                _ => {
+                    error!("VarTensor was not initialized");
+                    return Err(halo2_proofs::plonk::Error::Synthesis);
+                }
             },
             // Handle assigning evaluated value
             ValType::AssignedValue(v) => match &self {
@@ -794,7 +838,10 @@ impl VarTensor {
                         .assign_advice(|| "k", advices[x][y], z, || v)?
                         .evaluate(),
                 ),
-                _ => unimplemented!(),
+                _ => {
+                    error!("VarTensor was not initialized");
+                    return Err(halo2_proofs::plonk::Error::Synthesis);
+                }
             },
             // Handle constant value assignment with caching
             ValType::Constant(v) => {
