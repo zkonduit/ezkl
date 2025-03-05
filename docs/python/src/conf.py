@@ -1,7 +1,7 @@
 import ezkl
 
 project = 'ezkl'
-release = '0.0.0'
+release = '20.2.3'
 version = release
 
 
