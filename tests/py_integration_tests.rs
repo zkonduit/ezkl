@@ -46,7 +46,9 @@ mod py_tests {
             assert!(status.success());
         });
         // set VOICE_DATA_DIR environment variable
-        std::env::set_var("VOICE_DATA_DIR", format!("{}", voice_data_dir));
+        unsafe {
+            std::env::set_var("VOICE_DATA_DIR", format!("{}", voice_data_dir));
+        }
     }
 
     fn download_catdog_data() {
@@ -63,7 +65,9 @@ mod py_tests {
             assert!(status.success());
         });
         // set VOICE_DATA_DIR environment variable
-        std::env::set_var("CATDOG_DATA_DIR", format!("{}", cat_and_dog_data_dir));
+        unsafe {
+            std::env::set_var("CATDOG_DATA_DIR", format!("{}", cat_and_dog_data_dir));
+        }
     }
 
     fn setup_py_env() {

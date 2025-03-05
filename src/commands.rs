@@ -1,6 +1,6 @@
 use alloy::primitives::Address as H160;
 use clap::{Command, Parser, Subcommand};
-use clap_complete::{generate, Generator, Shell};
+use clap_complete::{Generator, Shell, generate};
 #[cfg(feature = "python-bindings")]
 use pyo3::{conversion::FromPyObject, exceptions::PyValueError, prelude::*};
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tosubcommand::{ToFlags, ToSubcommand};
 
-use crate::{pfsys::ProofType, Commitments, RunArgs};
+use crate::{Commitments, RunArgs, pfsys::ProofType};
 
 use crate::circuit::CheckMode;
 use crate::graph::TestDataSource;
@@ -360,8 +360,13 @@ pub fn get_styles() -> clap::builder::Styles {
 }
 
 /// Print completions for the given generator
-pub fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
-    generate(gen, cmd, cmd.get_name().to_string(), &mut std::io::stdout());
+pub fn print_completions<G: Generator>(r#gen: G, cmd: &mut Command) {
+    generate(
+        r#gen,
+        cmd,
+        cmd.get_name().to_string(),
+        &mut std::io::stdout(),
+    );
 }
 
 #[allow(missing_docs)]

@@ -62,7 +62,7 @@ pub trait TensorType: Clone + Debug + 'static {
 }
 
 macro_rules! tensor_type {
-    ($rust_type:ty, $tensor_type:ident, $zero:expr, $one:expr) => {
+    ($rust_type:ty, $tensor_type:ident, $zero:expr_2021, $one:expr_2021) => {
         impl TensorType for $rust_type {
             fn zero() -> Option<Self> {
                 Some($zero)
@@ -1693,7 +1693,7 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync + P
         lhs.par_iter_mut()
             .zip(rhs)
             .map(|(o, r)| {
-                if let Some(zero) = T::zero() {
+                match T::zero() { Some(zero) => {
                     if r != zero {
                         *o = o.clone() % r;
                         Ok(())
@@ -1702,11 +1702,11 @@ impl<T: TensorType + Rem<Output = T> + std::marker::Send + std::marker::Sync + P
                             "Cannot divide by zero in remainder".to_string(),
                         ))
                     }
-                } else {
+                } _ => {
                     Err(TensorError::InvalidArgument(
                         "Undefined zero value".to_string(),
                     ))
-                }
+                }}
             })
             .collect::<Result<Vec<_>, _>>()?;
 
