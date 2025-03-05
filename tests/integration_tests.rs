@@ -2453,22 +2453,25 @@ mod native_tests {
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
-            // generate the witness, passing the vk path to generate the necessary kzg commits
-            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args([
-                    "gen-witness",
-                    "-D",
-                    &test_on_chain_data_path,
-                    "-M",
-                    &model_path,
-                    "-O",
-                    &witness_path,
-                    "--vk-path",
-                    &format!("{}/{}/key.vk", test_dir, example_name),
-                ])
-                .status()
-                .expect("failed to execute process");
-            assert!(status.success());
+            // generate the witness, passing the vk path to generate the necessary kzg commits only
+            // if input visibility is NOT hashed
+            if input_visibility != "hashed" {
+                let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
+                    .args([
+                        "gen-witness",
+                        "-D",
+                        &test_on_chain_data_path,
+                        "-M",
+                        &model_path,
+                        "-O",
+                        &witness_path,
+                        "--vk-path",
+                        &format!("{}/{}/key.vk", test_dir, example_name),
+                    ])
+                    .status()
+                    .expect("failed to execute process");
+                assert!(status.success());
+            }
         }
 
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
