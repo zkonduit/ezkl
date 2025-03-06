@@ -87,7 +87,7 @@ jobs:
 
       - name: Replace memory definition in nodejs
         run: |
-          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
+          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:21,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
 
       - name: Replace `import.meta.url` with `import.meta.resolve` definition in workerHelpers.js
         run: |

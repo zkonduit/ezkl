@@ -289,10 +289,10 @@ pub fn verifyEVM(
     bytecode_vka: Option<Vec<u8>>,
 ) -> Result<bool, JsError> {
     let mut evm = Evm::unlimited();
-    let (verifier_address, _) = evm.create(bytecode_verifier);
+    let (verifier_address, _) = evm.create(utf8_bytes_to_hex_decoded(&bytecode_verifier));
     // if bytecode_vk is Some, then create the vk contract
     let vk_address = if let Some(bytecode_vka) = bytecode_vka {
-        let (address, _) = evm.create(bytecode_vka);
+        let (address, _) = evm.create(utf8_bytes_to_hex_decoded(&bytecode_vka));
         Some(address.as_slice().to_vec())
         // check if bytecode_verifier is none and if so then generate the
         // reusable verifier
@@ -396,4 +396,9 @@ pub fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
         n |= b as u128;
     }
     n
+}
+///
+pub fn utf8_bytes_to_hex_decoded(input: &[u8]) -> Vec<u8> {
+    let string = std::str::from_utf8(input).unwrap();
+    hex::decode(string).unwrap()
 }

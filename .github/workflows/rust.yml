@@ -465,7 +465,7 @@ jobs:
           wasm-pack build --target nodejs --out-dir ./tests/wasm/nodejs . -- -Z build-std="panic_abort,std"
       - name: Replace memory definition in nodejs
         run: |
-          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
+          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:21,maximum:65536,shared:true})}|" tests/wasm/nodejs/ezkl.js
       - name: KZG prove and verify tests (public outputs + column overflow)
         run: cargo nextest run --verbose tests::kzg_prove_and_verify_with_overflow_::w
       - name: KZG prove and verify tests (public outputs + fixed params + column overflow)
