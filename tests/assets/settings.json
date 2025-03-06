@@ -22,7 +22,6 @@
         "input_visibility": "Private",
         "output_visibility": "Public",
         "param_visibility": "Private",
-        "div_rebasing": false,
         "rebase_frac_zero_constants": false,
         "check_mode": "UNSAFE",
         "commitment": "KZG",
@@ -74,5 +73,5 @@
     "check_mode": "UNSAFE",
     "version": "0.0.0",
     "num_blinding_factors": null,
-    "timestamp": 1726429587279
+    "timestamp": 1741214578354
 }
