@@ -280,7 +280,7 @@ pub fn verify(
     super::universal::verify(proof_js.0, vk.0, settings.0, srs.0).map_err(JsError::from)
 }
 
-/// Verify proof in browser using wasm
+/// Verify proof in browser evm using wasm
 #[wasm_bindgen]
 #[allow(non_snake_case)]
 pub fn verifyEVM(
@@ -289,10 +289,14 @@ pub fn verifyEVM(
     bytecode_vka: Option<Vec<u8>>,
 ) -> Result<bool, JsError> {
     let mut evm = Evm::unlimited();
-    let (verifier_address, _) = evm.create(utf8_bytes_to_hex_decoded(&bytecode_verifier));
+    let decoded_verifier = utf8_bytes_to_hex_decoded(&bytecode_verifier)
+        .map_err(|e| JsError::new(&format!("Failed to decode verifier bytecode: {}", e)))?;
+    let (verifier_address, _) = evm.create(decoded_verifier);
     // if bytecode_vk is Some, then create the vk contract
     let vk_address = if let Some(bytecode_vka) = bytecode_vka {
-        let (address, _) = evm.create(utf8_bytes_to_hex_decoded(&bytecode_vka));
+        let decoded_vka = utf8_bytes_to_hex_decoded(&bytecode_vka)
+            .map_err(|e| JsError::new(&format!("Failed to decode VK bytecode: {}", e)))?;
+        let (address, _) = evm.create(utf8_bytes_to_hex_decoded(decoded_vka));
         Some(address.as_slice().to_vec())
         // check if bytecode_verifier is none and if so then generate the
         // reusable verifier
@@ -398,7 +402,12 @@ pub fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
     n
 }
 ///
-pub fn utf8_bytes_to_hex_decoded(input: &[u8]) -> Vec<u8> {
-    let string = std::str::from_utf8(input).unwrap();
-    hex::decode(string).unwrap()
+pub fn utf8_bytes_to_hex_decoded(input: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    let string = std::str::from_utf8(input)?.trim();
+    let hex_string = if string.starts_with("0x") {
+        &string[2..]
+    } else {
+        string
+    };
+    Ok(hex::decode(hex_string)?)
 }
