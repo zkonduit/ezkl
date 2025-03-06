@@ -285,8 +285,8 @@ pub fn verify(
 #[allow(non_snake_case)]
 pub fn verifyEVM(
     proof_js: wasm_bindgen::Clamped<Vec<u8>>,
-    bytecode_vka: Option<Vec<u8>>,
     bytecode_verifier: Vec<u8>,
+    bytecode_vka: Option<Vec<u8>>,
 ) -> Result<bool, JsError> {
     let mut evm = Evm::unlimited();
     let (verifier_address, _) = evm.create(bytecode_verifier);

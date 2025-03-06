@@ -1,5 +1,8 @@
-import localEVMVerify from '../../in-browser-evm-verifier/src/index'
-import { serialize, deserialize } from '@ezkljs/engine/nodejs'
+import {
+  serialize,
+  deserialize
+} from './utils';
+import * as wasmFunctions from './nodejs/ezkl'
 import { compileContracts } from './utils'
 import * as fs from 'fs'
 
@@ -9,9 +12,9 @@ exports.VK = require("minimist")(process.argv.slice(2))["vk"];
 
 describe('localEVMVerify', () => {
 
-  let bytecode_verifier: string
+  let bytecode_verifier_buffer: Uint8Array
 
-  let bytecode_vk: string | undefined = undefined
+  let bytecode_vk_buffer: Uint8Array | undefined = undefined
 
   let proof: any
 
@@ -22,16 +25,19 @@ describe('localEVMVerify', () => {
   beforeEach(() => {
     const solcOutput = compileContracts(path, example, 'kzg')
 
-    bytecode_verifier =
+    let bytecode_verifier =
       solcOutput.contracts['artifacts/Verifier.sol']['Halo2Verifier'].evm.bytecode
         .object
+    bytecode_verifier_buffer = new TextEncoder().encode(bytecode_verifier)
+
 
     if (vk) {
       const solcOutput_vk = compileContracts(path, example, 'vk')
 
-      bytecode_vk =
+      let bytecode_vk =
         solcOutput_vk.contracts['artifacts/Verifier.sol']['Halo2VerifyingKey'].evm.bytecode
           .object
+      bytecode_vk_buffer = new TextEncoder().encode(bytecode_vk)
 
 
       console.log('size of verifier bytecode', bytecode_verifier.length)
@@ -41,10 +47,11 @@ describe('localEVMVerify', () => {
 
   it('should return true when verification succeeds', async () => {
     const proofFileBuffer = fs.readFileSync(`${path}/${example}/proof.pf`)
+    const proofSer = new Uint8ClampedArray(proofFileBuffer.buffer)
 
-    proof = deserialize(proofFileBuffer)
+    proof = deserialize(proofSer)
 
-    const result = await localEVMVerify(proofFileBuffer, bytecode_verifier, bytecode_vk)
+    const result = wasmFunctions.verifyEVM(proofSer, bytecode_verifier_buffer, bytecode_vk_buffer)
 
     console.log('result', result)
 
@@ -64,7 +71,7 @@ describe('localEVMVerify', () => {
       proof.proof[index] = number
       console.log('index post', proof.proof[index])
       const proofModified = serialize(proof)
-      result = await localEVMVerify(proofModified, bytecode_verifier, bytecode_vk)
+      result = wasmFunctions.verifyEVM(proofModified, bytecode_verifier_buffer, bytecode_vk_buffer)
     } catch (error) {
       // Check if the error thrown is the "out of gas" error.
       expect(error).toEqual(

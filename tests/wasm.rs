@@ -102,8 +102,8 @@ mod wasm32 {
         // verify with single purpose evm verifier contract
         let value = verifyEVM(
             wasm_bindgen::Clamped(PROOF.to_vec()),
-            None,
             VERIFIER_BYTECODE.to_vec(),
+            None,
         )
         .map_err(|_| "failed")
         .unwrap();
