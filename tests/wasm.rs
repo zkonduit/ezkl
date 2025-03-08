@@ -5,12 +5,13 @@ mod wasm32 {
         bufferToVecOfFelt, compiledCircuitValidation, encodeVerifierCalldata, feltToBigEndian,
         feltToFloat, feltToInt, feltToLittleEndian, genPk, genVk, genWitness, inputValidation,
         kzgCommit, pkValidation, poseidonHash, proofValidation, prove, settingsValidation,
-        srsValidation, u8_array_to_u128_le, verify, verifyAggr, vkValidation, witnessValidation,
+        srsValidation, u8_array_to_u128_le, verify, verifyAggr, verifyEVM, vkValidation,
+        witnessValidation,
     };
-    use ezkl::circuit::modules::polycommit::PolyCommitChip;
-    use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
-    use ezkl::circuit::modules::poseidon::PoseidonChip;
     use ezkl::circuit::modules::Module;
+    use ezkl::circuit::modules::polycommit::PolyCommitChip;
+    use ezkl::circuit::modules::poseidon::PoseidonChip;
+    use ezkl::circuit::modules::poseidon::spec::{POSEIDON_RATE, POSEIDON_WIDTH, PoseidonSpec};
     use ezkl::graph::GraphCircuit;
     use ezkl::graph::{GraphSettings, GraphWitness};
     use ezkl::pfsys;
@@ -39,6 +40,7 @@ mod wasm32 {
     pub const VK_AGGR: &[u8] = include_bytes!("assets/vk_aggr.key");
     pub const SRS: &[u8] = include_bytes!("assets/kzg");
     pub const SRS1: &[u8] = include_bytes!("assets/kzg1.srs");
+    pub const VERIFIER_BYTECODE: &[u8] = include_bytes!("assets/wasm.code");
 
     #[wasm_bindgen_test]
     async fn can_verify_aggr() {
@@ -93,6 +95,21 @@ mod wasm32 {
             &flattened_instances.collect::<Vec<_>>(),
         );
         assert_eq!(calldata, reference_calldata);
+    }
+
+    #[wasm_bindgen_test]
+    async fn can_verify_evm() {
+        // verify with single purpose evm verifier contract
+        let value = verifyEVM(
+            wasm_bindgen::Clamped(PROOF.to_vec()),
+            VERIFIER_BYTECODE.to_vec(),
+            None,
+        )
+        .map_err(|_| "failed")
+        .unwrap();
+
+        // should not fail
+        assert!(value);
     }
 
     #[wasm_bindgen_test]

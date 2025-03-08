@@ -87,7 +87,7 @@ jobs:
 
       - name: Replace memory definition in nodejs
         run: |
-          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:20,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
+          sed -i "3s|.*|imports['env'] = {memory: new WebAssembly.Memory({initial:21,maximum:65536,shared:true})}|" pkg/nodejs/ezkl.js
 
       - name: Replace `import.meta.url` with `import.meta.resolve` definition in workerHelpers.js
         run: |
@@ -186,65 +186,5 @@ jobs:
           npm install
           npm ci
           npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-
-  in-browser-evm-ver-publish:
-    permissions:
-      contents: read
-      packages: write
-    name: publish-in-browser-evm-verifier-package
-    needs: [publish-wasm-bindings]
-    runs-on: ubuntu-latest
-    env:
-        RELEASE_TAG: ${{ github.ref_name }}
-    if: startsWith(github.ref, 'refs/tags/')
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-        with:
-          persist-credentials: false
-      - name: Update version in package.json
-        shell: bash
-        run: |
-          sed -i "s|\"version\": \".*\"|\"version\": \"$RELEASE_TAG\"|" in-browser-evm-verifier/package.json
-      - name: Prepare tag and fetch package integrity
-        run: |
-          CLEANED_TAG=${RELEASE_TAG} # Get the tag from ref_name
-          CLEANED_TAG="${CLEANED_TAG#v}" # Remove leading 'v'
-          echo "CLEANED_TAG=${CLEANED_TAG}" >> $GITHUB_ENV # Set it as an environment variable for later steps
-          ENGINE_INTEGRITY=$(npm view @ezkljs/engine@$CLEANED_TAG dist.integrity)
-          echo "ENGINE_INTEGRITY=$ENGINE_INTEGRITY" >> $GITHUB_ENV
-      - name: Update @ezkljs/engine version in package.json
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          sed -i "s|\"@ezkljs/engine\": \".*\"|\"@ezkljs/engine\": \"$CLEANED_TAG\"|" in-browser-evm-verifier/package.json
-      - name: Update the engine import in in-browser-evm-verifier to use @ezkljs/engine package instead of the local one;
-        run: |
-          sed -i "s|import { encodeVerifierCalldata } from '../nodejs/ezkl';|import { encodeVerifierCalldata } from '@ezkljs/engine';|" in-browser-evm-verifier/src/index.ts
-      - name: Update pnpm-lock.yaml versions and integrity
-        run: |
-          awk -v integrity="$ENGINE_INTEGRITY" -v tag="$CLEANED_TAG" '
-          NR==30{$0="    specifier: \"" tag "\""}
-          NR==31{$0="    version: \"" tag "\""}
-          NR==400{$0="  /@ezkljs/engine@" tag ":"}
-          NR==401{$0="    resolution: {integrity: \"" integrity "\"}"} 1' in-browser-evm-verifier/pnpm-lock.yaml > temp.yaml && mv temp.yaml in-browser-evm-verifier/pnpm-lock.yaml
-      - name: Use pnpm 8
-        uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b  #v2.4.1
-        with:
-          version: 8
-      - name: Set up Node.js
-        uses: actions/setup-node@1a4442cacd436585916779262731d5b162bc6ec7  #v3.8.2
-        with:
-          node-version: "18.12.1"
-          registry-url: "https://registry.npmjs.org"
-      - name: Publish to npm
-        run: |
-          cd in-browser-evm-verifier
-          pnpm install --frozen-lockfile
-          pnpm run build
-          pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
