@@ -1,14 +1,14 @@
-use super::errors::GraphError;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use super::VarScales;
+use super::errors::GraphError;
 use super::{Rescaled, SupportedOp, Visibility};
+use crate::circuit::Op;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::circuit::hybrid::HybridOp;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::circuit::lookup::LookupOp;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::circuit::poly::PolyOp;
-use crate::circuit::Op;
 use crate::fieldutils::IntegerRep;
 use crate::tensor::{Tensor, TensorError, TensorType};
 use halo2curves::bn256::Fr as Fp;
@@ -22,6 +22,7 @@ use std::sync::Arc;
 use tract_onnx::prelude::{DatumType, Node as OnnxNode, TypedFact, TypedOp};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::tract_core::ops::{
+    Downsample,
     array::{
         Gather, GatherElements, GatherNd, MultiBroadcastTo, OneHot, ScatterElements, ScatterNd,
         Slice, Topk,
@@ -31,7 +32,6 @@ use tract_onnx::tract_core::ops::{
     einsum::EinSum,
     element_wise::ElementWiseOp,
     nn::{LeakyRelu, Reduce, Softmax},
-    Downsample,
 };
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::tract_hir::{
@@ -1398,7 +1398,7 @@ pub fn new_op_from_onnx(
 
             SupportedOp::Linear(PolyOp::Downsample {
                 axis: downsample_node.axis,
-                stride: downsample_node.stride as usize,
+                stride: downsample_node.stride,
                 modulo: downsample_node.modulo,
             })
         }
