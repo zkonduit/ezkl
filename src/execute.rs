@@ -1581,7 +1581,7 @@ pub(crate) async fn create_evm_data_attestation(
     let mut f = File::create(sol_code_path.clone())?;
     let _ = f.write(output.as_bytes());
     // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestationSingle", 0).await?;
+    let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestation", 0).await?;
     // save abi to file
     serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
 

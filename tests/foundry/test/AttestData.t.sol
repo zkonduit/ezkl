@@ -5,6 +5,10 @@ import "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import "contracts/AttestData.sol" as AttestData;
 
+contract MockVKA {
+    constructor() {}
+}
+
 contract MockVerifier {
     bool public shouldVerify;
 
@@ -18,6 +22,14 @@ contract MockVerifier {
     ) external view returns (bool) {
         require(shouldVerify, "Verification failed");
         return shouldVerify;
+    }
+}
+
+contract MockVerifierSeperate {
+    bool public shouldVerify;
+
+    constructor(bool _shouldVerify) {
+        shouldVerify = _shouldVerify;
     }
 
     function verifyProof(
@@ -46,9 +58,11 @@ contract MockTargetContract {
     }
 }
 
-contract DataAttestationSingleTest is Test {
-    AttestData.DataAttestationSingle das;
+contract DataAttestationTest is Test {
+    AttestData.DataAttestation das;
     MockVerifier verifier;
+    MockVerifierSeperate verifierSeperate;
+    MockVKA vka;
     MockTargetContract target;
     int256[] mockData = [int256(1e18), -int256(5e17)];
     uint256[] decimals = [18, 18];
@@ -59,10 +73,12 @@ contract DataAttestationSingleTest is Test {
     function setUp() public {
         target = new MockTargetContract(mockData);
         verifier = new MockVerifier(true);
+        verifierSeperate = new MockVerifierSeperate(true);
+        vka = new MockVKA();
 
         callData = abi.encodeWithSignature("getData()");
 
-        das = new AttestData.DataAttestationSingle(
+        das = new AttestData.DataAttestation(
             address(target),
             callData,
             decimals,
@@ -179,13 +195,13 @@ contract DataAttestationSingleTest is Test {
         // Update the attested data
         target.setData(_mockData);
         // Deploy the new data attestation contract
-        AttestData.DataAttestationSingle dasNew = new AttestData.DataAttestationSingle(
-                address(target),
-                callData,
-                _decimals,
-                _bits,
-                instanceOffset
-            );
+        AttestData.DataAttestation dasNew = new AttestData.DataAttestation(
+            address(target),
+            callData,
+            _decimals,
+            _bits,
+            instanceOffset
+        );
         bytes memory proof = hex"1234"; // Would normally contain commitments
         bytes memory encoded = abi.encodeWithSignature(
             "verifyProof(bytes,uint256[])",
@@ -193,8 +209,8 @@ contract DataAttestationSingleTest is Test {
             _instances
         );
 
-        AttestData.DataAttestationSingle.Scalars memory _scalars = AttestData
-            .DataAttestationSingle
+        AttestData.DataAttestation.Scalars memory _scalars = AttestData
+            .DataAttestation
             .Scalars(10 ** _decimals[0], 1 << _bits[0]);
 
         int256 output = dasNew.quantizeData(_mockData[0], _scalars);
@@ -216,18 +232,14 @@ contract DataAttestationSingleTest is Test {
         assertEq(das.callData(), abi.encodeWithSignature("getData()"));
         assertEq(das.instanceOffset(), instanceOffset);
 
-        AttestData.DataAttestationSingle.Scalars memory scalar = das.getScalars(
-            0
-        );
+        AttestData.DataAttestation.Scalars memory scalar = das.getScalars(0);
         assertEq(scalar.decimals, 1e18);
         assertEq(scalar.bits, 1 << 13);
     }
 
     // Test quantizeData function
     function testQuantizeData() public view {
-        AttestData.DataAttestationSingle.Scalars memory scalar = das.getScalars(
-            0
-        );
+        AttestData.DataAttestation.Scalars memory scalar = das.getScalars(0);
 
         int256 positive = das.quantizeData(1e18, scalar);
         assertEq(positive, int256(scalar.bits));
@@ -255,9 +267,7 @@ contract DataAttestationSingleTest is Test {
     // Test attestData validation
     function testAttestDataSuccess() public view {
         uint256[] memory instances = new uint256[](2);
-        AttestData.DataAttestationSingle.Scalars memory scalar = das.getScalars(
-            0
-        );
+        AttestData.DataAttestation.Scalars memory scalar = das.getScalars(0);
         instances[0] = das.toFieldElement(int(scalar.bits));
         instances[1] = das.toFieldElement(-int(scalar.bits >> 1));
         das.attestData(instances); // Should not revert
@@ -276,9 +286,7 @@ contract DataAttestationSingleTest is Test {
     function testSuccessfulVerification() public view {
         // Prepare valid instances
         uint256[] memory instances = new uint256[](2);
-        AttestData.DataAttestationSingle.Scalars memory scalar = das.getScalars(
-            0
-        );
+        AttestData.DataAttestation.Scalars memory scalar = das.getScalars(0);
         instances[0] = das.toFieldElement(int(scalar.bits));
         instances[1] = das.toFieldElement(-int(scalar.bits >> 1));
 
@@ -289,18 +297,71 @@ contract DataAttestationSingleTest is Test {
             proof,
             instances
         );
+        bytes memory encoded_vka = abi.encodeWithSignature(
+            "verifyProof(address,bytes,uint256[])",
+            address(vka),
+            proof,
+            instances
+        );
 
         bool result = das.verifyWithDataAttestation(address(verifier), encoded);
         assertTrue(result);
+        result = das.verifyWithDataAttestation(
+            address(verifierSeperate),
+            encoded_vka
+        );
+        assertTrue(result);
+    }
+
+    function testLoadInstances() public view {
+        uint256[] memory instances = new uint256[](2);
+        AttestData.DataAttestation.Scalars memory scalar = das.getScalars(0);
+        instances[0] = das.toFieldElement(int(scalar.bits));
+        instances[1] = das.toFieldElement(-int(scalar.bits >> 1));
+
+        // Create valid calldata (mock)
+        bytes memory proof = hex"1234"; // Would normally contain commitments
+        bytes memory encoded = abi.encodeWithSignature(
+            "verifyProof(bytes,uint256[])",
+            proof,
+            instances
+        );
+        bytes memory encoded_vka = abi.encodeWithSignature(
+            "verifyProof(address,bytes,uint256[])",
+            address(vka),
+            proof,
+            instances
+        );
+
+        // Load encoded instances from calldata
+        uint256[] memory extracted_instances_calldata = das
+            .getInstancesCalldata(encoded);
+        assertEq(extracted_instances_calldata[0], instances[0]);
+        assertEq(extracted_instances_calldata[1], instances[1]);
+        // Load encoded instances from memory
+        uint256[] memory extracted_instances_memory = das.getInstancesMemory(
+            encoded
+        );
+        assertEq(extracted_instances_memory[0], instances[0]);
+        assertEq(extracted_instances_memory[1], instances[1]);
+        // Load encoded with vk instances from calldata
+        uint256[] memory extracted_instances_calldata_vk = das
+            .getInstancesCalldata(encoded_vka);
+        assertEq(extracted_instances_calldata_vk[0], instances[0]);
+        assertEq(extracted_instances_calldata_vk[1], instances[1]);
+        // Load encoded with vk instances from memory
+        uint256[] memory extracted_instances_memory_vk = das.getInstancesMemory(
+            encoded_vka
+        );
+        assertEq(extracted_instances_memory_vk[0], instances[0]);
+        assertEq(extracted_instances_memory_vk[1], instances[1]);
     }
 
     function testInvalidCommitments() public {
         // Create calldata with invalid commitments
         bytes memory invalidProof = hex"5678";
         uint256[] memory instances = new uint256[](2);
-        AttestData.DataAttestationSingle.Scalars memory scalar = das.getScalars(
-            0
-        );
+        AttestData.DataAttestation.Scalars memory scalar = das.getScalars(0);
         instances[0] = das.toFieldElement(int(scalar.bits));
         instances[1] = das.toFieldElement(-int(scalar.bits >> 1));
         bytes memory encoded = abi.encodeWithSignature(
@@ -316,9 +377,7 @@ contract DataAttestationSingleTest is Test {
     function testInvalidVerifier() public {
         MockVerifier invalidVerifier = new MockVerifier(false);
         uint256[] memory instances = new uint256[](2);
-        AttestData.DataAttestationSingle.Scalars memory scalar = das.getScalars(
-            0
-        );
+        AttestData.DataAttestation.Scalars memory scalar = das.getScalars(0);
         instances[0] = das.toFieldElement(int(scalar.bits));
         instances[1] = das.toFieldElement(-int(scalar.bits >> 1));
         bytes memory encoded = abi.encodeWithSignature(
@@ -333,9 +392,7 @@ contract DataAttestationSingleTest is Test {
 
     // Test edge cases
     function testZeroValueQuantization() public view {
-        AttestData.DataAttestationSingle.Scalars memory scalar = das.getScalars(
-            0
-        );
+        AttestData.DataAttestation.Scalars memory scalar = das.getScalars(0);
         int256 zero = das.quantizeData(0, scalar);
         assertEq(zero, 0);
     }
@@ -347,11 +404,26 @@ contract DataAttestationSingleTest is Test {
             )
         );
         // int256 half_order = int(order >> 1);
-        AttestData.DataAttestationSingle.Scalars memory scalar = AttestData
-            .DataAttestationSingle
+        AttestData.DataAttestation.Scalars memory scalar = AttestData
+            .DataAttestation
             .Scalars(1, 1 << 2);
 
         vm.expectRevert("Overflow field modulus");
         das.quantizeData(order, scalar); // Value that would overflow
+    }
+
+    function testInvalidFunctionSignature() public {
+        uint256[] memory instances = new uint256[](2);
+        AttestData.DataAttestation.Scalars memory scalar = das.getScalars(0);
+        instances[0] = das.toFieldElement(int(scalar.bits));
+        instances[1] = das.toFieldElement(-int(scalar.bits >> 1));
+        bytes memory encoded_invalid_sig = abi.encodeWithSignature(
+            "verifyProofff(bytes,uint256[])",
+            hex"1234",
+            instances
+        );
+
+        vm.expectRevert("Invalid function signature");
+        das.verifyWithDataAttestation(address(verifier), encoded_invalid_sig);
     }
 }

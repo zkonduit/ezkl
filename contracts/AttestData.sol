@@ -8,21 +8,27 @@ contract LoadInstances {
      */
     function getInstancesMemory(
         bytes memory encoded
-    ) internal pure returns (uint256[] memory instances) {
+    ) public pure returns (uint256[] memory instances) {
         bytes4 funcSig;
         uint256 instances_offset;
         uint256 instances_length;
         assembly {
             // fetch function sig. Either `verifyProof(bytes,uint256[])` or `verifyProof(address,bytes,uint256[])`
             funcSig := mload(add(encoded, 0x20))
-
+        }
+        if (funcSig == 0xaf83a18d) {
+            instances_offset = 0x64;
+        } else if (funcSig == 0x1e8e1e13) {
+            instances_offset = 0x44;
+        } else {
+            revert("Invalid function signature");
+        }
+        assembly {
             // Fetch instances offset which is 4 + 32 + 32 bytes away from
             // start of encoded for `verifyProof(bytes,uint256[])`,
             // and 4 + 32 + 32 +32 away for `verifyProof(address,bytes,uint256[])`
 
-            instances_offset := mload(
-                add(encoded, add(0x44, mul(0x20, eq(funcSig, 0xaf83a18d))))
-            )
+            instances_offset := mload(add(encoded, instances_offset))
 
             instances_length := mload(add(add(encoded, 0x24), instances_offset))
         }
@@ -53,23 +59,31 @@ contract LoadInstances {
      */
     function getInstancesCalldata(
         bytes calldata encoded
-    ) internal pure returns (uint256[] memory instances) {
+    ) public pure returns (uint256[] memory instances) {
         bytes4 funcSig;
         uint256 instances_offset;
         uint256 instances_length;
         assembly {
             // fetch function sig. Either `verifyProof(bytes,uint256[])` or `verifyProof(address,bytes,uint256[])`
             funcSig := calldataload(encoded.offset)
-
+        }
+        if (funcSig == 0xaf83a18d) {
+            instances_offset = 0x44;
+        } else if (funcSig == 0x1e8e1e13) {
+            instances_offset = 0x24;
+        } else {
+            revert("Invalid function signature");
+        }
+        // We need to create a new assembly block in order for solidity
+        // to cast the funcSig to a bytes4 type. Otherwise it will load the entire first 32 bytes of the calldata
+        // within the block
+        assembly {
             // Fetch instances offset which is 4 + 32 + 32 bytes away from
             // start of encoded for `verifyProof(bytes,uint256[])`,
             // and 4 + 32 + 32 +32 away for `verifyProof(address,bytes,uint256[])`
 
             instances_offset := calldataload(
-                add(
-                    encoded.offset,
-                    add(0x24, mul(0x20, eq(funcSig, 0xaf83a18d)))
-                )
+                add(encoded.offset, instances_offset)
             )
 
             instances_length := calldataload(
@@ -94,10 +108,6 @@ contract LoadInstances {
                 )
             }
         }
-        require(
-            funcSig == 0xaf83a18d || funcSig == 0x1e8e1e13,
-            "Invalid function signature"
-        );
     }
 }
 
@@ -121,17 +131,20 @@ contract SwapProofCommitments {
         assembly {
             // fetch function sig. Either `verifyProof(bytes,uint256[])` or `verifyProof(address,bytes,uint256[])`
             funcSig := calldataload(encoded.offset)
-
+        }
+        if (funcSig == 0xaf83a18d) {
+            proof_offset = 0x24;
+        } else if (funcSig == 0x1e8e1e13) {
+            proof_offset = 0x04;
+        } else {
+            revert("Invalid function signature");
+        }
+        assembly {
             // Fetch proof offset which is 4 + 32 bytes away from
             // start of encoded for `verifyProof(bytes,uint256[])`,
             // and 4 + 32 + 32 away for `verifyProof(address,bytes,uint256[])`
 
-            proof_offset := calldataload(
-                add(
-                    encoded.offset,
-                    add(0x04, mul(0x20, eq(funcSig, 0xaf83a18d)))
-                )
-            )
+            proof_offset := calldataload(add(encoded.offset, proof_offset))
 
             proof_length := calldataload(
                 add(add(encoded.offset, 0x04), proof_offset)
@@ -171,7 +184,7 @@ contract SwapProofCommitments {
     } /// end checkKzgCommits
 }
 
-contract DataAttestationSingle is LoadInstances, SwapProofCommitments {
+contract DataAttestation is LoadInstances, SwapProofCommitments {
     // the address of the account to make calls to
     address public immutable contractAddress;
 
