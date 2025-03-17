@@ -1,20 +1,21 @@
 use crate::{
     circuit::modules::{
+        Module,
         polycommit::PolyCommitChip,
         poseidon::{
-            spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
             PoseidonChip,
+            spec::{POSEIDON_RATE, POSEIDON_WIDTH, PoseidonSpec},
         },
-        Module,
     },
     fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
-    graph::{quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings},
+    graph::{GraphCircuit, GraphSettings, quantize_float, scale_to_multiplier},
 };
 use console_error_panic_hook;
 use halo2_proofs::{
     plonk::*,
     poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
 };
+use halo2_solidity_verifier::Evm;
 use halo2curves::{
     bn256::{Bn256, Fr, G1Affine},
     ff::PrimeField,
@@ -24,9 +25,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_console_logger::DEFAULT_LOGGER;
 
 use crate::bindings::universal::{
-    compiled_circuit_validation, encode_verifier_calldata, gen_pk, gen_vk, gen_witness,
-    input_validation, pk_validation, proof_validation, settings_validation, srs_validation,
-    verify_aggr, vk_validation, witness_validation, EZKLError as ExternalEZKLError,
+    EZKLError as ExternalEZKLError, compiled_circuit_validation, encode_verifier_calldata, gen_pk,
+    gen_vk, gen_witness, input_validation, pk_validation, proof_validation, settings_validation,
+    srs_validation, verify_aggr, vk_validation, witness_validation,
 };
 #[cfg(feature = "web")]
 pub use wasm_bindgen_rayon::init_thread_pool;
@@ -279,6 +280,33 @@ pub fn verify(
     super::universal::verify(proof_js.0, vk.0, settings.0, srs.0).map_err(JsError::from)
 }
 
+/// Verify proof in browser evm using wasm
+#[wasm_bindgen]
+#[allow(non_snake_case)]
+pub fn verifyEVM(
+    proof_js: wasm_bindgen::Clamped<Vec<u8>>,
+    bytecode_verifier: Vec<u8>,
+    bytecode_vka: Option<Vec<u8>>,
+) -> Result<bool, JsError> {
+    let mut evm = Evm::unlimited();
+    let decoded_verifier = utf8_bytes_to_hex_decoded(&bytecode_verifier)?;
+    let (verifier_address, _) = evm.create(decoded_verifier);
+    // if bytecode_vk is Some, then create the vk contract
+    let vk_address = if let Some(bytecode_vka) = bytecode_vka {
+        let decoded_vka = utf8_bytes_to_hex_decoded(&bytecode_vka)?;
+        let (address, _) = evm.create(decoded_vka);
+        Some(address.as_slice().to_vec())
+        // check if bytecode_verifier is none and if so then generate the
+        // reusable verifier
+    } else {
+        None
+    };
+    let calldata = encode_verifier_calldata(proof_js.0, vk_address).map_err(JsError::from);
+    let output = evm.call(verifier_address, calldata?).1;
+    let true_word = [vec![0; 31], vec![1]].concat();
+    Ok(output == true_word)
+}
+
 /// Verify aggregate proof in browser using wasm
 #[wasm_bindgen]
 #[allow(non_snake_case)]
@@ -370,4 +398,14 @@ pub fn u8_array_to_u128_le(arr: [u8; 16]) -> u128 {
         n |= b as u128;
     }
     n
+}
+///
+pub fn utf8_bytes_to_hex_decoded(input: &[u8]) -> Result<Vec<u8>, JsError> {
+    let string = std::str::from_utf8(input)?.trim();
+    let hex_string = if string.starts_with("0x") {
+        &string[2..]
+    } else {
+        string
+    };
+    hex::decode(hex_string).map_err(JsError::from)
 }
