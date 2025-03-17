@@ -20,6 +20,7 @@ env:
 
 jobs:
   fr-age-test:
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     permissions:
       contents: read
     runs-on: large-self-hosted
@@ -332,7 +333,7 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
-
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -451,6 +452,7 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -569,6 +571,7 @@ jobs:
     permissions:
       contents: read
     runs-on: self-hosted
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -609,6 +612,7 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -629,6 +633,7 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -653,6 +658,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest-32-cores
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -673,6 +679,7 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    needs: [build, library-tests, docs]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -702,6 +709,7 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
