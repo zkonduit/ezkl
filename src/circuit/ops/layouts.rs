@@ -1097,6 +1097,10 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let mut input = values[0].clone();
     input.flatten();
 
+    if input.len() == 1 {
+        return Ok((input.clone(), create_zero_tensor(1)));
+    }
+
     let is_assigned = !input.any_unknowns()?;
 
     // Generate sorted tensor - if values are assigned, compute the actual sort;
@@ -4910,7 +4914,7 @@ pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     axis: &usize,
-    stride: &usize,
+    stride: &isize,
     modulo: &usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     let input = region.assign(&config.custom_gates.inputs[0], &values[0])?;
