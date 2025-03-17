@@ -2346,7 +2346,11 @@ pub mod nonlinearities {
     pub fn recip(a: &Tensor<IntegerRep>, input_scale: f64, out_scale: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let rescaled = (a_i as f64) / input_scale;
-            let denom = (1_f64) / (rescaled + f64::EPSILON);
+            let denom = if rescaled == 0_f64 {
+                (1_f64) / (rescaled + f64::EPSILON)
+            } else {
+                (1_f64) / (rescaled)
+            };
             let d_inv_x = out_scale * denom;
             Ok::<_, TensorError>(d_inv_x.round() as IntegerRep)
         })
