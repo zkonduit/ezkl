@@ -401,7 +401,6 @@ pub enum Commands {
     /// Generates the witness from an input file.
     GenWitness {
         /// The path to the .json data file
-        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
         data: Option<String>,
         /// The path to the compiled model file (generated using the compile-circuit command)
@@ -435,7 +434,7 @@ pub enum Commands {
         /// The path to the .onnx model file
         #[arg(short = 'M', long, default_value = DEFAULT_MODEL, value_hint = clap::ValueHint::FilePath)]
         model: Option<PathBuf>,
-        /// The path to the .json data file to output
+        /// The path to the .json data file
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
         data: Option<PathBuf>,
         /// Hand-written parser for graph variables, eg. batch_size=1
@@ -448,7 +447,6 @@ pub enum Commands {
     /// Calibrates the proving scale, lookup bits and logrows from a circuit settings file.
     CalibrateSettings {
         /// The path to the .json calibration data file.
-        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
         #[arg(short = 'D', long, default_value = DEFAULT_CALIBRATION_FILE, value_hint = clap::ValueHint::FilePath)]
         data: Option<String>,
         /// The path to the .onnx model file
@@ -633,7 +631,6 @@ pub enum Commands {
     #[command(arg_required_else_help = true)]
     SetupTestEvmData {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
         #[arg(short = 'D', long, value_hint = clap::ValueHint::FilePath)]
         data: Option<String>,
         /// The path to the compiled model file (generated using the compile-circuit command)
@@ -653,20 +650,6 @@ pub enum Commands {
         /// where the output data come from
         #[arg(long, default_value = "on-chain", value_hint = clap::ValueHint::Other)]
         output_source: TestDataSource,
-    },
-    /// The Data Attestation Verifier contract stores the account calls to fetch data to feed into ezkl. This call data can be updated by an admin account. This tests that admin account is able to update this call data.
-    #[command(arg_required_else_help = true)]
-    TestUpdateAccountCalls {
-        /// The path to the verifier contract's address
-        #[arg(long, value_hint = clap::ValueHint::Other)]
-        addr: H160Flag,
-        /// The path to the .json data file.
-        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
-        #[arg(short = 'D', long, value_hint = clap::ValueHint::FilePath)]
-        data: Option<String>,
-        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
-        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: Option<String>,
     },
     /// Swaps the positions in the transcript that correspond to commitments
     SwapProofCommitments {
@@ -875,7 +858,6 @@ pub enum Commands {
     #[command(name = "deploy-evm-da")]
     DeployEvmDataAttestation {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        /// You can also pass the input data as a string, eg. --data '{"input_data": [1.0,2.0,3.0]}' directly and skip the file
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
         data: Option<String>,
         /// The path to load circuit settings .json file from (generated using the gen-settings command)

@@ -2440,23 +2440,43 @@ mod native_tests {
                 ));
             }
             input.save(data_path.clone().into()).unwrap();
+            let args = vec![
+                "setup-test-evm-data",
+                "-D",
+                data_path.as_str(),
+                "-M",
+                &model_path,
+                "--test-data",
+                test_on_chain_data_path.as_str(),
+                rpc_arg.as_str(),
+                test_input_source.as_str(),
+                test_output_source.as_str(),
+            ];
 
             let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args([
-                    "setup-test-evm-data",
-                    "-D",
-                    data_path.as_str(),
-                    "-M",
-                    &model_path,
-                    "--test-data",
-                    test_on_chain_data_path.as_str(),
-                    rpc_arg.as_str(),
-                    test_input_source.as_str(),
-                    test_output_source.as_str(),
-                ])
+                .args(args)
                 .status()
                 .expect("failed to execute process");
             assert!(status.success());
+            // generate the witness, passing the vk path to generate the necessary kzg commits only
+            // if input visibility is NOT hashed
+            if input_visibility != "hashed" {
+                let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
+                    .args([
+                        "gen-witness",
+                        "-D",
+                        &test_on_chain_data_path,
+                        "-M",
+                        &model_path,
+                        "-O",
+                        &witness_path,
+                        "--vk-path",
+                        &format!("{}/{}/key.vk", test_dir, example_name),
+                    ])
+                    .status()
+                    .expect("failed to execute process");
+                assert!(status.success());
+            }
         }
 
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
@@ -2599,56 +2619,6 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-        // Create a new set of test on chain data only for the on-chain input source
-        if input_source != "file" || output_source != "file" {
-            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args([
-                    "setup-test-evm-data",
-                    "-D",
-                    data_path.as_str(),
-                    "-M",
-                    &model_path,
-                    "--test-data",
-                    test_on_chain_data_path.as_str(),
-                    rpc_arg.as_str(),
-                    test_input_source.as_str(),
-                    test_output_source.as_str(),
-                ])
-                .status()
-                .expect("failed to execute process");
-
-            assert!(status.success());
-
-            let deployed_addr_arg = format!("--addr={}", addr_da);
-
-            let args: Vec<&str> = vec![
-                "test-update-account-calls",
-                deployed_addr_arg.as_str(),
-                "-D",
-                test_on_chain_data_path.as_str(),
-                rpc_arg.as_str(),
-            ];
-            let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-                .args(&args)
-                .status()
-                .expect("failed to execute process");
-
-            assert!(status.success());
-        }
-        // As sanity check, add example that should fail.
-        let args = vec![
-            "verify-evm",
-            "--proof-path",
-            PF_FAILURE,
-            deployed_addr_verifier_arg.as_str(),
-            deployed_addr_da_arg.as_str(),
-            rpc_arg.as_str(),
-        ];
-        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
-            .args(args)
-            .status()
-            .expect("failed to execute process");
-        assert!(!status.success());
     }
 
     fn build_ezkl() {

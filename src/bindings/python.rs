@@ -1819,10 +1819,10 @@ fn create_evm_data_attestation(
     test_data,
     input_source,
     output_source,
-    rpc_url=None,
+    rpc_url=None
 ))]
 #[gen_stub_pyfunction]
-fn setup_test_evm_witness(
+fn setup_test_evm_data(
     py: Python,
     data_path: String,
     compiled_circuit_path: PathBuf,
@@ -1832,7 +1832,7 @@ fn setup_test_evm_witness(
     rpc_url: Option<String>,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::setup_test_evm_witness(
+        crate::execute::setup_test_evm_data(
             data_path,
             compiled_circuit_path,
             test_data,
@@ -1842,7 +1842,7 @@ fn setup_test_evm_witness(
         )
         .await
         .map_err(|e| {
-            let err_str = format!("Failed to run setup_test_evm_witness: {}", e);
+            let err_str = format!("Failed to run setup_test_evm_data: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
 
@@ -2107,7 +2107,7 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
-    m.add_function(wrap_pyfunction!(setup_test_evm_witness, m)?)?;
+    m.add_function(wrap_pyfunction!(setup_test_evm_data, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
     m.add_function(wrap_pyfunction!(encode_evm_calldata, m)?)?;

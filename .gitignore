@@ -9,6 +9,7 @@ pkg
 !AttestData.sol
 !VerifierBase.sol
 !LoadInstances.sol
+!AttestData.t.sol
 *.pf
 *.vk
 *.pk
@@ -49,3 +50,5 @@ timingData.json
 !tests/assets/vk.key
 docs/python/build
 !tests/assets/vk_aggr.key
+cache
+out
