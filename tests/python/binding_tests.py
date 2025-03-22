@@ -888,6 +888,39 @@ def get_examples():
     return examples
 
 
+def get_conv_examples():
+    EXAMPLES_OMIT = [
+        # these are too large
+        'mobilenet_large',
+        'mobilenet',
+        'doodles',
+        'nanoGPT',
+        "self_attention",
+        'multihead_attention',
+        'large_op_graph',
+        '1l_instance_norm',
+        'variable_cnn',
+        'accuracy',
+        'linear_regression',
+        "mnist_gan",
+        "smallworm",
+        "fr_age",
+        "1d_conv",
+    ]
+    examples = []
+    for subdir, _, _ in os.walk(os.path.join(examples_path, "onnx")):
+        name = subdir.split('/')[-1]
+        if name in EXAMPLES_OMIT or name == "onnx" or "conv" not in name:
+            continue
+        else:
+            examples.append((
+                os.path.join(subdir, "network.onnx"),
+                os.path.join(subdir, "input.json"),
+            ))
+    return examples
+
+
+
 @pytest.mark.parametrize("model_file, input_file", get_examples())
 async def test_all_examples(model_file, input_file):
     """Tests all examples in the examples folder"""
@@ -904,6 +937,84 @@ async def test_all_examples(model_file, input_file):
     run_args = ezkl.PyRunArgs()
     run_args.variables = [("batch_size", 1), ("sequence_length", 100), ("<Sym1>", 1)]
     run_args.logrows = 22
+
+    res = ezkl.gen_settings(model_file, settings_path, py_run_args=run_args)
+    assert res
+
+    res = await ezkl.calibrate_settings(
+        input_file, model_file, settings_path, "resources")
+    assert res
+
+    print("Compiling example: ", model_file)
+    res = ezkl.compile_circuit(model_file, compiled_model_path, settings_path)
+    assert res
+
+    with open(settings_path, 'r') as f:
+        data = json.load(f)
+
+    logrows = data["run_args"]["logrows"]
+    srs_path = os.path.join(folder_path, f"srs_{logrows}")
+
+    # generate the srs file if the path does not exist
+    if not os.path.exists(srs_path):
+        print("Generating srs file: ", srs_path)
+        ezkl.gen_srs(os.path.join(folder_path, srs_path), logrows)
+
+    print("Setting up example: ", model_file)
+    res = ezkl.setup(
+        compiled_model_path,
+        vk_path,
+        pk_path,
+        srs_path
+    )
+    assert res == True
+    assert os.path.isfile(vk_path)
+    assert os.path.isfile(pk_path)
+
+    print("Generating witness for example: ", model_file)
+    res = await ezkl.gen_witness(input_file, compiled_model_path, witness_path)
+    assert os.path.isfile(witness_path)
+
+    print("Proving example: ", model_file)
+    ezkl.prove(
+        witness_path,
+        compiled_model_path,
+        pk_path,
+        proof_path,
+        "single",
+        srs_path=srs_path,
+    )
+
+    assert os.path.isfile(proof_path)
+
+    print("Verifying example: ", model_file)
+    res = ezkl.verify(
+        proof_path,
+        settings_path,
+        vk_path,
+        srs_path=srs_path,
+    )
+
+    assert res == True
+    
+    
+@pytest.mark.parametrize("model_file, input_file", get_conv_examples())
+async def test_fft_examples(model_file, input_file):
+    """Tests all examples in the examples folder"""
+    # gen settings
+    settings_path = os.path.join(folder_path, "settings.json")
+    compiled_model_path = os.path.join(folder_path, 'network.ezkl')
+    pk_path = os.path.join(folder_path, 'test.pk')
+    vk_path = os.path.join(folder_path, 'test.vk')
+    witness_path = os.path.join(folder_path, 'witness.json')
+    proof_path = os.path.join(folder_path, 'proof.json')
+
+    print("Testing example: ", model_file)
+
+    run_args = ezkl.PyRunArgs()
+    run_args.variables = [("batch_size", 1), ("sequence_length", 100), ("<Sym1>", 1)]
+    run_args.logrows = 22
+    run_args.use_fft_for_conv = True
 
     res = ezkl.gen_settings(model_file, settings_path, py_run_args=run_args)
     assert res
