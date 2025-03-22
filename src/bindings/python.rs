@@ -1,34 +1,34 @@
-use crate::circuit::modules::polycommit::PolyCommitChip;
-use crate::circuit::modules::poseidon::{
-    spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
-    PoseidonChip,
-};
-use crate::circuit::modules::Module;
+use crate::Commitments;
+use crate::RunArgs;
 use crate::circuit::CheckMode;
 use crate::circuit::InputType;
+use crate::circuit::modules::Module;
+use crate::circuit::modules::polycommit::PolyCommitChip;
+use crate::circuit::modules::poseidon::{
+    PoseidonChip,
+    spec::{POSEIDON_RATE, POSEIDON_WIDTH, PoseidonSpec},
+};
 use crate::commands::*;
-use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
+use crate::fieldutils::{IntegerRep, felt_to_integer_rep, integer_rep_to_felt};
 use crate::graph::TestDataSource;
 use crate::graph::{
-    quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
+    GraphCircuit, GraphSettings, Model, Visibility, quantize_float, scale_to_multiplier,
 };
 use crate::pfsys::evm::aggregation_kzg::AggregationCircuit;
 use crate::pfsys::{
-    load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
-    ProofType, TranscriptType,
+    ProofType, TranscriptType, load_pk, load_vk, save_params, save_vk,
+    srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
 };
-use crate::Commitments;
-use crate::RunArgs;
 use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
+use halo2curves::bn256::{Bn256, Fq, Fr, G1, G1Affine};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
 use pyo3_stub_gen::{
-    define_stub_info_gatherer, derive::gen_stub_pyclass, derive::gen_stub_pyclass_enum,
-    derive::gen_stub_pyfunction, TypeInfo,
+    TypeInfo, define_stub_info_gatherer, derive::gen_stub_pyclass, derive::gen_stub_pyclass_enum,
+    derive::gen_stub_pyfunction,
 };
 use snark_verifier::util::arithmetic::PrimeField;
 use std::collections::HashSet;
@@ -203,6 +203,9 @@ struct PyRunArgs {
     /// bool: Should the circuit use unbounded lookups for log
     #[pyo3(get, set)]
     pub bounded_log_lookup: bool,
+    /// bool: Should the circuit use fft for conv
+    #[pyo3(get, set)]
+    pub use_fft_for_conv: bool,
     /// bool: Should the circuit use range checks for inputs and outputs (set to false if the input is a felt)
     #[pyo3(get, set)]
     pub ignore_range_check_inputs_outputs: bool,
@@ -238,6 +241,7 @@ impl From<PyRunArgs> for RunArgs {
             decomp_base: py_run_args.decomp_base,
             decomp_legs: py_run_args.decomp_legs,
             ignore_range_check_inputs_outputs: py_run_args.ignore_range_check_inputs_outputs,
+            use_fft_for_conv: py_run_args.use_fft_for_conv,
         }
     }
 }
@@ -262,6 +266,7 @@ impl Into<PyRunArgs> for RunArgs {
             decomp_base: self.decomp_base,
             decomp_legs: self.decomp_legs,
             ignore_range_check_inputs_outputs: self.ignore_range_check_inputs_outputs,
+            use_fft_for_conv: self.use_fft_for_conv,
         }
     }
 }

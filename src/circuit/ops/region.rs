@@ -16,12 +16,12 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
-use super::{lookup::LookupOp, CircuitError};
+use super::{CircuitError, lookup::LookupOp};
 
 /// Constants map
 pub type ConstantsMap<F> = HashMap<F, ValType<F>>;
@@ -97,6 +97,8 @@ pub struct RegionSettings {
     pub base: usize,
     /// number of legs for decompositions
     pub legs: usize,
+    /// whether we should use fft conv or naive conv
+    pub use_fft: bool,
 }
 
 #[allow(unsafe_code)]
@@ -106,32 +108,41 @@ unsafe impl Send for RegionSettings {}
 
 impl RegionSettings {
     /// Create a new region settings
-    pub fn new(witness_gen: bool, check_range: bool, base: usize, legs: usize) -> RegionSettings {
+    pub fn new(
+        witness_gen: bool,
+        check_range: bool,
+        base: usize,
+        legs: usize,
+        use_fft: bool,
+    ) -> RegionSettings {
         RegionSettings {
             witness_gen,
             check_range,
             base,
             legs,
+            use_fft,
         }
     }
 
     /// Create a new region settings with all true
-    pub fn all_true(base: usize, legs: usize) -> RegionSettings {
+    pub fn all_true(base: usize, legs: usize, use_fft: bool) -> RegionSettings {
         RegionSettings {
             witness_gen: true,
             check_range: true,
             base,
             legs,
+            use_fft,
         }
     }
 
     /// Create a new region settings with all false
-    pub fn all_false(base: usize, legs: usize) -> RegionSettings {
+    pub fn all_false(base: usize, legs: usize, use_fft: bool) -> RegionSettings {
         RegionSettings {
             witness_gen: false,
             check_range: false,
             base,
             legs,
+            use_fft,
         }
     }
 }
@@ -192,6 +203,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     /// get the region's decomposition legs
     pub fn legs(&self) -> usize {
         self.settings.legs
+    }
+
+    /// use fft for conv
+    pub fn use_fft(&self) -> bool {
+        self.settings.use_fft
     }
 
     /// get the max dynamic input len
@@ -273,6 +289,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         num_inner_cols: usize,
         decomp_base: usize,
         decomp_legs: usize,
+        use_fft: bool,
     ) -> RegionCtx<'a, F> {
         let region = Some(RefCell::new(region));
         let linear_coord = row * num_inner_cols;
@@ -285,7 +302,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             dynamic_lookup_index: DynamicLookupIndex::default(),
             shuffle_index: ShuffleIndex::default(),
             statistics: RegionStatistics::default(),
-            settings: RegionSettings::all_true(decomp_base, decomp_legs),
+            settings: RegionSettings::all_true(decomp_base, decomp_legs, use_fft),
             assigned_constants: HashMap::new(),
             max_dynamic_input_len: 0,
         }
@@ -298,11 +315,35 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         num_inner_cols: usize,
         decomp_base: usize,
         decomp_legs: usize,
+        use_fft: bool,
         constants: ConstantsMap<F>,
     ) -> RegionCtx<'a, F> {
-        let mut new_self = Self::new(region, row, num_inner_cols, decomp_base, decomp_legs);
+        let mut new_self = Self::new(
+            region,
+            row,
+            num_inner_cols,
+            decomp_base,
+            decomp_legs,
+            use_fft,
+        );
         new_self.assigned_constants = constants;
         new_self
+    }
+
+    /// convert into dummy
+    pub fn into_dummy(self) -> RegionCtx<'a, F> {
+        RegionCtx {
+            region: None,
+            num_inner_cols: self.num_inner_cols,
+            row: self.row,
+            linear_coord: self.linear_coord,
+            dynamic_lookup_index: self.dynamic_lookup_index,
+            shuffle_index: self.shuffle_index,
+            statistics: self.statistics,
+            settings: self.settings,
+            assigned_constants: self.assigned_constants,
+            max_dynamic_input_len: self.max_dynamic_input_len,
+        }
     }
 
     /// Create a new region context
@@ -355,8 +396,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         output: &mut Tensor<T>,
         inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, CircuitError>
-            + Send
-            + Sync,
+        + Send
+        + Sync,
     ) -> Result<(), CircuitError> {
         if self.is_dummy() {
             self.dummy_loop(output, inner_loop_function)?;
@@ -391,8 +432,8 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         &mut self,
         output: &mut Tensor<T>,
         inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, CircuitError>
-            + Send
-            + Sync,
+        + Send
+        + Sync,
     ) -> Result<(), CircuitError> {
         let row = AtomicUsize::new(self.row());
         let linear_coord = AtomicUsize::new(self.linear_coord());

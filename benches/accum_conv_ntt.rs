@@ -53,6 +53,8 @@ impl Circuit<Fr> for MyCircuit {
 
         let output = VarTensor::new_advice(cs, K, 1, (len + 1) * len);
 
+        let _constant = VarTensor::constant_cols(cs, K, len * len, false);
+
         Self::Config::configure(cs, &[a, b], &output, CheckMode::UNSAFE)
     }
 
@@ -64,7 +66,7 @@ impl Circuit<Fr> for MyCircuit {
         layouter.assign_region(
             || "",
             |region| {
-                let mut region = region::RegionCtx::new(region, 0, 1, 1024, 2, false);
+                let mut region = region::RegionCtx::new(region, 0, 1, 1024, 2, true);
                 config
                     .layout(
                         &mut region,
@@ -90,7 +92,7 @@ fn runcnvrl(c: &mut Criterion) {
 
     let params = gen_srs::<KZGCommitmentScheme<_>>(K as u32);
 
-    for size in [1, 2, 4, 32, 128].iter() {
+    for size in [1, 2, 4].iter() {
         unsafe {
             KERNEL_HEIGHT = size * 2;
             KERNEL_WIDTH = size * 2;

@@ -42,7 +42,7 @@ const ASCII_ALPHABET: &str = "abcdefghijklmnopqrstuvwxyz";
 /// use ezkl::circuit::BaseConfig;
 /// use ezkl::tensor::ValTensor;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
 /// &[3, 3],
@@ -394,7 +394,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::BaseConfig;
 /// use ezkl::tensor::ValTensor;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[1, 2, 3, 2, 3, 4, 3, 4, 9]),
 ///    &[3, 3],
@@ -468,7 +468,7 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::BaseConfig;
 /// use ezkl::tensor::ValTensor;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
 /// &[3, 3],
@@ -507,7 +507,7 @@ pub fn rsqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::layouts::dot;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
@@ -650,7 +650,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// // matmul case
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -1261,7 +1261,7 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2413,7 +2413,7 @@ pub(crate) fn scatter_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2511,7 +2511,7 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2666,7 +2666,7 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2702,7 +2702,7 @@ pub fn prod_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2738,7 +2738,7 @@ pub fn sum_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2780,7 +2780,7 @@ pub fn argmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
 ///     &[2, 3],
@@ -2816,7 +2816,7 @@ pub fn max_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2862,7 +2862,7 @@ pub fn argmin_axes<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 15, 2, 1, 1, 0]),
@@ -2979,7 +2979,7 @@ pub(crate) fn pairwise<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[2, 15, 2, 1, 1, 0]),
@@ -3068,7 +3068,7 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[1, 12, 6, 4, 5, 6]),
@@ -3116,7 +3116,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -3196,7 +3196,7 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 0, 5, 4, 5, 1]),
@@ -3237,7 +3237,7 @@ pub fn less<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 0, 5, 4, 5, 1]),
@@ -3306,7 +3306,7 @@ pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 1, 1, 1, 1, 0]),
@@ -3375,7 +3375,7 @@ pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[1, 1, 1, 1, 1, 0]),
@@ -3455,7 +3455,7 @@ pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[1, 1, 1, 1, 1, 0]),
@@ -3616,7 +3616,7 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let a = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[1, 1, 1, 1, 1, 0]),
@@ -3702,7 +3702,7 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 1, 1, 1, 1, 0]),
@@ -3785,7 +3785,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let mask = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[1, 0, 1, 0, 1, 0]),
@@ -3843,7 +3843,7 @@ pub fn iff<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 1, 2, 1, 1, 1]),
@@ -3876,7 +3876,7 @@ pub fn neg<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::DataFormat;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -3981,7 +3981,7 @@ pub fn sumpool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::tensor::ValTensor;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -4087,7 +4087,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// // Original test case 1: Channel expansion
 /// let c = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(Some(&[6, 0, 12, 4, 0, 8, 0, 0, 3, 0, 0, 2]), &[1, 2, 2, 3]).unwrap());
@@ -4401,10 +4401,48 @@ pub fn deconv<
 }
 
 /// Applies convolution over a ND tensor of shape C x H x D1...DN (and adds a bias).
+pub fn conv<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + std::marker::Sync,
+>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>],
+    padding: &[(usize, usize)],
+    stride: &[usize],
+    num_groups: usize,
+    data_format: DataFormat,
+    kernel_format: KernelFormat,
+) -> Result<ValTensor<F>, CircuitError> {
+    if region.use_fft() {
+        conv_nd_ntt(
+            config,
+            region,
+            values,
+            padding,
+            stride,
+            num_groups,
+            data_format,
+            kernel_format,
+        )
+    } else {
+        conv_naive(
+            config,
+            region,
+            values,
+            padding,
+            stride,
+            num_groups,
+            data_format,
+            kernel_format,
+        )
+    }
+}
+
+/// Applies convolution over a ND tensor of shape C x H x D1...DN (and adds a bias).
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
-/// use ezkl::circuit::ops::layouts::conv;
+/// use ezkl::circuit::ops::layouts::conv_naive as conv;
 /// use ezkl::tensor::{val::ValTensor, DataFormat, KernelFormat};
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -4412,7 +4450,7 @@ pub fn deconv<
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// // Test case 1: Basic 2D convolution with NCHW format (default)
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
@@ -4429,6 +4467,23 @@ pub fn deconv<
 /// ).unwrap());
 /// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Test case 1.1: Basic 2D convolution with NCHW format (default) and stride 2
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 1, 3, 3],
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 1, 1, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap());
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[0]),
+///     &[1],
+/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(1, 1); 2], &vec![2;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[5, 5, 3, 26]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // Test case 2: NHWC format with HWIO kernel
@@ -4488,7 +4543,7 @@ pub fn deconv<
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 ///
-pub fn conv<
+pub fn conv_naive<
     F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + std::marker::Sync,
 >(
     config: &BaseConfig<F>,
@@ -4651,6 +4706,834 @@ pub fn conv<
     data_format.from_canonical(&mut final_output)?;
 
     Ok(final_output)
+}
+
+use std::marker::Sync;
+
+/// Convolution implementation using Number Theoretic Transform (NTT)
+/// This function performs n-dimensional convolution operations efficiently by
+/// leveraging the Number Theoretic Transform (NTT), enabling fast computation
+/// in zero-knowledge circuits.
+///
+/// # Arguments
+/// * `config` - The base circuit configuration
+/// * `region` - The region context for circuit construction
+/// * `values` - Array of input tensors [input, kernel, bias(optional)]
+/// * `padding` - Padding specification for each spatial dimension
+/// * `stride` - Stride specification for each spatial dimension
+/// * `num_groups` - Number of groups for grouped convolution
+/// * `data_format` - Format of the input data (NCHW or NHWC)
+/// * `kernel_format` - Format of the kernel weights (OIHW, HWIO, etc.)
+///
+/// # Returns
+/// * The resulting convolution tensor after NTT-based computation
+///
+/// # Example
+/// ```
+/// use ezkl::tensor::Tensor;
+/// use ezkl::fieldutils::IntegerRep;
+/// use ezkl::circuit::ops::layouts::conv_nd_ntt as conv;
+/// use ezkl::tensor::{val::ValTensor, DataFormat, KernelFormat};
+/// use halo2curves::bn256::Fr as Fp;
+/// use ezkl::circuit::region::RegionCtx;
+/// use ezkl::circuit::region::RegionSettings;
+/// use ezkl::circuit::BaseConfig;
+///
+/// let dummy_config = BaseConfig::dummy(12, 2);
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
+///
+/// // Test case 1: Basic 2D convolution with NCHW format (default)
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 1, 3, 3],
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 1, 1, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap());
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[0]),
+///     &[1],
+/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Test case 1.1: Basic 2D convolution with NCHW format (default) and stride 2
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 1, 3, 3],
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 1, 1, 1]),
+///     &[1, 1, 2, 2],
+/// ).unwrap());
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[0]),
+///     &[1],
+/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(1, 1); 2], &vec![2;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[5, 5, 3, 26]), &[1, 1, 2, 2]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Test case 2: NHWC format with HWIO kernel
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3, 1],  // NHWC format
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 1, 5, 1]),
+///     &[2, 2, 1, 1],  // HWIO format
+/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::HWIO).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[11, 24, 20, 14]), &[1, 2, 2, 1]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Test case 3: Multi-channel NHWC with OHWI kernel
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 2, 3, 0, 4, -1, 3, 1, 6, 5, 2, 3, 0, 4, -1, 3, 1, 6]),
+///     &[1, 3, 3, 2],  // NHWC format
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[5, 1, 1, 2, 5, 2, 1, 2]),
+///     &[1, 2, 2, 2],  // OHWI format
+/// ).unwrap());
+/// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 1]),
+///     &[2],
+/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k, b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::OHWI).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[64, 66, 46, 58]), &[1, 2, 2, 1]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Test case 4: 1D convolution with NCHW format
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 3, 4, 5]),
+///     &[1, 1, 5],  // NCHW format
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 3]),
+///     &[1, 1, 3],  // OIHW format
+/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0)], &vec![1], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[14, 20, 26]), &[1, 1, 3]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+///
+/// // Test case 5: 3D convolution with NCHW format
+/// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 2, 3, 4, 5, 6, 7, 8]),
+///     &[1, 1, 2, 2, 2],  // NCDHW format
+/// ).unwrap());
+/// let k = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
+///     Some(&[1, 1]),
+///     &[1, 1, 1, 1, 2],  // OIDHW format
+/// ).unwrap());
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[x, k], &vec![(0, 0); 3], &vec![1; 3], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[3, 7, 11, 15]), &[1, 1, 2, 2, 1]).unwrap();
+/// assert_eq!(result.int_evals().unwrap(), expected);
+/// ```
+///
+/// # ZK Argument
+/// This function implements convolution through frequency-domain multiplication:
+///
+/// 1. **Mathematical Foundation**:
+///   - Exploits the convolution theorem: convolution in spatial domain equals
+///     point-wise multiplication in frequency domain
+///   - Uses Number Theoretic Transform (NTT) instead of FFT to work in finite fields
+///   - Properly handles kernel flipping for true mathematical convolution
+///
+/// 2. **Implementation Strategy**:
+///   - Converts input and kernel to canonical formats
+///   - Applies appropriate padding to prevent circular artifacts
+///   - Transforms inputs to frequency domain using NTT
+///   - Performs element-wise multiplication in frequency domain
+///   - Transforms back to spatial domain with inverse NTT
+///   - Extracts the valid region and applies stride operations
+///
+/// 3. **Optimizations**:
+///   - Precomputes twiddle factors for NTT efficiency
+///   - Performs dimension calculations to minimize padding
+///   - Handles special cases for 1D, 2D, and 3D convolutions
+///   - Supports various data and kernel formats (NCHW, NHWC, etc.)
+///
+/// 4. **Performance Considerations**:
+///   - NTT-based approach has O(n log n) complexity versus O(n²) for direct convolution
+///   - Power-of-two padding may increase memory usage
+///   - Grouped convolution reduces computation when appropriate
+///   - Careful extraction of valid regions prevents artifacts
+pub fn conv_nd_ntt<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + Sync,
+>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    values: &[ValTensor<F>],
+    padding: &[(usize, usize)],
+    stride: &[usize],
+    num_groups: usize,
+    data_format: DataFormat,
+    kernel_format: KernelFormat,
+) -> Result<ValTensor<F>, CircuitError> {
+    // Setup and input validation
+    let has_bias = values.len() == 3;
+    let (mut working_image, mut working_kernel) = (values[0].clone(), values[1].clone());
+
+    // Convert formats to canonical form
+    data_format.to_canonical(&mut working_image)?;
+    kernel_format.to_canonical(&mut working_kernel)?;
+
+    // Validate stride
+    if stride.iter().any(|&s| s == 0) {
+        return Err(TensorError::DimMismatch(
+            "non-positive stride is not supported for conv".to_string(),
+        )
+        .into());
+    }
+
+    // Handle assignment if not already assigned
+    let mut assigned_len = vec![];
+    if !working_kernel.all_prev_assigned() {
+        working_kernel = region.assign(&config.custom_gates.inputs[0], &working_kernel)?;
+        assigned_len.push(working_kernel.len());
+    }
+
+    if !working_image.all_prev_assigned() {
+        working_image = region.assign(&config.custom_gates.inputs[1], &working_image)?;
+        assigned_len.push(working_image.len());
+    }
+
+    if !assigned_len.is_empty() {
+        region.increment(*assigned_len.iter().max().unwrap());
+    }
+
+    // Handle batch dimension if needed
+    if data_format.has_no_batch() {
+        let mut dim = working_image.dims().to_vec();
+        dim.insert(0, 1);
+        working_image.reshape(&dim)?;
+    }
+
+    // Extract dimensions
+    let image_dims = working_image.dims();
+    let kernel_dims = working_kernel.dims();
+
+    // Determine number of spatial dimensions
+    let n_dims = image_dims.len() - 2; // Subtract batch and channel dimensions
+
+    // Validate padding and stride dimensions
+    if padding.len() < n_dims || stride.len() < n_dims {
+        return Err(TensorError::DimMismatch(format!(
+            "Padding and stride must be specified for all {} spatial dimensions",
+            n_dims
+        ))
+        .into());
+    }
+
+    // Apply padding to the input
+    let mut padded_image = working_image.clone();
+    padded_image.pad(padding.to_vec(), 2)?;
+
+    // Calculate output spatial dimensions
+    let slides = image_dims[2..]
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let d = padding[i].0 + d + padding[i].1;
+            d.checked_sub(kernel_dims[i + 2])
+                .ok_or_else(|| TensorError::Overflow("conv".to_string()))?
+                .checked_div(stride[i])
+                .ok_or_else(|| TensorError::Overflow("conv".to_string()))?
+                .checked_add(1)
+                .ok_or_else(|| TensorError::Overflow("conv".to_string()))
+        })
+        .collect::<Result<Vec<_>, TensorError>>()?;
+
+    // Extract dimensions needed for processing
+    let batch_size = image_dims[0];
+    let input_channels = image_dims[1];
+    let output_channels = kernel_dims[0];
+
+    // Compute per-group dimensions
+    let input_channels_per_group = input_channels / num_groups;
+    let output_channels_per_group = output_channels / num_groups;
+
+    // Validate group dimensions
+    if output_channels_per_group == 0 || input_channels_per_group == 0 {
+        return Err(TensorError::DimMismatch(format!(
+            "Given groups={}, expected input channels and output channels to be divisible by groups, but got input_channels={}, output_channels={}",
+            num_groups, input_channels, output_channels
+        )).into());
+    }
+
+    // Create output tensor
+    let num_outputs = batch_size * output_channels * slides.iter().product::<usize>();
+    let mut output_tensor = Tensor::<ValType<F>>::new(None, &[num_outputs])?;
+
+    // Precompute maximum size needed for NTT
+    let max_size = compute_max_ntt_size(&padded_image, &working_kernel)?;
+    // Precompute twiddle factors
+    let twiddle_factors = precompute_twiddle_factors::<F>(max_size)?;
+
+    // Main processing loop
+    let process_batch_channel = |batch_idx: usize,
+                                 out_channel_idx: usize,
+                                 region: &mut RegionCtx<F>|
+     -> Result<ValTensor<F>, CircuitError> {
+        // Determine which group this output channel belongs to
+        let group = out_channel_idx / output_channels_per_group;
+
+        // Compute channel ranges for this group
+        let in_ch_start = group * input_channels_per_group;
+        let in_ch_end = in_ch_start + input_channels_per_group;
+
+        // Initialize accumulator for results
+        let mut result_acc = None;
+
+        // For each input channel in this group, compute contribution to output
+        for in_ch in in_ch_start..in_ch_end {
+            // Create slices for batch and channel
+            let mut image_slice =
+                padded_image.get_slice(&[batch_idx..batch_idx + 1, in_ch..in_ch + 1])?;
+            let dims = image_slice.dims().to_vec();
+
+            // Reshape to spatial dimensions only
+            image_slice.reshape(&dims[2..])?;
+
+            // Extract the N-D slices for this batch and channel
+            let mut kernel_slice = working_kernel
+                .get_slice(&[out_channel_idx..out_channel_idx + 1, in_ch..in_ch + 1])?;
+            kernel_slice.reshape(&kernel_dims[2..])?;
+
+            // Process with improved NTT-based convolution
+            let conv_result = ntt_nd_conv(
+                config,
+                region,
+                &image_slice,
+                &kernel_slice,
+                &twiddle_factors,
+                n_dims,
+            )?;
+
+            // Accumulate results
+            if let Some(acc) = result_acc {
+                result_acc = Some(pairwise(config, region, &[acc, conv_result], BaseOp::Add)?);
+            } else {
+                result_acc = Some(conv_result);
+            }
+        }
+
+        // Apply bias if present
+        let mut result = result_acc.unwrap();
+        if has_bias {
+            let bias_index = if values[2].len() > 1 {
+                out_channel_idx
+            } else {
+                0
+            };
+
+            let bias = values[2].get_single_elem(bias_index)?;
+            result = pairwise(config, region, &[result, bias], BaseOp::Add)?;
+        }
+
+        // Apply stride to get final output
+        let strided_result = apply_stride_nd(&result, stride, n_dims)?;
+
+        Ok(strided_result)
+    };
+
+    // Process all batch/channel combinations
+    let mut output_idx = 0;
+    for batch in 0..batch_size {
+        for out_ch in 0..output_channels {
+            let mut result = process_batch_channel(batch, out_ch, region)?;
+            result.flatten();
+
+            // Copy to the output tensor
+            output_tensor.set_slice(
+                &[output_idx..output_idx + result.len()],
+                result.get_inner_tensor()?,
+            )?;
+
+            output_idx += slides.iter().product::<usize>();
+        }
+    }
+
+    // Reshape the output to proper dimensions
+    let mut dims = vec![batch_size, output_channels];
+    dims.extend(slides.iter().cloned());
+
+    output_tensor.reshape(&dims)?;
+
+    // Convert back to requested format
+    let mut final_output: ValTensor<F> = output_tensor.into();
+    data_format.from_canonical(&mut final_output)?;
+
+    Ok(final_output)
+}
+
+/// Computes the maximum size needed for NTT based on input and kernel dimensions
+fn compute_max_ntt_size<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + Sync,
+>(
+    image: &ValTensor<F>,
+    kernel: &ValTensor<F>,
+) -> Result<usize, CircuitError> {
+    let image_dims = image.dims();
+    let kernel_dims = kernel.dims();
+
+    // For each spatial dimension, find the next power of 2 that can fit
+    // the convolution result size (image_size + kernel_size - 1)
+    let mut max_size = 1;
+
+    for i in 2..std::cmp::min(image_dims.len(), kernel_dims.len()) {
+        let conv_size = image_dims[i] + kernel_dims[i] - 1;
+        let po2_size = conv_size.next_power_of_two();
+        max_size = std::cmp::max(max_size, po2_size);
+    }
+
+    Ok(max_size)
+}
+
+/// Check if n is a power of two
+fn is_power_of_two(n: usize) -> bool {
+    n > 0 && (n & (n - 1)) == 0
+}
+
+/// Improved implementation of NTT-based convolution for N dimensions
+fn ntt_nd_conv<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + Sync,
+>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    image: &ValTensor<F>,
+    kernel: &ValTensor<F>,
+    twiddle_factors: &HashMap<usize, Vec<F>>,
+    n_dims: usize,
+) -> Result<ValTensor<F>, CircuitError> {
+    // Debug information
+    let image_dims = image.dims();
+    let kernel_dims = kernel.dims();
+
+    // Ensure dimensions match
+    if image_dims.len() != n_dims || kernel_dims.len() != n_dims {
+        return Err(TensorError::DimMismatch(format!(
+            "Both image and kernel must be {}-D tensors for NTT cross-correlation",
+            n_dims
+        ))
+        .into());
+    }
+
+    // Calculate output dimensions and NTT dimensions
+    let mut output_dims = Vec::with_capacity(n_dims);
+    let mut ntt_dims = Vec::with_capacity(n_dims);
+
+    for i in 0..n_dims {
+        let out_dim = image_dims[i] + kernel_dims[i] - 1;
+        output_dims.push(out_dim);
+        ntt_dims.push(out_dim.next_power_of_two());
+    }
+
+    // Pad image and kernel to power-of-2
+    let mut padded_image = image.clone();
+    let mut padded_kernel = kernel.clone();
+
+    // Flip kernel for proper convolution
+    padded_kernel.flip()?;
+
+    // Pad image and kernel
+    let mut image_padding = Vec::new();
+    let mut kernel_padding = Vec::new();
+
+    for i in 0..n_dims {
+        image_padding.push((0, ntt_dims[i] - image_dims[i]));
+        kernel_padding.push((0, ntt_dims[i] - kernel_dims[i]));
+    }
+
+    padded_image.pad(image_padding, 0)?;
+    padded_kernel.pad(kernel_padding, 0)?;
+
+    // Convert to frequency domain
+    let image_freq = ntt_nd(config, region, &padded_image, twiddle_factors, false)?;
+    let kernel_freq = ntt_nd(config, region, &padded_kernel, twiddle_factors, false)?;
+
+    // Element-wise multiplication in frequency domain
+    let result_freq = pairwise(config, region, &[image_freq, kernel_freq], BaseOp::Mult)?;
+
+    // Debug output
+
+    // Convert back to spatial domain
+    let result_full = inverse_ntt_nd(config, region, &result_freq, twiddle_factors)?;
+
+    // Extract valid region (the part of the output that represents true convolution)
+    let mut start_indices = Vec::with_capacity(n_dims);
+    let mut end_indices = Vec::with_capacity(n_dims);
+
+    for i in 0..n_dims {
+        // The valid region starts at (kernel_size - 1)
+        let start = kernel_dims[i] - 1;
+        // The valid region ends at (start + valid_output_size)
+        let end = start + (image_dims[i] - kernel_dims[i] + 1);
+
+        start_indices.push(start);
+        end_indices.push(end);
+    }
+
+    // Extract the valid region using slices
+    let mut slices = Vec::with_capacity(n_dims);
+    for i in 0..n_dims {
+        slices.push(start_indices[i]..end_indices[i]);
+    }
+
+    // Extract the valid region
+    let valid_result = result_full.get_slice(&slices)?;
+
+    Ok(valid_result)
+}
+
+/// Precomputes twiddle factors for NTT
+fn precompute_twiddle_factors<F: PrimeField>(
+    size: usize,
+) -> Result<HashMap<usize, Vec<F>>, CircuitError> {
+    let mut factors = HashMap::new();
+
+    /// Get root of unity of the appropriate order for the given size
+    fn get_root_of_unity<F: PrimeField>(size: usize) -> F {
+        // Start with the primitive root of unity
+        let mut root = F::ROOT_OF_UNITY;
+
+        // Determine the number of squarings needed
+        let log_size = size.next_power_of_two().trailing_zeros();
+        let field_log = F::S;
+
+        // Square the root of unity until we get the appropriate order
+        for _ in 0..(field_log - log_size) {
+            root = root.mul(&root);
+        }
+
+        root
+    }
+
+    // Find primitive root of unity directly for each size
+    // This avoids cascading errors from computing powers
+    for n in 1..=size {
+        if !is_power_of_two(n) {
+            continue;
+        }
+
+        // For binary fields like BN254, this computation is critical
+        let mut curr_factors = Vec::with_capacity(n);
+
+        // Get primitive root for exactly this size
+        let omega = get_root_of_unity::<F>(n);
+
+        // Compute powers directly to avoid accumulation errors
+        let mut omega_k = F::ONE;
+        for _ in 0..n {
+            curr_factors.push(omega_k);
+            omega_k = omega_k.mul(&omega);
+        }
+
+        factors.insert(n, curr_factors);
+    }
+
+    Ok(factors)
+}
+
+/// Improved implementation of N-dimensional Number Theoretic Transform (NTT)
+fn ntt_nd<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + Sync>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    input: &ValTensor<F>,
+    twiddle_factors: &HashMap<usize, Vec<F>>,
+    inverse: bool,
+) -> Result<ValTensor<F>, CircuitError> {
+    let dims = input.dims();
+    let n_dims = dims.len();
+
+    // Base case: for 1D input, use the 1D NTT directly
+    if n_dims == 1 {
+        return ntt_1d(config, region, input, twiddle_factors, inverse);
+    }
+
+    // Verify all dimensions are powers of two
+    for &dim in dims.iter() {
+        if !is_power_of_two(dim) {
+            return Err(TensorError::DimMismatch(
+                "NTT requires power-of-two dimensions".to_string(),
+            )
+            .into());
+        }
+    }
+
+    // Start with a copy of the input
+    let mut result = input.clone();
+
+    // Process each dimension separately
+    for dim_idx in 0..n_dims {
+        // Create a temporary tensor to hold the intermediate results
+        let mut new_result = Tensor::<ValType<F>>::new(None, dims)?;
+
+        // For each slice along the current dimension
+        let slice_size = dims[dim_idx];
+        let total_slices = dims.iter().product::<usize>() / slice_size;
+
+        // Calculate the stride and count for the current dimension
+        let mut stride = 1;
+        for i in (dim_idx + 1)..n_dims {
+            stride *= dims[i];
+        }
+
+        // Process each slice
+        for slice_idx in 0..total_slices {
+            // Calculate position
+            let base_idx = (slice_idx / (stride)) * (stride * slice_size) + (slice_idx % stride);
+
+            // Extract 1D slice
+            let mut slice = Tensor::<ValType<F>>::new(None, &[slice_size])?;
+            for i in 0..slice_size {
+                slice[i] = result.get_inner_tensor()?[base_idx + i * stride].clone();
+            }
+
+            // Apply 1D NTT to this slice
+            let transformed = ntt_1d(config, region, &slice.into(), twiddle_factors, inverse)?;
+
+            // Put the transformed data back
+            for i in 0..slice_size {
+                new_result[base_idx + i * stride] = transformed.get_inner_tensor()?[i].clone();
+            }
+        }
+
+        // Update result for next dimension
+        result = new_result.into();
+    }
+
+    Ok(result)
+}
+
+/// Improved implementation of N-Dimensional Inverse NTT with proper scaling
+fn inverse_ntt_nd<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + Sync,
+>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    input: &ValTensor<F>,
+    twiddle_factors: &HashMap<usize, Vec<F>>,
+) -> Result<ValTensor<F>, CircuitError> {
+    // Perform inverse NTT operation
+    let result = ntt_nd(config, region, input, twiddle_factors, true)?;
+
+    // Calculate proper scaling factor for each dimension
+    let dims = input.dims();
+    let mut scaling_factor = F::ONE;
+
+    // For each dimension, multiply by 1/size (which is 2^(-log_size) for power-of-2 dimensions)
+    for &dim in dims.iter() {
+        let log_dim = dim.trailing_zeros();
+        let dim_inv = calculate_inverse_power_of_two::<F>(log_dim as usize);
+        scaling_factor = scaling_factor.mul(&dim_inv);
+    }
+
+    // Apply scaling factor
+    let scale_tensor = create_constant_tensor(scaling_factor, 1);
+    let scaled_result = pairwise(config, region, &[result, scale_tensor], BaseOp::Mult)?;
+
+    Ok(scaled_result)
+}
+
+/// Calculate 2^(-power) in the finite field
+fn calculate_inverse_power_of_two<F: PrimeField>(power: usize) -> F {
+    let mut result = F::ONE;
+    let two_inv = F::from(2u64).invert().unwrap();
+
+    for _ in 0..power {
+        result = result.mul(&two_inv);
+    }
+
+    result
+}
+
+/// Perform 1D Number Theoretic Transform (NTT) or its inverse
+fn ntt_1d<F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + Sync>(
+    config: &BaseConfig<F>,
+    region: &mut RegionCtx<F>,
+    input: &ValTensor<F>,
+    twiddle_factors: &HashMap<usize, Vec<F>>,
+    inverse: bool,
+) -> Result<ValTensor<F>, CircuitError> {
+    let n = input.len();
+
+    if !is_power_of_two(n) {
+        return Err(
+            TensorError::DimMismatch(format!("NTT size must be a power of 2, got {}", n)).into(),
+        );
+    }
+
+    // Base case
+    if n == 1 {
+        return Ok(input.clone());
+    }
+
+    // Get twiddle factors for this size
+    let factors = if let Some(factors) = twiddle_factors.get(&n) {
+        factors
+    } else {
+        return Err(TensorError::DimError(format!(
+            "Twiddle factors not precomputed for size {}",
+            n
+        ))
+        .into());
+    };
+
+    // Split input into even and odd indices
+    let mut even = Tensor::<ValType<F>>::new(None, &[n / 2])?;
+    let mut odd = Tensor::<ValType<F>>::new(None, &[n / 2])?;
+
+    for i in 0..n / 2 {
+        let inner = input.get_inner_tensor()?;
+        even[i] = inner[2 * i].clone();
+        odd[i] = inner[2 * i + 1].clone();
+    }
+
+    // Recursively compute NTT on even and odd parts
+    let even_tensor: ValTensor<F> = even.into();
+    let odd_tensor: ValTensor<F> = odd.into();
+
+    let even_result = ntt_1d(config, region, &even_tensor, twiddle_factors, inverse)?;
+    let odd_result = ntt_1d(config, region, &odd_tensor, twiddle_factors, inverse)?;
+
+    // Combine results
+    let omegas: ValTensor<F> = if inverse {
+        let t: Tensor<ValType<F>> = (0..n / 2)
+            .map(|k| ValType::Constant(factors[(n - k) % n].clone()))
+            .collect();
+        t.into()
+    } else {
+        let t: Tensor<ValType<F>> = (0..n / 2)
+            .map(|k| ValType::Constant(factors[k].clone()))
+            .collect();
+        t.into()
+    };
+
+    let t = pairwise(config, region, &[odd_result.clone(), omegas], BaseOp::Mult)?;
+    let sum = pairwise(
+        config,
+        region,
+        &[even_result.clone(), t.clone()],
+        BaseOp::Add,
+    )?;
+    let diff = pairwise(config, region, &[even_result, t], BaseOp::Sub)?;
+    let result = sum.concat(diff)?;
+
+    Ok(result)
+}
+
+/// Apply stride to an N-dimensional tensor
+fn apply_stride_nd<
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + Sync,
+>(
+    input: &ValTensor<F>,
+    stride: &[usize],
+    n_dims: usize,
+) -> Result<ValTensor<F>, CircuitError> {
+    let input_dims = input.dims();
+
+    if input_dims.len() != n_dims || stride.len() < n_dims {
+        return Err(TensorError::DimMismatch(format!(
+            "Stride application requires {}-D input and at least {} stride values",
+            n_dims, n_dims
+        ))
+        .into());
+    }
+
+    // Calculate strided dimensions
+    let mut output_dims = Vec::with_capacity(n_dims);
+    for i in 0..n_dims {
+        let out_dim = (input_dims[i] + stride[i] - 1) / stride[i];
+        output_dims.push(out_dim);
+    }
+
+    // Create output tensor
+    let mut result = Tensor::<ValType<F>>::new(None, &output_dims)?;
+
+    // Helper function to convert n-dimensional coordinates to linear index
+    fn coords_to_index(coords: &[usize], dims: &[usize]) -> usize {
+        let mut idx = 0;
+        let mut multiplier = 1;
+
+        for i in (0..coords.len()).rev() {
+            idx += coords[i] * multiplier;
+            if i > 0 {
+                multiplier *= dims[i];
+            }
+        }
+
+        idx
+    }
+
+    // Extract strided elements using a recursive function
+    fn extract_strided_element<
+        F: PrimeField + TensorType + PartialOrd + std::hash::Hash + std::marker::Send + Sync,
+    >(
+        coords: &mut Vec<usize>,
+        dim_idx: usize,
+        input: &ValTensor<F>,
+        input_dims: &[usize],
+        stride: &[usize],
+        result: &mut Tensor<ValType<F>>,
+        output_dims: &[usize],
+    ) -> Result<(), CircuitError> {
+        if dim_idx == coords.len() {
+            // We have a complete set of coordinates, extract the element
+            let in_coords: Vec<usize> = coords
+                .iter()
+                .enumerate()
+                .map(|(i, &c)| c * stride[i])
+                .collect();
+
+            // Check if any coordinate is out of bounds
+            for (i, &coord) in in_coords.iter().enumerate() {
+                if coord >= input_dims[i] {
+                    return Ok(());
+                }
+            }
+
+            let in_idx = coords_to_index(&in_coords, input_dims);
+            let out_idx = coords_to_index(coords, output_dims);
+
+            result[out_idx] = input.get_inner_tensor()?[in_idx].clone();
+
+            Ok(())
+        } else {
+            // Fill in coordinates for this dimension and recurse
+            for i in 0..output_dims[dim_idx] {
+                coords[dim_idx] = i;
+                extract_strided_element(
+                    coords,
+                    dim_idx + 1,
+                    input,
+                    input_dims,
+                    stride,
+                    result,
+                    output_dims,
+                )?;
+            }
+
+            Ok(())
+        }
+    }
+
+    // Extract strided elements
+    let mut coords = vec![0; n_dims];
+    extract_strided_element(
+        &mut coords,
+        0,
+        input,
+        &input_dims,
+        stride,
+        &mut result,
+        &output_dims,
+    )?;
+
+    Ok(result.into())
 }
 
 /// Power accumulated layout
@@ -5339,7 +6222,7 @@ pub(crate) fn argmin<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///    Some(&[5, 2, 3, 0]),
 ///   &[1, 1, 2, 2],
@@ -5392,7 +6275,7 @@ pub fn max_comp<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///   Some(&[5, 2, 3, 0]),
 ///  &[1, 1, 2, 2],
@@ -5471,7 +6354,7 @@ pub(crate) fn min<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[3, -2, -3, 1]),
 /// &[1, 1, 2, 2],
@@ -5583,7 +6466,7 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///  Some(&[3, -2, 3, 1]),
 /// &[1, 1, 2, 2],
@@ -5696,7 +6579,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[3, 2, 3, 1]),
 /// &[1, 1, 2, 2],
@@ -5754,6 +6637,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         )?
         .into()
     };
+
     claimed_output.reshape(input.dims())?;
     let claimed_output = identity(&config, region, &[claimed_output], true)?;
     region.increment(claimed_output.len());
@@ -5844,6 +6728,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let mut comparison_unit = create_constant_tensor(integer_rep_to_felt(1), is_closest.len());
     comparison_unit.reshape(is_closest.dims())?;
     let assigned_unit = region.assign(&config.custom_gates.inputs[1], &comparison_unit)?;
+    region.increment(assigned_unit.len());
 
     enforce_equality(config, region, &[is_closest, assigned_unit])?;
 
@@ -5983,7 +6868,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[3, -2, 3, 1]),
 /// &[1, 1, 2, 2],
@@ -6134,7 +7019,7 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::region::RegionSettings;
 /// use ezkl::circuit::BaseConfig;
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 /// Some(&[3, -2, 3, 1]),
 /// &[1, 1, 2, 2],
@@ -6754,7 +7639,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[2, 2, 3, 2, 2, 0]),
@@ -6805,7 +7690,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// use ezkl::circuit::BaseConfig;
 ///
 /// let dummy_config = BaseConfig::dummy(12, 2);
-/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4));
+/// let mut dummy_region = RegionCtx::new_dummy(0,2,RegionSettings::all_true(65536, 4, true));
 ///
 /// let x = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
 ///     Some(&[100, 200, 300, 400, 500, 600]),

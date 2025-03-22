@@ -1,8 +1,8 @@
 use ezkl::circuit::region::RegionCtx;
 use ezkl::circuit::{
-    ops::lookup::LookupOp, ops::poly::PolyOp, BaseConfig as PolyConfig, CheckMode,
+    BaseConfig as PolyConfig, CheckMode, ops::lookup::LookupOp, ops::poly::PolyOp,
 };
-use ezkl::fieldutils::{self, integer_rep_to_felt, IntegerRep};
+use ezkl::fieldutils::{self, IntegerRep, integer_rep_to_felt};
 use ezkl::tensor::*;
 use halo2_proofs::dev::MockProver;
 use halo2_proofs::poly::commitment::Params;
@@ -10,8 +10,8 @@ use halo2_proofs::poly::kzg::multiopen::{ProverSHPLONK, VerifierSHPLONK};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
-        create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, Column, ConstraintSystem, Error,
-        Instance,
+        Circuit, Column, ConstraintSystem, Error, Instance, create_proof, keygen_pk, keygen_vk,
+        verify_proof,
     },
     poly::{
         commitment::ParamsProver,
@@ -31,7 +31,6 @@ use instant::Instant;
 use mnist::*;
 use rand::rngs::OsRng;
 use std::marker::PhantomData;
-
 
 mod params;
 
@@ -88,20 +87,20 @@ struct MyCircuit<
 }
 
 impl<
-        const LEN: usize,
-        const CLASSES: usize,
-        const LOOKUP_MIN: IntegerRep,
-        const LOOKUP_MAX: IntegerRep,
-        // Convolution
-        const KERNEL_HEIGHT: usize,
-        const KERNEL_WIDTH: usize,
-        const OUT_CHANNELS: usize,
-        const STRIDE: usize,
-        const IMAGE_HEIGHT: usize,
-        const IMAGE_WIDTH: usize,
-        const IN_CHANNELS: usize,
-        const PADDING: usize,
-    > Circuit<F>
+    const LEN: usize,
+    const CLASSES: usize,
+    const LOOKUP_MIN: IntegerRep,
+    const LOOKUP_MAX: IntegerRep,
+    // Convolution
+    const KERNEL_HEIGHT: usize,
+    const KERNEL_WIDTH: usize,
+    const OUT_CHANNELS: usize,
+    const STRIDE: usize,
+    const IMAGE_HEIGHT: usize,
+    const IMAGE_WIDTH: usize,
+    const IN_CHANNELS: usize,
+    const PADDING: usize,
+> Circuit<F>
     for MyCircuit<
         LEN,
         CLASSES,
@@ -203,7 +202,7 @@ where
             .assign_region(
                 || "mlp_4d",
                 |region| {
-                    let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 1024, 2);
+                    let mut region = RegionCtx::new(region, 0, NUM_INNER_COLS, 1024, 2, false);
 
                     let op = PolyOp::Conv {
                         padding: vec![(PADDING, PADDING); 2],

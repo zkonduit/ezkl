@@ -20,8 +20,8 @@ use crate::tensor::TensorError;
 use crate::{Commitments, RunArgs};
 use crate::{EZKLError, commands::*};
 use colored::Colorize;
-#[cfg(unix)]
-use gag::Gag;
+// #[cfg(unix)]
+// use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{self, Circuit};
 use halo2_proofs::poly::VerificationStrategy;
@@ -747,8 +747,11 @@ pub(crate) async fn gen_witness(
 
     let commitment: Commitments = settings.run_args.commitment.into();
 
-    let region_settings =
-        RegionSettings::all_true(settings.run_args.decomp_base, settings.run_args.decomp_legs);
+    let region_settings = RegionSettings::all_true(
+        settings.run_args.decomp_base,
+        settings.run_args.decomp_legs,
+        settings.run_args.use_fft_for_conv,
+    );
 
     let start_time = Instant::now();
     let witness = if settings.module_requires_polycommit() {
@@ -1145,17 +1148,17 @@ pub(crate) async fn calibrate(
             ..settings.run_args.clone()
         };
 
-        // if unix get a gag
-        #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _r = match Gag::stdout() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
-        #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _g = match Gag::stderr() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        // // if unix get a gag
+        // #[cfg(all(not(not(feature = "ezkl")), unix))]
+        // let _r = match Gag::stdout() {
+        //     Ok(g) => Some(g),
+        //     _ => None,
+        // };
+        // #[cfg(all(not(not(feature = "ezkl")), unix))]
+        // let _g = match Gag::stderr() {
+        //     Ok(g) => Some(g),
+        //     _ => None,
+        // };
 
         let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
             Ok(c) => c,
@@ -1184,6 +1187,7 @@ pub(crate) async fn calibrate(
                         RegionSettings::all_true(
                             settings.run_args.decomp_base,
                             settings.run_args.decomp_legs,
+                            settings.run_args.use_fft_for_conv,
                         ),
                     )
                     .map_err(|e| format!("failed to forward: {}", e))?;
@@ -1209,11 +1213,11 @@ pub(crate) async fn calibrate(
             }
         }
 
-        // drop the gag
-        #[cfg(all(not(not(feature = "ezkl")), unix))]
-        drop(_r);
-        #[cfg(all(not(not(feature = "ezkl")), unix))]
-        drop(_g);
+        // // drop the gag
+        // #[cfg(all(not(not(feature = "ezkl")), unix))]
+        // drop(_r);
+        // #[cfg(all(not(not(feature = "ezkl")), unix))]
+        // drop(_g);
 
         let result = forward_pass_res.get(&key).ok_or("key not found")?;
 

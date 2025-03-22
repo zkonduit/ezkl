@@ -1,22 +1,22 @@
+use super::GraphSettings;
 use super::errors::GraphError;
 use super::extract_const_quantized_values;
 use super::node::*;
 use super::vars::*;
-use super::GraphSettings;
+use crate::circuit::Input;
+use crate::circuit::InputType;
+use crate::circuit::Unknown;
 use crate::circuit::hybrid::HybridOp;
 use crate::circuit::region::ConstantsMap;
 use crate::circuit::region::RegionCtx;
 use crate::circuit::region::RegionSettings;
 use crate::circuit::table::Range;
-use crate::circuit::Input;
-use crate::circuit::InputType;
-use crate::circuit::Unknown;
 use crate::fieldutils::IntegerRep;
 use crate::tensor::ValType;
 use crate::{
-    circuit::{lookup::LookupOp, BaseConfig as PolyConfig, CheckMode, Op},
-    tensor::{Tensor, ValTensor},
     RunArgs,
+    circuit::{BaseConfig as PolyConfig, CheckMode, Op, lookup::LookupOp},
+    tensor::{Tensor, ValTensor},
 };
 use halo2curves::bn256::Fr as Fp;
 
@@ -573,7 +573,11 @@ impl Model {
         let res = self.dummy_layout(
             run_args,
             &inputs,
-            RegionSettings::all_false(run_args.decomp_base, run_args.decomp_legs),
+            RegionSettings::all_false(
+                run_args.decomp_base,
+                run_args.decomp_legs,
+                run_args.use_fft_for_conv,
+            ),
         )?;
 
         // if we're using percentage tolerance, we need to add the necessary range check ops for it.
@@ -1143,6 +1147,8 @@ impl Model {
             }
         }
 
+        println!("results: {:?}", results);
+
         let instance_idx = vars.get_instance_idx();
 
         config.base.layout_tables(layouter)?;
@@ -1159,6 +1165,7 @@ impl Model {
                     run_args.num_inner_cols,
                     run_args.decomp_base,
                     run_args.decomp_legs,
+                    run_args.use_fft_for_conv,
                     original_constants.clone(),
                 );
                 // we need to do this as this loop is called multiple times

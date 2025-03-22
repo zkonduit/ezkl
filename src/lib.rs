@@ -97,11 +97,11 @@ impl From<String> for EZKLError {
 
 use std::str::FromStr;
 
-use circuit::{table::Range, CheckMode};
+use circuit::{CheckMode, table::Range};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::Args;
 use fieldutils::IntegerRep;
-use graph::{Visibility, MAX_PUBLIC_SRS};
+use graph::{MAX_PUBLIC_SRS, Visibility};
 use halo2_proofs::poly::{
     ipa::commitment::IPACommitmentScheme, kzg::commitment::KZGCommitmentScheme,
 };
@@ -344,6 +344,12 @@ pub struct RunArgs {
         arg(long, default_value = "false")
     )]
     pub bounded_log_lookup: bool,
+    /// Whether to use fft to compute conv
+    #[cfg_attr(
+        all(feature = "ezkl", not(target_arch = "wasm32")),
+        arg(long, default_value = "false")
+    )]
+    pub use_fft_for_conv: bool,
     /// Range check inputs and outputs (turn off if the inputs are felts)
     #[cfg_attr(
         all(feature = "ezkl", not(target_arch = "wasm32")),
@@ -376,6 +382,7 @@ impl Default for RunArgs {
             decomp_base: 16384,
             decomp_legs: 2,
             ignore_range_check_inputs_outputs: false,
+            use_fft_for_conv: false,
         }
     }
 }

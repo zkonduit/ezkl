@@ -715,6 +715,21 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         Ok(tensor)
     }
 
+    /// Flips the inner tensor's order
+    pub fn flip(&mut self) -> Result<(), TensorError> {
+        match self {
+            ValTensor::Value {
+                inner: v, dims: _, ..
+            } => {
+                *v = v.flip()?;
+            }
+            ValTensor::Instance { .. } => {
+                return Err(TensorError::WrongMethod);
+            }
+        };
+        Ok(())
+    }
+
     /// Pads the tensor with zeros until its size is divisible by n
     ///
     /// # Arguments

@@ -1,9 +1,9 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use ezkl::circuit::poly::PolyOp;
 use ezkl::circuit::region::RegionCtx;
 use ezkl::circuit::*;
-use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::TranscriptType;
+use ezkl::pfsys::create_proof_circuit;
 use ezkl::pfsys::{create_keys, srs::gen_srs};
 use ezkl::tensor::*;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
@@ -56,7 +56,7 @@ impl Circuit<Fr> for MyCircuit {
         layouter.assign_region(
             || "",
             |region| {
-                let mut region = RegionCtx::new(region, 0, 1, 1024, 2);
+                let mut region = RegionCtx::new(region, 0, 1, 1024, 2, false);
                 config
                     .layout(&mut region, &self.inputs, Box::new(PolyOp::Pow(4)))
                     .unwrap();

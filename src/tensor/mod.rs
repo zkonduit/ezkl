@@ -737,6 +737,20 @@ impl<T: Clone + TensorType> Tensor<T> {
         index
     }
 
+    /// Flip the order of the inner values of the tensor.
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
+    /// let b = Tensor::<IntegerRep>::new(Some(&[6, 5, 4, 3, 2, 1]), &[2, 3]).unwrap();
+    /// assert_eq!(a.flip().unwrap(), b);
+    /// ```
+    pub fn flip(&self) -> Result<Tensor<T>, TensorError> {
+        let mut inner = self.inner.clone();
+        inner.reverse();
+        Tensor::new(Some(&inner), &self.dims)
+    }
+
     /// Fetches every nth element
     ///
     /// ```
