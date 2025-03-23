@@ -43,7 +43,7 @@ The generated proofs can then be verified with much less computational resources
 
 ----------------------
 
-### getting started ⚙️
+### Getting Started ⚙️
 
 The easiest way to get started is to try out a notebook. 
 
@@ -76,12 +76,12 @@ For more details visit the [docs](https://docs.ezkl.xyz). The CLI is faster than
 
 Build the auto-generated rust documentation and open the docs in your browser locally. `cargo doc --open`
 
-#### In-browser EVM verifier
+#### In-browser EVM Verifier
 
 As an alternative to running the native Halo2 verifier as a WASM binding in the browser, you can use the in-browser EVM verifier. The source code of which you can find in the `in-browser-evm-verifier` directory and a README with instructions on how to use it.
 
 
-### building the project 🔨
+### Building the Project 🔨
 
 #### Rust CLI
 
@@ -96,7 +96,7 @@ cargo install --locked --path .
 
 
 
-#### building python bindings
+#### Building Python Bindings
 Python bindings exists and can be built using `maturin`. You will need `rust` and `cargo` to be installed.
 
 ```bash
@@ -126,7 +126,7 @@ unset ENABLE_ICICLE_GPU
 
 **NOTE:** Even with the above environment variable set, icicle is disabled for circuits where k <= 8. To change the value of `k` where icicle is enabled, you can set the environment variable `ICICLE_SMALL_K`.
 
-### contributing 🌎
+### Contributing 🌎
 
 If you're interested in contributing and are unsure where to start, reach out to one of the maintainers:
 
@@ -155,7 +155,10 @@ Any contribution intentionally submitted for inclusion in the work by you shall 
 Check out `docs/advanced_security` for more advanced information on potential threat vectors that are specific to zero-knowledge inference, quantization, and to machine learning models generally.
 
 
-### no warranty
+### No Warranty
 
-Copyright (c) 2024 Zkonduit Inc. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Copyright (c) 2025 Zkonduit Inc. 
+
