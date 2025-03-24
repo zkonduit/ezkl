@@ -728,7 +728,7 @@ pub enum Commands {
     },
     /// Creates an Evm verifier artifact for a single proof to be used by the reusable verifier
     #[command(name = "create-evm-vka")]
-    CreateEvmVKArtifact {
+    CreateEvmVka {
         /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         srs_path: Option<PathBuf>,
@@ -747,7 +747,7 @@ pub enum Commands {
     },
     /// Creates an Evm verifier that attests to on-chain inputs for a single proof
     #[command(name = "create-evm-da")]
-    CreateEvmDataAttestation {
+    CreateEvmDa {
         /// The path to load circuit settings .json file from (generated using the gen-settings command)
         #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS, value_hint = clap::ValueHint::FilePath)]
         settings_path: Option<PathBuf>,
@@ -856,7 +856,7 @@ pub enum Commands {
     },
     /// Deploys an evm verifier that allows for data attestation
     #[command(name = "deploy-evm-da")]
-    DeployEvmDataAttestation {
+    DeployEvmDa {
         /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
         data: Option<String>,

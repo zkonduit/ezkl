@@ -212,8 +212,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             addr_vk,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
-
-        Commands::CreateEvmVKArtifact {
+        Commands::CreateEvmVka {
             vk_path,
             srs_path,
             settings_path,
@@ -229,7 +228,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        Commands::CreateEvmDataAttestation {
+        Commands::CreateEvmDa {
             settings_path,
             sol_code_path,
             abi_path,
@@ -434,7 +433,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        Commands::DeployEvmDataAttestation {
+        Commands::DeployEvmDa {
             data,
             settings_path,
             sol_code_path,
