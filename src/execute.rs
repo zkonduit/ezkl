@@ -45,6 +45,7 @@ use halo2curves::serde::SerdeObject;
 use indicatif::{ProgressBar, ProgressStyle};
 use instant::Instant;
 use itertools::Itertools;
+use lazy_static::lazy_static;
 use log::debug;
 use log::{info, trace, warn};
 use serde::Serialize;
@@ -64,8 +65,6 @@ use tabled::Tabled;
 use thiserror::Error;
 use tract_onnx::prelude::IntoTensor;
 use tract_onnx::prelude::Tensor as TractTensor;
-
-use lazy_static::lazy_static;
 
 lazy_static! {
     #[derive(Debug)]
@@ -138,11 +137,15 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             data,
             variables,
             seed,
+            min,
+            max,
         } => gen_random_data(
             model.unwrap_or(DEFAULT_MODEL.into()),
             data.unwrap_or(DEFAULT_DATA.into()),
             variables,
             seed,
+            min,
+            max,
         ),
         Commands::CalibrateSettings {
             model,
@@ -840,6 +843,8 @@ pub(crate) fn gen_random_data(
     data_path: PathBuf,
     variables: Vec<(String, usize)>,
     seed: u64,
+    min: Option<f32>,
+    max: Option<f32>,
 ) -> Result<String, EZKLError> {
     let mut file = std::fs::File::open(&model_path).map_err(|e| {
         crate::graph::errors::GraphError::ReadWriteFileError(
@@ -858,22 +863,32 @@ pub(crate) fn gen_random_data(
         .collect::<tract_onnx::prelude::TractResult<Vec<_>>>()
         .map_err(|e| EZKLError::from(e.to_string()))?;
 
+    let min = min.unwrap_or(0.0);
+    let max = max.unwrap_or(1.0);
+
     /// Generates a random tensor of a given size and type.
     fn random(
         sizes: &[usize],
         datum_type: tract_onnx::prelude::DatumType,
         seed: u64,
+        min: f32,
+        max: f32,
     ) -> TractTensor {
         use rand::{Rng, SeedableRng};
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
         let mut tensor = TractTensor::zero::<f32>(sizes).unwrap();
         let slice = tensor.as_slice_mut::<f32>().unwrap();
-        slice.iter_mut().for_each(|x| *x = rng.r#gen());
+        slice.iter_mut().for_each(|x| *x = rng.gen_range(min..max));
         tensor.cast_to_dt(datum_type).unwrap().into_owned()
     }
 
-    fn tensor_for_fact(fact: &tract_onnx::prelude::TypedFact, seed: u64) -> TractTensor {
+    fn tensor_for_fact(
+        fact: &tract_onnx::prelude::TypedFact,
+        seed: u64,
+        min: f32,
+        max: f32,
+    ) -> TractTensor {
         if let Some(value) = &fact.konst {
             return value.clone().into_tensor();
         }
@@ -884,12 +899,14 @@ pub(crate) fn gen_random_data(
                 .expect("Expected concrete shape, found: {fact:?}"),
             fact.datum_type,
             seed,
+            min,
+            max,
         )
     }
 
     let generated = input_facts
         .iter()
-        .map(|v| tensor_for_fact(v, seed))
+        .map(|v| tensor_for_fact(v, seed, min, max))
         .collect_vec();
 
     let data = GraphData::from_tract_data(&generated)?;

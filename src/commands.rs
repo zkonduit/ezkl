@@ -443,6 +443,12 @@ pub enum Commands {
         /// random seed for reproducibility (optional)
         #[arg(long, value_hint = clap::ValueHint::Other, default_value = DEFAULT_SEED)]
         seed: u64,
+        /// min value for random data
+        #[arg(long, value_hint = clap::ValueHint::Other)]
+        min: Option<f32>,
+        /// max value for random data
+        #[arg(long, value_hint = clap::ValueHint::Other)]
+        max: Option<f32>,
     },
     /// Calibrates the proving scale, lookup bits and logrows from a circuit settings file.
     CalibrateSettings {
