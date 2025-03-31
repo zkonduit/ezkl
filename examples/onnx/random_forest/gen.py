@@ -6,8 +6,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier as Rf
 import sk2torch
 import torch
-import ezkl
-import os
 from torch import nn
 
 

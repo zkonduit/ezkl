@@ -1,8 +1,9 @@
-pytorch2.0.1:É
+pytorch2.6.0:Ê
 E
 input
 input1output/GatherElements"GatherElements*
-axis 	torch_jitZ%
+axis 
+main_graphZ%
 input
 
 

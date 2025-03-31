@@ -1,7 +1,8 @@
-pytorch2.1.0:Р
-;
-inputoutput/HardSigmoid"HardSigmoid*
-alphaлк*>а
+pytorch2.6.0:К
+5
+inputoutput/LogSoftmax"
+LogSoftmax*
+axisа
 main_graphZ!
 input
 
