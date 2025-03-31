@@ -8,7 +8,7 @@ pluggy==1.4.0
 pytest==8.1.1
 tomli==2.0.1
 typing-extensions==4.10.0
-zipp==3.18.1
+zipp==3.21.0
 onnx==1.17.0
 onnxruntime==1.17.1
 numpy==1.26.4
