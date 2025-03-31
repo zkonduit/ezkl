@@ -1,34 +1,34 @@
-use crate::circuit::modules::polycommit::PolyCommitChip;
-use crate::circuit::modules::poseidon::{
-    spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
-    PoseidonChip,
-};
-use crate::circuit::modules::Module;
+use crate::Commitments;
+use crate::RunArgs;
 use crate::circuit::CheckMode;
 use crate::circuit::InputType;
+use crate::circuit::modules::Module;
+use crate::circuit::modules::polycommit::PolyCommitChip;
+use crate::circuit::modules::poseidon::{
+    PoseidonChip,
+    spec::{POSEIDON_RATE, POSEIDON_WIDTH, PoseidonSpec},
+};
 use crate::commands::*;
-use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
+use crate::fieldutils::{IntegerRep, felt_to_integer_rep, integer_rep_to_felt};
 use crate::graph::TestDataSource;
 use crate::graph::{
-    quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
+    GraphCircuit, GraphSettings, Model, Visibility, quantize_float, scale_to_multiplier,
 };
 use crate::pfsys::evm::aggregation_kzg::AggregationCircuit;
 use crate::pfsys::{
-    load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
-    ProofType, TranscriptType,
+    ProofType, TranscriptType, load_pk, load_vk, save_params, save_vk,
+    srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
 };
-use crate::Commitments;
-use crate::RunArgs;
 use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
+use halo2curves::bn256::{Bn256, Fq, Fr, G1, G1Affine};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
 use pyo3_stub_gen::{
-    define_stub_info_gatherer, derive::gen_stub_pyclass, derive::gen_stub_pyclass_enum,
-    derive::gen_stub_pyfunction, TypeInfo,
+    TypeInfo, define_stub_info_gatherer, derive::gen_stub_pyclass, derive::gen_stub_pyclass_enum,
+    derive::gen_stub_pyfunction,
 };
 use snark_verifier::util::arithmetic::PrimeField;
 use std::collections::HashSet;
@@ -962,6 +962,8 @@ fn gen_settings(
     output=PathBuf::from(DEFAULT_SETTINGS),
     variables=Vec::from([("batch_size".to_string(), 1)]),
     seed=DEFAULT_SEED.parse().unwrap(),
+    min=None, 
+    max=None
 ))]
 #[gen_stub_pyfunction]
 fn gen_random_data(
@@ -969,8 +971,10 @@ fn gen_random_data(
     output: PathBuf,
     variables: Vec<(String, usize)>,
     seed: u64,
+    min: Option<f32>,
+    max: Option<f32>,
 ) -> Result<bool, PyErr> {
-    crate::execute::gen_random_data(model, output, variables, seed).map_err(|e| {
+    crate::execute::gen_random_data(model, output, variables, seed, min, max).map_err(|e| {
         let err_str = format!("Failed to generate settings: {}", e);
         PyRuntimeError::new_err(err_str)
     })?;
@@ -1819,10 +1823,10 @@ fn create_evm_data_attestation(
     test_data,
     input_source,
     output_source,
-    rpc_url=None,
+    rpc_url=None
 ))]
 #[gen_stub_pyfunction]
-fn setup_test_evm_witness(
+fn setup_test_evm_data(
     py: Python,
     data_path: String,
     compiled_circuit_path: PathBuf,
@@ -1832,7 +1836,7 @@ fn setup_test_evm_witness(
     rpc_url: Option<String>,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::setup_test_evm_witness(
+        crate::execute::setup_test_evm_data(
             data_path,
             compiled_circuit_path,
             test_data,
@@ -1842,7 +1846,7 @@ fn setup_test_evm_witness(
         )
         .await
         .map_err(|e| {
-            let err_str = format!("Failed to run setup_test_evm_witness: {}", e);
+            let err_str = format!("Failed to run setup_test_evm_data: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
 
@@ -2107,7 +2111,7 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
-    m.add_function(wrap_pyfunction!(setup_test_evm_witness, m)?)?;
+    m.add_function(wrap_pyfunction!(setup_test_evm_data, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
     m.add_function(wrap_pyfunction!(encode_evm_calldata, m)?)?;

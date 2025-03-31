@@ -17,16 +17,16 @@ use crate::{Commitments, EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
-    create_proof, keygen_pk, keygen_vk_custom, verify_proof, Circuit, ProvingKey, VerifyingKey,
+    Circuit, ProvingKey, VerifyingKey, create_proof, keygen_pk, keygen_vk_custom, verify_proof,
 };
+use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
 use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
+use halo2curves::CurveAffine;
 use halo2curves::ff::{FromUniformBytes, PrimeField, WithSmallOrderMulGroup};
 use halo2curves::serde::SerdeObject;
-use halo2curves::CurveAffine;
 use instant::Instant;
 use log::{debug, info, trace};
 #[cfg(not(feature = "det-prove"))]
@@ -51,6 +51,9 @@ use pyo3::types::PyDictMethods;
 
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
+/// Converts a string to a `SerdeFormat`.
+/// # Panics
+/// Panics if the provided `s` is not a valid `SerdeFormat` (i.e. not one of "processed", "raw-bytes-unchecked", or "raw-bytes").
 fn serde_format_from_str(s: &str) -> halo2_proofs::SerdeFormat {
     match s {
         "processed" => halo2_proofs::SerdeFormat::Processed,
@@ -321,7 +324,7 @@ where
 }
 
 #[cfg(feature = "python-bindings")]
-use pyo3::{types::PyDict, PyObject, Python, ToPyObject};
+use pyo3::{PyObject, Python, ToPyObject, types::PyDict};
 #[cfg(feature = "python-bindings")]
 impl<F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> ToPyObject for Snark<F, C>
 where
@@ -345,9 +348,9 @@ where
 }
 
 impl<
-        F: PrimeField + SerdeObject + Serialize + FromUniformBytes<64> + DeserializeOwned,
-        C: CurveAffine + Serialize + DeserializeOwned,
-    > Snark<F, C>
+    F: PrimeField + SerdeObject + Serialize + FromUniformBytes<64> + DeserializeOwned,
+    C: CurveAffine + Serialize + DeserializeOwned,
+> Snark<F, C>
 where
     C::Scalar: Serialize + DeserializeOwned,
     C::ScalarExt: Serialize + DeserializeOwned,

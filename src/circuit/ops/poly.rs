@@ -49,7 +49,7 @@ pub enum PolyOp {
     },
     Downsample {
         axis: usize,
-        stride: usize,
+        stride: isize,
         modulo: usize,
     },
     DeConv {
@@ -108,13 +108,8 @@ pub enum PolyOp {
 }
 
 impl<
-        F: PrimeField
-            + TensorType
-            + PartialOrd
-            + std::hash::Hash
-            + Serialize
-            + for<'de> Deserialize<'de>,
-    > Op<F> for PolyOp
+    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Serialize + for<'de> Deserialize<'de>,
+> Op<F> for PolyOp
 {
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {
@@ -188,7 +183,8 @@ impl<
             } => {
                 format!(
                     "DECONV (stride={:?}, padding={:?}, output_padding={:?}, group={}, data_format={:?}, kernel_format={:?})",
-                    stride, padding, output_padding, group, data_format, kernel_format)
+                    stride, padding, output_padding, group, data_format, kernel_format
+                )
             }
             PolyOp::Concat { axis } => format!("CONCAT (axis={})", axis),
             PolyOp::Slice { axis, start, end } => {

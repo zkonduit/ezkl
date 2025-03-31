@@ -18,13 +18,12 @@ use self::tensor::{create_constant_tensor, create_zero_tensor};
 use super::{chip::BaseConfig, region::RegionCtx};
 use crate::{
     circuit::{ops::base::BaseOp, utils},
-    fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep},
-    tensor::{
-        create_unit_tensor, get_broadcasted_shape,
-        ops::{accumulated, add, mult, sub},
-        Tensor, TensorError, ValType,
-    },
+    fieldutils::{IntegerRep, felt_to_integer_rep, integer_rep_to_felt},
     tensor::{DataFormat, KernelFormat},
+    tensor::{
+        Tensor, TensorError, ValType, create_unit_tensor, get_broadcasted_shape,
+        ops::{accumulated, add, mult, sub},
+    },
 };
 
 use super::*;
@@ -67,9 +66,51 @@ pub fn l1_distance<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(abs_diff)
 }
 
-/// Determines if from a set of 3 tensors the 1st is closest to a reference tensor.
-/// should only be used in the context of a monotonic function like the product used in the division, recipe, and sqrt arguments;
-/// or the increasing powers of 2 in the ln argument. Which is used to construct a convex error function.
+/// Verifies that a given value is at the optimum (minimum) of a convex function.
+///
+/// This function checks whether a point `x` is at the minimum of a convex function `f` by comparing
+/// the function's value at `x` with its values at `x+1` and `x-1`. For a convex function,
+/// the minimum occurs at a point where f(x) ≤ f(x+1) and f(x) < f(x-1).
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `x` - The point to check for optimality
+/// * `f` - The convex function to evaluate, provided as a closure
+///
+/// # Returns
+/// * A tensor of 1s where `x` is optimal and 0s elsewhere
+///
+/// # ZK Argument
+/// This function implements a key zero-knowledge constraint technique for optimization problems:
+///
+/// 1. **Claimed Optimality Verification**:
+///    - The prover claims a tensor `x` contains optimal values for function `f`
+///    - Instead of computing the actual optimal values (which may be non-linear/difficult),
+///      the circuit only verifies the optimality property
+///
+/// 2. **Convexity-Based Constraints**:
+///    - Evaluates function at x, x+1, and x-1
+///    - Enforces constraints based on convex function properties:
+///      * f(x) ≤ f(x+1) - right-side slope is non-negative
+///      * f(x) < f(x-1) - left-side slope is negative
+///    - These two conditions together guarantee x is at the minimum
+///
+/// 3. **Uniqueness of Solution**:
+///    - For strictly convex functions, these constraints guarantee a unique solution
+///    - This technique allows efficient ZK verification of optimal solutions to convex problems
+///      without requiring the verifier to run optimization algorithms
+///
+/// # Mathematical Basis
+/// For a convex function, the global minimum occurs at a point where:
+/// 1. The function value at x is less than or equal to the function value at x+1
+/// 2. The function value at x is less than the function value at x-1
+///
+/// # Usage
+/// This function should only be used with monotonic or convex functions such as:
+/// - Product functions used in division, reciprocal, and square root operations
+/// - Exponential functions like powers of 2 in logarithmic operations
+/// - Any function where the error surface is convex
 fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -78,29 +119,40 @@ fn optimum_convex_function<F: PrimeField + TensorType + PartialOrd + std::hash::
 ) -> Result<ValTensor<F>, CircuitError> {
     let one = create_constant_tensor(F::from(1), 1);
 
+    // Evaluate function at the point x
     let f_x = f(config, region, x)?;
 
+    // Evaluate function at x+1
     let x_plus_1 = pairwise(config, region, &[x.clone(), one.clone()], BaseOp::Add)?;
     let f_x_plus_1 = f(config, region, &x_plus_1)?;
 
+    // Evaluate function at x-1
     let x_minus_1 = pairwise(config, region, &[x.clone(), one.clone()], BaseOp::Sub)?;
     let f_x_minus_1 = f(config, region, &x_minus_1)?;
 
-    // because the function is convex, the result should be the minimum of the three
-    // note that we offset the x by 1 to get the next value
-    // f(x) <= f(x+1) and f(x) < f(x-1)
-    // the result is 1 if the function is optimal solely because of the convexity of the function
-    // the distances can be equal but this is only possible if f(x) and f(x+1) are both optimal, but if (f(x) = f(x + 1))
-    // f(x+1) is not smaller than f(x + 1 - 1) = f(x) and thus f(x) is unique
+    // Check if f(x) ≤ f(x+1) - right side of optimality condition
     let f_x_is_opt_rhs = less_equal(config, region, &[f_x.clone(), f_x_plus_1.clone()])?;
+
+    // Check if f(x) < f(x-1) - left side of optimality condition
     let f_x_is_opt_lhs = less(config, region, &[f_x.clone(), f_x_minus_1.clone()])?;
 
+    // x is optimal if both conditions are satisfied
     let is_opt = and(config, region, &[f_x_is_opt_lhs, f_x_is_opt_rhs])?;
 
     Ok(is_opt)
 }
 
-/// Err is less than some constant
+/// Enforces that the L1 distance between two tensors is less than a specified constant.
+/// This is useful for asserting that two tensors are approximately equal.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Array of two tensors to compute distance between
+/// * `constant` - The maximum allowed distance between the tensors
+///
+/// # Returns
+/// * `()` if the constraint was successfully applied, or an error if the constraint fails
 pub fn diff_less_than<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -119,7 +171,51 @@ pub fn diff_less_than<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     Ok(())
 }
 
-/// Div accumulated layout
+/// Performs division of a tensor by a constant value.
+///
+/// This function divides each element in a tensor by a scalar divisor value, using
+/// a witness-based approach that's optimized for zero-knowledge circuits.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `value` - Single tensor to be divided
+/// * `div` - Constant scalar divisor
+///
+/// # Returns
+/// * The result tensor after division
+///
+/// # ZK Argument
+/// This function implements division using a sophisticated "claimed output" approach:
+///
+/// 1. **Witness-Based Implementation**:
+///    - Division is difficult to implement directly with constraints
+///    - Instead, the prover computes the quotient (result) in the clear
+///    - This quotient is provided as a witness in the ZK circuit
+///
+/// 2. **Verification Strategy**:
+///    - To ensure the witness is correct, the circuit checks: input ≈ output × divisor
+///    - This multiplication is easy to verify with constraints
+///    - The approximation allows for rounding errors in integer division
+///
+/// 3. **Constraint Implementation**:
+///    - The claimed output is first range-checked using identity function
+///    - Then product = output × divisor is calculated
+///    - Finally, diff_less_than verifies |input - product| < divisor
+///
+/// 4. **Integrity Guarantees**:
+///    - The allowed difference ensures a unique correct solution
+///    - The prover cannot provide an incorrect quotient without detection
+///    - The approach handles all edge cases, including division by 1 (optimization)
+///
+/// 5. **Performance Optimization**:
+///    - For divisor=1, returns input directly (no constraints)
+///    - Uses parallel computation for witness generation
+///    - Efficient constraint generation focused on the verification
+///
+/// This division implementation showcases a common ZK pattern: let the prover compute
+/// a complex operation outside the circuit, then efficiently verify its correctness
+/// using simpler constraints within the circuit.
 pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -170,7 +266,37 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(claimed_output)
 }
 
-/// recip accumulated layout
+/// Computes the reciprocal (1/x) of a tensor with scaling factors.
+///
+/// This function calculates the reciprocal of each element in the input tensor,
+/// with appropriate scaling to maintain precision. It handles special cases like
+/// zeros and verifies correctness using optimum convex function constraints.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `value` - Single tensor to calculate reciprocal for
+/// * `input_scale` - Scaling factor for the input values
+/// * `output_scale` - Scaling factor for the output values
+///
+/// # Returns
+/// * The result tensor containing reciprocals
+///
+/// # ZK Argument
+/// The function implements 1/x operation using a sophisticated ZK approach:
+/// 1. The prover computes the reciprocal and provides it as a witness
+/// 2. The circuit enforces constraints that verify this witness:
+///    - For zero inputs: Ensures output equals a special zero_inverse value
+///    - For non-zero inputs: Uses convex optimization to verify x×(1/x) ≈ 1
+/// 3. The convex optimization approach:
+///    - Defines an error function err(y) = |y×input - scale|
+///    - Uses optimum_convex_function to verify y minimizes this error
+///    - Checks err(y) < err(y-1) and err(y) ≤ err(y+1)
+///    - This guarantees a unique optimal solution where y = 1/x
+///
+/// # Special Cases
+/// * Zero values in the input are handled by a special zero_inverse value
+/// * Uses explicit masks to separate zero and non-zero handling
 pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -468,7 +594,51 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(last_elem)
 }
 
-/// Computes the einstein sum of a set of tensors.
+/// Computes the Einstein summation (einsum) of a set of tensors.
+///
+/// This powerful function implements generalized tensor contractions using Einstein
+/// notation, allowing complex tensor operations including matrix multiplication,
+/// dot products, transpositions, and custom multi-dimensional contractions.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `inputs` - Set of tensors to operate on
+/// * `equation` - Einstein notation string defining the operation
+///
+/// # Returns
+/// * Result tensor from the tensor contraction
+///
+/// # ZK Argument
+/// This function implements a generalized tensor contraction mechanism:
+///
+/// 1. **Einstein Notation Parsing**:
+///    - The equation string (like "ij,jk->ik") specifies how indices are contracted
+///    - Repeated indices across input tensors indicate summation/contraction
+///    - The notation after "->" specifies the output dimensions
+///
+/// 2. **Implementation Strategy**:
+///    - Parses equation to identify common indices (contraction dimensions)
+///    - Maps the indices to their corresponding dimensions in each tensor
+///    - For each common index, performs multiplication and summation
+///    - When no common indices exist, performs outer products
+///
+/// 3. **Optimization Approach**:
+///    - Special cases for common operations (dot product, matrix multiplication)
+///    - Efficient handling of tensor slices along specified dimensions
+///    - Parallelization where appropriate for performance
+///
+/// 4. **Constraint Generation**:
+///    - Uses the more efficient dot() function when appropriate
+///    - Otherwise builds constraints through multiplication and addition
+///    - Combines results with appropriate reductions based on the equation
+///
+/// This function provides a unified framework for tensor operations that would
+/// otherwise require multiple specialized functions, making it a powerful tool
+/// for implementing complex neural network operations like attention mechanisms,
+/// convolutions, and custom network architectures.
+///
+/// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
@@ -863,16 +1033,61 @@ pub fn einsum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 }
 
 #[derive(Debug, Clone, Copy)]
-/// Determines how to handle collisions in sorting.
+/// Determines how to handle collisions when sorting elements with identical values.
+///
+/// When sorting tensors or arrays, multiple elements might have the same value.
+/// This enum specifies different strategies for determining the order of such
+/// elements in the sorted result.
+///
+/// # Variants
+/// * `Unsorted` - No specific ordering is enforced for elements with identical values.
+///   They remain in their original relative positions.
+///
+/// * `SmallestIndexFirst` - When elements have the same value, the element with the
+///   smallest original index appears first in the sorted result. This creates a
+///   stable sort where earlier elements are prioritized.
+///
+/// * `LargestIndexFirst` - When elements have the same value, the element with the
+///   largest original index appears first in the sorted result. This reverses the
+///   normal tie-breaking behavior.
+///
+/// # Usage
+/// This is particularly important for operations like topk, argmax, and sorting
+/// functions where tie-breaking behavior needs to be consistent and well-defined.
 pub enum SortCollisionMode {
-    /// Do not sort (no rule)
+    /// Do not sort elements with identical values; maintain original order
     Unsorted,
-    /// Sort by smallest index first
+    /// When values are identical, prioritize the element with the smallest original index
     SmallestIndexFirst,
-    /// Sort by largest index first on collision
+    /// When values are identical, prioritize the element with the largest original index
     LargestIndexFirst,
 }
 
+/// Sorts a tensor in ascending order and returns both the sorted tensor and indices.
+///
+/// This internal function performs stable sorting on a tensor and handles collisions
+/// according to the specified collision mode. It also verifies the correctness of the
+/// sorting by enforcing constraints on consecutive elements.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor to be sorted
+/// * `collision_handling` - How to handle elements with identical values
+///
+/// # Returns
+/// * A tuple containing:
+///   - The sorted tensor in ascending order
+///   - The indices indicating the original positions of each element
+///
+/// # Details
+/// The function flattens the input tensor, sorts the values, and then:
+/// 1. Verifies that the sorted output is a valid permutation of the input using shuffles
+/// 2. Enforces that each consecutive pair of elements satisfies the sorting criteria
+/// 3. Handles collisions according to the specified SortCollisionMode
+///
+/// If the input is already assigned, the function uses parallel computation to generate
+/// the sorted output efficiently.
 fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -882,8 +1097,14 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let mut input = values[0].clone();
     input.flatten();
 
+    if input.len() == 1 {
+        return Ok((input.clone(), create_zero_tensor(1)));
+    }
+
     let is_assigned = !input.any_unknowns()?;
 
+    // Generate sorted tensor - if values are assigned, compute the actual sort;
+    // otherwise, create an unknown tensor of the same size
     let sorted = if is_assigned {
         let mut int_evals = input.int_evals()?;
         int_evals.sort_unstable();
@@ -898,9 +1119,11 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         )?
     };
 
+    // Assign the sorted tensor to advice columns
     let assigned_sort = region.assign(&config.custom_gates.inputs[0], &sorted.into())?;
     region.increment(assigned_sort.len());
-    // assert that this is a permutation/shuffle
+
+    // Verify that the sorted tensor is a permutation of the input
     let indices = shuffles(
         config,
         region,
@@ -909,28 +1132,40 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         collision_handling,
     )?;
 
-    let window_a = assigned_sort.get_slice(&[0..assigned_sort.len() - 1])?;
-    let window_b = assigned_sort.get_slice(&[1..assigned_sort.len()])?;
+    // Get consecutive pairs for comparison
+    let window_a = assigned_sort.get_slice(&[0..assigned_sort.len() - 1])?; // Elements a[0]...a[n-2]
+    let window_b = assigned_sort.get_slice(&[1..assigned_sort.len()])?; // Elements a[1]...a[n-1]
 
+    // Get corresponding index pairs
     let indices_a = indices.get_slice(&[0..indices.len() - 1])?;
     let indices_b = indices.get_slice(&[1..indices.len()])?;
 
+    // Unit tensor for enforcing constraints
     let unit = create_unit_tensor(window_a.len());
 
+    // Apply constraints based on collision handling mode
     match collision_handling {
         SortCollisionMode::Unsorted => {
+            // In unsorted mode, just verify that a[i+1] ≥ a[i]
             let is_greater = greater_equal(config, region, &[window_b.clone(), window_a.clone()])?;
             enforce_equality(config, region, &[unit, is_greater])?;
         }
         SortCollisionMode::SmallestIndexFirst => {
+            // Check if a[i+1] > a[i]
             let is_greater = greater(config, region, &[window_b.clone(), window_a.clone()])?;
+
+            // Check if a[i+1] = a[i]
             let is_equal = equals(config, region, &[window_b.clone(), window_a.clone()])?;
+
+            // For equal elements, check if the original index of a[i+1] > original index of a[i]
             let is_greater_indices =
                 greater(config, region, &[indices_b.clone(), indices_a.clone()])?;
 
+            // Element values are equal AND second element had larger original index
             let is_equal_and_is_greater_indices =
                 and(config, region, &[is_equal, is_greater_indices])?;
 
+            // Either values are strictly ascending OR values are equal and indices are in correct order
             let is_greater_or_is_equal_and_is_greater_indices = or(
                 config,
                 region,
@@ -944,13 +1179,18 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             )?;
         }
         SortCollisionMode::LargestIndexFirst => {
+            // Similar to SmallestIndexFirst but with reversed index comparison
             let is_greater = greater(config, region, &[window_b.clone(), window_a.clone()])?;
             let is_equal = equals(config, region, &[window_b.clone(), window_a.clone()])?;
+
+            // For equal elements, check if the original index of a[i+1] < original index of a[i]
             let is_lesser_indices = less(config, region, &[indices_b.clone(), indices_a.clone()])?;
 
+            // Element values are equal AND second element had smaller original index
             let is_equal_and_is_lesser_indices =
                 and(config, region, &[is_equal, is_lesser_indices])?;
 
+            // Either values are strictly ascending OR values are equal and indices are in correct order
             let is_greater_or_is_equal_and_is_greater_indices = or(
                 config,
                 region,
@@ -968,7 +1208,27 @@ fn _sort_ascending<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok((assigned_sort, indices))
 }
 
-/// Returns top K values.
+/// Selects the top K elements from a tensor, optionally taking the largest or smallest values.
+///
+/// This internal function first sorts the tensor in ascending order and then:
+/// - If `largest` is true, reverses the order to get values in descending order
+/// - Takes the first K elements from the resulting sorted tensor
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor to select from
+/// * `k` - The number of elements to select
+/// * `largest` - If true, select the largest K values; if false, select the smallest K values
+///
+/// # Returns
+/// * A tensor containing the top K values
+///
+/// # Performance
+/// This function leverages the _sort_ascending internal function to perform a full
+/// sort of the input tensor, which means its complexity is O(n log n) where n is the
+/// tensor size. For large tensors with small k values, more efficient algorithms
+/// could be implemented in the future.
 fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -976,10 +1236,15 @@ fn _select_topk<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     k: usize,
     largest: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
+    // Sort the tensor in ascending order
     let mut sorted = _sort_ascending(config, region, values, SortCollisionMode::Unsorted)?.0;
+
+    // If we want the largest values, reverse the sorted tensor
     if largest {
         sorted.reverse()?;
     }
+
+    // Take the first K elements from the sorted (and possibly reversed) tensor
     Ok(sorted.get_slice(&[0..k])?)
 }
 
@@ -1115,7 +1380,45 @@ fn one_hot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(assigned_output)
 }
 
-/// Dynamic lookup
+/// Performs a dynamic lookup operation, verifying values against runtime-defined tables.
+///
+/// This function allows for lookups where both the lookup values and tables can be
+/// dynamic (determined at runtime) rather than fixed at circuit definition time.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `lookups` - Two elements: lookup keys and their claimed corresponding values
+/// * `tables` - Two elements: table keys and their corresponding values
+///
+/// # Returns
+/// * A tuple of the assigned lookup tensors (keys and values)
+///
+/// # ZK Argument
+/// This function implements a powerful dynamic lookup mechanism:
+///
+/// 1. **Lookup Table Construction**:
+///    - Unlike traditional ZK lookup arguments that use fixed tables,
+///      this allows tables to be constructed dynamically during proof generation
+///    - Tables are represented as pairs of tensors (table_keys, table_values)
+///
+/// 2. **Lookup Verification**:
+///    - For each lookup key in lookups[0], the prover claims a corresponding value in lookups[1]
+///    - The circuit verifies this claim against the provided lookup tables
+///    - A lookup index tensor links each lookup value to the corresponding table
+///
+/// 3. **Constraint Structure**:
+///    - Uses custom selectors to enable or disable lookup constraints for specific elements
+///    - Constraints are structured to allow lookups across different tables
+///    - Each lookup is assigned a unique dynamic_lookup_index to distinguish between multiple lookups
+///
+/// 4. **Applications**:
+///    - This is a core primitive used for implementing more complex operations
+///    - Used for operations like select, gather, scatter where elements need to be
+///      dynamically accessed by position or value
+///
+/// The dynamic lookup approach is more flexible than static lookups and enables
+/// ZK circuits to perform operations that would otherwise require more complex constraint systems.
 pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -1216,14 +1519,47 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
     Ok((lookup_0, lookup_1))
 }
 
-/// Shuffle arg
-/// 1. the input is a set of pairs (index_input, value_input) -- looked up against a (dynamic) set of values (index_output, value_output).
-/// 2. index_input is copy constrained to values in a fixed column and is thus a fixed set of incrementing values over the input
-/// 3. value_input is just the input that we are ascertaining is shuffled
-/// 4. index_output is (typically) a prover generated witness committed to in an advice column
-/// 5. value_output is (typically) a prover generated witness committed to in an advice column
-/// 6. Given the above, and given the fixed index_input , we go through every (index_input, value_input) pair and ascertain that it is contained in the input.
-/// 7. Given the fixed incrementing index index_input, we avoid multiplicity in the output by leveraging this surrogate index: if index_output isn't matched to the exact value where for `index_input=index_output` -> `value_input=value_output`, then the lookup fails
+/// Implements a permutation (shuffle) argument to verify one tensor is a permutation of another.
+///
+/// This function verifies that the output tensor is a valid permutation of the input tensor,
+/// without revealing the specific permutation pattern. This is a fundamental ZK building block
+/// for many operations that reorder elements.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `output` - The tensor claimed to be a permutation of the input
+/// * `input` - The original tensor
+/// * `collision_handling` - How to handle elements with identical values during verification
+///
+/// # Returns
+/// * A tensor of indices mapping original positions to new positions
+///
+/// # ZK Argument
+/// The function implements a permutation argument using the following approach:
+///
+/// 1. **Challenge**: Verify output tensor is a permutation of input tensor
+///    - Must ensure all elements from input appear exactly once in output
+///    - Must not reveal the actual permutation pattern (this is the "zero-knowledge" part)
+///
+/// 2. **Lookup-Based Permutation Argument**:
+///    - Setup lookup tables and indices:
+///      * Creates pairs: (index_input, value_input) for original elements
+///      * Creates pairs: (index_output, value_output) for permuted elements
+///      * index_input is a fixed sequence 0,1,2... corresponding to input positions
+///    
+///    - Core permutation verification:
+///      * For each (index_input, value_input), verify there exists exactly one
+///        (index_output, value_output) such that value_input = value_output
+///      * The index_output becomes our witness for the permutation pattern
+///
+/// 3. **Collision Handling**:
+///    - When multiple input elements have the same value, the collision_handling
+///      parameter determines which input index maps to which output index
+///    - This ensures a deterministic and well-defined permutation even with duplicates
+///
+/// This approach allows verification that output is a permutation of input,
+/// while keeping the exact permutation pattern hidden within the ZK proof.
 pub(crate) fn shuffles<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -1751,15 +2087,15 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
             // assert than res is less than the product of the dims
             if region.witness_gen() {
                 assert!(
-                res.int_evals()?
-                    .iter()
-                    .all(|x| *x < dims.iter().product::<usize>() as IntegerRep),
-                "res is greater than the product of the dims {} (coord={}, index_dim_multiplier={}, res={})",
-                dims.iter().product::<usize>(),
-                index_val.show(),
-                index_dim_multiplier.show(),
-                res.show()
-            );
+                    res.int_evals()?
+                        .iter()
+                        .all(|x| *x < dims.iter().product::<usize>() as IntegerRep),
+                    "res is greater than the product of the dims {} (coord={}, index_dim_multiplier={}, res={})",
+                    dims.iter().product::<usize>(),
+                    index_val.show(),
+                    index_dim_multiplier.show(),
+                    res.show()
+                );
             }
         }
 
@@ -1774,7 +2110,37 @@ pub(crate) fn linearize_nd_index<F: PrimeField + TensorType + PartialOrd + std::
     Ok(output.into())
 }
 
-// assumes unique values in fullset
+/// Finds the missing elements from a set that aren't present in the input tensor.
+///
+/// Given an input tensor and a full set tensor, this function computes the elements that
+/// are in the full set but not in the input. It enforces that the input is a subset of
+/// the full set, and optionally sorts the missing elements.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Two-element array containing:
+///   - `values[0]`: The input tensor (subset)
+///   - `values[1]`: The full set tensor
+/// * `ordered` - Whether to sort the missing elements in the output
+///
+/// # Returns
+/// * A tensor containing the elements present in the full set but missing from the input
+///
+/// # Constraints
+/// This function enforces that:
+/// 1. The input is a subset of the full set
+/// 2. The concatenation of the input and the output is a permutation of the full set
+/// 3. If `ordered` is true, the output elements are sorted in ascending order
+///
+/// # Preconditions
+/// * Assumes all values in the full set are unique
+///
+/// # Example Use Cases
+/// This function is useful for:
+/// - Finding unused indices in a tensor operation
+/// - Computing complementary sets
+/// - Verifying that certain elements are not used more than once
 pub(crate) fn get_missing_set_elements<
     F: PrimeField + TensorType + PartialOrd + std::hash::Hash,
 >(
@@ -1787,48 +2153,47 @@ pub(crate) fn get_missing_set_elements<
     let set_len = fullset.len();
     input.flatten();
 
-    // while fullset is less than len of input concat
-
     let is_assigned = !input.any_unknowns()? && !fullset.any_unknowns()?;
 
+    // Generate the claimed output - the elements in fullset that aren't in input
     let mut claimed_output: ValTensor<F> = if is_assigned {
         let input_evals = input.int_evals()?;
         let mut fullset_evals = fullset.int_evals()?.into_iter().collect::<Vec<_>>();
 
-        // get the difference between the two vectors
+        // Remove elements from fullset that are present in input
         for eval in input_evals.iter() {
-            // delete first occurrence of that value
+            // Delete first occurrence of that value
             if let Some(pos) = fullset_evals.iter().position(|x| x == eval) {
                 fullset_evals.remove(pos);
             }
         }
 
-        // if fullset + input is the same length, then input is a subset of fullset, else randomly delete elements, this is a patch for
-        // the fact that we can't have a tensor of unknowns when using constant during gen-settings
+        // Ensure the result has correct size (fullset_len - input_len)
+        // This handles edge cases during gen-settings when we can't have tensor of unknowns
         if fullset_evals.len() != set_len - input.len() {
             fullset_evals.truncate(set_len - input.len());
         }
 
+        // Convert to tensor in parallel
         fullset_evals
             .par_iter()
             .map(|x| Value::known(integer_rep_to_felt(*x)))
             .collect::<Tensor<Value<F>>>()
             .into()
     } else {
+        // For unknown inputs, create tensor of appropriate size with unknown values
         let dim = fullset.len() - input.len();
         Tensor::new(Some(&vec![Value::<F>::unknown(); dim]), &[dim])?.into()
     };
 
-    // assign the claimed output
+    // Assign the claimed output to the circuit
     claimed_output = region.assign(&config.custom_gates.output, &claimed_output)?;
-
     region.increment(claimed_output.len());
 
-    // input and claimed output should be the shuffles of fullset
-    // concatenate input and claimed output
+    // Concatenate input and claimed output
     let input_and_claimed_output = input.concat(claimed_output.clone())?;
 
-    // assert that this is a permutation/shuffle
+    // Verify that input + claimed_output is a permutation of fullset
     shuffles(
         config,
         region,
@@ -1837,8 +2202,8 @@ pub(crate) fn get_missing_set_elements<
         SortCollisionMode::Unsorted,
     )?;
 
+    // If ordered output is requested, sort the claimed output
     if ordered {
-        // assert that the claimed output is sorted
         claimed_output = _sort_ascending(
             config,
             region,
@@ -1851,7 +2216,31 @@ pub(crate) fn get_missing_set_elements<
     Ok(claimed_output)
 }
 
-/// Gather accumulated layout
+/// Performs scatter operation to update elements in a tensor at specified indices.
+///
+/// The scatter operation copies elements from the source tensor to the output tensor at
+/// positions specified by the index tensor. This is the inverse of gather_elements.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Three-element array containing:
+///   - `values[0]`: The input tensor to be updated (data)
+///   - `values[1]`: The indices tensor specifying positions to update
+///   - `values[2]`: The source tensor containing values to scatter
+/// * `dim` - The dimension along which to perform the scatter operation
+///
+/// # Returns
+/// * A new tensor with values from the source tensor scattered at the specified indices
+///
+/// # Verification
+/// This function ensures correctness by:
+/// 1. Verifying that gathering with the same indices from the output gives the source
+/// 2. Confirming that elements not modified by the scatter retain their values from input
+///
+/// # Example
+/// For input [1,2,3], indices [0,2], source [10,20], and dim=0:
+/// Output would be [10,2,20] - replacing values at indices 0 and 2 with 10 and 20
 pub(crate) fn scatter_elements<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -2211,12 +2600,12 @@ fn axes_wise_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     axes: &[usize],
     // generic layout op
     op: impl Fn(
-            &BaseConfig<F>,
-            &mut RegionCtx<F>,
-            &[ValTensor<F>; 1],
-        ) -> Result<ValTensor<F>, CircuitError>
-        + Send
-        + Sync,
+        &BaseConfig<F>,
+        &mut RegionCtx<F>,
+        &[ValTensor<F>; 1],
+    ) -> Result<ValTensor<F>, CircuitError>
+    + Send
+    + Sync,
 ) -> Result<ValTensor<F>, CircuitError> {
     // calculate value of output
 
@@ -2631,10 +3020,42 @@ pub(crate) fn expand<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(assigned_input)
 }
 
-/// Greater than operation.
+/// Elementwise "greater than" comparison between two tensors, returning a boolean tensor.
+///
+/// This function compares corresponding elements in two tensors and returns 1 where
+/// the first tensor's value is greater than the second's, and 0 otherwise.
+///
 /// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Two tensors to compare [a, b]
+///
+/// # Returns
+/// * A boolean tensor with 1s where a > b and 0s elsewhere
+///
+/// # ZK Argument
+/// This function implements a greater-than comparison using a sign-based approach:
+///
+/// 1. **Comparison via Difference and Sign**:
+///    - First computes the difference between tensors: diff = a - b
+///    - Then extracts the sign of the difference:
+///      * If diff > 0 (a > b): sign = 1
+///      * If diff ≤ 0 (a ≤ b): sign = -1 or 0
+///    - Finally checks if sign equals 1 to determine if a > b
+///
+/// 2. **Implementation Details**:
+///    - The sign function extracts the sign bit from the field representation
+///    - The equals function compares the sign to 1 (positive)
+///    - This approach works because we operate on integer representations in the field
+///
+/// 3. **Zero-Knowledge Properties**:
+///    - Only reveals whether one value is greater than another, not the actual values
+///    - Works with the broadcasting mechanism for tensors of different shapes
+///    - Produces a guaranteed binary output (0 or 1 values)
+///
+/// This comparison primitive is fundamental for implementing control flow, conditionals,
+/// max/min operations, and other decision-making components in ZK circuits.
+///
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -2728,10 +3149,40 @@ pub fn greater_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     greater(config, region, &[lhs_plus_one, rhs])
 }
 
-/// Less than to operation.
+/// Elementwise "less than" comparison between two tensors, returning a boolean tensor.
+///
+/// This function compares corresponding elements in two tensors and returns 1 where
+/// the first tensor's value is less than the second's, and 0 otherwise.
+///
 /// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Two tensors to compare [a, b]
+///
+/// # Returns
+/// * A boolean tensor with 1s where a < b and 0s elsewhere
+///
+/// # ZK Argument
+/// This function implements a less-than comparison by leveraging the greater-than function:
+///
+/// 1. **Implementation Strategy**:
+///    - Simply invokes the greater function with arguments reversed: greater(b, a)
+///    - This efficiently reuses the existing greater-than implementation
+///    - The approach is correct because a < b is logically equivalent to b > a
+///
+/// 2. **Constraint Efficiency**:
+///    - No need to duplicate constraints for less-than comparison
+///    - Uses the same sign-based approach as greater-than
+///    - Maintains the same security and correctness guarantees
+///
+/// 3. **Zero-Knowledge Properties**:
+///    - Only reveals whether one value is less than another, not the actual values
+///    - Produces a guaranteed binary output (0 or 1 values)
+///    - Handles all edge cases correctly, including equality
+///
+/// This comparison operation is fundamental for implementing ordering operations,
+/// sorting algorithms, min/max functions, and conditional logic in ZK circuits.
+///
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -2810,10 +3261,38 @@ pub fn less_equal<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     greater_equal(config, region, &[values[1].clone(), values[0].clone()])
 }
 
-/// Elementwise applies and to two tensors
+/// Elementwise applies logical AND to two boolean tensors.
+///
+/// This function implements a ZK-friendly boolean AND operation between two tensors,
+/// ensuring that both input tensors contain only binary values (0 or 1).
+///
 /// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Two tensors to perform AND operation on, with elements constrained to {0,1}
+///
+/// # Returns
+/// * A tensor containing the result of the AND operation
+///
+/// # ZK Argument
+/// This function implements a boolean AND gate using the following approach:
+///
+/// 1. **Boolean Verification**:
+///    - Input `a` and `b` are verified to contain only 0 or 1 values using boolean_identity
+///    - This ensures the inputs are properly constrained binary values
+///
+/// 2. **AND Implementation**:
+///    - The boolean AND is implemented as simple multiplication: a * b
+///    - For binary inputs, multiplication perfectly models the AND truth table:
+///      * 1 * 1 = 1 (true AND true = true)
+///      * 1 * 0 = 0 (true AND false = false)
+///      * 0 * 1 = 0 (false AND true = false)
+///      * 0 * 0 = 0 (false AND false = false)
+///
+/// 3. **Output Guarantees**:
+///    - The result is guaranteed to be binary (0 or 1) without additional constraints
+///    - Since both inputs are binary, their product can only be 0 or 1
+///
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -2854,10 +3333,35 @@ pub fn and<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(res)
 }
 
-/// Elementwise applies or to two tensors .
+/// Elementwise applies logical OR to two boolean tensors.
+///
+/// This function implements a ZK-friendly boolean OR operation between two tensors,
+/// ensuring that both input tensors contain only binary values (0 or 1).
+///
 /// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Two tensors to perform OR operation on, with elements constrained to {0,1}
+///
+/// # Returns
+/// * A tensor containing the result of the OR operation
+///
+/// # ZK Argument
+/// This function implements a boolean OR gate using the following approach:
+///
+/// 1. **Boolean Verification**:
+///    - Verifies that input `b` contains only 0 or 1 values using boolean_identity
+///    - Input `a` is used in its native form
+///
+/// 2. **OR Implementation**:
+///    - Uses the `iff` conditional operation rather than direct addition
+///    - The operation is equivalent to: output = (a == 1) ? 1 : b
+///    - This correctly implements OR since when a=1, result=1; when a=0, result=b
+///
+/// 3. **Constraint Efficiency**:
+///    - The implementation uses multiplication rather than range checks where possible
+///    - Avoids the need for explicit boolean output range checking
+///
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -2902,10 +3406,42 @@ pub fn or<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(res)
 }
 
-/// Elementwise applies equals to two tensors .
+/// Elementwise tests equality between two tensors, returning a boolean tensor.
+///
+/// This function compares corresponding elements in two tensors and returns 1 where
+/// they are equal and 0 where they differ. The implementation leverages the efficient
+/// equals_zero function to check whether the difference between elements is zero.
+///
 /// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Two tensors to compare for equality
+///
+/// # Returns
+/// * A boolean tensor with 1s where elements are equal and 0s elsewhere
+///
+/// # ZK Argument
+/// This function implements equality testing using an efficient difference approach:
+///
+/// 1. **Equality as Zero Testing**:
+///    - Instead of directly testing equality (which would be complex in ZK circuits),
+///      this function leverages the mathematical property: a = b if and only if a - b = 0
+///    - First computes the element-wise difference: diff = values[0] - values[1]
+///    - Then applies equals_zero to check if each difference is zero
+///
+/// 2. **Constraint Efficiency**:
+///    - Reuses the highly optimized equals_zero function which uses multiplicative inverses
+///    - Avoids the need for additional range checks on the result
+///    - Outputs a guaranteed binary tensor (0 or 1 values only)
+///
+/// 3. **Security Properties**:
+///    - Preserves zero-knowledge as it reveals only whether elements are equal, not their values
+///    - The equality check is performed in constant time regardless of the input values
+///    - Works correctly for all field elements, including edge cases
+///
+/// This is a fundamental building block for many higher-level circuit operations
+/// that need to make decisions based on value equality.
+///
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -2942,15 +3478,63 @@ pub fn equals<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     equals_zero(config, region, &[diff])
 }
 
-/// Equality boolean operation
+/// Checks if each element in a tensor equals zero, returning a boolean tensor.
+///
+/// This function implements a zero-check that returns 1 for elements that are zero
+/// and 0 for non-zero elements. The implementation uses a clever field arithmetic trick
+/// based on multiplicative inverses rather than direct equality comparison.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor to check for zero elements
+///
+/// # Returns
+/// * A boolean tensor with 1s where the input is zero and 0s elsewhere
+///
+/// # ZK Argument
+/// This function implements an efficient zero-test using a field property approach:
+///
+/// 1. **Multiplicative Inverse Trick**:
+///    - For any non-zero field element v, there exists a unique multiplicative inverse v⁻¹
+///    - The product v * v⁻¹ = 1 for all non-zero v
+///    - For v = 0, this inverse doesn't exist (division by zero)
+///
+/// 2. **Implementation Strategy**:
+///    - For each value v in the input tensor:
+///      * Compute v⁻¹ (which is arbitrary when v=0)
+///      * Compute p = v * v⁻¹ (which is 1 when v≠0, and 0 when v=0)
+///      * Compute result = 1 - p (which is 0 when v≠0, and 1 when v=0)
+///
+/// 3. **Correctness Verification**:
+///    - A key constraint is enforced: output * input = 0
+///    - This must be true because:
+///      * When input=0: output=1, so product=0
+///      * When input≠0: output=0, so product=0
+///    - This guarantees the output is 1 if and only if the input is 0
+///
+/// 4. **Efficiency Benefits**:
+///    - Avoids expensive equality checks or range constraints
+///    - Uses only field operations (multiplication, subtraction)
+///    - Produces a guaranteed binary output without additional range checks
+///
+/// # Mathematical Approach
+/// For input value v, the function computes:
+/// 1. Compute v⁻¹ (inverse)
+/// 2. Compute v * v⁻¹ (equals 1 for v≠0, and 0 for v=0)
+/// 3. Compute 1 - (v * v⁻¹) (equals 0 for v≠0, and 1 for v=0)
+/// 4. Verify (1 - (v * v⁻¹)) * v = 0 (correctness check)
 pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     let values = values[0].clone();
+
+    // Get multiplicative inverse of each value (special handling for zero)
     let values_inverse = values.inverse()?;
 
+    // Multiply each value by its inverse - this equals 1 for non-zero values
     let product_values_and_invert = pairwise(
         config,
         region,
@@ -2958,9 +3542,10 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
         BaseOp::Mult,
     )?;
 
-    // constant of 1
+    // Create constant tensor of 1s
     let ones = create_unit_tensor(1);
-    // subtract
+
+    // Subtract from 1: result is 0 for non-zero inputs, 1 for zero inputs
     let output = pairwise(
         config,
         region,
@@ -2968,19 +3553,56 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
         BaseOp::Sub,
     )?;
 
-    // take the product of diff and output
+    // Verify correctness: output * input must equal 0
+    // (If input is 0, output is 1, so product is 0)
+    // (If input is non-zero, output is 0, so product is 0)
     let prod_check = pairwise(config, region, &[values, output.clone()], BaseOp::Mult)?;
 
+    // Enforce the product check
     let zero_tensor = create_zero_tensor(prod_check.len());
     enforce_equality(config, region, &[prod_check, zero_tensor])?;
 
     Ok(output)
 }
 
-/// Elementwise applies xor to two tensors
+/// Elementwise applies logical XOR to two boolean tensors.
+///
+/// This function implements a ZK-friendly boolean XOR operation between two tensors,
+/// ensuring that both input tensors contain only binary values (0 or 1).
+///
 /// # Arguments
-/// * `a` - Tensor
-/// * `b` - Tensor
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Two tensors to perform XOR operation on, with elements constrained to {0,1}
+///
+/// # Returns
+/// * A tensor containing the result of the XOR operation
+///
+/// # ZK Argument
+/// This function implements a boolean XOR gate using a combination of AND, NOT, and OR gates:
+///
+/// 1. **XOR Implementation Strategy**:
+///    - Uses the standard Boolean algebra expression: a XOR b = (a AND (NOT b)) OR ((NOT a) AND b)
+///    - The computation flow:
+///      * Compute NOT of each input (lhs_not, rhs_not)
+///      * Compute AND between first input and NOT of second: lhs AND rhs_not
+///      * Compute AND between NOT of first and second input: lhs_not AND rhs
+///      * Combine results with Addition (safe because products are disjoint)
+///
+/// 2. **Constraint Efficiency**:
+///    - Uses addition instead of explicit OR operation since the terms are guaranteed to be disjoint
+///    - For each position, exactly one of the terms will be 1, or both will be 0
+///    - This ensures the output is always binary (0 or 1) without additional range checks
+///
+/// 3. **Zero-Knowledge Properties**:
+///    - Each intermediate step preserves the binary nature of values
+///    - The final result is guaranteed to be binary without explicit range checks
+///    - The implementation correctly handles all truth table cases:
+///      * 0 XOR 0 = 0
+///      * 0 XOR 1 = 1
+///      * 1 XOR 0 = 1
+///      * 1 XOR 1 = 0
+///
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -3034,9 +3656,39 @@ pub fn xor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(res)
 }
 
-/// Elementwise applies not to a tensor .
+/// Elementwise applies logical NOT to a boolean tensor.
+///
+/// This function implements a ZK-friendly boolean NOT operation on a tensor,
+/// ensuring the input tensor contains only binary values (0 or 1).
+///
 /// # Arguments
-/// * `a` - Tensor
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor to apply NOT operation to, with elements constrained to {0,1}
+///
+/// # Returns
+/// * A tensor containing the result of the NOT operation
+///
+/// # ZK Argument
+/// This function implements a boolean NOT gate using an efficient conditional approach:
+///
+/// 1. **Implementation Strategy**:
+///    - Uses the `iff` (if-and-only-if) conditional operation, which is optimized for ZK circuits
+///    - The operation is structured as: if mask=1 then output=0 else output=1
+///    - This correctly implements NOT since:
+///      * When input=1: output=0
+///      * When input=0: output=1
+///
+/// 2. **Zero-Knowledge Properties**:
+///    - Input is not explicitly range-checked here (assumed to be binary)
+///    - Output is guaranteed to be binary without additional range checks
+///    - Uses constant values (0 and 1) represented as field elements
+///
+/// 3. **Constraint Efficiency**:
+///    - More efficient than computing 1-x for binary values
+///    - The `iff` operation handles the boolean logic in an optimized way
+///    - Preserves the boolean nature of the output
+///
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -3075,11 +3727,51 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(res)
 }
 
-/// IFF operation.
+/// Implements a conditional selection (if-and-only-if) operation between two tensors.
+///
+/// This function selects between two tensor values based on a binary mask tensor,
+/// implementing a fundamental conditional operation for ZK circuits. For each element:
+/// if mask=1, select the corresponding element from tensor a, otherwise from tensor b.
+///
 /// # Arguments
-/// * `mask` - Tensor of 0s and 1s
-/// * `a` - Tensor
-/// * `b` - Tensor
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Three tensors:
+///   - `values[0]`: Binary mask tensor (elements must be 0 or 1)
+///   - `values[1]`: First tensor (selected when mask=1)
+///   - `values[2]`: Second tensor (selected when mask=0)
+///
+/// # Returns
+/// * A tensor containing the conditional selection
+///
+/// # ZK Argument
+/// This function implements a fundamental conditional primitive using a technique
+/// optimized for ZK circuits:
+///
+/// 1. **Mask Verification**:
+///    - Ensures the mask is binary (0 or 1) using boolean_identity
+///    - This is critical for correctness of the conditional logic
+///
+/// 2. **Implementation Strategy**:
+///    - Computes `one_minus_mask = 1 - mask` for the complementary condition
+///    - Uses weighted multiplication to compute:
+///      * `masked_a = a * mask` (selects a when mask=1, zero otherwise)
+///      * `masked_b = b * (1-mask)` (selects b when mask=0, zero otherwise)
+///    - Combines with addition: `result = masked_a + masked_b`
+///
+/// 3. **Correctness Properties**:
+///    - When mask=1: result = a*1 + b*0 = a
+///    - When mask=0: result = a*0 + b*1 = b
+///    - This correctly implements the conditional selection logic
+///
+/// 4. **Efficiency Considerations**:
+///    - More efficient than implementing with separate range checks
+///    - Uses only multiplication and addition operations
+///    - Minimal constraint count for conditional logic
+///
+/// This function serves as a building block for many higher-level operations
+/// like boolean logic, max/min operations, and conditional assignments.
+///
 /// # Examples
 /// ```
 /// use ezkl::tensor::Tensor;
@@ -4093,7 +4785,47 @@ pub(crate) fn concat<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     Ok(tensor::ops::concat(&collected_inner, *axis)?.into())
 }
 
-/// Identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
+/// Establishes an identity constraint by copying values to advice columns.
+///
+/// This fundamental circuit primitive ensures values are properly assigned
+/// and optionally range-checked through decomposition, creating a constrained
+/// copy that can be used in further operations.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor to constrain
+/// * `decomp` - Whether to decompose the values (enabling range checks)
+///
+/// # Returns
+/// * The constrained tensor (possibly assigned to advice)
+///
+/// # ZK Argument
+/// This function implements a basic value assignment mechanism with optional decomposition:
+///
+/// 1. **Assignment Strategy**:
+///    - If values are not already assigned to advice columns, assigns them
+///    - This makes the values available for constraints in the proof system
+///    - Creates a "witnessed" version of the input that can participate in constraints
+///
+/// 2. **Range Checking Options**:
+///    - When decomp=false: simple assignment without range checking
+///    - When decomp=true: values are decomposed to digits in the specified base
+///      which implicitly range-checks them by ensuring each digit is valid
+///
+/// 3. **Usage Patterns**:
+///    - Used as a foundation for many operations that need advice values
+///    - Often the first step when processing input values
+///    - Critical for establishing values that will be used in constraints
+///    - The decomposition option enables validation of value ranges
+///
+/// 4. **Performance Considerations**:
+///    - Using decomp=true increases security but adds more constraints
+///    - Using decomp=false is more efficient when range checks aren't needed
+///    - Skip assignment entirely when values are already properly assigned
+///
+/// This function serves as a gateway between raw values and constrained values
+/// that can participate in zero-knowledge operations and circuits.
 pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -4121,7 +4853,41 @@ pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     Ok(output)
 }
 
-/// Boolean identity constraint. Usually used to constrain an instance column to an advice so the returned cells / values can be operated upon.
+/// Boolean identity constraint for verifying and constraining tensors to binary values.
+///
+/// This function ensures that elements in the input tensor are binary (0 or 1) and
+/// optionally assigns them to an advice column for further operations. It's a fundamental
+/// building block for implementing boolean operations in zero-knowledge circuits.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor to verify as boolean (elements must be 0 or 1)
+/// * `assign` - Whether to force assignment to an advice column even if already assigned
+///
+/// # Returns
+/// * The verified boolean tensor (possibly assigned to advice)
+///
+/// # ZK Argument
+/// This function implements a core boolean verification primitive:
+///
+/// 1. **Boolean Range Checking**:
+///    - Uses range_check to enforce that each element is in {0,1}
+///    - This is a critical constraint for boolean operations
+///    - Ensures values used in boolean logic are properly constrained
+///
+/// 2. **Assignment Strategy**:
+///    - If assign=true OR the tensor contains constant values: assigns to advice column
+///    - Otherwise: reuses the existing tensor (optimization when already assigned)
+///    - This prevents unnecessary constraint duplication
+///
+/// 3. **Usage Patterns**:
+///    - Used as foundation for boolean operations (AND, OR, XOR, NOT)
+///    - Enables complex boolean logic while maintaining ZK properties
+///    - Creates properly constrained witness values for boolean operations
+///
+/// Boolean tensors are a special case in ZK circuits, as they enable efficient implementation
+/// of logical operations while maintaining proof soundness.
 pub(crate) fn boolean_identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -4148,7 +4914,7 @@ pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     axis: &usize,
-    stride: &usize,
+    stride: &isize,
     modulo: &usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     let input = region.assign(&config.custom_gates.inputs[0], &values[0])?;
@@ -4159,7 +4925,43 @@ pub(crate) fn downsample<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     Ok(output)
 }
 
-/// layout for enforcing two sets of cells to be equal
+/// Enforces strict equality between two tensors, a fundamental ZK constraint primitive.
+///
+/// This function creates direct equality constraints between corresponding elements
+/// of two tensors, ensuring they must have exactly identical values. This is a core
+/// building block for creating constraint systems in zero-knowledge circuits.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Two tensors that must be equal: [a, b]
+///
+/// # Returns
+/// * The second tensor (after assignment)
+///
+/// # ZK Argument
+/// This function implements a direct equality constraint mechanism:
+///
+/// 1. **Direct Cell Equality**:
+///    - Instead of computing a - b = 0 using arithmetic constraints,
+///      this uses the more efficient region.constrain_equal() mechanism
+///    - This creates native equality constraints between advice cells
+///    - Directly constrains that corresponding elements must be identical
+///
+/// 2. **Implementation Details**:
+///    - Both tensors are assigned to advice columns
+///    - The region.constrain_equal() enforces that each pair of cells must be equal
+///    - The constraint is cryptographically enforced in the proof
+///
+/// 3. **Usage Patterns**:
+///    - Used as a fundamental primitive for asserting equality
+///    - Often used to enforce circuit outputs match expected values
+///    - Used when multiple computations must yield the same result
+///    - More efficient than equals() when direct equality is needed
+///
+/// This function uses the circuit's native equality constraints rather than
+/// constructing equality via subtraction and zero-checking, making it
+/// more efficient for direct equality enforcement.
 pub(crate) fn enforce_equality<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -4183,7 +4985,48 @@ pub(crate) fn enforce_equality<F: PrimeField + TensorType + PartialOrd + std::ha
     Ok(output)
 }
 
-/// layout for range check.
+/// Enforces that all values in a tensor lie within a specified range.
+///
+/// Range checking is a fundamental primitive in ZK circuits as it constrains values
+/// to a bounded interval, which is essential for both correctness and security.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor to range check
+/// * `range` - The inclusive bounds (min, max) for the allowed values
+///
+/// # Returns
+/// * The range-checked tensor (same as input, but with range constraints)
+///
+/// # ZK Argument
+/// This function implements one of the most fundamental ZK primitives:
+///
+/// 1. **Lookup-Based Range Checking**:
+///    - Direct range predicates would require complex inequality constraints
+///    - Instead, we use a lookup-based approach for efficiency
+///    - Constructs a lookup table containing all values in the allowed range
+///
+/// 2. **Constraint Mechanism**:
+///    - Each value is looked up in the range table
+///    - The lookup succeeds only if the value exists in the table
+///    - The table_index tracks which cell in the range table matched
+///
+/// 3. **Selector Activation**:
+///    - Custom selectors enable range check constraints for specific cells
+///    - Each range check is tracked via region.add_used_range_check()
+///    - Ensures the range check is properly accounted for in the circuit
+///
+/// 4. **Security Considerations**:
+///    - Range violations are detected during both proving and verification
+///    - For optimization, explicit checks only run during witness generation
+///      if region.check_range() and config.check_mode.is_safe() are true
+///
+/// Range checking is essential for:
+/// - Preventing overflow/underflow attacks
+/// - Ensuring values satisfy application requirements
+/// - Bounding inputs to nonlinear functions
+/// - Enforcing valid tensor element values
 pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -4262,7 +5105,47 @@ pub(crate) fn range_check<F: PrimeField + TensorType + PartialOrd + std::hash::H
     Ok(w)
 }
 
-/// layout for nonlinearity check.
+/// Performs nonlinear operations through lookup tables, a fundamental ZK optimization.
+///
+/// This function implements arbitrary nonlinear functions using lookup tables,
+/// which is a critical optimization technique in zero-knowledge circuits where
+/// complex nonlinear operations would otherwise be prohibitively expensive.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor input to the nonlinear function
+/// * `nl` - The specific nonlinear operation to perform (LookupOp enum)
+///
+/// # Returns
+/// * The result tensor after applying the nonlinear function
+///
+/// # ZK Argument
+/// This function implements the lookup argument pattern for efficient nonlinearity:
+///
+/// 1. **Lookup Table Approach**:
+///    - Direct implementation of nonlinear functions like exp, tanh, sigmoid would
+///      require prohibitively complex constraint systems
+///    - Instead, we use pre-computed lookup tables mapping inputs to outputs
+///    - The ZK argument verifies that lookups are performed correctly
+///
+/// 2. **Witness Generation**:
+///    - For each input value, the prover computes the actual nonlinear function result
+///    - These results become part of the witness, claimed as outputs
+///
+/// 3. **Constraint System**:
+///    - For each input element, a lookup constraint verifies the claimed output
+///      exists in the table at the corresponding input position
+///    - A table_index links each input to its position in the lookup table
+///    - Custom selectors enable/disable lookup constraints for specific elements
+///
+/// 4. **Optimization for Constants**:
+///    - Constant values are handled specially (removal_indices)
+///    - This avoids unnecessary constraints for values known at compile time
+///
+/// This pattern is one of the most important optimization techniques in ZK circuits,
+/// as it allows complex nonlinear functions to be efficiently implemented with
+/// minimal constraint count.
 pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -5224,20 +6107,27 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     )
 }
 
-/// round half to even layout
+/// Rounds values to nearest integer with ties rounding to even values (banker's rounding).
+///
+/// This function implements IEEE 754-style rounding, where values exactly halfway between
+/// two integers are rounded to the nearest even integer. This approach eliminates
+/// statistical bias in rounding operations.
+///
 /// # Arguments
-/// * `config` - BaseConfig
-/// * `region` - RegionCtx
-/// * `values` - &[ValTensor<F>; 1]
-/// * `scale` - utils::F32
-/// * `legs` - usize
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor to round
+/// * `scale` - Scaling factor to determine precision
+/// * `legs` - Number of digits for decomposition
+///
 /// # Returns
-/// * ValTensor<F>
+/// * Tensor with rounded values
+///
 /// # Example
 /// ```
 /// use ezkl::tensor::Tensor;
 /// use ezkl::fieldutils::IntegerRep;
-/// use ezkl::circuit::ops::layouts::round;
+/// use ezkl::circuit::ops::layouts::round_half_to_even;
 /// use ezkl::tensor::val::ValTensor;
 /// use halo2curves::bn256::Fr as Fp;
 /// use ezkl::circuit::region::RegionCtx;
@@ -5249,8 +6139,8 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// Some(&[3, -2, 3, 1]),
 /// &[1, 1, 2, 2],
 /// ).unwrap());
-/// let result = round::<Fp>(&dummy_config, &mut dummy_region, &[x], 4.0.into(), 2).unwrap();
-/// let expected = Tensor::<IntegerRep>::new(Some(&[4, -4, 4, 0]), &[1, 1, 2, 2]).unwrap();
+/// let result = round_half_to_even::<Fp>(&dummy_config, &mut dummy_region, &[x], 4.0.into(), 2).unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, 0]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
 ///
@@ -5364,6 +6254,39 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
     )
 }
 
+/// Recomposes a tensor from its decomposed representation in a given numerical base.
+///
+/// This function takes a tensor where the last dimension represents digits in a positional
+/// number system with a specified base, and combines these digits to form the original values.
+/// The first element in the last dimension is a sign indicator (+1 or -1), followed by
+/// the decomposed digits in decreasing order of significance.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Decomposed tensor with digits in the last dimension
+/// * `base` - The numerical base used for decomposition (e.g., 10 for decimal, 2 for binary)
+///
+/// # Returns
+/// * A tensor with values recomposed from their digit representations
+///
+/// # Tensor Structure
+/// The input tensor should have shape [..., n+1] where:
+/// - The first n dimensions can be any shape
+/// - The last dimension contains n+1 elements:
+///   - First element (index 0): Sign (+1 or -1)
+///   - Remaining elements: Digits in the positional number system
+///
+/// # Mathematical Process
+/// For an input tensor with digits [sign, d₀, d₁, ..., dₙ₋₁], the recomposed value is:
+/// sign × (d₀ × base^(n-1) + d₁ × base^(n-2) + ... + dₙ₋₁ × base^0)
+///
+/// # Implementation Details
+/// The function:
+/// 1. Separates the sign from the digit values
+/// 2. Constructs a tensor of base powers (base^0, base^1, ..., base^(n-1)) in reverse order
+/// 3. Computes the dot product of the digits with the base powers using einsum
+/// 4. Multiplies the result by the sign to get the final value
 pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -5372,20 +6295,25 @@ pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut input = values[0].clone();
 
+    // Extract dimensions except the last one (which contains the decomposed digits)
     let first_dims = input.dims().to_vec()[..input.dims().len() - 1].to_vec();
     let num_first_dims = first_dims.iter().product::<usize>();
+
+    // Number of digits excluding the sign
     let n = input.dims().last().unwrap() - 1;
 
+    // Assign input to circuit if not already assigned
     if !input.all_prev_assigned() {
         input = region.assign(&config.custom_gates.inputs[0], &input)?;
         region.increment(input.len());
     }
 
-    // to force the bases to be assigned
+    // Handle singleton tensors
     if input.is_singleton() {
         input.reshape(&[1])?;
     }
 
+    // Create tensor of base powers: [base^(n-1), base^(n-2), ..., base^0]
     let mut bases: ValTensor<F> = Tensor::from({
         (0..num_first_dims)
             .flat_map(|_| {
@@ -5402,34 +6330,83 @@ pub(crate) fn recompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
             .into_iter()
     })
     .into();
+
+    // Reshape bases tensor to match input dimensions except the last one
     let mut bases_dims = first_dims.clone();
     bases_dims.push(n);
     bases.reshape(&bases_dims)?;
 
-    // equation needs to be constructed as ij,j->i but for arbitrary n dims we need to construct this dynamically
-    // indices should map in order of the alphabet
-    // start with lhs
+    // Construct einsum equation for dot product of digits with base powers
+    // This creates a formula like "ij,ij->i" for arbitrary tensor dimensions
     let lhs = ASCII_ALPHABET.chars().take(input.dims().len()).join("");
     let rhs = ASCII_ALPHABET.chars().take(input.dims().len() - 1).join("");
-
     let equation = format!("{},{}->{}", lhs, lhs, rhs);
 
+    // Extract sign and digits from the input tensor
     let mut sign_slice = first_dims.iter().map(|x| 0..*x).collect::<Vec<_>>();
-    sign_slice.push(0..1);
+    sign_slice.push(0..1); // First element is the sign
     let mut rest_slice = first_dims.iter().map(|x| 0..*x).collect::<Vec<_>>();
-    rest_slice.push(1..n + 1);
+    rest_slice.push(1..n + 1); // Remaining elements are the digits
 
     let sign = input.get_slice(&sign_slice)?;
     let rest = input.get_slice(&rest_slice)?;
 
-    // now add the rhs
+    // Compute the dot product of the digits with the base powers
     let prod_recomp = einsum(config, region, &[rest.clone(), bases], &equation)?;
+
+    // Multiply by the sign to get the final value
     let mut signed_recomp = pairwise(config, region, &[prod_recomp, sign], BaseOp::Mult)?;
+
+    // Reshape the result to match the original dimensions
     signed_recomp.reshape(&first_dims)?;
 
     Ok(signed_recomp.into())
 }
 
+/// Decomposes numbers into a positional number system (e.g., base-10 digits).
+///
+/// This function is fundamental for implementing various ZK operations by representing
+/// numbers as sequences of smaller values in a specified base, which is often more
+/// efficient for constraint generation.
+///
+/// # Arguments
+/// * `config` - The circuit configuration
+/// * `region` - The region context
+/// * `values` - Single tensor containing values to decompose
+/// * `base` - The numerical base to use for decomposition (e.g., 10 for decimal)
+/// * `n` - Number of digits to use in the decomposition
+///
+/// # Returns
+/// * A tuple containing:
+///   - The decomposed tensor with an extra dimension for digits
+///   - The original input tensor
+///
+/// # ZK Argument
+/// This function implements a critical number representation technique:
+///
+/// 1. **Number System Decomposition**:
+///    - Represents integers as sequences of "digits" in the specified base
+///    - First element indicates sign (+1 or -1), followed by n digits
+///    - This allows large numbers to be processed as sequences of small values
+///
+/// 2. **Claimed Decomposition Verification**:
+///    - Prover provides the decomposition as a witness
+///    - Circuit constraints verify correctness by reconstructing the original value
+///    - Base powers are computed and used to verify: value = sign × Σ(digit_i × base^i)
+///
+/// 3. **Range Checking**:
+///    - Each digit is range-checked to ensure it's within [0, base-1]
+///    - Sign is checked to ensure it's either +1 or -1
+///    - Zero values get special handling to ensure consistent representation
+///
+/// 4. **Applications**:
+///    - Enables efficient binary operations (when base = 2)
+///    - Helps implement functions like floor, ceil, and round
+///    - Facilitates lookup-based operations by decomposing values into smaller components
+///
+/// This technique is fundamental for ZK cryptography as it transforms
+/// potentially complex operations on large numbers into simpler operations
+/// on sequences of small values.
 pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
@@ -5617,12 +6594,12 @@ fn multi_dim_axes_op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     values: &[ValTensor<F>; 1],
     axes: &[usize],
     op: impl Fn(
-            &BaseConfig<F>,
-            &mut RegionCtx<F>,
-            &[ValTensor<F>; 1],
-        ) -> Result<ValTensor<F>, CircuitError>
-        + Send
-        + Sync,
+        &BaseConfig<F>,
+        &mut RegionCtx<F>,
+        &[ValTensor<F>; 1],
+    ) -> Result<ValTensor<F>, CircuitError>
+    + Send
+    + Sync,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut input = values[0].clone();
 

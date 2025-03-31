@@ -1,0 +1,312 @@
+[
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_contractAddresses",
+                "type": "address"
+            },
+            {
+                "internalType": "bytes",
+                "name": "_callData",
+                "type": "bytes"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "_decimals",
+                "type": "uint256[]"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "_bits",
+                "type": "uint256[]"
+            },
+            {
+                "internalType": "uint8",
+                "name": "_instanceOffset",
+                "type": "uint8"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "HALF_ORDER",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ORDER",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256[]",
+                "name": "instances",
+                "type": "uint256[]"
+            }
+        ],
+        "name": "attestData",
+        "outputs": [],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "callData",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "contractAddress",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "encoded",
+                "type": "bytes"
+            }
+        ],
+        "name": "getInstancesCalldata",
+        "outputs": [
+            {
+                "internalType": "uint256[]",
+                "name": "instances",
+                "type": "uint256[]"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "encoded",
+                "type": "bytes"
+            }
+        ],
+        "name": "getInstancesMemory",
+        "outputs": [
+            {
+                "internalType": "uint256[]",
+                "name": "instances",
+                "type": "uint256[]"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "index",
+                "type": "uint256"
+            }
+        ],
+        "name": "getScalars",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "decimals",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "bits",
+                        "type": "uint256"
+                    }
+                ],
+                "internalType": "struct DataAttestation.Scalars",
+                "name": "",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "instanceOffset",
+        "outputs": [
+            {
+                "internalType": "uint8",
+                "name": "",
+                "type": "uint8"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "x",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "y",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "denominator",
+                "type": "uint256"
+            }
+        ],
+        "name": "mulDiv",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "result",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "int256",
+                "name": "x",
+                "type": "int256"
+            },
+            {
+                "components": [
+                    {
+                        "internalType": "uint256",
+                        "name": "decimals",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "bits",
+                        "type": "uint256"
+                    }
+                ],
+                "internalType": "struct DataAttestation.Scalars",
+                "name": "_scalars",
+                "type": "tuple"
+            }
+        ],
+        "name": "quantizeData",
+        "outputs": [
+            {
+                "internalType": "int256",
+                "name": "quantized_data",
+                "type": "int256"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "target",
+                "type": "address"
+            },
+            {
+                "internalType": "bytes",
+                "name": "data",
+                "type": "bytes"
+            }
+        ],
+        "name": "staticCall",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "",
+                "type": "bytes"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "int256",
+                "name": "x",
+                "type": "int256"
+            }
+        ],
+        "name": "toFieldElement",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "field_element",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "verifier",
+                "type": "address"
+            },
+            {
+                "internalType": "bytes",
+                "name": "encoded",
+                "type": "bytes"
+            }
+        ],
+        "name": "verifyWithDataAttestation",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]

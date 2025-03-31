@@ -21,7 +21,10 @@ pub enum BaseOp {
 
 /// Matches a [BaseOp] to an operation over inputs
 impl BaseOp {
-    /// forward func
+    /// forward func for non-accumulating operations
+    /// # Panics
+    /// Panics if called on an accumulating operation
+    /// # Examples
     pub fn nonaccum_f<
         T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Neg<Output = T>,
     >(
@@ -37,7 +40,9 @@ impl BaseOp {
         }
     }
 
-    /// forward func
+    /// forward func for accumulating operations
+    /// # Panics
+    /// Panics if called on a non-accumulating operation
     pub fn accum_f<
         T: TensorType + Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Neg<Output = T>,
     >(

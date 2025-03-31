@@ -4,8 +4,6 @@ use crate::circuit::InputType;
 use crate::fieldutils::integer_rep_to_felt;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::graph::postgres::Client;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-use crate::tensor::Tensor;
 use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(feature = "python-bindings")]
@@ -168,85 +166,26 @@ impl<'de> Deserialize<'de> for FileSourceInner {
 /// Organized as a vector of vectors where each inner vector represents a row/entry
 pub type FileSource = Vec<Vec<FileSourceInner>>;
 
-/// Represents different types of calls for fetching on-chain data
-#[derive(Clone, Debug, PartialOrd, PartialEq)]
-pub enum Calls {
-    /// Multiple calls to different accounts, each returning individual values
-    Multiple(Vec<CallsToAccount>),
-    /// Single call returning an array of values
-    Single(CallToAccount),
-}
+/// Represents which parts of the model (input/output) are attested to on-chain
+pub type InputOutput = (bool, bool);
 
-impl Default for Calls {
-    fn default() -> Self {
-        Calls::Multiple(Vec::new())
-    }
-}
-
-impl Serialize for Calls {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match self {
-            Calls::Single(data) => data.serialize(serializer),
-            Calls::Multiple(data) => data.serialize(serializer),
-        }
-    }
-}
-
-// !!! ALWAYS USE JSON SERIALIZATION FOR GRAPH INPUT
-// UNTAGGED ENUMS WONT WORK :( as highlighted here:
-impl<'de> Deserialize<'de> for Calls {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let this_json: Box<serde_json::value::RawValue> = Deserialize::deserialize(deserializer)?;
-        let multiple_try: Result<Vec<CallsToAccount>, _> = serde_json::from_str(this_json.get());
-        if let Ok(t) = multiple_try {
-            return Ok(Calls::Multiple(t));
-        }
-        let single_try: Result<CallToAccount, _> = serde_json::from_str(this_json.get());
-        if let Ok(t) = single_try {
-            return Ok(Calls::Single(t));
-        }
-
-        Err(serde::de::Error::custom("failed to deserialize Calls"))
-    }
-}
 /// Configuration for accessing on-chain data sources
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
 pub struct OnChainSource {
     /// Call specifications for fetching data
-    pub calls: Calls,
+    pub call: CallToAccount,
     /// RPC endpoint URL for accessing the chain
     pub rpc: RPCUrl,
 }
 
 impl OnChainSource {
-    /// Creates a new OnChainSource with multiple calls
-    ///
-    /// # Arguments
-    /// * `calls` - Vector of call specifications
-    /// * `rpc` - RPC endpoint URL
-    pub fn new_multiple(calls: Vec<CallsToAccount>, rpc: RPCUrl) -> Self {
-        OnChainSource {
-            calls: Calls::Multiple(calls),
-            rpc,
-        }
-    }
-
-    /// Creates a new OnChainSource with a single call
+    /// Creates a new OnChainSource
     ///
     /// # Arguments
     /// * `call` - Call specification
     /// * `rpc` - RPC endpoint URL
-    pub fn new_single(call: CallToAccount, rpc: RPCUrl) -> Self {
-        OnChainSource {
-            calls: Calls::Single(call),
-            rpc,
-        }
+    pub fn new(call: CallToAccount, rpc: RPCUrl) -> Self {
+        OnChainSource { call, rpc }
     }
 
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
@@ -263,11 +202,8 @@ impl OnChainSource {
         scales: Vec<crate::Scale>,
         mut shapes: Vec<Vec<usize>>,
         rpc: Option<&str>,
-    ) -> Result<(Vec<Tensor<Fp>>, Self), GraphError> {
-        use crate::eth::{
-            evm_quantize_multi, read_on_chain_inputs_multi, test_on_chain_data,
-            DEFAULT_ANVIL_ENDPOINT,
-        };
+    ) -> Result<Self, GraphError> {
+        use crate::eth::{read_on_chain_inputs, test_on_chain_data, DEFAULT_ANVIL_ENDPOINT};
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
@@ -281,46 +217,15 @@ impl OnChainSource {
                 shapes[idx] = vec![i.len()];
             }
         }
-
-        let calls_to_accounts = test_on_chain_data(client.clone(), data).await?;
-        debug!("Calls to accounts: {:?}", calls_to_accounts);
-        let inputs =
-            read_on_chain_inputs_multi(client.clone(), client_address, &calls_to_accounts).await?;
-        debug!("Inputs: {:?}", inputs);
-
-        let mut quantized_evm_inputs = vec![];
-
-        let mut prev = 0;
-        for (idx, i) in data.iter().enumerate() {
-            quantized_evm_inputs.extend(
-                evm_quantize_multi(
-                    client.clone(),
-                    vec![scales[idx]; i.len()],
-                    &(
-                        inputs.0[prev..i.len()].to_vec(),
-                        inputs.1[prev..i.len()].to_vec(),
-                    ),
-                )
-                .await?,
-            );
-            prev += i.len();
-        }
-
-        // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
-        let mut inputs: Vec<Tensor<Fp>> = vec![];
-        for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
-            let mut t: Tensor<Fp> = input.iter().cloned().collect();
-            t.reshape(&shape)?;
-            inputs.push(t);
-        }
-
         let used_rpc = rpc.unwrap_or(DEFAULT_ANVIL_ENDPOINT).to_string();
 
+        let call_to_account = test_on_chain_data(client.clone(), data).await?;
+        debug!("Call to account: {:?}", call_to_account);
+        let inputs = read_on_chain_inputs(client.clone(), client_address, &call_to_account).await?;
+        debug!("Inputs: {:?}", inputs);
+
         // Fill the input_data field of the GraphData struct
-        Ok((
-            inputs,
-            OnChainSource::new_multiple(calls_to_accounts.clone(), used_rpc),
-        ))
+        Ok(OnChainSource::new(call_to_account, used_rpc))
     }
 }
 
@@ -342,11 +247,9 @@ pub struct CallToAccount {
     /// ABI-encoded function call data
     pub call_data: Call,
     /// Number of decimal places for float conversion
-    pub decimals: Decimals,
+    pub decimals: Vec<Decimals>,
     /// Contract address to call
     pub address: String,
-    /// Expected length of returned array
-    pub len: usize,
 }
 
 /// Represents different sources of input/output data for the EZKL model
@@ -683,17 +586,6 @@ impl GraphData {
     }
 }
 
-#[cfg(feature = "python-bindings")]
-impl ToPyObject for CallsToAccount {
-    /// Converts CallsToAccount to Python object
-    fn to_object(&self, py: Python) -> PyObject {
-        let dict = PyDict::new(py);
-        dict.set_item("account", &self.address).unwrap();
-        dict.set_item("call_data", &self.call_data).unwrap();
-        dict.to_object(py)
-    }
-}
-
 // Additional Python bindings for various types...
 
 #[cfg(test)]
@@ -860,18 +752,7 @@ impl ToPyObject for CallToAccount {
         dict.set_item("account", &self.address).unwrap();
         dict.set_item("call_data", &self.call_data).unwrap();
         dict.set_item("decimals", &self.decimals).unwrap();
-        dict.set_item("len", &self.len).unwrap();
         dict.to_object(py)
-    }
-}
-
-#[cfg(feature = "python-bindings")]
-impl ToPyObject for Calls {
-    fn to_object(&self, py: Python) -> PyObject {
-        match self {
-            Calls::Multiple(calls) => calls.to_object(py),
-            Calls::Single(call) => call.to_object(py),
-        }
     }
 }
 
@@ -883,7 +764,7 @@ impl ToPyObject for DataSource {
             DataSource::OnChain(source) => {
                 let dict = PyDict::new(py);
                 dict.set_item("rpc_url", &source.rpc).unwrap();
-                dict.set_item("calls_to_accounts", &source.calls.to_object(py))
+                dict.set_item("calls_to_accounts", &source.call.to_object(py))
                     .unwrap();
                 dict.to_object(py)
             }
