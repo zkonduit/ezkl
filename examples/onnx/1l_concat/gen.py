@@ -42,4 +42,3 @@ torch.onnx.export(
         'output' : {0 : 'batch_size'}
     }
 )
-
