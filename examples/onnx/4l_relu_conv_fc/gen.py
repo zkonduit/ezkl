@@ -1,5 +1,9 @@
 from torch import nn
-from ezkl import export
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from export import export
+
 
 class MyModel(nn.Module):
     def __init__(self):
@@ -33,8 +37,6 @@ class MyModel(nn.Module):
        
         return logits
 
+
 circuit = MyModel()
-export(circuit, input_shape = [1,28,28])
-
-
-    
+export(circuit, input_shape = [1, 28, 28])

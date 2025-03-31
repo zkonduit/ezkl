@@ -46,3 +46,9 @@ torch.onnx.export(torch_gbt.model,               # model being run
                   output_names=['output'],  # the model's output names
                   dynamic_axes={'input': {0: 'batch_size'},    # variable length axes
                                 'output': {0: 'batch_size'}})
+
+d = ((x).detach().numpy()).reshape([-1]).tolist()
+
+data = dict(input_shapes=[shape],
+            input_data=[d],
+            output_data=[(o).reshape([-1]).tolist() for o in torch_out])

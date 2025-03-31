@@ -1,6 +1,7 @@
-pytorch1.12.1:q
-
-inputoutputRelu_0"Relu	torch_jitZ!
+pytorch2.6.0:w
+"
+inputoutput/layer/Relu"Relu
+main_graphZ!
 input
 
 

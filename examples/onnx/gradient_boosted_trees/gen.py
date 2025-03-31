@@ -6,8 +6,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier as Gbc
 import sk2torch
 import torch
-import ezkl
-import os
 from torch import nn
 
 NUM_CLASSES = 3

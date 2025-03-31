@@ -1,7 +1,8 @@
-pytorch1.12.1:Œ
-8
-inputoutputLeakyRelu_0"	LeakyRelu*
-alphaÍÌL= 	torch_jitZ!
+pytorch2.6.0:’
+=
+inputoutput/layer/LeakyRelu"	LeakyRelu*
+alphaÍÌL= 
+main_graphZ!
 input
 
 

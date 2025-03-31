@@ -1,5 +1,4 @@
 # 1. We define a simple transformer model with MultiHeadAttention layers
-import ezkl
 import json
 import torch
 import torch.nn as nn

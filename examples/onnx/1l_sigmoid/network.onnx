@@ -1,6 +1,7 @@
-pytorch1.12.1:w
-#
-inputoutput	Sigmoid_0"Sigmoid	torch_jitZ!
+pytorch2.6.0:}
+(
+inputoutput/layer/Sigmoid"Sigmoid
+main_graphZ!
 input
 
 

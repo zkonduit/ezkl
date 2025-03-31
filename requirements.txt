@@ -1,6 +1,6 @@
-attrs==23.2.0
+attrs==25.3.0
 exceptiongroup==1.2.0
-importlib-metadata==7.1.0
+importlib-metadata==8.6.1
 iniconfig==2.0.0
 maturin==1.5.1
 packaging==24.0
@@ -9,6 +9,6 @@ pytest==8.1.1
 tomli==2.0.1
 typing-extensions==4.10.0
 zipp==3.18.1
-onnx==1.15.0
+onnx==1.17.0
 onnxruntime==1.17.1
 numpy==1.26.4

@@ -1,7 +1,9 @@
 from torch import nn
 import torch
-import json
-import numpy as np
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from export import export
 
 
 class MyModel(nn.Module):
@@ -13,22 +15,4 @@ class MyModel(nn.Module):
 
 
 circuit = MyModel()
-
-
-
-torch.onnx.export(circuit, (), "network.onnx",
-                  export_params=True,        # store the trained parameter weights inside the model file
-                  opset_version=15,          # the ONNX version to export the model to
-                  do_constant_folding=True,  # whether to execute constant folding for optimization
-                  output_names=['output'],  # the model's output names
-                )
-
-
-
-
-data = dict(
-    input_data=[[]],
-)
-
-# Serialize data into file:
-json.dump(data, open("input.json", 'w'))
+export(circuit, include_input=False, opset_version=15)
