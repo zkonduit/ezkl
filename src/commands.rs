@@ -382,6 +382,44 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 
+/// Custom parser for data field that handles both direct JSON strings and file paths with '@' prefix
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
+pub struct DataField(pub String);
+
+impl FromStr for DataField {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Check if the input starts with '@'
+        if s.starts_with('@') {
+            // Extract the file path (remove the '@' prefix)
+            let file_path = &s[1..];
+
+            // Read the file content
+            let content = std::fs::read_to_string(file_path)
+                .map_err(|e| format!("Failed to read data file '{}': {}", file_path, e))?;
+
+            // Return the file content as the data field value
+            Ok(DataField(content))
+        } else {
+            // Use the input string directly
+            Ok(DataField(s.to_string()))
+        }
+    }
+}
+
+impl ToFlags for DataField {
+    fn to_flags(&self) -> Vec<String> {
+        vec![self.0.clone()]
+    }
+}
+
+impl std::fmt::Display for DataField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[allow(missing_docs)]
 #[derive(Debug, Subcommand, Clone, Deserialize, Serialize, PartialEq, PartialOrd, ToSubcommand)]
 pub enum Commands {
@@ -400,9 +438,9 @@ pub enum Commands {
 
     /// Generates the witness from an input file.
     GenWitness {
-        /// The path to the .json data file
-        #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<String>,
+        /// The path to the .json data file (with @ prefix) or a raw data string of the form '{"input_data": [[1, 2, 3]]}'
+        #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_parser = DataField::from_str)]
+        data: Option<DataField>,
         /// The path to the compiled model file (generated using the compile-circuit command)
         #[arg(short = 'M', long, default_value = DEFAULT_COMPILED_CIRCUIT, value_hint = clap::ValueHint::FilePath)]
         compiled_circuit: Option<PathBuf>,

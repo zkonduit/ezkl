@@ -176,7 +176,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             srs_path,
         } => gen_witness(
             compiled_circuit.unwrap_or(DEFAULT_COMPILED_CIRCUIT.into()),
-            data.unwrap_or(DEFAULT_DATA.into()),
+            data.unwrap_or(DataField(DEFAULT_DATA.into())).to_string(),
             Some(output.unwrap_or(DEFAULT_WITNESS.into())),
             vk_path,
             srs_path,
