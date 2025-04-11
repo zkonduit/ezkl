@@ -1,9 +1,10 @@
-pytorch2.0.1:û
+pytorch2.6.0:ü
 O
 input
 input1
 input2output/ScatterElements"ScatterElements*
-axis 	torch_jitZ%
+axis 
+main_graphZ%
 input
 
 

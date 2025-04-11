@@ -1,6 +1,10 @@
-import torch 
 from torch import nn
-from ezkl import export
+import torch
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from export import export
+
 
 class MyModel(nn.Module):
     def __init__(self):
@@ -8,6 +12,7 @@ class MyModel(nn.Module):
 
     def forward(self, x):
         return torch.sqrt(x)
+
 
 circuit = MyModel()
 export(circuit, input_shape = [3])

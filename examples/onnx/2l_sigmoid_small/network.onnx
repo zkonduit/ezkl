@@ -1,8 +1,9 @@
-pytorch1.13.1:Ó
+pytorch2.6.0:Ô
 =
 input/sigmoid/Sigmoid_output_0/sigmoid/Sigmoid"Sigmoid
 @
-/sigmoid/Sigmoid_output_0output/sigmoid_1/Sigmoid"Sigmoid	torch_jitZ!
+/sigmoid/Sigmoid_output_0output/sigmoid_1/Sigmoid"Sigmoid
+main_graphZ!
 input
 
 
