@@ -19,7 +19,7 @@ pub enum CircuitError {
     /// Error when instantiating lookup tables
     #[error("failed to instantiate lookup tables")]
     LookupInstantiation,
-    /// A lookup table was was already assigned
+    /// A lookup table was already assigned
     #[error("attempting to initialize an already instantiated lookup table")]
     TableAlreadyAssigned,
     /// This operation is unsupported
