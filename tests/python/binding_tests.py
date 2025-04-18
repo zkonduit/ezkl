@@ -564,8 +564,8 @@ async def test_verify_evm():
 
     res = await ezkl.verify_evm(
         addr,
+        anvil_url,
         proof_path,
-        rpc_url=anvil_url,
         # sol_code_path
         # optimizer_runs
     )
@@ -604,8 +604,8 @@ async def test_verify_evm_separate_vk():
 
     res = await ezkl.verify_evm(
         addr_verifier,
+        anvil_url,
         proof_path,
-        rpc_url=anvil_url,
         addr_vk=addr_vk,
         # sol_code_path
         # optimizer_runs
