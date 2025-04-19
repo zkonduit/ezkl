@@ -160,7 +160,7 @@ pub fn decompose(
 ///
 /// let result = trilu(&a, 0, false).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 3, 4, 5, 6]), &[1, 3, 2]).unwrap();
-/// assert_eq!(result, expected);  
+/// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, -1, true).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 0, 6]), &[1, 3, 2]).unwrap();
@@ -168,7 +168,7 @@ pub fn decompose(
 ///
 /// let result = trilu(&a, -1, false).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 3, 0, 5, 6]), &[1, 3, 2]).unwrap();
-/// assert_eq!(result, expected);  
+/// assert_eq!(result, expected);
 ///
 /// let a = Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6]),
@@ -188,7 +188,7 @@ pub fn decompose(
 ///
 /// let result = trilu(&a, 0, false).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 0, 4, 5, 0]), &[1, 2, 3]).unwrap();
-/// assert_eq!(result, expected);  
+/// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, -1, true).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[1, 2, 3]).unwrap();
@@ -196,7 +196,7 @@ pub fn decompose(
 ///
 /// let result = trilu(&a, -1, false).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 4, 0, 0]), &[1, 2, 3]).unwrap();
-/// assert_eq!(result, expected);  
+/// assert_eq!(result, expected);
 ///
 /// let a = Tensor::<IntegerRep>::new(
 ///   Some(&[1, 2, 3, 4, 5, 6, 7, 8, 9]),
@@ -216,7 +216,7 @@ pub fn decompose(
 ///
 /// let result = trilu(&a, 0, false).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 0, 4, 5, 0, 7, 8, 9]), &[1, 3, 3]).unwrap();
-/// assert_eq!(result, expected);  
+/// assert_eq!(result, expected);
 ///
 /// let result = trilu(&a, -1, true).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 8, 9]), &[1, 3, 3]).unwrap();
@@ -224,7 +224,7 @@ pub fn decompose(
 ///
 /// let result = trilu(&a, -1, false).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[0, 0, 0, 4, 0, 0, 7, 8, 0]), &[1, 3, 3]).unwrap();
-/// assert_eq!(result, expected);  
+/// assert_eq!(result, expected);
 /// ```
 pub fn trilu<T: TensorType + std::marker::Send + std::marker::Sync>(
     a: &Tensor<T>,
@@ -1866,7 +1866,8 @@ pub mod nonlinearities {
     pub fn rsqrt(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
         a.par_enum_map(|_, a_i| {
             let kix = (a_i as f64) / scale_input;
-            let fout = scale_input / (kix.sqrt() + f64::EPSILON);
+            // we use f32::EPSILON to avoid division by zero, and use f32 instead of f64 to avoid exceedingly large fixed point scales
+            let fout = scale_input / (kix.sqrt() + (f32::EPSILON as f64));
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
         })
@@ -2347,7 +2348,8 @@ pub mod nonlinearities {
         a.par_enum_map(|_, a_i| {
             let rescaled = (a_i as f64) / input_scale;
             let denom = if rescaled == 0_f64 {
-                (1_f64) / (rescaled + f64::EPSILON)
+                // we use f32::EPSILON to avoid division by zero, and use f32 instead of f64 to avoid exceedingly large fixed point scales
+                (1_f64) / (rescaled + (f32::EPSILON as f64))
             } else {
                 (1_f64) / (rescaled)
             };
@@ -2375,7 +2377,8 @@ pub mod nonlinearities {
 
         a.par_enum_map(|_, a_i| {
             let rescaled = a_i as f64;
-            let denom = (1_f64) / (rescaled + f64::EPSILON);
+            // we use f32::EPSILON to avoid division by zero, and use f32 instead of f64 to avoid exceedingly large fixed point scales
+            let denom = (1_f64) / (rescaled + (f32::EPSILON as f64));
             let d_inv_x = out_scale * denom;
             Ok::<_, TensorError>(d_inv_x.round() as IntegerRep)
         })
