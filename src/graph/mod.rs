@@ -36,12 +36,12 @@ use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSize
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::region::{ConstantsMap, RegionSettings};
-use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
+use crate::circuit::table::{RESERVED_BLINDING_ROWS_PAD, Range, Table, num_cols_required};
 use crate::circuit::{CheckMode, InputType};
-use crate::fieldutils::{felt_to_f64, IntegerRep};
+use crate::fieldutils::{IntegerRep, felt_to_f64};
 use crate::pfsys::PrettyElements;
 use crate::tensor::{Tensor, ValTensor};
-use crate::{RunArgs, EZKL_BUF_CAPACITY};
+use crate::{EZKL_BUF_CAPACITY, RunArgs};
 
 use halo2_proofs::{
     circuit::Layouter,
@@ -56,13 +56,13 @@ use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
+#[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDictMethods;
-#[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
 
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -541,14 +541,36 @@ impl GraphSettings {
 
     /// calculate the total number of instances
     pub fn total_instances(&self) -> Vec<usize> {
-        let mut instances: Vec<usize> = self
-            .model_instance_shapes
-            .iter()
-            .map(|x| x.iter().product())
-            .collect();
-        instances.extend(self.module_sizes.num_instances());
+        let mut instances: Vec<usize> = self.module_sizes.num_instances();
+        instances.extend(
+            self.model_instance_shapes
+                .iter()
+                .map(|x| x.iter().product::<usize>()),
+        );
 
         instances
+    }
+
+    /// get the scale data for instances
+    pub fn get_model_instance_scales(&self) -> Vec<crate::Scale> {
+        let mut scales = vec![];
+        if self.run_args.input_visibility.is_public() {
+            scales.extend(
+                self.model_input_scales
+                    .iter()
+                    .map(|x| x.clone())
+                    .collect::<Vec<crate::Scale>>(),
+            );
+        };
+        if self.run_args.output_visibility.is_public() {
+            scales.extend(
+                self.model_output_scales
+                    .iter()
+                    .map(|x| x.clone())
+                    .collect::<Vec<crate::Scale>>(),
+            );
+        };
+        scales
     }
 
     /// calculate the log2 of the total number of instances

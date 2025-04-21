@@ -2193,14 +2193,14 @@ mod native_tests {
         };
 
         let addr_path_arg_vk = format!("--addr-path={}/{}/addr_vk.txt", test_dir, example_name);
-        let sol_arg_vk: String = format!("--sol-code-path={}/{}/vk.sol", test_dir, example_name);
+        let arg_vka: String = format!("--vka-path={}/{}/vka.bytes", test_dir, example_name);
         // create the verifier
         let args = vec![
             "create-evm-vka",
             "--vk-path",
             &vk_arg,
             &settings_arg,
-            &sol_arg_vk,
+            &arg_vka,
         ];
 
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
@@ -2209,13 +2209,12 @@ mod native_tests {
             .expect("failed to execute process");
         assert!(status.success());
 
-        // deploy the vka
+        // register the vka
         let args = vec![
-            "deploy-evm",
+            "register-vka",
             rpc_arg.as_str(),
-            addr_path_arg_vk.as_str(),
-            sol_arg_vk.as_str(),
-            "-C=vka",
+            arg_vka.as_str(),
+            deployed_addr_arg.as_str(),
         ];
 
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
@@ -2223,12 +2222,6 @@ mod native_tests {
             .status()
             .expect("failed to execute process");
         assert!(status.success());
-
-        // read in the address
-        let addr_vk = std::fs::read_to_string(format!("{}/{}/addr_vk.txt", test_dir, example_name))
-            .expect("failed to read address file");
-
-        let deployed_addr_arg_vk = format!("--addr-vk={}", addr_vk);
 
         // create encoded calldata
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
@@ -2236,7 +2229,7 @@ mod native_tests {
                 "encode-evm-calldata",
                 "--proof-path",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
-                &deployed_addr_arg_vk,
+                &arg_vka,
             ])
             .status()
             .expect("failed to execute process");
@@ -2251,7 +2244,7 @@ mod native_tests {
             pf_arg.as_str(),
             rpc_arg.as_str(),
             deployed_addr_arg.as_str(),
-            deployed_addr_arg_vk.as_str(),
+            arg_vka.as_str(),
         ];
 
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))

@@ -78,8 +78,8 @@ pub const DEFAULT_DISABLE_SELECTOR_COMPRESSION: &str = "false";
 pub const DEFAULT_RENDER_REUSABLE: &str = "false";
 /// Default contract deployment type
 pub const DEFAULT_CONTRACT_DEPLOYMENT_TYPE: &str = "verifier";
-/// Default VK sol path
-pub const DEFAULT_VK_SOL: &str = "vk.sol";
+/// Default VKA calldata path
+pub const DEFAULT_VKA: &str = "vka.bytes";
 /// Default VK abi path
 pub const DEFAULT_VK_ABI: &str = "vk.abi";
 /// Default scale rebase multipliers for calibration
@@ -92,6 +92,10 @@ pub const DEFAULT_ONLY_RANGE_CHECK_REBASE: &str = "false";
 pub const DEFAULT_COMMITMENT: &str = "kzg";
 /// Default seed used to generate random data
 pub const DEFAULT_SEED: &str = "21242";
+/// Default number of decimals for instances rescaling on-chain.
+pub const DEFAULT_DECIMALS: &str = "18";
+/// Default path for the vka digest file
+pub const DEFAULT_VKA_DIGEST: &str = "vka.digest";
 
 #[cfg(feature = "python-bindings")]
 /// Converts TranscriptType into a PyObject (Required for TranscriptType to be compatible with Python)
@@ -187,8 +191,6 @@ pub enum ContractType {
         /// Can also be used as an alternative to aggregation for verifiers that are otherwise too large to fit on-chain.
         reusable: bool,
     },
-    /// Deploys a verifying key artifact that the reusable verifier loads into memory during runtime. Encodes the circuit specific data that was otherwise hardcoded onto the stack.
-    VerifyingKeyArtifact,
 }
 
 impl Default for ContractType {
@@ -207,7 +209,6 @@ impl std::fmt::Display for ContractType {
                     "verifier/reusable".to_string()
                 }
                 ContractType::Verifier { reusable: false } => "verifier".to_string(),
-                ContractType::VerifyingKeyArtifact => "vka".to_string(),
             }
         )
     }
@@ -224,7 +225,6 @@ impl From<&str> for ContractType {
         match s {
             "verifier" => ContractType::Verifier { reusable: false },
             "verifier/reusable" => ContractType::Verifier { reusable: true },
-            "vka" => ContractType::VerifyingKeyArtifact,
             _ => {
                 log::error!("Invalid value for ContractType");
                 log::warn!("Defaulting to verifier");
@@ -744,9 +744,9 @@ pub enum Commands {
         /// The path to save the calldata to
         #[arg(long, default_value = DEFAULT_CALLDATA, value_hint = clap::ValueHint::FilePath)]
         calldata_path: Option<PathBuf>,
-        /// The path to the verification key address (only used if the vk is rendered as a separate contract)
+        /// The path to the serialized VKA file
         #[arg(long, value_hint = clap::ValueHint::Other)]
-        addr_vk: Option<H160Flag>,
+        vka_path: Option<PathBuf>,
     },
     /// Creates an Evm verifier for a single proof
     #[command(name = "create-evm-verifier")]
@@ -770,7 +770,7 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_RENDER_REUSABLE, action = clap::ArgAction::SetTrue)]
         reusable: Option<bool>,
     },
-    /// Creates an Evm verifier artifact for a single proof to be used by the reusable verifier
+    /// Creates an evm verifier artifact to be used by the reusable verifier
     #[command(name = "create-evm-vka")]
     CreateEvmVka {
         /// The path to SRS, if None will use ~/.ezkl/srs/kzg{logrows}.srs
@@ -782,13 +782,15 @@ pub enum Commands {
         /// The path to load the desired verification key file
         #[arg(long, default_value = DEFAULT_VK, value_hint = clap::ValueHint::FilePath)]
         vk_path: Option<PathBuf>,
-        /// The path to output the Solidity code
-        #[arg(long, default_value = DEFAULT_VK_SOL, value_hint = clap::ValueHint::FilePath)]
-        sol_code_path: Option<PathBuf>,
-        /// The path to output the Solidity verifier ABI
-        #[arg(long, default_value = DEFAULT_VK_ABI, value_hint = clap::ValueHint::FilePath)]
-        abi_path: Option<PathBuf>,
+        /// The path to output the vka calldata
+        #[arg(long, default_value = DEFAULT_VKA, value_hint = clap::ValueHint::FilePath)]
+        vka_path: Option<PathBuf>,
+        /// The number of decimals we want to use for the rescaling of the instances into on-chain floats
+        /// Default is 18, which is the number of decimals used by most ERC20 tokens
+        #[arg(long, default_value = DEFAULT_DECIMALS, value_hint = clap::ValueHint::Other)]
+        decimals: Option<usize>,
     },
+    /// TODO: Fetch evm verifier artifact from vka data.
     /// Creates an Evm verifier that attests to on-chain inputs for a single proof
     #[command(name = "create-evm-da")]
     CreateEvmDa {
@@ -938,9 +940,28 @@ pub enum Commands {
         /// does the verifier use data attestation ?
         #[arg(long, value_hint = clap::ValueHint::Other)]
         addr_da: Option<H160Flag>,
-        // is the vk rendered seperately, if so specify an address
-        #[arg(long, value_hint = clap::ValueHint::Other)]
-        addr_vk: Option<H160Flag>,
+        /// The path to the serialized vka file
+        #[arg(long, default_value = DEFAULT_VKA, value_hint = clap::ValueHint::FilePath)]
+        vka_path: Option<PathBuf>,
+    },
+    /// Registers a VKA, returning the its digest used to identify it on-chain.
+    #[command(name = "register-vka")]
+    RegisterVka {
+        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
+        rpc_url: Option<String>,
+        /// The path to the reusable verifier contract's address
+        #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS, value_hint = clap::ValueHint::Other)]
+        addr_verifier: H160Flag,
+        /// The path to the serialized VKA file
+        #[arg(long, default_value = DEFAULT_VKA, value_hint = clap::ValueHint::FilePath)]
+        vka_path: Option<PathBuf>,
+        /// The path to output the VKA digest to
+        #[arg(long, default_value = DEFAULT_VKA_DIGEST, value_hint = clap::ValueHint::FilePath)]
+        vka_digest_path: Option<PathBuf>,
+        /// Private secp256K1 key in hex format, 64 chars, no 0x prefix, of the account signing transactions. If None the private key will be generated by Anvil
+        #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
+        private_key: Option<String>,
     },
     #[cfg(not(feature = "no-update"))]
     /// Updates ezkl binary to version specified (or latest if not specified)

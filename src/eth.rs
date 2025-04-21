@@ -31,7 +31,7 @@ use alloy::transports::{RpcError, TransportErrorKind};
 use foundry_compilers::Solc;
 use foundry_compilers::artifacts::Settings as SolcSettings;
 use foundry_compilers::error::{SolcError, SolcIoError};
-use halo2_solidity_verifier::encode_calldata;
+use halo2_solidity_verifier::{encode_calldata, encode_register_vk_calldata};
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use itertools::Itertools;
@@ -230,9 +230,9 @@ abigen!(
                 bool neg;
                 if (instances[i] > uint128(type(int128).max)) {
                     x = int256(ORDER - instances[i]);
+                    neg = true;
                 } else {
                     x = int256(instances[i]);
-                    neg = true;
                 }
                 uint output = mulDiv(uint256(x), numerator, denominator);
                 if (mulmod(uint256(x), numerator, denominator) * 2 >= denominator) {
@@ -292,6 +292,8 @@ pub enum EthError {
     Svm(String),
     #[error("no contract output found")]
     NoContractOutput,
+    #[error("failed to load vka data: {0}")]
+    VkaData(String),
 }
 
 // we have to generate these two contract differently because they are generated dynamically ! and hence the static compilation from above does not suit
@@ -380,6 +382,61 @@ pub async fn deploy_contract_via_solidity(
     let contract = factory.deploy().await?;
 
     Ok(contract)
+}
+
+///
+pub async fn register_vka_via_rv(
+    rpc_url: Option<&str>,
+    private_key: Option<&str>,
+    rv_address: H160,
+    vka_words: &[[u8; 32]],
+) -> Result<Vec<u8>, EthError> {
+    let (client, _) = setup_eth_backend(rpc_url, private_key).await?;
+
+    let encoded = encode_register_vk_calldata(vka_words);
+
+    debug!(
+        "encoded register vka calldata: {:#?}",
+        hex::encode(&encoded)
+    );
+
+    let input: TransactionInput = encoded.into();
+
+    let tx = TransactionRequest::default().to(rv_address).input(input);
+    debug!("transaction {:#?}", tx);
+
+    let result = client.call(&tx).await;
+
+    if let Err(e) = result {
+        return Err(EvmVerificationError::SolidityExecution(e.to_string()).into());
+    }
+    let result = result?;
+    debug!("result: {:#?}", result.to_vec());
+    // decode return bytes value into uint8
+    let output = result.to_vec();
+
+    let gas = client.estimate_gas(&tx).await?;
+
+    info!("estimated vka registration cost: {:#?}", gas);
+
+    // broadcast the transaction
+
+    let result = client.send_transaction(tx).await?;
+
+    result.watch().await?;
+
+    // if gas is greater than 30 million warn the user that the gas cost is above ethereum's 30 million block gas limit
+    if gas > 30_000_000_u128 {
+        warn!(
+            "Gas cost of verify transaction is greater than 30 million block gas limit. It will fail on mainnet."
+        );
+    } else if gas > 15_000_000_u128 {
+        warn!(
+            "Gas cost of verify transaction is greater than 15 million, the target block size for ethereum"
+        );
+    }
+
+    Ok(output)
 }
 
 ///
@@ -570,19 +627,27 @@ fn parse_call_to_account(call_to_account: CallToAccount) -> Result<ParsedCallToA
 }
 
 /// Verify a proof using a Solidity verifier contract
+/// TODO: add param to pass vka_digest and use that to fetch the VKA by indexing the RegisteredVKA events on the RV
 pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     addr: H160,
-    addr_vk: Option<H160>,
+    vka_path: Option<PathBuf>,
     rpc_url: Option<&str>,
 ) -> Result<bool, EthError> {
     let flattened_instances = proof.instances.into_iter().flatten();
 
-    let encoded = encode_calldata(
-        addr_vk.as_ref().map(|x| x.0).map(|x| x.0),
-        &proof.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
+    // Load the vka, which is bincode serialized, from the vka_path
+    let vka_buf: Option<Vec<[u8; 32]>> = match vka_path {
+        Some(path) => {
+            let bytes = std::fs::read(path)?;
+            Some(bincode::deserialize(&bytes).map_err(|e| EthError::VkaData(e.to_string()))?)
+        }
+        None => None,
+    };
+
+    let vka: Option<&[[u8; 32]]> = vka_buf.as_deref();
+
+    let encoded = encode_calldata(vka, &proof.proof, &flattened_instances.collect::<Vec<_>>());
 
     debug!("encoded: {:#?}", hex::encode(&encoded));
 
@@ -600,7 +665,10 @@ pub async fn verify_proof_via_solidity(
     let result = result?;
     debug!("result: {:#?}", result.to_vec());
     // decode return bytes value into uint8
-    let result = result.to_vec().last().ok_or(EthError::NoContractOutput)? == &1u8;
+    let result = result.to_vec()[..32]
+        .last()
+        .ok_or(EthError::NoContractOutput)?
+        == &1u8;
     if !result {
         return Err(EvmVerificationError::InvalidProof.into());
     }
@@ -675,7 +743,7 @@ pub async fn verify_proof_with_data_attestation(
     proof: Snark<Fr, G1Affine>,
     addr_verifier: H160,
     addr_da: H160,
-    addr_vk: Option<H160>,
+    vka_path: Option<PathBuf>,
     rpc_url: Option<&str>,
 ) -> Result<bool, EthError> {
     use ethabi::{Function, Param, ParamType, StateMutability, Token};
@@ -689,11 +757,19 @@ pub async fn verify_proof_with_data_attestation(
         public_inputs.push(u);
     }
 
-    let encoded_verifier = encode_calldata(
-        addr_vk.as_ref().map(|x| x.0).map(|x| x.0),
-        &proof.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
+    // Load the vka, which is bincode serialized, from the vka_path
+    let vka_buf: Option<Vec<[u8; 32]>> = match vka_path {
+        Some(path) => {
+            let bytes = std::fs::read(path)?;
+            Some(bincode::deserialize(&bytes).map_err(|e| EthError::VkaData(e.to_string()))?)
+        }
+        None => None,
+    };
+
+    let vka: Option<&[[u8; 32]]> = vka_buf.as_deref();
+
+    let encoded_verifier =
+        encode_calldata(vka, &proof.proof, &flattened_instances.collect::<Vec<_>>());
 
     debug!("encoded: {:#?}", hex::encode(&encoded_verifier));
 
