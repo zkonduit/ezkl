@@ -256,7 +256,7 @@ jobs:
           submodules: recursive
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@1ae64e38a1c69bda45343947875f7c86bad00038
+        uses: foundry-rs/foundry-toolchain@3b74dacdda3c0b763089addb99ed86bc3800e68b
 
       - name: Run tests
         run: |
