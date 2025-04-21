@@ -1859,7 +1859,7 @@ pub mod nonlinearities {
     ///     Some(&[4, 25, 8, 1, 1, 1]),
     ///     &[2, 3],
     /// ).unwrap();
-    /// let result = rsqrt(&x, 1.0, f64::);
+    /// let result = rsqrt(&x, 1.0, f64::EPSILON);
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 0, 1, 1, 1]), &[2, 3]).unwrap();
     /// assert_eq!(result, expected);
     /// ```
