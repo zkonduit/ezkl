@@ -33,7 +33,7 @@ jobs:
           toolchain: nightly-2025-02-17
           override: true
           components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3
+      - uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-nextest
           locked: true
@@ -219,7 +219,7 @@ jobs:
   wasm32-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -233,7 +233,7 @@ jobs:
         with:
           # Pin to version 0.12.1
           version: "v0.12.1"
-      - uses: nanasess/setup-chromedriver@affb1ea8848cbb080be372c1e8d7a5c173e9298f  #v2.3.0
+      - uses: nanasess/setup-chromedriver@e93e57b843c0c92788f22483f1a31af8ee48db25  #v2.3.0
         # with:
         #   chromedriver-version: "115.0.5790.102"
       - name: Install wasm32-unknown-unknown
@@ -256,7 +256,7 @@ jobs:
           submodules: recursive
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@3b74dacdda3c0b763089addb99ed86bc3800e68b
+        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run tests
         run: |
