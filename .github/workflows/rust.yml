@@ -233,7 +233,7 @@ jobs:
         with:
           # Pin to version 0.12.1
           version: "v0.12.1"
-      - uses: nanasess/setup-chromedriver@e93e57b843c0c92788f22483f1a31af8ee48db25  #v2.3.0
+      - uses: nanasess/setup-chromedriver@affb1ea8848cbb080be372c1e8d7a5c173e9298f  #v2.3.0
         # with:
         #   chromedriver-version: "115.0.5790.102"
       - name: Install wasm32-unknown-unknown
