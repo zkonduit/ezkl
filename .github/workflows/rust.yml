@@ -219,7 +219,7 @@ jobs:
   wasm32-tests:
     permissions:
       contents: read
-    runs-on: non-gpu
+    runs-on: ubuntu-latest-16-cores
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -259,7 +259,7 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run tests
-        run: | 
+        run: |
           cd tests/foundry
           forge install https://github.com/foundry-rs/forge-std --no-git --no-commit
           forge test -vvvv --fuzz-runs 64
