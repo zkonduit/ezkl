@@ -208,7 +208,7 @@ struct PyRunArgs {
     pub ignore_range_check_inputs_outputs: bool,
     /// float: epsilon used for arguments that use division
     #[pyo3(get, set)]
-    pub epsilon: f32,
+    pub epsilon: f64,
 }
 
 /// default instantiation of PyRunArgs
