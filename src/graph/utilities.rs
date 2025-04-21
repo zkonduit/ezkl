@@ -858,6 +858,7 @@ pub fn new_op_from_onnx(
             SupportedOp::Hybrid(HybridOp::Recip {
                 input_scale: (scale_to_multiplier(in_scale) as f32).into(),
                 output_scale: (scale_to_multiplier(max_scale) as f32).into(),
+                eps: run_args.get_epsilon(),
             })
         }
 
@@ -903,6 +904,7 @@ pub fn new_op_from_onnx(
             SupportedOp::Hybrid(HybridOp::Rsqrt {
                 input_scale: (scale_to_multiplier(in_scale) as f32).into(),
                 output_scale: (scale_to_multiplier(max_scale) as f32).into(),
+                eps: run_args.get_epsilon(),
             })
         }
         "Exp" => SupportedOp::Nonlinear(LookupOp::Exp {
@@ -913,6 +915,7 @@ pub fn new_op_from_onnx(
             if run_args.bounded_log_lookup {
                 SupportedOp::Hybrid(HybridOp::Ln {
                     scale: scale_to_multiplier(input_scales[0]).into(),
+                    eps: run_args.get_epsilon(),
                 })
             } else {
                 SupportedOp::Nonlinear(LookupOp::Ln {
@@ -1131,6 +1134,7 @@ pub fn new_op_from_onnx(
                 input_scale: scale_to_multiplier(in_scale).into(),
                 output_scale: scale_to_multiplier(max_scale).into(),
                 axes: softmax_op.axes.to_vec(),
+                eps: run_args.get_epsilon(),
             })
         }
         "MaxPool" => {

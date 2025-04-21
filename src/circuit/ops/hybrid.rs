@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     circuit::{layouts, utils},
-    fieldutils::{integer_rep_to_felt, IntegerRep},
+    fieldutils::{IntegerRep, integer_rep_to_felt},
     graph::multiplier_to_scale,
     tensor::{self, DataFormat, Tensor, TensorType, ValTensor},
 };
@@ -15,10 +15,12 @@ use serde::{Deserialize, Serialize};
 pub enum HybridOp {
     Ln {
         scale: utils::F32,
+        eps: f64,
     },
     Rsqrt {
         input_scale: utils::F32,
         output_scale: utils::F32,
+        eps: f64,
     },
     Sqrt {
         scale: utils::F32,
@@ -42,6 +44,7 @@ pub enum HybridOp {
     Recip {
         input_scale: utils::F32,
         output_scale: utils::F32,
+        eps: f64,
     },
     Div {
         denom: utils::F32,
@@ -77,6 +80,7 @@ pub enum HybridOp {
         input_scale: utils::F32,
         output_scale: utils::F32,
         axes: Vec<usize>,
+        eps: f64,
     },
     Output {
         decomp: bool,
@@ -128,12 +132,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             HybridOp::Rsqrt {
                 input_scale,
                 output_scale,
+                eps,
             } => format!(
-                "RSQRT (input_scale={}, output_scale={})",
-                input_scale, output_scale
+                "RSQRT (input_scale={}, output_scale={}, eps={})",
+                input_scale, output_scale, eps
             ),
             HybridOp::Sqrt { scale } => format!("SQRT(scale={})", scale),
-            HybridOp::Ln { scale } => format!("LN(scale={})", scale),
+            HybridOp::Ln { scale, eps } => format!("LN(scale={}, eps={})", scale, eps),
             HybridOp::RoundHalfToEven { scale, legs } => {
                 format!("ROUND_HALF_TO_EVEN(scale={}, legs={})", scale, legs)
             }
@@ -146,16 +151,18 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             HybridOp::Recip {
                 input_scale,
                 output_scale,
+                eps,
             } => format!(
-                "RECIP (input_scale={}, output_scale={})",
-                input_scale, output_scale
+                "RECIP (input_scale={}, output_scale={}, eps={})",
+                input_scale, output_scale, eps
             ),
             HybridOp::Div { denom } => format!("DIV (denom={})", denom),
             HybridOp::SumPool {
                 padding,
                 stride,
                 kernel_shape,
-                normalized, data_format
+                normalized,
+                data_format,
             } => format!(
                 "SUMPOOL (padding={:?}, stride={:?}, kernel_shape={:?}, normalized={}, data_format={:?})",
                 padding, stride, kernel_shape, normalized, data_format
@@ -177,10 +184,11 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 input_scale,
                 output_scale,
                 axes,
+                eps,
             } => {
                 format!(
-                    "SOFTMAX (input_scale={}, output_scale={}, axes={:?})",
-                    input_scale, output_scale, axes
+                    "SOFTMAX (input_scale={}, output_scale={}, axes={:?}, eps={})",
+                    input_scale, output_scale, axes, eps
                 )
             }
             HybridOp::Output { decomp } => {
@@ -211,17 +219,21 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             HybridOp::Rsqrt {
                 input_scale,
                 output_scale,
+                eps,
             } => layouts::rsqrt(
                 config,
                 region,
                 values[..].try_into()?,
                 *input_scale,
                 *output_scale,
+                *eps,
             )?,
             HybridOp::Sqrt { scale } => {
                 layouts::sqrt(config, region, values[..].try_into()?, *scale)?
             }
-            HybridOp::Ln { scale } => layouts::ln(config, region, values[..].try_into()?, *scale)?,
+            HybridOp::Ln { scale, eps } => {
+                layouts::ln(config, region, values[..].try_into()?, *scale, *eps)?
+            }
             HybridOp::RoundHalfToEven { scale, legs } => {
                 layouts::round_half_to_even(config, region, values[..].try_into()?, *scale, *legs)?
             }
@@ -255,12 +267,14 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             HybridOp::Recip {
                 input_scale,
                 output_scale,
+                eps,
             } => layouts::recip(
                 config,
                 region,
                 values[..].try_into()?,
                 integer_rep_to_felt(input_scale.0 as IntegerRep),
                 integer_rep_to_felt(output_scale.0 as IntegerRep),
+                *eps,
             )?,
             HybridOp::Div { denom, .. } => {
                 if denom.0.fract() == 0.0 {
@@ -317,6 +331,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 input_scale,
                 output_scale,
                 axes,
+                eps,
             } => layouts::softmax_axes(
                 config,
                 region,
@@ -324,6 +339,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
                 *input_scale,
                 *output_scale,
                 axes,
+                *eps,
             )?,
             HybridOp::Output { decomp } => {
                 layouts::output(config, region, values[..].try_into()?, *decomp)?
@@ -364,6 +380,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Hybrid
             } => multiplier_to_scale((output_scale.0 * input_scale.0) as f64),
             HybridOp::Ln {
                 scale: output_scale,
+                eps: _,
             } => 4 * multiplier_to_scale(output_scale.0 as f64),
             _ => in_scales[0],
         };

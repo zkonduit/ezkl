@@ -206,6 +206,9 @@ struct PyRunArgs {
     /// bool: Should the circuit use range checks for inputs and outputs (set to false if the input is a felt)
     #[pyo3(get, set)]
     pub ignore_range_check_inputs_outputs: bool,
+    /// float: epsilon used for arguments that use division
+    #[pyo3(get, set)]
+    pub epsilon: f32,
 }
 
 /// default instantiation of PyRunArgs
@@ -238,6 +241,7 @@ impl From<PyRunArgs> for RunArgs {
             decomp_base: py_run_args.decomp_base,
             decomp_legs: py_run_args.decomp_legs,
             ignore_range_check_inputs_outputs: py_run_args.ignore_range_check_inputs_outputs,
+            epsilon: Some(py_run_args.epsilon),
         }
     }
 }
@@ -262,6 +266,7 @@ impl Into<PyRunArgs> for RunArgs {
             decomp_base: self.decomp_base,
             decomp_legs: self.decomp_legs,
             ignore_range_check_inputs_outputs: self.ignore_range_check_inputs_outputs,
+            epsilon: self.get_epsilon(),
         }
     }
 }
@@ -962,7 +967,7 @@ fn gen_settings(
     output=PathBuf::from(DEFAULT_SETTINGS),
     variables=Vec::from([("batch_size".to_string(), 1)]),
     seed=DEFAULT_SEED.parse().unwrap(),
-    min=None, 
+    min=None,
     max=None
 ))]
 #[gen_stub_pyfunction]
