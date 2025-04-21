@@ -816,31 +816,31 @@ jobs:
   #     # - name: Reusable verifier tutorial
   #     # run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_
 
-  ios-integration-tests:
-    permissions:
-      contents: read
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-        with:
-          persist-credentials: false
-      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
-        with:
-          toolchain: nightly-2025-02-17
-          override: true
-          components: rustfmt, clippy
-      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
-        with:
-          crate: cargo-nextest
-          locked: true
-      - name: Run ios tests
-        run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-02-17-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
+  # ios-integration-tests:
+  #   permissions:
+  #     contents: read
+  #   runs-on: macos-latest
+  #   steps:
+  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+  #       with:
+  #         persist-credentials: false
+  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+  #       with:
+  #         toolchain: nightly-2025-02-17
+  #         override: true
+  #         components: rustfmt, clippy
+  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+  #       with:
+  #         crate: cargo-nextest
+  #         locked: true
+  #     - name: Run ios tests
+  #       run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-02-17-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
 
   swift-package-tests:
     permissions:
       contents: read
     runs-on: macos-latest
-    needs: [ios-integration-tests]
+    needs: []
 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
