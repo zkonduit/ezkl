@@ -36,12 +36,12 @@ use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSize
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::region::{ConstantsMap, RegionSettings};
-use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
+use crate::circuit::table::{RESERVED_BLINDING_ROWS_PAD, Range, Table, num_cols_required};
 use crate::circuit::{CheckMode, InputType};
-use crate::fieldutils::{felt_to_f64, IntegerRep};
+use crate::fieldutils::{IntegerRep, felt_to_f64};
 use crate::pfsys::PrettyElements;
 use crate::tensor::{Tensor, ValTensor};
-use crate::{RunArgs, EZKL_BUF_CAPACITY};
+use crate::{EZKL_BUF_CAPACITY, RunArgs};
 
 use halo2_proofs::{
     circuit::Layouter,
@@ -56,13 +56,13 @@ use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
+#[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDictMethods;
-#[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
 
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -764,7 +764,7 @@ pub struct TestOnChainData {
     /// The path to the test witness
     pub data: std::path::PathBuf,
     /// rpc endpoint
-    pub rpc: Option<String>,
+    pub rpc: String,
     /// data sources for the on chain data
     pub data_sources: TestSources,
 }
@@ -1027,7 +1027,7 @@ impl GraphCircuit {
         scales: Vec<crate::Scale>,
     ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
-        let (client, client_address) = setup_eth_backend(Some(&source.rpc), None).await?;
+        let (client, client_address) = setup_eth_backend(&source.rpc, None).await?;
         let input = read_on_chain_inputs(client.clone(), client_address, &source.call).await?;
         let quantized_evm_inputs =
             evm_quantize(client, scales, &input, &source.call.decimals).await?;
@@ -1481,13 +1481,9 @@ impl GraphCircuit {
         // print file data
         debug!("file data: {:?}", file_data);
 
-        let on_chain_data: OnChainSource = OnChainSource::test_from_file_data(
-            &file_data,
-            scales,
-            shapes,
-            test_on_chain_data.rpc.as_deref(),
-        )
-        .await?;
+        let on_chain_data: OnChainSource =
+            OnChainSource::test_from_file_data(&file_data, scales, shapes, &test_on_chain_data.rpc)
+                .await?;
         // Here we update the GraphData struct with the on-chain data
         if input_data.is_some() {
             data.input_data = on_chain_data.clone().into();
