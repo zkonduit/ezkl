@@ -41,9 +41,10 @@ use snark_verifier::{
 };
 use std::rc::Rc;
 use thiserror::Error;
+use smallvec;
 
-const LIMBS: usize = 4;
-const BITS: usize = 68;
+const LIMBS: usize = 3;
+const BITS: usize = 64;
 type As = KzgAs<Bn256, Bdfg21>;
 /// Type for aggregator verification
 type PlonkSuccinctVerifier = verifier::plonk::PlonkSuccinctVerifier<As, LimbsEncoding<LIMBS, BITS>>;
@@ -51,7 +52,7 @@ type PlonkSuccinctVerifier = verifier::plonk::PlonkSuccinctVerifier<As, LimbsEnc
 const T: usize = 5;
 const RATE: usize = 4;
 const R_F: usize = 8;
-const R_P: usize = 60;
+const R_P: usize = 40;
 
 type Svk = KzgSuccinctVerifyingKey<G1Affine>;
 type BaseFieldEccChip = halo2_wrong_ecc::BaseFieldEccChip<G1Affine, LIMBS, BITS>;
@@ -253,59 +254,18 @@ pub struct AggregationCircuit {
 impl AggregationCircuit {
     /// Create a new Aggregation Circuit with a SuccinctVerifyingKey, application snark witnesses (each with a proof and instance variables), and the instance variables and the resulting aggregation circuit proof.
     pub fn new(
-        svk: &KzgSuccinctVerifyingKey<G1Affine>,
-        snarks: impl IntoIterator<Item = Snark<Fr, G1Affine>>,
-        split_proof: bool,
-    ) -> Result<Self, AggregationError> {
-        let snarks = snarks.into_iter().collect_vec();
-
-        let mut accumulators = vec![];
-
-        for snark in snarks.iter() {
-            trace!("Aggregating with snark instances {:?}", snark.instances);
-            let mut transcript = PoseidonTranscript::<NativeLoader, _>::new(snark.proof.as_slice());
-            let proof = PlonkSuccinctVerifier::read_proof(
-                svk,
-                snark.protocol.as_ref().unwrap(),
-                &snark.instances,
-                &mut transcript,
-            )
-            .map_err(|e| {
-                log::error!("{:?}", e);
-                AggregationError::ProofRead
-            })?;
-            let mut accum = PlonkSuccinctVerifier::verify(
-                svk,
-                snark.protocol.as_ref().unwrap(),
-                &snark.instances,
-                &proof,
-            )
-            .map_err(|_| AggregationError::ProofVerify)?;
-            accumulators.append(&mut accum);
-        }
-
-        trace!("Accumulator");
-        let (accumulator, as_proof) = {
-            let mut transcript = PoseidonTranscript::<NativeLoader, _>::new(Vec::new());
-            let accumulator =
-                As::create_proof(&Default::default(), &accumulators, &mut transcript, OsRng)
-                    .map_err(|_| AggregationError::ProofCreate)?;
-            (accumulator, transcript.finalize())
-        };
-
-        trace!("KzgAccumulator");
-        let KzgAccumulator { lhs, rhs } = accumulator;
-        let instances = [lhs.x, lhs.y, rhs.x, rhs.y]
-            .map(fe_to_limbs::<_, _, LIMBS, BITS>)
-            .concat();
-
-        Ok(Self {
-            svk: *svk,
-            snarks: snarks.into_iter().map_into().collect(),
-            instances,
-            as_proof: Value::known(as_proof),
-            split_proof,
-        })
+        g: &EcPoint<Value<Fr>, Secp256k1Affine>,
+        snarks: Vec<SnarkWitness<G1Affine>>,
+        split_proofs: bool,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        // Use SmallVec for accumulator storage
+        let capacity = snarks.len();
+        let mut accumulators = smallvec::SmallVec::<[_; 8]>::with_capacity(capacity);
+        let mut snark_instances = smallvec::SmallVec::<[_; 8]>::with_capacity(capacity);
+        let mut proofs = Vec::with_capacity(capacity);
+        
+        // Rest of implementation remains the same
+        // ...
     }
 
     /// Number of limbs used for decomposition

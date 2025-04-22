@@ -50,6 +50,7 @@ use tosubcommand::ToFlags;
 use pyo3::types::PyDictMethods;
 
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
+use crate::pfsys::evm::age_transcript::AgeTranscript;
 
 /// Converts a string to a `SerdeFormat`.
 /// # Panics
@@ -206,6 +207,7 @@ pub enum TranscriptType {
     Poseidon,
     #[default]
     EVM,
+    Age,
 }
 
 impl std::fmt::Display for TranscriptType {
@@ -216,6 +218,7 @@ impl std::fmt::Display for TranscriptType {
             match self {
                 TranscriptType::Poseidon => "poseidon",
                 TranscriptType::EVM => "evm",
+                TranscriptType::Age => "age",
             }
         )
     }
@@ -233,6 +236,7 @@ impl ToPyObject for TranscriptType {
         match self {
             TranscriptType::Poseidon => "Poseidon".to_object(py),
             TranscriptType::EVM => "EVM".to_object(py),
+            TranscriptType::Age => "Age".to_object(py),
         }
     }
 }
