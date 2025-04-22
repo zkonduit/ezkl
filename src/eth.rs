@@ -12,7 +12,6 @@ use alloy::dyn_abi::abi::TokenSeq;
 use alloy::dyn_abi::abi::token::{DynSeqToken, PackedSeqToken, WordToken};
 // use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
-use alloy::node_bindings::Anvil;
 use alloy::primitives::ruint::ParseError;
 use alloy::primitives::{B256, I256, ParseSignedError};
 use alloy::providers::ProviderBuilder;
@@ -313,25 +312,12 @@ pub type ContractFactory<M> = CallBuilder<Http<Client>, Arc<M>, ()>;
 
 /// Return an instance of Anvil and a client for the given RPC URL. If none is provided, a local client is used.
 pub async fn setup_eth_backend(
-    rpc_url: Option<&str>,
+    rpc_url: &str,
     private_key: Option<&str>,
 ) -> Result<(EthersClient, alloy::primitives::Address), EthError> {
     // Launch anvil
 
-    let endpoint: String;
-    if let Some(rpc_url) = rpc_url {
-        endpoint = rpc_url.to_string();
-    } else {
-        let anvil = Anvil::new()
-            .args([
-                "--code-size-limit=41943040",
-                "--disable-block-gas-limit",
-                "-p",
-                "8545",
-            ])
-            .spawn();
-        endpoint = anvil.endpoint();
-    }
+    let endpoint = rpc_url.to_string();
 
     // Instantiate the wallet
     let wallet: LocalWallet;
@@ -365,7 +351,7 @@ pub async fn setup_eth_backend(
 ///
 pub async fn deploy_contract_via_solidity(
     sol_code_path: PathBuf,
-    rpc_url: Option<&str>,
+    rpc_url: &str,
     runs: usize,
     private_key: Option<&str>,
     contract_name: &str,
@@ -387,7 +373,7 @@ pub async fn deploy_da_verifier_via_solidity(
     settings_path: PathBuf,
     input: String,
     sol_code_path: PathBuf,
-    rpc_url: Option<&str>,
+    rpc_url: &str,
     runs: usize,
     private_key: Option<&str>,
 ) -> Result<H160, EthError> {
@@ -574,7 +560,7 @@ pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     addr: H160,
     addr_vk: Option<H160>,
-    rpc_url: Option<&str>,
+    rpc_url: &str,
 ) -> Result<bool, EthError> {
     let flattened_instances = proof.instances.into_iter().flatten();
 
@@ -676,7 +662,7 @@ pub async fn verify_proof_with_data_attestation(
     addr_verifier: H160,
     addr_da: H160,
     addr_vk: Option<H160>,
-    rpc_url: Option<&str>,
+    rpc_url: &str,
 ) -> Result<bool, EthError> {
     use ethabi::{Function, Param, ParamType, StateMutability, Token};
 
@@ -1015,7 +1001,7 @@ pub fn fix_da_sol(commitment_bytes: Option<Vec<u8>>, only_kzg: bool) -> Result<S
                     require(checkKzgCommits(encoded), "Invalid KZG commitments");
                     // static call the verifier contract to verify the proof
                     (bool success, bytes memory returndata) = verifier.staticcall(encoded);
-            
+
                     if (success) {
                         return abi.decode(returndata, (bool));
                     } else {
