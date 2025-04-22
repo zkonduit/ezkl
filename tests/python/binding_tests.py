@@ -479,15 +479,15 @@ async def test_deploy_evm_reusable_and_vka():
 
     res = await ezkl.deploy_evm(
         addr_path_verifier,
-        sol_code_path,
         anvil_url,
+        sol_code_path,
         "verifier/reusable",
     )
 
     res = await ezkl.deploy_evm(
         addr_path_vk,
-        vk_code_path,
         anvil_url,
+        vk_code_path,
         "vka",
     )
 
@@ -506,8 +506,8 @@ async def test_deploy_evm():
 
     res = await ezkl.deploy_evm(
         addr_path,
-        sol_code_path,
         anvil_url,
+        sol_code_path,
     )
 
     assert res == True
@@ -528,8 +528,8 @@ async def test_deploy_evm_with_private_key():
 
     res = await ezkl.deploy_evm(
         addr_path,
+        anvil_url,
         sol_code_path,
-        rpc_url=anvil_url,
         private_key=anvil_default_private_key
     )
 
@@ -540,8 +540,8 @@ async def test_deploy_evm_with_private_key():
     with pytest.raises(RuntimeError, match="Failed to run deploy_evm"):
         res = await ezkl.deploy_evm(
             addr_path,
+            anvil_url,
             sol_code_path,
-            rpc_url=anvil_url,
             private_key=custom_zero_balance_private_key
         )
 
@@ -564,8 +564,8 @@ async def test_verify_evm():
 
     res = await ezkl.verify_evm(
         addr,
+        anvil_url,
         proof_path,
-        rpc_url=anvil_url,
         # sol_code_path
         # optimizer_runs
     )
@@ -604,8 +604,8 @@ async def test_verify_evm_separate_vk():
 
     res = await ezkl.verify_evm(
         addr_verifier,
+        anvil_url,
         proof_path,
-        rpc_url=anvil_url,
         addr_vk=addr_vk,
         # sol_code_path
         # optimizer_runs
@@ -831,8 +831,8 @@ async def test_evm_aggregate_and_verify_aggr():
 
     res = await ezkl.deploy_evm(
         addr_path,
+        anvil_url,
         sol_code_path,
-        rpc_url=anvil_url,
     )
 
     # as a sanity check

@@ -1829,7 +1829,7 @@ fn create_evm_data_attestation(
     test_data,
     input_source,
     output_source,
-    rpc_url=None
+    rpc_url,
 ))]
 #[gen_stub_pyfunction]
 fn setup_test_evm_data(
@@ -1839,7 +1839,7 @@ fn setup_test_evm_data(
     test_data: PathBuf,
     input_source: PyTestDataSource,
     output_source: PyTestDataSource,
-    rpc_url: Option<String>,
+    rpc_url: String,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         crate::execute::setup_test_evm_data(
@@ -1863,8 +1863,8 @@ fn setup_test_evm_data(
 /// deploys the solidity verifier
 #[pyfunction(signature = (
     addr_path,
+    rpc_url,
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE),
-    rpc_url=None,
     contract_type=ContractType::default(),
     optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
     private_key=None,
@@ -1873,8 +1873,8 @@ fn setup_test_evm_data(
 fn deploy_evm(
     py: Python,
     addr_path: PathBuf,
+    rpc_url: String,
     sol_code_path: PathBuf,
-    rpc_url: Option<String>,
     contract_type: ContractType,
     optimizer_runs: usize,
     private_key: Option<String>,
@@ -1902,9 +1902,9 @@ fn deploy_evm(
 #[pyfunction(signature = (
     addr_path,
     input_data,
+    rpc_url,
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
     sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
-    rpc_url=None,
     optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
     private_key=None
 ))]
@@ -1913,9 +1913,9 @@ fn deploy_da_evm(
     py: Python,
     addr_path: PathBuf,
     input_data: String,
+    rpc_url: String,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
-    rpc_url: Option<String>,
     optimizer_runs: usize,
     private_key: Option<String>,
 ) -> PyResult<Bound<'_, PyAny>> {
@@ -1962,8 +1962,8 @@ fn deploy_da_evm(
 ///
 #[pyfunction(signature = (
     addr_verifier,
+    rpc_url,
     proof_path=PathBuf::from(DEFAULT_PROOF),
-    rpc_url=None,
     addr_da = None,
     addr_vk = None,
 ))]
@@ -1971,8 +1971,8 @@ fn deploy_da_evm(
 fn verify_evm<'a>(
     py: Python<'a>,
     addr_verifier: &'a str,
+    rpc_url: String,
     proof_path: PathBuf,
-    rpc_url: Option<String>,
     addr_da: Option<&'a str>,
     addr_vk: Option<&'a str>,
 ) -> PyResult<Bound<'a, PyAny>> {
