@@ -248,6 +248,7 @@ impl From<PyRunArgs> for RunArgs {
 
 impl Into<PyRunArgs> for RunArgs {
     fn into(self) -> PyRunArgs {
+        let eps = self.get_epsilon();
         PyRunArgs {
             bounded_log_lookup: self.bounded_log_lookup,
             input_scale: self.input_scale,
@@ -266,7 +267,7 @@ impl Into<PyRunArgs> for RunArgs {
             decomp_base: self.decomp_base,
             decomp_legs: self.decomp_legs,
             ignore_range_check_inputs_outputs: self.ignore_range_check_inputs_outputs,
-            epsilon: self.get_epsilon(),
+            epsilon: eps,
         }
     }
 }
