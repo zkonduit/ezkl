@@ -42,6 +42,7 @@ unzip-n = "0.1.2"
 num = "0.4.1"
 tosubcommand = { git = "https://github.com/zkonduit/enum_to_subcommand", package = "tosubcommand", optional = true }
 semver = { version = "1.0.22", optional = true }
+rayon = "1.10.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 serde_json = { version = "1.0.97", features = ["float_roundtrip", "raw_value"] }
