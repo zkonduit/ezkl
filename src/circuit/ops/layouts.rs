@@ -303,6 +303,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     value: &[ValTensor<F>; 1],
     input_scale: F,
     output_scale: F,
+    eps: f64,
 ) -> Result<ValTensor<F>, CircuitError> {
     let input = value[0].clone();
     let input_dims = input.dims();
@@ -317,6 +318,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             &input_evals,
             felt_to_integer_rep(input_scale) as f64,
             felt_to_integer_rep(output_scale) as f64,
+            eps,
         )
         .par_iter()
         .map(|x| Value::known(integer_rep_to_felt(*x)))
@@ -335,7 +337,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     let claimed_output = identity(config, region, &[claimed_output], true)?;
     // divide by input_scale
     let zero_inverse_val =
-        tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64)[0];
+        tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64, eps)[0];
     let zero_inverse = create_constant_tensor(integer_rep_to_felt(zero_inverse_val), 1);
 
     let equal_zero_mask = equals_zero(config, region, &[input.clone()])?;
@@ -473,7 +475,7 @@ pub fn sqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///    Some(&[1, 2, 3, 2, 3, 4, 3, 4, 5]),
 /// &[3, 3],
 /// ).unwrap());
-/// let result = rsqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0.into(), 1.0.into()).unwrap();
+/// let result = rsqrt::<Fp>(&dummy_config, &mut dummy_region, &[x], 1.0.into(), 1.0.into(), f64::EPSILON).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 1, 1, 1, 1, 1, 1, 1, 1]), &[3, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -483,13 +485,21 @@ pub fn rsqrt<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     value: &[ValTensor<F>; 1],
     input_scale: utils::F32,
     output_scale: utils::F32,
+    eps: f64,
 ) -> Result<ValTensor<F>, CircuitError> {
     let sqrt = sqrt(config, region, value, input_scale)?;
 
     let felt_output_scale = integer_rep_to_felt(output_scale.0 as IntegerRep);
     let felt_input_scale = integer_rep_to_felt(input_scale.0 as IntegerRep);
 
-    let recip = recip(config, region, &[sqrt], felt_input_scale, felt_output_scale)?;
+    let recip = recip(
+        config,
+        region,
+        &[sqrt],
+        felt_input_scale,
+        felt_output_scale,
+        eps,
+    )?;
 
     Ok(recip)
 }
@@ -1547,7 +1557,7 @@ pub(crate) fn dynamic_lookup<F: PrimeField + TensorType + PartialOrd + std::hash
 ///      * Creates pairs: (index_input, value_input) for original elements
 ///      * Creates pairs: (index_output, value_output) for permuted elements
 ///      * index_input is a fixed sequence 0,1,2... corresponding to input positions
-///    
+///
 ///    - Core permutation verification:
 ///      * For each (index_input, value_input), verify there exists exactly one
 ///        (index_output, value_output) such that value_input = value_output
@@ -5702,7 +5712,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// &[1, 1, 2, 2],
 /// ).unwrap());
 ///
-/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into()).unwrap();
+/// let result = ln::<Fp>(&dummy_config, &mut dummy_region, &[x], 2.0.into(), f64::EPSILON).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[4, 0, 4, -8]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -5712,6 +5722,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[ValTensor<F>; 1],
     scale: utils::F32,
+    eps: f64,
 ) -> Result<ValTensor<F>, CircuitError> {
     // first generate the claimed val
 
@@ -5882,6 +5893,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[pow2_prior_to_claimed_distance],
         scale_as_felt,
         scale_as_felt * scale_as_felt,
+        eps,
     )?;
 
     let interpolated_distance = pairwise(
@@ -5910,6 +5922,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[pow2_next_to_claimed_distance],
         scale_as_felt,
         scale_as_felt * scale_as_felt,
+        eps,
     )?;
 
     let interpolated_distance_next = pairwise(
@@ -6698,12 +6711,13 @@ pub(crate) fn softmax_axes<F: PrimeField + TensorType + PartialOrd + std::hash::
     input_scale: utils::F32,
     output_scale: utils::F32,
     axes: &[usize],
+    eps: f64,
 ) -> Result<ValTensor<F>, CircuitError> {
     let soft_max_at_scale = move |config: &BaseConfig<F>,
                                   region: &mut RegionCtx<F>,
                                   values: &[ValTensor<F>; 1]|
           -> Result<ValTensor<F>, CircuitError> {
-        softmax(config, region, values, input_scale, output_scale)
+        softmax(config, region, values, input_scale, output_scale, eps)
     };
 
     let output = multi_dim_axes_op(config, region, values, axes, soft_max_at_scale)?;
@@ -6718,6 +6732,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
     values: &[ValTensor<F>; 1],
     input_scale: utils::F32,
     output_scale: utils::F32,
+    eps: f64,
 ) -> Result<ValTensor<F>, CircuitError> {
     let is_assigned = values[0].all_prev_assigned();
     let mut input = values[0].clone();
@@ -6736,6 +6751,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
         &[denom],
         input_felt_scale,
         output_felt_scale,
+        eps,
     )?;
     // product of num * (1 / denom) = input_scale * output_scale
     pairwise(config, region, &[input, inv_denom], BaseOp::Mult)
@@ -6760,7 +6776,7 @@ pub(crate) fn percent<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>
 ///     Some(&[2, 2, 3, 2, 2, 0]),
 ///     &[2, 3],
 /// ).unwrap());
-/// let result = softmax::<Fp>(&dummy_config, &mut dummy_region, &[x], 128.0.into(), (128.0 * 128.0).into()).unwrap();
+/// let result = softmax::<Fp>(&dummy_config, &mut dummy_region, &[x], 128.0.into(), (128.0 * 128.0).into(), f64::EPSILON).unwrap();
 /// // doubles the scale of the input
 /// let expected = Tensor::<IntegerRep>::new(Some(&[350012, 350012, 352768, 350012, 350012, 344500]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
@@ -6771,6 +6787,7 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     values: &[ValTensor<F>; 1],
     input_scale: utils::F32,
     output_scale: utils::F32,
+    eps: f64,
 ) -> Result<ValTensor<F>, CircuitError> {
     // get the max then subtract it
     let max_val = max(config, region, values)?;
@@ -6787,7 +6804,14 @@ pub fn softmax<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         },
     )?;
 
-    percent(config, region, &[ex.clone()], input_scale, output_scale)
+    percent(
+        config,
+        region,
+        &[ex.clone()],
+        input_scale,
+        output_scale,
+        eps,
+    )
 }
 
 /// Checks that the percent error between the expected public output and the actual output value
