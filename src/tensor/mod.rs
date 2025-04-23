@@ -2033,3 +2033,18 @@ mod tests {
         assert_eq!(a.get_slice(&[0..2, 0..1]).unwrap(), b);
     }
 }
+
+// Commenting out missing modules until they're implemented
+// pub mod integer;
+
+#[cfg(any(feature = "macos-metal", feature = "ios-metal"))]
+pub mod metal;
+
+// pub mod boolean;
+// pub mod concrete;
+// pub mod field;
+// pub mod helpers;
+// pub mod lookup;
+// pub mod quantization;
+// pub mod range;
+// pub mod witness;
