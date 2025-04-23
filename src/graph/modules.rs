@@ -297,26 +297,22 @@ impl GraphModules {
         let mut polycommit = None;
 
         if element_visibility.is_hashed() {
-            let field_elements = inputs.iter().fold(vec![], |mut acc, x| {
-                let res = ModulePoseidon::run(x.to_vec()).unwrap()[0].clone();
-                acc.extend(res);
-                acc
-            });
+            let field_elements = inputs.iter().flat_map(|x| {
+                ModulePoseidon::run(x.to_vec()).unwrap()[0].clone()
+            }).collect();
             poseidon_hash = Some(field_elements);
         }
 
         if element_visibility.is_polycommit() {
             if let Some(vk) = vk {
                 if let Some(srs) = srs {
-                    let commitments = inputs.iter().fold(vec![], |mut acc, x| {
-                        let res = PolyCommitChip::commit::<Scheme>(
+                    let commitments = inputs.iter().map(|x| {
+                        PolyCommitChip::commit::<Scheme>(
                             x.to_vec(),
                             (vk.cs().blinding_factors() + 1) as u32,
                             srs,
-                        );
-                        acc.push(res);
-                        acc
-                    });
+                        )
+                    }).collect();
                     polycommit = Some(commitments);
                 } else {
                     log::warn!("no srs provided for polycommit. processed value will be none");
