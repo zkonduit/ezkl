@@ -67,6 +67,9 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Debug secrets
+        run: |
+          echo "Has token? [${{ secrets.VERIFICATION_EZKL_TOKEN != '' }}]"
       - name: Authorise private Git dependencies
         run: |
           # Abort early if the secret is empty
