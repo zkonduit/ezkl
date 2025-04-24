@@ -11,6 +11,7 @@ use ezkl::pfsys::metal_msm_accelerator::{
     accelerate_age_verification_msm,
     memory_optimized_age_verification_msm,
     performance_optimized_age_verification_msm,
+    msm_optimized,
 };
 use ezkl::circuit::metal_optimize::{
     AgeVerificationOptimizer,
@@ -21,6 +22,9 @@ use ezkl::circuit::metal_optimize::{
 use halo2curves::bn256::{Fr, G1Affine, G1};
 use rand::rngs::OsRng;
 use std::time::Instant;
+use ezkl::RunArgs;
+use rand::thread_rng;
+use halo2_proofs::arithmetic::Field;
 
 /// Generate random data for MSM testing
 fn generate_test_data(size: usize) -> (Vec<G1Affine>, Vec<Fr>) {
@@ -238,4 +242,92 @@ fn measure_memory_usage() {
     
     println!("Running memory-optimized accelerator...");
     memory_optimized_accelerator.memory_optimized_msm(&bases, &scalars);
+}
+
+#[cfg(any(feature = "macos-metal", feature = "ios-metal"))]
+mod metal_msm_tests {
+    use ezkl::pfsys::metal_msm_accelerator::{MetalMSMAccelerator, MetalMSMConfig, msm_optimized};
+    use ezkl::RunArgs;
+    use ezkl::circuit::metal_optimize::{
+        optimize_age_verification_circuit,
+        optimize_age_verification_circuit_for_memory,
+        optimize_age_verification_circuit_for_performance,
+    };
+    use halo2curves::bn256::{G1Affine, Fr};
+    use rand::thread_rng;
+    use halo2_proofs::arithmetic::Field;
+    use std::time::Instant;
+
+    #[test]
+    fn test_metal_msm_accelerator_setup() {
+        let config = MetalMSMConfig {
+            window_size: 22,
+            batch_size: 64,
+            use_metal: true,
+            num_threads: 6,
+            age_verification_optimized: true,
+            max_threads: 6,
+            optimization_target: "balanced".to_string(),
+        };
+        
+        MetalMSMAccelerator::setup_for_age_verification(config);
+        
+        // Just testing that the setup doesn't panic
+        assert!(true);
+    }
+    
+    #[test]
+    fn test_optimize_age_verification_circuit() {
+        let mut run_args = RunArgs::default();
+        
+        // Apply optimization
+        optimize_age_verification_circuit(&mut run_args);
+        
+        // Check that settings were updated
+        assert_eq!(run_args.bits, 16);
+        assert_eq!(run_args.lookup_bits, 10);
+    }
+    
+    #[test]
+    fn test_memory_optimization() {
+        let mut run_args = RunArgs::default();
+        
+        // Apply memory optimization
+        optimize_age_verification_circuit_for_memory(&mut run_args);
+        
+        // Check that settings were updated for memory optimization
+        assert_eq!(run_args.bits, 13);
+        assert_eq!(run_args.lookup_bits, 9);
+    }
+    
+    #[test]
+    fn test_performance_optimization() {
+        let mut run_args = RunArgs::default();
+        
+        // Apply performance optimization
+        optimize_age_verification_circuit_for_performance(&mut run_args);
+        
+        // Check that settings were updated for performance optimization
+        assert_eq!(run_args.bits, 18);
+        assert_eq!(run_args.lookup_bits, 12);
+    }
+    
+    #[test]
+    fn benchmark_metal_msm() {
+        // Create test data
+        let n = 10000;
+        let mut rng = thread_rng();
+        
+        let scalars: Vec<Fr> = (0..n).map(|_| Fr::random(&mut rng)).collect();
+        let bases: Vec<G1Affine> = (0..n)
+            .map(|_| G1Affine::random(&mut rng))
+            .collect();
+        
+        // Benchmark Metal MSM
+        let start = Instant::now();
+        let _result = msm_optimized(&bases, &scalars);
+        let duration = start.elapsed();
+        
+        println!("Metal MSM with {} points took: {:?}", n, duration);
+    }
 } 
