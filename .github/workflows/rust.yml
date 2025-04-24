@@ -20,7 +20,7 @@ env:
 
 jobs:
   fr-age-test:
-    needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     permissions:
       contents: read
     runs-on: large-self-hosted
@@ -334,7 +334,7 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
-    needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -572,7 +572,7 @@ jobs:
     permissions:
       contents: read
     runs-on: self-hosted
-    needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -613,7 +613,7 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
-    needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -634,7 +634,7 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
-    needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -676,41 +676,41 @@ jobs:
       - name: Examples
         run: cargo nextest run --release tests_examples
 
-  # python-tests:
-  #   permissions:
-  #     contents: read
-  #   runs-on: non-gpu
-  #   needs: [build, library-tests, docs]
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  #       with:
-  #         persist-credentials: false
-  #     - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
-  #       with:
-  #         python-version: "3.12"
-  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-02-17
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - name: Install cmake
-  #       run: sudo apt-get install -y cmake
-  #     # - name: Install solc
-  #     #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
-  #     - name: Setup Virtual Env and Install python dependencies
-  #       run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
-  #     - name: Install Anvil
-  #       run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
-  #     - name: Build python ezkl
-  #       run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
-  #     - name: Run pytest
-  #       run: source .env/bin/activate; pip install pytest-asyncio; pytest -vv
+  python-tests:
+    permissions:
+      contents: read
+    runs-on: non-gpu
+    needs: [build, library-tests, docs]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
+        with:
+          python-version: "3.12"
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+        with:
+          toolchain: nightly-2025-02-17
+          override: true
+          components: rustfmt, clippy
+      - name: Install cmake
+        run: sudo apt-get install -y cmake
+      # - name: Install solc
+      #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+      - name: Setup Virtual Env and Install python dependencies
+        run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt;
+      - name: Install Anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
+      - name: Build python ezkl
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
+      - name: Run pytest
+        run: source .env/bin/activate; pip install pytest-asyncio; pytest -vv
 
   accuracy-measurement-tests:
     permissions:
       contents: read
     runs-on: non-gpu
-    needs: [build, library-tests, docs]
+    needs: [build, library-tests, docs, python-tests, python-integration-tests]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -740,158 +740,158 @@ jobs:
       - name: Public outputs + resources
         run: source .env/bin/activate; cargo nextest run --verbose tests::resources_accuracy_measurement_public_outputs_
 
-  # python-integration-tests:
-  #   permissions:
-  #     contents: read
-  #   runs-on: large-self-hosted
-  #   services:
-  #     # Label used to access the service container
-  #     postgres:
-  #       # Docker Hub image
-  #       image: postgres
-  #       env:
-  #         POSTGRES_USER: ubuntu
-  #         POSTGRES_HOST_AUTH_METHOD: trust
-  #       # Set health checks to wait until postgres has started
-  #       options: >-
-  #         --health-cmd pg_isready
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
-  #         -v /var/run/postgresql:/var/run/postgresql
-  #       ports:
-  #         # Maps tcp port 5432 on service container to the host
-  #         - 5432:5432
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  #       with:
-  #         persist-credentials: false
-  #     - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
-  #       with:
-  #         python-version: "3.11"
-  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-02-17
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
-  #       with:
-  #         crate: cargo-nextest
-  #         locked: true
-  #     # - name: Install solc
-  #     #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
-  #     - name: Install Anvil
-  #       run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
-  #     - name: Install pip
-  #       run: python -m ensurepip --upgrade
-  #     - name: Setup Virtual Env and Install python dependencies
-  #       run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt; python -m ensurepip --upgrade
-  #     - name: Build python ezkl
-  #       run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
-  #     - name: Cat and Dog notebook
-  #       run: source .env/bin/activate; cargo nextest run py_tests::tests::cat_and_dog_notebook_
-  #     - name: All notebooks
-  #       run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
-  #     - name: Voice tutorial
-  #       run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
-  #     - name: Neural bow
-  #       run: source .env/bin/activate; cargo nextest run py_tests::tests::neural_bag_of_words_ --no-capture
-  #     - name: Felt conversion
-  #       run: source .env/bin/activate; cargo nextest run py_tests::tests::felt_conversion_test_ --no-capture
-  #     - name: Postgres tutorials
-  #       run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --no-capture
-  #     - name: Tictactoe tutorials
-  #       run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
-  #     # - name: authenticate-kaggle-cli
-  #     #   shell: bash
-  #     #   env:
-  #     #     KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
-  #     #   run: |
-  #     #     mkdir /home/ubuntu/.kaggle
-  #     #     # now dump the contents of the file into a file called kaggle.json
-  #     #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
-  #     #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
-  #     - name: NBEATS tutorial
-  #       run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
-  #     # - name: Reusable verifier tutorial
-  #     # run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_
+  python-integration-tests:
+    permissions:
+      contents: read
+    runs-on: large-self-hosted
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        env:
+          POSTGRES_USER: ubuntu
+          POSTGRES_HOST_AUTH_METHOD: trust
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          -v /var/run/postgresql:/var/run/postgresql
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
+        with:
+          python-version: "3.11"
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+        with:
+          toolchain: nightly-2025-02-17
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+        with:
+          crate: cargo-nextest
+          locked: true
+      # - name: Install solc
+      #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
+      - name: Install Anvil
+        run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
+      - name: Install pip
+        run: python -m ensurepip --upgrade
+      - name: Setup Virtual Env and Install python dependencies
+        run: python -m venv .env --clear; source .env/bin/activate; pip install -r requirements.txt; python -m ensurepip --upgrade
+      - name: Build python ezkl
+        run: source .env/bin/activate; unset CONDA_PREFIX; maturin develop --features python-bindings --profile=test-runs
+      - name: Cat and Dog notebook
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::cat_and_dog_notebook_
+      - name: All notebooks
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::run_notebook_ --test-threads 1
+      - name: Voice tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::voice_
+      - name: Neural bow
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::neural_bag_of_words_ --no-capture
+      - name: Felt conversion
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::felt_conversion_test_ --no-capture
+      - name: Postgres tutorials
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --no-capture
+      - name: Tictactoe tutorials
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
+      # - name: authenticate-kaggle-cli
+      #   shell: bash
+      #   env:
+      #     KAGGLE_API_KEY: ${{ secrets.KAGGLE_API_KEY }}
+      #   run: |
+      #     mkdir /home/ubuntu/.kaggle
+      #     # now dump the contents of the file into a file called kaggle.json
+      #     echo $KAGGLE_API_KEY > /home/ubuntu/.kaggle/kaggle.json
+      #     chmod 600 /home/ubuntu/.kaggle/kaggle.json
+      - name: NBEATS tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
+      # - name: Reusable verifier tutorial
+      # run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_
 
-  # ios-integration-tests:
-  #   permissions:
-  #     contents: read
-  #   runs-on: macos-latest
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  #       with:
-  #         persist-credentials: false
-  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-02-17
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
-  #       with:
-  #         crate: cargo-nextest
-  #         locked: true
-  #     - name: Run ios tests
-  #       run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-02-17-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
+  ios-integration-tests:
+    permissions:
+      contents: read
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+        with:
+          toolchain: nightly-2025-02-17
+          override: true
+          components: rustfmt, clippy
+      - uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3  #v3.3.0
+        with:
+          crate: cargo-nextest
+          locked: true
+      - name: Run ios tests
+        run: CARGO_BUILD_TARGET=aarch64-apple-darwin RUSTUP_TOOLCHAIN=nightly-2025-02-17-aarch64-apple-darwin cargo test --test ios_integration_tests --features ios-bindings-test --no-default-features
 
-  # swift-package-tests:
-  #   permissions:
-  #     contents: read
-  #   runs-on: macos-latest
-  #   needs: []
+  swift-package-tests:
+    permissions:
+      contents: read
+    runs-on: macos-latest
+    needs: [ios-integration-tests]
 
-  #   steps:
-  #     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
-  #       with:
-  #         persist-credentials: false
-  #     - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
-  #       with:
-  #         toolchain: nightly-2025-02-17
-  #         override: true
-  #         components: rustfmt, clippy
-  #     - name: Build EzklCoreBindings
-  #       run: CONFIGURATION=debug cargo run --bin ios_gen_bindings --features "ios-bindings uuid camino uniffi_bindgen" --no-default-features
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
+        with:
+          toolchain: nightly-2025-02-17
+          override: true
+          components: rustfmt, clippy
+      - name: Build EzklCoreBindings
+        run: CONFIGURATION=debug cargo run --bin ios_gen_bindings --features "ios-bindings uuid camino uniffi_bindgen" --no-default-features
 
-  #     - name: Clone ezkl-swift- repository
-  #       run: |
-  #         git clone https://github.com/zkonduit/ezkl-swift-package.git
+      - name: Clone ezkl-swift- repository
+        run: |
+          git clone https://github.com/zkonduit/ezkl-swift-package.git
 
-  #     - name: Copy EzklCoreBindings
-  #       run: |
-  #         rm -rf ezkl-swift-package/Sources/EzklCoreBindings
-  #         cp -r build/EzklCoreBindings ezkl-swift-package/Sources/
+      - name: Copy EzklCoreBindings
+        run: |
+          rm -rf ezkl-swift-package/Sources/EzklCoreBindings
+          cp -r build/EzklCoreBindings ezkl-swift-package/Sources/
 
-  #     - name: Copy Test Files
-  #       run: |
-  #         rm -rf ezkl-swift-package/Tests/EzklAssets/
-  #         mkdir -p ezkl-swift-package/Tests/EzklAssets/
-  #         cp tests/assets/kzg ezkl-swift-package/Tests/EzklAssets/kzg.srs
-  #         cp tests/assets/input.json ezkl-swift-package/Tests/EzklAssets/input.json
-  #         cp tests/assets/model.compiled ezkl-swift-package/Tests/EzklAssets/network.ezkl
-  #         cp tests/assets/settings.json ezkl-swift-package/Tests/EzklAssets/settings.json
+      - name: Copy Test Files
+        run: |
+          rm -rf ezkl-swift-package/Tests/EzklAssets/
+          mkdir -p ezkl-swift-package/Tests/EzklAssets/
+          cp tests/assets/kzg ezkl-swift-package/Tests/EzklAssets/kzg.srs
+          cp tests/assets/input.json ezkl-swift-package/Tests/EzklAssets/input.json
+          cp tests/assets/model.compiled ezkl-swift-package/Tests/EzklAssets/network.ezkl
+          cp tests/assets/settings.json ezkl-swift-package/Tests/EzklAssets/settings.json
 
-  #     - name: Set up Xcode environment
-  #       run: |
-  #         sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-  #         sudo xcodebuild -license accept
+      - name: Set up Xcode environment
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          sudo xcodebuild -license accept
 
-  #     - name: Run Package Tests
-  #       run: |
-  #         cd ezkl-swift-package
-  #         xcodebuild test \
-  #           -scheme EzklPackage \
-  #           -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
-  #           -resultBundlePath ../testResults
+      - name: Run Package Tests
+        run: |
+          cd ezkl-swift-package
+          xcodebuild test \
+            -scheme EzklPackage \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+            -resultBundlePath ../testResults
 
-  #     - name: Run Example App Tests
-  #       run: |
-  #         cd ezkl-swift-package/Example
-  #         xcodebuild test \
-  #           -project Example.xcodeproj \
-  #           -scheme EzklApp \
-  #           -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
-  #           -parallel-testing-enabled NO \
-  #           -resultBundlePath ../../exampleTestResults \
-  #           -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder
+      - name: Run Example App Tests
+        run: |
+          cd ezkl-swift-package/Example
+          xcodebuild test \
+            -project Example.xcodeproj \
+            -scheme EzklApp \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=17.5' \
+            -parallel-testing-enabled NO \
+            -resultBundlePath ../../exampleTestResults \
+            -skip-testing:EzklAppUITests/EzklAppUITests/testButtonClicksInOrder

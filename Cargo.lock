@@ -2440,6 +2440,7 @@ dependencies = [
 
 [[package]]
 name = "halo2_solidity_verifier"
+source = "git+https://github.com/zkonduit/verificaiton-ezkl#fcf7cb1e00eedffc4097ada961b947fff13dc02e"
 version = "0.1.0"
 dependencies = [
  "askama",
