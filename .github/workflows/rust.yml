@@ -17,7 +17,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:
   fr-age-test:
@@ -29,6 +28,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -49,6 +56,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -65,6 +80,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -81,6 +104,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -139,6 +170,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -172,6 +211,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -205,6 +252,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -225,6 +280,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -273,6 +336,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -340,6 +411,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -459,6 +538,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -578,6 +665,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: dtolnay/rust-toolchain@4f94fbe7e03939b0e674bcc9ca609a16088f63ff  #nightly branch, TODO: update when required
         with:
           toolchain: nightly-2025-02-17
@@ -619,6 +714,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -640,6 +743,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -665,6 +776,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -686,6 +805,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.12"
@@ -716,6 +843,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.12"
@@ -767,6 +902,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa  #v4.8.0
         with:
           python-version: "3.11"
@@ -825,6 +968,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
@@ -847,6 +998,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
+      - name: Authorise private Git dependencies   
+        env:
+          TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
+        run: |
+          git config --global \
+            url."https://${TOKEN}:x-oauth-basic@github.com/".insteadOf \
+            "https://github.com/"
+
       - uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f  #v1.0.6
         with:
           toolchain: nightly-2025-02-17
