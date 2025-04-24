@@ -246,6 +246,16 @@ abigen!(
 );
 
 #[derive(Debug, thiserror::Error)]
+enum RescaleCheckError {
+    #[error("rescaled instance #{idx} mismatch: expected {expected}, got {got}")]
+    Mismatch {
+        idx: usize,
+        expected: String,
+        got: String,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum EthError {
     #[error("a transport error occurred: {0}")]
     Transport(#[from] RpcError<TransportErrorKind>),
@@ -294,6 +304,8 @@ pub enum EthError {
     NoContractOutput,
     #[error("failed to load vka data: {0}")]
     VkaData(String),
+    #[error("rescaled‑instance mismatch: {0}")]
+    RescaleCheckError(#[from] RescaleCheckError),
 }
 
 // we have to generate these two contract differently because they are generated dynamically ! and hence the static compilation from above does not suit
@@ -635,6 +647,14 @@ pub async fn verify_proof_via_solidity(
     rpc_url: Option<&str>,
 ) -> Result<bool, EthError> {
     let flattened_instances = proof.instances.into_iter().flatten();
+    let instances_len = flattened_instances.clone().collect_vec().len();
+    println!(
+        "flattened instances: {:#?} len: {:#?}",
+        flattened_instances.clone().collect_vec(),
+        instances_len
+    );
+    // print the pretty public inputs on the proof
+    println!("public inputs: {:#?}", proof.pretty_public_inputs);
 
     // Load the vka, which is bincode serialized, from the vka_path
     let vka_buf: Option<Vec<[u8; 32]>> = match vka_path {
@@ -664,6 +684,33 @@ pub async fn verify_proof_via_solidity(
     }
     let result = result?;
     debug!("result: {:#?}", result.to_vec());
+    // if result is larger than 32
+    if result.to_vec().len() > 32 {
+        // From result[96..], iterate through 32 byte chunks converting them to U256
+        let rescaled_instances = result.to_vec()[96..]
+            .chunks_exact(32)
+            .map(|chunk| U256::from_be_slice(chunk).to_string())
+            .collect::<Vec<_>>();
+        println!("rescaled_instances: {:#?}", rescaled_instances);
+        if let Some(pretty) = &proof.pretty_public_inputs {
+            // 1️⃣ collect reference decimals --------------------------------------
+            let mut refs = pretty.rescaled_inputs.clone();
+            refs.extend(pretty.rescaled_outputs.clone()); // extend inputs with outputs
+            let reference: Vec<String> = refs.into_iter().flatten().collect();
+
+            // 2️⃣ compare element‑wise -------------------------------------------
+            for (idx, (inst, exp)) in rescaled_instances.iter().zip(reference.iter()).enumerate() {
+                if !scaled_matches(inst, exp) {
+                    return Err(EthError::RescaleCheckError(RescaleCheckError::Mismatch {
+                        idx,
+                        expected: exp.clone(),
+                        got: to_decimal_18(inst),
+                    }));
+                }
+            }
+            debug!("✅ all rescaled instances match their expected values");
+        }
+    }
     // decode return bytes value into uint8
     let result = result.to_vec()[..32]
         .last()
@@ -1054,6 +1101,74 @@ pub async fn get_contract_artifacts(
     };
 
     Ok((abi, bytecode, runtime_bytecode))
+}
+
+/// Convert a 1e‑18 fixed‑point **integer string** into a decimal string.
+///
+/// `"1541748046875000000"` → `"1.541748046875000000"`  
+/// `"273690402507781982"`  → `"0.273690402507781982"`
+fn to_decimal_18(s: &str) -> String {
+    let s = s.trim_start_matches('0');
+    if s.is_empty() {
+        return "0".into();
+    }
+    if s.len() <= 18 {
+        // pad on the left so we always have exactly 18 fraction digits
+        return format!("0.{:0>18}", s);
+    }
+    let split = s.len() - 18;
+    format!("{}.{}", &s[..split], &s[split..]) // ← correct slice here
+}
+
+/// “Banker’s‐round” comparison:  compare the **decimal** produced
+/// by `instance` to the reference string `expected`.
+///
+/// *  All digits present in `expected` (integer part **and** fraction)
+///    must match exactly.
+/// *  Excess digits in `instance` are ignored **unless** the very first
+///    excess digit ≥ 5; in that case we round the last compared digit
+///    and check again.
+fn scaled_matches(instance: &str, expected: &str) -> bool {
+    let inst_dec = to_decimal_18(instance);
+    let (inst_int, inst_frac) = inst_dec.split_once('.').unwrap_or((&inst_dec, ""));
+    let (exp_int, exp_frac) = expected.split_once('.').unwrap_or((expected, ""));
+
+    // integer part must be identical
+    if inst_int != exp_int {
+        return false;
+    }
+
+    // fraction‑part comparison with optional rounding
+    let cmp_len = exp_frac.len();
+    let inst_cmp = &inst_frac[..cmp_len.min(inst_frac.len())];
+    let trailing = inst_frac.chars().nth(cmp_len).unwrap_or('0');
+
+    if inst_cmp == exp_frac {
+        true // exact match
+    } else if trailing >= '5' {
+        // need to round
+        // round the inst_cmp (string) up by one ulp
+        let mut rounded = inst_cmp.chars().collect::<Vec<_>>();
+        let mut carry = true;
+        for d in rounded.iter_mut().rev() {
+            if !carry {
+                break;
+            }
+            let v = d.to_digit(10).unwrap() + 1;
+            *d = char::from_digit(v % 10, 10).unwrap();
+            carry = v == 10;
+        }
+        if carry {
+            // 0.999… → 1.000…
+            return exp_int
+                == &(num::BigUint::parse_bytes(exp_int.as_bytes(), 10).unwrap() + 1u32)
+                    .to_string()
+                && exp_frac.chars().all(|c| c == '0');
+        }
+        rounded.into_iter().collect::<String>() == exp_frac
+    } else {
+        false
+    }
 }
 
 /// Sets the constants stored in the da verifier
