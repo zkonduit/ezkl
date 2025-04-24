@@ -384,7 +384,7 @@ pub async fn deploy_contract_via_solidity(
 
 ///
 pub async fn register_vka_via_rv(
-    rpc_url: Option<&str>,
+    rpc_url: &str,
     private_key: Option<&str>,
     rv_address: H160,
     vka_words: &[[u8; 32]],
@@ -630,7 +630,7 @@ pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     addr: H160,
     vka_path: Option<PathBuf>,
-    rpc_url: Option<&str>,
+    rpc_url: &str,
 ) -> Result<bool, EthError> {
     let flattened_instances = proof.instances.into_iter().flatten();
     let instances_len = flattened_instances.clone().collect_vec().len();
@@ -777,7 +777,7 @@ pub async fn verify_proof_with_data_attestation(
     addr_verifier: H160,
     addr_da: H160,
     vka_path: Option<PathBuf>,
-    rpc_url: Option<&str>,
+    rpc_url: &str,
 ) -> Result<bool, EthError> {
     use ethabi::{Function, Param, ParamType, StateMutability, Token};
 

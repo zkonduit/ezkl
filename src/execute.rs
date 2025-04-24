@@ -1706,7 +1706,7 @@ pub(crate) async fn deploy_evm(
 }
 
 pub(crate) async fn register_vka(
-    rpc_url: Option<String>,
+    rpc_url: String,
     rv_addr: H160Flag,
     vka_path: PathBuf,
     vka_digest_path: PathBuf,
@@ -1717,7 +1717,7 @@ pub(crate) async fn register_vka(
     let vka_buf: Vec<[u8; 32]> = bincode::deserialize(&bytes)
         .map_err(|e| EZKLError::from(format!("Failed to deserialize vka words: {e}")))?;
     let vka_digest = register_vka_via_rv(
-        rpc_url.as_deref(),
+        rpc_url.as_ref(),
         private_key.as_deref(),
         rv_addr.into(),
         &vka_buf,
@@ -1788,7 +1788,7 @@ pub(crate) async fn verify_evm(
             addr_verifier.into(),
             addr_da.into(),
             vka_path.map(|s| s.into()),
-            rpc_url.as_deref(),
+            rpc_url.as_ref(),
         )
         .await?
     } else {
@@ -1796,7 +1796,7 @@ pub(crate) async fn verify_evm(
             proof.clone(),
             addr_verifier.into(),
             vka_path.map(|s| s.into()),
-            rpc_url.as_deref(),
+            rpc_url.as_ref(),
         )
         .await?
     };

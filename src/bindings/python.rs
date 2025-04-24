@@ -1607,22 +1607,15 @@ fn verify_aggr(
 #[pyfunction(signature = (
     proof=PathBuf::from(DEFAULT_PROOF),
     calldata=PathBuf::from(DEFAULT_CALLDATA),
-    addr_vk=None,
+    vka_path=None,
 ))]
 #[gen_stub_pyfunction]
 fn encode_evm_calldata<'a>(
     proof: PathBuf,
     calldata: PathBuf,
-    addr_vk: Option<&'a str>,
+    vka_path: Option<PathBuf>,
 ) -> Result<Vec<u8>, PyErr> {
-    let addr_vk = if let Some(addr_vk) = addr_vk {
-        let addr_vk = H160Flag::from(addr_vk);
-        Some(addr_vk)
-    } else {
-        None
-    };
-
-    crate::execute::encode_evm_calldata(proof, calldata, addr_vk).map_err(|e| {
+    crate::execute::encode_evm_calldata(proof, calldata, vka_path).map_err(|e| {
         let err_str = format!("Failed to generate calldata: {}", e);
         PyRuntimeError::new_err(err_str)
     })
@@ -1702,14 +1695,14 @@ fn create_evm_verifier(
 /// settings_path: str
 ///     The path to the settings file
 ///
-/// sol_code_path: str
-///     The path to the create the solidity verifying key.
-///
-/// abi_path: str
-///     The path to create the ABI for the solidity verifier
+/// vka_path: str
+///     The path to the verification artifact calldata bytes file.
 ///
 /// srs_path: str
 ///     The path to the SRS file
+///
+/// decimals: int
+///    The number of decimals used for the rescaling of fixed point felt instances into on-chain floats.
 ///
 /// Returns
 /// -------
@@ -1718,21 +1711,21 @@ fn create_evm_verifier(
 #[pyfunction(signature = (
     vk_path=PathBuf::from(DEFAULT_VK),
     settings_path=PathBuf::from(DEFAULT_SETTINGS),
-    sol_code_path=PathBuf::from(DEFAULT_VK_SOL),
-    abi_path=PathBuf::from(DEFAULT_VERIFIER_ABI),
-    srs_path=None
+    vka_path=PathBuf::from(DEFAULT_VKA),
+    srs_path=None,
+    decimals=DEFAULT_DECIMALS.parse().unwrap(),
 ))]
 #[gen_stub_pyfunction]
 fn create_evm_vka(
     py: Python,
     vk_path: PathBuf,
     settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    abi_path: PathBuf,
+    vka_path: PathBuf,
     srs_path: Option<PathBuf>,
+    decimals: usize,
 ) -> PyResult<Bound<'_, PyAny>> {
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::create_evm_vka(vk_path, srs_path, settings_path, sol_code_path, abi_path)
+        crate::execute::create_evm_vka(vk_path, srs_path, settings_path, vka_path, decimals)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to run create_evm_verifier: {}", e);
@@ -1743,124 +1736,7 @@ fn create_evm_vka(
     })
 }
 
-/// Creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
-///
-/// Arguments
-/// ---------
-/// input_data: str
-///     The path to the .json data file, which should contain the necessary calldata and account addresses needed to read from all the on-chain view functions that return the data that the network ingests as inputs
-///
-/// settings_path: str
-///     The path to the settings file
-///
-/// sol_code_path: str
-///     The path to the create the solidity verifier
-///
-/// abi_path: str
-///     The path to create the ABI for the solidity verifier
-///
-/// Returns
-/// -------
-/// bool
-///
-#[pyfunction(signature = (
-    input_data=String::from(DEFAULT_DATA),
-    settings_path=PathBuf::from(DEFAULT_SETTINGS),
-    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
-    abi_path=PathBuf::from(DEFAULT_VERIFIER_DA_ABI),
-    witness_path=None,
-))]
-#[gen_stub_pyfunction]
-fn create_evm_data_attestation(
-    py: Python,
-    input_data: String,
-    settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    abi_path: PathBuf,
-    witness_path: Option<PathBuf>,
-) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::create_evm_data_attestation(
-            settings_path,
-            sol_code_path,
-            abi_path,
-            input_data,
-            witness_path,
-        )
-        .await
-        .map_err(|e| {
-            let err_str = format!("Failed to run create_evm_data_attestation: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
-
-        Ok(true)
-    })
-}
-
-/// Setup test evm witness
-///
-/// Arguments
-/// ---------
-/// data_path: str
-///     The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-///
-/// compiled_circuit_path: str
-///     The path to the compiled model file (generated using the compile-circuit command)
-///
-/// test_data: str
-///     For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information derived from the file information in the data .json file. Should include both the network input (possibly private) and the network output (public input to the proof)
-///
-/// input_sources: str
-///     Where the input data comes from
-///
-/// output_source: str
-///     Where the output data comes from
-///
-/// rpc_url: str
-///     RPC URL for an EVM compatible node, if None, uses Anvil as a local RPC node
-///
-/// Returns
-/// -------
-/// bool
-///
-#[pyfunction(signature = (
-    data_path,
-    compiled_circuit_path,
-    test_data,
-    input_source,
-    output_source,
-    rpc_url,
-))]
-#[gen_stub_pyfunction]
-fn setup_test_evm_data(
-    py: Python,
-    data_path: String,
-    compiled_circuit_path: PathBuf,
-    test_data: PathBuf,
-    input_source: PyTestDataSource,
-    output_source: PyTestDataSource,
-    rpc_url: String,
-) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::setup_test_evm_data(
-            data_path,
-            compiled_circuit_path,
-            test_data,
-            rpc_url,
-            input_source.into(),
-            output_source.into(),
-        )
-        .await
-        .map_err(|e| {
-            let err_str = format!("Failed to run setup_test_evm_data: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
-
-        Ok(true)
-    })
-}
-
-/// deploys the solidity verifier
+/// Deploys the solidity verifier
 #[pyfunction(signature = (
     addr_path,
     rpc_url,
@@ -1898,46 +1774,64 @@ fn deploy_evm(
     })
 }
 
-/// deploys the solidity da verifier
+/// Registers a VKA on the EZKL reusable verifier contract
+///
+/// Arguments
+/// ---------
+/// addr_verifier: str
+///     The reusable verifier contract's address as a hex string
+///
+/// rpc_url: str
+///     RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+///
+/// vka_path: str
+///     The path to the VKA calldata bytes file (generated using the create_evm_vka command)
+///
+/// vka_digest_path: str
+///     The path to the VKA digest file, aka hash of the VKA calldata bytes file
+///
+/// private_key: str
+///     The private key to use for signing the transaction. If None, will use the default private key
+///
+/// Returns
+/// -------
+/// bool
+///
 #[pyfunction(signature = (
-    addr_path,
-    input_data,
+    addr_verifier,
     rpc_url,
-    settings_path=PathBuf::from(DEFAULT_SETTINGS),
-    sol_code_path=PathBuf::from(DEFAULT_SOL_CODE_DA),
-    optimizer_runs=DEFAULT_OPTIMIZER_RUNS.parse().unwrap(),
-    private_key=None
+    vka_path=PathBuf::from(DEFAULT_VKA),
+    vka_digest_path=PathBuf::from(DEFAULT_VKA_DIGEST),
+    private_key=None,
 ))]
 #[gen_stub_pyfunction]
-fn deploy_da_evm(
-    py: Python,
-    addr_path: PathBuf,
-    input_data: String,
+fn register_vka<'a>(
+    py: Python<'a>,
+    addr_verifier: &'a str,
     rpc_url: String,
-    settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    optimizer_runs: usize,
+    vka_path: PathBuf,
+    vka_digest_path: PathBuf,
     private_key: Option<String>,
-) -> PyResult<Bound<'_, PyAny>> {
+) -> PyResult<Bound<'a, PyAny>> {
+    let addr_verifier = H160Flag::from(addr_verifier);
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::deploy_da_evm(
-            input_data,
-            settings_path,
-            sol_code_path,
+        crate::execute::register_vka(
             rpc_url,
-            addr_path,
-            optimizer_runs,
+            addr_verifier,
+            vka_path,
+            vka_digest_path,
             private_key,
         )
         .await
         .map_err(|e| {
-            let err_str = format!("Failed to run deploy_da_evm: {}", e);
+            let err_str = format!("Failed to run register_vka: {}", e);
             PyRuntimeError::new_err(err_str)
         })?;
 
         Ok(true)
     })
 }
+
 /// verifies an evm compatible proof, you will need solc installed in your environment to run this
 ///
 /// Arguments
@@ -1965,7 +1859,7 @@ fn deploy_da_evm(
     rpc_url,
     proof_path=PathBuf::from(DEFAULT_PROOF),
     addr_da = None,
-    addr_vk = None,
+    vka_path = None,
 ))]
 #[gen_stub_pyfunction]
 fn verify_evm<'a>(
@@ -1974,7 +1868,7 @@ fn verify_evm<'a>(
     rpc_url: String,
     proof_path: PathBuf,
     addr_da: Option<&'a str>,
-    addr_vk: Option<&'a str>,
+    vka_path: Option<PathBuf>,
 ) -> PyResult<Bound<'a, PyAny>> {
     let addr_verifier = H160Flag::from(addr_verifier);
     let addr_da = if let Some(addr_da) = addr_da {
@@ -1983,15 +1877,9 @@ fn verify_evm<'a>(
     } else {
         None
     };
-    let addr_vk = if let Some(addr_vk) = addr_vk {
-        let addr_vk = H160Flag::from(addr_vk);
-        Some(addr_vk)
-    } else {
-        None
-    };
 
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::verify_evm(proof_path, addr_verifier, rpc_url, addr_da, addr_vk)
+        crate::execute::verify_evm(proof_path, addr_verifier, rpc_url, addr_da, vka_path)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to run verify_evm: {}", e);
@@ -2115,12 +2003,10 @@ fn ezkl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_evm_verifier, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_vka, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_evm, m)?)?;
-    m.add_function(wrap_pyfunction!(deploy_da_evm, m)?)?;
     m.add_function(wrap_pyfunction!(verify_evm, m)?)?;
-    m.add_function(wrap_pyfunction!(setup_test_evm_data, m)?)?;
     m.add_function(wrap_pyfunction!(create_evm_verifier_aggr, m)?)?;
-    m.add_function(wrap_pyfunction!(create_evm_data_attestation, m)?)?;
     m.add_function(wrap_pyfunction!(encode_evm_calldata, m)?)?;
+    m.add_function(wrap_pyfunction!(register_vka, m)?)?;
     Ok(())
 }
 

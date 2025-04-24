@@ -160,30 +160,6 @@ def compile_circuit(model:str | os.PathLike | pathlib.Path,compiled_circuit:str 
     """
     ...
 
-def create_evm_data_attestation(input_data:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,sol_code_path:str | os.PathLike | pathlib.Path,abi_path:str | os.PathLike | pathlib.Path,witness_path:typing.Optional[str | os.PathLike | pathlib.Path]) -> typing.Any:
-    r"""
-    Creates an EVM compatible data attestation verifier, you will need solc installed in your environment to run this
-    
-    Arguments
-    ---------
-    input_data: str
-        The path to the .json data file, which should contain the necessary calldata and account addresses needed to read from all the on-chain view functions that return the data that the network ingests as inputs
-    
-    settings_path: str
-        The path to the settings file
-    
-    sol_code_path: str
-        The path to the create the solidity verifier
-    
-    abi_path: str
-        The path to create the ABI for the solidity verifier
-    
-    Returns
-    -------
-    bool
-    """
-    ...
-
 def create_evm_verifier(vk_path:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,sol_code_path:str | os.PathLike | pathlib.Path,abi_path:str | os.PathLike | pathlib.Path,srs_path:typing.Optional[str | os.PathLike | pathlib.Path],reusable:bool) -> typing.Any:
     r"""
     Creates an EVM compatible verifier, you will need solc installed in your environment to run this
@@ -272,12 +248,6 @@ def create_evm_vka(vk_path:str | os.PathLike | pathlib.Path,settings_path:str | 
     Returns
     -------
     bool
-    """
-    ...
-
-def deploy_da_evm(addr_path:str | os.PathLike | pathlib.Path,input_data:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,sol_code_path:str | os.PathLike | pathlib.Path,rpc_url:typing.Optional[str],optimizer_runs:int,private_key:typing.Optional[str]) -> typing.Any:
-    r"""
-    deploys the solidity da verifier
     """
     ...
 
@@ -706,35 +676,6 @@ def setup_aggregate(sample_snarks:typing.Sequence[str | os.PathLike | pathlib.Pa
     """
     ...
 
-def setup_test_evm_data(data_path:str | os.PathLike | pathlib.Path,compiled_circuit_path:str | os.PathLike | pathlib.Path,test_data:str | os.PathLike | pathlib.Path,input_source:PyTestDataSource,output_source:PyTestDataSource,rpc_url:typing.Optional[str]) -> typing.Any:
-    r"""
-    Setup test evm data
-    
-    Arguments
-    ---------
-    data_path: str
-        The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-    
-    compiled_circuit_path: str
-        The path to the compiled model file (generated using the compile-circuit command)
-    
-    test_data: str
-        For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information derived from the file information in the data .json file. Should include both the network input (possibly private) and the network output (public input to the proof)
-    
-    input_sources: str
-        Where the input data comes from
-    
-    output_source: str
-        Where the output data comes from
-    
-    rpc_url: str
-        RPC URL for an EVM compatible node, if None, uses Anvil as a local RPC node
-    
-    Returns
-    -------
-    bool
-    """
-    ...
 
 def swap_proof_commitments(proof_path:str | os.PathLike | pathlib.Path,witness_path:str | os.PathLike | pathlib.Path) -> None:
     r"""

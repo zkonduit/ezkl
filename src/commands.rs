@@ -299,7 +299,6 @@ impl IntoPy<PyObject> for ContractType {
         match self {
             ContractType::Verifier { reusable: true } => "verifier/reusable".to_object(py),
             ContractType::Verifier { reusable: false } => "verifier".to_object(py),
-            ContractType::VerifyingKeyArtifact => "vka".to_object(py),
         }
     }
 }
@@ -312,7 +311,6 @@ impl<'source> FromPyObject<'source> for ContractType {
         match strval.to_lowercase().as_str() {
             "verifier" => Ok(ContractType::Verifier { reusable: false }),
             "verifier/reusable" => Ok(ContractType::Verifier { reusable: true }),
-            "vka" => Ok(ContractType::VerifyingKeyArtifact),
             _ => Err(PyValueError::new_err("Invalid value for ContractType")),
         }
     }
@@ -949,7 +947,7 @@ pub enum Commands {
     RegisterVka {
         /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: Option<String>,
+        rpc_url: String,
         /// The path to the reusable verifier contract's address
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS, value_hint = clap::ValueHint::Other)]
         addr_verifier: H160Flag,

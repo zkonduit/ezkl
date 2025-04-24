@@ -17,6 +17,13 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # instruct libgit2 to use this token when it sees github.com over HTTPS
+  GIT_HTTP_USER_AGENT: "cargo"
+  CARGO_NET_GIT_FETCH_WITH_CLI: "false"   # libgit2 is OK here
+  # supply credentials through standard git env vars
+  GIT_ASKPASS: "echo"
+  GIT_USERNAME: "x-access-token"
+  GIT_PASSWORD: ${{ secrets.GH_READ_PAT }}
 
 jobs:
   fr-age-test:
