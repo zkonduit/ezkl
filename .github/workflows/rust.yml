@@ -17,7 +17,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
 
 jobs:
   fr-age-test:
@@ -25,6 +24,8 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -57,6 +58,8 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -85,6 +88,8 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -113,6 +118,8 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest-32-cores
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -183,6 +190,8 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -228,6 +237,8 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -273,6 +284,8 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest-16-cores
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -305,6 +318,8 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -365,6 +380,8 @@ jobs:
     permissions:
       contents: read
     runs-on: non-gpu
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -444,6 +461,8 @@ jobs:
       contents: read
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -575,6 +594,8 @@ jobs:
       contents: read
     runs-on: non-gpu
     needs: [build, library-tests, docs]
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -706,6 +727,8 @@ jobs:
       contents: read
     runs-on: self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -759,6 +782,8 @@ jobs:
       contents: read
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -792,6 +817,8 @@ jobs:
       contents: read
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -829,6 +856,8 @@ jobs:
       contents: read
     runs-on: ubuntu-latest-32-cores
     needs: [build, library-tests, docs]
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -862,6 +891,8 @@ jobs:
       contents: read
     runs-on: non-gpu
     needs: [build, library-tests, docs]
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -904,6 +935,8 @@ jobs:
       contents: read
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -967,7 +1000,8 @@ jobs:
         ports:
           # Maps tcp port 5432 on service container to the host
           - 5432:5432
-    steps:
+    env: 
+          steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
@@ -1037,6 +1071,8 @@ jobs:
     permissions:
       contents: read
     runs-on: macos-latest
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -1071,6 +1107,8 @@ jobs:
     runs-on: macos-latest
     needs: [ios-integration-tests]
 
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
