@@ -1000,8 +1000,9 @@ jobs:
         ports:
           # Maps tcp port 5432 on service container to the host
           - 5432:5432
-    env: 
-          steps:
+    env:
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+    steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
           persist-credentials: false
@@ -1031,7 +1032,7 @@ jobs:
           locked: true
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
-      - name: Install Anvil
+      - name: Install Anvil 
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: Install pip
         run: python -m ensurepip --upgrade
@@ -1065,7 +1066,9 @@ jobs:
       - name: NBEATS tutorial
         run: source .env/bin/activate; cargo nextest run py_tests::tests::nbeats_
       # - name: Reusable verifier tutorial
-      # run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_
+      # run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_verifier_ --no-capture
+      - name: Reusable verifier tutorial
+        run: source .env/bin/activate; cargo nextest run py_tests::tests::reusable_verifier_ --no-capture --test-threads 1
 
   ios-integration-tests:
     permissions:
