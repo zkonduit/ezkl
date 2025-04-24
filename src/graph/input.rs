@@ -1,17 +1,17 @@
 use super::errors::GraphError;
 use super::quantize_float;
+use crate::EZKL_BUF_CAPACITY;
 use crate::circuit::InputType;
 use crate::fieldutils::integer_rep_to_felt;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::graph::postgres::Client;
-use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
+#[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
-#[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::BufReader;
 use std::io::BufWriter;
@@ -19,7 +19,7 @@ use std::io::Read;
 use std::panic::UnwindSafe;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::tract_core::{
-    tract_data::{prelude::Tensor as TractTensor, TVec},
+    tract_data::{TVec, prelude::Tensor as TractTensor},
     value::TValue,
 };
 
@@ -201,9 +201,9 @@ impl OnChainSource {
         data: &FileSource,
         scales: Vec<crate::Scale>,
         mut shapes: Vec<Vec<usize>>,
-        rpc: Option<&str>,
+        rpc: &str,
     ) -> Result<Self, GraphError> {
-        use crate::eth::{read_on_chain_inputs, test_on_chain_data, DEFAULT_ANVIL_ENDPOINT};
+        use crate::eth::{read_on_chain_inputs, test_on_chain_data};
         use log::debug;
 
         // Set up local anvil instance for reading on-chain data
@@ -217,7 +217,7 @@ impl OnChainSource {
                 shapes[idx] = vec![i.len()];
             }
         }
-        let used_rpc = rpc.unwrap_or(DEFAULT_ANVIL_ENDPOINT).to_string();
+        let used_rpc = rpc.to_string();
 
         let call_to_account = test_on_chain_data(client.clone(), data).await?;
         debug!("Call to account: {:?}", call_to_account);
@@ -381,7 +381,7 @@ impl GraphData {
                 return Err(GraphError::InvalidDims(
                     0,
                     "non file data cannot be split into batches".to_string(),
-                ))
+                ));
             }
         }
         Ok(inputs)
@@ -434,13 +434,13 @@ impl GraphData {
     /// Loads graph input data from a string, first seeing if it is a file path or JSON data
     /// If it is a file path, it will load the data from the file
     /// Otherwise, it will attempt to parse the string as JSON data
-    /// 
+    ///
     /// # Arguments
     /// * `data` - String containing the input data
     /// # Returns
     /// A new GraphData instance containing the loaded data
     pub fn from_str(data: &str) -> Result<Self, GraphError> {
-        let graph_input = serde_json::from_str(data); 
+        let graph_input = serde_json::from_str(data);
         match graph_input {
             Ok(graph_input) => {
                 return Ok(graph_input);
@@ -515,7 +515,7 @@ impl GraphData {
                 return Err(GraphError::InvalidDims(
                     0,
                     "on-chain data cannot be split into batches".to_string(),
-                ))
+                ));
             }
             #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
             GraphData {
@@ -538,7 +538,6 @@ impl GraphData {
                         input.len(),
                         input_size
                     ),
-                    
                 ));
             }
 

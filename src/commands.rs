@@ -685,9 +685,9 @@ pub enum Commands {
         /// Should include both the network input (possibly private) and the network output (public input to the proof)
         #[arg(short = 'T', long, value_hint = clap::ValueHint::FilePath)]
         test_data: PathBuf,
-        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        /// RPC URL for an Ethereum node
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: Option<String>,
+        rpc_url: String,
         /// where the input data come from
         #[arg(long, default_value = "on-chain", value_hint = clap::ValueHint::Other)]
         input_source: TestDataSource,
@@ -884,9 +884,9 @@ pub enum Commands {
         /// The path to the Solidity code (generated using the create-evm-verifier command)
         #[arg(long, default_value = DEFAULT_SOL_CODE, value_hint = clap::ValueHint::FilePath)]
         sol_code_path: Option<PathBuf>,
-        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
-        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: Option<String>,
+        /// RPC URL for an Ethereum node
+        #[arg(short = 'U', long,  default_value = DEFAULT_CONTRACT_ADDRESS, value_hint = clap::ValueHint::Url)]
+        rpc_url: String,
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS, value_hint = clap::ValueHint::Other)]
         /// The path to output the contract address
         addr_path: Option<PathBuf>,
@@ -912,9 +912,9 @@ pub enum Commands {
         /// The path to the Solidity code
         #[arg(long, default_value = DEFAULT_SOL_CODE_DA, value_hint = clap::ValueHint::FilePath)]
         sol_code_path: Option<PathBuf>,
-        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        /// RPC URL for an Ethereum node
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: Option<String>,
+        rpc_url: String,
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS_DA, value_hint = clap::ValueHint::FilePath)]
         /// The path to output the contract address
         addr_path: Option<PathBuf>,
@@ -934,9 +934,9 @@ pub enum Commands {
         /// The path to verifier contract's address
         #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS, value_hint = clap::ValueHint::Other)]
         addr_verifier: H160Flag,
-        /// RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
+        /// RPC URL for an Ethereum node
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: Option<String>,
+        rpc_url: String,
         /// does the verifier use data attestation ?
         #[arg(long, value_hint = clap::ValueHint::Other)]
         addr_da: Option<H160Flag>,

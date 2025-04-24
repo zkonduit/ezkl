@@ -1655,7 +1655,7 @@ pub(crate) async fn deploy_da_evm(
     data: String,
     settings_path: PathBuf,
     sol_code_path: PathBuf,
-    rpc_url: Option<String>,
+    rpc_url: String,
     addr_path: PathBuf,
     runs: usize,
     private_key: Option<String>,
@@ -1664,7 +1664,7 @@ pub(crate) async fn deploy_da_evm(
         settings_path,
         data,
         sol_code_path,
-        rpc_url.as_deref(),
+        &rpc_url,
         runs,
         private_key.as_deref(),
     )
@@ -1679,7 +1679,7 @@ pub(crate) async fn deploy_da_evm(
 
 pub(crate) async fn deploy_evm(
     sol_code_path: PathBuf,
-    rpc_url: Option<String>,
+    rpc_url: String,
     addr_path: PathBuf,
     runs: usize,
     private_key: Option<String>,
@@ -1691,7 +1691,7 @@ pub(crate) async fn deploy_evm(
     };
     let contract_address = deploy_contract_via_solidity(
         sol_code_path,
-        rpc_url.as_deref(),
+        &rpc_url,
         runs,
         private_key.as_deref(),
         contract_name,
@@ -1774,7 +1774,7 @@ pub(crate) fn encode_evm_calldata(
 pub(crate) async fn verify_evm(
     proof_path: PathBuf,
     addr_verifier: H160Flag,
-    rpc_url: Option<String>,
+    rpc_url: String,
     addr_da: Option<H160Flag>,
     vka_path: Option<PathBuf>,
 ) -> Result<String, EZKLError> {
@@ -1940,7 +1940,7 @@ pub(crate) async fn setup_test_evm_data(
     data_path: String,
     compiled_circuit_path: PathBuf,
     test_data: PathBuf,
-    rpc_url: Option<String>,
+    rpc_url: String,
     input_source: TestDataSource,
     output_source: TestDataSource,
 ) -> Result<String, EZKLError> {

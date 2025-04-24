@@ -97,11 +97,11 @@ impl From<String> for EZKLError {
 
 use std::str::FromStr;
 
-use circuit::{table::Range, CheckMode};
+use circuit::{CheckMode, table::Range};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::Args;
 use fieldutils::IntegerRep;
-use graph::{Visibility, MAX_PUBLIC_SRS};
+use graph::{MAX_PUBLIC_SRS, Visibility};
 use halo2_proofs::poly::{
     ipa::commitment::IPACommitmentScheme, kzg::commitment::KZGCommitmentScheme,
 };
@@ -350,6 +350,16 @@ pub struct RunArgs {
         arg(long, default_value = "false")
     )]
     pub ignore_range_check_inputs_outputs: bool,
+    /// Optional override for epsilon value
+    #[cfg_attr(all(feature = "ezkl", not(target_arch = "wasm32")), arg(long))]
+    pub epsilon: Option<f64>,
+}
+
+impl RunArgs {
+    /// Returns the epsilon value
+    pub fn get_epsilon(&self) -> f64 {
+        self.epsilon.unwrap_or(f64::EPSILON)
+    }
 }
 
 impl Default for RunArgs {
@@ -376,6 +386,7 @@ impl Default for RunArgs {
             decomp_base: 16384,
             decomp_legs: 2,
             ignore_range_check_inputs_outputs: false,
+            epsilon: None,
         }
     }
 }

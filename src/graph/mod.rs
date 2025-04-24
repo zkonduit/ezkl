@@ -786,7 +786,7 @@ pub struct TestOnChainData {
     /// The path to the test witness
     pub data: std::path::PathBuf,
     /// rpc endpoint
-    pub rpc: Option<String>,
+    pub rpc: String,
     /// data sources for the on chain data
     pub data_sources: TestSources,
 }
@@ -1049,7 +1049,7 @@ impl GraphCircuit {
         scales: Vec<crate::Scale>,
     ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
-        let (client, client_address) = setup_eth_backend(Some(&source.rpc), None).await?;
+        let (client, client_address) = setup_eth_backend(&source.rpc, None).await?;
         let input = read_on_chain_inputs(client.clone(), client_address, &source.call).await?;
         let quantized_evm_inputs =
             evm_quantize(client, scales, &input, &source.call.decimals).await?;
@@ -1503,13 +1503,9 @@ impl GraphCircuit {
         // print file data
         debug!("file data: {:?}", file_data);
 
-        let on_chain_data: OnChainSource = OnChainSource::test_from_file_data(
-            &file_data,
-            scales,
-            shapes,
-            test_on_chain_data.rpc.as_deref(),
-        )
-        .await?;
+        let on_chain_data: OnChainSource =
+            OnChainSource::test_from_file_data(&file_data, scales, shapes, &test_on_chain_data.rpc)
+                .await?;
         // Here we update the GraphData struct with the on-chain data
         if input_data.is_some() {
             data.input_data = on_chain_data.clone().into();
