@@ -734,6 +734,12 @@ pub enum Commands {
         /// run sanity checks during calculations (safe or unsafe)
         #[arg(long, default_value = DEFAULT_CHECKMODE, value_hint = clap::ValueHint::Other)]
         check_mode: Option<CheckMode>,
+        /// optimize proving times and memory usage while maintaining soundness
+        #[arg(long, default_value = "false", action = clap::ArgAction::SetTrue)]
+        optimize: bool,
+        /// verify KZG commitments
+        #[arg(long, default_value = "false", action = clap::ArgAction::SetTrue)]
+        verify_kzg: bool,
     },
     /// Encodes a proof into evm calldata
     #[command(name = "encode-evm-calldata")]

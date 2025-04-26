@@ -79,6 +79,40 @@ impl PolyCommitChip {
         );
         advice_commitments
     }
+
+    /// Verify KZG commitments
+    pub fn verify<Scheme: CommitmentScheme<Scalar = Fp, Curve = G1Affine>>(
+        commitments: Vec<G1Affine>,
+        message: Vec<Scheme::Scalar>,
+        num_unusable_rows: u32,
+        params: &Scheme::ParamsVerifier,
+    ) -> bool {
+        let k = params.k();
+        let domain = halo2_proofs::poly::EvaluationDomain::new(2, k);
+        let n = 2_u64.pow(k) - num_unusable_rows as u64;
+        let num_poly = (message.len() / n as usize) + 1;
+        let mut poly = vec![domain.empty_lagrange(); num_poly];
+
+        (0..num_unusable_rows).for_each(|i| {
+            for p in &mut poly {
+                p[(n + i as u64) as usize] = Blind::default().0;
+            }
+        });
+
+        for (i, m) in message.iter().enumerate() {
+            let x = i / (n as usize);
+            let y = i % (n as usize);
+            poly[x][y] = *m;
+        }
+
+        for (i, a) in poly.iter().enumerate() {
+            if !params.verify_lagrange(&commitments[i], a, Blind::default()) {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 impl Module<Fp> for PolyCommitChip {

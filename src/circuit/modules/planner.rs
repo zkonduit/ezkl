@@ -54,6 +54,8 @@ pub struct ModuleLayouter<'a, F: Field, CS: Assignment<F> + 'a> {
     current_module: usize,
     /// num_constants
     total_constants: usize,
+    /// Cache for assigned constants
+    constant_cache: HashMap<Assigned<F>, Cell>,
 }
 
 impl<'a, F: Field, CS: Assignment<F> + 'a> fmt::Debug for ModuleLayouter<'a, F, CS> {
@@ -79,6 +81,7 @@ impl<'a, F: Field, CS: Assignment<F>> ModuleLayouter<'a, F, CS> {
             current_module: 0,
             total_constants: 0,
             _marker: PhantomData,
+            constant_cache: HashMap::default(),
         };
         Ok(ret)
     }
@@ -184,6 +187,19 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
             }
         } else {
             for (constant, advice) in constants_to_assign {
+                // Check if the constant is already assigned
+                if let Some(&cached_cell) = self.constant_cache.get(&constant) {
+                    let region_module = self.region_idx[&advice.region_index];
+                    self.cs.copy(
+                        cached_cell.column,
+                        *self.regions[&region_module][&cached_cell.region_index]
+                            + cached_cell.row_offset,
+                        advice.column,
+                        *self.regions[&region_module][&advice.region_index] + advice.row_offset,
+                    )?;
+                    continue;
+                }
+
                 // read path from OS env
                 let (constant_column, y) = crate::graph::GLOBAL_SETTINGS.with(|settings| {
                     match settings.borrow().as_ref() {
@@ -212,6 +228,17 @@ impl<'a, F: Field, CS: Assignment<F> + 'a + SyncDeps> Layouter<F> for ModuleLayo
                     advice.column,
                     *self.regions[&region_module][&advice.region_index] + advice.row_offset,
                 )?;
+
+                // Cache the assigned constant
+                self.constant_cache.insert(
+                    constant,
+                    Cell {
+                        region_index: advice.region_index,
+                        row_offset: advice.row_offset,
+                        column: advice.column,
+                    },
+                );
+
                 self.total_constants += 1;
             }
         }
