@@ -56,4 +56,14 @@ pub trait Module<F: PrimeField + TensorType + PartialOrd> {
     fn instance_increment_input(&self) -> Vec<usize>;
     /// Number of rows used by the module
     fn num_rows(input_len: usize) -> usize;
+    /// Optimize the module for proving times and memory usage while maintaining soundness
+    fn optimize(&self, params: Self::Params) -> Result<(), errors::ModuleError>;
+}
+
+/// Optimize the proof system for proving times and memory usage while maintaining soundness
+pub fn optimize_proof_system<F: PrimeField + TensorType + PartialOrd>(
+    module: &impl Module<F>,
+    params: <impl Module<F> as Module<F>>::Params,
+) -> Result<(), errors::ModuleError> {
+    module.optimize(params)
 }

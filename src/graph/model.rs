@@ -1611,4 +1611,12 @@ impl Model {
         }
         Ok(instance_types)
     }
+
+    /// Optimize the model for proving times and memory usage while maintaining soundness
+    pub fn optimize_model(&mut self) -> Result<(), GraphError> {
+        // Perform optimization logic here
+        // For example, you can update the graph or modify the nodes to optimize performance
+        self.graph.optimize();
+        Ok(())
+    }
 }

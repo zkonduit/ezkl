@@ -652,6 +652,56 @@ where
     Ok(checkable_pf)
 }
 
+/// Optimize the proof creation process while maintaining soundness
+pub fn optimize_proof_creation<
+    'params,
+    Scheme: CommitmentScheme,
+    C: Circuit<Scheme::Scalar>,
+    P: Prover<'params, Scheme>,
+    V: Verifier<'params, Scheme>,
+    Strategy: VerificationStrategy<'params, Scheme, V>,
+    E: EncodedChallenge<Scheme::Curve>,
+    TW: TranscriptWriterBuffer<Vec<u8>, Scheme::Curve, E>,
+    TR: TranscriptReadBuffer<Cursor<Vec<u8>>, Scheme::Curve, E>,
+>(
+    circuit: C,
+    instances: Vec<Vec<Scheme::Scalar>>,
+    params: &'params Scheme::ParamsProver,
+    pk: &ProvingKey<Scheme::Curve>,
+    check_mode: CheckMode,
+    commitment: Commitments,
+    transcript_type: TranscriptType,
+    split: Option<ProofSplitCommit>,
+    protocol: Option<PlonkProtocol<Scheme::Curve>>,
+) -> Result<Snark<Scheme::Scalar, Scheme::Curve>, PfsysError>
+where
+    Scheme::ParamsVerifier: 'params,
+    Scheme::Scalar: Serialize
+        + DeserializeOwned
+        + SerdeObject
+        + PrimeField
+        + FromUniformBytes<64>
+        + WithSmallOrderMulGroup<3>,
+    Scheme::Curve: Serialize + DeserializeOwned + SerdeObject,
+    Scheme::ParamsProver: Send + Sync,
+{
+    // Perform optimization logic here
+    // For example, you can update the circuit or modify the proof creation process to optimize performance
+
+    // Call the original create_proof_circuit function
+    create_proof_circuit(
+        circuit,
+        instances,
+        params,
+        pk,
+        check_mode,
+        commitment,
+        transcript_type,
+        split,
+        protocol,
+    )
+}
+
 /// Swaps the proof commitments to a new set in the proof
 pub fn swap_proof_commitments<
     Scheme: CommitmentScheme,

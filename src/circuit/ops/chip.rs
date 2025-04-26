@@ -37,13 +37,15 @@ pub enum CheckMode {
     #[default]
     SAFE,
     UNSAFE,
+    OPTIMIZED,
 }
 
 impl std::fmt::Display for CheckMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::Result {
         match self {
             CheckMode::SAFE => write!(f, "safe"),
             CheckMode::UNSAFE => write!(f, "unsafe"),
+            CheckMode::OPTIMIZED => write!(f, "optimized"),
         }
     }
 }
@@ -69,6 +71,7 @@ impl FromStr for CheckMode {
         match s.to_lowercase().as_str() {
             "safe" => Ok(CheckMode::SAFE),
             "unsafe" => Ok(CheckMode::UNSAFE),
+            "optimized" => Ok(CheckMode::OPTIMIZED),
             _ => Err("Invalid value for CheckMode".to_string()),
         }
     }
@@ -80,6 +83,7 @@ impl CheckMode {
         match self {
             CheckMode::SAFE => true,
             CheckMode::UNSAFE => false,
+            CheckMode::OPTIMIZED => true,
         }
     }
 }
@@ -91,6 +95,7 @@ impl IntoPy<PyObject> for CheckMode {
         match self {
             CheckMode::SAFE => "safe".to_object(py),
             CheckMode::UNSAFE => "unsafe".to_object(py),
+            CheckMode::OPTIMIZED => "optimized".to_object(py),
         }
     }
 }
@@ -103,6 +108,7 @@ impl<'source> FromPyObject<'source> for CheckMode {
         match trystr.to_lowercase().as_str() {
             "safe" => Ok(CheckMode::SAFE),
             "unsafe" => Ok(CheckMode::UNSAFE),
+            "optimized" => Ok(CheckMode::OPTIMIZED),
             _ => Err(PyValueError::new_err("Invalid value for CheckMode")),
         }
     }

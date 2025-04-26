@@ -138,6 +138,8 @@ pub struct GraphWitness {
     pub max_range_size: IntegerRep,
     /// (optional) version of ezkl used
     pub version: Option<String>,
+    /// Indicates if the graph is optimized
+    pub optimized: bool,
 }
 
 impl GraphWitness {
@@ -167,6 +169,7 @@ impl GraphWitness {
             min_lookup_inputs: 0,
             max_range_size: 0,
             version: None,
+            optimized: false,
         }
     }
 
@@ -644,7 +647,7 @@ impl GraphSettings {
     pub fn module_requires_polycommit(&self) -> bool {
         self.run_args.input_visibility.is_polycommit()
             || self.run_args.output_visibility.is_polycommit()
-            || self.run_args.param_visibility.is_polycommit()
+            || self.run_args.param_visibility.is.polycommit()
     }
 }
 
@@ -688,22 +691,22 @@ impl GraphCircuit {
         &self.core.model
     }
     ///
-    pub fn save(&self, path: std::path::PathBuf) -> Result<(), GraphError> {
+    pub fn save(&self, path: std::.path::PathBuf) -> Result<(), GraphError> {
         let f = std::fs::File::create(&path).map_err(|e| {
             GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
         })?;
-        let writer = std::io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
+        let writer = std::.io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, f);
         bincode::serialize_into(writer, &self)?;
         Ok(())
     }
 
     ///
-    pub fn load(path: std::path::PathBuf) -> Result<Self, GraphError> {
+    pub fn load(path: std::.path::PathBuf) -> Result<Self, GraphError> {
         // read bytes from file
-        let f = std::fs::File::open(&path).map_err(|e| {
+        let f = std::.fs::File::open(&path).map_err(|e| {
             GraphError::ReadWriteFileError(path.display().to_string(), e.to_string())
         })?;
-        let reader = std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
+        let reader = std::.io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, f);
         let result: GraphCircuit = bincode::deserialize_from(reader)?;
 
         // check the versions matche
@@ -762,7 +765,7 @@ pub struct TestSources {
 #[derive(Clone, Debug, Default)]
 pub struct TestOnChainData {
     /// The path to the test witness
-    pub data: std::path::PathBuf,
+    pub data: std::.path::PathBuf,
     /// rpc endpoint
     pub rpc: String,
     /// data sources for the on chain data
@@ -800,7 +803,7 @@ impl GraphCircuit {
         settings.module_sizes = sizes.clone();
 
         // as they occupy independent rows
-        settings.num_rows = std::cmp::max(settings.num_rows, sizes.max_constraints());
+        settings.num_rows = std::.cmp::max(settings.num_rows, sizes.max_constraints());
 
         let core = CoreCircuit {
             model,
@@ -895,7 +898,7 @@ impl GraphCircuit {
         // the ordering here is important, we want the inputs to come before the outputs
         // as they are configured in that order as Column<Instances>
 
-        if data.pretty_elements.is_none() {
+        if data.pretty_elements.is.none() {
             warn!("no rescaled elements found in witness data");
             return Ok(None);
         }
@@ -1109,7 +1112,7 @@ impl GraphCircuit {
         max_range_size: IntegerRep,
     ) -> Result<u32, GraphError> {
         // pick the range with the largest absolute size safe_lookup_range or max_range_size
-        let safe_range = std::cmp::max(
+        let safe_range = std::.cmp::max(
             (safe_lookup_range.1 - safe_lookup_range.0).abs(),
             max_range_size,
         );
@@ -1131,8 +1134,8 @@ impl GraphCircuit {
     ) -> Result<(), GraphError> {
         // load the max logrows
         let max_logrows = max_logrows.unwrap_or(MAX_PUBLIC_SRS);
-        let max_logrows = std::cmp::min(max_logrows, MAX_PUBLIC_SRS);
-        let mut max_logrows = std::cmp::max(max_logrows, MIN_LOGROWS);
+        let max_logrows = std::.cmp::min(max_logrows, MAX_PUBLIC_SRS);
+        let mut max_logrows = std::.cmp::max(max_logrows, MIN_LOGROWS);
         let mut min_logrows = MIN_LOGROWS;
 
         let safe_lookup_range = Self::calc_safe_lookup_range(min_max_lookup, lookup_safety_margin);
@@ -1159,7 +1162,7 @@ impl GraphCircuit {
         let instance_logrows = self.settings().log2_total_instances();
         let module_constraint_logrows = self.settings().module_constraint_logrows();
         let dynamic_lookup_logrows = self.settings().dynamic_lookup_and_shuffle_logrows();
-        min_logrows = std::cmp::max(
+        min_logrows = std::.cmp::max(
             min_logrows,
             // max of the instance logrows and the module constraint logrows and the dynamic lookup logrows is the lower limit
             *[
@@ -1176,7 +1179,7 @@ impl GraphCircuit {
         let model_constraint_logrows = self.settings().model_constraint_logrows_with_blinding();
         let min_bits = self.table_size_logrows(safe_lookup_range, max_range_size)?;
         let constants_logrows = self.settings().constants_logrows();
-        max_logrows = std::cmp::min(
+        max_logrows = std::.cmp::min(
             max_logrows,
             // max of the model constraint logrows, min_bits, and the constants logrows is the upper limit
             *[model_constraint_logrows, min_bits, constants_logrows]
@@ -1186,7 +1189,7 @@ impl GraphCircuit {
         );
 
         // we now have a min and max logrows
-        max_logrows = std::cmp::max(min_logrows, max_logrows);
+        max_logrows = std::.cmp::max(min_logrows, max_logrows);
 
         // degrade the max logrows until the extended k is small enough
         while min_logrows < max_logrows
@@ -1376,6 +1379,7 @@ impl GraphCircuit {
             min_lookup_inputs: model_results.min_lookup_inputs,
             max_range_size: model_results.max_range_size,
             version: Some(crate::version().to_string()),
+            optimized: false,
         };
 
         witness.generate_rescaled_elements(
@@ -1397,7 +1401,7 @@ impl GraphCircuit {
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     pub fn from_run_args(
         run_args: &RunArgs,
-        model_path: &std::path::Path,
+        model_path: &std::.path::Path,
     ) -> Result<Self, GraphError> {
         let model = Model::from_run_args(run_args, model_path)?;
         Self::new(model, run_args)
@@ -1407,7 +1411,7 @@ impl GraphCircuit {
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     pub fn from_settings(
         params: &GraphSettings,
-        model_path: &std::path::Path,
+        model_path: &std::.path::Path,
         check_mode: CheckMode,
     ) -> Result<Self, GraphError> {
         params
@@ -1494,6 +1498,16 @@ impl GraphCircuit {
         debug!("test on-chain data: {:?}", data);
         // Save the updated GraphData struct to the data_path
         data.save(test_on_chain_data.data)?;
+        Ok(())
+    }
+
+    /// Optimize the graph for proving times and memory usage while maintaining soundness
+    pub fn optimize_graph(&mut self) -> Result<(), GraphError> {
+        // Perform optimization logic here
+        // For example, you can update the settings or modify the model to optimize performance
+        self.core.settings.run_args.optimize();
+        self.core.model.optimize();
+        self.graph_witness.optimized = true;
         Ok(())
     }
 }

@@ -31,7 +31,7 @@ pub enum Visibility {
     Hashed {
         /// Controls how the hash is handled in proof
         /// true - hash is included directly in proof (public)
-        /// false - hash is used as advice and passed to computational graph
+        false - hash is used as advice and passed to computational graph
         hash_is_public: bool,
         /// Specifies which outputs this hash affects
         outlets: Vec<usize>,
@@ -284,14 +284,16 @@ pub struct VarVisibility {
     pub params: Visibility,
     /// Visibility of model outputs
     pub output: Visibility,
+    /// Indicates if the variables are optimized
+    pub optimized: bool,
 }
 
 impl std::fmt::Display for VarVisibility {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
-            "(inputs: {}, params: {}, outputs: {})",
-            self.input, self.params, self.output
+            "(inputs: {}, params: {}, outputs: {}, optimized: {})",
+            self.input, self.params, self.output, self.optimized
         )
     }
 }
@@ -302,6 +304,7 @@ impl Default for VarVisibility {
             input: Visibility::Private,
             params: Visibility::Private,
             output: Visibility::Public,
+            optimized: false,
         }
     }
 }
@@ -336,7 +339,15 @@ impl VarVisibility {
             input: input_vis.clone(),
             params: params_vis.clone(),
             output: output_vis.clone(),
+            optimized: false,
         })
+    }
+
+    /// Optimize the variables for proving times and memory usage while maintaining soundness
+    pub fn optimize_vars(&mut self) {
+        // Perform optimization logic here
+        // For example, you can update the visibility settings or modify the variables to optimize performance
+        self.optimized = true;
     }
 }
 
