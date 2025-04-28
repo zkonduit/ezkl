@@ -1,30 +1,32 @@
-use crate::EZKL_BUF_CAPACITY;
-use crate::circuit::CheckMode;
 use crate::circuit::region::RegionSettings;
+use crate::circuit::CheckMode;
 use crate::commands::CalibrationTarget;
+#[cfg(feature = "eth")]
 use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity, fix_da_sol};
 #[allow(unused_imports)]
+#[cfg(feature = "eth")]
 use crate::eth::{get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
+#[cfg(feature = "eth")]
 use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::{
-    ProofSplitCommit, create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit,
+    create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
 };
 use crate::pfsys::{
-    Snark, StrategyType, TranscriptType, create_keys, load_pk, load_vk, save_params, save_pk,
+    create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit, ProofSplitCommit,
 };
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
+use crate::EZKL_BUF_CAPACITY;
+use crate::{commands::*, EZKLError};
 use crate::{Commitments, RunArgs};
-use crate::{EZKLError, commands::*};
 use colored::Colorize;
 #[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{self, Circuit};
-use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params};
 use halo2_proofs::poly::commitment::{ParamsProver, Verifier};
 use halo2_proofs::poly::ipa::commitment::{IPACommitmentScheme, ParamsIPA};
@@ -37,7 +39,9 @@ use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy as KZGAccumulatorStra
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
+use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer};
+#[cfg(feature = "eth")]
 use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
@@ -48,15 +52,18 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::debug;
 use log::{info, trace, warn};
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use snark_verifier::loader::native::NativeLoader;
-use snark_verifier::system::halo2::Config;
 use snark_verifier::system::halo2::compile;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
+use snark_verifier::system::halo2::Config;
+#[cfg(feature = "eth")]
 use std::fs::File;
 use std::io::BufWriter;
-use std::io::{Cursor, Write};
+use std::io::Cursor;
+#[cfg(feature = "eth")]
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -187,6 +194,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             model.unwrap_or(DEFAULT_MODEL.into()),
             witness.unwrap_or(DEFAULT_WITNESS.into()),
         ),
+        #[cfg(feature = "eth")]
         Commands::CreateEvmVerifier {
             vk_path,
             srs_path,
@@ -205,6 +213,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(feature = "eth")]
         Commands::EncodeEvmCalldata {
             proof_path,
             calldata_path,
@@ -215,6 +224,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             addr_vk,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
+        #[cfg(feature = "eth")]
         Commands::CreateEvmVka {
             vk_path,
             srs_path,
@@ -231,6 +241,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(feature = "eth")]
         Commands::CreateEvmDa {
             settings_path,
             sol_code_path,
@@ -247,6 +258,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(feature = "eth")]
         Commands::CreateEvmVerifierAggr {
             vk_path,
             srs_path,
@@ -292,6 +304,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             disable_selector_compression
                 .unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap()),
         ),
+        #[cfg(feature = "eth")]
         Commands::SetupTestEvmData {
             data,
             compiled_circuit,
@@ -418,6 +431,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
+        #[cfg(feature = "eth")]
         Commands::DeployEvm {
             sol_code_path,
             rpc_url,
@@ -436,6 +450,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(feature = "eth")]
         Commands::DeployEvmDa {
             data,
             settings_path,
@@ -456,6 +471,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(feature = "eth")]
         Commands::VerifyEvm {
             proof_path,
             addr_verifier,
@@ -741,7 +757,11 @@ pub(crate) async fn gen_witness(
         None
     };
 
+    #[cfg(feature = "eth")]
     let mut input = circuit.load_graph_input(&data).await?;
+
+    #[cfg(not(feature = "eth"))]
+    let mut input = circuit.load_graph_input(&data)?;
     #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
     let mut input = circuit.load_graph_input(&data)?;
 
@@ -1444,6 +1464,7 @@ pub(crate) fn mock(
     Ok(String::new())
 }
 
+#[cfg(feature = "eth")]
 pub(crate) async fn create_evm_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1488,6 +1509,7 @@ pub(crate) async fn create_evm_verifier(
     Ok(String::new())
 }
 
+#[cfg(feature = "eth")]
 pub(crate) async fn create_evm_vka(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1528,6 +1550,7 @@ pub(crate) async fn create_evm_vka(
     Ok(String::new())
 }
 
+#[cfg(feature = "eth")]
 pub(crate) async fn create_evm_data_attestation(
     settings_path: PathBuf,
     sol_code_path: PathBuf,
@@ -1604,6 +1627,7 @@ pub(crate) async fn create_evm_data_attestation(
     Ok(String::new())
 }
 
+#[cfg(feature = "eth")]
 pub(crate) async fn deploy_da_evm(
     data: String,
     settings_path: PathBuf,
@@ -1630,6 +1654,7 @@ pub(crate) async fn deploy_da_evm(
     Ok(String::new())
 }
 
+#[cfg(feature = "eth")]
 pub(crate) async fn deploy_evm(
     sol_code_path: PathBuf,
     rpc_url: String,
@@ -1660,6 +1685,7 @@ pub(crate) async fn deploy_evm(
 }
 
 /// Encodes the calldata for the EVM verifier (both aggregated and single proof)
+#[cfg(feature = "eth")]
 pub(crate) fn encode_evm_calldata(
     proof_path: PathBuf,
     calldata_path: PathBuf,
@@ -1685,6 +1711,7 @@ pub(crate) fn encode_evm_calldata(
     Ok(encoded)
 }
 
+#[cfg(feature = "eth")]
 pub(crate) async fn verify_evm(
     proof_path: PathBuf,
     addr_verifier: H160Flag,
@@ -1724,6 +1751,7 @@ pub(crate) async fn verify_evm(
     Ok(String::new())
 }
 
+#[cfg(feature = "eth")]
 pub(crate) async fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1847,6 +1875,7 @@ pub(crate) fn setup(
     Ok(String::new())
 }
 
+#[cfg(feature = "eth")]
 pub(crate) async fn setup_test_evm_data(
     data_path: String,
     compiled_circuit_path: PathBuf,

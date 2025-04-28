@@ -29,19 +29,19 @@ use itertools::Itertools;
 use tosubcommand::ToFlags;
 
 use self::errors::GraphError;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+#[cfg(feature = "eth")]
 use self::input::OnChainSource;
 use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::region::{ConstantsMap, RegionSettings};
-use crate::circuit::table::{RESERVED_BLINDING_ROWS_PAD, Range, Table, num_cols_required};
+use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
-use crate::fieldutils::{IntegerRep, felt_to_f64};
+use crate::fieldutils::{felt_to_f64, IntegerRep};
 use crate::pfsys::PrettyElements;
 use crate::tensor::{Tensor, ValTensor};
-use crate::{EZKL_BUF_CAPACITY, RunArgs};
+use crate::{RunArgs, EZKL_BUF_CAPACITY};
 
 use halo2_proofs::{
     circuit::Layouter,
@@ -56,13 +56,13 @@ use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
-#[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDictMethods;
+#[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
 
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -931,7 +931,7 @@ impl GraphCircuit {
     }
 
     ///
-    #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
+    #[cfg(any(not(feature = "eth"), target_arch = "wasm32"))]
     pub fn load_graph_input(&mut self, data: &GraphData) -> Result<Vec<Tensor<Fp>>, GraphError> {
         let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
@@ -958,7 +958,7 @@ impl GraphCircuit {
     }
 
     ///
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    #[cfg(feature = "eth")]
     pub async fn load_graph_input(
         &mut self,
         data: &GraphData,
@@ -972,7 +972,7 @@ impl GraphCircuit {
             .await
     }
 
-    #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
+    #[cfg(any(not(feature = "eth"), target_arch = "wasm32"))]
     /// Process the data source for the model
     fn process_data_source(
         &mut self,
@@ -985,11 +985,11 @@ impl GraphCircuit {
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
-            DataSource::OnChain(_) => Err(GraphError::OnChainDataSource),
+            _ => Err(GraphError::OnChainDataSource),
         }
     }
 
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    #[cfg(feature = "eth")]
     /// Process the data source for the model
     async fn process_data_source(
         &mut self,
@@ -1019,7 +1019,7 @@ impl GraphCircuit {
     }
 
     /// Prepare on chain test data
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    #[cfg(feature = "eth")]
     pub async fn load_on_chain_data(
         &mut self,
         source: OnChainSource,
@@ -1419,7 +1419,7 @@ impl GraphCircuit {
     }
 
     ///
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    #[cfg(feature = "eth")]
     pub async fn populate_on_chain_test_data(
         &mut self,
         data: &mut GraphData,

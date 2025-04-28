@@ -1,17 +1,17 @@
 use super::errors::GraphError;
 use super::quantize_float;
-use crate::EZKL_BUF_CAPACITY;
 use crate::circuit::InputType;
 use crate::fieldutils::integer_rep_to_felt;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use crate::graph::postgres::Client;
+use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
-#[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
+#[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::BufReader;
 use std::io::BufWriter;
@@ -19,7 +19,7 @@ use std::io::Read;
 use std::panic::UnwindSafe;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::tract_core::{
-    tract_data::{TVec, prelude::Tensor as TractTensor},
+    tract_data::{prelude::Tensor as TractTensor, TVec},
     value::TValue,
 };
 
@@ -189,6 +189,7 @@ impl OnChainSource {
     }
 
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+    #[cfg(feature = "eth")]
     /// Creates test data for the OnChain data source
     /// Used for testing and development purposes
     ///
