@@ -224,13 +224,11 @@ default = [
     "precompute-coset",
     "no-banner",
     "parallel-poly-read",
-    "eth",
 ]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-async-runtimes", "pyo3-stub-gen"]
 ios-bindings = ["mv-lookup", "precompute-coset", "parallel-poly-read", "uniffi"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
-eth = ["dep:alloy", "dep:foundry-compilers"]
 ezkl = [
     "onnx",
     "dep:colored",
@@ -238,6 +236,8 @@ ezkl = [
     "tabled/color",
     "serde_json/std",
     "colored_json",
+    "dep:alloy",
+    "dep:foundry-compilers",
     "dep:ethabi",
     "dep:indicatif",
     "dep:gag",

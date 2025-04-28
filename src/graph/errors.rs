@@ -106,7 +106,6 @@ pub enum GraphError {
         not(all(target_arch = "wasm32", target_os = "unknown"))
     ))]
     #[error("[eth] {0}")]
-    #[cfg(feature = "eth")]
     EthError(#[from] crate::eth::EthError),
     /// Json error
     #[error("[json] {0}")]
