@@ -1845,11 +1845,8 @@ fn register_vka<'a>(
 /// rpc_url: str
 ///     RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
 ///
-/// addr_da: str
-///     does the verifier use data attestation ?
-///
-/// addr_vk: str
-///     The address of the separate VK contract (if the verifier key is rendered as a separate contract)
+/// vka_path: str
+///     The path to the VKA calldata bytes file (generated using the create_evm_vka command)
 /// Returns
 /// -------
 /// bool
@@ -1858,7 +1855,6 @@ fn register_vka<'a>(
     addr_verifier,
     rpc_url,
     proof_path=PathBuf::from(DEFAULT_PROOF),
-    addr_da = None,
     vka_path = None,
 ))]
 #[gen_stub_pyfunction]
@@ -1867,19 +1863,12 @@ fn verify_evm<'a>(
     addr_verifier: &'a str,
     rpc_url: String,
     proof_path: PathBuf,
-    addr_da: Option<&'a str>,
     vka_path: Option<PathBuf>,
 ) -> PyResult<Bound<'a, PyAny>> {
     let addr_verifier = H160Flag::from(addr_verifier);
-    let addr_da = if let Some(addr_da) = addr_da {
-        let addr_da = H160Flag::from(addr_da);
-        Some(addr_da)
-    } else {
-        None
-    };
 
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::verify_evm(proof_path, addr_verifier, rpc_url, addr_da, vka_path)
+        crate::execute::verify_evm(proof_path, addr_verifier, rpc_url, vka_path)
             .await
             .map_err(|e| {
                 let err_str = format!("Failed to run verify_evm: {}", e);

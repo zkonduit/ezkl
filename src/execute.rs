@@ -2,14 +2,11 @@ use crate::EZKL_BUF_CAPACITY;
 use crate::circuit::CheckMode;
 use crate::circuit::region::RegionSettings;
 use crate::commands::CalibrationTarget;
-use crate::eth::{
-    deploy_contract_via_solidity, deploy_da_verifier_via_solidity, fix_da_sol, register_vka_via_rv,
-};
+use crate::eth::{deploy_contract_via_solidity, register_vka_via_rv};
 #[allow(unused_imports)]
 use crate::eth::{get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
-use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::{
     ProofSplitCommit, create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit,
@@ -233,22 +230,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        Commands::CreateEvmDa {
-            settings_path,
-            sol_code_path,
-            abi_path,
-            data,
-            witness,
-        } => {
-            create_evm_data_attestation(
-                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
-                sol_code_path.unwrap_or(DEFAULT_SOL_CODE_DA.into()),
-                abi_path.unwrap_or(DEFAULT_VERIFIER_DA_ABI.into()),
-                data.unwrap_or(DEFAULT_DATA.into()),
-                witness,
-            )
-            .await
-        }
         Commands::CreateEvmVerifierAggr {
             vk_path,
             srs_path,
@@ -294,24 +275,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             disable_selector_compression
                 .unwrap_or(DEFAULT_DISABLE_SELECTOR_COMPRESSION.parse().unwrap()),
         ),
-        Commands::SetupTestEvmData {
-            data,
-            compiled_circuit,
-            test_data,
-            rpc_url,
-            input_source,
-            output_source,
-        } => {
-            setup_test_evm_data(
-                data.unwrap_or(DEFAULT_DATA.into()),
-                compiled_circuit.unwrap_or(DEFAULT_COMPILED_CIRCUIT.into()),
-                test_data,
-                rpc_url,
-                input_source,
-                output_source,
-            )
-            .await
-        }
         Commands::SwapProofCommitments {
             proof_path,
             witness_path,
@@ -438,38 +401,16 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
-        Commands::DeployEvmDa {
-            data,
-            settings_path,
-            sol_code_path,
-            rpc_url,
-            addr_path,
-            optimizer_runs,
-            private_key,
-        } => {
-            deploy_da_evm(
-                data.unwrap_or(DEFAULT_DATA.into()),
-                settings_path.unwrap_or(DEFAULT_SETTINGS.into()),
-                sol_code_path.unwrap_or(DEFAULT_SOL_CODE_DA.into()),
-                rpc_url,
-                addr_path.unwrap_or(DEFAULT_CONTRACT_ADDRESS_DA.into()),
-                optimizer_runs,
-                private_key,
-            )
-            .await
-        }
         Commands::VerifyEvm {
             proof_path,
             addr_verifier,
             rpc_url,
-            addr_da,
             vka_path,
         } => {
             verify_evm(
                 proof_path.unwrap_or(DEFAULT_PROOF.into()),
                 addr_verifier,
                 rpc_url,
-                addr_da,
                 vka_path,
             )
             .await
@@ -1527,7 +1468,6 @@ pub(crate) async fn create_evm_vka(
     )?;
 
     let num_poseidon_instance = settings.module_sizes.num_instances().iter().sum::<usize>();
-    println!("num_poseidon_instance: {}", num_poseidon_instance);
     let num_fixed_point_instance = settings
         .model_instance_shapes
         .iter()
@@ -1535,8 +1475,6 @@ pub(crate) async fn create_evm_vka(
         .collect_vec();
 
     let scales = settings.get_model_instance_scales();
-    println!("num_fixed_point_instance: {:?}", num_fixed_point_instance);
-    println!("scales: {:?}", scales);
     let vk = load_vk::<KZGCommitmentScheme<Bn256>, GraphCircuit>(vk_path, settings)?;
     trace!("params computed");
     // assert that the decimals must be less than or equal to 38 to prevent overflow
@@ -1574,109 +1512,6 @@ pub(crate) async fn create_evm_vka(
 
     Ok(String::new())
 }
-
-pub(crate) async fn create_evm_data_attestation(
-    settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    abi_path: PathBuf,
-    input: String,
-    witness: Option<PathBuf>,
-) -> Result<String, EZKLError> {
-    #[allow(unused_imports)]
-    use crate::graph::{DataSource, VarVisibility};
-    use crate::{graph::Visibility, pfsys::get_proof_commitments};
-
-    let settings = GraphSettings::load(&settings_path)?;
-
-    let visibility = VarVisibility::from_args(&settings.run_args)?;
-    trace!("params computed");
-
-    // if input is not provided, we just instantiate dummy input data
-    let data =
-        GraphData::from_str(&input).unwrap_or_else(|_| GraphData::new(DataSource::File(vec![])));
-
-    debug!("data attestation data: {:?}", data);
-
-    // The number of input and output instances we attest to for the single call data attestation
-    let mut input_len = None;
-    let mut output_len = None;
-
-    if let Some(DataSource::OnChain(source)) = data.output_data {
-        if visibility.output.is_private() {
-            return Err("private output data on chain is not supported on chain".into());
-        }
-        output_len = Some(source.call.decimals.len());
-    };
-
-    if let DataSource::OnChain(source) = data.input_data {
-        if visibility.input.is_private() {
-            return Err("private input data on chain is not supported on chain".into());
-        }
-        input_len = Some(source.call.decimals.len());
-    };
-
-    // If both model inputs and outputs are attested to then we
-
-    // Read the settings file. Look if either the run_ars.input_visibility, run_args.output_visibility or run_args.param_visibility is KZGCommit
-    // if so, then we need to load the witness
-
-    let commitment_bytes = if settings.run_args.input_visibility == Visibility::KZGCommit
-        || settings.run_args.output_visibility == Visibility::KZGCommit
-        || settings.run_args.param_visibility == Visibility::KZGCommit
-    {
-        let witness = GraphWitness::from_path(witness.unwrap_or(DEFAULT_WITNESS.into()))?;
-        let commitments = witness.get_polycommitments();
-        let proof_first_bytes = get_proof_commitments::<
-            KZGCommitmentScheme<Bn256>,
-            _,
-            EvmTranscript<G1Affine, _, _, _>,
-        >(&commitments);
-
-        Some(proof_first_bytes.unwrap())
-    } else {
-        None
-    };
-
-    let output: String = fix_da_sol(
-        commitment_bytes,
-        input_len.is_none() && output_len.is_none(),
-    )?;
-    let mut f = File::create(sol_code_path.clone())?;
-    let _ = f.write(output.as_bytes());
-    // fetch abi of the contract
-    let (abi, _, _) = get_contract_artifacts(sol_code_path, "DataAttestation", 0).await?;
-    // save abi to file
-    serde_json::to_writer(std::fs::File::create(abi_path)?, &abi)?;
-
-    Ok(String::new())
-}
-
-pub(crate) async fn deploy_da_evm(
-    data: String,
-    settings_path: PathBuf,
-    sol_code_path: PathBuf,
-    rpc_url: String,
-    addr_path: PathBuf,
-    runs: usize,
-    private_key: Option<String>,
-) -> Result<String, EZKLError> {
-    let contract_address = deploy_da_verifier_via_solidity(
-        settings_path,
-        data,
-        sol_code_path,
-        &rpc_url,
-        runs,
-        private_key.as_deref(),
-    )
-    .await?;
-    info!("Contract deployed at: {}", contract_address);
-
-    let mut f = File::create(addr_path)?;
-    write!(f, "{:#?}", contract_address)?;
-
-    Ok(String::new())
-}
-
 pub(crate) async fn deploy_evm(
     sol_code_path: PathBuf,
     rpc_url: String,
@@ -1775,31 +1610,17 @@ pub(crate) async fn verify_evm(
     proof_path: PathBuf,
     addr_verifier: H160Flag,
     rpc_url: String,
-    addr_da: Option<H160Flag>,
     vka_path: Option<PathBuf>,
 ) -> Result<String, EZKLError> {
-    use crate::eth::verify_proof_with_data_attestation;
-
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
-    let result = if let Some(addr_da) = addr_da {
-        verify_proof_with_data_attestation(
-            proof.clone(),
-            addr_verifier.into(),
-            addr_da.into(),
-            vka_path.map(|s| s.into()),
-            rpc_url.as_ref(),
-        )
-        .await?
-    } else {
-        verify_proof_via_solidity(
-            proof.clone(),
-            addr_verifier.into(),
-            vka_path.map(|s| s.into()),
-            rpc_url.as_ref(),
-        )
-        .await?
-    };
+    let result = verify_proof_via_solidity(
+        proof.clone(),
+        addr_verifier.into(),
+        vka_path.map(|s| s.into()),
+        rpc_url.as_ref(),
+    )
+    .await?;
 
     info!("Solidity verification result: {}", result);
 
@@ -1933,41 +1754,6 @@ pub(crate) fn setup(
     };
     save_vk::<G1Affine>(&vk_path, pk.get_vk())?;
     save_pk::<G1Affine>(&pk_path, &pk)?;
-    Ok(String::new())
-}
-
-pub(crate) async fn setup_test_evm_data(
-    data_path: String,
-    compiled_circuit_path: PathBuf,
-    test_data: PathBuf,
-    rpc_url: String,
-    input_source: TestDataSource,
-    output_source: TestDataSource,
-) -> Result<String, EZKLError> {
-    use crate::graph::TestOnChainData;
-
-    let mut data = GraphData::from_str(&data_path)?;
-    let mut circuit = GraphCircuit::load(compiled_circuit_path)?;
-
-    // if both input and output are from files fail
-    if matches!(input_source, TestDataSource::File) && matches!(output_source, TestDataSource::File)
-    {
-        return Err("Both input and output cannot be from files".into());
-    }
-
-    let test_on_chain_data = TestOnChainData {
-        data: test_data.clone(),
-        rpc: rpc_url,
-        data_sources: TestSources {
-            input: input_source,
-            output: output_source,
-        },
-    };
-
-    circuit
-        .populate_on_chain_test_data(&mut data, test_on_chain_data)
-        .await?;
-
     Ok(String::new())
 }
 

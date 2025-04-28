@@ -11,7 +11,6 @@ use tosubcommand::{ToFlags, ToSubcommand};
 use crate::{Commitments, RunArgs, pfsys::ProofType};
 
 use crate::circuit::CheckMode;
-use crate::graph::TestDataSource;
 use crate::pfsys::TranscriptType;
 
 /// The default path to the .json data file
@@ -42,20 +41,14 @@ pub const DEFAULT_SPLIT: &str = "false";
 pub const DEFAULT_VERIFIER_ABI: &str = "verifier_abi.json";
 /// Default verifier abi for aggregated proofs
 pub const DEFAULT_VERIFIER_AGGREGATED_ABI: &str = "verifier_aggr_abi.json";
-/// Default verifier abi for data attestation
-pub const DEFAULT_VERIFIER_DA_ABI: &str = "verifier_da_abi.json";
 /// Default solidity code
 pub const DEFAULT_SOL_CODE: &str = "evm_deploy.sol";
 /// Default calldata path
 pub const DEFAULT_CALLDATA: &str = "calldata.bytes";
 /// Default solidity code for aggregated proofs
 pub const DEFAULT_SOL_CODE_AGGREGATED: &str = "evm_deploy_aggr.sol";
-/// Default solidity code for data attestation
-pub const DEFAULT_SOL_CODE_DA: &str = "evm_deploy_da.sol";
 /// Default contract address
 pub const DEFAULT_CONTRACT_ADDRESS: &str = "contract.address";
-/// Default contract address for data attestation
-pub const DEFAULT_CONTRACT_ADDRESS_DA: &str = "contract_da.address";
 /// Default contract address for vk
 pub const DEFAULT_CONTRACT_ADDRESS_VK: &str = "contract_vk.address";
 /// Default check mode
@@ -669,30 +662,6 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_DISABLE_SELECTOR_COMPRESSION, action = clap::ArgAction::SetTrue)]
         disable_selector_compression: Option<bool>,
     },
-    /// Deploys a test contact that the data attester reads from and creates a data attestation formatted input.json file that contains call data information
-    #[command(arg_required_else_help = true)]
-    SetupTestEvmData {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long, value_hint = clap::ValueHint::FilePath)]
-        data: Option<String>,
-        /// The path to the compiled model file (generated using the compile-circuit command)
-        #[arg(short = 'M', long, value_hint = clap::ValueHint::FilePath)]
-        compiled_circuit: Option<PathBuf>,
-        /// For testing purposes only. The optional path to the .json data file that will be generated that contains the OnChain data storage information
-        /// derived from the file information in the data .json file.
-        /// Should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'T', long, value_hint = clap::ValueHint::FilePath)]
-        test_data: PathBuf,
-        /// RPC URL for an Ethereum node
-        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: String,
-        /// where the input data come from
-        #[arg(long, default_value = "on-chain", value_hint = clap::ValueHint::Other)]
-        input_source: TestDataSource,
-        /// where the output data come from
-        #[arg(long, default_value = "on-chain", value_hint = clap::ValueHint::Other)]
-        output_source: TestDataSource,
-    },
     /// Swaps the positions in the transcript that correspond to commitments
     SwapProofCommitments {
         /// The path to the proof file
@@ -788,30 +757,6 @@ pub enum Commands {
         #[arg(long, default_value = DEFAULT_DECIMALS, value_hint = clap::ValueHint::Other)]
         decimals: Option<usize>,
     },
-    /// TODO: Fetch evm verifier artifact from vka data.
-    /// Creates an Evm verifier that attests to on-chain inputs for a single proof
-    #[command(name = "create-evm-da")]
-    CreateEvmDa {
-        /// The path to load circuit settings .json file from (generated using the gen-settings command)
-        #[arg(short = 'S', long, default_value = DEFAULT_SETTINGS, value_hint = clap::ValueHint::FilePath)]
-        settings_path: Option<PathBuf>,
-        /// The path to output the Solidity code
-        #[arg(long, default_value = DEFAULT_SOL_CODE_DA, value_hint = clap::ValueHint::FilePath)]
-        sol_code_path: Option<PathBuf>,
-        /// The path to output the Solidity verifier ABI
-        #[arg(long, default_value = DEFAULT_VERIFIER_DA_ABI, value_hint = clap::ValueHint::FilePath)]
-        abi_path: Option<PathBuf>,
-        /// The path to the .json data file, which should
-        /// contain the necessary calldata and account addresses
-        /// needed to read from all the on-chain
-        /// view functions that return the data that the network
-        /// ingests as inputs.
-        #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<String>,
-        /// The path to the witness file. This is needed for proof swapping for kzg commitments.
-        #[arg(short = 'W', long, default_value = DEFAULT_WITNESS, value_hint = clap::ValueHint::FilePath)]
-        witness: Option<PathBuf>,
-    },
 
     /// Creates an Evm verifier for an aggregate proof
     #[command(name = "create-evm-verifier-aggr")]
@@ -898,31 +843,6 @@ pub enum Commands {
         #[arg(long = "contract-type", short = 'C', default_value = DEFAULT_CONTRACT_DEPLOYMENT_TYPE, value_hint = clap::ValueHint::Other)]
         contract: ContractType,
     },
-    /// Deploys an evm verifier that allows for data attestation
-    #[command(name = "deploy-evm-da")]
-    DeployEvmDa {
-        /// The path to the .json data file, which should include both the network input (possibly private) and the network output (public input to the proof)
-        #[arg(short = 'D', long, default_value = DEFAULT_DATA, value_hint = clap::ValueHint::FilePath)]
-        data: Option<String>,
-        /// The path to load circuit settings .json file from (generated using the gen-settings command)
-        #[arg(long, default_value = DEFAULT_SETTINGS, value_hint = clap::ValueHint::FilePath)]
-        settings_path: Option<PathBuf>,
-        /// The path to the Solidity code
-        #[arg(long, default_value = DEFAULT_SOL_CODE_DA, value_hint = clap::ValueHint::FilePath)]
-        sol_code_path: Option<PathBuf>,
-        /// RPC URL for an Ethereum node
-        #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
-        rpc_url: String,
-        #[arg(long, default_value = DEFAULT_CONTRACT_ADDRESS_DA, value_hint = clap::ValueHint::FilePath)]
-        /// The path to output the contract address
-        addr_path: Option<PathBuf>,
-        /// The optimizer runs to set on the verifier. (Lower values optimize for deployment, while higher values optimize for execution)
-        #[arg(long, default_value = DEFAULT_OPTIMIZER_RUNS, value_hint = clap::ValueHint::Other)]
-        optimizer_runs: usize,
-        /// Private secp256K1 key in hex format, 64 chars, no 0x prefix, of the account signing transactions. If None the private key will be generated by Anvil
-        #[arg(short = 'P', long, value_hint = clap::ValueHint::Other)]
-        private_key: Option<String>,
-    },
     /// Verifies a proof using a local Evm executor, returning accept or reject
     #[command(name = "verify-evm")]
     VerifyEvm {
@@ -935,9 +855,6 @@ pub enum Commands {
         /// RPC URL for an Ethereum node
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
         rpc_url: String,
-        /// does the verifier use data attestation ?
-        #[arg(long, value_hint = clap::ValueHint::Other)]
-        addr_da: Option<H160Flag>,
         /// The path to the serialized vka file
         #[arg(long, default_value = DEFAULT_VKA, value_hint = clap::ValueHint::FilePath)]
         vka_path: Option<PathBuf>,

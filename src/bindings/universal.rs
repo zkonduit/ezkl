@@ -1,6 +1,7 @@
 use halo2_proofs::{
     plonk::*,
     poly::{
+        VerificationStrategy,
         commitment::{CommitmentScheme, ParamsProver},
         ipa::{
             commitment::{IPACommitmentScheme, ParamsIPA},
@@ -12,7 +13,6 @@ use halo2_proofs::{
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
             strategy::SingleStrategy as KZGSingleStrategy,
         },
-        VerificationStrategy,
     },
 };
 use std::fmt::Display;
@@ -20,15 +20,15 @@ use std::io::BufReader;
 use std::str::FromStr;
 
 use crate::{
+    CheckMode, Commitments, EZKLError as InnerEZKLError,
     circuit::region::RegionSettings,
     graph::GraphSettings,
     pfsys::{
-        create_proof_circuit,
+        TranscriptType, create_proof_circuit,
         evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript},
-        verify_proof_circuit, TranscriptType,
+        verify_proof_circuit,
     },
     tensor::TensorType,
-    CheckMode, Commitments, EZKLError as InnerEZKLError,
 };
 
 use crate::graph::{GraphCircuit, GraphWitness};
@@ -66,26 +66,24 @@ impl From<InnerEZKLError> for EZKLError {
 pub(crate) fn encode_verifier_calldata(
     // TODO - shuold it be pub(crate) or pub or pub(super)?
     proof: Vec<u8>,
-    vk_address: Option<Vec<u8>>,
+    vka: Option<Vec<u8>>,
 ) -> Result<Vec<u8>, EZKLError> {
     let snark: crate::pfsys::Snark<Fr, G1Affine> =
         serde_json::from_slice(&proof[..]).map_err(InnerEZKLError::from)?;
 
-    let vk_address: Option<[u8; 20]> = if let Some(vk_address) = vk_address {
-        let array: [u8; 20] =
-            serde_json::from_slice(&vk_address[..]).map_err(InnerEZKLError::from)?;
+    let vka_buf: Option<Vec<[u8; 32]>> = if let Some(vka) = vka {
+        let array: Vec<[u8; 32]> =
+            serde_json::from_slice(&vka[..]).map_err(InnerEZKLError::from)?;
         Some(array)
     } else {
         None
     };
 
+    let vka: Option<&[[u8; 32]]> = vka_buf.as_deref();
+
     let flattened_instances = snark.instances.into_iter().flatten();
 
-    let encoded = encode_calldata(
-        vk_address,
-        &snark.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
+    let encoded = encode_calldata(vka, &snark.proof, &flattened_instances.collect::<Vec<_>>());
 
     Ok(encoded)
 }

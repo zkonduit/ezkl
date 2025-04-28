@@ -30,7 +30,6 @@ use tosubcommand::ToFlags;
 
 use self::errors::GraphError;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-use self::input::OnChainSource;
 use self::input::{FileSource, GraphData};
 use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSizes};
 use crate::circuit::lookup::LookupOp;
@@ -1021,15 +1020,6 @@ impl GraphCircuit {
         input_types: Vec<InputType>,
     ) -> Result<Vec<Tensor<Fp>>, GraphError> {
         match &data {
-            DataSource::OnChain(source) => {
-                let mut per_item_scale = vec![];
-                for (i, shape) in shapes.iter().enumerate() {
-                    per_item_scale.extend(vec![scales[i]; shape.iter().product::<usize>()]);
-                }
-
-                self.load_on_chain_data(source.clone(), &shapes, per_item_scale)
-                    .await
-            }
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
@@ -1038,30 +1028,6 @@ impl GraphCircuit {
                 self.load_file_data(&data, &shapes, scales, input_types)
             }
         }
-    }
-
-    /// Prepare on chain test data
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    pub async fn load_on_chain_data(
-        &mut self,
-        source: OnChainSource,
-        shapes: &Vec<Vec<usize>>,
-        scales: Vec<crate::Scale>,
-    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
-        use crate::eth::{evm_quantize, read_on_chain_inputs, setup_eth_backend};
-        let (client, client_address) = setup_eth_backend(&source.rpc, None).await?;
-        let input = read_on_chain_inputs(client.clone(), client_address, &source.call).await?;
-        let quantized_evm_inputs =
-            evm_quantize(client, scales, &input, &source.call.decimals).await?;
-        // on-chain data has already been quantized at this point. Just need to reshape it and push into tensor vector
-        let mut inputs: Vec<Tensor<Fp>> = vec![];
-        for (input, shape) in [quantized_evm_inputs].iter().zip(shapes) {
-            let mut t: Tensor<Fp> = input.iter().cloned().collect();
-            t.reshape(shape)?;
-            inputs.push(t);
-        }
-
-        Ok(inputs)
     }
 
     ///
@@ -1438,85 +1404,6 @@ impl GraphCircuit {
             .map_err(GraphError::InvalidRunArgs)?;
         let model = Model::from_run_args(&params.run_args, model_path)?;
         Self::new_from_settings(model, params.clone(), check_mode)
-    }
-
-    ///
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    pub async fn populate_on_chain_test_data(
-        &mut self,
-        data: &mut GraphData,
-        test_on_chain_data: TestOnChainData,
-    ) -> Result<(), GraphError> {
-        // Set up local anvil instance for reading on-chain data
-
-        let input_scales = self.model().graph.get_input_scales();
-        let output_scales = self.model().graph.get_output_scales()?;
-        let input_shapes = self.model().graph.input_shapes()?;
-        let output_shapes = self.model().graph.output_shapes()?;
-        let mut input_data = None;
-        let mut output_data = None;
-
-        if matches!(
-            test_on_chain_data.data_sources.input,
-            TestDataSource::OnChain
-        ) {
-            // if not public then fail
-            if self.settings().run_args.input_visibility.is_private() {
-                return Err(GraphError::OnChainDataSource);
-            }
-
-            input_data = match &data.input_data {
-                DataSource::File(input_data) => Some(input_data),
-                _ => {
-                    return Err(GraphError::MissingDataSource);
-                }
-            };
-        }
-        if matches!(
-            test_on_chain_data.data_sources.output,
-            TestDataSource::OnChain
-        ) {
-            // if not public then fail
-            if self.settings().run_args.output_visibility.is_private() {
-                return Err(GraphError::OnChainDataSource);
-            }
-
-            output_data = match &data.output_data {
-                Some(DataSource::File(output_data)) => Some(output_data),
-                _ => return Err(GraphError::MissingDataSource),
-            };
-        }
-        // Merge the input and output data
-        let mut file_data: Vec<Vec<input::FileSourceInner>> = vec![];
-        let mut scales: Vec<crate::Scale> = vec![];
-        let mut shapes: Vec<Vec<usize>> = vec![];
-        if let Some(input_data) = input_data {
-            file_data.extend(input_data.clone());
-            scales.extend(input_scales.clone());
-            shapes.extend(input_shapes.clone());
-        }
-        if let Some(output_data) = output_data {
-            file_data.extend(output_data.clone());
-            scales.extend(output_scales.clone());
-            shapes.extend(output_shapes.clone());
-        };
-        // print file data
-        debug!("file data: {:?}", file_data);
-
-        let on_chain_data: OnChainSource =
-            OnChainSource::test_from_file_data(&file_data, scales, shapes, &test_on_chain_data.rpc)
-                .await?;
-        // Here we update the GraphData struct with the on-chain data
-        if input_data.is_some() {
-            data.input_data = on_chain_data.clone().into();
-        }
-        if output_data.is_some() {
-            data.output_data = Some(on_chain_data.into());
-        }
-        debug!("test on-chain data: {:?}", data);
-        // Save the updated GraphData struct to the data_path
-        data.save(test_on_chain_data.data)?;
-        Ok(())
     }
 }
 

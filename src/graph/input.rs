@@ -187,46 +187,6 @@ impl OnChainSource {
     pub fn new(call: CallToAccount, rpc: RPCUrl) -> Self {
         OnChainSource { call, rpc }
     }
-
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    /// Creates test data for the OnChain data source
-    /// Used for testing and development purposes
-    ///
-    /// # Arguments
-    /// * `data` - Sample file data to use
-    /// * `scales` - Scaling factors for each input
-    /// * `shapes` - Shapes of the input tensors
-    /// * `rpc` - Optional RPC endpoint override
-    pub async fn test_from_file_data(
-        data: &FileSource,
-        scales: Vec<crate::Scale>,
-        mut shapes: Vec<Vec<usize>>,
-        rpc: &str,
-    ) -> Result<Self, GraphError> {
-        use crate::eth::{read_on_chain_inputs, test_on_chain_data};
-        use log::debug;
-
-        // Set up local anvil instance for reading on-chain data
-        let (client, client_address) = crate::eth::setup_eth_backend(rpc, None).await?;
-
-        let mut scales = scales;
-        // set scales to 1 where data is a field element
-        for (idx, i) in data.iter().enumerate() {
-            if i.iter().all(|e| e.is_field()) {
-                scales[idx] = 0;
-                shapes[idx] = vec![i.len()];
-            }
-        }
-        let used_rpc = rpc.to_string();
-
-        let call_to_account = test_on_chain_data(client.clone(), data).await?;
-        debug!("Call to account: {:?}", call_to_account);
-        let inputs = read_on_chain_inputs(client.clone(), client_address, &call_to_account).await?;
-        debug!("Inputs: {:?}", inputs);
-
-        // Fill the input_data field of the GraphData struct
-        Ok(OnChainSource::new(call_to_account, used_rpc))
-    }
 }
 
 /// Specification for view-only calls to fetch on-chain data
@@ -258,8 +218,6 @@ pub struct CallToAccount {
 pub enum DataSource {
     /// Data from a JSON file containing arrays of values
     File(FileSource),
-    /// Data fetched from blockchain contracts
-    OnChain(OnChainSource),
     /// Data from a PostgreSQL database
     #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     DB(PostgresSource),
@@ -297,12 +255,6 @@ impl From<Vec<Vec<f64>>> for DataSource {
     }
 }
 
-impl From<OnChainSource> for DataSource {
-    fn from(data: OnChainSource) -> Self {
-        DataSource::OnChain(data)
-    }
-}
-
 // Note: Always use JSON serialization for untagged enums
 impl<'de> Deserialize<'de> for DataSource {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -317,17 +269,11 @@ impl<'de> Deserialize<'de> for DataSource {
             return Ok(DataSource::File(t));
         }
 
-        // Try deserializing as OnChainSource
-        let second_try: Result<OnChainSource, _> = serde_json::from_str(this_json.get());
-        if let Ok(t) = second_try {
-            return Ok(DataSource::OnChain(t));
-        }
-
         // Try deserializing as PostgresSource if feature enabled
         #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
         {
-            let third_try: Result<PostgresSource, _> = serde_json::from_str(this_json.get());
-            if let Ok(t) = third_try {
+            let second_try: Result<PostgresSource, _> = serde_json::from_str(this_json.get());
+            if let Ok(t) = second_try {
                 return Ok(DataSource::DB(t));
             }
         }
@@ -508,15 +454,6 @@ impl GraphData {
                 input_data: DataSource::File(data),
                 output_data: _,
             } => data.clone(),
-            GraphData {
-                input_data: DataSource::OnChain(_),
-                output_data: _,
-            } => {
-                return Err(GraphError::InvalidDims(
-                    0,
-                    "on-chain data cannot be split into batches".to_string(),
-                ));
-            }
             #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
             GraphData {
                 input_data: DataSource::DB(data),
@@ -760,13 +697,6 @@ impl ToPyObject for DataSource {
     fn to_object(&self, py: Python) -> PyObject {
         match self {
             DataSource::File(data) => data.to_object(py),
-            DataSource::OnChain(source) => {
-                let dict = PyDict::new(py);
-                dict.set_item("rpc_url", &source.rpc).unwrap();
-                dict.set_item("calls_to_accounts", &source.call.to_object(py))
-                    .unwrap();
-                dict.to_object(py)
-            }
             #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
             DataSource::DB(source) => {
                 let dict = PyDict::new(py);

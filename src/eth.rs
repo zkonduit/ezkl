@@ -1,7 +1,4 @@
-use crate::graph::DataSource;
-use crate::graph::GraphSettings;
-use crate::graph::input::{CallToAccount, CallsToAccount, FileSourceInner, GraphData};
-use crate::graph::modules::POSEIDON_INSTANCES;
+use crate::graph::input::FileSourceInner;
 use crate::pfsys::Snark;
 use crate::pfsys::evm::EvmVerificationError;
 use alloy::contract::CallBuilder;
@@ -9,11 +6,10 @@ use alloy::core::primitives::Address as H160;
 use alloy::core::primitives::Bytes;
 use alloy::core::primitives::U256;
 use alloy::dyn_abi::abi::TokenSeq;
-use alloy::dyn_abi::abi::token::{DynSeqToken, PackedSeqToken, WordToken};
 // use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
 use alloy::primitives::ruint::ParseError;
-use alloy::primitives::{B256, I256, ParseSignedError};
+use alloy::primitives::{I256, ParseSignedError};
 use alloy::providers::ProviderBuilder;
 use alloy::providers::fillers::{
     ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller,
@@ -33,7 +29,6 @@ use foundry_compilers::error::{SolcError, SolcIoError};
 use halo2_solidity_verifier::{encode_calldata, encode_register_vk_calldata};
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
-use itertools::Itertools;
 use log::{debug, info, warn};
 use reqwest::Client;
 use std::path::PathBuf;
@@ -245,7 +240,7 @@ abigen!(
 );
 
 #[derive(Debug, thiserror::Error)]
-enum RescaleCheckError {
+pub enum RescaleCheckError {
     #[error("rescaled instance #{idx} mismatch: expected {expected}, got {got}")]
     Mismatch {
         idx: usize,
@@ -437,193 +432,6 @@ pub async fn register_vka_via_rv(
     Ok(output)
 }
 
-///
-pub async fn deploy_da_verifier_via_solidity(
-    settings_path: PathBuf,
-    input: String,
-    sol_code_path: PathBuf,
-    rpc_url: &str,
-    runs: usize,
-    private_key: Option<&str>,
-) -> Result<H160, EthError> {
-    let (client, client_address) = setup_eth_backend(rpc_url, private_key).await?;
-
-    let input = GraphData::from_str(&input).map_err(|_| EthError::GraphData)?;
-
-    let settings = GraphSettings::load(&settings_path).map_err(|_| EthError::GraphSettings)?;
-
-    let mut scales: Vec<u32> = vec![];
-    // The data that will be stored in the test contracts that will eventually be read from.
-    let mut call_to_account = None;
-
-    let mut instance_shapes = vec![];
-    let mut model_instance_offset = 0;
-
-    if settings.run_args.input_visibility.is_hashed() {
-        instance_shapes.push(POSEIDON_INSTANCES)
-    } else if settings.run_args.input_visibility.is_public() {
-        for idx in 0..settings.model_input_scales.len() {
-            let shape = &settings.model_instance_shapes[idx];
-            instance_shapes.push(shape.iter().product::<usize>());
-            model_instance_offset += 1;
-        }
-    }
-
-    if settings.run_args.param_visibility.is_hashed() {
-        return Err(EvmVerificationError::InvalidVisibility.into());
-    }
-
-    if settings.run_args.output_visibility.is_hashed() {
-        instance_shapes.push(POSEIDON_INSTANCES)
-    } else if settings.run_args.output_visibility.is_public() {
-        for idx in model_instance_offset..model_instance_offset + settings.model_output_scales.len()
-        {
-            let shape = &settings.model_instance_shapes[idx];
-            instance_shapes.push(shape.iter().product::<usize>());
-        }
-    }
-
-    let mut instance_idx = 0;
-    let mut contract_instance_offset = 0;
-
-    if let DataSource::OnChain(source) = input.input_data {
-        if settings.run_args.input_visibility.is_hashed_public() {
-            // set scales 1.0
-            scales.extend(vec![0; instance_shapes[instance_idx]]);
-            instance_idx += 1;
-        } else {
-            let input_scales = settings.clone().model_input_scales;
-            // give each input a scale
-            for scale in input_scales {
-                scales.extend(vec![scale as u32; instance_shapes[instance_idx]]);
-                instance_idx += 1;
-            }
-        }
-        // match statement for enum type of source.call
-        call_to_account = Some(source.call);
-    } else if let DataSource::File(source) = input.input_data {
-        if settings.run_args.input_visibility.is_public() {
-            instance_idx += source.len();
-            for s in source {
-                contract_instance_offset += s.len();
-            }
-        }
-    }
-
-    if let Some(DataSource::OnChain(source)) = input.output_data {
-        if settings.run_args.output_visibility.is_hashed_public() {
-            // set scales 1.0
-            scales.extend(vec![0; instance_shapes[instance_idx]]);
-        } else {
-            let input_scales = settings.clone().model_output_scales;
-            // give each output a scale
-            for scale in input_scales {
-                scales.extend(vec![scale as u32; instance_shapes[instance_idx]]);
-                instance_idx += 1;
-            }
-        }
-        call_to_account = Some(source.call);
-        // match statement for enum type of source.calls
-    }
-
-    deploy_da_contract(
-        client,
-        contract_instance_offset,
-        client_address,
-        scales,
-        call_to_account,
-        sol_code_path,
-        runs,
-        &settings,
-    )
-    .await
-}
-async fn deploy_da_contract(
-    client: EthersClient,
-    contract_instance_offset: usize,
-    client_address: alloy::primitives::Address,
-    scales: Vec<u32>,
-    call_to_accounts: Option<CallToAccount>,
-    sol_code_path: PathBuf,
-    runs: usize,
-    settings: &GraphSettings,
-) -> Result<H160, EthError> {
-    let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestation", runs).await?;
-    let (contract_address, call_data, decimals) = if let Some(call_to_accounts) = call_to_accounts {
-        parse_call_to_account(call_to_accounts)?
-    } else {
-        // if calls to accounts is empty then we know need to check that atleast there kzg visibility in the settings file
-        let kzg_visibility = settings.run_args.input_visibility.is_polycommit()
-            || settings.run_args.output_visibility.is_polycommit()
-            || settings.run_args.param_visibility.is_polycommit();
-        if !kzg_visibility {
-            return Err(EthError::OnChainDataSource);
-        }
-        let factory =
-            get_sol_contract_factory(abi, bytecode, runtime_bytecode, client, None::<()>)?;
-        let contract = factory.deploy().await?;
-        return Ok(contract);
-    };
-
-    let factory = get_sol_contract_factory(
-        abi,
-        bytecode,
-        runtime_bytecode,
-        client,
-        Some((
-            // address _contractAddress,
-            WordToken(contract_address.into_word()),
-            // bytes memory _callData,
-            PackedSeqToken(call_data.as_ref()),
-            // uint256 [] _decimals,
-            DynSeqToken(
-                decimals
-                    .iter()
-                    .map(|i| WordToken(B256::from(*i)))
-                    .collect_vec(),
-            ),
-            // uint[] memory _bits,
-            DynSeqToken(
-                scales
-                    .clone()
-                    .into_iter()
-                    .map(|i| WordToken(U256::from(i).into()))
-                    .collect_vec(),
-            ),
-            //  uint8 _instanceOffset,
-            WordToken(U256::from(contract_instance_offset as u32).into()),
-            // address _admin
-            WordToken(client_address.into_word()),
-        )),
-    )?;
-
-    debug!("scales: {:#?}", scales);
-    debug!("call_data: {:#?}", call_data);
-    debug!("contract_addresses: {:#?}", contract_address);
-    debug!("decimals: {:#?}", decimals);
-
-    let contract = factory.deploy().await?;
-
-    Ok(contract)
-}
-type ParsedCallToAccount = (H160, Bytes, Vec<U256>);
-
-fn parse_call_to_account(call_to_account: CallToAccount) -> Result<ParsedCallToAccount, EthError> {
-    let contract_address_bytes = hex::decode(&call_to_account.address)?;
-    let contract_address = H160::from_slice(&contract_address_bytes);
-    let call_data_bytes = hex::decode(&call_to_account.call_data)?;
-    let call_data = Bytes::from(call_data_bytes);
-    // Parse the decimals array as uint256 array for the contract.
-    // iterate through the decimals array and convert each element to a uint256
-    let mut decimals: Vec<U256> = vec![];
-    for decimal in &call_to_account.decimals {
-        decimals.push(I256::from_dec_str(&decimal.to_string())?.unsigned_abs());
-    }
-    // let decimal = I256::from_dec_str(&call_to_account.decimals.to_string())?.unsigned_abs();
-    Ok((contract_address, call_data, decimals))
-}
-
 /// Verify a proof using a Solidity verifier contract
 /// TODO: add param to pass vka_digest and use that to fetch the VKA by indexing the RegisteredVKA events on the RV
 pub async fn verify_proof_via_solidity(
@@ -633,14 +441,6 @@ pub async fn verify_proof_via_solidity(
     rpc_url: &str,
 ) -> Result<bool, EthError> {
     let flattened_instances = proof.instances.into_iter().flatten();
-    let instances_len = flattened_instances.clone().collect_vec().len();
-    println!(
-        "flattened instances: {:#?} len: {:#?}",
-        flattened_instances.clone().collect_vec(),
-        instances_len
-    );
-    // print the pretty public inputs on the proof
-    println!("public inputs: {:#?}", proof.pretty_public_inputs);
 
     // Load the vka, which is bincode serialized, from the vka_path
     let vka_buf: Option<Vec<[u8; 32]>> = match vka_path {
@@ -677,7 +477,6 @@ pub async fn verify_proof_via_solidity(
             .chunks_exact(32)
             .map(|chunk| U256::from_be_slice(chunk).to_string())
             .collect::<Vec<_>>();
-        println!("rescaled_instances: {:#?}", rescaled_instances);
         if let Some(pretty) = &proof.pretty_public_inputs {
             // 1️⃣ collect reference decimals --------------------------------------
             let mut refs = pretty.rescaled_inputs.clone();
@@ -768,178 +567,6 @@ pub async fn setup_test_contract<M: 'static + Provider<Http<Client>, Ethereum>>(
     let contract = TestReads::deploy(client, scaled_by_decimals_data).await?;
 
     Ok((contract, decimals))
-}
-
-/// Verify a proof using a Solidity DataAttestation contract.
-/// Used for testing purposes.
-pub async fn verify_proof_with_data_attestation(
-    proof: Snark<Fr, G1Affine>,
-    addr_verifier: H160,
-    addr_da: H160,
-    vka_path: Option<PathBuf>,
-    rpc_url: &str,
-) -> Result<bool, EthError> {
-    use ethabi::{Function, Param, ParamType, StateMutability, Token};
-
-    let mut public_inputs: Vec<U256> = vec![];
-    let flattened_instances = proof.instances.into_iter().flatten();
-
-    for val in flattened_instances.clone() {
-        let bytes = val.to_repr();
-        let u = U256::from_le_slice(bytes.inner().as_slice());
-        public_inputs.push(u);
-    }
-
-    // Load the vka, which is bincode serialized, from the vka_path
-    let vka_buf: Option<Vec<[u8; 32]>> = match vka_path {
-        Some(path) => {
-            let bytes = std::fs::read(path)?;
-            Some(bincode::deserialize(&bytes).map_err(|e| EthError::VkaData(e.to_string()))?)
-        }
-        None => None,
-    };
-
-    let vka: Option<&[[u8; 32]]> = vka_buf.as_deref();
-
-    let encoded_verifier =
-        encode_calldata(vka, &proof.proof, &flattened_instances.collect::<Vec<_>>());
-
-    debug!("encoded: {:#?}", hex::encode(&encoded_verifier));
-
-    debug!("public_inputs: {:#?}", public_inputs);
-    debug!("proof: {:#?}", Bytes::from(proof.proof.to_vec()));
-
-    #[allow(deprecated)]
-    let func = Function {
-        name: "verifyWithDataAttestation".to_owned(),
-        inputs: vec![
-            Param {
-                name: "verifier".to_owned(),
-                kind: ParamType::Address,
-                internal_type: None,
-            },
-            Param {
-                name: "encoded".to_owned(),
-                kind: ParamType::Bytes,
-                internal_type: None,
-            },
-        ],
-        outputs: vec![Param {
-            name: "success".to_owned(),
-            kind: ParamType::Bool,
-            internal_type: None,
-        }],
-        constant: None,
-        state_mutability: StateMutability::View,
-    };
-
-    let encoded = func.encode_input(&[
-        Token::Address(addr_verifier.0.0.into()),
-        Token::Bytes(encoded_verifier),
-    ])?;
-
-    debug!("encoded: {:#?}", hex::encode(&encoded));
-
-    let encoded: TransactionInput = encoded.into();
-
-    let (client, _) = setup_eth_backend(rpc_url, None).await?;
-    let tx = TransactionRequest::default().to(addr_da).input(encoded);
-    debug!("transaction {:#?}", tx);
-    info!(
-        "estimated verify gas cost: {:#?}",
-        client.estimate_gas(&tx).await?
-    );
-
-    let result = client.call(&tx).await;
-    if let Err(e) = result {
-        return Err(EvmVerificationError::SolidityExecution(e.to_string()).into());
-    }
-    let result = result?;
-    debug!("result: {:#?}", result);
-    // decode return bytes value into uint8
-    let result = result.to_vec().last().ok_or(EthError::NoContractOutput)? == &1u8;
-    if !result {
-        return Err(EvmVerificationError::InvalidProof.into());
-    }
-
-    Ok(true)
-}
-
-/// Tests on-chain data storage by deploying a contract that stores the network input and or output
-/// data in its storage. It does this by converting the floating point values to integers and storing the
-/// the number of decimals of the floating point value on chain.
-pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
-    client: Arc<M>,
-    data: &[Vec<FileSourceInner>],
-) -> Result<CallToAccount, EthError> {
-    let (contract, decimals) = setup_test_contract(client, data).await?;
-
-    // Get the encoded calldata for the input
-    let builder = contract.readAll();
-    let call = builder.calldata();
-    let call_to_account = CallToAccount {
-        call_data: hex::encode(call),
-        decimals,
-        address: hex::encode(contract.address().0.0),
-    };
-    info!("call_to_account: {:#?}", call_to_account);
-    Ok(call_to_account)
-}
-
-/// Reads on-chain inputs, returning the raw encoded data returned from making all the calls in on_chain_input_data
-pub async fn read_on_chain_inputs_multi<M: 'static + Provider<Http<Client>, Ethereum>>(
-    client: Arc<M>,
-    address: H160,
-    data: &Vec<CallsToAccount>,
-) -> Result<(Vec<Bytes>, Vec<u8>), EthError> {
-    // Iterate over all on-chain inputs
-
-    let mut fetched_inputs = vec![];
-    let mut decimals = vec![];
-    for on_chain_data in data {
-        // Construct the address
-        let contract_address_bytes = hex::decode(&on_chain_data.address)?;
-        let contract_address = H160::from_slice(&contract_address_bytes);
-        for (call_data, decimal) in &on_chain_data.call_data {
-            let call_data_bytes = hex::decode(call_data)?;
-            let input: TransactionInput = call_data_bytes.into();
-
-            let tx = TransactionRequest::default()
-                .to(contract_address)
-                .from(address)
-                .input(input);
-            debug!("transaction {:#?}", tx);
-
-            let result = client.call(&tx).await?;
-            debug!("return data {:#?}", result);
-            fetched_inputs.push(result);
-            decimals.push(*decimal);
-        }
-    }
-    Ok((fetched_inputs, decimals))
-}
-
-/// Reads on-chain inputs, returning the raw encoded data returned from making the single call in on_chain_input_data
-/// that returns the array of input data we will attest to.
-pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>(
-    client: Arc<M>,
-    address: H160,
-    data: &CallToAccount,
-) -> Result<Bytes, EthError> {
-    // Iterate over all on-chain inputs
-    let contract_address_bytes = hex::decode(&data.address)?;
-    let contract_address = H160::from_slice(&contract_address_bytes);
-    let call_data_bytes = hex::decode(&data.call_data)?;
-    let input: TransactionInput = call_data_bytes.into();
-    let tx = TransactionRequest::default()
-        .to(contract_address)
-        .from(address)
-        .input(input);
-    debug!("transaction {:#?}", tx);
-
-    let result = client.call(&tx).await?;
-    debug!("return data {:#?}", result);
-    Ok(result)
 }
 
 pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(

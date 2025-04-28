@@ -223,7 +223,7 @@ def create_evm_verifier_aggr(aggregation_settings:typing.Sequence[str | os.PathL
     """
     ...
 
-def create_evm_vka(vk_path:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,sol_code_path:str | os.PathLike | pathlib.Path,abi_path:str | os.PathLike | pathlib.Path,srs_path:typing.Optional[str | os.PathLike | pathlib.Path]) -> typing.Any:
+def create_evm_vka(vk_path:str | os.PathLike | pathlib.Path,settings_path:str | os.PathLike | pathlib.Path,vka_path:str | os.PathLike | pathlib.Path,srs_path:typing.Optional[str | os.PathLike | pathlib.Path]) -> typing.Any:
     r"""
     Creates an Evm VK artifact. This command generated a VK with circuit specific meta data encoding in memory for use by the reusable H2 verifier.
     This is useful for deploying verifier that were otherwise too big to fit on chain and required aggregation.
@@ -236,8 +236,8 @@ def create_evm_vka(vk_path:str | os.PathLike | pathlib.Path,settings_path:str | 
     settings_path: str
         The path to the settings file
     
-    sol_code_path: str
-        The path to the create the solidity verifying key.
+    vka_path: str
+        The path to the create the vka calldata.
     
     abi_path: str
         The path to create the ABI for the solidity verifier
@@ -764,7 +764,7 @@ def verify_aggr(proof_path:str | os.PathLike | pathlib.Path,vk_path:str | os.Pat
     """
     ...
 
-def verify_evm(addr_verifier:str,proof_path:str | os.PathLike | pathlib.Path,rpc_url:typing.Optional[str],addr_da:typing.Optional[str],addr_vk:typing.Optional[str]) -> typing.Any:
+def verify_evm(addr_verifier:str,proof_path:str | os.PathLike | pathlib.Path,rpc_url:typing.Optional[str],vka_path:typing.Optional[str]) -> typing.Any:
     r"""
     verifies an evm compatible proof, you will need solc installed in your environment to run this
     
@@ -779,11 +779,8 @@ def verify_evm(addr_verifier:str,proof_path:str | os.PathLike | pathlib.Path,rpc
     rpc_url: str
         RPC URL for an Ethereum node, if None will use Anvil but WON'T persist state
     
-    addr_da: str
-        does the verifier use data attestation ?
-    
-    addr_vk: str
-        The addess of the separate VK contract (if the verifier key is rendered as a separate contract)
+    vka_path: str
+        The path to the VKA calldata bytes file (generated using the create_evm_vka command)
     Returns
     -------
     bool
