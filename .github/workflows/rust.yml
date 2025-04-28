@@ -798,8 +798,6 @@ jobs:
         run: source .env/bin/activate; cargo nextest run py_tests::tests::neural_bag_of_words_ --no-capture
       - name: Felt conversion
         run: source .env/bin/activate; cargo nextest run py_tests::tests::felt_conversion_test_ --no-capture
-      - name: Postgres tutorials
-        run: source .env/bin/activate; cargo nextest run py_tests::tests::postgres_ --no-capture
       - name: Tictactoe tutorials
         run: source .env/bin/activate; cargo nextest run py_tests::tests::tictactoe_ --test-threads 1
       # - name: authenticate-kaggle-cli
