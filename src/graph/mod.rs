@@ -28,6 +28,9 @@ use itertools::Itertools;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tosubcommand::ToFlags;
 
+#[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
+use self::input::{FileSource, GraphData};
+
 use self::errors::GraphError;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use self::input::{FileSource, GraphData};
@@ -961,6 +964,7 @@ impl GraphCircuit {
     }
 
     ///
+    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
     pub fn load_graph_from_file_exclusively(
         &mut self,
         data: &GraphData,
@@ -1006,7 +1010,6 @@ impl GraphCircuit {
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
-            DataSource::OnChain(_) => Err(GraphError::OnChainDataSource),
         }
     }
 
