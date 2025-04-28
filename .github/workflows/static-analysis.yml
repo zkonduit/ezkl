@@ -26,7 +26,7 @@ jobs:
       - name: Install Zizmor
         run: cargo install --locked zizmor
 
-      # - name: Run Zizmor Analysis
-      #   run: zizmor .
+      - name: Run Zizmor Analysis
+        run: zizmor .
 
 
