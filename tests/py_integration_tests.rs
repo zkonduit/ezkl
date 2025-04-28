@@ -273,16 +273,6 @@ mod py_tests {
             }
 
             #[test]
-            fn postgres_notebook_() {
-                crate::py_tests::init_binary();
-                let test_dir: TempDir = TempDir::new("mean_postgres").unwrap();
-                let path = test_dir.path().to_str().unwrap();
-                crate::py_tests::mv_test_(path, "mean_postgres.ipynb");
-                run_notebook(path, "mean_postgres.ipynb");
-                test_dir.close().unwrap();
-            }
-
-            #[test]
             fn tictactoe_autoencoder_notebook_() {
                 crate::py_tests::init_binary();
                 let test_dir: TempDir = TempDir::new("tictactoe_autoencoder").unwrap();

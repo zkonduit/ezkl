@@ -6,9 +6,6 @@ pub mod model;
 pub mod modules;
 /// Inner elements of a computational graph that represent a single operation / constraints.
 pub mod node;
-/// postgres helper functions
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-pub mod postgres;
 /// Helper functions
 pub mod utilities;
 /// Representations of a computational graph's variables.
@@ -1010,10 +1007,6 @@ impl GraphCircuit {
             }
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
-            }
-            DataSource::DB(pg) => {
-                let data = pg.fetch_and_format_as_file().await?;
-                self.load_file_data(&data, &shapes, scales, input_types)
             }
         }
     }
