@@ -258,7 +258,7 @@ solidity-verifier = [
     "dep:halo2_solidity_verifier",
 ]
 solidity-verifier-mv-lookup = [
-    "dep:halo2_solidity_verifier/mv-lookup",
+    "halo2_solidity_verifier/mv-lookup",
 ]
 eth-mv-lookup = [
     "solidity-verifier-mv-lookup",
