@@ -98,8 +98,6 @@ pub enum GraphError {
         feature = "ezkl",
         not(all(target_arch = "wasm32", target_os = "unknown"))
     ))]
-    #[error("[tokio postgres] {0}")]
-    TokioPostgresError(#[from] tokio_postgres::Error),
     /// Eth error
     #[cfg(all(
         feature = "ezkl",
@@ -141,7 +139,9 @@ pub enum GraphError {
     #[error("range check {0} is too large")]
     RangeCheckTooLarge(usize),
     ///Cannot use on-chain data source as private data
-    #[error("cannot use on-chain data source as 1) output for on-chain test 2) as private data 3) as input when using wasm.")]
+    #[error(
+        "cannot use on-chain data source as 1) output for on-chain test 2) as private data 3) as input when using wasm."
+    )]
     OnChainDataSource,
     /// Missing data source
     #[error("missing data source")]
