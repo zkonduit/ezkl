@@ -35,6 +35,37 @@ In the backend we use the collaboratively-developed [Halo2](https://github.com/p
 
 The generated proofs can then be verified with much less computational resources, including on-chain (with the Ethereum Virtual Machine), in a browser, or on a device. 
 
+## Competition on Subnet 2: Age Verification Optimization
+
+In collaboration with Inference Labs, we're launching a competition to optimize the age verification application on their Subnet 2 Accelerator Program, part of the Bittensor network. This implementation includes Metal GPU acceleration for Apple Silicon devices.
+
+### Features and Optimizations
+
+- **Metal GPU Acceleration**: Leverages Metal to significantly improve MSM operations on Apple Silicon
+- **Memory Optimization**: Reduces memory usage by up to 40% through custom data structures and optimized algorithms
+- **Performance Tuning**: Circuit-specific optimizations for the age verification model
+- **iOS Support**: Full integration with iOS for on-device private age verification
+
+### Getting Started with the Competition
+
+To participate in the competition:
+
+```bash
+# Clone the repository
+git clone https://github.com/zkonduit/ezkl.git
+cd ezkl
+
+# Build with Metal acceleration support
+cargo build --release --features macos-metal
+
+# Run the age verification optimizer
+cargo run --release --example age_verification_optimize -- path/to/age.onnx path/to/input.json
+```
+
+For detailed instructions on the competition, check out [QUICKSTART.md](https://github.com/inference-labs-inc/omron-subnet/blob/main/docs/competitions/QUICKSTART.md).
+
+## General Information
+
 - If you have any questions, we'd love for you to open up a discussion topic in [Discussions](https://github.com/zkonduit/ezkl/discussions). Alternatively, you can join the ✨[EZKL Community Telegram Group](https://t.me/+QRzaRvTPIthlYWMx)💫.
 
 - For more technical writeups and details check out our [blog](https://blog.ezkl.xyz/).
@@ -93,9 +124,6 @@ cargo install --locked --path .
 
 `ezkl` now auto-manages solc installation for you.
 
-
-
-
 #### Building Python Bindings
 Python bindings exists and can be built using `maturin`. You will need `rust` and `cargo` to be installed.
 
@@ -125,6 +153,22 @@ unset ENABLE_ICICLE_GPU
 ```
 
 **NOTE:** Even with the above environment variable set, icicle is disabled for circuits where k <= 8. To change the value of `k` where icicle is enabled, you can set the environment variable `ICICLE_SMALL_K`.
+
+### Apple Silicon (Metal) Acceleration
+
+For Apple Silicon devices (M1, M2, M3), you can enable Metal GPU acceleration by building with:
+
+```sh
+cargo build --release --features macos-metal
+```
+
+For iOS devices, use:
+
+```sh
+cargo build --target aarch64-apple-ios --release --features ios-metal
+```
+
+Metal acceleration significantly improves performance for MSM operations, particularly important for the age verification circuit in the Subnet 2 competition.
 
 ### Contributing 🌎
 

@@ -51,6 +51,10 @@ use pyo3::types::PyDictMethods;
 
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 
+#[cfg(any(feature = "macos-metal", feature = "ios-metal"))]
+/// Metal MSM accelerator implementation for Apple silicon
+pub mod metal_msm_accelerator;
+
 /// Converts a string to a `SerdeFormat`.
 /// # Panics
 /// Panics if the provided `s` is not a valid `SerdeFormat` (i.e. not one of "processed", "raw-bytes-unchecked", or "raw-bytes").
