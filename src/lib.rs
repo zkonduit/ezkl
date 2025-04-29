@@ -125,7 +125,7 @@ pub fn version() -> &'static str {
 
 /// Bindings management
 #[cfg(any(
-    feature = "ios-bindings",
+    feature = "universal-bindings",
     all(target_arch = "wasm32", target_os = "unknown"),
     feature = "python-bindings"
 ))]
