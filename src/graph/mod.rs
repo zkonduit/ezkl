@@ -978,7 +978,6 @@ impl GraphCircuit {
             DataSource::File(file_data) => {
                 self.load_file_data(file_data, &shapes, scales, input_types)
             }
-            _ => Err(GraphError::OnChainDataSource),
         }
     }
 

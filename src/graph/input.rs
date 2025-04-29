@@ -323,12 +323,6 @@ impl GraphData {
                     }
                 }
             }
-            _ => {
-                return Err(GraphError::InvalidDims(
-                    0,
-                    "non file data cannot be split into batches".to_string(),
-                ));
-            }
         }
         Ok(inputs)
     }
