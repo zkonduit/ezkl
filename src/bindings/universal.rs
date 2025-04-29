@@ -1,6 +1,7 @@
 use halo2_proofs::{
     plonk::*,
     poly::{
+        VerificationStrategy,
         commitment::{CommitmentScheme, ParamsProver},
         ipa::{
             commitment::{IPACommitmentScheme, ParamsIPA},
@@ -12,7 +13,6 @@ use halo2_proofs::{
             multiopen::{ProverSHPLONK, VerifierSHPLONK},
             strategy::SingleStrategy as KZGSingleStrategy,
         },
-        VerificationStrategy,
     },
 };
 use std::fmt::Display;
@@ -20,15 +20,15 @@ use std::io::BufReader;
 use std::str::FromStr;
 
 use crate::{
+    CheckMode, Commitments, EZKLError as InnerEZKLError,
     circuit::region::RegionSettings,
     graph::GraphSettings,
     pfsys::{
-        create_proof_circuit,
+        TranscriptType, create_proof_circuit,
         evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript},
-        verify_proof_circuit, TranscriptType,
+        verify_proof_circuit,
     },
     tensor::TensorType,
-    CheckMode, Commitments, EZKLError as InnerEZKLError,
 };
 
 use crate::graph::{GraphCircuit, GraphWitness};

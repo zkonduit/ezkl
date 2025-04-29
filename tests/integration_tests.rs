@@ -6,7 +6,6 @@ mod native_tests {
     use ezkl::graph::input::{FileSource, GraphData};
     use ezkl::graph::GraphSettings;
     use ezkl::pfsys::Snark;
-    use ezkl::Commitments;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2curves::bn256::Bn256;
     use lazy_static::lazy_static;

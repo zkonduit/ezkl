@@ -225,7 +225,13 @@ default = [
 ]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-async-runtimes", "pyo3-stub-gen"]
-universal-bindings = ["uniffi", "mv-lookup", "precompute-coset", "parallel-poly-read", "solidity-verifier-mv-lookup"]
+universal-bindings = [
+    "uniffi",
+    "mv-lookup",
+    "precompute-coset",
+    "parallel-poly-read",
+    "solidity-verifier-mv-lookup",
+]
 ios-bindings = ["universal-bindings"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
@@ -250,34 +256,16 @@ ezkl = [
     "dep:clap",
     "dep:tosubcommand",
 ]
-eth = [
-    "dep:alloy",
-    "dep:foundry-compilers",
-    "dep:ethabi",
-]
-solidity-verifier = [
-    "dep:halo2_solidity_verifier",
-]
-solidity-verifier-mv-lookup = [
-    "halo2_solidity_verifier/mv-lookup",
-]
-eth-mv-lookup = [
-    "solidity-verifier-mv-lookup",
-    "mv-lookup",
-    "eth",
-]
-eth-original-lookup = [
-    "eth",
-    "solidity-verifier",
-]
+eth = ["dep:alloy", "dep:foundry-compilers", "dep:ethabi"]
+solidity-verifier = ["dep:halo2_solidity_verifier"]
+solidity-verifier-mv-lookup = ["halo2_solidity_verifier/mv-lookup"]
+eth-mv-lookup = ["solidity-verifier-mv-lookup", "mv-lookup", "eth"]
+eth-original-lookup = ["eth", "solidity-verifier"]
 parallel-poly-read = [
     "halo2_proofs/circuit-params",
     "halo2_proofs/parallel-poly-read",
 ]
-mv-lookup = [
-    "halo2_proofs/mv-lookup",
-    "snark-verifier/mv-lookup",
-]
+mv-lookup = ["halo2_proofs/mv-lookup", "snark-verifier/mv-lookup"]
 asm = ["halo2curves/asm", "halo2_proofs/asm"]
 precompute-coset = ["halo2_proofs/precompute-coset"]
 det-prove = []
