@@ -35,12 +35,12 @@ use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSize
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::region::{ConstantsMap, RegionSettings};
-use crate::circuit::table::{RESERVED_BLINDING_ROWS_PAD, Range, Table, num_cols_required};
+use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
-use crate::fieldutils::{IntegerRep, felt_to_f64};
+use crate::fieldutils::{felt_to_f64, IntegerRep};
 use crate::pfsys::PrettyElements;
 use crate::tensor::{Tensor, ValTensor};
-use crate::{EZKL_BUF_CAPACITY, RunArgs};
+use crate::{RunArgs, EZKL_BUF_CAPACITY};
 
 use halo2_proofs::{
     circuit::Layouter,
@@ -55,13 +55,13 @@ use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
-#[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDictMethods;
+#[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
 
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -952,77 +952,11 @@ impl GraphCircuit {
     }
 
     ///
-    #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
     pub fn load_graph_input(&mut self, data: &GraphData) -> Result<Vec<Tensor<Fp>>, GraphError> {
         let shapes = self.model().graph.input_shapes()?;
         let scales = self.model().graph.get_input_scales();
         let input_types = self.model().graph.get_input_types()?;
-        self.process_data_source(&data.input_data, shapes, scales, input_types)
-    }
-
-    ///
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    pub fn load_graph_from_file_exclusively(
-        &mut self,
-        data: &GraphData,
-    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
-        let shapes = self.model().graph.input_shapes()?;
-        let scales = self.model().graph.get_input_scales();
-        let input_types = self.model().graph.get_input_types()?;
-        debug!("input scales: {:?}", scales);
-
-        match &data.input_data {
-            DataSource::File(file_data) => {
-                self.load_file_data(file_data, &shapes, scales, input_types)
-            }
-        }
-    }
-
-    ///
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    pub async fn load_graph_input(
-        &mut self,
-        data: &GraphData,
-    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
-        let shapes = self.model().graph.input_shapes()?;
-        let scales = self.model().graph.get_input_scales();
-        let input_types = self.model().graph.get_input_types()?;
-        debug!("input scales: {:?}", scales);
-
-        self.process_data_source(&data.input_data, shapes, scales, input_types)
-            .await
-    }
-
-    #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
-    /// Process the data source for the model
-    fn process_data_source(
-        &mut self,
-        data: &DataSource,
-        shapes: Vec<Vec<usize>>,
-        scales: Vec<crate::Scale>,
-        input_types: Vec<InputType>,
-    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
-        match &data {
-            DataSource::File(file_data) => {
-                self.load_file_data(file_data, &shapes, scales, input_types)
-            }
-        }
-    }
-
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    /// Process the data source for the model
-    async fn process_data_source(
-        &mut self,
-        data: &DataSource,
-        shapes: Vec<Vec<usize>>,
-        scales: Vec<crate::Scale>,
-        input_types: Vec<InputType>,
-    ) -> Result<Vec<Tensor<Fp>>, GraphError> {
-        match &data {
-            DataSource::File(file_data) => {
-                self.load_file_data(file_data, &shapes, scales, input_types)
-            }
-        }
+        self.load_file_data(data.input_data.values(), &shapes, scales, input_types)
     }
 
     ///

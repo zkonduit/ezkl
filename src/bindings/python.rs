@@ -1,34 +1,34 @@
-use crate::Commitments;
-use crate::RunArgs;
-use crate::circuit::CheckMode;
-use crate::circuit::InputType;
-use crate::circuit::modules::Module;
 use crate::circuit::modules::polycommit::PolyCommitChip;
 use crate::circuit::modules::poseidon::{
+    spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
     PoseidonChip,
-    spec::{POSEIDON_RATE, POSEIDON_WIDTH, PoseidonSpec},
 };
+use crate::circuit::modules::Module;
+use crate::circuit::CheckMode;
+use crate::circuit::InputType;
 use crate::commands::*;
-use crate::fieldutils::{IntegerRep, felt_to_integer_rep, integer_rep_to_felt};
+use crate::fieldutils::{felt_to_integer_rep, integer_rep_to_felt, IntegerRep};
 use crate::graph::TestDataSource;
 use crate::graph::{
-    GraphCircuit, GraphSettings, Model, Visibility, quantize_float, scale_to_multiplier,
+    quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings, Model, Visibility,
 };
 use crate::pfsys::evm::aggregation_kzg::AggregationCircuit;
 use crate::pfsys::{
-    ProofType, TranscriptType, load_pk, load_vk, save_params, save_vk,
-    srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
+    load_pk, load_vk, save_params, save_vk, srs::gen_srs as ezkl_gen_srs, srs::load_srs_prover,
+    ProofType, TranscriptType,
 };
+use crate::Commitments;
+use crate::RunArgs;
 use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
-use halo2curves::bn256::{Bn256, Fq, Fr, G1, G1Affine};
+use halo2curves::bn256::{Bn256, Fq, Fr, G1Affine, G1};
 use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3_log;
 use pyo3_stub_gen::{
-    TypeInfo, define_stub_info_gatherer, derive::gen_stub_pyclass, derive::gen_stub_pyclass_enum,
-    derive::gen_stub_pyfunction,
+    define_stub_info_gatherer, derive::gen_stub_pyclass, derive::gen_stub_pyclass_enum,
+    derive::gen_stub_pyfunction, TypeInfo,
 };
 use snark_verifier::util::arithmetic::PrimeField;
 use std::collections::HashSet;
@@ -1040,25 +1040,22 @@ fn calibrate_settings(
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::calibrate(
-            model,
-            data,
-            settings,
-            target,
-            lookup_safety_margin,
-            scales,
-            scale_rebase_multiplier,
-            max_logrows,
-        )
-        .await
-        .map_err(|e| {
-            let err_str = format!("Failed to calibrate settings: {}", e);
-            PyRuntimeError::new_err(err_str)
-        })?;
+    crate::execute::calibrate(
+        model,
+        data,
+        settings,
+        target,
+        lookup_safety_margin,
+        scales,
+        scale_rebase_multiplier,
+        max_logrows,
+    )
+    .map_err(|e| {
+        let err_str = format!("Failed to calibrate settings: {}", e);
+        PyRuntimeError::new_err(err_str)
+    })?;
 
-        Ok(true)
-    })
+    Ok(true)
 }
 
 /// Runs the forward pass operation to generate a witness
@@ -1101,15 +1098,12 @@ fn gen_witness(
     vk_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
 ) -> PyResult<Bound<'_, PyAny>> {
-    pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        let output = crate::execute::gen_witness(model, data, output, vk_path, srs_path)
-            .await
-            .map_err(|e| {
-                let err_str = format!("Failed to generate witness: {}", e);
-                PyRuntimeError::new_err(err_str)
-            })?;
-        Python::with_gil(|py| Ok(output.to_object(py)))
-    })
+    let output =
+        crate::execute::gen_witness(model, data, output, vk_path, srs_path).map_err(|e| {
+            let err_str = format!("Failed to generate witness: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
+    Python::with_gil(|py| Ok(output.to_object(py)))
 }
 
 /// Mocks the prover

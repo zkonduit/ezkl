@@ -1,15 +1,15 @@
 use super::errors::GraphError;
 use super::quantize_float;
-use crate::EZKL_BUF_CAPACITY;
 use crate::circuit::InputType;
 use crate::fieldutils::integer_rep_to_felt;
+use crate::EZKL_BUF_CAPACITY;
 use halo2curves::bn256::Fr as Fp;
-#[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
+#[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::BufReader;
 use std::io::BufWriter;
@@ -17,7 +17,7 @@ use std::io::Read;
 use std::panic::UnwindSafe;
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use tract_onnx::tract_core::{
-    tract_data::{TVec, prelude::Tensor as TractTensor},
+    tract_data::{prelude::Tensor as TractTensor, TVec},
     value::TValue,
 };
 
@@ -209,27 +209,30 @@ pub struct CallToAccount {
 
 /// Represents different sources of input/output data for the EZKL model
 #[derive(Clone, Debug, Serialize, PartialOrd, PartialEq)]
-#[serde(untagged)]
-pub enum DataSource {
-    /// Data from a JSON file containing arrays of values
-    File(FileSource),
+pub struct DataSource(FileSource);
+
+impl DataSource {
+    /// Gets the underlying file source data
+    pub fn values(&self) -> &FileSource {
+        &self.0
+    }
 }
 
 impl Default for DataSource {
     fn default() -> Self {
-        DataSource::File(vec![vec![]])
+        DataSource(vec![vec![]])
     }
 }
 
 impl From<FileSource> for DataSource {
     fn from(data: FileSource) -> Self {
-        DataSource::File(data)
+        DataSource(data)
     }
 }
 
 impl From<Vec<Vec<Fp>>> for DataSource {
     fn from(data: Vec<Vec<Fp>>) -> Self {
-        DataSource::File(
+        DataSource(
             data.iter()
                 .map(|e| e.iter().map(|e| FileSourceInner::Field(*e)).collect())
                 .collect(),
@@ -239,7 +242,7 @@ impl From<Vec<Vec<Fp>>> for DataSource {
 
 impl From<Vec<Vec<f64>>> for DataSource {
     fn from(data: Vec<Vec<f64>>) -> Self {
-        DataSource::File(
+        DataSource(
             data.iter()
                 .map(|e| e.iter().map(|e| FileSourceInner::Float(*e)).collect())
                 .collect(),
@@ -258,7 +261,7 @@ impl<'de> Deserialize<'de> for DataSource {
         // Try deserializing as FileSource first
         let first_try: Result<FileSource, _> = serde_json::from_str(this_json.get());
         if let Ok(t) = first_try {
-            return Ok(DataSource::File(t));
+            return Ok(DataSource(t));
         }
 
         Err(serde::de::Error::custom("failed to deserialize DataSource"))
@@ -294,19 +297,16 @@ impl GraphData {
         datum_types: &[tract_onnx::prelude::DatumType],
     ) -> Result<TVec<TValue>, GraphError> {
         let mut inputs = TVec::new();
-        match &self.input_data {
-            DataSource::File(data) => {
-                for (i, input) in data.iter().enumerate() {
-                    if !input.is_empty() {
-                        let dt = datum_types[i];
-                        let input = input.iter().map(|e| e.to_float()).collect::<Vec<f64>>();
-                        let tt = TractTensor::from_shape(&shapes[i], &input)?;
-                        let tt = tt.cast_to_dt(dt)?;
-                        inputs.push(tt.into_owned().into());
-                    }
-                }
+        for (i, input) in self.input_data.values().iter().enumerate() {
+            if !input.is_empty() {
+                let dt = datum_types[i];
+                let input = input.iter().map(|e| e.to_float()).collect::<Vec<f64>>();
+                let tt = TractTensor::from_shape(&shapes[i], &input)?;
+                let tt = tt.cast_to_dt(dt)?;
+                inputs.push(tt.into_owned().into());
             }
         }
+
         Ok(inputs)
     }
 
@@ -338,7 +338,7 @@ impl GraphData {
             }
         }
         Ok(GraphData {
-            input_data: DataSource::File(input_data),
+            input_data: DataSource(input_data),
             output_data: None,
         })
     }
@@ -420,7 +420,7 @@ impl GraphData {
     /// Returns error if:
     /// - Data is from on-chain source
     /// - Input size is not evenly divisible by batch size
-    pub async fn split_into_batches(
+    pub fn split_into_batches(
         &self,
         input_shapes: Vec<Vec<usize>>,
     ) -> Result<Vec<Self>, GraphError> {
@@ -428,7 +428,7 @@ impl GraphData {
 
         let iterable = match self {
             GraphData {
-                input_data: DataSource::File(data),
+                input_data: DataSource(data),
                 output_data: _,
             } => data.clone(),
         };
@@ -476,12 +476,12 @@ impl GraphData {
             for input in batched_inputs.iter() {
                 batch.push(input[i].clone());
             }
-            input_batches.push(DataSource::File(batch));
+            input_batches.push(DataSource(batch));
         }
 
         // Ensure at least one batch exists
         if input_batches.is_empty() {
-            input_batches.push(DataSource::File(vec![vec![]]));
+            input_batches.push(DataSource(vec![vec![]]));
         }
 
         // Create GraphData instance for each batch
@@ -556,9 +556,7 @@ impl ToPyObject for CallToAccount {
 #[cfg(feature = "python-bindings")]
 impl ToPyObject for DataSource {
     fn to_object(&self, py: Python) -> PyObject {
-        match self {
-            DataSource::File(data) => data.to_object(py),
-        }
+        self.0.to_object(py)
     }
 }
 
