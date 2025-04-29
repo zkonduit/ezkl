@@ -44,6 +44,7 @@ pub enum EZKLError {
         not(all(target_arch = "wasm32", target_os = "unknown"))
     ))]
     #[error("[eth] {0}")]
+    #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
     EthError(#[from] eth::EthError),
     #[error("[graph] {0}")]
     GraphError(#[from] graph::errors::GraphError),
@@ -97,11 +98,11 @@ impl From<String> for EZKLError {
 
 use std::str::FromStr;
 
-use circuit::{CheckMode, table::Range};
+use circuit::{table::Range, CheckMode};
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 use clap::Args;
 use fieldutils::IntegerRep;
-use graph::{MAX_PUBLIC_SRS, Visibility};
+use graph::{Visibility, MAX_PUBLIC_SRS};
 use halo2_proofs::poly::{
     ipa::commitment::IPACommitmentScheme, kzg::commitment::KZGCommitmentScheme,
 };
@@ -134,7 +135,7 @@ pub mod circuit;
 /// CLI commands.
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
 pub mod commands;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 // abigen doesn't generate docs for this module
 #[allow(missing_docs)]
 /// Utility functions for contracts
