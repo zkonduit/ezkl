@@ -1030,7 +1030,6 @@ fn gen_random_data(
 ))]
 #[gen_stub_pyfunction]
 fn calibrate_settings(
-    py: Python,
     data: String,
     model: PathBuf,
     settings: PathBuf,
@@ -1039,7 +1038,7 @@ fn calibrate_settings(
     scales: Option<Vec<crate::Scale>>,
     scale_rebase_multiplier: Vec<u32>,
     max_logrows: Option<u32>,
-) -> PyResult<Bound<'_, PyAny>> {
+) -> PyResult<bool> {
     crate::execute::calibrate(
         model,
         data,
@@ -1091,13 +1090,12 @@ fn calibrate_settings(
 ))]
 #[gen_stub_pyfunction]
 fn gen_witness(
-    py: Python,
     data: String,
     model: PathBuf,
     output: Option<PathBuf>,
     vk_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
-) -> PyResult<Bound<'_, PyAny>> {
+) -> PyResult<PyAny> {
     let output =
         crate::execute::gen_witness(model, data, output, vk_path, srs_path).map_err(|e| {
             let err_str = format!("Failed to generate witness: {}", e);

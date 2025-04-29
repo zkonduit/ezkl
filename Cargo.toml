@@ -225,8 +225,8 @@ default = [
 ]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-async-runtimes", "pyo3-stub-gen"]
-universal-bindings = ["uniffi", "mv-lookup", "precompute-coset", "parallel-poly-read"]
-ios-bindings = ["solidity-verifier-mv-lookup", "universal-bindings"]
+universal-bindings = ["uniffi", "mv-lookup", "precompute-coset", "parallel-poly-read", "solidity-verifier-mv-lookup"]
+ios-bindings = ["universal-bindings"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
     "onnx",

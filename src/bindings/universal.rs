@@ -32,7 +32,6 @@ use crate::{
 };
 
 use crate::graph::{GraphCircuit, GraphWitness};
-#[cfg(feature = "ios-bindings")]
 use halo2_solidity_verifier::encode_calldata;
 use halo2curves::{
     bn256::{Bn256, Fr, G1Affine},
@@ -63,7 +62,6 @@ impl From<InnerEZKLError> for EZKLError {
 }
 
 /// Encode verifier calldata from proof and ethereum vk_address
-#[cfg(feature = "ios-bindings")]
 #[cfg_attr(feature = "ios-bindings", uniffi::export)]
 pub fn encode_verifier_calldata(
     // TODO - shuold it be pub or pub or pub(super)?
@@ -93,17 +91,22 @@ pub fn encode_verifier_calldata(
 /// Generate witness from compiled circuit and input json
 #[cfg_attr(feature = "ios-bindings", uniffi::export)]
 pub fn gen_witness(compiled_circuit: Vec<u8>, input: Vec<u8>) -> Result<Vec<u8>, EZKLError> {
+    println!("[circuit]");
     let mut circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
         .map_err(|e| {
             EZKLError::InternalError(format!("Failed to deserialize compiled model: {}", e))
         })?;
+
+    println!("[input]");
     let input: crate::graph::input::GraphData = serde_json::from_slice(&input[..])
         .map_err(|e| EZKLError::InternalError(format!("Failed to deserialize input: {}", e)))?;
 
+    println!("[load graph input]");
     let mut input = circuit
         .load_graph_input(&input)
         .map_err(|e| EZKLError::InternalError(format!("{}", e)))?;
 
+    println!("[load graph witness]");
     let witness = circuit
         .forward::<KZGCommitmentScheme<Bn256>>(
             &mut input,
@@ -116,6 +119,7 @@ pub fn gen_witness(compiled_circuit: Vec<u8>, input: Vec<u8>) -> Result<Vec<u8>,
         )
         .map_err(|e| EZKLError::InternalError(format!("{}", e)))?;
 
+    println!("[serialize witness]");
     serde_json::to_vec(&witness)
         .map_err(|e| EZKLError::InternalError(format!("Failed to serialize witness: {}", e)))
 }
