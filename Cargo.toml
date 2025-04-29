@@ -262,6 +262,7 @@ solidity-verifier-mv-lookup = [
 ]
 eth-mv-lookup = [
     "solidity-verifier-mv-lookup",
+    "mv-lookup",
     "eth",
 ]
 eth-original-lookup = [
