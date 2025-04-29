@@ -3,7 +3,7 @@ cargo-features = ["profile-rustflags"]
 [package]
 name = "ezkl"
 version = "0.0.0"
-edition = "2024"
+edition = "2021"
 default-run = "ezkl"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -75,12 +75,12 @@ tokio = { version = "1.35.0", default-features = false, features = [
     "macros",
     "rt-multi-thread",
 ], optional = true }
-pyo3 = { version = "0.23.2", features = [
+pyo3 = { version = "0.24.2", features = [
     "extension-module",
     "abi3-py37",
     "macros",
 ], default-features = false, optional = true }
-pyo3-async-runtimes = { git = "https://github.com/PyO3/pyo3-async-runtimes", version = "0.23.0", features = [
+pyo3-async-runtimes = { git = "https://github.com/PyO3/pyo3-async-runtimes", version = "0.24.0", features = [
     "attributes",
     "tokio-runtime",
 ], default-features = false, optional = true }
@@ -271,12 +271,6 @@ no-update = []
 macos-metal = ["halo2_proofs/macos"]
 ios-metal = ["halo2_proofs/ios"]
 
-[patch.'https://github.com/zkonduit/halo2']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#f441c920be45f8f05d2c06a173d82e8885a5ed4d", package = "halo2_proofs" }
-
-[patch.'https://github.com/zkonduit/halo2#0654e92bdf725fd44d849bfef3643870a8c7d50b']
-halo2_proofs = { git = "https://github.com/zkonduit/halo2#f441c920be45f8f05d2c06a173d82e8885a5ed4d", package = "halo2_proofs" }
-
 
 [patch.crates-io]
 uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "feat/testing-feature-build-fix" }
@@ -285,7 +279,7 @@ uniffi_testing = { git = "https://github.com/ElusAegis/uniffi-rs", branch = "fea
 rustflags = ["-C", "relocation-model=pic"]
 lto = "fat"
 codegen-units = 1
-#panic = "abort"
+# panic = "abort"
 
 
 [profile.test-runs]
