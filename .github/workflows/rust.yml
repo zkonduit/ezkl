@@ -25,7 +25,7 @@ jobs:
       contents: read
     runs-on: large-self-hosted
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -36,12 +36,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -66,7 +66,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -77,12 +77,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -103,7 +103,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -114,12 +114,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -140,7 +140,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest-32-cores
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -151,12 +151,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -179,7 +179,7 @@ jobs:
       - name: Library tests
         run: cargo nextest run --lib --verbose
       - name: Library tests (original lookup)
-        run: cargo nextest run --lib --verbose --no-default-features --features ezkl
+        run: cargo nextest run --lib --verbose --no-default-features --features ezkl,eth-original-lookup
 
   # ultra-overflow-tests-gpu:
   #   runs-on: GPU
@@ -219,7 +219,7 @@ jobs:
       contents: read
     runs-on: non-gpu
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -230,12 +230,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -260,20 +260,20 @@ jobs:
       # - name: Conv overflow (wasi)
       #   run: cargo wasi test conv_col_ultra_overflow -- --include-ignored --nocapture
       - name: lookup overflow
-        run: cargo nextest run --release lookup_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: cargo nextest run --release lookup_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
       - name: Matmul overflow
-        run: RUST_LOG=debug cargo nextest run --release matmul_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release matmul_col_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
       - name: Conv overflow
-        run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: RUST_LOG=debug cargo nextest run --release conv_col_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
       - name: Conv + relu overflow
-        run: cargo nextest run --release conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl -- --include-ignored
+        run: cargo nextest run --release conv_relu_col_ultra_overflow --no-capture --no-default-features --features ezkl,eth-original-lookup -- --include-ignored
 
   ultra-overflow-tests:
     permissions:
       contents: read
     runs-on: non-gpu
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -284,12 +284,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -327,7 +327,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest-16-cores
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -338,12 +338,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -368,7 +368,7 @@ jobs:
       contents: read
     runs-on: non-gpu
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -379,12 +379,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -437,7 +437,7 @@ jobs:
       contents: read
     runs-on: non-gpu
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -448,12 +448,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -525,7 +525,7 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -536,12 +536,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -665,7 +665,7 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -676,12 +676,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -805,7 +805,7 @@ jobs:
     runs-on: self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -816,12 +816,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -867,7 +867,7 @@ jobs:
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -878,12 +878,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -909,7 +909,7 @@ jobs:
     runs-on: large-self-hosted
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -920,12 +920,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -955,7 +955,7 @@ jobs:
     runs-on: ubuntu-latest-32-cores
     needs: [build, library-tests, docs]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -966,12 +966,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -997,7 +997,7 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -1008,12 +1008,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -1048,7 +1048,7 @@ jobs:
     runs-on: non-gpu
     needs: [build, library-tests, docs, python-tests, python-integration-tests]
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -1059,12 +1059,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -1120,7 +1120,7 @@ jobs:
           # Maps tcp port 5432 on service container to the host
           - 5432:5432
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -1131,12 +1131,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -1158,7 +1158,7 @@ jobs:
           locked: true
       # - name: Install solc
       #   run: (hash svm 2>/dev/null || cargo install svm-rs) && svm install 0.8.20 && solc --version
-      - name: Install Anvil 
+      - name: Install Anvil
         run: cargo install --git https://github.com/foundry-rs/foundry --rev 62cdea8ff9e6efef011f77e295823b5f2dbeb3a1 --locked anvil --force
       - name: Install pip
         run: python -m ensurepip --upgrade
@@ -1199,7 +1199,7 @@ jobs:
       contents: read
     runs-on: macos-latest
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -1210,12 +1210,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \
@@ -1242,7 +1242,7 @@ jobs:
     needs: [ios-integration-tests]
 
     env:
-      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }} 
+      VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  #v4.2.2
         with:
@@ -1253,12 +1253,12 @@ jobs:
             echo "❌ VERIFICATION_EZKL_TOKEN is empty – check repo/org secrets" >&2
             exit 1
           fi
-          
+
           # Configure git to use the token for all GitHub requests
           git config --global credential.helper store
           echo "https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com" > ~/.git-credentials
           chmod 600 ~/.git-credentials
-          
+
           # Also set the URL replacement as before
           git config --global \
             url."https://${VERIFICATION_EZKL_TOKEN}:x-oauth-basic@github.com/".insteadOf \

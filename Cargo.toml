@@ -217,8 +217,8 @@ required-features = ["python-bindings"]
 [features]
 web = ["wasm-bindgen-rayon"]
 default = [
+    "eth-mv-lookup",
     "ezkl",
-    "mv-lookup",
     "precompute-coset",
     "no-banner",
     "parallel-poly-read",
@@ -234,8 +234,6 @@ ezkl = [
     "tabled/color",
     "serde_json/std",
     "colored_json",
-    "dep:alloy",
-    "dep:foundry-compilers",
     "dep:ethabi",
     "dep:indicatif",
     "dep:gag",
@@ -247,10 +245,29 @@ ezkl = [
     "dep:chrono",
     "dep:sha256",
     "dep:clap_complete",
-    "dep:halo2_solidity_verifier",
     "dep:semver",
     "dep:clap",
     "dep:tosubcommand",
+]
+eth = [
+    "dep:alloy",
+    "dep:foundry-compilers",
+    "dep:ethabi",
+]
+solidity-verifier = [
+    "dep:halo2_solidity_verifier",
+]
+solidity-verifier-mv-lookup = [
+    "halo2_solidity_verifier/mv-lookup",
+]
+eth-mv-lookup = [
+    "solidity-verifier-mv-lookup",
+    "mv-lookup",
+    "eth",
+]
+eth-original-lookup = [
+    "eth",
+    "solidity-verifier",
 ]
 parallel-poly-read = [
     "halo2_proofs/circuit-params",
@@ -259,7 +276,6 @@ parallel-poly-read = [
 mv-lookup = [
     "halo2_proofs/mv-lookup",
     "snark-verifier/mv-lookup",
-    "halo2_solidity_verifier/mv-lookup",
 ]
 asm = ["halo2curves/asm", "halo2_proofs/asm"]
 precompute-coset = ["halo2_proofs/precompute-coset"]

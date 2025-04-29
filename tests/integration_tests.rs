@@ -3,10 +3,10 @@
 mod native_tests {
 
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
-    use ezkl::Commitments;
     use ezkl::graph::input::{FileSource, GraphData};
     use ezkl::graph::{DataSource, GraphSettings};
     use ezkl::pfsys::Snark;
+    use ezkl::Commitments;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2curves::bn256::Bn256;
     use lazy_static::lazy_static;
@@ -2247,7 +2247,7 @@ mod native_tests {
         // not macos-metal and not icicle
         #[cfg(all(not(feature = "icicle"), not(feature = "macos-metal")))]
         let args = ["build", "--profile=test-runs", "--bin", "ezkl"];
-        #[cfg(not(feature = "mv-lookup"))]
+        #[cfg(feature = "eth-original-lookup")]
         let args = [
             "build",
             "--profile=test-runs",
@@ -2255,7 +2255,7 @@ mod native_tests {
             "ezkl",
             "--no-default-features",
             "--features",
-            "ezkl",
+            "ezkl,solidity-verifier,eth",
         ];
 
         let status = Command::new("cargo")

@@ -1,29 +1,30 @@
-use crate::EZKL_BUF_CAPACITY;
-use crate::circuit::CheckMode;
 use crate::circuit::region::RegionSettings;
+use crate::circuit::CheckMode;
 use crate::commands::CalibrationTarget;
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 use crate::eth::{deploy_contract_via_solidity, register_vka_via_rv};
 #[allow(unused_imports)]
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 use crate::eth::{get_contract_artifacts, verify_proof_via_solidity};
 use crate::graph::input::GraphData;
 use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::{
-    ProofSplitCommit, create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit,
+    create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
 };
 use crate::pfsys::{
-    Snark, StrategyType, TranscriptType, create_keys, load_pk, load_vk, save_params, save_pk,
+    create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit, ProofSplitCommit,
 };
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
+use crate::EZKL_BUF_CAPACITY;
+use crate::{commands::*, EZKLError};
 use crate::{Commitments, RunArgs};
-use crate::{EZKLError, commands::*};
 use colored::Colorize;
 #[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{self, Circuit};
-use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params};
 use halo2_proofs::poly::commitment::{ParamsProver, Verifier};
 use halo2_proofs::poly::ipa::commitment::{IPACommitmentScheme, ParamsIPA};
@@ -36,7 +37,9 @@ use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy as KZGAccumulatorStra
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
+use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer};
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
 use halo2curves::ff::{FromUniformBytes, WithSmallOrderMulGroup};
@@ -47,15 +50,18 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::debug;
 use log::{info, trace, warn};
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use snark_verifier::loader::native::NativeLoader;
-use snark_verifier::system::halo2::Config;
 use snark_verifier::system::halo2::compile;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
+use snark_verifier::system::halo2::Config;
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 use std::fs::File;
 use std::io::BufWriter;
-use std::io::{Cursor, Write};
+use std::io::Cursor;
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -186,6 +192,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             model.unwrap_or(DEFAULT_MODEL.into()),
             witness.unwrap_or(DEFAULT_WITNESS.into()),
         ),
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::CreateEvmVerifier {
             vk_path,
             srs_path,
@@ -204,6 +211,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::EncodeEvmCalldata {
             proof_path,
             calldata_path,
@@ -214,6 +222,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             vka_path,
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::CreateEvmVka {
             vk_path,
             srs_path,
@@ -230,6 +239,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::CreateEvmVerifierAggr {
             vk_path,
             srs_path,
@@ -383,6 +393,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             commitment.into(),
         )
         .map(|e| serde_json::to_string(&e).unwrap()),
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::DeployEvm {
             sol_code_path,
             rpc_url,
@@ -401,6 +412,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::VerifyEvm {
             proof_path,
             addr_verifier,
@@ -415,6 +427,7 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             )
             .await
         }
+        #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
         Commands::RegisterVka {
             addr_verifier,
             vka_path,
@@ -1403,6 +1416,7 @@ pub(crate) fn mock(
     Ok(String::new())
 }
 
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn create_evm_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1452,6 +1466,7 @@ pub(crate) async fn create_evm_verifier(
     Ok(String::new())
 }
 
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn create_evm_vka(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
@@ -1512,6 +1527,7 @@ pub(crate) async fn create_evm_vka(
 
     Ok(String::new())
 }
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn deploy_evm(
     sol_code_path: PathBuf,
     rpc_url: String,
@@ -1540,6 +1556,7 @@ pub(crate) async fn deploy_evm(
     Ok(String::new())
 }
 
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn register_vka(
     rpc_url: String,
     rv_addr: H160Flag,
@@ -1569,6 +1586,7 @@ pub(crate) async fn register_vka(
 /// Encodes the calldata for the EVM verifier (both aggregated and single proof)
 /// TODO: Add a "RV address param" which will query the "RegisteredVKA" events to fetch the
 /// VKA from the vka_digest.
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) fn encode_evm_calldata(
     proof_path: PathBuf,
     calldata_path: PathBuf,
@@ -1606,6 +1624,7 @@ pub(crate) fn encode_evm_calldata(
 
 /// TODO: Add an optional vka_digest param that will allow use to fetch the assocaited VKA
 /// from the RegisteredVKA events on the RV.
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn verify_evm(
     proof_path: PathBuf,
     addr_verifier: H160Flag,
@@ -1631,6 +1650,7 @@ pub(crate) async fn verify_evm(
     Ok(String::new())
 }
 
+#[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn create_evm_aggregate_verifier(
     vk_path: PathBuf,
     srs_path: Option<PathBuf>,
