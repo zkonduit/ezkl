@@ -27,7 +27,7 @@ pub use var::*;
 
 use crate::{
     circuit::utils,
-    fieldutils::{IntegerRep, integer_rep_to_felt},
+    fieldutils::{integer_rep_to_felt, IntegerRep},
     graph::Visibility,
 };
 
@@ -62,7 +62,7 @@ pub trait TensorType: Clone + Debug + 'static {
 }
 
 macro_rules! tensor_type {
-    ($rust_type:ty, $tensor_type:ident, $zero:expr_2021, $one:expr_2021) => {
+    ($rust_type:ty, $tensor_type:ident, $zero:expr, $one:expr) => {
         impl TensorType for $rust_type {
             fn zero() -> Option<Self> {
                 Some($zero)

@@ -41,7 +41,7 @@ use halo2curves::{
 use snark_verifier::{loader::native::NativeLoader, system::halo2::transcript::evm::EvmTranscript};
 
 /// Wrapper around the Error Message
-#[cfg_attr(feature = "universal-bindings", derive(uniffi::Error))]
+#[cfg_attr(feature = "ios-bindings", derive(uniffi::Error))]
 #[derive(Debug)]
 pub enum EZKLError {
     /// Some Comment
@@ -63,9 +63,10 @@ impl From<InnerEZKLError> for EZKLError {
 }
 
 /// Encode verifier calldata from proof and ethereum vk_address
+#[cfg(feature = "ios-bindings")]
 #[cfg_attr(feature = "ios-bindings", uniffi::export)]
-pub(crate) fn encode_verifier_calldata(
-    // TODO - shuold it be pub(crate) or pub or pub(super)?
+pub fn encode_verifier_calldata(
+    // TODO - shuold it be pub or pub or pub(super)?
     proof: Vec<u8>,
     vka: Option<Vec<u8>>,
 ) -> Result<Vec<u8>, EZKLError> {
@@ -90,8 +91,8 @@ pub(crate) fn encode_verifier_calldata(
 }
 
 /// Generate witness from compiled circuit and input json
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn gen_witness(compiled_circuit: Vec<u8>, input: Vec<u8>) -> Result<Vec<u8>, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn gen_witness(compiled_circuit: Vec<u8>, input: Vec<u8>) -> Result<Vec<u8>, EZKLError> {
     let mut circuit: crate::graph::GraphCircuit = bincode::deserialize(&compiled_circuit[..])
         .map_err(|e| {
             EZKLError::InternalError(format!("Failed to deserialize compiled model: {}", e))
@@ -120,8 +121,8 @@ pub(crate) fn gen_witness(compiled_circuit: Vec<u8>, input: Vec<u8>) -> Result<V
 }
 
 /// Generate verifying key from compiled circuit, and parameters srs
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn gen_vk(
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn gen_vk(
     compiled_circuit: Vec<u8>,
     srs: Vec<u8>,
     compress_selectors: bool,
@@ -150,12 +151,8 @@ pub(crate) fn gen_vk(
 }
 
 /// Generate proving key from vk, compiled circuit and parameters srs
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn gen_pk(
-    vk: Vec<u8>,
-    compiled_circuit: Vec<u8>,
-    srs: Vec<u8>,
-) -> Result<Vec<u8>, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn gen_pk(vk: Vec<u8>, compiled_circuit: Vec<u8>, srs: Vec<u8>) -> Result<Vec<u8>, EZKLError> {
     let mut reader = BufReader::new(&srs[..]);
     let params: ParamsKZG<Bn256> = get_params(&mut reader)?;
 
@@ -181,8 +178,8 @@ pub(crate) fn gen_pk(
 }
 
 /// Verify proof with vk, proof json, circuit settings json and srs
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn verify(
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn verify(
     proof: Vec<u8>,
     vk: Vec<u8>,
     settings: Vec<u8>,
@@ -263,8 +260,8 @@ pub(crate) fn verify(
 }
 
 /// Verify aggregate proof with vk, proof, circuit settings and srs
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn verify_aggr(
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn verify_aggr(
     proof: Vec<u8>,
     vk: Vec<u8>,
     logrows: u64,
@@ -345,8 +342,8 @@ pub(crate) fn verify_aggr(
 }
 
 /// Prove in browser with compiled circuit, witness json, proving key, and srs
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn prove(
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn prove(
     witness: Vec<u8>,
     pk: Vec<u8>,
     compiled_circuit: Vec<u8>,
@@ -443,16 +440,16 @@ pub(crate) fn prove(
 }
 
 /// Validate the witness json
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn witness_validation(witness: Vec<u8>) -> Result<bool, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn witness_validation(witness: Vec<u8>) -> Result<bool, EZKLError> {
     let _: GraphWitness = serde_json::from_slice(&witness[..]).map_err(InnerEZKLError::from)?;
 
     Ok(true)
 }
 
 /// Validate the compiled circuit
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn compiled_circuit_validation(compiled_circuit: Vec<u8>) -> Result<bool, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn compiled_circuit_validation(compiled_circuit: Vec<u8>) -> Result<bool, EZKLError> {
     let _: GraphCircuit = bincode::deserialize(&compiled_circuit[..]).map_err(|e| {
         EZKLError::InternalError(format!("Failed to deserialize compiled circuit: {}", e))
     })?;
@@ -461,8 +458,8 @@ pub(crate) fn compiled_circuit_validation(compiled_circuit: Vec<u8>) -> Result<b
 }
 
 /// Validate the input json
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn input_validation(input: Vec<u8>) -> Result<bool, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn input_validation(input: Vec<u8>) -> Result<bool, EZKLError> {
     let _: crate::graph::input::GraphData =
         serde_json::from_slice(&input[..]).map_err(InnerEZKLError::from)?;
 
@@ -470,8 +467,8 @@ pub(crate) fn input_validation(input: Vec<u8>) -> Result<bool, EZKLError> {
 }
 
 /// Validate the proof json
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn proof_validation(proof: Vec<u8>) -> Result<bool, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn proof_validation(proof: Vec<u8>) -> Result<bool, EZKLError> {
     let _: crate::pfsys::Snark<Fr, G1Affine> =
         serde_json::from_slice(&proof[..]).map_err(InnerEZKLError::from)?;
 
@@ -479,8 +476,8 @@ pub(crate) fn proof_validation(proof: Vec<u8>) -> Result<bool, EZKLError> {
 }
 
 /// Validate the verifying key given the settings json
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn vk_validation(vk: Vec<u8>, settings: Vec<u8>) -> Result<bool, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn vk_validation(vk: Vec<u8>, settings: Vec<u8>) -> Result<bool, EZKLError> {
     let circuit_settings: GraphSettings =
         serde_json::from_slice(&settings[..]).map_err(InnerEZKLError::from)?;
 
@@ -496,8 +493,8 @@ pub(crate) fn vk_validation(vk: Vec<u8>, settings: Vec<u8>) -> Result<bool, EZKL
 }
 
 /// Validate the proving key given the settings json
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn pk_validation(pk: Vec<u8>, settings: Vec<u8>) -> Result<bool, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn pk_validation(pk: Vec<u8>, settings: Vec<u8>) -> Result<bool, EZKLError> {
     let circuit_settings: GraphSettings =
         serde_json::from_slice(&settings[..]).map_err(InnerEZKLError::from)?;
 
@@ -513,16 +510,16 @@ pub(crate) fn pk_validation(pk: Vec<u8>, settings: Vec<u8>) -> Result<bool, EZKL
 }
 
 /// Validate the settings json
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn settings_validation(settings: Vec<u8>) -> Result<bool, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn settings_validation(settings: Vec<u8>) -> Result<bool, EZKLError> {
     let _: GraphSettings = serde_json::from_slice(&settings[..]).map_err(InnerEZKLError::from)?;
 
     Ok(true)
 }
 
 /// Validate the srs
-#[cfg_attr(feature = "universal-bindings", uniffi::export)]
-pub(crate) fn srs_validation(srs: Vec<u8>) -> Result<bool, EZKLError> {
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn srs_validation(srs: Vec<u8>) -> Result<bool, EZKLError> {
     let mut reader = BufReader::new(&srs[..]);
     let _: ParamsKZG<Bn256> =
         halo2_proofs::poly::commitment::Params::<'_, G1Affine>::read(&mut reader).map_err(|e| {
