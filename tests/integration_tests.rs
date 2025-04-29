@@ -4,7 +4,7 @@ mod native_tests {
 
     // use ezkl::circuit::table::RESERVED_BLINDING_ROWS_PAD;
     use ezkl::graph::input::{FileSource, GraphData};
-    use ezkl::graph::{DataSource, GraphSettings};
+    use ezkl::graph::GraphSettings;
     use ezkl::pfsys::Snark;
     use ezkl::Commitments;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
@@ -163,17 +163,14 @@ mod native_tests {
             let data = GraphData::from_path(format!("{}/{}/input.json", test_dir, test).into())
                 .expect("failed to load input data");
 
-            let input_data = match data.input_data {
-                DataSource::File(data) => data,
-                _ => panic!("Only File data sources support batching"),
-            };
-
-            let duplicated_input_data: FileSource = input_data
+            let duplicated_input_data: FileSource = data
+                .input_data
+                .values()
                 .iter()
                 .map(|data| (0..num_batches).flat_map(|_| data.clone()).collect())
                 .collect();
 
-            let duplicated_data = GraphData::new(DataSource::File(duplicated_input_data));
+            let duplicated_data = GraphData::new(duplicated_input_data.into());
 
             let res =
                 duplicated_data.save(format!("{}/{}/input.json", test_dir, output_dir).into());

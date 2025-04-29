@@ -171,7 +171,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             scale_rebase_multiplier,
             max_logrows,
         )
-        .await
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::GenWitness {
             data,
@@ -186,7 +185,6 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             vk_path,
             srs_path,
         )
-        .await
         .map(|e| serde_json::to_string(&e).unwrap()),
         Commands::Mock { model, witness } => mock(
             model.unwrap_or(DEFAULT_MODEL.into()),
@@ -691,7 +689,7 @@ pub(crate) fn table(model: PathBuf, run_args: RunArgs) -> Result<String, EZKLErr
     Ok(String::new())
 }
 
-pub(crate) async fn gen_witness(
+pub(crate) fn gen_witness(
     compiled_circuit_path: PathBuf,
     data: String,
     output: Option<PathBuf>,
@@ -713,7 +711,7 @@ pub(crate) async fn gen_witness(
         None
     };
 
-    let mut input = circuit.load_graph_input(&data).await?;
+    let mut input = circuit.load_graph_input(&data)?;
     #[cfg(any(not(feature = "ezkl"), target_arch = "wasm32"))]
     let mut input = circuit.load_graph_input(&data)?;
 
@@ -1024,7 +1022,7 @@ impl AccuracyResults {
 /// Calibrate the circuit parameters to a given a dataset
 #[allow(trivial_casts)]
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn calibrate(
+pub(crate) fn calibrate(
     model_path: PathBuf,
     data: String,
     settings_path: PathBuf,
@@ -1050,7 +1048,7 @@ pub(crate) async fn calibrate(
 
     let input_shapes = model.graph.input_shapes()?;
 
-    let chunks = data.split_into_batches(input_shapes).await?;
+    let chunks = data.split_into_batches(input_shapes)?;
     info!("num calibration batches: {}", chunks.len());
 
     debug!("running onnx predictions...");
@@ -1161,7 +1159,7 @@ pub(crate) async fn calibrate(
                 let chunk = chunk.clone();
 
                 let data = circuit
-                    .load_graph_from_file_exclusively(&chunk)
+                    .load_graph_input(&chunk)
                     .map_err(|e| format!("failed to load circuit inputs: {}", e))?;
 
                 let forward_res = circuit
