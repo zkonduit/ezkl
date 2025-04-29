@@ -3,8 +3,6 @@ use super::quantize_float;
 use crate::EZKL_BUF_CAPACITY;
 use crate::circuit::InputType;
 use crate::fieldutils::integer_rep_to_felt;
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-use crate::graph::postgres::Client;
 use halo2curves::bn256::Fr as Fp;
 #[cfg(feature = "python-bindings")]
 use pyo3::ToPyObject;
@@ -22,9 +20,6 @@ use tract_onnx::tract_core::{
     tract_data::{TVec, prelude::Tensor as TractTensor},
     value::TValue,
 };
-
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-use tract_onnx::tract_hir::tract_num_traits::ToPrimitive;
 
 type Decimals = u8;
 type Call = String;
@@ -260,9 +255,6 @@ pub enum DataSource {
     File(FileSource),
     /// Data fetched from blockchain contracts
     OnChain(OnChainSource),
-    /// Data from a PostgreSQL database
-    #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-    DB(PostgresSource),
 }
 
 impl Default for DataSource {
@@ -321,15 +313,6 @@ impl<'de> Deserialize<'de> for DataSource {
         let second_try: Result<OnChainSource, _> = serde_json::from_str(this_json.get());
         if let Ok(t) = second_try {
             return Ok(DataSource::OnChain(t));
-        }
-
-        // Try deserializing as PostgresSource if feature enabled
-        #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-        {
-            let third_try: Result<PostgresSource, _> = serde_json::from_str(this_json.get());
-            if let Ok(t) = third_try {
-                return Ok(DataSource::DB(t));
-            }
         }
 
         Err(serde::de::Error::custom("failed to deserialize DataSource"))
@@ -517,11 +500,6 @@ impl GraphData {
                     "on-chain data cannot be split into batches".to_string(),
                 ));
             }
-            #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-            GraphData {
-                input_data: DataSource::DB(data),
-                output_data: _,
-            } => data.fetch_and_format_as_file().await?,
         };
 
         // Process each input tensor according to its shape
@@ -592,28 +570,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_postgres_source_new() {
-        #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-        {
-            let source = PostgresSource::new(
-                "localhost".to_string(),
-                "5432".to_string(),
-                "user".to_string(),
-                "SELECT * FROM table".to_string(),
-                "database".to_string(),
-                "password".to_string(),
-            );
-
-            assert_eq!(source.host, "localhost");
-            assert_eq!(source.port, "5432");
-            assert_eq!(source.user, "user");
-            assert_eq!(source.query, "SELECT * FROM table");
-            assert_eq!(source.dbname, "database");
-            assert_eq!(source.password, "password");
-        }
-    }
-
-    #[test]
     fn test_data_source_serialization_round_trip() {
         // Test backwards compatibility with old format
         let source = DataSource::from(vec![vec![0.053_262_424, 0.074_970_566, 0.052_355_476]]);
@@ -655,95 +611,6 @@ mod tests {
     }
 }
 
-/// Source data from a PostgreSQL database
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialOrd, PartialEq)]
-pub struct PostgresSource {
-    /// Database host address
-    pub host: RPCUrl,
-    /// Database user name
-    pub user: String,
-    /// Database password
-    pub password: String,
-    /// SQL query to execute
-    pub query: String,
-    /// Database name
-    pub dbname: String,
-    /// Database port
-    pub port: String,
-}
-
-#[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-impl PostgresSource {
-    /// Creates a new PostgreSQL data source
-    pub fn new(
-        host: RPCUrl,
-        port: String,
-        user: String,
-        query: String,
-        dbname: String,
-        password: String,
-    ) -> Self {
-        PostgresSource {
-            host,
-            user,
-            password,
-            query,
-            dbname,
-            port,
-        }
-    }
-
-    /// Fetches data from the PostgreSQL database
-    pub async fn fetch(&self) -> Result<Vec<Vec<pg_bigdecimal::PgNumeric>>, GraphError> {
-        // Configuration string
-        let config = if self.password.is_empty() {
-            format!(
-                "host={} user={} dbname={} port={}",
-                self.host, self.user, self.dbname, self.port
-            )
-        } else {
-            format!(
-                "host={} user={} dbname={} port={} password={}",
-                self.host, self.user, self.dbname, self.port, self.password
-            )
-        };
-
-        let mut client = Client::connect(&config).await?;
-        let mut res: Vec<pg_bigdecimal::PgNumeric> = Vec::new();
-
-        // Extract rows from query
-        for row in client.query(&self.query, &[]).await? {
-            for i in 0..row.len() {
-                res.push(row.get(i));
-            }
-        }
-        Ok(vec![res])
-    }
-
-    /// Fetches and formats data as FileSource
-    pub async fn fetch_and_format_as_file(&self) -> Result<Vec<Vec<FileSourceInner>>, GraphError> {
-        Ok(self
-            .fetch()
-            .await?
-            .iter()
-            .map(|d| {
-                d.iter()
-                    .map(|d| {
-                        FileSourceInner::Float(
-                            d.n.as_ref()
-                                .unwrap()
-                                .to_f64()
-                                .ok_or("could not convert decimal to f64")
-                                .unwrap(),
-                        )
-                    })
-                    .collect()
-            })
-            .collect())
-    }
-}
-
 #[cfg(feature = "python-bindings")]
 impl ToPyObject for CallToAccount {
     fn to_object(&self, py: Python) -> PyObject {
@@ -765,14 +632,6 @@ impl ToPyObject for DataSource {
                 dict.set_item("rpc_url", &source.rpc).unwrap();
                 dict.set_item("calls_to_accounts", &source.call.to_object(py))
                     .unwrap();
-                dict.to_object(py)
-            }
-            #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-            DataSource::DB(source) => {
-                let dict = PyDict::new(py);
-                dict.set_item("host", &source.host).unwrap();
-                dict.set_item("user", &source.user).unwrap();
-                dict.set_item("query", &source.query).unwrap();
                 dict.to_object(py)
             }
         }

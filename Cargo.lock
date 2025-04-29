@@ -468,6 +468,7 @@ source = "git+https://github.com/alloy-rs/alloy?rev=5fbf57bac99edef9d8475190109a
 dependencies = [
  "alloy-json-rpc",
  "base64",
+ "base64",
  "futures-util",
  "futures-utils-wasm",
  "serde",
@@ -909,17 +910,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba62675e8242a4c4e806d12f11d136e626e6c8361d6b829310732241652a178a"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "bigdecimal"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6773ddc0eafc0e509fb60e48dff7f450f8e674a0686ae8605e8d9901bd5eefa"
-dependencies = [
- "num-bigint",
- "num-integer",
- "num-traits",
 ]
 
 [[package]]
@@ -2033,7 +2023,6 @@ dependencies = [
  "num",
  "objc",
  "openssl",
- "pg_bigdecimal",
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-log",
@@ -2054,7 +2043,6 @@ dependencies = [
  "test-case",
  "thiserror 1.0.69",
  "tokio",
- "tokio-postgres",
  "tosubcommand",
  "tract-onnx",
  "uniffi",
@@ -2066,12 +2054,6 @@ dependencies = [
  "wasm-bindgen-rayon",
  "wasm-bindgen-test",
 ]
-
-[[package]]
-name = "fallible-iterator"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 
 [[package]]
 name = "fastrand"
@@ -4151,19 +4133,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pg_bigdecimal"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9855a94c74528af62c0ea236577af5e601263c1c404a6ac939b07c97c8e0216"
-dependencies = [
- "bigdecimal",
- "byteorder",
- "bytes",
- "num",
- "postgres",
-]
-
-[[package]]
 name = "phf"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4919,6 +4888,7 @@ version = "0.12.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d19c46a6fdd48bc4dab94b6103fccc55d34c67cc0ad04653aad4ea2a07cd7bbb"
 dependencies = [
+ "base64",
  "base64",
  "bytes",
  "futures-channel",
@@ -6838,12 +6808,6 @@ checksum = "9683f9a5a998d873c0d21fcbe3c083009670149a8fab228644b8bd36b2c48cb3"
 dependencies = [
  "wit-bindgen-rt",
 ]
-
-[[package]]
-name = "wasite"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
 
 [[package]]
 name = "wasm-bindgen"
