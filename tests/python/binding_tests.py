@@ -135,7 +135,7 @@ async def test_calibrate_over_user_range():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources", 1, [0, 1, 2])
     assert res == True
     assert os.path.isfile(output_path)
@@ -169,7 +169,7 @@ async def test_calibrate():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources")
     assert res == True
     assert os.path.isfile(output_path)
@@ -216,7 +216,7 @@ async def test_forward():
         'witness.json'
     )
 
-    res = await ezkl.gen_witness(data_path, model_path, output_path)
+    res = ezkl.gen_witness(data_path, model_path, output_path)
 
     with open(output_path, "r") as f:
         data = json.load(f)
@@ -640,7 +640,7 @@ async def test_aggregate_and_verify_aggr():
     res = ezkl.gen_settings(model_path, settings_path)
     assert res == True
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         data_path, model_path, settings_path, "resources")
     assert res == True
     assert os.path.isfile(settings_path)
@@ -662,7 +662,7 @@ async def test_aggregate_and_verify_aggr():
         '1l_relu_aggr_witness.json'
     )
 
-    res = await ezkl.gen_witness(data_path, compiled_model_path,
+    res = ezkl.gen_witness(data_path, compiled_model_path,
                            output_path)
 
     ezkl.prove(
@@ -742,7 +742,7 @@ async def test_evm_aggregate_and_verify_aggr():
         settings_path,
     )
 
-    await ezkl.calibrate_settings(
+    ezkl.calibrate_settings(
         data_path,
         model_path,
         settings_path,
@@ -771,7 +771,7 @@ async def test_evm_aggregate_and_verify_aggr():
         '1l_relu_aggr_evm_witness.json'
     )
 
-    res = await ezkl.gen_witness(data_path, compiled_model_path,
+    res = ezkl.gen_witness(data_path, compiled_model_path,
                            output_path)
 
     ezkl.prove(
@@ -905,7 +905,7 @@ async def test_all_examples(model_file, input_file):
     res = ezkl.gen_settings(model_file, settings_path, py_run_args=run_args)
     assert res
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         input_file, model_file, settings_path, "resources")
     assert res
 
@@ -936,7 +936,7 @@ async def test_all_examples(model_file, input_file):
     assert os.path.isfile(pk_path)
 
     print("Generating witness for example: ", model_file)
-    res = await ezkl.gen_witness(input_file, compiled_model_path, witness_path)
+    res = ezkl.gen_witness(input_file, compiled_model_path, witness_path)
     assert os.path.isfile(witness_path)
 
     print("Proving example: ", model_file)
