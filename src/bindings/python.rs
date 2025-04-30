@@ -1095,7 +1095,7 @@ fn gen_witness(
     output: Option<PathBuf>,
     vk_path: Option<PathBuf>,
     srs_path: Option<PathBuf>,
-) -> PyResult<Py<PyAny>> {
+) -> PyResult<PyObject> {
     let output =
         crate::execute::gen_witness(model, data, output, vk_path, srs_path).map_err(|e| {
             let err_str = format!("Failed to generate witness: {}", e);

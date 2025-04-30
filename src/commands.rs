@@ -864,7 +864,7 @@ pub enum Commands {
         #[arg(short = 'U', long, value_hint = clap::ValueHint::Url)]
         rpc_url: String,
         /// The path to the serialized vka file
-        #[arg(long, default_value = DEFAULT_VKA, value_hint = clap::ValueHint::FilePath)]
+        #[arg(long, value_hint = clap::ValueHint::FilePath)]
         vka_path: Option<PathBuf>,
     },
     /// Registers a VKA, returning the its digest used to identify it on-chain.

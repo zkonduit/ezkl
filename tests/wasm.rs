@@ -76,21 +76,18 @@ mod wasm32 {
         );
         assert_eq!(calldata, reference_calldata);
         // with vk address
-        let vk_address = hex::decode("0000000000000000000000000000000000000000").unwrap();
+        let dummy_32_byte_word = [0u8; 32];
 
-        let vk_address: [u8; 20] = {
-            let mut array = [0u8; 20];
-            array.copy_from_slice(&vk_address);
-            array
-        };
+        // define and initialize a variable of type: &[[u8; 32]] named "vka"
+        let vka: &[[u8; 32]] = &[dummy_32_byte_word.into()];
 
-        let serialized = serde_json::to_vec(&vk_address).unwrap();
+        let serialized = serde_json::to_vec(vka).unwrap();
 
         let calldata = encodeVerifierCalldata(ser_proof, Some(serialized))
             .map_err(|_| "failed")
             .unwrap();
         let reference_calldata = encode_calldata(
-            Some(vk_address),
+            Some(vka),
             &snark.proof,
             &flattened_instances.collect::<Vec<_>>(),
         );

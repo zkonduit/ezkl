@@ -1,6 +1,6 @@
 use crate::graph::input::FileSourceInner;
-use crate::pfsys::Snark;
 use crate::pfsys::evm::EvmVerificationError;
+use crate::pfsys::Snark;
 use alloy::contract::CallBuilder;
 use alloy::core::primitives::Address as H160;
 use alloy::core::primitives::Bytes;
@@ -9,12 +9,12 @@ use alloy::dyn_abi::abi::TokenSeq;
 // use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
 use alloy::primitives::ruint::ParseError;
-use alloy::primitives::{I256, ParseSignedError};
-use alloy::providers::ProviderBuilder;
+use alloy::primitives::{ParseSignedError, I256};
 use alloy::providers::fillers::{
     ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller,
 };
 use alloy::providers::network::{Ethereum, EthereumSigner};
+use alloy::providers::ProviderBuilder;
 use alloy::providers::{Identity, Provider, RootProvider};
 use alloy::rpc::types::eth::TransactionInput;
 use alloy::rpc::types::eth::TransactionRequest;
@@ -23,9 +23,9 @@ use alloy::signers::wallet::{LocalWallet, WalletError};
 use alloy::sol as abigen;
 use alloy::transports::http::Http;
 use alloy::transports::{RpcError, TransportErrorKind};
-use foundry_compilers::Solc;
 use foundry_compilers::artifacts::Settings as SolcSettings;
 use foundry_compilers::error::{SolcError, SolcIoError};
+use foundry_compilers::Solc;
 use halo2_solidity_verifier::{encode_calldata, encode_register_vk_calldata};
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
@@ -663,9 +663,9 @@ pub async fn get_contract_artifacts(
     runs: usize,
 ) -> Result<(JsonAbi, Bytes, Bytes), EthError> {
     use foundry_compilers::{
-        SHANGHAI_SOLC, SolcInput,
-        artifacts::{Optimizer, output_selection::OutputSelection},
+        artifacts::{output_selection::OutputSelection, Optimizer},
         compilers::CompilerInput,
+        SolcInput, SHANGHAI_SOLC,
     };
 
     if !sol_code_path.exists() {
