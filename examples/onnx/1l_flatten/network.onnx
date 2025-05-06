@@ -1,7 +1,8 @@
-pytorch1.12.1:Œ
-0
-inputoutput	Flatten_0"Flatten*
-axis 	torch_jitZ)
+pytorch2.6.0:”
+7
+inputoutput/flatten/Flatten"Flatten*
+axis 
+main_graphZ)
 input 
 
 

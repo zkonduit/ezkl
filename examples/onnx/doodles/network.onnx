@@ -1,7 +1,8 @@
-pytorch1.13.1:‰
+pytorch2.6.0:Š
 %
 inputoutput
-Identity_0"Identity	torch_jitZ)
+Identity_0"Identity
+main_graphZ)
 input 
 
 

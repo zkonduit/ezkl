@@ -1,6 +1,7 @@
-pytorch1.13.1:p
+pytorch2.6.0:q
 
-inputoutput/Sqrt"Sqrt	torch_jitZ!
+inputoutput/Sqrt"Sqrt
+main_graphZ!
 input
 
 

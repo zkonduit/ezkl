@@ -1,9 +1,10 @@
-pytorch2.0.1:ц
+pytorch2.6.0:д
 ?/Constant_output_0	/Constant"Constant*
 value*Jмлл╫═
 .
 input
-/Constant_output_0output/Pow"Pow	torch_jitZ!
+/Constant_output_0output/Pow"Pow
+main_graphZ!
 input
 
 

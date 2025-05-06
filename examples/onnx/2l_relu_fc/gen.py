@@ -1,6 +1,10 @@
 from torch import nn
 import torch.nn.init as init
-from ezkl import export
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from export import export
+
 
 class Model(nn.Module):
     def __init__(self, inplace=False):
@@ -18,6 +22,7 @@ class Model(nn.Module):
 
     def _initialize_weights(self):
         init.orthogonal_(self.aff1.weight)
+
 
 circuit = Model()
 export(circuit, input_shape = [3])
