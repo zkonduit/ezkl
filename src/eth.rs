@@ -302,9 +302,6 @@ pub enum EthError {
     RescaleCheckError(#[from] RescaleCheckError),
 }
 
-// we have to generate these two contract differently because they are generated dynamically ! and hence the static compilation from above does not suit
-const ATTESTDATA_SOL: &str = include_str!("../contracts/AttestData.sol");
-
 pub type EthersClient = Arc<
     FillProvider<
         JoinFill<
@@ -718,7 +715,7 @@ pub async fn get_contract_artifacts(
 
 /// Convert a 1e‑18 fixed‑point **integer string** into a decimal string.
 ///
-/// `"1541748046875000000"` → `"1.541748046875000000"`  
+/// `"1541748046875000000"` → `"1.541748046875000000"`
 /// `"273690402507781982"`  → `"0.273690402507781982"`
 fn to_decimal_18(s: &str) -> String {
     let s = s.trim_start_matches('0');
@@ -782,61 +779,4 @@ fn scaled_matches(instance: &str, expected: &str) -> bool {
     } else {
         false
     }
-}
-
-/// Sets the constants stored in the da verifier
-pub fn fix_da_sol(commitment_bytes: Option<Vec<u8>>, only_kzg: bool) -> Result<String, EthError> {
-    let mut contract = ATTESTDATA_SOL.to_string();
-
-    // The case where a combination of on-chain data source + kzg commit is provided.
-    if commitment_bytes.is_some() && !commitment_bytes.as_ref().unwrap().is_empty() {
-        let commitment_bytes = commitment_bytes.as_ref().unwrap();
-        let hex_string = hex::encode(commitment_bytes);
-        contract = contract.replace(
-            "bytes constant COMMITMENT_KZG = hex\"1234\";",
-            &format!("bytes constant COMMITMENT_KZG = hex\"{}\";", hex_string),
-        );
-        if only_kzg {
-            contract = contract.replace(
-                "contract SwapProofCommitments {",
-                "contract DataAttestation {",
-            );
-
-            // Remove everything past the end of the checkKzgCommits function
-            if let Some(pos) = contract.find("    } /// end checkKzgCommits") {
-                contract.truncate(pos);
-                contract.push('}');
-            }
-
-            // Add the Solidity function below checkKzgCommits
-            contract.push_str(
-                r#"
-                function verifyWithDataAttestation(
-                    address verifier,
-                    bytes calldata encoded
-                ) public view returns (bool) {
-                    require(verifier.code.length > 0, "Address: call to non-contract");
-                    require(checkKzgCommits(encoded), "Invalid KZG commitments");
-                    // static call the verifier contract to verify the proof
-                    (bool success, bytes memory returndata) = verifier.staticcall(encoded);
-
-                    if (success) {
-                        return abi.decode(returndata, (bool));
-                    } else {
-                        revert("low-level call to verifier failed");
-                    }
-                }
-            }"#,
-            );
-        }
-    } else {
-        // Remove the SwapProofCommitments inheritance and the checkKzgCommits function call if no commitment is provided
-        contract = contract.replace(", SwapProofCommitments", "");
-        contract = contract.replace(
-            "require(checkKzgCommits(encoded), \"Invalid KZG commitments\");",
-            "",
-        );
-    }
-
-    Ok(contract)
 }

@@ -234,6 +234,7 @@ universal-bindings = [
     "parallel-poly-read",
     "solidity-verifier-mv-lookup",
 ]
+logging = []
 ios-bindings = ["universal-bindings"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
@@ -257,6 +258,7 @@ ezkl = [
     "dep:semver",
     "dep:clap",
     "dep:tosubcommand",
+    "logging",
 ]
 eth = ["dep:alloy", "dep:foundry-compilers", "dep:ethabi"]
 solidity-verifier = ["dep:halo2_solidity_verifier"]

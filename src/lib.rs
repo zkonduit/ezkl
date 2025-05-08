@@ -152,7 +152,7 @@ pub mod fieldutils;
 pub mod graph;
 /// beautiful logging
 #[cfg(all(
-    feature = "ezkl",
+    feature = "logging",
     not(all(target_arch = "wasm32", target_os = "unknown"))
 ))]
 pub mod logger;
