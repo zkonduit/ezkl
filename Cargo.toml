@@ -234,13 +234,11 @@ universal-bindings = [
     "parallel-poly-read",
     "solidity-verifier-mv-lookup",
 ]
-logging = []
+logging = ["dep:colored","dep:env_logger","dep:chrono"]
 ios-bindings = ["universal-bindings"]
 ios-bindings-test = ["ios-bindings", "uniffi/bindgen-tests"]
 ezkl = [
     "onnx",
-    "dep:colored",
-    "dep:env_logger",
     "tabled/color",
     "serde_json/std",
     "colored_json",
@@ -252,7 +250,6 @@ ezkl = [
     "dep:tokio",
     "dep:openssl",
     "dep:mimalloc",
-    "dep:chrono",
     "dep:sha256",
     "dep:clap_complete",
     "dep:semver",
