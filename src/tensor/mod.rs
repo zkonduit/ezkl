@@ -19,7 +19,7 @@ use maybe_rayon::{
     slice::ParallelSliceMut,
 };
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::path::PathBuf;
 pub use val::*;
 pub use var::*;
@@ -406,44 +406,46 @@ impl<T: Clone + TensorType + PrimeField> Tensor<T> {
 
         let mut inner = Vec::new();
         loop {
-            // Try to read a complete T::Repr directly
+            // Check if there's more data available
+            let has_data = match buf_reader.fill_buf() {
+                Ok(buffer) => !buffer.is_empty(),
+                Err(e) => {
+                    return Err(TensorError::FileLoadError(format!(
+                        "IO error while checking for data: {}",
+                        e
+                    )));
+                }
+            };
+
+            // If no data left, we're done
+            if !has_data {
+                break;
+            }
+
+            // Try to read a complete T::Repr
             let mut repr = T::Repr::default();
 
-            // Use read_exact instead of relying on buffer size
             match buf_reader.read_exact(repr.as_mut()) {
                 Ok(_) => {
                     // Successfully read a complete representation
-                    // Check if the conversion was successful in a constant-time manner
-                    let candidate = T::from_repr(repr);
-                    if candidate.is_some().into() {
+                    let tensor = T::from_repr(repr);
+
+                    // Check if the conversion was successful
+                    if tensor.is_some().into() {
                         // Unwrap the value safely (we already checked it's Some)
-                        inner.push(candidate.unwrap());
+                        inner.push(tensor.unwrap());
                     } else {
-                        return Err(TensorError::FileLoadError(format!(
-                            "Invalid tensor data encountered at element {}",
-                            inner.len()
-                        )));
+                        return Err(TensorError::FileLoadError(
+                            "Failed to convert representation to tensor".to_string(),
+                        ));
                     }
                 }
-                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                    // Check if we've read any complete elements
-                    if inner.is_empty() {
-                        // Empty file case
-                        break;
-                    } else {
-                        // Partial read at the end - this is an error
-                        return Err(TensorError::FileLoadError(format!(
-                            "Incomplete tensor data at the end of file after reading {} elements",
-                            inner.len()
-                        )));
-                    }
-                }
-                Err(e) => {
-                    // Other IO errors
-                    return Err(TensorError::FileLoadError(format!(
-                        "IO error while reading tensor data: {}",
-                        e
-                    )));
+                Err(_) => {
+                    // Any error during read_exact is treated as a failure
+                    // This matches the original implementation
+                    return Err(TensorError::FileLoadError(
+                        "Failed to read tensor".to_string(),
+                    ));
                 }
             }
         }
