@@ -1,24 +1,20 @@
-use crate::graph::DataSource;
-use crate::graph::GraphSettings;
-use crate::graph::input::{CallToAccount, CallsToAccount, FileSourceInner, GraphData};
-use crate::graph::modules::POSEIDON_INSTANCES;
-use crate::pfsys::Snark;
+use crate::graph::input::FileSourceInner;
 use crate::pfsys::evm::EvmVerificationError;
+use crate::pfsys::Snark;
 use alloy::contract::CallBuilder;
 use alloy::core::primitives::Address as H160;
 use alloy::core::primitives::Bytes;
 use alloy::core::primitives::U256;
 use alloy::dyn_abi::abi::TokenSeq;
-use alloy::dyn_abi::abi::token::{DynSeqToken, PackedSeqToken, WordToken};
 // use alloy::providers::Middleware;
 use alloy::json_abi::JsonAbi;
 use alloy::primitives::ruint::ParseError;
-use alloy::primitives::{B256, I256, ParseSignedError};
-use alloy::providers::ProviderBuilder;
+use alloy::primitives::{ParseSignedError, I256};
 use alloy::providers::fillers::{
     ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, SignerFiller,
 };
 use alloy::providers::network::{Ethereum, EthereumSigner};
+use alloy::providers::ProviderBuilder;
 use alloy::providers::{Identity, Provider, RootProvider};
 use alloy::rpc::types::eth::TransactionInput;
 use alloy::rpc::types::eth::TransactionRequest;
@@ -27,13 +23,12 @@ use alloy::signers::wallet::{LocalWallet, WalletError};
 use alloy::sol as abigen;
 use alloy::transports::http::Http;
 use alloy::transports::{RpcError, TransportErrorKind};
-use foundry_compilers::Solc;
 use foundry_compilers::artifacts::Settings as SolcSettings;
 use foundry_compilers::error::{SolcError, SolcIoError};
-use halo2_solidity_verifier::encode_calldata;
+use foundry_compilers::Solc;
+use halo2_solidity_verifier::{encode_calldata, encode_register_vk_calldata};
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
-use itertools::Itertools;
 use log::{debug, info, warn};
 use reqwest::Client;
 use std::path::PathBuf;
@@ -229,9 +224,9 @@ abigen!(
                 bool neg;
                 if (instances[i] > uint128(type(int128).max)) {
                     x = int256(ORDER - instances[i]);
+                    neg = true;
                 } else {
                     x = int256(instances[i]);
-                    neg = true;
                 }
                 uint output = mulDiv(uint256(x), numerator, denominator);
                 if (mulmod(uint256(x), numerator, denominator) * 2 >= denominator) {
@@ -243,6 +238,16 @@ abigen!(
         }
     }
 );
+
+#[derive(Debug, thiserror::Error)]
+pub enum RescaleCheckError {
+    #[error("rescaled instance #{idx} mismatch: expected {expected}, got {got}")]
+    Mismatch {
+        idx: usize,
+        expected: String,
+        got: String,
+    },
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum EthError {
@@ -291,10 +296,11 @@ pub enum EthError {
     Svm(String),
     #[error("no contract output found")]
     NoContractOutput,
+    #[error("failed to load vka data: {0}")]
+    VkaData(String),
+    #[error("rescaled‑instance mismatch: {0}")]
+    RescaleCheckError(#[from] RescaleCheckError),
 }
-
-// we have to generate these two contract differently because they are generated dynamically ! and hence the static compilation from above does not suit
-const ATTESTDATA_SOL: &str = include_str!("../contracts/AttestData.sol");
 
 pub type EthersClient = Arc<
     FillProvider<
@@ -369,206 +375,82 @@ pub async fn deploy_contract_via_solidity(
 }
 
 ///
-pub async fn deploy_da_verifier_via_solidity(
-    settings_path: PathBuf,
-    input: String,
-    sol_code_path: PathBuf,
+pub async fn register_vka_via_rv(
     rpc_url: &str,
-    runs: usize,
     private_key: Option<&str>,
-) -> Result<H160, EthError> {
-    let (client, client_address) = setup_eth_backend(rpc_url, private_key).await?;
+    rv_address: H160,
+    vka_words: &[[u8; 32]],
+) -> Result<Vec<u8>, EthError> {
+    let (client, _) = setup_eth_backend(rpc_url, private_key).await?;
 
-    let input = GraphData::from_str(&input).map_err(|_| EthError::GraphData)?;
+    let encoded = encode_register_vk_calldata(vka_words);
 
-    let settings = GraphSettings::load(&settings_path).map_err(|_| EthError::GraphSettings)?;
+    debug!(
+        "encoded register vka calldata: {:#?}",
+        hex::encode(&encoded)
+    );
 
-    let mut scales: Vec<u32> = vec![];
-    // The data that will be stored in the test contracts that will eventually be read from.
-    let mut call_to_account = None;
+    let input: TransactionInput = encoded.into();
 
-    let mut instance_shapes = vec![];
-    let mut model_instance_offset = 0;
+    let tx = TransactionRequest::default().to(rv_address).input(input);
+    debug!("transaction {:#?}", tx);
 
-    if settings.run_args.input_visibility.is_hashed() {
-        instance_shapes.push(POSEIDON_INSTANCES)
-    } else if settings.run_args.input_visibility.is_public() {
-        for idx in 0..settings.model_input_scales.len() {
-            let shape = &settings.model_instance_shapes[idx];
-            instance_shapes.push(shape.iter().product::<usize>());
-            model_instance_offset += 1;
-        }
+    let result = client.call(&tx).await;
+
+    if let Err(e) = result {
+        return Err(EvmVerificationError::SolidityExecution(e.to_string()).into());
+    }
+    let result = result?;
+    debug!("result: {:#?}", result.to_vec());
+    // decode return bytes value into uint8
+    let output = result.to_vec();
+
+    let gas = client.estimate_gas(&tx).await?;
+
+    info!("estimated vka registration cost: {:#?}", gas);
+
+    // broadcast the transaction
+
+    let result = client.send_transaction(tx).await?;
+
+    result.watch().await?;
+
+    // if gas is greater than 30 million warn the user that the gas cost is above ethereum's 30 million block gas limit
+    if gas > 30_000_000_u128 {
+        warn!(
+            "Gas cost of verify transaction is greater than 30 million block gas limit. It will fail on mainnet."
+        );
+    } else if gas > 15_000_000_u128 {
+        warn!(
+            "Gas cost of verify transaction is greater than 15 million, the target block size for ethereum"
+        );
     }
 
-    if settings.run_args.param_visibility.is_hashed() {
-        return Err(EvmVerificationError::InvalidVisibility.into());
-    }
-
-    if settings.run_args.output_visibility.is_hashed() {
-        instance_shapes.push(POSEIDON_INSTANCES)
-    } else if settings.run_args.output_visibility.is_public() {
-        for idx in model_instance_offset..model_instance_offset + settings.model_output_scales.len()
-        {
-            let shape = &settings.model_instance_shapes[idx];
-            instance_shapes.push(shape.iter().product::<usize>());
-        }
-    }
-
-    let mut instance_idx = 0;
-    let mut contract_instance_offset = 0;
-
-    if let DataSource::OnChain(source) = input.input_data {
-        if settings.run_args.input_visibility.is_hashed_public() {
-            // set scales 1.0
-            scales.extend(vec![0; instance_shapes[instance_idx]]);
-            instance_idx += 1;
-        } else {
-            let input_scales = settings.clone().model_input_scales;
-            // give each input a scale
-            for scale in input_scales {
-                scales.extend(vec![scale as u32; instance_shapes[instance_idx]]);
-                instance_idx += 1;
-            }
-        }
-        // match statement for enum type of source.call
-        call_to_account = Some(source.call);
-    } else if let DataSource::File(source) = input.input_data {
-        if settings.run_args.input_visibility.is_public() {
-            instance_idx += source.len();
-            for s in source {
-                contract_instance_offset += s.len();
-            }
-        }
-    }
-
-    if let Some(DataSource::OnChain(source)) = input.output_data {
-        if settings.run_args.output_visibility.is_hashed_public() {
-            // set scales 1.0
-            scales.extend(vec![0; instance_shapes[instance_idx]]);
-        } else {
-            let input_scales = settings.clone().model_output_scales;
-            // give each output a scale
-            for scale in input_scales {
-                scales.extend(vec![scale as u32; instance_shapes[instance_idx]]);
-                instance_idx += 1;
-            }
-        }
-        call_to_account = Some(source.call);
-        // match statement for enum type of source.calls
-    }
-
-    deploy_da_contract(
-        client,
-        contract_instance_offset,
-        client_address,
-        scales,
-        call_to_account,
-        sol_code_path,
-        runs,
-        &settings,
-    )
-    .await
-}
-async fn deploy_da_contract(
-    client: EthersClient,
-    contract_instance_offset: usize,
-    client_address: alloy::primitives::Address,
-    scales: Vec<u32>,
-    call_to_accounts: Option<CallToAccount>,
-    sol_code_path: PathBuf,
-    runs: usize,
-    settings: &GraphSettings,
-) -> Result<H160, EthError> {
-    let (abi, bytecode, runtime_bytecode) =
-        get_contract_artifacts(sol_code_path, "DataAttestation", runs).await?;
-    let (contract_address, call_data, decimals) = if let Some(call_to_accounts) = call_to_accounts {
-        parse_call_to_account(call_to_accounts)?
-    } else {
-        // if calls to accounts is empty then we know need to check that atleast there kzg visibility in the settings file
-        let kzg_visibility = settings.run_args.input_visibility.is_polycommit()
-            || settings.run_args.output_visibility.is_polycommit()
-            || settings.run_args.param_visibility.is_polycommit();
-        if !kzg_visibility {
-            return Err(EthError::OnChainDataSource);
-        }
-        let factory =
-            get_sol_contract_factory(abi, bytecode, runtime_bytecode, client, None::<()>)?;
-        let contract = factory.deploy().await?;
-        return Ok(contract);
-    };
-
-    let factory = get_sol_contract_factory(
-        abi,
-        bytecode,
-        runtime_bytecode,
-        client,
-        Some((
-            // address _contractAddress,
-            WordToken(contract_address.into_word()),
-            // bytes memory _callData,
-            PackedSeqToken(call_data.as_ref()),
-            // uint256 [] _decimals,
-            DynSeqToken(
-                decimals
-                    .iter()
-                    .map(|i| WordToken(B256::from(*i)))
-                    .collect_vec(),
-            ),
-            // uint[] memory _bits,
-            DynSeqToken(
-                scales
-                    .clone()
-                    .into_iter()
-                    .map(|i| WordToken(U256::from(i).into()))
-                    .collect_vec(),
-            ),
-            //  uint8 _instanceOffset,
-            WordToken(U256::from(contract_instance_offset as u32).into()),
-            // address _admin
-            WordToken(client_address.into_word()),
-        )),
-    )?;
-
-    debug!("scales: {:#?}", scales);
-    debug!("call_data: {:#?}", call_data);
-    debug!("contract_addresses: {:#?}", contract_address);
-    debug!("decimals: {:#?}", decimals);
-
-    let contract = factory.deploy().await?;
-
-    Ok(contract)
-}
-type ParsedCallToAccount = (H160, Bytes, Vec<U256>);
-
-fn parse_call_to_account(call_to_account: CallToAccount) -> Result<ParsedCallToAccount, EthError> {
-    let contract_address_bytes = hex::decode(&call_to_account.address)?;
-    let contract_address = H160::from_slice(&contract_address_bytes);
-    let call_data_bytes = hex::decode(&call_to_account.call_data)?;
-    let call_data = Bytes::from(call_data_bytes);
-    // Parse the decimals array as uint256 array for the contract.
-    // iterate through the decimals array and convert each element to a uint256
-    let mut decimals: Vec<U256> = vec![];
-    for decimal in &call_to_account.decimals {
-        decimals.push(I256::from_dec_str(&decimal.to_string())?.unsigned_abs());
-    }
-    // let decimal = I256::from_dec_str(&call_to_account.decimals.to_string())?.unsigned_abs();
-    Ok((contract_address, call_data, decimals))
+    Ok(output)
 }
 
 /// Verify a proof using a Solidity verifier contract
+/// TODO: add param to pass vka_digest and use that to fetch the VKA by indexing the RegisteredVKA events on the RV
 pub async fn verify_proof_via_solidity(
     proof: Snark<Fr, G1Affine>,
     addr: H160,
-    addr_vk: Option<H160>,
+    vka_path: Option<PathBuf>,
     rpc_url: &str,
 ) -> Result<bool, EthError> {
     let flattened_instances = proof.instances.into_iter().flatten();
 
-    let encoded = encode_calldata(
-        addr_vk.as_ref().map(|x| x.0).map(|x| x.0),
-        &proof.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
+    // Load the vka, which is bincode serialized, from the vka_path
+    let vka_buf: Option<Vec<[u8; 32]>> = match vka_path {
+        Some(path) => {
+            let bytes = std::fs::read(path)?;
+            Some(bincode::deserialize(&bytes).map_err(|e| EthError::VkaData(e.to_string()))?)
+        }
+        None => None,
+    };
+
+    let vka: Option<&[[u8; 32]]> = vka_buf.as_deref();
+
+    let encoded = encode_calldata(vka, &proof.proof, &flattened_instances.collect::<Vec<_>>());
 
     debug!("encoded: {:#?}", hex::encode(&encoded));
 
@@ -585,8 +467,37 @@ pub async fn verify_proof_via_solidity(
     }
     let result = result?;
     debug!("result: {:#?}", result.to_vec());
+    // if result is larger than 32
+    if result.to_vec().len() > 32 {
+        // From result[96..], iterate through 32 byte chunks converting them to U256
+        let rescaled_instances = result.to_vec()[96..]
+            .chunks_exact(32)
+            .map(|chunk| U256::from_be_slice(chunk).to_string())
+            .collect::<Vec<_>>();
+        if let Some(pretty) = &proof.pretty_public_inputs {
+            // 1️⃣ collect reference decimals --------------------------------------
+            let mut refs = pretty.rescaled_inputs.clone();
+            refs.extend(pretty.rescaled_outputs.clone()); // extend inputs with outputs
+            let reference: Vec<String> = refs.into_iter().flatten().collect();
+
+            // 2️⃣ compare element‑wise -------------------------------------------
+            for (idx, (inst, exp)) in rescaled_instances.iter().zip(reference.iter()).enumerate() {
+                if !scaled_matches(inst, exp) {
+                    return Err(EthError::RescaleCheckError(RescaleCheckError::Mismatch {
+                        idx,
+                        expected: exp.clone(),
+                        got: to_decimal_18(inst),
+                    }));
+                }
+            }
+            debug!("✅ all rescaled instances match their expected values");
+        }
+    }
     // decode return bytes value into uint8
-    let result = result.to_vec().last().ok_or(EthError::NoContractOutput)? == &1u8;
+    let result = result.to_vec()[..32]
+        .last()
+        .ok_or(EthError::NoContractOutput)?
+        == &1u8;
     if !result {
         return Err(EvmVerificationError::InvalidProof.into());
     }
@@ -653,170 +564,6 @@ pub async fn setup_test_contract<M: 'static + Provider<Http<Client>, Ethereum>>(
     let contract = TestReads::deploy(client, scaled_by_decimals_data).await?;
 
     Ok((contract, decimals))
-}
-
-/// Verify a proof using a Solidity DataAttestation contract.
-/// Used for testing purposes.
-pub async fn verify_proof_with_data_attestation(
-    proof: Snark<Fr, G1Affine>,
-    addr_verifier: H160,
-    addr_da: H160,
-    addr_vk: Option<H160>,
-    rpc_url: &str,
-) -> Result<bool, EthError> {
-    use ethabi::{Function, Param, ParamType, StateMutability, Token};
-
-    let mut public_inputs: Vec<U256> = vec![];
-    let flattened_instances = proof.instances.into_iter().flatten();
-
-    for val in flattened_instances.clone() {
-        let bytes = val.to_repr();
-        let u = U256::from_le_slice(bytes.inner().as_slice());
-        public_inputs.push(u);
-    }
-
-    let encoded_verifier = encode_calldata(
-        addr_vk.as_ref().map(|x| x.0).map(|x| x.0),
-        &proof.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
-
-    debug!("encoded: {:#?}", hex::encode(&encoded_verifier));
-
-    debug!("public_inputs: {:#?}", public_inputs);
-    debug!("proof: {:#?}", Bytes::from(proof.proof.to_vec()));
-
-    #[allow(deprecated)]
-    let func = Function {
-        name: "verifyWithDataAttestation".to_owned(),
-        inputs: vec![
-            Param {
-                name: "verifier".to_owned(),
-                kind: ParamType::Address,
-                internal_type: None,
-            },
-            Param {
-                name: "encoded".to_owned(),
-                kind: ParamType::Bytes,
-                internal_type: None,
-            },
-        ],
-        outputs: vec![Param {
-            name: "success".to_owned(),
-            kind: ParamType::Bool,
-            internal_type: None,
-        }],
-        constant: None,
-        state_mutability: StateMutability::View,
-    };
-
-    let encoded = func.encode_input(&[
-        Token::Address(addr_verifier.0.0.into()),
-        Token::Bytes(encoded_verifier),
-    ])?;
-
-    debug!("encoded: {:#?}", hex::encode(&encoded));
-
-    let encoded: TransactionInput = encoded.into();
-
-    let (client, _) = setup_eth_backend(rpc_url, None).await?;
-    let tx = TransactionRequest::default().to(addr_da).input(encoded);
-    debug!("transaction {:#?}", tx);
-    info!(
-        "estimated verify gas cost: {:#?}",
-        client.estimate_gas(&tx).await?
-    );
-
-    let result = client.call(&tx).await;
-    if let Err(e) = result {
-        return Err(EvmVerificationError::SolidityExecution(e.to_string()).into());
-    }
-    let result = result?;
-    debug!("result: {:#?}", result);
-    // decode return bytes value into uint8
-    let result = result.to_vec().last().ok_or(EthError::NoContractOutput)? == &1u8;
-    if !result {
-        return Err(EvmVerificationError::InvalidProof.into());
-    }
-
-    Ok(true)
-}
-
-/// Tests on-chain data storage by deploying a contract that stores the network input and or output
-/// data in its storage. It does this by converting the floating point values to integers and storing the
-/// the number of decimals of the floating point value on chain.
-pub async fn test_on_chain_data<M: 'static + Provider<Http<Client>, Ethereum>>(
-    client: Arc<M>,
-    data: &[Vec<FileSourceInner>],
-) -> Result<CallToAccount, EthError> {
-    let (contract, decimals) = setup_test_contract(client, data).await?;
-
-    // Get the encoded calldata for the input
-    let builder = contract.readAll();
-    let call = builder.calldata();
-    let call_to_account = CallToAccount {
-        call_data: hex::encode(call),
-        decimals,
-        address: hex::encode(contract.address().0.0),
-    };
-    info!("call_to_account: {:#?}", call_to_account);
-    Ok(call_to_account)
-}
-
-/// Reads on-chain inputs, returning the raw encoded data returned from making all the calls in on_chain_input_data
-pub async fn read_on_chain_inputs_multi<M: 'static + Provider<Http<Client>, Ethereum>>(
-    client: Arc<M>,
-    address: H160,
-    data: &Vec<CallsToAccount>,
-) -> Result<(Vec<Bytes>, Vec<u8>), EthError> {
-    // Iterate over all on-chain inputs
-
-    let mut fetched_inputs = vec![];
-    let mut decimals = vec![];
-    for on_chain_data in data {
-        // Construct the address
-        let contract_address_bytes = hex::decode(&on_chain_data.address)?;
-        let contract_address = H160::from_slice(&contract_address_bytes);
-        for (call_data, decimal) in &on_chain_data.call_data {
-            let call_data_bytes = hex::decode(call_data)?;
-            let input: TransactionInput = call_data_bytes.into();
-
-            let tx = TransactionRequest::default()
-                .to(contract_address)
-                .from(address)
-                .input(input);
-            debug!("transaction {:#?}", tx);
-
-            let result = client.call(&tx).await?;
-            debug!("return data {:#?}", result);
-            fetched_inputs.push(result);
-            decimals.push(*decimal);
-        }
-    }
-    Ok((fetched_inputs, decimals))
-}
-
-/// Reads on-chain inputs, returning the raw encoded data returned from making the single call in on_chain_input_data
-/// that returns the array of input data we will attest to.
-pub async fn read_on_chain_inputs<M: 'static + Provider<Http<Client>, Ethereum>>(
-    client: Arc<M>,
-    address: H160,
-    data: &CallToAccount,
-) -> Result<Bytes, EthError> {
-    // Iterate over all on-chain inputs
-    let contract_address_bytes = hex::decode(&data.address)?;
-    let contract_address = H160::from_slice(&contract_address_bytes);
-    let call_data_bytes = hex::decode(&data.call_data)?;
-    let input: TransactionInput = call_data_bytes.into();
-    let tx = TransactionRequest::default()
-        .to(contract_address)
-        .from(address)
-        .input(input);
-    debug!("transaction {:#?}", tx);
-
-    let result = client.call(&tx).await?;
-    debug!("return data {:#?}", result);
-    Ok(result)
 }
 
 pub async fn evm_quantize<M: 'static + Provider<Http<Client>, Ethereum>>(
@@ -913,9 +660,9 @@ pub async fn get_contract_artifacts(
     runs: usize,
 ) -> Result<(JsonAbi, Bytes, Bytes), EthError> {
     use foundry_compilers::{
-        SHANGHAI_SOLC, SolcInput,
-        artifacts::{Optimizer, output_selection::OutputSelection},
+        artifacts::{output_selection::OutputSelection, Optimizer},
         compilers::CompilerInput,
+        SolcInput, SHANGHAI_SOLC,
     };
 
     if !sol_code_path.exists() {
@@ -966,59 +713,70 @@ pub async fn get_contract_artifacts(
     Ok((abi, bytecode, runtime_bytecode))
 }
 
-/// Sets the constants stored in the da verifier
-pub fn fix_da_sol(commitment_bytes: Option<Vec<u8>>, only_kzg: bool) -> Result<String, EthError> {
-    let mut contract = ATTESTDATA_SOL.to_string();
+/// Convert a 1e‑18 fixed‑point **integer string** into a decimal string.
+///
+/// `"1541748046875000000"` → `"1.541748046875000000"`
+/// `"273690402507781982"`  → `"0.273690402507781982"`
+fn to_decimal_18(s: &str) -> String {
+    let s = s.trim_start_matches('0');
+    if s.is_empty() {
+        return "0".into();
+    }
+    if s.len() <= 18 {
+        // pad on the left so we always have exactly 18 fraction digits
+        return format!("0.{:0>18}", s);
+    }
+    let split = s.len() - 18;
+    format!("{}.{}", &s[..split], &s[split..]) // ← correct slice here
+}
 
-    // The case where a combination of on-chain data source + kzg commit is provided.
-    if commitment_bytes.is_some() && !commitment_bytes.as_ref().unwrap().is_empty() {
-        let commitment_bytes = commitment_bytes.as_ref().unwrap();
-        let hex_string = hex::encode(commitment_bytes);
-        contract = contract.replace(
-            "bytes constant COMMITMENT_KZG = hex\"1234\";",
-            &format!("bytes constant COMMITMENT_KZG = hex\"{}\";", hex_string),
-        );
-        if only_kzg {
-            contract = contract.replace(
-                "contract SwapProofCommitments {",
-                "contract DataAttestation {",
-            );
+/// “Banker’s‐round” comparison:  compare the **decimal** produced
+/// by `instance` to the reference string `expected`.
+///
+/// *  All digits present in `expected` (integer part **and** fraction)
+///    must match exactly.
+/// *  Excess digits in `instance` are ignored **unless** the very first
+///    excess digit ≥ 5; in that case we round the last compared digit
+///    and check again.
+fn scaled_matches(instance: &str, expected: &str) -> bool {
+    let inst_dec = to_decimal_18(instance);
+    let (inst_int, inst_frac) = inst_dec.split_once('.').unwrap_or((&inst_dec, ""));
+    let (exp_int, exp_frac) = expected.split_once('.').unwrap_or((expected, ""));
 
-            // Remove everything past the end of the checkKzgCommits function
-            if let Some(pos) = contract.find("    } /// end checkKzgCommits") {
-                contract.truncate(pos);
-                contract.push('}');
-            }
-
-            // Add the Solidity function below checkKzgCommits
-            contract.push_str(
-                r#"
-                function verifyWithDataAttestation(
-                    address verifier,
-                    bytes calldata encoded
-                ) public view returns (bool) {
-                    require(verifier.code.length > 0, "Address: call to non-contract");
-                    require(checkKzgCommits(encoded), "Invalid KZG commitments");
-                    // static call the verifier contract to verify the proof
-                    (bool success, bytes memory returndata) = verifier.staticcall(encoded);
-
-                    if (success) {
-                        return abi.decode(returndata, (bool));
-                    } else {
-                        revert("low-level call to verifier failed");
-                    }
-                }
-            }"#,
-            );
-        }
-    } else {
-        // Remove the SwapProofCommitments inheritance and the checkKzgCommits function call if no commitment is provided
-        contract = contract.replace(", SwapProofCommitments", "");
-        contract = contract.replace(
-            "require(checkKzgCommits(encoded), \"Invalid KZG commitments\");",
-            "",
-        );
+    // integer part must be identical
+    if inst_int != exp_int {
+        return false;
     }
 
-    Ok(contract)
+    // fraction‑part comparison with optional rounding
+    let cmp_len = exp_frac.len();
+    let inst_cmp = &inst_frac[..cmp_len.min(inst_frac.len())];
+    let trailing = inst_frac.chars().nth(cmp_len).unwrap_or('0');
+
+    if inst_cmp == exp_frac {
+        true // exact match
+    } else if trailing >= '5' {
+        // need to round
+        // round the inst_cmp (string) up by one ulp
+        let mut rounded = inst_cmp.chars().collect::<Vec<_>>();
+        let mut carry = true;
+        for d in rounded.iter_mut().rev() {
+            if !carry {
+                break;
+            }
+            let v = d.to_digit(10).unwrap() + 1;
+            *d = char::from_digit(v % 10, 10).unwrap();
+            carry = v == 10;
+        }
+        if carry {
+            // 0.999… → 1.000…
+            return exp_int
+                == &(num::BigUint::parse_bytes(exp_int.as_bytes(), 10).unwrap() + 1u32)
+                    .to_string()
+                && exp_frac.chars().all(|c| c == '0');
+        }
+        rounded.into_iter().collect::<String>() == exp_frac
+    } else {
+        false
+    }
 }

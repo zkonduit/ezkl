@@ -52,3 +52,5 @@ docs/python/build
 !tests/assets/vk_aggr.key
 cache
 out
+!tests/assets/wasm.code
+!tests/assets/wasm.sol

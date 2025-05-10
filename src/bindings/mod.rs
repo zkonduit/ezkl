@@ -3,7 +3,7 @@
 pub mod python;
 /// Universal bindings for all platforms
 #[cfg(any(
-    feature = "ios-bindings",
+    feature = "universal-bindings",
     all(target_arch = "wasm32", target_os = "unknown")
 ))]
 pub mod universal;

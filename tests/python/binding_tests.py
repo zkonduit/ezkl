@@ -135,7 +135,7 @@ async def test_calibrate_over_user_range():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources", 1, [0, 1, 2])
     assert res == True
     assert os.path.isfile(output_path)
@@ -169,7 +169,7 @@ async def test_calibrate():
         model_path, output_path, py_run_args=run_args)
     assert res == True
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         data_path, model_path, output_path, "resources")
     assert res == True
     assert os.path.isfile(output_path)
@@ -216,7 +216,7 @@ async def test_forward():
         'witness.json'
     )
 
-    res = await ezkl.gen_witness(data_path, model_path, output_path)
+    res = ezkl.gen_witness(data_path, model_path, output_path)
 
     with open(output_path, "r") as f:
         data = json.load(f)
@@ -430,7 +430,7 @@ async def test_create_evm_verifier_separate_vk():
     vk_path = os.path.join(folder_path, 'test_evm.vk')
     settings_path = os.path.join(folder_path, 'settings.json')
     sol_code_path = os.path.join(folder_path, 'test_separate.sol')
-    vk_code_path = os.path.join(folder_path, 'test_vk.sol')
+    vka_path = os.path.join(folder_path, 'vka.calldata')
     abi_path = os.path.join(folder_path, 'test_separate.abi')
     abi_vk_path = os.path.join(folder_path, 'test_vk_separate.abi')
     proof_path = os.path.join(folder_path, 'test_evm.pf')
@@ -455,9 +455,8 @@ async def test_create_evm_verifier_separate_vk():
     res = await ezkl.create_evm_vka(
         vk_path,
         settings_path,
-        vk_code_path,
-        abi_vk_path,
-        srs_path=srs_path,
+        vka_path,
+        srs_path=srs_path
     )
 
     assert res == True
@@ -472,7 +471,7 @@ async def test_deploy_evm_reusable_and_vka():
     addr_path_verifier = os.path.join(folder_path, 'address_separate.json')
     addr_path_vk = os.path.join(folder_path, 'address_vk.json')
     sol_code_path = os.path.join(folder_path, 'test_separate.sol')
-    vk_code_path = os.path.join(folder_path, 'test_vk.sol')
+    vka_path = os.path.join(folder_path, 'vka.calldata')
 
     # TODO: without optimization there will be out of gas errors
     # sol_code_path = os.path.join(folder_path, 'test.sol')
@@ -484,11 +483,14 @@ async def test_deploy_evm_reusable_and_vka():
         "verifier/reusable",
     )
 
-    res = await ezkl.deploy_evm(
-        addr_path_vk,
+    with open(addr_path_verifier, 'r') as file:
+        addr_verifier = file.read().rstrip()
+
+    # TODO fix: we need to call register vka instead of deploy evm
+    res = await ezkl.register_vka(
+        addr_verifier,
         anvil_url,
-        vk_code_path,
-        "vka",
+        vka_path=vka_path,
     )
 
     assert res == True
@@ -579,7 +581,7 @@ async def test_verify_evm_separate_vk():
     """
     proof_path = os.path.join(folder_path, 'test_evm.pf')
     addr_path_verifier = os.path.join(folder_path, 'address_separate.json')
-    addr_path_vk = os.path.join(folder_path, 'address_vk.json')
+    vka_path = os.path.join(folder_path, 'vka.calldata')
     proof_path = os.path.join(folder_path, 'test_evm.pf')
     calldata_path = os.path.join(folder_path, 'calldata_separate.bytes')
 
@@ -588,13 +590,8 @@ async def test_verify_evm_separate_vk():
 
     print(addr_verifier)
 
-    with open(addr_path_vk, 'r') as file:
-        addr_vk = file.read().rstrip()
-
-    print(addr_vk)
-
     # res is now a vector of bytes
-    res = ezkl.encode_evm_calldata(proof_path, calldata_path, addr_vk=addr_vk)
+    res = ezkl.encode_evm_calldata(proof_path, calldata_path, vka_path=vka_path)
 
     assert os.path.isfile(calldata_path)
     assert len(res) > 0
@@ -606,7 +603,7 @@ async def test_verify_evm_separate_vk():
         addr_verifier,
         anvil_url,
         proof_path,
-        addr_vk=addr_vk,
+        vka_path=vka_path,
         # sol_code_path
         # optimizer_runs
     )
@@ -643,7 +640,7 @@ async def test_aggregate_and_verify_aggr():
     res = ezkl.gen_settings(model_path, settings_path)
     assert res == True
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         data_path, model_path, settings_path, "resources")
     assert res == True
     assert os.path.isfile(settings_path)
@@ -665,7 +662,7 @@ async def test_aggregate_and_verify_aggr():
         '1l_relu_aggr_witness.json'
     )
 
-    res = await ezkl.gen_witness(data_path, compiled_model_path,
+    res = ezkl.gen_witness(data_path, compiled_model_path,
                            output_path)
 
     ezkl.prove(
@@ -745,7 +742,7 @@ async def test_evm_aggregate_and_verify_aggr():
         settings_path,
     )
 
-    await ezkl.calibrate_settings(
+    ezkl.calibrate_settings(
         data_path,
         model_path,
         settings_path,
@@ -774,7 +771,7 @@ async def test_evm_aggregate_and_verify_aggr():
         '1l_relu_aggr_evm_witness.json'
     )
 
-    res = await ezkl.gen_witness(data_path, compiled_model_path,
+    res = ezkl.gen_witness(data_path, compiled_model_path,
                            output_path)
 
     ezkl.prove(
@@ -908,7 +905,7 @@ async def test_all_examples(model_file, input_file):
     res = ezkl.gen_settings(model_file, settings_path, py_run_args=run_args)
     assert res
 
-    res = await ezkl.calibrate_settings(
+    res = ezkl.calibrate_settings(
         input_file, model_file, settings_path, "resources")
     assert res
 
@@ -939,7 +936,7 @@ async def test_all_examples(model_file, input_file):
     assert os.path.isfile(pk_path)
 
     print("Generating witness for example: ", model_file)
-    res = await ezkl.gen_witness(input_file, compiled_model_path, witness_path)
+    res = ezkl.gen_witness(input_file, compiled_model_path, witness_path)
     assert os.path.isfile(witness_path)
 
     print("Proving example: ", model_file)
