@@ -405,8 +405,6 @@ impl<T: Clone + TensorType + PrimeField> Tensor<T> {
         let mut buf_reader = std::io::BufReader::new(reader);
 
         let mut inner = Vec::new();
-        let repr_size = std::mem::size_of::<T::Repr>();
-
         loop {
             // Try to read a complete T::Repr directly
             let mut repr = T::Repr::default();
