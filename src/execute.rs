@@ -15,7 +15,7 @@ use crate::pfsys::{
 use crate::pfsys::{
     create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit, ProofSplitCommit,
 };
-use crate::pfsys::{save_vk, srs::*};
+use crate::pfsys::{encode_calldata, save_vk, srs::*};
 use crate::tensor::TensorError;
 use crate::EZKL_BUF_CAPACITY;
 use crate::{commands::*, EZKLError};
@@ -1607,11 +1607,7 @@ pub(crate) fn encode_evm_calldata(
         };
 
     let vka: Option<&[[u8; 32]]> = vka_buf.as_deref();
-    let encoded = halo2_solidity_verifier::encode_calldata(
-        vka,
-        &snark.proof,
-        &flattened_instances.collect::<Vec<_>>(),
-    );
+    let encoded = encode_calldata(vka, &snark.proof, &flattened_instances.collect::<Vec<_>>());
 
     log::debug!("Encoded calldata: {:?}", encoded);
 

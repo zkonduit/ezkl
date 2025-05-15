@@ -7,7 +7,11 @@ pub mod srs;
 /// errors related to pfsys
 pub mod errors;
 
+use alloy::primitives::ruint::UintTryFrom;
+use alloy::primitives::U256;
 pub use errors::PfsysError;
+use itertools::chain;
+use std::borrow::Borrow;
 
 use crate::circuit::CheckMode;
 use crate::graph::GraphWitness;
@@ -17,16 +21,16 @@ use crate::{Commitments, EZKL_BUF_CAPACITY, EZKL_KEY_FORMAT};
 use clap::ValueEnum;
 use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::{
-    Circuit, ProvingKey, VerifyingKey, create_proof, keygen_pk, keygen_vk_custom, verify_proof,
+    create_proof, keygen_pk, keygen_vk_custom, verify_proof, Circuit, ProvingKey, VerifyingKey,
 };
-use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params, ParamsProver, Prover, Verifier};
 use halo2_proofs::poly::ipa::commitment::IPACommitmentScheme;
 use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
+use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer, TranscriptWriterBuffer};
-use halo2curves::CurveAffine;
 use halo2curves::ff::{FromUniformBytes, PrimeField, WithSmallOrderMulGroup};
 use halo2curves::serde::SerdeObject;
+use halo2curves::{bn256, CurveAffine};
 use instant::Instant;
 use log::{debug, info, trace};
 #[cfg(not(feature = "det-prove"))]
@@ -61,6 +65,73 @@ fn serde_format_from_str(s: &str) -> halo2_proofs::SerdeFormat {
         "raw-bytes" => halo2_proofs::SerdeFormat::RawBytes,
         _ => panic!("invalid serde format"),
     }
+}
+
+/// Function signature of `verifyProof(bytes,uint256[])`.
+pub const FN_SIG_VERIFY_PROOF: [u8; 4] = [0x1e, 0x8e, 0x1e, 0x13];
+
+/// Function signature of `verifyProof(bytes,uint256[],bytes32[])`.
+pub const FN_SIG_VERIFY_PROOF_WITH_VKA: [u8; 4] = [0x34, 0x09, 0xfc, 0x9f];
+
+/// Function signature of verifyWithDataAttestation(address,bytes)
+pub const FN_SIG_VERIFY_WITH_DATA_ATTESTATION: [u8; 4] = [0x4c, 0x79, 0x85, 0xd0];
+
+/// Function signatore of registeredVkas(bytes32[]) 0xdc8b4094
+pub const FN_SIG_REGISTER_VKA: [u8; 4] = [0xdc, 0x8b, 0x40, 0x94];
+
+/// Encode proof into calldata to invoke `Halo2Verifier.verifyProof`.
+///
+/// For `vk_address`:
+/// - Pass `None` if verifying key is embedded in `Halo2Verifier`
+/// - Pass `Some(vka)` if verifying key is separated and already registered
+pub fn encode_calldata(vka: Option<&[[u8; 32]]>, proof: &[u8], instances: &[bn256::Fr]) -> Vec<u8> {
+    let (fn_sig, offset) = if vka.is_some() {
+        (FN_SIG_VERIFY_PROOF_WITH_VKA, 0x60)
+    } else {
+        (FN_SIG_VERIFY_PROOF, 0x40)
+    };
+    let num_instances = instances.len();
+    let (vka_offset, vka_data) = if let Some(vka) = vka {
+        (
+            to_u256_be_bytes(offset + 0x40 + proof.len() + (num_instances * 0x20)).to_vec(),
+            vka.to_vec(),
+        )
+    } else {
+        (Vec::new(), Vec::new())
+    };
+    let num_vka_words = vka_data.len();
+    chain![
+        fn_sig,                                                      // function signature
+        to_u256_be_bytes(offset),                                    // offset of proof
+        to_u256_be_bytes(offset + 0x20 + proof.len()),               // offset of instances
+        vka_offset,                                                  // offset of vka
+        to_u256_be_bytes(proof.len()),                               // length of proof
+        proof.iter().cloned(),                                       // proof
+        to_u256_be_bytes(num_instances),                             // length of instances
+        instances.iter().map(fr_to_u256).flat_map(to_u256_be_bytes), // instances
+        to_u256_be_bytes(num_vka_words),                             // vka length
+        vka_data.iter().flat_map(|arr| arr.iter().cloned())          // vka words
+    ]
+    .collect()
+}
+
+fn to_u256_be_bytes<T>(value: T) -> [u8; 32]
+where
+    U256: UintTryFrom<T>,
+{
+    U256::from(value).to_be_bytes()
+}
+
+fn fr_to_u256(fe: impl Borrow<bn256::Fr>) -> U256 {
+    fe_to_u256(fe)
+}
+
+fn fe_to_u256<F>(fe: impl Borrow<F>) -> U256
+where
+    F: PrimeField<Repr = halo2_proofs::halo2curves::serde::Repr<32>>,
+{
+    #[allow(clippy::clone_on_copy)]
+    U256::from_le_bytes(fe.borrow().to_repr().inner().clone())
 }
 
 #[allow(missing_docs)]
@@ -324,7 +395,7 @@ where
 }
 
 #[cfg(feature = "python-bindings")]
-use pyo3::{PyObject, Python, ToPyObject, types::PyDict};
+use pyo3::{types::PyDict, PyObject, Python, ToPyObject};
 #[cfg(feature = "python-bindings")]
 impl<F: PrimeField + SerdeObject + Serialize, C: CurveAffine + Serialize> ToPyObject for Snark<F, C>
 where
@@ -348,9 +419,9 @@ where
 }
 
 impl<
-    F: PrimeField + SerdeObject + Serialize + FromUniformBytes<64> + DeserializeOwned,
-    C: CurveAffine + Serialize + DeserializeOwned,
-> Snark<F, C>
+        F: PrimeField + SerdeObject + Serialize + FromUniformBytes<64> + DeserializeOwned,
+        C: CurveAffine + Serialize + DeserializeOwned,
+    > Snark<F, C>
 where
     C::Scalar: Serialize + DeserializeOwned,
     C::ScalarExt: Serialize + DeserializeOwned,

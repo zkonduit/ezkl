@@ -1,6 +1,6 @@
 use crate::graph::input::FileSourceInner;
 use crate::pfsys::evm::EvmVerificationError;
-use crate::pfsys::Snark;
+use crate::pfsys::{encode_calldata, Snark};
 use alloy::contract::CallBuilder;
 use alloy::core::primitives::Address as H160;
 use alloy::core::primitives::Bytes;
@@ -26,7 +26,7 @@ use alloy::transports::{RpcError, TransportErrorKind};
 use foundry_compilers::artifacts::Settings as SolcSettings;
 use foundry_compilers::error::{SolcError, SolcIoError};
 use foundry_compilers::Solc;
-use halo2_solidity_verifier::{encode_calldata, encode_register_vk_calldata};
+use halo2_solidity_verifier::encode_register_vk_calldata;
 use halo2curves::bn256::{Fr, G1Affine};
 use halo2curves::group::ff::PrimeField;
 use log::{debug, info, warn};
@@ -37,7 +37,7 @@ use std::sync::Arc;
 
 const ANVIL_DEFAULT_PRIVATE_KEY: &str =
     "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-
+///
 pub const DEFAULT_ANVIL_ENDPOINT: &str = "http://localhost:8545";
 
 // Generate contract bindings OUTSIDE the functions so they are part of library
