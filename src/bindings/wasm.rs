@@ -1,12 +1,5 @@
 use crate::{
-    circuit::modules::{
-        polycommit::PolyCommitChip,
-        poseidon::{
-            spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
-            PoseidonChip,
-        },
-        Module,
-    },
+    circuit::modules::polycommit::PolyCommitChip,
     fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
     graph::{quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings},
 };
@@ -226,7 +219,9 @@ pub fn bufferToVecOfFelt(
 pub fn poseidonHash(
     message: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
-    super::universal::poseidon_hash(message.0).map_err(JsError::from)
+    super::universal::poseidon_hash(message.0)
+        .map_err(JsError::from)
+        .map(|x| wasm_bindgen::Clamped(x.clone()))
 }
 
 /// Generate a witness file from input.json, compiled model and a settings.json file.

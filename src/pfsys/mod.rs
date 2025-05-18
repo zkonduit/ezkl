@@ -7,8 +7,6 @@ pub mod srs;
 /// errors related to pfsys
 pub mod errors;
 
-use alloy::primitives::ruint::UintTryFrom;
-use alloy::primitives::U256;
 pub use errors::PfsysError;
 use itertools::chain;
 use std::borrow::Borrow;
@@ -93,7 +91,7 @@ pub fn encode_calldata(vka: Option<&[[u8; 32]]>, proof: &[u8], instances: &[bn25
     let num_instances = instances.len();
     let (vka_offset, vka_data) = if let Some(vka) = vka {
         (
-            to_u256_be_bytes(offset + 0x40 + proof.len() + (num_instances * 0x20)).to_vec(),
+            to_be_bytes_32(offset + 0x40 + proof.len() + (num_instances * 0x20)).to_vec(),
             vka.to_vec(),
         )
     } else {
@@ -101,37 +99,45 @@ pub fn encode_calldata(vka: Option<&[[u8; 32]]>, proof: &[u8], instances: &[bn25
     };
     let num_vka_words = vka_data.len();
     chain![
-        fn_sig,                                                      // function signature
-        to_u256_be_bytes(offset),                                    // offset of proof
-        to_u256_be_bytes(offset + 0x20 + proof.len()),               // offset of instances
-        vka_offset,                                                  // offset of vka
-        to_u256_be_bytes(proof.len()),                               // length of proof
-        proof.iter().cloned(),                                       // proof
-        to_u256_be_bytes(num_instances),                             // length of instances
-        instances.iter().map(fr_to_u256).flat_map(to_u256_be_bytes), // instances
-        to_u256_be_bytes(num_vka_words),                             // vka length
-        vka_data.iter().flat_map(|arr| arr.iter().cloned())          // vka words
+        fn_sig,                                              // function signature
+        to_be_bytes_32(offset),                              // offset of proof
+        to_be_bytes_32(offset + 0x20 + proof.len()),         // offset of instances
+        vka_offset,                                          // offset of vka
+        to_be_bytes_32(proof.len()),                         // length of proof
+        proof.iter().cloned(),                               // proof
+        to_be_bytes_32(num_instances),                       // length of instances
+        instances.iter().map(fr_to_bytes32).flatten(),       // instances
+        to_be_bytes_32(num_vka_words),                       // vka length
+        vka_data.iter().flat_map(|arr| arr.iter().cloned())  // vka words
     ]
     .collect()
 }
 
-fn to_u256_be_bytes<T>(value: T) -> [u8; 32]
-where
-    U256: UintTryFrom<T>,
-{
-    U256::from(value).to_be_bytes()
+fn to_be_bytes_32(value: usize) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    // Convert the usize to big-endian bytes in the last 8 bytes (or however many needed)
+    let value_bytes = value.to_be_bytes();
+    let start_idx = 32 - value_bytes.len();
+    bytes[start_idx..].copy_from_slice(&value_bytes);
+    bytes
 }
 
-fn fr_to_u256(fe: impl Borrow<bn256::Fr>) -> U256 {
-    fe_to_u256(fe)
+fn fr_to_bytes32(fe: impl Borrow<bn256::Fr>) -> [u8; 32] {
+    fe_to_bytes32(fe)
 }
 
-fn fe_to_u256<F>(fe: impl Borrow<F>) -> U256
+fn fe_to_bytes32<F>(fe: impl Borrow<F>) -> [u8; 32]
 where
     F: PrimeField<Repr = halo2_proofs::halo2curves::serde::Repr<32>>,
 {
-    #[allow(clippy::clone_on_copy)]
-    U256::from_le_bytes(fe.borrow().to_repr().inner().clone())
+    let repr = fe.borrow().to_repr();
+    // Note: we're converting from little-endian representation to big-endian bytes
+    let mut bytes = [0u8; 32];
+    let inner = repr.inner();
+    for i in 0..32 {
+        bytes[31 - i] = inner[i];
+    }
+    bytes
 }
 
 #[allow(missing_docs)]
