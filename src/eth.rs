@@ -19,7 +19,6 @@ use alloy::rpc::types::eth::TransactionInput;
 use alloy::rpc::types::eth::TransactionRequest;
 use alloy::signers::k256::ecdsa;
 use alloy::signers::wallet::{LocalWallet, WalletError};
-use alloy::sol as abigen;
 use alloy::transports::http::Http;
 use alloy::transports::{RpcError, TransportErrorKind};
 use foundry_compilers::artifacts::Settings as SolcSettings;

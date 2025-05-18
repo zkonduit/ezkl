@@ -31,6 +31,11 @@ use crate::{
     CheckMode, Commitments, EZKLError as InnerEZKLError,
 };
 
+use crate::circuit::modules::poseidon::{
+    spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
+    PoseidonChip,
+};
+use crate::circuit::modules::Module;
 use crate::graph::{GraphCircuit, GraphWitness};
 use halo2curves::{
     bn256::{Bn256, Fr, G1Affine},
@@ -58,6 +63,28 @@ impl From<InnerEZKLError> for EZKLError {
     fn from(e: InnerEZKLError) -> Self {
         EZKLError::InternalError(e.to_string())
     }
+}
+
+/// Hash the input message with poseidon
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn poseidon_hash(message: Vec<u8>) -> Result<Vec<u8>, EZKLError> {
+    let message: Vec<Fr> = serde_json::from_slice(&message[..]).map_err(InnerEZKLError::from)?;
+
+    let output = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::run(message.clone())
+        .map_err(InnerEZKLError::from)?;
+
+    Ok(serde_json::to_vec(&output).map_err(InnerEZKLError::from)?)
+}
+
+/// Hash the input message with poseidon without converting to Fr
+#[cfg_attr(feature = "ios-bindings", uniffi::export)]
+pub fn poseidon_hash_no_felt(message: Vec<u8>) -> Result<Vec<u8>, EZKLError> {
+    let message: Vec<Fr> = message.iter().map(|x| Fr::from(*x as u64)).collect();
+
+    let output = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::run(message.clone())
+        .map_err(InnerEZKLError::from)?;
+
+    Ok(serde_json::to_vec(&output).map_err(InnerEZKLError::from)?)
 }
 
 /// Encode verifier calldata from proof and ethereum vk_address

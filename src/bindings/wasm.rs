@@ -1,14 +1,14 @@
 use crate::{
     circuit::modules::{
-        Module,
         polycommit::PolyCommitChip,
         poseidon::{
+            spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH},
             PoseidonChip,
-            spec::{POSEIDON_RATE, POSEIDON_WIDTH, PoseidonSpec},
         },
+        Module,
     },
     fieldutils::{felt_to_integer_rep, integer_rep_to_felt},
-    graph::{GraphCircuit, GraphSettings, quantize_float, scale_to_multiplier},
+    graph::{quantize_float, scale_to_multiplier, GraphCircuit, GraphSettings},
 };
 use console_error_panic_hook;
 use halo2_proofs::{
@@ -25,9 +25,9 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_console_logger::DEFAULT_LOGGER;
 
 use crate::bindings::universal::{
-    EZKLError as ExternalEZKLError, compiled_circuit_validation, encode_verifier_calldata, gen_pk,
-    gen_vk, gen_witness, input_validation, pk_validation, proof_validation, settings_validation,
-    srs_validation, verify_aggr, vk_validation, witness_validation,
+    compiled_circuit_validation, encode_verifier_calldata, gen_pk, gen_vk, gen_witness,
+    input_validation, pk_validation, proof_validation, settings_validation, srs_validation,
+    verify_aggr, vk_validation, witness_validation, EZKLError as ExternalEZKLError,
 };
 #[cfg(feature = "web")]
 pub use wasm_bindgen_rayon::init_thread_pool;
@@ -226,15 +226,7 @@ pub fn bufferToVecOfFelt(
 pub fn poseidonHash(
     message: wasm_bindgen::Clamped<Vec<u8>>,
 ) -> Result<wasm_bindgen::Clamped<Vec<u8>>, JsError> {
-    let message: Vec<Fr> = serde_json::from_slice(&message[..])
-        .map_err(|e| JsError::new(&format!("Failed to deserialize message: {}", e)))?;
-
-    let output = PoseidonChip::<PoseidonSpec, POSEIDON_WIDTH, POSEIDON_RATE>::run(message.clone())
-        .map_err(|e| JsError::new(&format!("{}", e)))?;
-
-    Ok(wasm_bindgen::Clamped(serde_json::to_vec(&output).map_err(
-        |e| JsError::new(&format!("Failed to serialize poseidon hash output: {}", e)),
-    )?))
+    super::universal::poseidon_hash(message.0).map_err(JsError::from)
 }
 
 /// Generate a witness file from input.json, compiled model and a settings.json file.
