@@ -12,10 +12,10 @@ mod wasm32 {
     use ezkl::circuit::modules::poseidon::spec::{PoseidonSpec, POSEIDON_RATE, POSEIDON_WIDTH};
     use ezkl::circuit::modules::poseidon::PoseidonChip;
     use ezkl::circuit::modules::Module;
-    use ezkl::eth::encode_calldata;
     use ezkl::graph::GraphCircuit;
     use ezkl::graph::{GraphSettings, GraphWitness};
     use ezkl::pfsys;
+    use ezkl::pfsys::encode_calldata;
     use halo2_proofs::plonk::VerifyingKey;
     use halo2_proofs::poly::kzg::commitment::KZGCommitmentScheme;
     use halo2_proofs::poly::kzg::commitment::ParamsKZG;
