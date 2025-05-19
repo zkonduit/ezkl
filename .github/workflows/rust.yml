@@ -1053,7 +1053,6 @@ jobs:
     permissions:
       contents: read
     runs-on: large-self-hosted
-    services:
     env:
       VERIFICATION_EZKL_TOKEN: ${{ secrets.VERIFICATION_EZKL_TOKEN }}
     steps:
