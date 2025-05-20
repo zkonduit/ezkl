@@ -27,7 +27,7 @@ pub use var::*;
 
 use crate::{
     circuit::utils,
-    fieldutils::{IntegerRep, integer_rep_to_felt},
+    fieldutils::{integer_rep_to_felt, IntegerRep},
     graph::Visibility,
 };
 
@@ -42,21 +42,17 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::io::Read;
 use std::iter::Iterator;
+use std::ops::Rem;
 use std::ops::{Add, Deref, DerefMut, Div, Mul, Neg, Range, Sub};
-use std::{cmp::max, ops::Rem};
 
 /// The (inner) type of tensor elements.
-pub trait TensorType: Clone + Debug + 'static {
+pub trait TensorType: Clone + Debug {
     /// Returns the zero value.
     fn zero() -> Option<Self> {
         None
     }
     /// Returns the unit value.
     fn one() -> Option<Self> {
-        None
-    }
-    /// Max operator for ordering values.
-    fn tmax(&self, _: &Self) -> Option<Self> {
         None
     }
 }
@@ -70,10 +66,6 @@ macro_rules! tensor_type {
             fn one() -> Option<Self> {
                 Some($one)
             }
-
-            fn tmax(&self, other: &Self) -> Option<Self> {
-                Some(max(*self, *other))
-            }
         }
     };
 }
@@ -82,45 +74,11 @@ impl TensorType for f32 {
     fn zero() -> Option<Self> {
         Some(0.0)
     }
-
-    // f32 doesnt impl Ord so we cant just use max like we can for IntegerRep, usize.
-    // A comparison between f32s needs to handle NAN values.
-    fn tmax(&self, other: &Self) -> Option<Self> {
-        match (self.is_nan(), other.is_nan()) {
-            (true, true) => Some(f32::NAN),
-            (true, false) => Some(*other),
-            (false, true) => Some(*self),
-            (false, false) => {
-                if self >= other {
-                    Some(*self)
-                } else {
-                    Some(*other)
-                }
-            }
-        }
-    }
 }
 
 impl TensorType for f64 {
     fn zero() -> Option<Self> {
         Some(0.0)
-    }
-
-    // f32 doesnt impl Ord so we cant just use max like we can for IntegerRep, usize.
-    // A comparison between f32s needs to handle NAN values.
-    fn tmax(&self, other: &Self) -> Option<Self> {
-        match (self.is_nan(), other.is_nan()) {
-            (true, true) => Some(f64::NAN),
-            (true, false) => Some(*other),
-            (false, true) => Some(*self),
-            (false, false) => {
-                if self >= other {
-                    Some(*self)
-                } else {
-                    Some(*other)
-                }
-            }
-        }
     }
 }
 
@@ -147,14 +105,6 @@ impl<T: TensorType> TensorType for Value<T> {
     fn one() -> Option<Self> {
         Some(Value::known(T::one().unwrap()))
     }
-
-    fn tmax(&self, other: &Self) -> Option<Self> {
-        Some(
-            (self.clone())
-                .zip(other.clone())
-                .map(|(a, b)| a.tmax(&b).unwrap()),
-        )
-    }
 }
 
 impl<F: PrimeField + PartialOrd> TensorType for Assigned<F>
@@ -167,14 +117,6 @@ where
 
     fn one() -> Option<Self> {
         Some(F::ONE.into())
-    }
-
-    fn tmax(&self, other: &Self) -> Option<Self> {
-        if self.evaluate() >= other.evaluate() {
-            Some(*self)
-        } else {
-            Some(*other)
-        }
     }
 }
 
@@ -189,42 +131,14 @@ where
     fn one() -> Option<Self> {
         Some(Expression::Constant(F::ONE))
     }
-
-    fn tmax(&self, _: &Self) -> Option<Self> {
-        todo!()
-    }
 }
 
 impl TensorType for Column<Advice> {}
 impl TensorType for Column<Fixed> {}
 
-impl<F: PrimeField + PartialOrd> TensorType for AssignedCell<Assigned<F>, F> {
-    fn tmax(&self, other: &Self) -> Option<Self> {
-        let mut output: Option<Self> = None;
-        self.value_field().zip(other.value_field()).map(|(a, b)| {
-            if a.evaluate() >= b.evaluate() {
-                output = Some(self.clone());
-            } else {
-                output = Some(other.clone());
-            }
-        });
-        output
-    }
-}
+impl<F: PrimeField + PartialOrd> TensorType for AssignedCell<Assigned<F>, F> {}
 
-impl<F: PrimeField + PartialOrd> TensorType for AssignedCell<F, F> {
-    fn tmax(&self, other: &Self) -> Option<Self> {
-        let mut output: Option<Self> = None;
-        self.value().zip(other.value()).map(|(a, b)| {
-            if a >= b {
-                output = Some(self.clone());
-            } else {
-                output = Some(other.clone());
-            }
-        });
-        output
-    }
-}
+impl<F: PrimeField + PartialOrd> TensorType for AssignedCell<F, F> {}
 
 // specific types
 impl TensorType for halo2curves::pasta::Fp {
@@ -234,10 +148,6 @@ impl TensorType for halo2curves::pasta::Fp {
 
     fn one() -> Option<Self> {
         Some(halo2curves::pasta::Fp::one())
-    }
-
-    fn tmax(&self, other: &Self) -> Option<Self> {
-        Some((*self).max(*other))
     }
 }
 
@@ -249,9 +159,15 @@ impl TensorType for halo2curves::bn256::Fr {
     fn one() -> Option<Self> {
         Some(halo2curves::bn256::Fr::one())
     }
+}
 
-    fn tmax(&self, other: &Self) -> Option<Self> {
-        Some((*self).max(*other))
+impl<F: TensorType> TensorType for &F {
+    fn zero() -> Option<Self> {
+        None
+    }
+
+    fn one() -> Option<Self> {
+        None
     }
 }
 
@@ -374,7 +290,7 @@ impl<T: Clone + TensorType + std::marker::Send + std::marker::Sync>
     }
 }
 
-impl<'data, T: Clone + TensorType + std::marker::Send + std::marker::Sync>
+impl<'data, T: Clone + TensorType + std::marker::Send + std::marker::Sync + 'data>
     maybe_rayon::iter::IntoParallelRefMutIterator<'data> for Tensor<T>
 {
     type Iter = maybe_rayon::slice::IterMut<'data, T>;
@@ -420,6 +336,14 @@ impl<T: Clone + TensorType + PrimeField> Tensor<T> {
             }
         }
         Ok(Tensor::new(Some(&inner), &[inner.len()]).unwrap())
+    }
+}
+
+impl<T: Clone + TensorType> Tensor<&T> {
+    /// Clones the tensor values into a new tensor.
+    pub fn cloned(&self) -> Tensor<T> {
+        let inner = self.inner.clone().into_iter().cloned().collect::<Vec<T>>();
+        Tensor::new(Some(&inner), &self.dims).unwrap()
     }
 }
 
@@ -551,12 +475,14 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::fieldutils::IntegerRep;
-    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1,2,3,4,5,6]), &[2, 3]).unwrap();
+    /// let a = Tensor::<IntegerRep>::new(Some(&[1,2,3,4,5,6]), &[2, 3]).unwrap();
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0]), &[8]).unwrap();
-    /// assert_eq!(a.pad_to_zero_rem(4, 0).unwrap(), expected);
+    /// a.pad_to_zero_rem(4, 0).unwrap();
+    /// assert_eq!(a, expected);
     ///
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0, 0]), &[9]).unwrap();
-    /// assert_eq!(a.pad_to_zero_rem(9, 0).unwrap(), expected);
+    /// a.pad_to_zero_rem(9, 0).unwrap();
+    /// assert_eq!(a, expected);
     /// ```
     pub fn pad_to_zero_rem(&self, n: usize, pad: T) -> Result<Tensor<T>, TensorError> {
         let mut inner = self.inner.clone();
@@ -603,17 +529,21 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
     /// let mut b = Tensor::<IntegerRep>::new(Some(&[1, 2]), &[2]).unwrap();
     ///
-    /// assert_eq!(a.get_slice(&[0..2]).unwrap(), b);
+    /// assert_eq!(a.get_slice(&[0..2]).unwrap().cloned(), b);
     /// ```
-    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorError>
+    pub fn get_slice<'a>(&'a self, indices: &[Range<usize>]) -> Result<Tensor<&'a T>, TensorError>
     where
         T: Send + Sync,
+        &'a T: TensorType,
     {
         // Fast path: empty indices or full tensor slice
         if indices.is_empty()
             || indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims
         {
-            return Ok(self.clone());
+            return Tensor::new(
+                Some(self.inner.iter().collect::<Vec<_>>().as_slice()),
+                &self.dims,
+            );
         }
 
         // Validate dimensions
@@ -636,7 +566,7 @@ impl<T: Clone + TensorType> Tensor<T> {
             .iter()
             .map(|range| range.end - range.start)
             .product();
-        let mut res = Vec::with_capacity(total_size);
+        let mut res: Vec<&T> = Vec::with_capacity(total_size);
 
         // Calculate new dimensions once
         let dims: Vec<usize> = full_indices.iter().map(|e| e.end - e.start).collect();
@@ -644,10 +574,26 @@ impl<T: Clone + TensorType> Tensor<T> {
         // Use iterator directly without collecting into intermediate Vec
         for coord in full_indices.iter().cloned().multi_cartesian_product() {
             let index = self.get_index(&coord);
-            res.push(self[index].clone());
+            res.push(&self[index]);
         }
 
         Tensor::new(Some(&res), &dims)
+    }
+
+    /// Get a slice from the Tensor.
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
+    /// let mut b = Tensor::<IntegerRep>::new(Some(&[1, 2]), &[2]).unwrap();
+    ///
+    /// assert_eq!(a.get_slice_cloned(&[0..2]).unwrap(), b);
+    /// ```
+    pub fn get_slice_cloned(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorError>
+    where
+        T: Send + Sync,
+    {
+        Ok(self.get_slice(indices)?.cloned())
     }
 
     /// Set a slice of the Tensor.
@@ -927,7 +873,7 @@ impl<T: Clone + TensorType> Tensor<T> {
             }
             self.dims = vec![];
         }
-        if self.dims() == &[0] && new_dims.iter().product::<usize>() == 1 {
+        if self.dims() == [0] && new_dims.iter().product::<usize>() == 1 {
             self.dims = Vec::from(new_dims);
         } else {
             let product = if new_dims != [0] {
@@ -1808,7 +1754,7 @@ impl DataFormat {
         match self {
             DataFormat::NHWC => DataFormat::NCHW,
             DataFormat::HWC => DataFormat::CHW,
-            _ => self.clone(),
+            _ => *self,
         }
     }
 
@@ -1908,7 +1854,7 @@ impl KernelFormat {
         match self {
             KernelFormat::HWIO => KernelFormat::OIHW,
             KernelFormat::OHWI => KernelFormat::OIHW,
-            _ => self.clone(),
+            _ => *self,
         }
     }
 
@@ -2030,6 +1976,9 @@ mod tests {
     fn tensor_slice() {
         let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[2, 3]).unwrap();
         let b = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2, 1]).unwrap();
-        assert_eq!(a.get_slice(&[0..2, 0..1]).unwrap(), b);
+        assert_eq!(
+            a.get_slice(&[0..2, 0..1]).unwrap(),
+            b.get_slice(&[0..2, 0..1]).unwrap()
+        );
     }
 }

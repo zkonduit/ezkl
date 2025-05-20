@@ -391,10 +391,8 @@ impl FromStr for DataField {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Check if the input starts with '@'
-        if s.starts_with('@') {
+        if let Some(file_path) = s.strip_prefix('@') {
             // Extract the file path (remove the '@' prefix)
-            let file_path = &s[1..];
-
             // Read the file content
             let content = std::fs::read_to_string(file_path)
                 .map_err(|e| format!("Failed to read data file '{}': {}", file_path, e))?;

@@ -288,6 +288,18 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Vec<ValType<F>>> for ValTenso
     }
 }
 
+impl<F: PrimeField + TensorType + PartialOrd> From<Vec<&ValType<F>>> for ValTensor<F> {
+    fn from(t: Vec<&ValType<F>>) -> ValTensor<F> {
+        ValTensor::Value {
+            inner: t.clone().into_iter().cloned().into(),
+
+            dims: vec![t.len()],
+
+            scale: 1,
+        }
+    }
+}
+
 impl<F: PrimeField + TensorType + PartialOrd> TryFrom<Tensor<F>> for ValTensor<F> {
     type Error = TensorError;
 
@@ -640,6 +652,9 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// # Returns
     /// A tensor containing the base-n decomposition of each value
     pub fn decompose(&self, base: usize, n: usize) -> Result<Self, TensorError> {
+        let mut dims = self.dims().to_vec();
+        dims.push(n + 1);
+
         let res = self
             .get_inner()?
             .par_iter()
@@ -666,8 +681,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             .collect::<Result<Vec<_>, _>>();
 
         let mut tensor = Tensor::from(res?.into_iter().flatten().collect::<Vec<_>>().into_iter());
-        let mut dims = self.dims().to_vec();
-        dims.push(n + 1);
 
         tensor.reshape(&dims)?;
 
@@ -794,7 +807,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 let inner = v.get_slice(indices)?;
                 let dims = inner.dims().to_vec();
                 ValTensor::Value {
-                    inner,
+                    inner: inner.cloned(),
                     dims,
                     scale: *scale,
                 }
@@ -1276,7 +1289,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// Returns an error if called on an Instance tensor
     pub fn intercalate_values(
         &mut self,
-        value: ValType<F>,
+        value: &ValType<F>,
         stride: usize,
         axis: usize,
     ) -> Result<(), TensorError> {
@@ -1368,10 +1381,10 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     }
 
     /// Concatenates two tensors along the first dimension
-    pub fn concat(&self, other: Self) -> Result<Self, TensorError> {
+    pub fn concat(&self, other: &Self) -> Result<Self, TensorError> {
         let res = match (self, other) {
             (ValTensor::Value { inner: v1, .. }, ValTensor::Value { inner: v2, .. }) => {
-                ValTensor::from(Tensor::new(Some(&[v1.clone(), v2]), &[2])?.combine()?)
+                ValTensor::from(Tensor::new(Some(&[v1.clone(), v2.clone()]), &[2])?.combine()?)
             }
             _ => {
                 return Err(TensorError::WrongMethod);

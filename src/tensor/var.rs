@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use log::{debug, error, warn};
 
-use crate::circuit::{CheckMode, region::ConstantsMap};
+use crate::circuit::{region::ConstantsMap, CheckMode};
 
 use super::*;
 /// A wrapper around Halo2's Column types that represents a tensor of variables in the circuit.

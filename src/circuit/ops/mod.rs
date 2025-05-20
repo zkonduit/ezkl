@@ -49,7 +49,7 @@ pub trait Op<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>:
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        values: &[ValTensor<F>],
+        values: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError>;
 
     /// Returns the scale of the output of the operation.
@@ -209,7 +209,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        values: &[ValTensor<F>],
+        values: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         let value = values[0].clone();
         if !value.all_prev_assigned() {
@@ -263,7 +263,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Unknow
         &self,
         _: &mut crate::circuit::BaseConfig<F>,
         _: &mut RegionCtx<F>,
-        _: &[ValTensor<F>],
+        _: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Err(super::CircuitError::UnsupportedOp)
     }
@@ -319,8 +319,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Constant<F> {
 }
 
 impl<
-    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Serialize + for<'de> Deserialize<'de>,
-> Op<F> for Constant<F>
+        F: PrimeField
+            + TensorType
+            + PartialOrd
+            + std::hash::Hash
+            + Serialize
+            + for<'de> Deserialize<'de>,
+    > Op<F> for Constant<F>
 {
     fn as_any(&self) -> &dyn Any {
         self
@@ -333,7 +338,7 @@ impl<
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        _: &[ValTensor<F>],
+        _: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         let value = if let Some(value) = &self.pre_assigned_val {
             value.clone()
@@ -344,7 +349,7 @@ impl<
         Ok(Some(layouts::identity(
             config,
             region,
-            &[value],
+            &[&value],
             self.decomp,
         )?))
     }

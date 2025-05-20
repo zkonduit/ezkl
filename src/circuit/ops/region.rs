@@ -462,15 +462,14 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     /// Update the max and min from inputs
     pub fn update_max_min_lookup_inputs(
         &mut self,
-        inputs: &[ValTensor<F>],
+        inputs: &ValTensor<F>,
     ) -> Result<(), CircuitError> {
-        let (mut min, mut max) = (0, 0);
-        for i in inputs {
-            max = max.max(i.int_evals()?.into_iter().max().unwrap_or_default());
-            min = min.min(i.int_evals()?.into_iter().min().unwrap_or_default());
-        }
-        self.statistics.max_lookup_inputs = self.statistics.max_lookup_inputs.max(max);
-        self.statistics.min_lookup_inputs = self.statistics.min_lookup_inputs.min(min);
+        let int_eval = inputs.int_evals()?;
+        let max = int_eval.iter().max().unwrap_or(&0);
+        let min = int_eval.iter().min().unwrap_or(&0);
+
+        self.statistics.max_lookup_inputs = self.statistics.max_lookup_inputs.max(*max);
+        self.statistics.min_lookup_inputs = self.statistics.min_lookup_inputs.min(*min);
         Ok(())
     }
 
@@ -505,10 +504,10 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     /// add used lookup
     pub fn add_used_lookup(
         &mut self,
-        lookup: LookupOp,
-        inputs: &[ValTensor<F>],
+        lookup: &LookupOp,
+        inputs: &ValTensor<F>,
     ) -> Result<(), CircuitError> {
-        self.statistics.used_lookups.insert(lookup);
+        self.statistics.used_lookups.insert(lookup.clone());
         self.update_max_min_lookup_inputs(inputs)
     }
 

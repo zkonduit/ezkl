@@ -117,10 +117,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                         .layer_config
                         .layout(
                             &mut region,
-                            &[
-                                self.l0_params[0].clone().try_into().unwrap(),
-                                self.input.clone(),
-                            ],
+                            &[&self.l0_params[0].clone().try_into().unwrap(), &self.input],
                             Box::new(PolyOp::Einsum {
                                 equation: "ab,bc->ac".to_string(),
                             }),
@@ -135,7 +132,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x, self.l0_params[1].clone().try_into().unwrap()],
+                            &[&x, &self.l0_params[1].clone().try_into().unwrap()],
                             Box::new(PolyOp::Add),
                         )
                         .unwrap()
@@ -147,7 +144,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x],
+                            &[&x],
                             Box::new(PolyOp::LeakyReLU {
                                 scale: 1,
                                 slope: 0.0.into(),
@@ -163,7 +160,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                         .layer_config
                         .layout(
                             &mut region,
-                            &[self.l2_params[0].clone().try_into().unwrap(), x],
+                            &[&self.l2_params[0].clone().try_into().unwrap(), &x],
                             Box::new(PolyOp::Einsum {
                                 equation: "ab,bc->ac".to_string(),
                             }),
@@ -178,7 +175,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x, self.l2_params[1].clone().try_into().unwrap()],
+                            &[&x, &self.l2_params[1].clone().try_into().unwrap()],
                             Box::new(PolyOp::Add),
                         )
                         .unwrap()
@@ -190,7 +187,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x],
+                            &[&x],
                             Box::new(PolyOp::LeakyReLU {
                                 scale: 1,
                                 slope: 0.0.into(),
@@ -203,7 +200,7 @@ impl<const LEN: usize, const LOOKUP_MIN: IntegerRep, const LOOKUP_MAX: IntegerRe
                         .layer_config
                         .layout(
                             &mut region,
-                            &[x.unwrap()],
+                            &[&x.unwrap()],
                             Box::new(LookupOp::Div {
                                 denom: ezkl::circuit::utils::F32::from(128.),
                             }),

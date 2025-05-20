@@ -1,6 +1,5 @@
-use crate::EZKL_BUF_CAPACITY;
-use crate::circuit::CheckMode;
 use crate::circuit::region::RegionSettings;
+use crate::circuit::CheckMode;
 use crate::commands::CalibrationTarget;
 use crate::eth::{deploy_contract_via_solidity, deploy_da_verifier_via_solidity, fix_da_sol};
 #[allow(unused_imports)]
@@ -10,21 +9,21 @@ use crate::graph::{GraphCircuit, GraphSettings, GraphWitness, Model};
 use crate::graph::{TestDataSource, TestSources};
 use crate::pfsys::evm::aggregation_kzg::{AggregationCircuit, PoseidonTranscript};
 use crate::pfsys::{
-    ProofSplitCommit, create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit,
+    create_keys, load_pk, load_vk, save_params, save_pk, Snark, StrategyType, TranscriptType,
 };
 use crate::pfsys::{
-    Snark, StrategyType, TranscriptType, create_keys, load_pk, load_vk, save_params, save_pk,
+    create_proof_circuit, swap_proof_commitments_polycommit, verify_proof_circuit, ProofSplitCommit,
 };
 use crate::pfsys::{save_vk, srs::*};
 use crate::tensor::TensorError;
+use crate::EZKL_BUF_CAPACITY;
+use crate::{commands::*, EZKLError};
 use crate::{Commitments, RunArgs};
-use crate::{EZKLError, commands::*};
 use colored::Colorize;
 #[cfg(unix)]
 use gag::Gag;
 use halo2_proofs::dev::VerifyFailure;
 use halo2_proofs::plonk::{self, Circuit};
-use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::poly::commitment::{CommitmentScheme, Params};
 use halo2_proofs::poly::commitment::{ParamsProver, Verifier};
 use halo2_proofs::poly::ipa::commitment::{IPACommitmentScheme, ParamsIPA};
@@ -37,6 +36,7 @@ use halo2_proofs::poly::kzg::strategy::AccumulatorStrategy as KZGAccumulatorStra
 use halo2_proofs::poly::kzg::{
     commitment::ParamsKZG, strategy::SingleStrategy as KZGSingleStrategy,
 };
+use halo2_proofs::poly::VerificationStrategy;
 use halo2_proofs::transcript::{EncodedChallenge, TranscriptReadBuffer};
 use halo2_solidity_verifier;
 use halo2curves::bn256::{Bn256, Fr, G1Affine};
@@ -48,12 +48,12 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::debug;
 use log::{info, trace, warn};
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use snark_verifier::loader::native::NativeLoader;
-use snark_verifier::system::halo2::Config;
 use snark_verifier::system::halo2::compile;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
+use snark_verifier::system::halo2::Config;
 use std::fs::File;
 use std::io::BufWriter;
 use std::io::{Cursor, Write};
@@ -1163,15 +1163,9 @@ pub(crate) async fn calibrate(
 
         // if unix get a gag
         #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _r = match Gag::stdout() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        let _r = Gag::stdout().ok();
         #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _g = match Gag::stderr() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        let _g = Gag::stderr().ok();
 
         let mut circuit = match GraphCircuit::from_run_args(&local_run_args, &model_path) {
             Ok(c) => c,
@@ -1329,7 +1323,7 @@ pub(crate) async fn calibrate(
                 .clone()
         }
         CalibrationTarget::Accuracy => {
-            let param_iterator = found_params.iter().sorted_by_key(|p| {
+            let mut param_iterator = found_params.iter().sorted_by_key(|p| {
                 (
                     p.run_args.input_scale,
                     p.run_args.param_scale,
@@ -1338,7 +1332,7 @@ pub(crate) async fn calibrate(
                 )
             });
 
-            let last = param_iterator.last().ok_or("no params found")?;
+            let last = param_iterator.next_back().ok_or("no params found")?;
             let max_scale = (
                 last.run_args.input_scale,
                 last.run_args.param_scale,

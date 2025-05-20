@@ -916,11 +916,14 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
 /// let expected = Tensor::<IntegerRep>::new(Some(&[2, 7]), &[2]).unwrap();
 /// assert_eq!(result, expected);
 ///
-pub fn gather_nd<T: TensorType + Send + Sync>(
-    input: &Tensor<T>,
+pub fn gather_nd<'a, T: TensorType + Send + Sync + 'a>(
+    input: &'a Tensor<T>,
     index: &Tensor<usize>,
     batch_dims: usize,
-) -> Result<Tensor<T>, TensorError> {
+) -> Result<Tensor<T>, TensorError>
+where
+    &'a T: TensorType,
+{
     // Calculate the output tensor size
     let index_dims = index.dims().to_vec();
     let input_dims = input.dims().to_vec();
@@ -996,10 +999,14 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
                         .get_slice(&slice)
                         .unwrap()
                         .iter()
-                        .map(|x| *x..*x + 1)
+                        .map(|x| ***x..***x + 1)
                         .collect::<Vec<_>>();
 
-                    input_slice.get_slice(&index_slice).unwrap()
+                    input_slice
+                        .get_slice(&index_slice)
+                        .unwrap()
+                        .cloned()
+                        .cloned()
                 })
                 .collect::<Tensor<_>>();
 
@@ -1108,11 +1115,14 @@ pub fn gather_nd<T: TensorType + Send + Sync>(
 /// assert_eq!(result, expected);
 /// ````
 ///
-pub fn scatter_nd<T: TensorType + Send + Sync>(
+pub fn scatter_nd<'a, T: TensorType + Send + Sync + 'a>(
     input: &Tensor<T>,
     index: &Tensor<usize>,
-    src: &Tensor<T>,
-) -> Result<Tensor<T>, TensorError> {
+    src: &'a Tensor<T>,
+) -> Result<Tensor<T>, TensorError>
+where
+    &'a T: TensorType,
+{
     // Calculate the output tensor size
     let index_dims = index.dims().to_vec();
     let input_dims = input.dims().to_vec();
@@ -1136,9 +1146,9 @@ pub fn scatter_nd<T: TensorType + Send + Sync>(
         .map(|coord| {
             let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
             let index_val = index.get_slice(&slice)?;
-            let index_slice = index_val.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let index_slice = index_val.iter().map(|x| **x..**x + 1).collect::<Vec<_>>();
 
-            let src_val = src.get_slice(&slice)?;
+            let src_val = src.get_slice(&slice)?.cloned();
             output.set_slice(&index_slice, &src_val)?;
             Ok::<_, TensorError>(())
         })
@@ -1196,7 +1206,7 @@ pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
 /// ```
 pub fn intercalate_values<T: TensorType>(
     tensor: &Tensor<T>,
-    value: T,
+    value: &T,
     stride: usize,
     axis: usize,
 ) -> Result<Tensor<T>, TensorError> {
@@ -1494,7 +1504,7 @@ pub fn slice<T: TensorType + Send + Sync>(
         }
     }
 
-    t.get_slice(&slice)
+    Ok(t.get_slice(&slice)?.cloned())
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -2414,20 +2424,20 @@ pub mod accumulated {
     ///     Some(&[25, 35]),
     ///     &[2],
     /// ).unwrap();
-    /// assert_eq!(dot(&[x, y], 1).unwrap(), expected);
+    /// assert_eq!(dot(&x, &y, 1).unwrap(), expected);
     /// ```
     pub fn dot<T: TensorType + Mul<Output = T> + Add<Output = T>>(
-        inputs: &[Tensor<T>; 2],
+        a: &Tensor<T>,
+        b: &Tensor<T>,
         chunk_size: usize,
     ) -> Result<Tensor<T>, TensorError> {
-        if inputs[0].clone().len() != inputs[1].clone().len() {
+        if a.len() != b.len() {
             return Err(TensorError::DimMismatch("dot".to_string()));
         }
-        let (a, b): (Tensor<T>, Tensor<T>) = (inputs[0].clone(), inputs[1].clone());
 
         let transcript: Tensor<T> = a
             .iter()
-            .zip(b)
+            .zip(b.iter())
             .chunks(chunk_size)
             .into_iter()
             .scan(T::zero().unwrap(), |acc, chunk| {

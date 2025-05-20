@@ -108,8 +108,13 @@ pub enum PolyOp {
 }
 
 impl<
-    F: PrimeField + TensorType + PartialOrd + std::hash::Hash + Serialize + for<'de> Deserialize<'de>,
-> Op<F> for PolyOp
+        F: PrimeField
+            + TensorType
+            + PartialOrd
+            + std::hash::Hash
+            + Serialize
+            + for<'de> Deserialize<'de>,
+    > Op<F> for PolyOp
 {
     /// Returns a reference to the Any trait.
     fn as_any(&self) -> &dyn Any {
@@ -203,7 +208,7 @@ impl<
         &self,
         config: &mut crate::circuit::BaseConfig<F>,
         region: &mut RegionCtx<F>,
-        values: &[ValTensor<F>],
+        values: &[&ValTensor<F>],
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
             PolyOp::Abs => layouts::abs(config, region, values[..].try_into()?)?,
@@ -416,14 +421,14 @@ impl<
             PolyOp::Reshape(_) | PolyOp::Flatten(_) => in_scales[0],
             PolyOp::Pow(pow) => in_scales[0] * (*pow as crate::Scale),
             PolyOp::Identity { out_scale } => out_scale.unwrap_or(in_scales[0]),
-            PolyOp::Sign { .. } => 0,
+            PolyOp::Sign => 0,
             _ => in_scales[0],
         };
         Ok(scale)
     }
 
     fn requires_homogenous_input_scales(&self) -> Vec<usize> {
-        if matches!(self, PolyOp::Add { .. } | PolyOp::Sub) {
+        if matches!(self, PolyOp::Add | PolyOp::Sub) {
             vec![0, 1]
         } else if matches!(self, PolyOp::Iff) {
             vec![1, 2]

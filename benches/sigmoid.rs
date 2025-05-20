@@ -67,7 +67,7 @@ impl Circuit<Fr> for NLCircuit {
                 config
                     .layout(
                         &mut region,
-                        &[self.input.clone()],
+                        &[&self.input],
                         Box::new(LookupOp::Sigmoid { scale: 1.0.into() }),
                     )
                     .unwrap();

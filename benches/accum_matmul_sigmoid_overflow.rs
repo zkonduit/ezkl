@@ -17,6 +17,7 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error},
 };
 use halo2curves::bn256::{Bn256, Fr};
+use itertools::Itertools;
 use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 use std::marker::PhantomData;
 
@@ -87,13 +88,13 @@ impl Circuit<Fr> for MyCircuit {
                 let mut region = region::RegionCtx::new(region, 0, 1, 1024, 2);
                 let output = config
                     .base_config
-                    .layout(&mut region, &self.inputs, Box::new(op))
+                    .layout(&mut region, &self.inputs.iter().collect_vec(), Box::new(op))
                     .unwrap();
                 let _output = config
                     .base_config
                     .layout(
                         &mut region,
-                        &[output.unwrap()],
+                        &[&output.unwrap()],
                         Box::new(LookupOp::Sigmoid { scale: 1.0.into() }),
                     )
                     .unwrap();

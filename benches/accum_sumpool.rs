@@ -63,7 +63,7 @@ impl Circuit<Fr> for MyCircuit {
                 config
                     .layout(
                         &mut region,
-                        &[self.image.clone()],
+                        &[&self.image],
                         Box::new(HybridOp::SumPool {
                             padding: vec![(0, 0); 2],
                             stride: vec![1, 1],

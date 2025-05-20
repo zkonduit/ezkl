@@ -68,7 +68,7 @@ impl Circuit<Fr> for MyCircuit {
                 config
                     .layout(
                         &mut region,
-                        &[self.image.clone(), self.kernel.clone(), self.bias.clone()],
+                        &[&self.image, &self.kernel, &self.bias],
                         Box::new(PolyOp::Conv {
                             padding: vec![(0, 0)],
                             stride: vec![1; 2],

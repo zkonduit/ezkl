@@ -9,6 +9,7 @@ use halo2_proofs::{
 };
 use halo2curves::bn256::Fr as F;
 use halo2curves::ff::{Field, PrimeField};
+use itertools::Itertools;
 #[cfg(not(any(
     all(target_arch = "wasm32", target_os = "unknown"),
     not(feature = "ezkl")
@@ -64,7 +65,7 @@ mod matmul {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "ij,jk->ik".to_string(),
                                 }),
@@ -141,7 +142,7 @@ mod matmul_col_overflow_double_col {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "ij,jk->ik".to_string(),
                                 }),
@@ -215,7 +216,7 @@ mod matmul_col_overflow {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "ij,jk->ik".to_string(),
                                 }),
@@ -302,7 +303,7 @@ mod matmul_col_ultra_overflow_double_col {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "ij,jk->ik".to_string(),
                                 }),
@@ -380,6 +381,7 @@ mod matmul_col_ultra_overflow {
         multiopen::{ProverSHPLONK, VerifierSHPLONK},
         strategy::SingleStrategy,
     };
+    use itertools::Itertools;
     use snark_verifier::system::halo2::transcript::evm::EvmTranscript;
 
     use super::*;
@@ -422,7 +424,7 @@ mod matmul_col_ultra_overflow {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "ij,jk->ik".to_string(),
                                 }),
@@ -533,7 +535,7 @@ mod dot {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -610,7 +612,7 @@ mod dot_col_overflow_triple_col {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -683,7 +685,7 @@ mod dot_col_overflow {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -756,7 +758,7 @@ mod sum {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Sum { axes: vec![0] }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -826,7 +828,7 @@ mod sum_col_overflow_double_col {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Sum { axes: vec![0] }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -895,7 +897,7 @@ mod sum_col_overflow {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Sum { axes: vec![0] }),
                             )
                             .map_err(|_| Error::Synthesis)
@@ -966,7 +968,7 @@ mod composition {
                         let _ = config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -975,7 +977,7 @@ mod composition {
                         let _ = config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -984,7 +986,7 @@ mod composition {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs.clone(),
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Einsum {
                                     equation: "i,i->".to_string(),
                                 }),
@@ -1061,7 +1063,7 @@ mod conv {
                         config
                             .layout(
                                 &mut region,
-                                &self.inputs,
+                                &self.inputs.iter().collect_vec(),
                                 Box::new(PolyOp::Conv {
                                     padding: vec![(1, 1); 2],
                                     stride: vec![2; 2],
@@ -1218,7 +1220,7 @@ mod conv_col_ultra_overflow {
                         config
                             .layout(
                                 &mut region,
-                                &[self.image.clone(), self.kernel.clone()],
+                                &[&self.image, &self.kernel],
                                 Box::new(PolyOp::Conv {
                                     padding: vec![(1, 1); 2],
                                     stride: vec![2; 2],
@@ -1377,7 +1379,7 @@ mod conv_relu_col_ultra_overflow {
                         let output = config
                             .layout(
                                 &mut region,
-                                &[self.image.clone(), self.kernel.clone()],
+                                &[&self.image, &self.kernel],
                                 Box::new(PolyOp::Conv {
                                     padding: vec![(1, 1); 2],
                                     stride: vec![2; 2],
@@ -1390,7 +1392,7 @@ mod conv_relu_col_ultra_overflow {
                         let _output = config
                             .layout(
                                 &mut region,
-                                &[output.unwrap().unwrap()],
+                                &[&output.unwrap().unwrap()],
                                 Box::new(PolyOp::LeakyReLU {
                                     slope: 0.0.into(),
                                     scale: 1,
@@ -1517,7 +1519,11 @@ mod add_w_shape_casting {
                     |region| {
                         let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
-                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
+                            .layout(
+                                &mut region,
+                                &self.inputs.iter().collect_vec(),
+                                Box::new(PolyOp::Add),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1584,7 +1590,11 @@ mod add {
                     |region| {
                         let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
-                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
+                            .layout(
+                                &mut region,
+                                &self.inputs.iter().collect_vec(),
+                                Box::new(PolyOp::Add),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -1671,8 +1681,8 @@ mod dynamic_lookup {
                             layouts::dynamic_lookup(
                                 &config,
                                 &mut region,
-                                &self.lookups[i],
-                                &self.tables[i],
+                                &self.lookups[i].iter().collect_vec().try_into().unwrap(),
+                                &self.tables[i].iter().collect_vec().try_into().unwrap(),
                             )
                             .map_err(|_| Error::Synthesis)?;
                         }
@@ -1767,8 +1777,8 @@ mod shuffle {
 
     #[derive(Clone)]
     struct MyCircuit<F: PrimeField + TensorType + PartialOrd> {
-        inputs: [[ValTensor<F>; 1]; NUM_LOOP],
-        references: [[ValTensor<F>; 1]; NUM_LOOP],
+        inputs: [ValTensor<F>; NUM_LOOP],
+        references: [ValTensor<F>; NUM_LOOP],
         _marker: PhantomData<F>,
     }
 
@@ -1818,15 +1828,15 @@ mod shuffle {
                             layouts::shuffles(
                                 &config,
                                 &mut region,
-                                &self.inputs[i],
-                                &self.references[i],
+                                &[&self.inputs[i]],
+                                &[&self.references[i]],
                                 layouts::SortCollisionMode::Unsorted,
                             )
                             .map_err(|_| Error::Synthesis)?;
                         }
                         assert_eq!(
                             region.shuffle_col_coord(),
-                            NUM_LOOP * self.references[0][0].len()
+                            NUM_LOOP * self.references[0].len()
                         );
                         assert_eq!(region.shuffle_index(), NUM_LOOP);
 
@@ -1843,17 +1853,19 @@ mod shuffle {
         // parameters
         let references = (0..NUM_LOOP)
             .map(|loop_idx| {
-                [ValTensor::from(Tensor::from((0..LEN).map(|i| {
-                    Value::known(F::from((i * loop_idx) as u64 + 1))
-                })))]
+                ValTensor::from(Tensor::from(
+                    (0..LEN).map(|i| Value::known(F::from((i * loop_idx) as u64 + 1))),
+                ))
             })
             .collect::<Vec<_>>();
 
         let inputs = (0..NUM_LOOP)
             .map(|loop_idx| {
-                [ValTensor::from(Tensor::from((0..LEN).rev().map(|i| {
-                    Value::known(F::from((i * loop_idx) as u64 + 1))
-                })))]
+                ValTensor::from(Tensor::from(
+                    (0..LEN)
+                        .rev()
+                        .map(|i| Value::known(F::from((i * loop_idx) as u64 + 1))),
+                ))
             })
             .collect::<Vec<_>>();
 
@@ -1873,9 +1885,11 @@ mod shuffle {
                 } else {
                     loop_idx - 1
                 };
-                [ValTensor::from(Tensor::from((0..LEN).rev().map(|i| {
-                    Value::known(F::from((i * prev_idx) as u64 + 1))
-                })))]
+                ValTensor::from(Tensor::from(
+                    (0..LEN)
+                        .rev()
+                        .map(|i| Value::known(F::from((i * prev_idx) as u64 + 1))),
+                ))
             })
             .collect::<Vec<_>>();
 
@@ -1931,7 +1945,11 @@ mod add_with_overflow {
                     |region| {
                         let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
-                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Add))
+                            .layout(
+                                &mut region,
+                                &self.inputs.iter().collect_vec(),
+                                Box::new(PolyOp::Add),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -2026,7 +2044,7 @@ mod add_with_overflow_and_poseidon {
 
             layouter.assign_region(|| "_new_module", |_| Ok(()))?;
 
-            let inputs = vec![assigned_inputs_a, assigned_inputs_b];
+            let inputs = vec![&assigned_inputs_a, &assigned_inputs_b];
 
             layouter.assign_region(
                 || "model",
@@ -2135,7 +2153,11 @@ mod sub {
                     |region| {
                         let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
-                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Sub))
+                            .layout(
+                                &mut region,
+                                &self.inputs.iter().collect_vec(),
+                                Box::new(PolyOp::Sub),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -2202,7 +2224,11 @@ mod mult {
                     |region| {
                         let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
-                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Mult))
+                            .layout(
+                                &mut region,
+                                &self.inputs.iter().collect_vec(),
+                                Box::new(PolyOp::Mult),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -2269,7 +2295,11 @@ mod pow {
                     |region| {
                         let mut region = RegionCtx::new(region, 0, 1, 128, 2);
                         config
-                            .layout(&mut region, &self.inputs.clone(), Box::new(PolyOp::Pow(5)))
+                            .layout(
+                                &mut region,
+                                &self.inputs.iter().collect_vec(),
+                                Box::new(PolyOp::Pow(5)),
+                            )
                             .map_err(|_| Error::Synthesis)
                     },
                 )
@@ -2360,13 +2390,13 @@ mod matmul_relu {
                     };
                     let output = config
                         .base_config
-                        .layout(&mut region, &self.inputs, Box::new(op))
+                        .layout(&mut region, &self.inputs.iter().collect_vec(), Box::new(op))
                         .unwrap();
                     let _output = config
                         .base_config
                         .layout(
                             &mut region,
-                            &[output.unwrap()],
+                            &[&output.unwrap()],
                             Box::new(PolyOp::LeakyReLU {
                                 slope: 0.0.into(),
                                 scale: 1,
@@ -2465,7 +2495,7 @@ mod relu {
                         Ok(config
                             .layout(
                                 &mut region,
-                                &[self.input.clone()],
+                                &[&self.input],
                                 Box::new(PolyOp::LeakyReLU {
                                     slope: 0.0.into(),
                                     scale: 1,
@@ -2563,7 +2593,7 @@ mod lookup_ultra_overflow {
                         config
                             .layout(
                                 &mut region,
-                                &[self.input.clone()],
+                                &[&self.input],
                                 Box::new(LookupOp::Sigmoid { scale: 1.0.into() }),
                             )
                             .map_err(|_| Error::Synthesis)

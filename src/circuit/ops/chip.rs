@@ -962,7 +962,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
     pub fn layout(
         &mut self,
         region: &mut RegionCtx<F>,
-        values: &[ValTensor<F>],
+        values: &[&ValTensor<F>],
         op: Box<dyn Op<F>>,
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         op.layout(self, region, values)
