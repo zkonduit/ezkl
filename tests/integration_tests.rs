@@ -1938,6 +1938,7 @@ mod native_tests {
         let rpc_arg = format!("--rpc-url={}", anvil_url);
         let addr_path_arg = format!("--addr-path={}/{}/addr.txt", test_dir, example_name);
         let settings_arg = format!("--settings-path={}", settings_path);
+        let calldata_path = format!("{}/{}/calldata.bytes", test_dir, example_name);
 
         // create encoded calldata
         let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
@@ -1945,6 +1946,8 @@ mod native_tests {
                 "encode-evm-calldata",
                 "--proof-path",
                 &format!("{}/{}/proof.pf", test_dir, example_name),
+                "--calldata-path",
+                calldata_path.as_str(),
             ])
             .status()
             .expect("failed to execute process");
@@ -1983,6 +1986,24 @@ mod native_tests {
             .expect("failed to read address file");
 
         let deployed_addr_arg = format!("--addr-verifier={}", addr);
+
+        // verify the proof using the calldata bytes file
+        let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);
+        let args = vec![
+            "verify-evm",
+            "--proof-path",
+            pf_arg.as_str(),
+            rpc_arg.as_str(),
+            deployed_addr_arg.as_str(),
+            "--encoded-calldata",
+            calldata_path.as_str(),
+        ];
+
+        let status = Command::new(format!("{}/{}", *CARGO_TARGET_DIR, TEST_BINARY))
+            .args(&args)
+            .status()
+            .expect("failed to execute process");
+        assert!(status.success());
 
         // now verify the proof
         let pf_arg = format!("{}/{}/proof.pf", test_dir, example_name);

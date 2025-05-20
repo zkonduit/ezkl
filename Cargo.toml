@@ -46,6 +46,11 @@ tosubcommand = { git = "https://github.com/zkonduit/enum_to_subcommand", package
 semver = { version = "1.0.22", optional = true }
 
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+
+# evm related deps
+serde_json = { version = "1.0.97", features = ["float_roundtrip", "raw_value"] }
+
 alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev = "5fbf57bac99edef9d8475190109a7ea9fb7e5e83", features = [
     "provider-http",
     "signers",
@@ -55,10 +60,6 @@ alloy = { git = "https://github.com/alloy-rs/alloy", version = "0.1.0", rev = "5
     "node-bindings",
 
 ], optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# evm related deps
-serde_json = { version = "1.0.97", features = ["float_roundtrip", "raw_value"] }
 
 foundry-compilers = { version = "0.4.1", features = [
     "svm-solc",

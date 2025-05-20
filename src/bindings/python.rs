@@ -1839,6 +1839,9 @@ fn register_vka<'a>(
 ///
 /// vka_path: str
 ///     The path to the VKA calldata bytes file (generated using the create_evm_vka command)
+///
+/// encoded_calldata: str
+///     The path to the encoded calldata bytes file (generated using the encode calldata command)
 /// Returns
 /// -------
 /// bool
@@ -1848,6 +1851,7 @@ fn register_vka<'a>(
     rpc_url,
     proof_path=PathBuf::from(DEFAULT_PROOF),
     vka_path = None,
+    encoded_calldata = None,
 ))]
 #[gen_stub_pyfunction]
 fn verify_evm<'a>(
@@ -1856,16 +1860,23 @@ fn verify_evm<'a>(
     rpc_url: String,
     proof_path: PathBuf,
     vka_path: Option<PathBuf>,
+    encoded_calldata: Option<PathBuf>,
 ) -> PyResult<Bound<'a, PyAny>> {
     let addr_verifier = H160Flag::from(addr_verifier);
 
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
-        crate::execute::verify_evm(proof_path, addr_verifier, rpc_url, vka_path)
-            .await
-            .map_err(|e| {
-                let err_str = format!("Failed to run verify_evm: {}", e);
-                PyRuntimeError::new_err(err_str)
-            })?;
+        crate::execute::verify_evm(
+            proof_path,
+            addr_verifier,
+            rpc_url,
+            vka_path,
+            encoded_calldata,
+        )
+        .await
+        .map_err(|e| {
+            let err_str = format!("Failed to run verify_evm: {}", e);
+            PyRuntimeError::new_err(err_str)
+        })?;
 
         Ok(true)
     })

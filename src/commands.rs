@@ -866,6 +866,9 @@ pub enum Commands {
         /// The path to the serialized vka file
         #[arg(long, value_hint = clap::ValueHint::FilePath)]
         vka_path: Option<PathBuf>,
+        /// The path to the serialized encoded calldata file generated via the encode_calldata command
+        #[arg(long, value_hint = clap::ValueHint::FilePath)]
+        encoded_calldata: Option<PathBuf>,
     },
     /// Registers a VKA, returning the its digest used to identify it on-chain.
     #[command(name = "register-vka")]

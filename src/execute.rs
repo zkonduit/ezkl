@@ -416,12 +416,14 @@ pub async fn run(command: Commands) -> Result<String, EZKLError> {
             addr_verifier,
             rpc_url,
             vka_path,
+            encoded_calldata,
         } => {
             verify_evm(
                 proof_path.unwrap_or(DEFAULT_PROOF.into()),
                 addr_verifier,
                 rpc_url,
                 vka_path,
+                encoded_calldata,
             )
             .await
         }
@@ -1616,7 +1618,7 @@ pub(crate) fn encode_evm_calldata(
     Ok(encoded)
 }
 
-/// TODO: Add an optional vka_digest param that will allow use to fetch the assocaited VKA
+/// TODO: Add an optional vka_digest param that will allow us to fetch the associated VKA
 /// from the RegisteredVKA events on the RV.
 #[cfg(all(feature = "eth", not(target_arch = "wasm32")))]
 pub(crate) async fn verify_evm(
@@ -1624,6 +1626,7 @@ pub(crate) async fn verify_evm(
     addr_verifier: H160Flag,
     rpc_url: String,
     vka_path: Option<PathBuf>,
+    encoded_calldata: Option<PathBuf>,
 ) -> Result<String, EZKLError> {
     let proof = Snark::load::<KZGCommitmentScheme<Bn256>>(&proof_path)?;
 
@@ -1632,6 +1635,7 @@ pub(crate) async fn verify_evm(
         addr_verifier.into(),
         vka_path.map(|s| s.into()),
         rpc_url.as_ref(),
+        encoded_calldata.map(|s| s.into()),
     )
     .await?;
 

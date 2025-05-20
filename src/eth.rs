@@ -86,6 +86,8 @@ pub enum EthError {
     NoConstructor,
     #[error("contract not found at path: {0}")]
     ContractNotFound(String),
+    #[error("encoded calldata not found at path: {0}")]
+    EncodedCalldataNotFound(String),
     #[error("solc error: {0}")]
     Solc(#[from] SolcError),
     #[error("solc io error: {0}")]
@@ -234,9 +236,8 @@ pub async fn verify_proof_via_solidity(
     addr: H160,
     vka_path: Option<PathBuf>,
     rpc_url: &str,
+    encoded_calldata: Option<PathBuf>,
 ) -> Result<bool, EthError> {
-    let flattened_instances = proof.instances.into_iter().flatten();
-
     // Load the vka, which is bincode serialized, from the vka_path
     let vka_buf: Option<Vec<[u8; 32]>> = match vka_path {
         Some(path) => {
@@ -248,7 +249,15 @@ pub async fn verify_proof_via_solidity(
 
     let vka: Option<&[[u8; 32]]> = vka_buf.as_deref();
 
-    let encoded = encode_calldata(vka, &proof.proof, &flattened_instances.collect::<Vec<_>>());
+    let encoded = if encoded_calldata.is_none() {
+        let flattened_instances = proof.instances.into_iter().flatten();
+
+        encode_calldata(vka, &proof.proof, &flattened_instances.collect::<Vec<_>>())
+    } else {
+        // Load the bincode serialized calldata from the file path
+        let path = encoded_calldata.unwrap();
+        std::fs::read(&path).map_err(|e| EthError::EncodedCalldataNotFound(e.to_string()))?
+    };
 
     debug!("encoded: {:#?}", hex::encode(&encoded));
 
