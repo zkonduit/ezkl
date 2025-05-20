@@ -477,12 +477,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// use ezkl::fieldutils::IntegerRep;
     /// let a = Tensor::<IntegerRep>::new(Some(&[1,2,3,4,5,6]), &[2, 3]).unwrap();
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0]), &[8]).unwrap();
-    /// a.pad_to_zero_rem(4, 0).unwrap();
-    /// assert_eq!(a, expected);
-    ///
+    /// assert_eq!(a.pad_to_zero_rem(4, 0).unwrap(), expected);
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0, 0]), &[9]).unwrap();
-    /// a.pad_to_zero_rem(9, 0).unwrap();
-    /// assert_eq!(a, expected);
+    /// assert_eq!(a.pad_to_zero_rem(9, 0).unwrap(), expected);
     /// ```
     pub fn pad_to_zero_rem(&self, n: usize, pad: T) -> Result<Tensor<T>, TensorError> {
         let mut inner = self.inner.clone();

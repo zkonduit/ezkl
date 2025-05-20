@@ -1193,12 +1193,12 @@ pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
 /// use ezkl::tensor::ops::intercalate_values;
 ///
 /// let tensor = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4]), &[2, 2]).unwrap();
-/// let result = intercalate_values(&tensor, 0, 2, 1).unwrap();
+/// let result = intercalate_values(&tensor, &0, 2, 1).unwrap();
 ///
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 2, 3, 0, 4]), &[2, 3]).unwrap();
 /// assert_eq!(result, expected);
 ///
-/// let result = intercalate_values(&expected, 0, 2, 0).unwrap();
+/// let result = intercalate_values(&expected, &0, 2, 0).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 0, 2, 0, 0, 0, 3, 0, 4]), &[3, 3]).unwrap();
 ///
 /// assert_eq!(result, expected);

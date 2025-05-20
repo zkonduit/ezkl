@@ -742,7 +742,7 @@ pub fn dot<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///  &[2, 3],
 /// ).unwrap());
 ///
-/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&z, x, &k], "bn,anm,bm->ba").unwrap();
+/// let result = einsum::<Fp>(&dummy_config, &mut dummy_region, &[&z, &x, &k], "bn,anm,bm->ba").unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[390, 414, 534, 994, 1153, 1384]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -3093,7 +3093,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// &[2, 3],
 /// ).unwrap());
 /// let b = ValTensor::from_integer_rep_tensor(Tensor::<IntegerRep>::new(
-///  Some(&[1, 2, 3, 4, 5, 4],
+///  Some(&[1, 2, 3, 4, 5, 4]),
 /// &[2, 3],
 /// ).unwrap());
 /// let result = greater_equal::<Fp>(&dummy_config, &mut dummy_region, &[&a, &b]).unwrap();
@@ -3759,7 +3759,7 @@ pub fn not<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///   Some(&[7, 8, 9, 10, 11, 12]),
 /// &[2, 3],
 /// ).unwrap());
-/// let result = iff::<Fp>(&dummy_config, &mut dummy_region, &[&mask, a, &b]).unwrap();
+/// let result = iff::<Fp>(&dummy_config, &mut dummy_region, &[&mask, &a, &b]).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 8, 3, 10, 5, 12]), &[2, 3]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 /// ```
@@ -4107,7 +4107,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     &[1, 1, 2, 2],
 /// ).unwrap());
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0); 2], &vec![0;2], &vec![2; 2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
-/// let expected = Tensor::<IntegerRep>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4].unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[6, 2, 12, 4, 2, 10, 4, 20, 0, 0, 3, 1, 0, 0, 1, 5]), &[1, 1, 4, 4]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // Original test case 6: Different kernel shape
@@ -4159,7 +4159,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     Some(&[1]),
 ///     &[1],
 /// ).unwrap());
-/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, k, &b], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k, &b], &vec![(1, 1); 2], &vec![0;2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[55, 58, 66, 69]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4186,7 +4186,7 @@ pub fn max_pool<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ///     &[1, 1, 2],  // OIH format
 /// ).unwrap());
 /// let result = deconv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k], &vec![(0, 0)], &vec![0], &vec![1], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
-/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 7, 6]), &[1, 1, 4].unwrap();
+/// let expected = Tensor::<IntegerRep>::new(Some(&[1, 4, 7, 6]), &[1, 1, 4]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
 /// // Additional test case 3: 3D deconvolution with NCHW format
@@ -4383,7 +4383,7 @@ pub fn deconv<
 ///     Some(&[0]),
 ///     &[1],
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[&x, k, &b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k, &b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NCHW, KernelFormat::OIHW).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[31, 16, 8, 26]), &[1, 1, 2, 2]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4413,7 +4413,7 @@ pub fn deconv<
 ///     Some(&[1, 1]),
 ///     &[2],
 /// ).unwrap());
-/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[&x, k, &b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::OHWI).unwrap();
+/// let result = conv::<Fp>(&dummy_config, &mut dummy_region, &[&x, &k, &b], &vec![(0, 0); 2], &vec![1;2], 1, DataFormat::NHWC, KernelFormat::OHWI).unwrap();
 /// let expected = Tensor::<IntegerRep>::new(Some(&[64, 66, 46, 58]), &[1, 2, 2, 1]).unwrap();
 /// assert_eq!(result.int_evals().unwrap(), expected);
 ///
@@ -4458,9 +4458,6 @@ pub fn conv<
 ) -> Result<ValTensor<F>, CircuitError> {
     let has_bias = values.len() == 3;
 
-    let image_dims = values[0].dims();
-    let kernel_dims = values[1].dims();
-
     let (mut working_image, mut working_kernel) = (values[0].clone(), values[1].clone());
 
     data_format.to_canonical(&mut working_image)?;
@@ -4494,6 +4491,8 @@ pub fn conv<
         working_image.reshape(&dim)?;
     }
 
+    let image_dims = working_image.dims().to_vec();
+    let kernel_dims = working_kernel.dims().to_vec();
     // Apply padding
     working_image.pad(padding.to_vec(), 2)?;
 
