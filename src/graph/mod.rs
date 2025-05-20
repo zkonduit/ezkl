@@ -33,12 +33,12 @@ use self::modules::{GraphModules, ModuleConfigs, ModuleForwardResult, ModuleSize
 use crate::circuit::lookup::LookupOp;
 use crate::circuit::modules::ModulePlanner;
 use crate::circuit::region::{ConstantsMap, RegionSettings};
-use crate::circuit::table::{RESERVED_BLINDING_ROWS_PAD, Range, Table, num_cols_required};
+use crate::circuit::table::{num_cols_required, Range, Table, RESERVED_BLINDING_ROWS_PAD};
 use crate::circuit::{CheckMode, InputType};
-use crate::fieldutils::{IntegerRep, felt_to_f64};
+use crate::fieldutils::{felt_to_f64, IntegerRep};
 use crate::pfsys::PrettyElements;
 use crate::tensor::{Tensor, ValTensor};
-use crate::{EZKL_BUF_CAPACITY, RunArgs};
+use crate::{RunArgs, EZKL_BUF_CAPACITY};
 
 use halo2_proofs::{
     circuit::Layouter,
@@ -53,13 +53,13 @@ use maybe_rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 pub use model::*;
 pub use node::*;
 #[cfg(feature = "python-bindings")]
-use pyo3::ToPyObject;
-#[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDict;
 #[cfg(feature = "python-bindings")]
 use pyo3::types::PyDictMethods;
+#[cfg(feature = "python-bindings")]
+use pyo3::ToPyObject;
 
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -571,7 +571,7 @@ impl GraphSettings {
             std::io::BufWriter::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::create(path)?);
         serde_json::to_writer(writer, &self).map_err(|e| {
             error!("failed to save settings file at {}", e);
-            std::io::Error::new(std::io::ErrorKind::Other, e)
+            std::io::Error::other(e)
         })
     }
     /// load params from file
@@ -581,7 +581,7 @@ impl GraphSettings {
             std::io::BufReader::with_capacity(*EZKL_BUF_CAPACITY, std::fs::File::open(path)?);
         let settings: GraphSettings = serde_json::from_reader(reader).map_err(|e| {
             error!("failed to load settings file at {}", e);
-            std::io::Error::new(std::io::ErrorKind::Other, e)
+            std::io::Error::other(e)
         })?;
 
         crate::check_version_string_matches(&settings.version);
@@ -1232,15 +1232,9 @@ impl GraphCircuit {
         let mut cs = ConstraintSystem::default();
         // if unix get a gag
         #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _r = match Gag::stdout() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        let _r = Gag::stdout().ok();
         #[cfg(all(not(not(feature = "ezkl")), unix))]
-        let _g = match Gag::stderr() {
-            Ok(g) => Some(g),
-            _ => None,
-        };
+        let _g = Gag::stderr().ok();
 
         Self::configure_with_params(&mut cs, settings);
 
@@ -1576,13 +1570,13 @@ impl Circuit<Fp> for GraphCircuit {
 
         let mut module_configs = ModuleConfigs::from_visibility(
             cs,
-            params.module_sizes.clone(),
+            &params.module_sizes,
             params.run_args.logrows as usize,
         );
 
         let mut vars = ModelVars::new(cs, &params);
 
-        module_configs.configure_complex_modules(cs, visibility, params.module_sizes.clone());
+        module_configs.configure_complex_modules(cs, &visibility, &params.module_sizes);
 
         vars.instantiate_instance(
             cs,
