@@ -325,6 +325,8 @@ pub fn resize<T: TensorType + Send + Sync>(
         new_shape.push(s * d);
     }
 
+    let mut output = Tensor::new(None, &new_shape)?;
+
     let cartesian_coord: Vec<Vec<usize>> = new_shape
         .iter()
         .map(|d| (0..*d))
@@ -333,21 +335,16 @@ pub fn resize<T: TensorType + Send + Sync>(
 
     // resize using nearest neighbour interpolation
     // (i.e. just copy the value of the nearest neighbour to pad the tensor)
-    let mut output: Tensor<T> = cartesian_coord
-        .par_iter()
-        .map(|c| {
-            let mut coord = vec![];
-            for (j, (c, _d)) in c.iter().zip(new_shape.iter()).enumerate() {
-                let scale = scales[j];
-                let fragment = c / scale;
-                coord.push(fragment);
-            }
+    output = output.par_enum_map(|i, _| {
+        let mut coord = vec![];
+        for (j, (c, _d)) in cartesian_coord[i].iter().zip(new_shape.iter()).enumerate() {
+            let scale = scales[j];
+            let fragment = c / scale;
+            coord.push(fragment);
+        }
 
-            a.get(&coord)
-        })
-        .collect();
-
-    output.reshape(&new_shape)?;
+        Ok::<_, TensorError>(a.get(&coord))
+    })?;
 
     Ok(output)
 }
@@ -618,6 +615,8 @@ pub fn downsample<T: TensorType + Send + Sync>(
     let div = (input.dims()[dim] - modulo) / stride_abs;
     output_shape[dim] = div + (remainder > 0) as usize;
 
+    let mut output = Tensor::<T>::new(None, &output_shape)?;
+
     // Calculate indices based on stride direction
     let indices = (0..output_shape.len())
         .map(|i| {
@@ -640,10 +639,10 @@ pub fn downsample<T: TensorType + Send + Sync>(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    let mut output: Tensor<T> = indices.par_iter().map(|coord| input.get(&coord)).collect();
-
-    // Reshape the output tensor
-    output.reshape(&output_shape)?;
+    output = output.par_enum_map(|i, _: T| {
+        let coord = indices[i].clone();
+        Ok::<_, TensorError>(input.get(&coord))
+    })?;
 
     Ok(output)
 }
@@ -686,27 +685,24 @@ pub fn gather<T: TensorType + Send + Sync>(
     output_size[dim] = index_clone.dims()[0];
 
     // Allocate memory for the output tensor
+    let mut output = Tensor::new(None, &output_size)?;
     let cartesian_coord = output_size
         .iter()
         .map(|x| 0..*x)
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    let mut output = cartesian_coord
-        .par_iter()
-        .map(|coord| {
-            let index_val = index_clone.get(&[coord[dim]]);
-            let new_coord = coord
-                .iter()
-                .enumerate()
-                .map(|(i, x)| if i == dim { index_val } else { *x })
-                .collect::<Vec<_>>();
+    output = output.par_enum_map(|i, _: T| {
+        let coord = cartesian_coord[i].clone();
+        let index_val = index_clone.get(&[coord[dim]]);
+        let new_coord = coord
+            .iter()
+            .enumerate()
+            .map(|(i, x)| if i == dim { index_val } else { *x })
+            .collect::<Vec<_>>();
 
-            input.get(&new_coord)
-        })
-        .collect::<Tensor<T>>();
-
-    output.reshape(&output_size)?;
+        Ok::<_, TensorError>(input.get(&new_coord))
+    })?;
 
     // Reshape the output tensor
     if index.is_singleton() {
@@ -813,23 +809,24 @@ pub fn gather_elements<T: TensorType + Send + Sync>(
     assert_eq!(input.dims().len(), index.dims().len());
 
     // Allocate memory for the output tensor
+    let mut output = Tensor::new(None, &output_size)?;
     let cartesian_coord = output_size
         .iter()
         .map(|x| 0..*x)
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    let mut output: Tensor<T> = cartesian_coord
-        .par_iter()
-        .map(|coord| {
-            let index_val = index.get(&coord);
+    output = output.par_enum_map(|i, _: T| {
+        let coord = cartesian_coord[i].clone();
+        let index_val = index.get(&coord);
 
-            let mut new_coord = coord.clone();
-            new_coord[dim] = index_val;
+        let mut new_coord = coord.clone();
+        new_coord[dim] = index_val;
 
-            input.get(&new_coord)
-        })
-        .collect();
+        let val = input.get(&new_coord);
+
+        Ok::<_, TensorError>(val)
+    })?;
 
     // Reshape the output tensor
     output.reshape(&output_size)?;
@@ -1002,18 +999,23 @@ where
                         .get_slice(&slice)
                         .unwrap()
                         .iter()
-                        .map(|x| *x..*x + 1)
+                        .map(|x| ***x..***x + 1)
                         .collect::<Vec<_>>();
 
-                    input_slice.get_slice(&index_slice).unwrap()
+                    input_slice
+                        .get_slice(&index_slice)
+                        .unwrap()
+                        .cloned()
+                        .cloned()
                 })
                 .collect::<Tensor<_>>();
 
             output.combine()
         })
-        .collect::<Result<Tensor<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?;
 
-    let mut outputs = outputs.combine()?;
+    let mut outputs = outputs.into_iter().flatten().collect::<Tensor<_>>();
+
     outputs.reshape(&output_size)?;
 
     Ok(outputs)
@@ -1144,9 +1146,9 @@ where
         .map(|coord| {
             let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
             let index_val = index.get_slice(&slice)?;
-            let index_slice = index_val.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
+            let index_slice = index_val.iter().map(|x| **x..**x + 1).collect::<Vec<_>>();
 
-            let src_val = src.get_slice(&slice)?;
+            let src_val = src.get_slice(&slice)?.cloned();
             output.set_slice(&index_slice, &src_val)?;
             Ok::<_, TensorError>(())
         })
@@ -1175,13 +1177,13 @@ pub fn abs<T: TensorType + Add<Output = T> + std::cmp::Ord + Neg<Output = T>>(
     a: &Tensor<T>,
 ) -> Result<Tensor<T>, TensorError> {
     // calculate value of output
-    Ok(a.map(|a_i| {
-        if a_i < T::zero().unwrap() {
-            -a_i.clone()
-        } else {
-            a_i.clone()
+    let mut output: Tensor<T> = a.clone();
+    output.iter_mut().for_each(|a_i| {
+        if *a_i < T::zero().unwrap() {
+            *a_i = -a_i.clone();
         }
-    }))
+    });
+    Ok(output)
 }
 
 /// Intercalates values into a tensor along a given axis.
@@ -1215,9 +1217,10 @@ pub fn intercalate_values<T: TensorType>(
     let mut output_dims = tensor.dims().to_vec();
     output_dims[axis] = output_dims[axis] * stride - 1;
 
-    let total_size = output_dims.iter().product::<usize>();
+    let mut output: Tensor<T> = Tensor::new(None, &output_dims)?;
 
-    let cartesian_coord = output_dims
+    let cartesian_coord = output
+        .dims()
         .iter()
         .map(|d| (0..*d))
         .multi_cartesian_product()
@@ -1225,18 +1228,17 @@ pub fn intercalate_values<T: TensorType>(
 
     let mut tensor_slice_iter = tensor.iter();
 
-    let mut res = Tensor::from((0..total_size).map(|i| {
+    output.iter_mut().enumerate().for_each(|(i, o)| {
         let coord = &cartesian_coord[i];
+
         if coord[axis] % stride == 0 {
-            tensor_slice_iter.next().unwrap().clone()
+            *o = tensor_slice_iter.next().unwrap().clone();
         } else {
-            value.clone()
+            *o = value.clone();
         }
-    }));
+    });
 
-    res.reshape(&output_dims)?;
-
-    Ok(res)
+    Ok(output)
 }
 
 /// One hot encodes a tensor along a given axis.
@@ -1269,10 +1271,10 @@ pub fn one_hot(
         .multi_cartesian_product()
         .collect::<Vec<_>>();
 
-    output = output
-        .iter()
+    output
+        .iter_mut()
         .enumerate()
-        .map(|(i, _)| {
+        .map(|(i, o)| {
             let coord = &cartesian_coord[i];
             let coord_axis = coord[axis];
 
@@ -1288,12 +1290,13 @@ pub fn one_hot(
             };
 
             if coord_axis == elem {
-                Ok(1)
+                *o = 1;
             } else {
-                Ok(0)
+                *o = 0;
             }
+            Ok(())
         })
-        .collect::<Result<_, TensorError>>()?;
+        .collect::<Result<Vec<()>, TensorError>>()?;
 
     Ok(output)
 }
@@ -1417,6 +1420,7 @@ pub fn concat<T: TensorType + Send + Sync>(
     output_size[axis] = inputs.iter().map(|x| x.dims()[axis]).sum();
 
     // Allocate memory for the output tensor
+    let mut output = Tensor::new(None, &output_size)?;
     let cartesian_coord = output_size
         .iter()
         .map(|x| 0..*x)
@@ -1439,23 +1443,21 @@ pub fn concat<T: TensorType + Send + Sync>(
         (input_idx, input_coord_at_idx)
     };
 
-    let mut output: Tensor<T> = cartesian_coord
-        .par_iter()
-        .map(|coord| {
-            let mut index = 0;
-            let mut input_index = 0;
-            let mut input_coord = coord.clone();
-            for (j, x) in coord.iter().enumerate() {
-                if j == axis {
-                    (input_index, input_coord[j]) = get_input_index(*x);
-                    break;
-                }
-                index += x;
+    output = output.par_enum_map(|i, _: T| {
+        let coord = cartesian_coord[i].clone();
+        let mut index = 0;
+        let mut input_index = 0;
+        let mut input_coord = coord.clone();
+        for (j, x) in coord.iter().enumerate() {
+            if j == axis {
+                (input_index, input_coord[j]) = get_input_index(*x);
+                break;
             }
+            index += x;
+        }
 
-            inputs[input_index].get(&input_coord)
-        })
-        .collect();
+        Ok::<_, TensorError>(inputs[input_index].get(&input_coord))
+    })?;
 
     // Reshape the output tensor
     output.reshape(&output_size)?;
@@ -1502,7 +1504,7 @@ pub fn slice<T: TensorType + Send + Sync>(
         }
     }
 
-    Ok(t.get_slice(&slice)?)
+    Ok(t.get_slice(&slice)?.cloned())
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -1534,8 +1536,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn round_half_to_even(a: &Tensor<IntegerRep>, scale: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale;
             let rounded = kix.round_ties_even() * scale;
             Ok::<_, TensorError>(rounded as IntegerRep)
         })
@@ -1560,8 +1562,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn pow(a: &Tensor<IntegerRep>, scale_input: f64, power: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let kix = scale_input * (kix).powf(power);
             let rounded = kix.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1588,7 +1590,7 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn is_odd(a: &Tensor<IntegerRep>) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
+        a.par_enum_map(|_, a_i| {
             let rounded = if a_i % 2 == 0 { 0 } else { 1 };
             Ok::<_, TensorError>(rounded)
         })
@@ -1613,8 +1615,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn ipow2(a: &Tensor<IntegerRep>, scale_output: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = *a_i as f64;
+        a.par_enum_map(|_, a_i| {
+            let kix = a_i as f64;
             let kix = scale_output * (2.0_f64).powf(kix);
             let rounded = kix.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1639,8 +1641,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn ilog2(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let log = (kix).log2();
             let floor = log.floor();
             let ceil = log.ceil();
@@ -1693,8 +1695,8 @@ pub mod nonlinearities {
     ///
     /// ```
     pub fn sigmoid(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input / (1.0 + (-kix).exp());
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1729,8 +1731,8 @@ pub mod nonlinearities {
     ///
     /// ```
     pub fn hardswish(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let res = if kix <= -3.0 {
                 0.0
             } else if kix >= 3.0 {
@@ -1775,8 +1777,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn exp(a: &Tensor<IntegerRep>, scale_input: f64, base: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * base.powf(kix);
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1814,8 +1816,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn ln(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.ln();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1843,8 +1845,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn sqrt(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sqrt();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1872,8 +1874,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn rsqrt(a: &Tensor<IntegerRep>, scale_input: f64, eps: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input / (kix.sqrt() + eps);
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1900,8 +1902,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn cos(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.cos();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1928,8 +1930,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn acos(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.acos();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1956,8 +1958,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn cosh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.cosh();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -1984,8 +1986,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn acosh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.acosh();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2012,8 +2014,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn sin(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sin();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2040,8 +2042,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn asin(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.asin();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2068,8 +2070,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn sinh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.sinh();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2096,8 +2098,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn asinh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.asinh();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2124,8 +2126,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn tan(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.tan();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2152,8 +2154,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn atan(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.atan();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2181,8 +2183,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn tanh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.tanh();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2211,8 +2213,8 @@ pub mod nonlinearities {
     /// ```
 
     pub fn atanh(a: &Tensor<IntegerRep>, scale_input: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * kix.atanh();
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2296,8 +2298,8 @@ pub mod nonlinearities {
             }
         }
 
-        a.par_map(|a_i| {
-            let kix = (*a_i as f64) / scale_input;
+        a.par_enum_map(|_, a_i| {
+            let kix = (a_i as f64) / scale_input;
             let fout = scale_input * erf(kix);
             let rounded = fout.round();
             Ok::<_, TensorError>(rounded as IntegerRep)
@@ -2325,8 +2327,8 @@ pub mod nonlinearities {
     /// assert_eq!(result, expected);
     /// ```
     pub fn const_div(a: &Tensor<IntegerRep>, denom: f64) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let d_inv_x = (*a_i as f64) / (denom);
+        a.par_enum_map(|_, a_i| {
+            let d_inv_x = (a_i as f64) / (denom);
             Ok::<_, TensorError>(d_inv_x.round() as IntegerRep)
         })
         .unwrap()
@@ -2357,8 +2359,8 @@ pub mod nonlinearities {
         out_scale: f64,
         eps: f64,
     ) -> Tensor<IntegerRep> {
-        a.par_map(|a_i| {
-            let rescaled = (*a_i as f64) / input_scale;
+        a.par_enum_map(|_, a_i| {
+            let rescaled = (a_i as f64) / input_scale;
             let denom = if rescaled == 0_f64 {
                 (1_f64) / (rescaled + eps)
             } else {
@@ -2386,8 +2388,8 @@ pub mod nonlinearities {
     pub fn zero_recip(out_scale: f64, eps: f64) -> Tensor<IntegerRep> {
         let a = Tensor::<IntegerRep>::new(Some(&[0]), &[1]).unwrap();
 
-        a.par_map(|a_i| {
-            let rescaled = *a_i as f64;
+        a.par_enum_map(|_, a_i| {
+            let rescaled = a_i as f64;
             let denom = (1_f64) / (rescaled + eps);
             let d_inv_x = out_scale * denom;
             Ok::<_, TensorError>(d_inv_x.round() as IntegerRep)

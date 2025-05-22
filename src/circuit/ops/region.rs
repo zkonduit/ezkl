@@ -11,7 +11,7 @@ use halo2_proofs::{
 };
 use halo2curves::ff::PrimeField;
 use itertools::Itertools;
-use maybe_rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
+use maybe_rayon::iter::ParallelExtend;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -353,31 +353,35 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
     /// Apply a function in a loop to the region
     pub fn apply_in_loop<T: TensorType + Send + Sync>(
         &mut self,
-        dims: &[usize],
+        output: &mut Tensor<T>,
         inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, CircuitError>
             + Send
             + Sync,
-    ) -> Result<Tensor<T>, CircuitError> {
+    ) -> Result<(), CircuitError> {
         if self.is_dummy() {
-            self.dummy_loop(dims, inner_loop_function)
+            self.dummy_loop(output, inner_loop_function)?;
         } else {
-            self.real_loop(dims, inner_loop_function)
+            self.real_loop(output, inner_loop_function)?;
         }
+        Ok(())
     }
 
     /// Run a loop
     pub fn real_loop<T: TensorType + Send + Sync>(
         &mut self,
-        dims: &[usize],
+        output: &mut Tensor<T>,
         inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, CircuitError>,
-    ) -> Result<Tensor<T>, CircuitError> {
-        let num_iters = dims.iter().product::<usize>();
-        let mut res = (0..num_iters)
-            .map(|i| inner_loop_function(i, self))
-            .collect::<Result<Tensor<T>, CircuitError>>()?;
+    ) -> Result<(), CircuitError> {
+        output
+            .iter_mut()
+            .enumerate()
+            .map(|(i, o)| {
+                *o = inner_loop_function(i, self)?;
+                Ok(())
+            })
+            .collect::<Result<Vec<_>, CircuitError>>()?;
 
-        res.reshape(dims)?;
-        Ok(res)
+        Ok(())
     }
 
     /// Create a new region context per loop iteration
@@ -385,11 +389,11 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
 
     pub fn dummy_loop<T: TensorType + Send + Sync>(
         &mut self,
-        dims: &[usize],
+        output: &mut Tensor<T>,
         inner_loop_function: impl Fn(usize, &mut RegionCtx<'a, F>) -> Result<T, CircuitError>
             + Send
             + Sync,
-    ) -> Result<Tensor<T>, CircuitError> {
+    ) -> Result<(), CircuitError> {
         let row = AtomicUsize::new(self.row());
         let linear_coord = AtomicUsize::new(self.linear_coord());
         let statistics = Arc::new(Mutex::new(self.statistics.clone()));
@@ -397,46 +401,42 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         let dynamic_lookup_index = Arc::new(Mutex::new(self.dynamic_lookup_index.clone()));
         let constants = Arc::new(Mutex::new(self.assigned_constants.clone()));
 
-        let num_iters = dims.iter().product::<usize>();
-        let mut res = (0..num_iters)
-            .into_par_iter()
-            .map(|idx| {
-                // we kick off the loop with the current offset
-                let starting_offset = row.load(Ordering::SeqCst);
-                let starting_linear_coord = linear_coord.load(Ordering::SeqCst);
-                // get inner value of the locked lookups
+        *output = output.par_enum_map(|idx, _| {
+            // we kick off the loop with the current offset
+            let starting_offset = row.load(Ordering::SeqCst);
+            let starting_linear_coord = linear_coord.load(Ordering::SeqCst);
+            // get inner value of the locked lookups
 
-                // we need to make sure that the region is not shared between threads
-                let mut local_reg = Self::new_dummy_with_linear_coord(
-                    starting_offset,
-                    starting_linear_coord,
-                    self.num_inner_cols,
-                    self.settings.clone(),
-                );
-                let res = inner_loop_function(idx, &mut local_reg);
-                // we update the offset and constants
-                row.fetch_add(local_reg.row() - starting_offset, Ordering::SeqCst);
-                linear_coord.fetch_add(
-                    local_reg.linear_coord() - starting_linear_coord,
-                    Ordering::SeqCst,
-                );
+            // we need to make sure that the region is not shared between threads
+            let mut local_reg = Self::new_dummy_with_linear_coord(
+                starting_offset,
+                starting_linear_coord,
+                self.num_inner_cols,
+                self.settings.clone(),
+            );
+            let res = inner_loop_function(idx, &mut local_reg);
+            // we update the offset and constants
+            row.fetch_add(local_reg.row() - starting_offset, Ordering::SeqCst);
+            linear_coord.fetch_add(
+                local_reg.linear_coord() - starting_linear_coord,
+                Ordering::SeqCst,
+            );
 
-                // update the lookups
-                let mut statistics = statistics.lock().unwrap();
-                statistics.update(local_reg.statistics());
-                // update the dynamic lookup index
-                let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
-                dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
-                // update the shuffle index
-                let mut shuffle_index = shuffle_index.lock().unwrap();
-                shuffle_index.update(&local_reg.shuffle_index);
-                // update the constants
-                let mut constants = constants.lock().unwrap();
-                constants.extend(local_reg.assigned_constants);
+            // update the lookups
+            let mut statistics = statistics.lock().unwrap();
+            statistics.update(local_reg.statistics());
+            // update the dynamic lookup index
+            let mut dynamic_lookup_index = dynamic_lookup_index.lock().unwrap();
+            dynamic_lookup_index.update(&local_reg.dynamic_lookup_index);
+            // update the shuffle index
+            let mut shuffle_index = shuffle_index.lock().unwrap();
+            shuffle_index.update(&local_reg.shuffle_index);
+            // update the constants
+            let mut constants = constants.lock().unwrap();
+            constants.extend(local_reg.assigned_constants);
 
-                res
-            })
-            .collect::<Result<Tensor<T>, CircuitError>>()?;
+            res
+        })?;
         self.linear_coord = linear_coord.into_inner();
         self.row = row.into_inner();
         self.statistics = Arc::try_unwrap(statistics)
@@ -456,8 +456,7 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
             .into_inner()
             .map_err(|e| CircuitError::GetConstantsError(format!("{:?}", e)))?;
 
-        res.reshape(dims)?;
-        Ok(res)
+        Ok(())
     }
 
     /// Update the max and min from inputs

@@ -47,10 +47,4 @@ pub enum TensorError {
     /// Invalid data conversion
     #[error("invalid data conversion from format {0} to {1}")]
     InvalidDataConversion(DataFormat, DataFormat),
-    /// Invalid method for a viewed tensor
-    #[error("invalid method for a view tensor call 'rm_view()' first")]
-    InvalidMethodForView,
-    /// Failed to acquire lock
-    #[error("failed to acquire lock")]
-    LockError,
 }

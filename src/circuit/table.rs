@@ -6,7 +6,6 @@ use halo2_proofs::{
     circuit::{Layouter, Value},
     plonk::{ConstraintSystem, Expression, TableColumn},
 };
-use itertools::Itertools;
 use log::{debug, warn};
 use maybe_rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
@@ -130,7 +129,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
             .nonlinearity
             .f(&[Tensor::from(vec![first_element].into_iter())])
             .unwrap();
-        (first_element, op_f.output.get_flat(0).clone())
+        (first_element, op_f.output[0])
     }
 
     /// calculates the column size given the number of rows and reserved blinding rows
@@ -226,7 +225,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
 
         let gen_table = || -> Result<(Tensor<F>, Tensor<F>), crate::tensor::TensorError> {
             let inputs = Tensor::from(smallest..=largest)
-                .par_map(|x| Ok::<_, crate::tensor::TensorError>(integer_rep_to_felt(*x)))?;
+                .par_enum_map(|_, x| Ok::<_, crate::tensor::TensorError>(integer_rep_to_felt(x)))?;
             let evals = self.nonlinearity.f(&[inputs.clone()])?;
             Ok((inputs, evals.output))
         };
@@ -240,7 +239,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
                 log::info!("Loading lookup table from cache: {:?}", cache_path);
                 let (input_cache, output_cache) =
                     (Tensor::load(&input_path)?, Tensor::load(&output_path)?);
-                (input_cache.to_vec(), output_cache.to_vec())
+                (input_cache, output_cache)
             } else {
                 log::info!(
                     "Generating lookup table and saving to cache: {:?}",
@@ -258,16 +257,15 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
                 inputs.save(&input_path)?;
                 evals.save(&output_path)?;
 
-                (inputs.to_vec(), evals.to_vec())
+                (inputs, evals)
             }
         } else {
             log::info!(
                 "Generating lookup table {} without cache",
                 self.nonlinearity.as_path()
             );
-            let (inputs, evals) = gen_table()?;
 
-            (inputs.to_vec(), evals.to_vec())
+            gen_table()?
         };
 
         let chunked_inputs = inputs.chunks(self.col_size);
@@ -302,11 +300,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Table<F> {
                                     )?;
                                 }
 
+                                let output = evals[row_offset];
+
                                 table.assign_cell(
                                     || format!("nl_o_col row {}", row_offset),
                                     self.table_outputs[x],
                                     y,
-                                    || Value::known(evals[row_offset] * col_multiplier),
+                                    || Value::known(output * col_multiplier),
                                 )?;
 
                                 Ok(())
@@ -415,13 +415,13 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
         let smallest = self.range.0;
         let largest = self.range.1;
 
-        let inputs: Vec<F> = if !LOOKUP_CACHE.is_empty() {
+        let inputs: Tensor<F> = if !LOOKUP_CACHE.is_empty() {
             let cache = std::path::Path::new(&*LOOKUP_CACHE);
             let cache_path = cache.join(self.as_path());
             let input_path = cache_path.join("inputs");
             if cache_path.exists() {
                 log::info!("Loading range check table from cache: {:?}", cache_path);
-                Tensor::load(&input_path)?.to_vec()
+                Tensor::load(&input_path)?
             } else {
                 log::info!(
                     "Generating range check table and saving to cache: {:?}",
@@ -433,14 +433,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RangeCheck<F> {
 
                 let inputs = Tensor::from(smallest..=largest).map(|x| integer_rep_to_felt(x));
                 inputs.save(&input_path)?;
-                inputs.to_vec()
+                inputs
             }
         } else {
             log::info!("Generating range check {} without cache", self.as_path());
 
-            (smallest..=largest)
-                .map(|x| integer_rep_to_felt(x))
-                .collect_vec()
+            Tensor::from(smallest..=largest).map(|x| integer_rep_to_felt(x))
         };
 
         let chunked_inputs = inputs.chunks(self.col_size);

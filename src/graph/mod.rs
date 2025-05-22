@@ -62,6 +62,7 @@ use pyo3::types::PyDictMethods;
 use pyo3::ToPyObject;
 
 use serde::{Deserialize, Serialize};
+use std::ops::Deref;
 pub use utilities::*;
 pub use vars::*;
 
@@ -1345,12 +1346,15 @@ impl GraphCircuit {
         }
 
         let mut witness = GraphWitness {
-            inputs: original_inputs.iter().map(|t| t.to_vec()).collect_vec(),
+            inputs: original_inputs
+                .iter()
+                .map(|t| t.deref().to_vec())
+                .collect_vec(),
             pretty_elements: None,
             outputs: model_results
                 .outputs
                 .iter()
-                .map(|t| t.to_vec())
+                .map(|t| t.deref().to_vec())
                 .collect_vec(),
             processed_inputs,
             processed_params,
