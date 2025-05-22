@@ -1256,16 +1256,22 @@ impl Model {
                     .map(|(idx, outlet)| {
                         let res = if self.graph.nodes[idx].num_uses() == 1 {
                             let res = results.remove(idx);
-                            res.ok_or(GraphError::MissingResults)?[*outlet].clone()
+                            res.ok_or(GraphError::MissingResults(*idx))?[*outlet].clone()
                         } else {
-                            results.get(idx).ok_or(GraphError::MissingResults)?[*outlet].clone()
+                            results.get(idx).ok_or(GraphError::MissingResults(*idx))?[*outlet]
+                                .clone()
                         };
                         Ok(res)
                     })
                     .collect::<Result<Vec<_>, GraphError>>()?
             } else {
                 // we re-assign inputs, always from the 0 outlet
-                vec![results.get(idx).ok_or(GraphError::MissingResults)?[0].clone()]
+                if self.graph.nodes[idx].num_uses() == 1 {
+                    let res = results.remove(idx);
+                    vec![res.ok_or(GraphError::MissingInput(*idx))?[0].clone()]
+                } else {
+                    vec![results.get(idx).ok_or(GraphError::MissingInput(*idx))?[0].clone()]
+                }
             };
             trace!("output dims: {:?}", node.out_dims());
             trace!(
