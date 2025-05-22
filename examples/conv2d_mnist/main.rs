@@ -333,10 +333,10 @@ pub fn runconv() {
     let mut train_labels = Tensor::from(trn_lbl.iter().map(|x| *x as f32));
     train_labels.reshape(&[50_000, 1]).unwrap();
 
-    println!("The first digit is a {:?}", train_labels[0]);
+    println!("The first digit is a {:?}", train_labels.get_flat(0));
 
     let mut input: ValTensor<F> = train_data
-        .get_slice_cloned(&[0..1, 0..28, 0..28])
+        .get_slice(&[0..1, 0..28, 0..28])
         .unwrap()
         .map(Value::known)
         .into();
@@ -420,16 +420,11 @@ pub fn runconv() {
     .into_iter()
     .into();
 
-    let pi_inner: Tensor<F> = public_input.map(integer_rep_to_felt::<F>);
+    let pi_inner: Vec<F> = public_input.map(integer_rep_to_felt::<F>).to_vec();
 
     println!("MOCK PROVING");
     let now = Instant::now();
-    let prover = MockProver::run(
-        K as u32,
-        &circuit,
-        vec![pi_inner.clone().into_iter().collect()],
-    )
-    .unwrap();
+    let prover = MockProver::run(K as u32, &circuit, vec![pi_inner.clone()]).unwrap();
     prover.assert_satisfied();
     let elapsed = now.elapsed();
     println!(

@@ -318,7 +318,7 @@ pub fn new_op_from_onnx(
                     return Err(GraphError::InvalidDims(idx, "shift left".to_string()));
                 }
                 SupportedOp::Linear(PolyOp::Identity {
-                    out_scale: Some(input_scales[0] - raw_values[0] as i32),
+                    out_scale: Some(input_scales[0] - raw_values.get_flat(0) as i32),
                 })
             } else {
                 return Err(GraphError::OpMismatch(idx, "shift left".to_string()));
@@ -337,7 +337,7 @@ pub fn new_op_from_onnx(
                     return Err(GraphError::InvalidDims(idx, "shift right".to_string()));
                 }
                 SupportedOp::Linear(PolyOp::Identity {
-                    out_scale: Some(input_scales[0] + raw_values[0] as i32),
+                    out_scale: Some(input_scales[0] + raw_values.get_flat(0) as i32),
                 })
             } else {
                 return Err(GraphError::OpMismatch(idx, "shift right".to_string()));
@@ -372,9 +372,9 @@ pub fn new_op_from_onnx(
                 .map(|x| x.get_constant().ok_or(GraphError::NonConstantRange))
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let start = input_ops[0].raw_values.map(|x| x as usize)[0];
-            let end = input_ops[1].raw_values.map(|x| x as usize)[0];
-            let delta = input_ops[2].raw_values.map(|x| x as usize)[0];
+            let start = input_ops[0].raw_values.map(|x| x as usize).get_flat(0);
+            let end = input_ops[1].raw_values.map(|x| x as usize).get_flat(0);
+            let delta = input_ops[2].raw_values.map(|x| x as usize).get_flat(0);
 
             let range = (start..end).step_by(delta).collect::<Vec<_>>();
             let raw_value = range.iter().map(|x| *x as f32).collect::<Tensor<_>>();
@@ -402,7 +402,7 @@ pub fn new_op_from_onnx(
                 if raw_values.len() != 1 {
                     return Err(GraphError::InvalidDims(idx, "trilu".to_string()));
                 }
-                raw_values[0] as i32
+                raw_values.get_flat(0) as i32
             } else {
                 return Err(GraphError::NonConstantTrilu);
             };
@@ -472,7 +472,7 @@ pub fn new_op_from_onnx(
 
                 inputs[1].decrement_use();
                 deleted_indices.push(inputs.len() - 1);
-                c.raw_values.map(|x| x as usize)[0]
+                c.raw_values.map(|x| x as usize).get_flat(0)
             } else {
                 op.fallback_k.to_i64()? as usize
             };
@@ -815,7 +815,7 @@ pub fn new_op_from_onnx(
                     let boxed_op = inputs[const_idx].opkind();
                     let unit = if let Some(c) = extract_const_raw_values(boxed_op) {
                         if c.len() == 1 {
-                            c[0]
+                            c.get_flat(0)
                         } else {
                             return Err(GraphError::InvalidDims(idx, "max".to_string()));
                         }
@@ -1050,9 +1050,9 @@ pub fn new_op_from_onnx(
                 }
 
                 if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
-                    if c.raw_values.len() == 1 && c.raw_values[0] < 1. {
+                    if c.raw_values.len() == 1 && c.raw_values.get_flat(0) < 1. {
                         // if not divisible by 2 then we need to add a range check
-                        let raw_values = 1.0 / c.raw_values[0];
+                        let raw_values = 1.0 / c.raw_values.get_flat(0);
                         if raw_values.log2().fract() == 0.0 {
                             inputs[const_idx].decrement_use();
                             deleted_indices.push(const_idx);
@@ -1210,7 +1210,7 @@ pub fn new_op_from_onnx(
                     return Err(GraphError::InvalidDims(idx, "pow".to_string()));
                 }
 
-                let exponent = c.raw_values[0];
+                let exponent = c.raw_values.get_flat(0);
 
                 if exponent.fract() == 0.0 {
                     SupportedOp::Linear(PolyOp::Pow(exponent as u32))
@@ -1229,7 +1229,7 @@ pub fn new_op_from_onnx(
                     return Err(GraphError::InvalidDims(idx, "pow".to_string()));
                 }
 
-                let base = c.raw_values[0];
+                let base = c.raw_values.get_flat(0);
 
                 SupportedOp::Nonlinear(LookupOp::Exp {
                     scale: scale_to_multiplier(input_scales[1]).into(),
@@ -1263,11 +1263,11 @@ pub fn new_op_from_onnx(
             }
 
             if let Some(c) = inputs[const_idx].opkind().get_mutable_constant() {
-                if c.raw_values.len() == 1 && c.raw_values[0] != 0. {
+                if c.raw_values.len() == 1 && c.raw_values.get_flat(0) != 0. {
                     inputs[const_idx].decrement_use();
                     deleted_indices.push(const_idx);
                     // get the non constant index
-                    let denom = c.raw_values[0];
+                    let denom = c.raw_values.get_flat(0);
 
                     let op = SupportedOp::Hybrid(HybridOp::Div {
                         denom: denom.into(),
@@ -1441,7 +1441,10 @@ pub fn new_op_from_onnx(
             let scale_factor = if let Some(scale_factor_node) = scale_factor_node {
                 let boxed_op = inputs[scale_factor_node].opkind();
                 if let Some(c) = extract_const_raw_values(boxed_op) {
-                    c.map(|x| x as usize).into_iter().collect::<Vec<usize>>()
+                    c.map(|x| x as usize)
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<usize>>()
                 } else {
                     return Err(GraphError::OpMismatch(idx, "Resize".to_string()));
                 }
@@ -1555,9 +1558,9 @@ pub fn quantize_tensor<F: PrimeField + TensorType + PartialOrd>(
     scale: crate::Scale,
     visibility: &Visibility,
 ) -> Result<Tensor<F>, TensorError> {
-    let mut value: Tensor<F> = const_value.par_enum_map(|_, x| {
+    let mut value: Tensor<F> = const_value.par_map(|x| {
         Ok::<_, TensorError>(crate::fieldutils::integer_rep_to_felt::<F>(quantize_float(
-            &(x).into(),
+            &(*x).into(),
             0.0,
             scale,
         )?))

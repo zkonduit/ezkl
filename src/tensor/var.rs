@@ -367,12 +367,12 @@ impl VarTensor {
         region: &mut Region<F>,
         offset: usize,
         coord: usize,
-        constant: F,
+        constant: &F,
     ) -> Result<AssignedCell<F, F>, halo2_proofs::plonk::Error> {
         let (x, y, z) = self.cartesian_coord(offset + coord);
         match &self {
             VarTensor::Advice { inner: advices, .. } => {
-                region.assign_advice_from_constant(|| "constant", advices[x][y], z, constant)
+                region.assign_advice_from_constant(|| "constant", advices[x][y], z, *constant)
             }
             _ => {
                 error!("VarTensor was not initialized");
@@ -411,10 +411,9 @@ impl VarTensor {
             ValTensor::Value { inner: v, .. } => Ok::<ValTensor<F>, halo2_proofs::plonk::Error>(
                 v.enum_map(|coord, k| {
                     if omissions.contains(&coord) {
-                        return Ok::<_, halo2_proofs::plonk::Error>(k);
+                        return Ok::<_, halo2_proofs::plonk::Error>(k.clone());
                     }
-                    let cell =
-                        self.assign_value(region, offset, k.clone(), assigned_coord, constants)?;
+                    let cell = self.assign_value(region, offset, k, assigned_coord, constants)?;
                     assigned_coord += 1;
                     Ok::<_, halo2_proofs::plonk::Error>(cell)
                 })?
@@ -477,9 +476,7 @@ impl VarTensor {
                 }
             },
             ValTensor::Value { inner: v, .. } => Ok(v
-                .enum_map(|coord, k| {
-                    self.assign_value(region, offset, k.clone(), coord, constants)
-                })?
+                .enum_map(|coord, k| self.assign_value(region, offset, k, coord, constants))?
                 .into()),
         }?;
         res.set_scale(values.scale());
@@ -656,8 +653,7 @@ impl VarTensor {
                     })?;
                 let mut res: ValTensor<F> = {
                     v.enum_map(|coord, k| {
-                        let cell =
-                            self.assign_value(region, offset, k.clone(), coord, constants)?;
+                        let cell = self.assign_value(region, offset, k, coord, constants)?;
                         Ok::<_, halo2_proofs::plonk::Error>(cell)
                     })?
                     .into()
@@ -730,12 +726,11 @@ impl VarTensor {
                             // assert that duplication occurred correctly
                             assert_eq!(
                                 Into::<IntegerRep>::into(k.clone()),
-                                Into::<IntegerRep>::into(v[coord - 1].clone())
+                                Into::<IntegerRep>::into(v.get_flat(coord - 1).clone())
                             );
                         };
 
-                        let cell =
-                            self.assign_value(region, offset, k.clone(), coord * step, constants)?;
+                        let cell = self.assign_value(region, offset, k, coord * step, constants)?;
 
                         let at_end_of_column = z == duplication_freq - 1;
                         let at_beginning_of_column = z == 0;
@@ -795,7 +790,7 @@ impl VarTensor {
         &self,
         region: &mut Region<F>,
         offset: usize,
-        k: ValType<F>,
+        k: &ValType<F>,
         coord: usize,
         constants: &mut ConstantsMap<F>,
     ) -> Result<ValType<F>, halo2_proofs::plonk::Error> {
@@ -803,9 +798,9 @@ impl VarTensor {
         let res = match k {
             // Handle direct value assignment
             ValType::Value(v) => match &self {
-                VarTensor::Advice { inner: advices, .. } => {
-                    ValType::PrevAssigned(region.assign_advice(|| "k", advices[x][y], z, || v)?)
-                }
+                VarTensor::Advice { inner: advices, .. } => ValType::PrevAssigned(
+                    region.assign_advice(|| "k", advices[x][y], z, || v.clone())?,
+                ),
                 _ => {
                     error!("VarTensor was not initialized");
                     return Err(halo2_proofs::plonk::Error::Synthesis);
@@ -823,9 +818,10 @@ impl VarTensor {
             },
             // Handle copying previously assigned constant
             ValType::AssignedConstant(v, val) => match &self {
-                VarTensor::Advice { inner: advices, .. } => {
-                    ValType::AssignedConstant(v.copy_advice(|| "k", region, advices[x][y], z)?, val)
-                }
+                VarTensor::Advice { inner: advices, .. } => ValType::AssignedConstant(
+                    v.copy_advice(|| "k", region, advices[x][y], z)?,
+                    val.clone(),
+                ),
                 _ => {
                     error!("VarTensor was not initialized");
                     return Err(halo2_proofs::plonk::Error::Synthesis);
@@ -835,7 +831,7 @@ impl VarTensor {
             ValType::AssignedValue(v) => match &self {
                 VarTensor::Advice { inner: advices, .. } => ValType::PrevAssigned(
                     region
-                        .assign_advice(|| "k", advices[x][y], z, || v)?
+                        .assign_advice(|| "k", advices[x][y], z, || v.clone())?
                         .evaluate(),
                 ),
                 _ => {
@@ -845,16 +841,16 @@ impl VarTensor {
             },
             // Handle constant value assignment with caching
             ValType::Constant(v) => {
-                if let std::collections::hash_map::Entry::Vacant(e) = constants.entry(v) {
+                if let std::collections::hash_map::Entry::Vacant(e) = constants.entry(*v) {
                     let value = ValType::AssignedConstant(
                         self.assign_constant(region, offset, coord, v)?,
-                        v,
+                        v.clone(),
                     );
                     e.insert(value.clone());
                     value
                 } else {
-                    let cell = constants.get(&v).unwrap();
-                    self.assign_value(region, offset, cell.clone(), coord, constants)?
+                    let cell = constants.get(&v).unwrap().clone();
+                    self.assign_value(region, offset, &cell, coord, constants)?
                 }
             }
         };
