@@ -1265,12 +1265,7 @@ impl Model {
                     .collect::<Result<Vec<_>, GraphError>>()?
             } else {
                 // we re-assign inputs, always from the 0 outlet
-                if self.graph.nodes[idx].num_uses() == 1 {
-                    let res = results.remove(idx);
-                    vec![res.ok_or(GraphError::MissingResults)?[0].clone()]
-                } else {
-                    vec![results.get(idx).ok_or(GraphError::MissingResults)?[0].clone()]
-                }
+                vec![results.get(idx).ok_or(GraphError::MissingResults)?[0].clone()]
             };
             trace!("output dims: {:?}", node.out_dims());
             trace!(
