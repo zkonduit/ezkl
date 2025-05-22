@@ -1430,7 +1430,7 @@ impl Model {
         );
         let outputs = output_nodes
             .map(|(idx, outlet)| {
-                Ok(results.get(idx).ok_or(GraphError::MissingResults)?[*outlet].clone())
+                Ok(results.get(idx).ok_or(GraphError::MissingResults(*idx))?[*outlet].clone())
             })
             .collect::<Result<Vec<_>, GraphError>>()?;
 
