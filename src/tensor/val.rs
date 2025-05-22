@@ -5,7 +5,6 @@ use super::{
 use crate::{circuit::region::ConstantsMap, fieldutils::felt_to_integer_rep};
 use halo2_proofs::{arithmetic::Field, circuit::Cell, plonk::Instance};
 use maybe_rayon::iter::{FilterMap, ParallelIterator};
-use maybe_rayon::slice::{Iter, ParallelSlice};
 
 /// Creates a new ValTensor filled with a constant value
 ///
@@ -309,13 +308,13 @@ impl<F: PrimeField + TensorType + PartialOrd> TryFrom<Tensor<F>> for ValTensor<F
         let dims = t.dims().to_vec();
 
         let inner = t
-            .into_iter()
+            .iter()
             .map(|x| {
                 if let Some(vis) = &visibility {
                     match vis {
-                        Visibility::Fixed => Ok(ValType::Constant(x)),
+                        Visibility::Fixed => Ok(ValType::Constant(x.clone())),
 
-                        _ => Ok(Value::known(x).into()),
+                        _ => Ok(Value::known(x.clone()).into()),
                     }
                 } else {
                     Err(TensorError::UnsetVisibility)
@@ -529,9 +528,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     /// # Returns
     /// An iterator yielding (value, ValType) pairs for constants
     #[allow(clippy::type_complexity)]
-    pub fn create_constants_map_iterator(
-        &self,
-    ) -> FilterMap<Iter<'_, ValType<F>>, fn(&ValType<F>) -> Option<(F, ValType<F>)>> {
+    pub fn create_constants_map_iterator<'data>(
+        &'data self,
+    ) -> FilterMap<
+        maybe_rayon::iter::IterBridge<std::vec::IntoIter<&'data ValType<F>>>,
+        fn(&ValType<F>) -> Option<(F, ValType<F>)>,
+    > {
         match self {
             ValTensor::Value { inner, .. } => inner.par_iter().filter_map(|x| {
                 if let ValType::Constant(v) = x {
@@ -569,23 +571,15 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 ValTensor::Instance { .. } => ConstantsMap::new(),
             }
         } else {
-            // Use parallel processing for larger arrays
-            let num_cores = std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1);
-            let chunk_size = (self.len() / num_cores).max(100_000);
-
             match self {
                 ValTensor::Value { inner, .. } => inner
-                    .par_chunks(chunk_size)
-                    .flat_map(|chunk| {
-                        chunk.par_iter().filter_map(|x| {
-                            if let ValType::Constant(v) = x {
-                                Some((*v, x.clone()))
-                            } else {
-                                None
-                            }
-                        })
+                    .par_iter()
+                    .filter_map(|x| {
+                        if let ValType::Constant(v) = x {
+                            Some((*v, x.clone()))
+                        } else {
+                            None
+                        }
                     })
                     .collect(),
                 ValTensor::Instance { .. } => ConstantsMap::new(),
@@ -635,7 +629,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
     pub fn sign(&self) -> Result<Self, TensorError> {
         let evals = self.int_evals()?;
         Ok(evals
-            .par_enum_map(|_, val| {
+            .par_map(|val| {
                 Ok::<_, TensorError>(ValType::Value(Value::known(integer_rep_to_felt(
                     val.signum(),
                 ))))
@@ -807,7 +801,38 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 let inner = v.get_slice(indices)?;
                 let dims = inner.dims().to_vec();
                 ValTensor::Value {
-                    inner: inner.cloned(),
+                    inner,
+                    dims,
+                    scale: *scale,
+                }
+            }
+            _ => return Err(TensorError::WrongMethod),
+        };
+        Ok(slice)
+    }
+
+    /// Gets a slice of the tensor
+    ///
+    /// # Arguments
+    /// * `indices` - The ranges to slice along each dimension
+    pub fn get_slice_concretize(
+        &self,
+        indices: &[Range<usize>],
+    ) -> Result<ValTensor<F>, TensorError> {
+        if indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims() {
+            return Ok(self.clone());
+        }
+        let slice = match self {
+            ValTensor::Value {
+                inner: v,
+                dims: _,
+                scale,
+            } => {
+                let mut inner = v.get_slice(indices)?;
+                inner.concretize();
+                let dims = inner.dims().to_vec();
+                ValTensor::Value {
+                    inner,
                     dims,
                     scale: *scale,
                 }
@@ -828,7 +853,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 dims: _,
                 scale,
             } => {
-                let inner = Tensor::from(vec![v.get_flat_index(index)].into_iter());
+                let inner = Tensor::from(vec![v.get_flat(index)].into_iter());
                 ValTensor::Value {
                     inner,
                     dims: vec![1],
@@ -1032,190 +1057,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             }
         }
         Ok(())
-    }
-
-    /// Removes every nth element from the tensor
-    ///
-    /// # Arguments
-    /// * `n` - Period of removal
-    ///
-    /// # Errors
-    /// Returns an error if called on an Instance tensor
-    pub fn exclude_every_n(&mut self, n: usize) -> Result<(), TensorError> {
-        match self {
-            ValTensor::Value {
-                inner: v, dims: d, ..
-            } => {
-                *v = v.exclude_every_n(n)?;
-                *d = v.dims().to_vec();
-            }
-            ValTensor::Instance { .. } => {
-                return Err(TensorError::WrongMethod);
-            }
-        }
-        Ok(())
-    }
-
-    /// Removes constant zero values from the tensor
-    /// Uses parallel processing for tensors larger than a threshold
-    pub fn remove_const_zero_values(&mut self) {
-        let size_threshold = 1_000_000; // Tuned using benchmarks
-
-        if self.len() < size_threshold {
-            // Single-threaded for small tensors
-            match self {
-                ValTensor::Value { inner: v, dims, .. } => {
-                    *v = v
-                        .clone()
-                        .into_iter()
-                        .filter_map(|e| {
-                            if let ValType::Constant(r) = e {
-                                if r == F::ZERO {
-                                    return None;
-                                }
-                            } else if let ValType::AssignedConstant(_, r) = e {
-                                if r == F::ZERO {
-                                    return None;
-                                }
-                            }
-                            Some(e)
-                        })
-                        .collect();
-                    *dims = v.dims().to_vec();
-                }
-                ValTensor::Instance { .. } => {}
-            }
-        } else {
-            // Parallel processing for large tensors
-            let num_cores = std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1);
-            let chunk_size = (self.len() / num_cores).max(100_000);
-
-            match self {
-                ValTensor::Value { inner: v, dims, .. } => {
-                    *v = v
-                        .par_chunks_mut(chunk_size)
-                        .flat_map(|chunk| {
-                            chunk.par_iter_mut().filter_map(|e| {
-                                if let ValType::Constant(r) = e {
-                                    if *r == F::ZERO {
-                                        return None;
-                                    }
-                                } else if let ValType::AssignedConstant(_, r) = e {
-                                    if *r == F::ZERO {
-                                        return None;
-                                    }
-                                }
-                                Some(e.clone())
-                            })
-                        })
-                        .collect();
-                    *dims = v.dims().to_vec();
-                }
-                ValTensor::Instance { .. } => {}
-            }
-        }
-    }
-
-    /// Gets the indices of all constant zero values
-    /// Uses parallel processing for large tensors
-    ///
-    /// # Returns
-    /// A vector of indices where constant zero values are located
-    pub fn get_const_zero_indices(&self) -> Vec<usize> {
-        let size_threshold = 1_000_000;
-
-        if self.len() < size_threshold {
-            // Single-threaded for small tensors
-            match &self {
-                ValTensor::Value { inner: v, .. } => v
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, e)| match e {
-                        ValType::Constant(r) | ValType::AssignedConstant(_, r) => {
-                            (*r == F::ZERO).then_some(i)
-                        }
-                        _ => None,
-                    })
-                    .collect(),
-                ValTensor::Instance { .. } => vec![],
-            }
-        } else {
-            // Parallel processing for large tensors
-            let num_cores = std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1);
-            let chunk_size = (self.len() / num_cores).max(100_000);
-
-            match &self {
-                ValTensor::Value { inner: v, .. } => v
-                    .par_chunks(chunk_size)
-                    .enumerate()
-                    .flat_map(|(chunk_idx, chunk)| {
-                        chunk
-                            .par_iter()
-                            .enumerate()
-                            .filter_map(move |(i, e)| match e {
-                                ValType::Constant(r) | ValType::AssignedConstant(_, r) => {
-                                    (*r == F::ZERO).then_some(chunk_idx * chunk_size + i)
-                                }
-                                _ => None,
-                            })
-                    })
-                    .collect::<Vec<_>>(),
-                ValTensor::Instance { .. } => vec![],
-            }
-        }
-    }
-
-    /// Gets the indices of all constant values
-    /// Uses parallel processing for large tensors
-    ///
-    /// # Returns
-    /// A vector of indices where constant values are located
-    pub fn get_const_indices(&self) -> Vec<usize> {
-        let size_threshold = 1_000_000;
-
-        if self.len() < size_threshold {
-            // Single-threaded for small tensors
-            match &self {
-                ValTensor::Value { inner: v, .. } => v
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, e)| match e {
-                        ValType::Constant(_) | ValType::AssignedConstant(_, _) => Some(i),
-                        _ => None,
-                    })
-                    .collect(),
-                ValTensor::Instance { .. } => vec![],
-            }
-        } else {
-            // Parallel processing for large tensors
-            let num_cores = std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1);
-            let chunk_size = (self.len() / num_cores).max(100_000);
-
-            match &self {
-                ValTensor::Value { inner: v, .. } => v
-                    .par_chunks(chunk_size)
-                    .enumerate()
-                    .flat_map(|(chunk_idx, chunk)| {
-                        chunk
-                            .par_iter()
-                            .enumerate()
-                            .filter_map(move |(i, e)| match e {
-                                ValType::Constant(_) | ValType::AssignedConstant(_, _) => {
-                                    Some(chunk_idx * chunk_size + i)
-                                }
-                                _ => None,
-                            })
-                    })
-                    .collect::<Vec<_>>(),
-                ValTensor::Instance { .. } => vec![],
-            }
-        }
     }
 
     /// Removes specified indices from the tensor
@@ -1438,18 +1279,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             Ok(v) => v,
             Err(_) => return "ValTensor not PrevAssigned".into(),
         };
-
-        if r.len() > 10 {
-            let start = r[..5].to_vec();
-            let end = r[r.len() - 5..].to_vec();
-            format!(
-                "[{} ... {}]",
-                start.iter().map(|x| format!("{}", x)).join(", "),
-                end.iter().map(|x| format!("{}", x)).join(", ")
-            )
-        } else {
-            format!("{:?}", r)
-        }
+        r.show()
     }
 }
 

@@ -347,7 +347,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                 {
                     *q_i = inputs[i]
                         .query_rng(meta, *block_idx, *inner_col_idx, 0, 1)
-                        .expect("non accum: input query failed")[0]
+                        .expect("non accum: input query failed")
+                        .get_flat(0)
                         .clone()
                 }
 
@@ -360,7 +361,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                         .expect("non accum: output query failed");
 
                     let res = base_op.nonaccum_f((qis[0].clone(), qis[1].clone()));
-                    vec![expected_output[base_op.constraint_idx()].clone() - res]
+                    vec![expected_output.get_flat(base_op.constraint_idx()) - res]
                 };
 
                 Constraints::with_selector(selector, constraints)
@@ -380,7 +381,8 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                     *q_i = inputs[i]
                         .query_whole_block(meta, *block_idx, 0, 1)
                         .expect("accum: input query failed")
-                        .into_iter()
+                        .iter()
+                        .cloned()
                         .collect()
                 }
 
@@ -391,9 +393,12 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> BaseConfig<F> {
                     .query_rng(meta, *block_idx, 0, rotation_offset, rng)
                     .expect("accum: output query failed");
 
-                let res =
-                    base_op.accum_f(expected_output[0].clone(), qis[0].clone(), qis[1].clone());
-                let constraints = vec![expected_output[base_op.constraint_idx()].clone() - res];
+                let res = base_op.accum_f(
+                    expected_output.get_flat(0).clone(),
+                    qis[0].clone(),
+                    qis[1].clone(),
+                );
+                let constraints = vec![expected_output.get_flat(base_op.constraint_idx()) - res];
 
                 Constraints::with_selector(selector, constraints)
             });
