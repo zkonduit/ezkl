@@ -989,20 +989,20 @@ impl AccuracyResults {
             let squared_error = error.map(|x| x.powi(2));
             let percentage_error = error.enum_map(|i, x| {
                 // if everything is 0 then we can't divide by 0 so we just return 0
-                let res = if original.get_flat(i) == 0.0 && *x == 0.0 {
+                let res = if original[i] == 0.0 && x == 0.0 {
                     0.0
                 } else {
-                    x / original.get_flat(i)
+                    x / original[i]
                 };
                 Ok::<f32, TensorError>(res)
             })?;
             let abs_percentage_error = percentage_error.map(|x| x.abs());
 
-            errors.extend(error.iter());
-            abs_errors.extend(abs_error.iter());
-            squared_errors.extend(squared_error.iter());
-            percentage_errors.extend(percentage_error.iter());
-            abs_percentage_errors.extend(abs_percentage_error.iter());
+            errors.extend(error);
+            abs_errors.extend(abs_error);
+            squared_errors.extend(squared_error);
+            percentage_errors.extend(percentage_error);
+            abs_percentage_errors.extend(abs_percentage_error);
         }
 
         let mean_percent_error =

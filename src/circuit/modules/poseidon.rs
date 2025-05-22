@@ -305,7 +305,7 @@ impl<S: Spec<Fp, WIDTH, RATE> + Sync, const WIDTH: usize, const RATE: usize> Mod
 
         let result = Tensor::from(vec![ValType::from(hash.clone())].into_iter());
 
-        let output = match result.get_flat(0).clone() {
+        let output = match result[0].clone() {
             ValType::PrevAssigned(v) => v,
             _ => {
                 log::error!("wrong input type, must be previously assigned");
