@@ -698,7 +698,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     pub fn get_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
-        for (i, elem) in self.inner.clone().into_iter().enumerate() {
+        for (i, elem) in self.inner.iter().enumerate() {
             if i % n == 0 {
                 inner.push(elem.clone());
             }
@@ -721,7 +721,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     pub fn exclude_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
-        for (i, elem) in self.inner.clone().into_iter().enumerate() {
+        for (i, elem) in self.inner.iter().enumerate() {
             if i % n != 0 {
                 inner.push(elem.clone());
             }
@@ -757,9 +757,9 @@ impl<T: Clone + TensorType> Tensor<T> {
 
         let mut inner: Vec<T> = Vec::with_capacity(self.inner.len());
         let mut offset = initial_offset;
-        for (i, elem) in self.inner.clone().into_iter().enumerate() {
+        for (i, elem) in self.inner.iter().enumerate() {
             if (i + offset + 1) % n == 0 {
-                inner.extend(vec![elem; 1 + num_repeats]);
+                inner.extend(vec![elem.clone(); 1 + num_repeats]);
                 offset += num_repeats;
             } else {
                 inner.push(elem.clone());
@@ -1240,32 +1240,6 @@ impl<T: Clone + TensorType> Tensor<T> {
         Tensor::new(Some(&[res]), &[1])
     }
 
-    /// Maps a function to tensors and enumerates in parallel
-    /// ```
-    /// use ezkl::tensor::{Tensor, TensorError};
-    /// use ezkl::fieldutils::IntegerRep;
-    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2]).unwrap();
-    /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(IntegerRep::pow(x + i as IntegerRep, 2))).unwrap();
-    /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
-    /// ```
-    pub fn par_enum_map_mut_filtered<
-        F: Fn(usize) -> Result<T, E> + std::marker::Send + std::marker::Sync,
-        E: Error + std::marker::Send + std::marker::Sync,
-    >(
-        &mut self,
-        filter_indices: &std::collections::HashSet<usize>,
-        f: F,
-    ) -> Result<(), E>
-    where
-        T: std::marker::Send + std::marker::Sync,
-    {
-        self.inner
-            .par_iter_mut()
-            .enumerate()
-            .filter(|(i, _)| filter_indices.contains(i))
-            .for_each(move |(i, e)| *e = f(i).unwrap());
-        Ok(())
-    }
 }
 
 impl<T: Clone + TensorType> Tensor<Tensor<T>> {
@@ -1282,9 +1256,9 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     pub fn combine(&self) -> Result<Tensor<T>, TensorError> {
         let mut dims = 0;
         let mut inner = Vec::new();
-        for t in self.inner.clone().into_iter() {
+        for t in self.inner.iter() {
             dims += t.len();
-            inner.extend(t.inner);
+            inner.extend(t.inner.clone());
         }
         Tensor::new(Some(&inner), &[dims])
     }

@@ -280,9 +280,7 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Vec<ValType<F>>> for ValTenso
     fn from(t: Vec<ValType<F>>) -> ValTensor<F> {
         ValTensor::Value {
             inner: t.clone().into_iter().into(),
-
             dims: vec![t.len()],
-
             scale: 1,
         }
     }
@@ -292,9 +290,7 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Vec<&ValType<F>>> for ValTens
     fn from(t: Vec<&ValType<F>>) -> ValTensor<F> {
         ValTensor::Value {
             inner: t.clone().into_iter().cloned().into(),
-
             dims: vec![t.len()],
-
             scale: 1,
         }
     }

@@ -5469,7 +5469,7 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
             let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
             inner_tensor[sliced_input.len() - 2] =
-                incremented_elem.get_inner_tensor()?.clone()[0].clone();
+                incremented_elem.get_inner_tensor()?[0].clone();
 
             // set the last elem to zero
             inner_tensor[sliced_input.len() - 1] = zero.clone();
@@ -5579,7 +5579,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
             let sliced_len = sliced_input.len();
             let inner_tensor = sliced_input.get_inner_tensor_mut()?;
-            inner_tensor[sliced_len - 2] = incremented_elem.get_inner_tensor()?.clone()[0].clone();
+            inner_tensor[sliced_len - 2] = incremented_elem.get_inner_tensor()?[0].clone();
 
             // set the last elem to zero
             inner_tensor[sliced_len - 1] = zero.clone();
