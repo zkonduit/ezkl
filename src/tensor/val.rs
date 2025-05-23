@@ -904,7 +904,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v.move_axis(source, destination)?;
+                v.move_axis(source, destination)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
