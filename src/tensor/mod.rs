@@ -1239,7 +1239,6 @@ impl<T: Clone + TensorType> Tensor<T> {
 
         Tensor::new(Some(&[res]), &[1])
     }
-
 }
 
 impl<T: Clone + TensorType> Tensor<Tensor<T>> {

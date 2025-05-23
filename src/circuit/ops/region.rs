@@ -10,7 +10,6 @@ use halo2_proofs::{
     plonk::{Error, Selector},
 };
 use halo2curves::ff::PrimeField;
-use itertools::Itertools;
 use maybe_rayon::iter::ParallelExtend;
 use std::{
     cell::RefCell,
@@ -639,34 +638,6 @@ impl<'a, F: PrimeField + TensorType + PartialOrd + std::hash::Hash> RegionCtx<'a
         values: &ValTensor<F>,
     ) -> Result<(ValTensor<F>, usize), CircuitError> {
         self.assign_dynamic_lookup(var, values)
-    }
-
-    /// Assign a valtensor to a vartensor
-    pub fn assign_with_omissions(
-        &mut self,
-        var: &VarTensor,
-        values: &ValTensor<F>,
-        ommissions: &HashSet<usize>,
-    ) -> Result<ValTensor<F>, CircuitError> {
-        if let Some(region) = &self.region {
-            Ok(var.assign_with_omissions(
-                &mut region.borrow_mut(),
-                self.linear_coord,
-                values,
-                ommissions,
-                &mut self.assigned_constants,
-            )?)
-        } else {
-            let mut values_clone = values.clone();
-            let mut indices = ommissions.clone().into_iter().collect_vec();
-            values_clone.remove_indices(&mut indices, false)?;
-
-            let values_map = values.create_constants_map();
-
-            self.assigned_constants.par_extend(values_map);
-
-            Ok(values.clone())
-        }
     }
 
     /// Assign a valtensor to a vartensor with duplication

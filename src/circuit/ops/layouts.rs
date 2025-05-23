@@ -2406,13 +2406,6 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     // time this entire function run
     let mut input = values[0].clone();
 
-    // this section has been optimized to death, don't mess with it
-    input.remove_const_zero_values();
-
-    // if empty return a const
-    if values.is_empty() {
-        return Ok(create_zero_tensor(1));
-    }
 
     let block_width = config.custom_gates.output.num_inner_cols();
 
@@ -2496,16 +2489,6 @@ pub fn prod<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
     region.flush()?;
-    // time this entire function run
-
-    // this section has been optimized to death, don't mess with it
-    let removal_indices = values[0].get_const_zero_indices();
-
-    // if empty return a const
-    if !removal_indices.is_empty() {
-        return Ok(create_zero_tensor(1));
-    }
-
     let block_width = config.custom_gates.output.num_inner_cols();
     let assigned_len: usize;
     let input = {
@@ -5107,36 +5090,25 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
 
     let x = values[0];
 
-    let removal_indices = values[0].get_const_indices();
-    let removal_indices: HashSet<usize> = HashSet::from_iter(removal_indices);
+    let w = region.assign(&config.static_lookups.input, x)?;
 
-    let w = region.assign_with_omissions(&config.static_lookups.input, x, &removal_indices)?;
-
-    let output = w.get_inner_tensor()?.par_enum_map(|i, e| {
+    let output: Tensor<ValType<F>> = w.get_inner_tensor()?.par_enum_map(|_i, e| {
         Ok::<_, TensorError>(if let Some(f) = e.get_felt_eval() {
-            if !removal_indices.contains(&i) {
-                Value::known(nl.f(&[Tensor::from(vec![f].into_iter())])?.output[0]).into()
-            } else {
-                ValType::Constant(nl.f(&[Tensor::from(vec![f].into_iter())])?.output[0])
-            }
+            Value::known(nl.f(&[Tensor::from(vec![f].into_iter())])?.output[0]).into()
         } else {
             Value::<F>::unknown().into()
         })
     })?;
 
-    let assigned_len = x.len() - removal_indices.len();
-    let mut output = region.assign_with_omissions(
-        &config.static_lookups.output,
-        &output.into(),
-        &removal_indices,
-    )?;
+    let assigned_len = x.len();
+    let mut output = region.assign(&config.static_lookups.output, &output.into())?;
 
     let is_dummy = region.is_dummy();
 
     let table_index: ValTensor<F> = w
         .get_inner_tensor()?
-        .par_enum_map(|i, e| {
-            Ok::<_, CircuitError>(if let Some(f) = e.get_felt_eval() {
+        .par_enum_map(|_i, e| {
+            Ok::<ValType<F>, CircuitError>(if let Some(f) = e.get_felt_eval() {
                 let col_idx = if !is_dummy {
                     let table = config
                         .static_lookups
@@ -5147,18 +5119,14 @@ pub(crate) fn nonlinearity<F: PrimeField + TensorType + PartialOrd + std::hash::
                 } else {
                     F::ZERO
                 };
-                if !removal_indices.contains(&i) {
-                    Value::known(col_idx).into()
-                } else {
-                    ValType::Constant(col_idx)
-                }
+                Value::known(col_idx).into()
             } else {
                 Value::<F>::unknown().into()
             })
         })?
         .into();
 
-    region.assign_with_omissions(&config.static_lookups.index, &table_index, &removal_indices)?;
+    region.assign(&config.static_lookups.index, &table_index)?;
 
     if !is_dummy {
         (0..assigned_len)
@@ -5468,8 +5436,7 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             )?;
 
             let mut inner_tensor = sliced_input.get_inner_tensor()?.clone();
-            inner_tensor[sliced_input.len() - 2] =
-                incremented_elem.get_inner_tensor()?[0].clone();
+            inner_tensor[sliced_input.len() - 2] = incremented_elem.get_inner_tensor()?[0].clone();
 
             // set the last elem to zero
             inner_tensor[sliced_input.len() - 1] = zero.clone();

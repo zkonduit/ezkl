@@ -1,6 +1,6 @@
 use alloy::primitives::Address as H160;
 use clap::{Command, Parser, Subcommand};
-use clap_complete::{Generator, Shell, generate};
+use clap_complete::{generate, Generator, Shell};
 #[cfg(feature = "python-bindings")]
 use pyo3::{conversion::FromPyObject, exceptions::PyValueError, prelude::*};
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tosubcommand::{ToFlags, ToSubcommand};
 
-use crate::{Commitments, RunArgs, pfsys::ProofType};
+use crate::{pfsys::ProofType, Commitments, RunArgs};
 
 use crate::circuit::CheckMode;
 use crate::graph::TestDataSource;

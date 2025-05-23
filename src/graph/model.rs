@@ -1255,9 +1255,7 @@ impl Model {
                     .iter()
                     .map(|(idx, outlet)| {
                         // check node is not an output
-                        let is_output = self.graph.outputs.iter().any(|(o_idx, _)| {
-                            *idx == *o_idx
-                        });
+                        let is_output = self.graph.outputs.iter().any(|(o_idx, _)| *idx == *o_idx);
 
                         let res = if self.graph.nodes[idx].num_uses() == 1 && !is_output {
                             let res = results.remove(idx);
