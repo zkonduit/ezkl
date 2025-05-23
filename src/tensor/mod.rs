@@ -449,21 +449,6 @@ impl<T: Clone + TensorType> Tensor<T> {
         self[index].clone()
     }
 
-    /// Get a single value from the Tensor.
-    ///
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// let mut a = Tensor::<IntegerRep>::new(None, &[2, 3, 5]).unwrap();
-    ///
-    /// let flat_index = 1*15 + 1*5 + 1;
-    /// a[1*15 + 1*5 + 1] = 5;
-    /// assert_eq!(a.get_flat_index(flat_index), 5);
-    /// ```
-    pub fn get_flat_index(&self, index: usize) -> T {
-        self[index].clone()
-    }
-
     /// Get a mutable array index from rows / columns indices.
     ///
     /// ```
@@ -498,14 +483,28 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// a.pad_to_zero_rem(9, 0).unwrap();
     /// assert_eq!(a, expected);
     /// ```
-    pub fn pad_to_zero_rem(&mut self, n: usize, pad: T) -> Result<(), TensorError> {
+    pub fn pad_to_zero_rem(&self, n: usize, pad: T) -> Result<Tensor<T>, TensorError> {
+        let mut inner = self.inner.clone();
         let remainder = self.len() % n;
         if remainder != 0 {
-            self.inner.resize(self.len() + n - remainder, pad);
+            inner.resize(self.len() + n - remainder, pad);
         }
-        self.dims = vec![self.inner.len()];
+        Tensor::new(Some(&inner), &[inner.len()])
+    }
 
-        Ok(())
+    /// Get a single value from the Tensor.
+    ///
+    /// ```
+    /// use ezkl::tensor::Tensor;
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(None, &[2, 3, 5]).unwrap();
+    ///
+    /// let flat_index = 1*15 + 1*5 + 1;
+    /// a[1*15 + 1*5 + 1] = 5;
+    /// assert_eq!(a.get_flat_index(flat_index), 5);
+    /// ```
+    pub fn get_flat_index(&self, index: usize) -> T {
+        self[index].clone()
     }
 
     /// Display a tensor
@@ -699,7 +698,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     pub fn get_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
-        for (i, elem) in self.inner.iter().enumerate() {
+        for (i, elem) in self.inner.clone().into_iter().enumerate() {
             if i % n == 0 {
                 inner.push(elem.clone());
             }
@@ -722,7 +721,7 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     pub fn exclude_every_n(&self, n: usize) -> Result<Tensor<T>, TensorError> {
         let mut inner: Vec<T> = vec![];
-        for (i, elem) in self.inner.iter().enumerate() {
+        for (i, elem) in self.inner.clone().into_iter().enumerate() {
             if i % n != 0 {
                 inner.push(elem.clone());
             }
@@ -758,9 +757,9 @@ impl<T: Clone + TensorType> Tensor<T> {
 
         let mut inner: Vec<T> = Vec::with_capacity(self.inner.len());
         let mut offset = initial_offset;
-        for (i, elem) in self.inner.iter().enumerate() {
+        for (i, elem) in self.inner.clone().into_iter().enumerate() {
             if (i + offset + 1) % n == 0 {
-                inner.extend(vec![elem.clone(); 1 + num_repeats]);
+                inner.extend(vec![elem; 1 + num_repeats]);
                 offset += num_repeats;
             } else {
                 inner.push(elem.clone());
@@ -831,10 +830,11 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// assert_eq!(a, b);
     /// ```
     pub fn remove_indices(
-        &mut self,
+        &self,
         indices: &mut [usize],
         is_sorted: bool,
-    ) -> Result<(), TensorError> {
+    ) -> Result<Tensor<T>, TensorError> {
+        let mut inner: Vec<T> = self.inner.clone();
         // time it
         if !is_sorted {
             indices.par_sort_unstable();
@@ -842,15 +842,13 @@ impl<T: Clone + TensorType> Tensor<T> {
         // remove indices
         for elem in indices.iter().rev() {
             if *elem < self.len() {
-                self.inner.remove(*elem);
+                inner.remove(*elem);
             } else {
                 return Err(TensorError::IndexOutOfBounds(*elem, self.len()));
             }
         }
 
-        self.dims = vec![self.inner.len()];
-
-        Ok(())
+        Tensor::new(Some(&inner), &[inner.len()])
     }
 
     /// Returns the tensor's dimensions.
@@ -1241,6 +1239,33 @@ impl<T: Clone + TensorType> Tensor<T> {
 
         Tensor::new(Some(&[res]), &[1])
     }
+
+    /// Maps a function to tensors and enumerates in parallel
+    /// ```
+    /// use ezkl::tensor::{Tensor, TensorError};
+    /// use ezkl::fieldutils::IntegerRep;
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 4]), &[2]).unwrap();
+    /// let mut c = a.par_enum_map::<_,_,TensorError>(|i, x| Ok(IntegerRep::pow(x + i as IntegerRep, 2))).unwrap();
+    /// assert_eq!(c, Tensor::from([1, 25].into_iter()));
+    /// ```
+    pub fn par_enum_map_mut_filtered<
+        F: Fn(usize) -> Result<T, E> + std::marker::Send + std::marker::Sync,
+        E: Error + std::marker::Send + std::marker::Sync,
+    >(
+        &mut self,
+        filter_indices: &std::collections::HashSet<usize>,
+        f: F,
+    ) -> Result<(), E>
+    where
+        T: std::marker::Send + std::marker::Sync,
+    {
+        self.inner
+            .par_iter_mut()
+            .enumerate()
+            .filter(|(i, _)| filter_indices.contains(i))
+            .for_each(move |(i, e)| *e = f(i).unwrap());
+        Ok(())
+    }
 }
 
 impl<T: Clone + TensorType> Tensor<Tensor<T>> {
@@ -1257,9 +1282,9 @@ impl<T: Clone + TensorType> Tensor<Tensor<T>> {
     pub fn combine(&self) -> Result<Tensor<T>, TensorError> {
         let mut dims = 0;
         let mut inner = Vec::new();
-        for t in self.inner.iter() {
+        for t in self.inner.clone().into_iter() {
             dims += t.len();
-            inner.extend(t.inner.clone());
+            inner.extend(t.inner);
         }
         Tensor::new(Some(&inner), &[dims])
     }

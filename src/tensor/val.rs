@@ -280,7 +280,9 @@ impl<F: PrimeField + TensorType + PartialOrd> From<Vec<ValType<F>>> for ValTenso
     fn from(t: Vec<ValType<F>>) -> ValTensor<F> {
         ValTensor::Value {
             inner: t.clone().into_iter().into(),
+
             dims: vec![t.len()],
+
             scale: 1,
         }
     }
@@ -736,7 +738,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                v.pad_to_zero_rem(n, pad)?;
+                *v = v.pad_to_zero_rem(n, pad)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
@@ -904,7 +906,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                v.move_axis(source, destination)?;
+                *v = v.move_axis(source, destination)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
@@ -1233,7 +1235,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                v.remove_indices(indices, is_sorted)?;
+                *v = v.remove_indices(indices, is_sorted)?;
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
@@ -1461,23 +1463,20 @@ impl<F: PrimeField + TensorType + PartialOrd> ValTensor<F> {
     /// # Errors
     /// Returns an error if called on an Instance tensor
     pub fn inverse(&self) -> Result<ValTensor<F>, TensorError> {
-        let mut cloned_self: ValTensor<F> = self.clone();
+        let mut cloned_self = self.clone();
+
         match &mut cloned_self {
             ValTensor::Value {
                 inner: v, dims: d, ..
             } => {
-                *v = v.par_enum_map(|_i, x| {
-                    Ok::<_, TensorError>(match x {
-                        ValType::AssignedValue(v) => ValType::AssignedValue(v.invert()),
-                        ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
-                            ValType::AssignedValue(v.value_field().invert())
-                        }
-                        ValType::Value(v) => {
-                            ValType::Value(v.map(|x| x.invert().unwrap_or(F::ZERO)))
-                        }
-                        ValType::Constant(v) => ValType::Constant(v.invert().unwrap_or(F::ZERO)),
-                    })
-                })?;
+                *v = v.map(|x| match x {
+                    ValType::AssignedValue(v) => ValType::AssignedValue(v.invert()),
+                    ValType::PrevAssigned(v) | ValType::AssignedConstant(v, ..) => {
+                        ValType::AssignedValue(v.value_field().invert())
+                    }
+                    ValType::Value(v) => ValType::Value(v.map(|x| x.invert().unwrap_or(F::ZERO))),
+                    ValType::Constant(v) => ValType::Constant(v.invert().unwrap_or(F::ZERO)),
+                });
                 *d = v.dims().to_vec();
             }
             ValTensor::Instance { .. } => {
