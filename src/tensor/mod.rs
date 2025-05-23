@@ -554,7 +554,6 @@ impl<T: Clone + TensorType> Tensor<T> {
         // Fill remaining dimensions
         full_indices.extend((indices.len()..self.dims.len()).map(|i| 0..self.dims[i]));
 
-
         // Calculate new dimensions once
         let dims: Vec<usize> = full_indices.iter().map(|e| e.end - e.start).collect();
 
@@ -566,18 +565,13 @@ impl<T: Clone + TensorType> Tensor<T> {
             .multi_cartesian_product()
             .collect();
 
-        output
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(i, e)| {
-                let coord = &cartesian_coord[i];
-                *e = self.get(coord);
-            });
+        output.par_iter_mut().enumerate().for_each(|(i, e)| {
+            let coord = &cartesian_coord[i];
+            *e = self.get(coord);
+        });
 
         Ok(output)
     }
-
-
 
     /// Set a slice of the Tensor.
     /// ```

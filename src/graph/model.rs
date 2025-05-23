@@ -1150,7 +1150,7 @@ impl Model {
 
         let original_constants = constants.clone();
 
-        let outputs = layouter.assign_region(
+        layouter.assign_region(
             || "model",
             |region| {
                 let mut thread_safe_region = RegionCtx::new_with_constants(
@@ -1164,18 +1164,21 @@ impl Model {
                 // we need to do this as this loop is called multiple times
                 vars.set_instance_idx(instance_idx);
 
-                let outputs = self
-                    .layout_nodes(&mut config, &mut thread_safe_region, &mut results)
+                self.layout_nodes(&mut config, &mut thread_safe_region, &mut results)
                     .map_err(|e| {
                         error!("{}", e);
                         halo2_proofs::plonk::Error::Synthesis
                     })?;
 
                 if run_args.output_visibility.is_public() || run_args.output_visibility.is_fixed() {
-                    let res = outputs
+                    let res = self
+                        .graph
+                        .outputs
                         .iter()
                         .enumerate()
-                        .map(|(i, output)| {
+                        .map(|(i, (idx, outlet))| {
+                            let output =
+                                &results.get(idx).ok_or(GraphError::MissingResults(*idx))?[*outlet];
                             let comparators = if run_args.output_visibility == Visibility::Public {
                                 let res = vars
                                     .instance
@@ -1215,14 +1218,37 @@ impl Model {
 
                 *constants = thread_safe_region.assigned_constants().clone();
 
-                Ok(outputs)
+                Ok(self
+                    .graph
+                    .outputs
+                    .iter()
+                    .map(|(idx, outlet)| {
+                        results
+                            .remove(idx)
+                            .ok_or(GraphError::MissingResults(*idx))
+                            .unwrap()[*outlet]
+                            .clone()
+                    })
+                    .collect::<Vec<_>>())
             },
         )?;
 
         let duration = start_time.elapsed();
         trace!("model layout took: {:?}", duration);
 
-        Ok(outputs)
+        let output_nodes = self.graph.outputs.iter();
+        debug!(
+            "model outputs are nodes: {:?}",
+            output_nodes.clone().collect_vec()
+        );
+        output_nodes
+            .map(|(idx, outlet)| {
+                Ok(results
+                    .remove(idx)
+                    .ok_or(GraphError::MissingResults(*idx))?[*outlet]
+                    .clone())
+            })
+            .collect::<Result<Vec<_>, GraphError>>()
     }
 
     fn layout_nodes(
@@ -1230,7 +1256,7 @@ impl Model {
         config: &mut ModelConfig,
         region: &mut RegionCtx<Fp>,
         results: &mut BTreeMap<usize, Vec<ValTensor<Fp>>>,
-    ) -> Result<Vec<ValTensor<Fp>>, GraphError> {
+    ) -> Result<(), GraphError> {
         // index over results to get original inputs
         let orig_inputs: BTreeMap<usize, _> = results
             .clone()
@@ -1358,12 +1384,19 @@ impl Model {
                                 .zip(values.iter().map(|v| vec![v.clone()])),
                         );
 
-                        let res = model.layout_nodes(config, region, &mut subgraph_results)?;
+                        model.layout_nodes(config, region, &mut subgraph_results)?;
 
                         let mut outlets = BTreeMap::new();
                         let mut stacked_outlets = BTreeMap::new();
 
-                        for (mappings, outlet_res) in output_mappings.iter().zip(res) {
+                        let outputs = model.graph.outputs.iter().map(|(idx, outlet)| {
+                            &subgraph_results
+                                .get(idx)
+                                .ok_or_else(|| GraphError::MissingResults(*idx))
+                                .unwrap()[*outlet]
+                        });
+
+                        for (mappings, outlet_res) in output_mappings.iter().zip(outputs) {
                             for mapping in mappings {
                                 match mapping {
                                     OutputMapping::Single { outlet, .. } => {
@@ -1429,18 +1462,7 @@ impl Model {
         // we do this so we can support multiple passes of the same model and have deterministic results (Non-assigned inputs etc... etc...)
         results.extend(orig_inputs);
 
-        let output_nodes = self.graph.outputs.iter();
-        debug!(
-            "model outputs are nodes: {:?}",
-            output_nodes.clone().collect_vec()
-        );
-        let outputs = output_nodes
-            .map(|(idx, outlet)| {
-                Ok(results.get(idx).ok_or(GraphError::MissingResults(*idx))?[*outlet].clone())
-            })
-            .collect::<Result<Vec<_>, GraphError>>()?;
-
-        Ok(outputs)
+        Ok(())
     }
 
     /// Assigns dummy values to the regions created when calling `configure`.
@@ -1471,12 +1493,16 @@ impl Model {
 
         let mut region = RegionCtx::new_dummy(0, run_args.num_inner_cols, region_settings);
 
-        let outputs = self.layout_nodes(&mut model_config, &mut region, &mut results)?;
+        self.layout_nodes(&mut model_config, &mut region, &mut results)?;
 
         if self.visibility.output.is_public() || self.visibility.output.is_fixed() {
-            let res = outputs
+            let res = self
+                .graph
+                .outputs
                 .iter()
-                .map(|output| {
+                .map(|(idx, outlet)| {
+                    let output =
+                        &results.get(idx).ok_or(GraphError::MissingResults(*idx))?[*outlet];
                     let mut comparator: ValTensor<Fp> = (0..output.len())
                         .map(|_| {
                             if !self.visibility.output.is_fixed() {
@@ -1489,18 +1515,19 @@ impl Model {
                         .into();
                     comparator.reshape(output.dims())?;
 
-                    dummy_config.layout(
+                    Ok(dummy_config.layout(
                         &mut region,
                         &[output, &comparator],
                         Box::new(HybridOp::Output {
                             decomp: !run_args.ignore_range_check_inputs_outputs,
                         }),
-                    )
+                    )?)
                 })
-                .collect::<Result<Vec<_>, _>>();
+                .collect::<Result<Vec<_>, GraphError>>();
             res?;
         } else if !self.visibility.output.is_private() {
-            for output in &outputs {
+            for (idx, outlet) in self.graph.outputs.iter() {
+                let output = &results.get(idx).ok_or(GraphError::MissingResults(*idx))?[*outlet];
                 region.update_constants(output.create_constants_map());
             }
         }
@@ -1512,9 +1539,15 @@ impl Model {
         #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
         region.debug_report();
 
-        let outputs = outputs
+        let outputs = self
+            .graph
+            .outputs
             .iter()
-            .map(|x| {
+            .map(|(idx, outlet)| {
+                let x = &results
+                    .get(idx)
+                    .ok_or(GraphError::MissingResults(*idx))
+                    .unwrap()[*outlet];
                 x.get_felt_evals()
                     .unwrap_or_else(|_| Tensor::new(Some(&[Fp::ZERO]), &[1]).unwrap())
             })

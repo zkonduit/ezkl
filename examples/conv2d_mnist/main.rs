@@ -336,7 +336,7 @@ pub fn runconv() {
     println!("The first digit is a {:?}", train_labels[0]);
 
     let mut input: ValTensor<F> = train_data
-        .get_slice_cloned(&[0..1, 0..28, 0..28])
+        .get_slice(&[0..1, 0..28, 0..28])
         .unwrap()
         .map(Value::known)
         .into();

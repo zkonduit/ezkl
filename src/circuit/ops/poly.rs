@@ -212,7 +212,7 @@ impl<
     ) -> Result<Option<ValTensor<F>>, CircuitError> {
         Ok(Some(match self {
             PolyOp::Abs => layouts::abs(config, region, values[..].try_into()?)?,
-            PolyOp::Sign => layouts::sign(config, region, values[..].try_into()?)?,
+            PolyOp::Sign => layouts::sign(config, region, values[..].try_into()?, true)?,
             PolyOp::LeakyReLU { slope, scale } => {
                 layouts::leaky_relu(config, region, values[..].try_into()?, slope, scale)?
             }

@@ -1002,9 +1002,7 @@ where
                         .map(|x| *x..*x + 1)
                         .collect::<Vec<_>>();
 
-                    input_slice
-                        .get_slice(&index_slice)
-                        .unwrap()
+                    input_slice.get_slice(&index_slice).unwrap()
                 })
                 .collect::<Tensor<_>>();
 

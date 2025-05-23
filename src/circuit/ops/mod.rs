@@ -226,12 +226,17 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
                 _ => {
                     if self.decomp {
                         log::debug!("constraining input to be decomp");
-                        Ok(Some(super::layouts::decompose(
-                            config,
-                            region,
-                            values[..].try_into()?,
-                            &region.base(), &region.legs()
-                        )?.1))
+                        Ok(Some(
+                            super::layouts::decompose(
+                                config,
+                                region,
+                                values[..].try_into()?,
+                                &region.base(),
+                                &region.legs(),
+                                false,
+                            )?
+                            .1,
+                        ))
                     } else {
                         log::debug!("constraining input to be identity");
                         Ok(Some(super::layouts::identity(
@@ -359,7 +364,7 @@ impl<
         };
         Ok(Some(if self.decomp {
             log::debug!("constraining constant to be decomp");
-            super::layouts::decompose(config, region, &[&value], &region.base(), &region.legs())?.1
+            super::layouts::decompose(config, region, &[&value], &region.base(), &region.legs(), false)?.1
         } else {
             log::debug!("constraining constant to be identity");
             super::layouts::identity(config, region, &[&value])?

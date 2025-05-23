@@ -256,6 +256,7 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[&claimed_output],
         &region.base(),
         &region.legs(),
+        false,
     )?
     .1;
 
@@ -340,6 +341,7 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[&claimed_output],
         &region.base(),
         &region.legs(),
+        false,
     )?
     .1;
     // divide by input_scale
@@ -3060,7 +3062,7 @@ pub fn greater<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     rhs.expand(&broadcasted_shape)?;
 
     let diff = pairwise(config, region, &[&lhs, &rhs], BaseOp::Sub)?;
-    let sign = sign(config, region, &[&diff])?;
+    let sign = sign(config, region, &[&diff], true)?;
     let eq = equals(config, region, &[&sign, &create_unit_tensor(1)])?;
     Ok(eq)
 }
@@ -3491,21 +3493,15 @@ pub(crate) fn equals_zero<F: PrimeField + TensorType + PartialOrd + std::hash::H
 ) -> Result<ValTensor<F>, CircuitError> {
     let values = values[0];
 
-    // Get multiplicative inverse of each value (special handling for zero)
-    let values_inverse = values.inverse()?;
-
     // Multiply each value by its inverse - this equals 1 for non-zero values
     let product_values_and_invert =
-        pairwise(config, region, &[values, &values_inverse], BaseOp::Mult)?;
-
-    // Create constant tensor of 1s
-    let ones = create_unit_tensor(1);
+        pairwise(config, region, &[values, &values.inverse()?], BaseOp::Mult)?;
 
     // Subtract from 1: result is 0 for non-zero inputs, 1 for zero inputs
     let output = pairwise(
         config,
         region,
-        &[&ones, &product_values_and_invert],
+        &[&create_unit_tensor(1), &product_values_and_invert],
         BaseOp::Sub,
     )?;
 
@@ -5393,7 +5389,7 @@ pub fn floor<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs, true)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -5502,7 +5498,7 @@ pub fn ceil<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs, true)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -5660,6 +5656,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &[&claimed_output],
         &region.base(),
         &region.legs(),
+        true,
     )?
     .0;
     region.increment(claimed_output.len());
@@ -5734,7 +5731,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 
     // get a linear interpolation now
 
-    let sign_of_distance_to_claimed = sign(config, region, &[&distance_to_claimed])?;
+    let sign_of_distance_to_claimed = sign(config, region, &[&distance_to_claimed], true)?;
     let sign_of_distance_to_claimed_is_negative = equals(
         config,
         region,
@@ -5878,7 +5875,7 @@ pub fn round<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs, true)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -6020,7 +6017,7 @@ pub fn round_half_to_even<F: PrimeField + TensorType + PartialOrd + std::hash::H
     legs: usize,
 ) -> Result<ValTensor<F>, CircuitError> {
     // decompose with base scale and then set the last element to zero
-    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs)?.0;
+    let decomposition = decompose(config, region, values, &(scale.0 as usize), &legs, true)?.0;
     // set the last element to zero and then recompose, we don't actually need to assign here
     // as this will automatically be assigned in the recompose function and uses the constant caching of RegionCtx
     let zero = ValType::Constant(F::ZERO);
@@ -6267,6 +6264,7 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     values: &[&ValTensor<F>; 1],
     base: &usize,
     n: &usize,
+    zero_sign_matters: bool,
 ) -> Result<(ValTensor<F>, ValTensor<F>), CircuitError> {
     let mut input = values[0].clone();
 
@@ -6329,7 +6327,7 @@ pub(crate) fn decompose<F: PrimeField + TensorType + PartialOrd + std::hash::Has
     let sign = range_check(config, region, &[&sign], &(-1, 1))?;
 
     // isZero(input) * sign == 0.
-    {
+    if zero_sign_matters {
         let is_zero = equals_zero(config, region, &[&input])?;
         // take the product of the sign and is_zero
         let sign_is_zero = pairwise(config, region, &[&sign, &is_zero], BaseOp::Mult)?;
@@ -6368,8 +6366,17 @@ pub(crate) fn sign<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 1],
+    zero_sign_matters: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let mut decomp = decompose(config, region, values, &region.base(), &region.legs())?.0;
+    let mut decomp = decompose(
+        config,
+        region,
+        values,
+        &region.base(),
+        &region.legs(),
+        zero_sign_matters,
+    )?
+    .0;
     // get every n elements now, which correspond to the sign bit
     decomp.get_every_n(region.legs() + 1)?;
     decomp.reshape(values[0].dims())?;
@@ -6382,7 +6389,7 @@ pub(crate) fn abs<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 1],
 ) -> Result<ValTensor<F>, CircuitError> {
-    let sign = sign(config, region, values)?;
+    let sign = sign(config, region, values, false)?;
 
     pairwise(config, region, &[values[0], &sign], BaseOp::Mult)
 }
@@ -6394,7 +6401,7 @@ pub(crate) fn leaky_relu<F: PrimeField + TensorType + PartialOrd + std::hash::Ha
     alpha: &utils::F32,
     input_scale: &i32,
 ) -> Result<ValTensor<F>, CircuitError> {
-    let sign = sign(config, region, values)?;
+    let sign = sign(config, region, values, false)?;
 
     let mut unit = create_unit_tensor(sign.len());
     unit.reshape(sign.dims())?;
@@ -6686,6 +6693,7 @@ pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             &[&values[0]],
             &region.base(),
             &region.legs(),
+            false,
         )?
         .1;
     } else if !values[0].all_prev_assigned() {
@@ -6700,6 +6708,7 @@ pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
             &[&values[1]],
             &region.base(),
             &region.legs(),
+            false,
         )?
         .1;
     } else if !values[1].all_prev_assigned() {
