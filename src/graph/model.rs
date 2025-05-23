@@ -647,7 +647,10 @@ impl Model {
         let variables: std::collections::HashMap<String, usize> =
             std::collections::HashMap::from_iter(variables.iter().map(|(k, v)| (k.clone(), *v)));
 
-        for (i, id) in model.clone().inputs.iter().enumerate() {
+        let inputs = model.inputs.clone();
+        let outputs = model.outputs.clone();
+
+        for (i, id) in inputs.iter().enumerate() {
             let input = model.node_mut(id.node);
 
             if input.outputs.is_empty() {
@@ -669,7 +672,7 @@ impl Model {
             model.set_input_fact(i, fact)?;
         }
 
-        for (i, _) in model.clone().outputs.iter().enumerate() {
+        for (i, _) in outputs.iter().enumerate() {
             model.set_output_fact(i, InferenceFact::default())?;
         }
 

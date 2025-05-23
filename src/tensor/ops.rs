@@ -999,14 +999,12 @@ where
                         .get_slice(&slice)
                         .unwrap()
                         .iter()
-                        .map(|x| ***x..***x + 1)
+                        .map(|x| *x..*x + 1)
                         .collect::<Vec<_>>();
 
                     input_slice
                         .get_slice(&index_slice)
                         .unwrap()
-                        .cloned()
-                        .cloned()
                 })
                 .collect::<Tensor<_>>();
 
@@ -1146,9 +1144,9 @@ where
         .map(|coord| {
             let slice = coord.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
             let index_val = index.get_slice(&slice)?;
-            let index_slice = index_val.iter().map(|x| **x..**x + 1).collect::<Vec<_>>();
+            let index_slice = index_val.iter().map(|x| *x..*x + 1).collect::<Vec<_>>();
 
-            let src_val = src.get_slice(&slice)?.cloned();
+            let src_val = src.get_slice(&slice)?;
             output.set_slice(&index_slice, &src_val)?;
             Ok::<_, TensorError>(())
         })
@@ -1504,7 +1502,7 @@ pub fn slice<T: TensorType + Send + Sync>(
         }
     }
 
-    Ok(t.get_slice(&slice)?.cloned())
+    Ok(t.get_slice(&slice)?)
 }
 
 // ---------------------------------------------------------------------------------------------------------

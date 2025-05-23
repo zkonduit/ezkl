@@ -250,7 +250,14 @@ pub(crate) fn div<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     };
     claimed_output.reshape(input_dims)?;
     // implicitly check if the prover provided output is within range
-    let claimed_output = identity(config, region, &[&claimed_output], true)?;
+    let claimed_output = decompose(
+        config,
+        region,
+        &[&claimed_output],
+        &region.base(),
+        &region.legs(),
+    )?
+    .1;
 
     let product = pairwise(config, region, &[&claimed_output, &divisor], BaseOp::Mult)?;
 
@@ -327,7 +334,14 @@ pub(crate) fn recip<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     claimed_output.reshape(input_dims)?;
 
     // implicitly check if the prover provided output is within range
-    let claimed_output = identity(config, region, &[&claimed_output], true)?;
+    let claimed_output = decompose(
+        config,
+        region,
+        &[&claimed_output],
+        &region.base(),
+        &region.legs(),
+    )?
+    .1;
     // divide by input_scale
     let zero_inverse_val =
         tensor::ops::nonlinearities::zero_recip(felt_to_integer_rep(output_scale) as f64, eps)[0];
@@ -1894,7 +1908,7 @@ where
         .collect::<Vec<_>>();
 
     let val_dim_multiplier: ValTensor<F> = dim_multiplier
-        .get_slice_cloned(&[dim..dim + 1])?
+        .get_slice(&[dim..dim + 1])?
         .map(|x| ValType::Constant(x))
         .into();
 
@@ -1990,7 +2004,7 @@ where
     }
 
     let index_dim_multiplier: ValTensor<F> = dim_multiplier
-        .get_slice_cloned(&[batch_dims..dims.len()])?
+        .get_slice(&[batch_dims..dims.len()])?
         .map(|x| ValType::Constant(x))
         .into();
 
@@ -2405,7 +2419,6 @@ pub fn sum<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
     region.flush()?;
     // time this entire function run
     let mut input = values[0].clone();
-
 
     let block_width = config.custom_gates.output.num_inner_cols();
 
@@ -4733,7 +4746,6 @@ pub(crate) fn concat<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 /// * `config` - The circuit configuration
 /// * `region` - The region context
 /// * `values` - Single tensor to constrain
-/// * `decomp` - Whether to decompose the values (enabling range checks)
 ///
 /// # Returns
 /// * The constrained tensor (possibly assigned to advice)
@@ -4768,17 +4780,12 @@ pub(crate) fn identity<F: PrimeField + TensorType + PartialOrd + std::hash::Hash
     config: &BaseConfig<F>,
     region: &mut RegionCtx<F>,
     values: &[&ValTensor<F>; 1],
-    decomp: bool,
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut output = values[0].clone();
     if !output.all_prev_assigned() {
         // checks they are in range
-        if decomp {
-            output = decompose(config, region, &[&output], &region.base(), &region.legs())?.1;
-        } else {
-            output = region.assign(&config.custom_gates.output, values[0])?;
-            region.increment(output.len());
-        }
+        output = region.assign(&config.custom_gates.output, values[0])?;
+        region.increment(output.len());
     }
 
     Ok(output)
@@ -5647,7 +5654,14 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         .into()
     };
     claimed_output.reshape(input.dims())?;
-    let claimed_output = identity(config, region, &[&claimed_output], true)?;
+    let claimed_output = decompose(
+        config,
+        region,
+        &[&claimed_output],
+        &region.base(),
+        &region.legs(),
+    )?
+    .0;
     region.increment(claimed_output.len());
 
     let pow2_of_claimed_output = nonlinearity(
@@ -6664,14 +6678,32 @@ pub fn output<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
 ) -> Result<ValTensor<F>, CircuitError> {
     let mut values = [values[0].clone(), values[1].clone()];
 
-    if !values[0].all_prev_assigned() {
-        // range check the outputs
-        values[0] = layouts::identity(config, region, &[&values[0]], decomp)?;
+    // range check the outputs
+    if decomp {
+        values[0] = decompose(
+            config,
+            region,
+            &[&values[0]],
+            &region.base(),
+            &region.legs(),
+        )?
+        .1;
+    } else if !values[0].all_prev_assigned() {
+        values[0] = region.assign(&config.custom_gates.inputs[0], &values[0])?;
     }
 
-    if !values[1].all_prev_assigned() {
-        // range check the outputs
-        values[1] = layouts::identity(config, region, &[&values[1]], decomp)?;
+    // range check the outputs
+    if decomp {
+        values[1] = decompose(
+            config,
+            region,
+            &[&values[1]],
+            &region.base(),
+            &region.legs(),
+        )?
+        .1;
+    } else if !values[1].all_prev_assigned() {
+        values[1] = region.assign(&config.custom_gates.inputs[1], &values[1])?;
     }
 
     // regular equality constraint

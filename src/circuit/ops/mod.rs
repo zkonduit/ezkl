@@ -223,12 +223,24 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> Op<F> for Input 
                         true,
                     )?))
                 }
-                _ => Ok(Some(super::layouts::identity(
-                    config,
-                    region,
-                    values[..].try_into()?,
-                    self.decomp,
-                )?)),
+                _ => {
+                    if self.decomp {
+                        log::debug!("constraining input to be decomp");
+                        Ok(Some(super::layouts::decompose(
+                            config,
+                            region,
+                            values[..].try_into()?,
+                            &region.base(), &region.legs()
+                        )?.1))
+                    } else {
+                        log::debug!("constraining input to be identity");
+                        Ok(Some(super::layouts::identity(
+                            config,
+                            region,
+                            values[..].try_into()?,
+                        )?))
+                    }
+                }
             }
         } else {
             Ok(Some(value))
@@ -345,13 +357,13 @@ impl<
         } else {
             self.quantized_values.clone().try_into()?
         };
-        // we gotta constrain it once if its used multiple times
-        Ok(Some(layouts::identity(
-            config,
-            region,
-            &[&value],
-            self.decomp,
-        )?))
+        Ok(Some(if self.decomp {
+            log::debug!("constraining constant to be decomp");
+            super::layouts::decompose(config, region, &[&value], &region.base(), &region.legs())?.1
+        } else {
+            log::debug!("constraining constant to be identity");
+            super::layouts::identity(config, region, &[&value])?
+        }))
     }
 
     fn clone_dyn(&self) -> Box<dyn Op<F>> {

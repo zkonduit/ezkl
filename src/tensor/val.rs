@@ -803,7 +803,7 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
                 let inner = v.get_slice(indices)?;
                 let dims = inner.dims().to_vec();
                 ValTensor::Value {
-                    inner: inner.cloned(),
+                    inner,
                     dims,
                     scale: *scale,
                 }
@@ -1051,8 +1051,6 @@ impl<F: PrimeField + TensorType + PartialOrd + std::hash::Hash> ValTensor<F> {
         }
         Ok(())
     }
-
-
 
     /// Gets the indices of all constant values
     /// Uses parallel processing for large tensors

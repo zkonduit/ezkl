@@ -477,11 +477,9 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// use ezkl::fieldutils::IntegerRep;
     /// let mut a = Tensor::<IntegerRep>::new(Some(&[1,2,3,4,5,6]), &[2, 3]).unwrap();
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0]), &[8]).unwrap();
-    /// a.pad_to_zero_rem(4, 0).unwrap();
-    /// assert_eq!(a, expected);
+    /// assert_eq!(a.pad_to_zero_rem(4, 0).unwrap(), expected);
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0, 0]), &[9]).unwrap();
-    /// a.pad_to_zero_rem(9, 0).unwrap();
-    /// assert_eq!(a, expected);
+    /// assert_eq!(a.pad_to_zero_rem(9, 0).unwrap(), expected);
     /// ```
     pub fn pad_to_zero_rem(&self, n: usize, pad: T) -> Result<Tensor<T>, TensorError> {
         let mut inner = self.inner.clone();
@@ -528,21 +526,17 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
     /// let mut b = Tensor::<IntegerRep>::new(Some(&[1, 2]), &[2]).unwrap();
     ///
-    /// assert_eq!(a.get_slice(&[0..2]).unwrap().cloned(), b);
+    /// assert_eq!(a.get_slice(&[0..2]).unwrap(), b);
     /// ```
-    pub fn get_slice<'a>(&'a self, indices: &[Range<usize>]) -> Result<Tensor<&'a T>, TensorError>
+    pub fn get_slice(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorError>
     where
         T: Send + Sync,
-        &'a T: TensorType,
     {
         // Fast path: empty indices or full tensor slice
         if indices.is_empty()
             || indices.iter().map(|x| x.end - x.start).collect::<Vec<_>>() == self.dims
         {
-            return Tensor::new(
-                Some(self.inner.iter().collect::<Vec<_>>().as_slice()),
-                &self.dims,
-            );
+            return Ok(self.clone());
         }
 
         // Validate dimensions
@@ -560,40 +554,30 @@ impl<T: Clone + TensorType> Tensor<T> {
         // Fill remaining dimensions
         full_indices.extend((indices.len()..self.dims.len()).map(|i| 0..self.dims[i]));
 
-        // Pre-calculate total size and allocate result vector
-        let total_size: usize = full_indices
-            .iter()
-            .map(|range| range.end - range.start)
-            .product();
-        let mut res: Vec<&T> = Vec::with_capacity(total_size);
 
         // Calculate new dimensions once
         let dims: Vec<usize> = full_indices.iter().map(|e| e.end - e.start).collect();
 
-        // Use iterator directly without collecting into intermediate Vec
-        for coord in full_indices.iter().cloned().multi_cartesian_product() {
-            let index = self.get_index(&coord);
-            res.push(&self[index]);
-        }
+        let mut output = Tensor::new(None, &dims)?;
 
-        Tensor::new(Some(&res), &dims)
+        let cartesian_coord: Vec<Vec<usize>> = full_indices
+            .iter()
+            .cloned()
+            .multi_cartesian_product()
+            .collect();
+
+        output
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, e)| {
+                let coord = &cartesian_coord[i];
+                *e = self.get(coord);
+            });
+
+        Ok(output)
     }
 
-    /// Get a slice from the Tensor.
-    /// ```
-    /// use ezkl::tensor::Tensor;
-    /// use ezkl::fieldutils::IntegerRep;
-    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3]), &[3]).unwrap();
-    /// let mut b = Tensor::<IntegerRep>::new(Some(&[1, 2]), &[2]).unwrap();
-    ///
-    /// assert_eq!(a.get_slice_cloned(&[0..2]).unwrap(), b);
-    /// ```
-    pub fn get_slice_cloned(&self, indices: &[Range<usize>]) -> Result<Tensor<T>, TensorError>
-    where
-        T: Send + Sync,
-    {
-        Ok(self.get_slice(indices)?.cloned())
-    }
+
 
     /// Set a slice of the Tensor.
     /// ```
