@@ -490,11 +490,13 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::fieldutils::IntegerRep;
-    /// let a = Tensor::<IntegerRep>::new(Some(&[1,2,3,4,5,6]), &[2, 3]).unwrap();
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1,2,3,4,5,6]), &[2, 3]).unwrap();
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0]), &[8]).unwrap();
-    /// assert_eq!(a.pad_to_zero_rem(4, 0).unwrap(), expected);
+    /// a.pad_to_zero_rem(4, 0).unwrap();
+    /// assert_eq!(a, expected);
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6, 0, 0, 0]), &[9]).unwrap();
-    /// assert_eq!(a.pad_to_zero_rem(9, 0).unwrap(), expected);
+    /// a.pad_to_zero_rem(9, 0).unwrap();
+    /// assert_eq!(a, expected);
     /// ```
     pub fn pad_to_zero_rem(&mut self, n: usize, pad: T) -> Result<(), TensorError> {
         let remainder = self.len() % n;
@@ -815,16 +817,18 @@ impl<T: Clone + TensorType> Tensor<T> {
     /// ```
     /// use ezkl::tensor::Tensor;
     /// use ezkl::fieldutils::IntegerRep;
-    /// let a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
+    /// let mut a = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 4, 5, 6]), &[6]).unwrap();
     /// let expected = Tensor::<IntegerRep>::new(Some(&[1, 2, 3, 6]), &[4]).unwrap();
     /// let mut indices = vec![3, 4];
-    /// assert_eq!(a.remove_indices(&mut indices, true).unwrap(), expected);
+    /// a.remove_indices(&mut indices, false).unwrap();
+    /// assert_eq!(a, expected);
     ///
     ///
     /// let a = Tensor::<IntegerRep>::new(Some(&[52, -245, 153, 13, -4, -56, -163, 249, -128, -172, 396, 143, 2, -96, 504, -44, -158, -393, 61, 95, 191, 74, 64, -219, 553, 104, 235, 222, 44, -216, 63, -251, 40, -140, 112, -355, 60, 123, 26, -116, -89, -200, -109, 168, 135, -34, -99, -54, 5, -81, 322, 87, 4, -139, 420, 92, -295, -12, 262, -1, 26, -48, 231, 1, -335, 244, 188, -4, 5, -362, 57, -198, -184, -117, 40, 305, 49, 30, -59, -26, -37, 96]), &[82]).unwrap();
     /// let b = Tensor::<IntegerRep>::new(Some(&[52, -245, 153, 13, -4, -56, -163, 249, -128, -172, 396, 143, 2, -96, 504, -44, -158, -393, 61, 95, 191, 74, 64, -219, 553, 104, 235, 222, 44, -216, 63, -251, 40, -140, 112, -355, 60, 123, 26, -116, -89, -200, -109, 168, 135, -34, -99, -54, 5, -81, 322, 87, 4, -139, 420, 92, -295, -12, 262, -1, 26, -48, 231, -335, 244, 188, 5, -362, 57, -198, -184, -117, 40, 305, 49, 30, -59, -26, -37, 96]), &[80]).unwrap();
     /// let mut indices = vec![63, 67];
-    /// assert_eq!(a.remove_indices(&mut indices, true).unwrap(), b);
+    /// a.remove_indices(&mut indices, false).unwrap();
+    /// assert_eq!(a, b);
     /// ```
     pub fn remove_indices(
         &mut self,
