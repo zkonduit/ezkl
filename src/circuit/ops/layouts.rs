@@ -5658,7 +5658,7 @@ pub fn ln<F: PrimeField + TensorType + PartialOrd + std::hash::Hash>(
         &region.legs(),
         true,
     )?
-    .0;
+    .1;
     region.increment(claimed_output.len());
 
     let pow2_of_claimed_output = nonlinearity(
