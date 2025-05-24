@@ -29,8 +29,10 @@
 //! A library for turning computational graphs, such as neural networks, into ZK-circuits.
 //!
 use log::warn;
+
+#[global_allocator]
 #[cfg(all(feature = "ezkl", not(target_arch = "wasm32")))]
-use mimalloc as _;
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 /// Error type
 // #[cfg_attr(not(feature = "ezkl"), derive(uniffi::Error))]
