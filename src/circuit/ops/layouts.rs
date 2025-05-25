@@ -4568,7 +4568,7 @@ pub fn conv<
         let mut local_kernel = working_kernel.get_slice(&[start_kernel_index..end_kernel_index])?;
         local_kernel.flatten();
 
-        let mut res = einsum(config, region, &[&local_image, &local_kernel], "i,i->")?;
+        let mut res = dot(config, region, &[&local_image, &local_kernel])?;
 
         if has_bias {
             let bias_index = if values[2].len() > 1 {
