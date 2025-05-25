@@ -222,7 +222,6 @@ default = [
     "precompute-coset",
     "no-banner",
     "parallel-poly-read",
-    "mimalloc"
 ]
 onnx = ["dep:tract-onnx"]
 python-bindings = ["pyo3", "pyo3-log", "pyo3-async-runtimes", "pyo3-stub-gen"]
